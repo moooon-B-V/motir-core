@@ -157,6 +157,9 @@ describe('grouping — a group with no surviving rows is not rendered', () => {
         { billingAvailable: true },
       ),
     );
+    // `access` (Members, Security) and `billing` (Usage & cost, Billing) both
+    // empty for a plain member and are dropped with their headings — Usage & cost
+    // is Owner/Admin again since the org-roles merge (MOTIR-6167 over MOTIR-6175).
     expect(groups.map((g) => g.group)).toEqual(['general']);
   });
 

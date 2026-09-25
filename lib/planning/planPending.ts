@@ -40,8 +40,8 @@ export function pendingProposalCount(index: Pick<PlanChangeDiffIndex, 'counts'>)
 
 /**
  * Does closing now LOSE the proposal — may the close-with-pending guard open at all
- * (Story MOTIR-6012 · MOTIR-6037; `design/ai-planning/design-notes.md` Part XX §20.6,
- * §20.11 flag 1)?
+ * (Story MOTIR-6012 · MOTIR-6037; `design/ai-planning/design-notes.md` Part XXII §22.6,
+ * §22.11 flag 1)?
  *
  * ⚠️ NOT for a GATED plan and NOT for one being WRITTEN. The guard's body — *"Nothing is
  * saved until you confirm. Closing now discards them."* — and its *Discard* are false

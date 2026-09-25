@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { AlertTriangle } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
+import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 
 // The unmapped-statuses tray (Subtask 3.2.6 · design `board.mock.html` panel 5).
 // Surfaces project workflow statuses mapped to NO board column
@@ -38,6 +39,7 @@ export function UnmappedStatusesTray({
   boardId: string;
 }) {
   const t = useTranslations('boards');
+  const canConfigure = useProjectAccess().can('board:configure');
   return (
     <aside
       aria-label={t('unmappedLabel')}
@@ -55,13 +57,18 @@ export function UnmappedStatusesTray({
           ))}
         </span>
       </span>
-      <Link
-        href={`/settings/project/board?board=${encodeURIComponent(boardId)}`}
-        className="text-sm font-semibold whitespace-nowrap text-(--el-link) hover:underline"
-        data-testid="board-unmapped-link"
-      >
-        {t('unmappedMapColumns')} →
-      </Link>
+      {/* MOTIR-6175 — the fix is in the Boards settings room, which opens on
+          `board:configure`. Everyone keeps the WARNING (the cards it hides are
+          everyone's concern); only a configurer is offered the door to fix it. */}
+      {canConfigure ? (
+        <Link
+          href={`/settings/project/board?board=${encodeURIComponent(boardId)}`}
+          className="text-sm font-semibold whitespace-nowrap text-(--el-link) hover:underline"
+          data-testid="board-unmapped-link"
+        >
+          {t('unmappedMapColumns')} →
+        </Link>
+      ) : null}
     </aside>
   );
 }

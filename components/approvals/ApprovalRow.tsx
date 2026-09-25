@@ -621,7 +621,7 @@ export function ApprovalRow({
   const announcedState = useDecidedGateState(row.gateId);
 
   // ⚠️ A CARD-LESS ROW IS A PLAN'S (Story MOTIR-6012 · MOTIR-6037; design
-  // `design/ai-planning/design-notes.md` Part XX §20.3). A `plan_approval` gate belongs to
+  // `design/ai-planning/design-notes.md` Part XXII §22.3). A `plan_approval` gate belongs to
   // no work item (ADR `approval-gates.md` §11.1): it has no key to name and NO overlay
   // address (§11.5b) — its row returns the reader to the PLANNING SURFACE. Any other
   // card-less row (a plan gate whose plan is gone) still draws nothing: there is nothing
@@ -816,7 +816,7 @@ export function ApprovalRow({
 }
 
 /**
- * THE PLAN's LEADING LINE (design Part XX §20.3, DECIDED): what the plan is ABOUT, never
+ * THE PLAN's LEADING LINE (design Part XXII §22.3, DECIDED): what the plan is ABOUT, never
  * the gate kind. Four forms, one ICU message each, so the ORDER is the catalogue's (zh puts
  * the title first):
  *   · a target → *Plan for {target title}* — the title is the shipped quick-view door;
@@ -907,13 +907,13 @@ function PlanApprovalRow({
     sessionId: subject.sessionId,
     host: `${pathname}${qs ? `?${qs}` : ''}`,
     anchorKey: subject.targets[0]?.key ?? null,
-    // `planVia=approvals` (§20.2): the reopened line says *Reopened from To approve*.
+    // `planVia=approvals` (§22.2): the reopened line says *Reopened from To approve*.
     via: 'approvals',
   });
   const opensSurface = destination.kind === 'planning-surface';
 
   /** Open the planning surface over the page the list is on — `shallowPush`, so Close
-   *  lands back on exactly this list (§20.2). */
+   *  lands back on exactly this list (§22.2). */
   function openPlanningSurface() {
     shallowPush(destination.href);
   }
@@ -922,7 +922,7 @@ function PlanApprovalRow({
     // `usePeekRowClick`'s condition: a modified or non-primary click keeps the real
     // `href` — the plan page, in a new tab.
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-    // NO CONVERSATION → the real navigation to `/plans/<id>` goes ahead (§20.2).
+    // NO CONVERSATION → the real navigation to `/plans/<id>` goes ahead (§22.2).
     if (!opensSurface) return;
     e.preventDefault();
     openPlanningSurface();
@@ -984,7 +984,7 @@ function PlanApprovalRow({
       style={{ gridTemplateColumns: gridTemplate }}
     >
       <div role="cell" className="flex min-w-0 items-center gap-2">
-        {/* THE DOOR (§20.2): `/plans/<id>` is the real href — a new tab opens the plan
+        {/* THE DOOR (§22.2): `/plans/<id>` is the real href — a new tab opens the plan
             page — and a plain primary click returns to the planning surface. The
             planning overlay is a dialog, hence `aria-haspopup`. */}
         <Link
@@ -994,7 +994,7 @@ function PlanApprovalRow({
           onClick={onRowClick}
           className="absolute inset-0 z-0 focus:outline-none"
         />
-        {/* The Motir-AI mark the Plans nav already carries (§20.3); the words carry the
+        {/* The Motir-AI mark the Plans nav already carries (§22.3); the words carry the
             meaning, so it is hidden. */}
         <Sparkles className="h-4 w-4 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
         <span className="flex min-w-0 items-center gap-1 text-sm">
@@ -1011,7 +1011,7 @@ function PlanApprovalRow({
           )}
         </span>
         {/* The KEY cell names the targets: the first, `+{n}` for the rest, every key in
-            its `title` (§20.3, the multi-target form). No target, no key cell. */}
+            its `title` (§22.3, the multi-target form). No target, no key cell. */}
         {keys.length > 0 ? (
           <span
             className="shrink-0 font-mono text-xs text-(--el-text-secondary)"

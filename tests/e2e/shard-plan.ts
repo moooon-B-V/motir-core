@@ -652,6 +652,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'pages-stream.spec.ts': 12.0,
   'org-admin.spec.ts': 8.6,
   'per-domain-admin-permissions.spec.ts': 12.4,
+  'permission-gated-surfaces.spec.ts': 18.0,
   'permission-gated-ui.spec.ts': 14.0,
   'plan-change-planner-turn.spec.ts': 7.6,
   'plan-decision-permission.spec.ts': 4.5,

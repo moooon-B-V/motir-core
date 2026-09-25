@@ -8,7 +8,7 @@ import { withPlanningOverlay } from '@/lib/planning/launcher';
 import { fetchPlanReview } from '@/lib/planning/planReviewClient';
 
 // THE APPROVAL OVERLAY'S ONE PLAN ARM (Story MOTIR-6012 · MOTIR-6037; ADR
-// `approval-gates.md` §11.5b; design `design/ai-planning/design-notes.md` Part XX §20.2).
+// `approval-gates.md` §11.5b; design `design/ai-planning/design-notes.md` Part XXII §22.2).
 //
 // A plan gate is decided on the PLANNING SURFACE and renders no port, so nothing writes
 // `?approval=` for `plan_approval` — its To-approve row returns to the planning surface

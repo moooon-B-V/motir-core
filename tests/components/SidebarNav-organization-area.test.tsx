@@ -136,7 +136,7 @@ describe('the two filtered arms, as they RENDER', () => {
     // Nothing marks the gap: an entry point is a promise about a room, and a
     // disabled row is a promise the product then refuses (MOTIR-2468).
     expect(screen.queryByText('Access')).toBeNull();
-    expect(screen.queryByText('Billing')).toBeNull();
+    expect(rowNames()).not.toContain('Billing & plans');
   });
 
   it('off cloud, `Billing & plans` is gone and its group keeps `Usage & cost`', () => {

@@ -371,8 +371,8 @@ export function PlanningWorkspaceHost({
   const pending = isProposalPending(state, index);
   const pendingCount = pendingProposalCount(index);
   const deciding = state.phase === 'deciding';
-  // ⚠️ THE GUARD'S OWN PREDICATE IS NARROWER THAN `pending` (MOTIR-6037; design Part XX
-  // §20.6, §20.11 flag 1): an ASKED plan and a plan being WRITTEN lose nothing on close —
+  // ⚠️ THE GUARD'S OWN PREDICATE IS NARROWER THAN `pending` (MOTIR-6037; design Part XXII
+  // §22.6, §22.11 flag 1): an ASKED plan and a plan being WRITTEN lose nothing on close —
   // the first waits in To approve, the second is a server job — so the guard, whose copy
   // says closing discards them, does not open for either. `pending` still chooses the
   // footer slot's content.

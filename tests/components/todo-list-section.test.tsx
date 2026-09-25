@@ -265,6 +265,12 @@ describe('read-only', () => {
     expect(screen.queryByRole('button', { name: 'Delete step' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Move step up' })).toBeNull();
 
+    // MOTIR-6173 — the tick stays, disabled, inside a wrapper that carries the
+    // read-only reason (a disabled input swallows the pointer, so the Tooltip
+    // cannot hang off the checkbox itself).
+    const wrapper = screen.getByTestId('todo-checkbox-read-only');
+    expect(wrapper.contains(screen.getByRole('checkbox'))).toBe(true);
+
     // Criterion 6: attempt the interaction rather than inspect an attribute.
     fireEvent.click(screen.getByRole('checkbox'));
     await new Promise((r) => setTimeout(r, 0));

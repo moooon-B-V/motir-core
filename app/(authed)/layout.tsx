@@ -49,6 +49,7 @@ import {
   isWorkspaceTierRevealed,
   scopeWorkspacesToActiveOrg,
 } from '@/lib/workspaces/tierDisclosure';
+import { AI_PLANNING_REQUIREMENT, satisfiesRequirement } from '@/lib/settings/projectNavAccess';
 
 // Layout for every authenticated route. Story 1.5 migrates this from a bare
 // top-nav + centered <main> into the full AppLayout shell: a full-width top
@@ -310,7 +311,13 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // modal's "Draft with AI" uses) AND there's an active project to plan into.
   // A server-side boolean so the client launcher needs no `server-only` read.
   const aiPlanningConfigured = isMotirAiConfigured();
-  const showPlanWithAi = aiPlanningConfigured && Boolean(activeProject);
+  // MOTIR-6175 — AND an actor who may plan: `ai:plan`, the key every planning
+  // write asserts and the one the ⌘K twin already checks. The pill and the orb
+  // opened the planning workspace for a Viewer, whose first message was refused.
+  const showPlanWithAi =
+    aiPlanningConfigured &&
+    Boolean(activeProject) &&
+    satisfiesRequirement(AI_PLANNING_REQUIREMENT, held);
 
   // The server-cheap gate for the labeled "Resume onboarding" door (MOTIR-1533;
   // design MOTIR-1548): AI configured, an active project, and its onboarding
@@ -571,9 +578,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     settingsPermissions={settingsPermissions}
                     aiPlanningConfigured={aiPlanningConfigured}
                     publicProjectsAvailable={publicProjectsAvailable}
-                    canManageOrgSettings={
-                      activeOrg ? orgCan(activeOrg.role, 'manageOrgSettings') : false
-                    }
+                    isOrgAdmin={activeOrg ? orgCan(activeOrg.role, 'manageOrgSettings') : false}
                   />
 
                   {/* The floating "M" entrance (MOTIR-1299) — the second of the two

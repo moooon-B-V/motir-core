@@ -22,6 +22,7 @@ import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils/cn';
 import type { OrganizationDTO } from '@/lib/dto/organizations';
 import { orgCan } from '@/lib/organizations/capabilities';
+import { visibleOrganizationSettingsNav } from '@/lib/settings/organizationSettingsNav';
 import { createOrganizationAction, switchOrganizationAction } from '../_actions';
 import { CreateWorkspaceDialog } from './CreateWorkspaceDialog';
 
@@ -46,7 +47,7 @@ export interface OrgControlProps {
    * workspace sections (Leave workspace among them); above it the org page has
    * nothing of theirs and answers 404 (MOTIR-6312 · panel 3a / 3b).
    */
-  workspaceTierRevealed: boolean;
+  workspaceTierRevealed?: boolean;
 }
 
 // The organization control in the app shell (Story 6.10.5, design/org-admin
@@ -60,7 +61,7 @@ export function OrgControl({
   activeOrg,
   orgs,
   cloudBilling,
-  workspaceTierRevealed,
+  workspaceTierRevealed = false,
 }: OrgControlProps) {
   const t = useTranslations('orgAdmin');
   const router = useRouter();
@@ -84,12 +85,19 @@ export function OrgControl({
   // server refuses them (MOTIR-6309). The answers come from the ONE capability
   // table (`lib/organizations/capabilities.ts`), read off the role the layout
   // already hands this control — no second fetch.
-  const canManageOrg = orgCan(activeOrg.role, 'manageOrgSettings');
   const canManageWorkspaces = orgCan(activeOrg.role, 'manageWorkspaces');
-  // A Member keeps `Settings` only BELOW the reveal, where it is the door to the
-  // folded-in workspace sections (3a). Above it the page 404s for them (3d).
-  const showSettings = canManageOrg || !workspaceTierRevealed;
-  const hasOrgRows = showSettings || canManageOrg || canManageWorkspaces;
+  // The SETTINGS rows are offered from the SAME registry the org settings rail
+  // filters with (MOTIR-6175), so the menu and the rail can never disagree about
+  // a door. A Member keeps `Settings` only BELOW the reveal, where it is the door
+  // to the folded-in workspace sections (3a); above it the page 404s for them (3d).
+  const offered = new Set(
+    visibleOrganizationSettingsNav(
+      { isOrgAdmin: orgCan(activeOrg.role, 'manageOrgSettings'), workspaceTierRevealed },
+      undefined,
+      { billingAvailable: cloudBilling },
+    ).map((entry) => entry.id),
+  );
+  const hasOrgRows = offered.size > 0 || canManageWorkspaces;
 
   // 3b · a Member, 2+ workspaces, ONE org: the menu would hold nothing — no org
   // page to open and no org to switch to — so the name is a plain LABEL, not a
@@ -160,7 +168,7 @@ export function OrgControl({
         <Popover.Content align="start" width={288} className="py-1">
           {hasOrgRows ? (
             <ul role="list" className="px-1">
-              {showSettings ? (
+              {offered.has('organization') ? (
                 <li>
                   <MenuLink href="/settings/organization" onNavigate={() => setOpen(false)}>
                     <Settings className="text-(--el-text-muted) h-4 w-4" aria-hidden />
@@ -168,57 +176,52 @@ export function OrgControl({
                   </MenuLink>
                 </li>
               ) : null}
-              {canManageOrg ? (
-                <>
-                  <li>
-                    {/* Security — the org's require-2FA policy (Story MOTIR-1215 ·
-                  MOTIR-3646, design/org-admin/security-policy panel 1). Directly
-                  under Settings, where the design puts it: it is a
-                  settings-shaped destination, and keeping it above Members holds
-                  the two account-level concerns together. A route with no door
-                  is not shipped. */}
-                    <MenuLink
-                      href="/settings/organization/security"
-                      onNavigate={() => setOpen(false)}
-                    >
-                      <ShieldCheck className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-                      {t('menu.security')}
-                    </MenuLink>
-                  </li>
-                  <li>
-                    <MenuLink
-                      href="/settings/organization/members"
-                      onNavigate={() => setOpen(false)}
-                    >
-                      <Users className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-                      {t('menu.members')}
-                    </MenuLink>
-                  </li>
-                  <li>
-                    {/* Usage & cost — the org cost dashboard (7.2.11, design ai-usage
-                  panel 1). The usage half of the "Billing & usage" promise; the
-                  billing/checkout half stays "Coming soon" (Epic 8). */}
-                    <MenuLink href="/settings/organization/usage" onNavigate={() => setOpen(false)}>
-                      <Coins className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-                      {t('menu.usage')}
-                    </MenuLink>
-                  </li>
-                  {cloudBilling ? (
-                    <li>
-                      {/* Billing & plans — the org's commercial home (Story 8.1.7,
-                    design/billing panel 1). The row the ai-usage design left as a
-                    passive "Coming soon" is now ACTIVE. Cloud-only (ADR §6): on a
-                    self-hosted build it is hidden entirely (no billing surface). */}
-                      <MenuLink
-                        href="/settings/organization/billing"
-                        onNavigate={() => setOpen(false)}
-                      >
-                        <CreditCard className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-                        {t('menu.billing')}
-                      </MenuLink>
-                    </li>
-                  ) : null}
-                </>
+              {offered.has('security') ? (
+                <li>
+                  {/* Security — the org's require-2FA policy (Story MOTIR-1215 ·
+                      MOTIR-3646, design/org-admin/security-policy panel 1). Directly
+                      under Settings, where the design puts it: it is a
+                      settings-shaped destination, and keeping it above Members holds
+                      the two account-level concerns together. A route with no door
+                      is not shipped. */}
+                  <MenuLink
+                    href="/settings/organization/security"
+                    onNavigate={() => setOpen(false)}
+                  >
+                    <ShieldCheck className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                    {t('menu.security')}
+                  </MenuLink>
+                </li>
+              ) : null}
+              {offered.has('members') ? (
+                <li>
+                  <MenuLink href="/settings/organization/members" onNavigate={() => setOpen(false)}>
+                    <Users className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                    {t('menu.members')}
+                  </MenuLink>
+                </li>
+              ) : null}
+              {offered.has('usage') ? (
+                <li>
+                  {/* Usage & cost — the org cost dashboard (7.2.11, design ai-usage
+                      panel 1). The usage half of the "Billing & usage" promise; the
+                      billing/checkout half stays "Coming soon" (Epic 8). */}
+                  <MenuLink href="/settings/organization/usage" onNavigate={() => setOpen(false)}>
+                    <Coins className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                    {t('menu.usage')}
+                  </MenuLink>
+                </li>
+              ) : null}
+              {offered.has('billing') ? (
+                <li>
+                  {/* Billing & plans — the org's commercial home (Story 8.1.7,
+                      design/billing panel 1). Cloud-only (ADR §6): on a self-hosted
+                      build the registry does not offer it (no billing surface). */}
+                  <MenuLink href="/settings/organization/billing" onNavigate={() => setOpen(false)}>
+                    <CreditCard className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                    {t('menu.billing')}
+                  </MenuLink>
+                </li>
               ) : null}
               {canManageWorkspaces ? (
                 <li>

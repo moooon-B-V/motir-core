@@ -86,11 +86,12 @@ export interface OrganizationSettingsNavActor {
   /** `orgCan(role, 'manageOrgSettings')` — owner or admin (`lib/organizations/capabilities.ts`). */
   isOrgAdmin: boolean;
   /**
-   * Whether the active org has ≥2 workspaces (`isWorkspaceTierRevealed`). Read
-   * only by the `foldInHost` row: above the reveal the org index page hosts
-   * nothing of a plain member's, and answers them 404 (MOTIR-6312).
+   * `isWorkspaceTierRevealed(count)` — whether the workspace tier is shown. It
+   * decides what the area ROOT hosts for a plain member (see `organization`
+   * below), so the row that opens it reads it. Absent = not revealed, the
+   * one-workspace default.
    */
-  workspaceTierRevealed: boolean;
+  workspaceTierRevealed?: boolean;
 }
 
 /**
@@ -129,13 +130,13 @@ export interface OrganizationSettingsNavEntry {
    */
   orgAdminOnly?: true;
   /**
-   * The org index page's own rule: Owner/Admin always, a plain org member only
-   * BELOW the workspace-tier reveal, where the page hosts the folded-in
-   * workspace sections (§6d) — Leave workspace among them. Above the reveal the
-   * page has nothing of theirs and 404s for them, so a row there would be a door
-   * onto a 404 (MOTIR-6312 · `org-admin--workspaces-at-org-tier.mock.html` 3d).
+   * Requires org owner/admin ONCE THE WORKSPACE TIER IS REVEALED (MOTIR-6175).
+   * Below the reveal the row's page hosts the folded-in workspace sections a
+   * plain member uses; above it, those sections move to `/settings/workspace`
+   * and the page holds only the org-scoped cards, which answer a plain member
+   * with the forbidden panel — a door onto a room with nothing in it for them.
    */
-  foldInHost?: true;
+  orgAdminOnlyAboveReveal?: true;
   /**
    * Cloud builds only — the route `notFound()`s on a self-host build, so a row
    * would point at a 404. Same flag, same default-closed handling, as the project
@@ -171,9 +172,12 @@ export const ORGANIZATION_SETTINGS_NAV: OrganizationSettingsNavEntry[] = [
     // alternative surface anywhere in the product. Hiding the row would close the
     // only route to it, which is precisely the defect §6d was written to repair.
     // The page keeps gating PER SECTION; the row is the door to the page.
-    // ABOVE the reveal a member has no section there at all (MOTIR-6312), so the
-    // row follows the page's 404 — `foldInHost`.
-    foldInHost: true,
+    //
+    // ⚠️ ABOVE the reveal that reason is gone (MOTIR-6175): the fold-in is not
+    // rendered, `/settings/workspace` hosts those sections instead, and the page
+    // answers a plain member with panel 5d's forbidden state and nothing else —
+    // so the door hides for them there, and only there.
+    orgAdminOnlyAboveReveal: true,
   },
   {
     id: 'git',
@@ -220,6 +224,16 @@ export const ORGANIZATION_SETTINGS_NAV: OrganizationSettingsNavEntry[] = [
     href: '/settings/organization/usage',
     icon: Coins,
     labelKey: 'usage',
+    // ⚠️ `orgAdminOnly` — RE-APPLIED by MOTIR-6167 over MOTIR-6175 (2026-09-25).
+    // MOTIR-6175 lifted the flag because the page gates no role and
+    // `aiUsageService.getUsage` scopes a plain member's read to their own
+    // workspaces. The role model's approved org-tier design says otherwise for the
+    // DOOR: a Member's org rail and org menu carry no org rows at all
+    // (`design/org-admin/design-notes.md` § *Workspaces are created and removed at
+    // the org tier*, panel 3; MOTIR-6312; the story's criterion "an org Member sees
+    // no org settings beyond their own profile"), and the owner chose that design
+    // when the two collided at this merge. The PAGE is unchanged — it still
+    // serves a Member their scoped slice if the URL is opened directly (7.2.11).
     orgAdminOnly: true,
   },
   {
@@ -281,7 +295,7 @@ export function visibleOrganizationSettingsNav(
     (entry) =>
       isAvailable(entry, available) &&
       (!entry.orgAdminOnly || actor.isOrgAdmin) &&
-      (!entry.foldInHost || actor.isOrgAdmin || !actor.workspaceTierRevealed),
+      (!entry.orgAdminOnlyAboveReveal || actor.isOrgAdmin || !actor.workspaceTierRevealed),
   );
 }
 

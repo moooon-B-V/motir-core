@@ -15,6 +15,7 @@ import { useSprintPoints } from './useSprintPoints';
 import { useBacklogDnd } from './BacklogDndProvider';
 import { sprintRegionId } from './backlogDnd';
 import { SPRINT_STATE_TONE, type StatusByKey } from './backlogShared';
+import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 
 // A sprint-planning container (Story 4.2 · Subtask 4.2.3, read render). A
 // collapsible panel per design/backlog/backlog.mock.html panel 1: chevron, name
@@ -139,6 +140,12 @@ export function SprintContainer({
   const isPlanned = sprint.state === 'planned';
   const isActive = sprint.state === 'active';
   const canStart = isPlanned && sprint.issueCount >= 1;
+  // MOTIR-6174 — Start, Complete and the ⋯ menu (Rename / Edit dates / Delete)
+  // all assert `sprint:manage` (`sprintsService`). They are ENTRY POINTS into a
+  // flow, so an actor without the key sees none of them (the permission-gated UI
+  // rule, HIDE); the sprint's name, state, dates and points stay.
+  const { can } = useProjectAccess();
+  const canManageSprint = can('sprint:manage');
 
   return (
     <section
@@ -202,7 +209,7 @@ export function SprintContainer({
         </span>
         {/* Start-sprint entry point (4.2.3 seam) — WIRED to the flow (4.4.5).
             Rendered only for a planned sprint; disabled until it has ≥1 issue. */}
-        {isPlanned ? (
+        {isPlanned && canManageSprint ? (
           <button
             type="button"
             disabled={!canStart}
@@ -216,7 +223,7 @@ export function SprintContainer({
         ) : null}
         {/* Complete-sprint entry point (self-mounted, Subtask 4.4.6) — the active
             sprint's lifecycle action; opens the carry-over chooser + report. */}
-        {isActive ? (
+        {isActive && canManageSprint ? (
           <button
             type="button"
             onClick={() => setCompleteOpen(true)}
@@ -229,12 +236,14 @@ export function SprintContainer({
         ) : null}
         {/* `⋯` sprint actions menu — ENABLED + Delete wired (Subtask 4.2.5 /
             MOTIR-1492); Rename (MOTIR-1493) + Edit-dates (MOTIR-1494) sibling items. */}
-        <SprintActionsMenu
-          sprint={sprint}
-          onRenamed={onRenamed}
-          onDeleted={onDeleted}
-          onUpdated={onUpdated}
-        />
+        {canManageSprint ? (
+          <SprintActionsMenu
+            sprint={sprint}
+            onRenamed={onRenamed}
+            onDeleted={onDeleted}
+            onUpdated={onUpdated}
+          />
+        ) : null}
       </div>
 
       {collapsed ? null : (

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { Card } from '@/components/ui/Card';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 // The detail rail's field-card grammar (Story 2.4), extracted from
 // CoreFieldsPanel so the custom-field cards (Subtask 5.3.7) compose the SAME
@@ -27,15 +28,26 @@ export function Avatar({ name }: { name: string }) {
 // toggles into the control (edit mode). The chevron is a real button with an
 // accessible name; the caption is a plain <div> (the control carries its own
 // accessible name). `editable={false}` drops the chevron (read-only fields).
+//
+// `readOnlyReason` is the PERMISSION-GATED state (MOTIR-6173, the permission-gated
+// UI rule's part 2 — `design/projects/design-notes.md`, treatment-table row 6): a
+// field the actor could edit if they held the key. The chevron stays, DISABLED,
+// and says why in a Tooltip and in its accessible name — it never toggles, so no
+// editor (and no auto-opening picker, the MOTIR-4822 path) is ever mounted for an
+// actor whose write the server would refuse. `editable={false}` stays for fields
+// NOBODY edits here (reporter, created), which carry no reason because there is
+// no right to lack.
 export function FieldCard({
   label,
   editable = true,
+  readOnlyReason,
   editing,
   onToggle,
   children,
 }: {
   label: string;
   editable?: boolean;
+  readOnlyReason?: string;
   editing?: boolean;
   onToggle?: () => void;
   children: ReactNode;
@@ -48,7 +60,20 @@ export function FieldCard({
         <div className="font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
           {label}
         </div>
-        {editable ? (
+        {editable && readOnlyReason ? (
+          <Tooltip content={readOnlyReason}>
+            <button
+              type="button"
+              aria-disabled="true"
+              aria-label={`${label} — ${readOnlyReason}`}
+              data-read-only-field=""
+              onClick={(e) => e.preventDefault()}
+              className="-mt-0.5 cursor-not-allowed rounded-(--radius-control) p-0.5 text-(--el-text-faint) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              <ChevronDown className="h-4 w-4" aria-hidden />
+            </button>
+          </Tooltip>
+        ) : editable ? (
           <button
             type="button"
             // Don't steal focus on click: otherwise clicking the chevron to

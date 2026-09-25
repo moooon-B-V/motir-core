@@ -308,9 +308,7 @@ export function SidebarNav({
       visibleOrganizationSettingsNav(
         { isOrgAdmin: organization?.isOrgAdmin ?? false, workspaceTierRevealed },
         undefined,
-        {
-          billingAvailable,
-        },
+        { billingAvailable },
       ),
     ).map(({ group, entries }) => ({
       id: `org-settings-${group}`,

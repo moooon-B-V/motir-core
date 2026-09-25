@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Check, CircleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Tooltip } from '@/components/ui/Tooltip';
 import type { QuickViewData } from '@/lib/dto/quickView';
 import {
   updateIssueAction,
@@ -69,6 +70,13 @@ export interface QuickViewRailEdit {
   /** True when the actor may edit at all — the whole affordance hangs off this. */
   canEdit: boolean;
   /**
+   * Why a field is read-only, when the reason is a missing PERMISSION (MOTIR-6173 —
+   * the permission-gated UI rule's part 2: an in-place control stays, disabled,
+   * and says why). Undefined for an actor who can edit AND in proposal mode,
+   * where nobody can and there is no right to lack.
+   */
+  readOnlyReason: string | undefined;
+  /**
    * The item as the rail should render it: served values + optimistic overrides.
    * Null only while the peek is still loading / not-found, since the hook is
    * called above the panel's early returns (hooks cannot be conditional).
@@ -133,6 +141,9 @@ export function useQuickViewRailEdit(
   // rendered by the components, and a refusal arrives already translated from
   // the action.
   const t = useTranslations('issueViews');
+  const tpa = useTranslations('projectAccess');
+  const readOnlyReason =
+    !suppressEditing && !can('work_item:edit') ? tpa('readOnlyHint') : undefined;
 
   const [overrides, setOverrides] = useState<Partial<QuickViewData>>({});
   const [ackUpdatedAt, setAckUpdatedAt] = useState<string | null>(null);
@@ -228,6 +239,7 @@ export function useQuickViewRailEdit(
 
   return {
     canEdit,
+    readOnlyReason,
     effective,
     editing,
     toggle: useCallback((key: RailEditKey) => setEditing((cur) => (cur === key ? null : key)), []),
@@ -314,6 +326,19 @@ export function EditableRailField({
               aria-hidden
             />
           </button>
+        ) : edit.readOnlyReason && control != null ? (
+          <Tooltip content={edit.readOnlyReason}>
+            <button
+              type="button"
+              aria-disabled="true"
+              aria-label={`${label} — ${edit.readOnlyReason}`}
+              data-read-only-field=""
+              onClick={(e) => e.preventDefault()}
+              className="ml-auto inline-flex cursor-not-allowed rounded-(--radius-control) p-0.5 text-(--el-text-faint) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+            </button>
+          </Tooltip>
         ) : null}
       </dt>
       <dd
