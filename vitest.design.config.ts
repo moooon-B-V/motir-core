@@ -63,6 +63,13 @@ export default defineConfig({
       // oldest for ten weeks — a design PR is both the only thing that can
       // break this and the only thing that can fix it, so it belongs here.
       'tests/design-three-file-set.test.ts',
+      // `design-notes-part-numbers` (MOTIR-6190) rules that a `# Part <N>`
+      // number in a `design-notes.md` addresses ONE section and that the file's
+      // index table names exactly the Parts it holds. Two designs once shared
+      // `Part XX` and the index lost a row, and every citation by number then
+      // resolved wrong. It reads `design/**` and nothing else, and a design PR is
+      // the only thing that appends a Part.
+      'tests/design-notes-part-numbers.test.ts',
       // `theme/orb-glyph-contrast` (MOTIR-3207, widened by MOTIR-3217) measures
       // the floating orb's white mark against its own gradient in all twenty
       // palette x theme contexts, and it also rules on the TWO design assets

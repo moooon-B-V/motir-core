@@ -649,9 +649,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     //
     // Re-pinned again for MOTIR-3271, and this one is NOT a new severity: the
     // `likely-over-gate-sizing` line was corrected in place — its minutes
-    // threshold moved 60 → 70 and the text now says that arm is a PROXY, since
-    // `estimateMinutes` sums agent time and CI time while the gate ceilings the
-    // agent run alone. Summary UNCHANGED for the reason above, which the
+    // threshold moved from sixty to seventy and the text now says that arm is a
+    // PROXY, since `estimateMinutes` sums agent time and CI time while the gate
+    // ceilings the agent run alone. (Those two numbers are SPELLED OUT, not
+    // written as digits: `tests/mcp/mcp-doc-guards.test.ts` forbids the CURRENT
+    // tool count as a bare literal anywhere below `McpCatalogueToolName`, and a
+    // threshold that merely happens to equal it would trip a guard aimed at
+    // something else. Do not "tidy" them back into numerals.)
+    // Summary UNCHANGED for the reason above, which the
     // paragraph anticipated: the drift is on the advisory channel, and the
     // summary describes the verdict.
     //
@@ -791,6 +796,16 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       "Correct a plan's OWN title and summary — the heading above the tree — without touching a single proposal.",
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: '3c8e94ce5a31',
+  },
+  record_plan_revision_reason: {
+    // The line has to say the thing that makes this tool unlike its six
+    // neighbours: they all CHANGE the plan and this one does not — it records
+    // why it had to change. A reader picking between them is choosing on
+    // exactly that.
+    summary:
+      'Record WHY an unapproved plan had to change — four branches, two of which file a planning bug; it changes nothing about the plan.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: 'f58da227efc6',
   },
   open_plan_session: {
     // Re-worded for MOTIR-6028: a scope holds MANY conversations now, and the

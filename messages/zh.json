@@ -6772,7 +6772,13 @@
       "reopenedYours": "从计划页面重新打开 · 由你发起 · 最近活动 {when}",
       "readOnly": "你可以阅读此对话。继续对话需要使用 Motir AI 规划的权限。",
       "someone": "某人"
-    }
+    },
+    "arrival": {
+      "crumbTargetPrefix": "规划目标：",
+      "movedAnnouncement": "正在显示 {target} 内的工作",
+      "goToTarget": "方案在 {identifier} · 前往"
+    },
+    "dividerAria": "调整对话窗口宽度"
   },
   "codeHealth": {
     "title": "代码健康度",
@@ -8990,9 +8996,7 @@
         "proceed": "确认拒绝"
       },
       "noConversation": {
-        "agent": "{harness} 在对话之外编写了此计划，因此它在自己的页面上打开。",
-        "cadence": "这是 Motir 在你的就绪工作用完时自动规划的，因此背后没有对话。",
-        "earlier": "此计划是在 Motir 开始保存规划对话之前编写的。",
+        "none": "此计划没有对话记录。",
         "next": "可以在这里批准或拒绝它——也可以在下方请 Motir 修改它。"
       },
       "handoff": {
@@ -9327,5 +9331,11 @@
       "copied": "已复制",
       "copyFailed": "无法复制——请手动选择 ID。"
     }
+  },
+  "planDestination": {
+    "conversation": "打开对话",
+    "plan": "打开计划",
+    "noConversation": "无对话",
+    "noConversationWhy": "此计划没有对话记录。"
   }
 }

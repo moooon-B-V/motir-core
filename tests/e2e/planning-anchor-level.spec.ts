@@ -1,22 +1,26 @@
-// Planning workspace — the ANCHOR reaches the CANVAS (Bug MOTIR-2070).
+// Planning workspace — the ANCHOR reaches the CANVAS (Bug MOTIR-2070), and the
+// canvas opens INSIDE it (MOTIR-6160, Story MOTIR-6154).
 //
 // Opening the planning workspace FROM a work item used to land the canvas on the
 // project's ROOT level: the anchor was spent on the conversation (the pre-filled
 // `@`-mention target + the MOTIR-909 thread) and dropped on the canvas, which
-// seeded itself from `parentId = null`. On a real tree that meant three manual
-// drills to reach the item you were already looking at — and the anchor's target
-// ring was drawn on a level nobody was on, indistinguishable from no anchor.
+// seeded itself from `parentId = null`. MOTIR-2070 fixed that by seeding the
+// anchor's ANCESTORS, so the workspace opened on the anchor's OWN level.
 //
-// This is the browser-level proof, on a REAL `epic → story → subtask` tree: the
-// workspace opens ALREADY DRILLED to the level that CONTAINS the anchor, ringed.
-// The unit tests prove the seed mechanics and the integration seam proves the page
-// derives the trail from the real ancestor chain; only this proves what the user
-// actually SEES on arrival.
+// ⚠️ MOTIR-6154 OVERTURNED THAT SECOND CHOICE. A person planning a story wants to
+// look at the story's WORK while they talk about it, and at the level its
+// proposals will land on — so a CONTAINER anchor now opens INSIDE itself, and the
+// target stays named as the last crumb rather than ringed on a node one level up.
+// A `subtask` has no inside, so it keeps MOTIR-2070's arrival and its ring: that
+// is the first test below, and it is unchanged.
+//
+// This is the browser-level proof, on a REAL `epic → story → subtask` tree. The
+// unit tests prove the rule (`tests/planning/surfaceArrival.test.ts`) and the
+// overlay test proves the seam; only this proves what the user actually SEES.
 //
 // Drives the real stack (Next + Postgres). Waits on AUTHORITATIVE signals — the
 // per-level roadmap GET (MOTIR-1010) and rendered DOM — never fixed sleeps
 // (`motir-core/CLAUDE.md` § E2E discipline; `notes.html` #37).
-
 import { expect, test, type Page } from '@playwright/test';
 
 import { resetDatabase, db } from './_helpers/db-reset';
@@ -83,7 +87,9 @@ const drilledLevelLoad = (page: Page) =>
       r.ok(),
   );
 
-test('the workspace opens on the ANCHOR’s own level, with the anchor ringed', async ({ page }) => {
+test('a LEAF anchor (a subtask) opens on its OWN level, with the anchor ringed', async ({
+  page,
+}) => {
   const seed = await seedPlanningAnchorTree('planning-anchor@example.com');
   await signIn(page, seed.email, seed.password);
 
@@ -121,18 +127,78 @@ test('the workspace opens on the ANCHOR’s own level, with the anchor ringed', 
   await expect(canvasNode(page, seed.subtaskTitle)).toHaveCount(0);
 });
 
-test('a ROOT-level anchor (an epic) still opens at the root, undrilled', async ({ page }) => {
+test('a CONTAINER anchor (a story) opens INSIDE it — its children, not its siblings', async ({
+  page,
+}) => {
+  // ⚠️ THE ARRIVAL THIS STORY CHANGED (MOTIR-6160, Story MOTIR-6154), and the
+  // sharpest statement of it: the story's own SIBLINGS are what the old rule put
+  // on screen, and they are exactly what must not be here now.
+  const seed = await seedPlanningAnchorTree('planning-anchor-story@example.com');
+  await signIn(page, seed.email, seed.password);
+
+  const arrived = drilledLevelLoad(page);
+  await page.goto(anchoredHref(seed.storyKey));
+  await arrived;
+
+  await expect(workspace(page).getByTestId('planning-canvas')).toBeVisible();
+
+  // ── The level is the story's CHILDREN ─────────────────────────────────────
+  await expect(canvasNode(page, seed.subtaskTitle)).toBeVisible();
+  await expect(canvasNode(page, seed.siblingTitle)).toBeVisible();
+  // The story itself is NOT on the level — you are standing inside it, so it is
+  // the crumb rather than a node. This is the assertion that fails under the old
+  // ancestors-only trail, where the story was a node among its siblings.
+  await expect(canvasNode(page, seed.storyTitle)).toHaveCount(0);
+  await expect(canvasNode(page, 'Growth experiments')).toHaveCount(0);
+
+  // ── The breadcrumb ENDS at the story — the level you are standing in ──────
+  const breadcrumb = workspace(page).getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(breadcrumb).toBeVisible();
+  await expect(breadcrumb).toContainText(`${seed.epicKey} · ${seed.epicTitle}`);
+  await expect(breadcrumb).toContainText(`${seed.storyKey} · ${seed.storyTitle}`);
+  // MOTIR-2070's objection, answered: the target is still NAMED, as the current
+  // crumb, rather than being a ring on a node that is no longer drawn.
+  //
+  // ⚠️ By ATTRIBUTE, not by a `getByRole` option: `current` is Testing Library's
+  // role filter, and Playwright's takes no such key. The two APIs read alike and
+  // are not the same, which `tsconfig.e2e.json` is what catches — the product
+  // `tsconfig.json` does not include `tests/`, so only `pnpm typecheck` (the
+  // solution build) sees this file at all.
+  await expect(breadcrumb.locator('[aria-current="page"]')).toContainText(
+    `${seed.storyKey} · ${seed.storyTitle}`,
+  );
+
+  // ── Back climbs out to the story's own level, where it sits among siblings ─
+  await page.getByRole('button', { name: 'Back' }).click();
+  await expect(canvasNode(page, seed.storyTitle)).toBeVisible();
+  await expect(canvasNode(page, seed.subtaskTitle)).toHaveCount(0);
+});
+
+test('a ROOT-level container anchor (an epic) opens inside it, on its stories', async ({
+  page,
+}) => {
+  // ⚠️ REVERSED BY MOTIR-6160. This test asserted the opposite — "still opens at
+  // the root, undrilled, with no breadcrumb at all" — because an epic is already
+  // ON the root level and the ancestors-only trail was therefore empty. Under the
+  // arrival rule an epic is a CONTAINER like any other: having no ancestors makes
+  // its trail one crumb long, not zero.
   const seed = await seedPlanningAnchorTree('planning-anchor-epic@example.com');
   await signIn(page, seed.email, seed.password);
 
+  const arrived = drilledLevelLoad(page);
   await page.goto(anchoredHref(seed.epicKey));
+  await arrived;
 
-  // The epic is already ON the root level, so there is nothing to drill to: both
-  // root epics are drawn and there is no breadcrumb at all.
   await expect(workspace(page).getByTestId('planning-canvas')).toBeVisible();
-  await expect(canvasNode(page, seed.epicTitle)).toBeVisible();
-  await expect(canvasNode(page, 'Growth experiments')).toBeVisible();
-  await expect(workspace(page).getByRole('navigation', { name: 'Breadcrumb' })).toHaveCount(0);
+  // The epic's STORY is drawn; the epic and its root-level sibling are not.
+  await expect(canvasNode(page, seed.storyTitle)).toBeVisible();
+  await expect(canvasNode(page, seed.epicTitle)).toHaveCount(0);
+  await expect(canvasNode(page, 'Growth experiments')).toHaveCount(0);
+
+  // A one-crumb trail: the epic alone, as the level being stood in.
+  const breadcrumb = workspace(page).getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(breadcrumb).toBeVisible();
+  await expect(breadcrumb).toContainText(`${seed.epicKey} · ${seed.epicTitle}`);
 });
 
 test('an UNRESOLVABLE ?item= opens the workspace at the root, never an error', async ({ page }) => {

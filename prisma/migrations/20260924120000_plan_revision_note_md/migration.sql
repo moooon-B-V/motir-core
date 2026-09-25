@@ -1,0 +1,23 @@
+-- Story MOTIR-5543 · Subtask MOTIR-6083: a plan revision can carry the EVIDENCE
+-- behind a `reason_classified` row.
+--
+-- Nullable, no backfill, no default: every existing row predates the kind that
+-- populates it, so NULL is the correct and complete answer for all of them. The
+-- column is ADDITIVE, which is what makes the ordinary deploy order (migrate,
+-- then take traffic) safe here — the still-serving build neither reads nor names
+-- it.
+--
+-- The evidence cannot ride `plan_revision.diff`: that payload is COUNT-shaped by
+-- contract (schema.prisma's own doc comment) and the plan timeline renders it on
+-- that promise, so prose there would either break the contract for every existing
+-- reader or smuggle a body into a payload documented as never carrying one.
+--
+-- ⚠️ INTERNAL. `note_md` is populated ONLY by `change_kind = 'reason_classified'`,
+-- and that kind is excluded from every tenant-facing read at the QUERY, through
+-- the single `TENANT_VISIBLE_PLAN_REVISION_WHERE` fragment in
+-- `planRevisionRepository`. No route, no MCP tool and no DTO returns either.
+--
+-- No index: the one read that selects these rows is already covered by
+-- `plan_revision(plan_id, changed_at)`, and a classification trail is tens of
+-- rows per plan.
+ALTER TABLE "plan_revision" ADD COLUMN "note_md" TEXT;

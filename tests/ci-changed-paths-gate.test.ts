@@ -947,6 +947,93 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
     });
   });
 
+  // ── The E2E lane keeps reading `app` (MOTIR-6222) ──────────────────────────
+  //
+  // MOTIR-6222 proposed a second flag — `app_e2e`, an ALLOW-list over the
+  // surfaces a browser can reach — so the twelve Playwright legs would skip a
+  // `packages/cli/**`-only diff. It required its own saving to be re-measured
+  // first, over at least the last 100 merged pull requests, and declared itself a
+  // NO-GO if the share came out materially below the 25% it had read off a
+  // 40-pull-request sample. It came out at 8.4% over 300, every window but that
+  // one sitting at 0–7%; `docs/decisions/ci-e2e-path-gate.md` is the verdict.
+  //
+  // This block pins it, exactly as the MOTIR-5948 block above pins that revert:
+  // the flag cannot come back piecemeal — a computed output nothing reads, or an
+  // `e2e` job quietly re-gated — without somebody re-opening the decision. The
+  // one thing that SHOULD bring it back is a fresh measurement, which is why the
+  // instrument is kept and asserted here rather than deleted with the proposal.
+  describe('the E2E lane keeps reading `app`, and no `app_e2e` flag exists (MOTIR-6222)', () => {
+    const ADR = 'docs/decisions/ci-e2e-path-gate.md';
+    const SCRIPT = 'scripts/ci/measure-e2e-reachability.mjs';
+
+    it('computes, declares and reads no `app_e2e` anywhere in the workflow', () => {
+      // All three, because each alone is a live-looking knob: a classifier that
+      // sets it, an `outputs:` that publishes it, or a job that gates on it.
+      expect(ci).not.toMatch(/app_e2e/);
+    });
+
+    it('still gates `e2e` on `app` — the same flag `test` and `coverage` read', () => {
+      // `every lane it gates actually reads it` above asserts the pairing for all
+      // nine lanes. This is the same fact stated where the DECISION is, so a
+      // future edit that re-points `e2e` lands on this card's record.
+      const e2eCode = codeOf(ciJobs.get('e2e') ?? '');
+      expect(e2eCode, 'the e2e job exists').not.toBe('');
+      expect(e2eCode).toContain("needs.changes.outputs.app == 'true'");
+    });
+
+    it('keeps the instrument that re-opens the decision', () => {
+      // `ci-affected-tests.md` A1.5 point 3's precedent: the measuring script
+      // outlives the proposal it declined, because re-running it is the only
+      // thing that re-opens the question.
+      const source = read(SCRIPT);
+      expect(source).toMatch(/E2E_REACHABLE/);
+      expect(read(ADR)).toContain(SCRIPT);
+    });
+
+    it('lifts the shipped classifier rather than carrying a second copy of it', () => {
+      // The whole worth of the measurement. A script that re-implemented the
+      // `app` arms would be scoring a copy whose first-match-wins order nobody
+      // keeps true — the exact reason `appArms` above models the shell instead of
+      // testing membership.
+      const source = read(SCRIPT);
+      expect(source).toContain('.github/workflows/ci.yml');
+      expect(source).toMatch(/- id: classify/);
+      // No second copy of the classifier's own exclusion arm.
+      expect(source).not.toContain('scripts/plan-seed/*');
+    });
+
+    it('records a reachable set that is the script’s, and names every surface §2.3 calls reachable', () => {
+      // §2.3 is the load-bearing half of the NO-GO: the card's proposed
+      // allow-list omitted these, and each omission is a pull request the flag
+      // would have skipped while the browser could see the change. If the script
+      // stops covering one, the record's argument is no longer true of the
+      // instrument that produced it.
+      const source = read(SCRIPT);
+      const block = source.slice(
+        source.indexOf('const E2E_REACHABLE'),
+        source.indexOf('];', source.indexOf('const E2E_REACHABLE')),
+      );
+      const globs = [...block.matchAll(/^\s*'([^']+)',$/gm)].map((m) => m[1]!);
+      expect(globs.length, 'the reachable list parsed').toBeGreaterThan(10);
+      for (const surface of [
+        'hooks/**',
+        'instrumentation.ts',
+        'packages/brand/**',
+        'packages/orchestrator/**',
+        'scripts/**',
+        'tests/helpers/**',
+        'tests/fixtures/**',
+        'package.json',
+        'pnpm-lock.yaml',
+      ]) {
+        expect(globs, surface).toContain(surface);
+      }
+      // And the one package nothing in the bundle or the specs reads — the whole
+      // population a narrower flag could ever have skipped — is NOT in it.
+      expect(globs).not.toContain('packages/cli/**');
+    });
+  });
+
   describe('each PACKAGE lane runs on what it consumes (MOTIR-5323)', () => {
     const LANES = [
       { job: 'cli', flag: 'pkg_cli', dir: 'packages/cli' },

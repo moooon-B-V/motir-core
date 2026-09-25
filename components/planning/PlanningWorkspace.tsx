@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { PlanningResizableFrame } from '@/components/planning/PlanningResizableFrame';
 
 // The reusable AI planning workspace shell (introduced by Subtask 7.3.5 /
 // MOTIR-833). The full-screen, two-pane frame EVERY AI-planning surface shares:
@@ -30,9 +31,54 @@ export interface PlanningWorkspaceProps {
    *  chrome-fitted container instead of the viewport. The grid columns are
    *  unchanged. */
   className?: string;
+  /**
+   * OPT IN to the RESIZABLE split (MOTIR-6250) — a conversation pane that opens
+   * at a third, a divider that drags, and a reset when a plan is proposed, all
+   * built to MOTIR-6249's approved design.
+   *
+   * ⚠️ OPT-IN, NOT THE DEFAULT, AND THAT IS A SCOPE DECISION RATHER THAN
+   * CAUTION. This shell has five consumers, and the split belongs to exactly one
+   * of them: the planning workspace (`PlanningWorkspaceHost`). Both cards in the
+   * story say so in terms — MOTIR-6250's boundary is *"Does NOT change: … the
+   * plan page's rail"*, and MOTIR-6236's is *"This host is NOT a split — it keeps
+   * its own rail width"*. `PlanDetail`, `GenerationFlow`, `DiscoveryOnboarding`
+   * and `PlanningWorkspaceSkeleton` therefore keep the FIXED `22rem` column,
+   * byte for byte, and a `false` here renders the identical markup it always did.
+   *
+   * It is the same shape MOTIR-6237 used one file over for `Textarea`'s
+   * auto-grow — *"every current caller keeps its fixed `rows`"* — which is the
+   * precedent in this very story set.
+   */
+  resizable?: boolean;
+  /**
+   * Whether a plan PROPOSAL is present. Read ONLY when `resizable` is set: it is
+   * what the reset fires on, at the moment a proposal arrives in the workspace's
+   * state rather than on a route change.
+   */
+  proposalPresent?: boolean;
 }
 
-export function PlanningWorkspace({ canvas, chat, guard, className }: PlanningWorkspaceProps) {
+export function PlanningWorkspace({
+  canvas,
+  chat,
+  guard,
+  className,
+  resizable = false,
+  proposalPresent = false,
+}: PlanningWorkspaceProps) {
+  if (resizable) {
+    return (
+      <>
+        <PlanningResizableFrame
+          canvas={canvas}
+          chat={chat}
+          proposalPresent={proposalPresent}
+          className={className}
+        />
+        {guard}
+      </>
+    );
+  }
   return (
     <>
       <div className={`grid grid-cols-1 md:grid-cols-[1fr_22rem] ${className ?? 'h-dvh w-full'}`}>

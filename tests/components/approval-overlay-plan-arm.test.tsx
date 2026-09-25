@@ -87,14 +87,31 @@ describe('handing the approval overlay a PLAN gate', () => {
     expect(href.searchParams.get('planVia')).toBe('approvals');
   });
 
-  it.each([
-    ['no conversation', null],
-    ['a conversation with no turns', { sessionId: 's-9', hasTurns: false, targetKeys: [] }],
-  ])('%s → the plan’s own page', async (_label, conversation) => {
-    fetchPlanReview.mockResolvedValue(reviewWith(conversation));
+  it('NO SESSION → the plan’s own page', async () => {
+    fetchPlanReview.mockResolvedValue(reviewWith(null));
     await openPlanGate();
     expect(replace).toHaveBeenCalledWith('/plans/plan-9');
     expect(shallowReplace).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  // ⚠️ AMENDED by Story MOTIR-6043 · MOTIR-6045, and it is a BEHAVIOUR CHANGE rather
+  // than a rewritten assertion: this case sat in the row above, asserting the plan
+  // page, because the forward keyed on the session's TURNS.
+  // `docs/decisions/mcp-authored-plan-review.md` overturned that reading — *"an empty
+  // transcript is not an absent conversation"* — so the whole test is now whether a
+  // session EXISTS, and a session with no turns forwards to the SURFACE like any
+  // other. The row and the page agree because both read the same predicate.
+  it('a session with NO TURNS → the conversation, not the page', async () => {
+    fetchPlanReview.mockResolvedValue(
+      reviewWith({ sessionId: 's-9', hasTurns: false, targetKeys: [] }),
+    );
+    await openPlanGate();
+    expect(replace).not.toHaveBeenCalled();
+    expect(shallowReplace).toHaveBeenCalledTimes(1);
+    const href = new URL(shallowReplace.mock.calls[0]![0] as string, 'http://x');
+    expect(href.searchParams.get('planSession')).toBe('s-9');
+    expect(href.searchParams.get('planVia')).toBe('approvals');
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 

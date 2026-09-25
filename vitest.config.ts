@@ -1849,6 +1849,26 @@ export default defineConfig({
         // gating them here would gate THIS story on OTHER stories' coverage, which
         // is the trade the block above already refuses once.
         'lib/planning/planShape.ts',
+        // Story MOTIR-6154 · Subtask MOTIR-6162 — the surface ARRIVAL. Where the
+        // planning canvas opens, and the one move it makes when a target settles
+        // later. MEASURED over this story's own specs (the two units, the canvas
+        // suite, the overlay and host suites and the integration gate):
+        //
+        //   surfaceArrival.ts   100 / 100 / 100 / 100   → GATED below
+        //   surfaceFollow.ts    100 / 100 / 100 / 100   → GATED below
+        //   planArrival.ts      93.7 / 80.8 / 88.9 / 100 → REPORT-ONLY
+        //
+        // `planArrival.ts` is REPORT-ONLY by the rule the two blocks above state.
+        // It is code this story MOVED rather than wrote (out of
+        // `components/planning/PlanReviewCanvas.tsx`, byte for byte), its residual
+        // branches are that function's pre-existing defensive arms, and the
+        // measurement above is over THIS story's specs alone — the plan page's own
+        // `plan-review-canvas*` suites exercise it too and will lift the number.
+        // Pinning it blind is what that rule exists to prevent; publishing it is
+        // the honest step, and the pin belongs to whoever reads the first CI run.
+        'lib/planning/surfaceArrival.ts',
+        'lib/planning/surfaceFollow.ts',
+        'lib/planning/planArrival.ts',
         'lib/planning/planView.ts',
         'components/planning/PlanProposalList.tsx',
         'app/**/plans/_components/PlanStatusTabs.tsx',
@@ -1862,6 +1882,18 @@ export default defineConfig({
         'app/**/plans/sessionRowView.ts',
         'app/**/plans/_components/SessionRow.tsx',
         'app/**/plans/_components/SessionsList.tsx',
+
+        // Story MOTIR-6043 · Subtask MOTIR-6045 — WHERE a plans row opens. The
+        // rule is the reason to gate it: ONE function answers for the Plans row
+        // above and the To-approve row in `components/approvals/`, so a branch
+        // of it that nothing exercises is a branch on which the two surfaces can
+        // silently disagree — which is the whole defect the story removes. Both
+        // files are new here and both are GATED in `thresholds` below, measured
+        // first, as this block prescribes throughout. `ApprovalRow.tsx` keeps its
+        // existing report-only place (see the approvals block below); it is a
+        // CALLER of the rule, not the rule.
+        'lib/planning/planDestination.ts',
+        'components/planning/PlanDestinationTag.tsx',
 
         // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle.
         // The story's decision code, in one place: what a pull request delivers
@@ -4766,6 +4798,12 @@ export default defineConfig({
         // Pinned at the 90 floor rather than at the measured number, so a later
         // refactor has room without anyone loosening a gate to make a build pass.
         'lib/planning/planShape.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-6162 — both measured 100 on every axis. Pinned at the project's
+        // 90 rather than at the measurement, so ordinary churn does not fail a
+        // build for a rounding error. `planArrival.ts` is deliberately absent:
+        // see the note beside its `include` entry.
+        'lib/planning/surfaceArrival.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/planning/surfaceFollow.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/planning/planView.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/PlanProposalList.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/_components/PlanStatusTabs.tsx': { branches: 90, functions: 90, lines: 90 },
@@ -4777,6 +4815,15 @@ export default defineConfig({
         'app/**/plans/sessionRowView.ts': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/_components/SessionRow.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/plans/_components/SessionsList.tsx': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-6043 · Subtask MOTIR-6045 — the destination rule and its
+        // affordance, pinned at the 90 floor after being MEASURED on this branch
+        // (both 100 / 100 / 100 / 100 over `tests/planning/planDestination`,
+        // `tests/components/plan-row-destination-agreement` and
+        // `tests/integration/planning/planRowDestinationGate`; `SessionRow.tsx`
+        // re-measured at 93.44 branches / 100 functions / 94.87 lines, still
+        // clear of the pin it already carried).
+        'lib/planning/planDestination.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/planning/PlanDestinationTag.tsx': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2999 · Subtask MOTIR-3008 — the `implemented` lifecycle
         // (see the `include` note above for why these five and not the three
         // pre-existing files the story also widened). MEASURED on this branch

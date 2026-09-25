@@ -16,7 +16,8 @@ import { fetchPlanReview } from '@/lib/planning/planReviewClient';
 // and the overlay must not answer it with an empty frame. So it FORWARDS: the `approval`
 // value is read as the PLAN's id, and the reader lands on the planning surface at the
 // plan's conversation (`planSession` + `planVia=approvals`, the row's own address) — or
-// on the plan's own page when it has no conversation to return to, or the read fails.
+// on the plan's own page when it has no SESSION to return to (Story MOTIR-6043's
+// settlement: the session's existence, never its turn count), or the read fails.
 //
 // ⚠️ A FORWARD, NOT A CLOSE — which is why it lives here rather than in the overlay. The
 // overlay has exactly one close seam (`requestClose`, guarded by
@@ -38,7 +39,12 @@ export function usePlanGateForward(planId: string | null): void {
         const review = await fetchPlanReview(planId, controller.signal);
         if (controller.signal.aborted) return;
         const conversation = review.conversation ?? null;
-        if (!conversation?.hasTurns) {
+        // ⚠️ THE SESSION, NOT ITS TURNS (Story MOTIR-6043 · MOTIR-6045). This read
+        // `!conversation?.hasTurns` until the settlement: an empty transcript is not
+        // an absent conversation, so an agent's plan, a cadence plan and a backfilled
+        // one all have somewhere to return to. Only a plan with NO session lands on
+        // the page — the same predicate `planRowDestination` answers for both rows.
+        if (!conversation) {
           router.replace(planPage);
           return;
         }

@@ -1523,6 +1523,29 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'docs/decisions/page-body.md',
     why: 'the fixture decision document the row NAMES (MOTIR-5673) — drawn content, not a citation',
   },
+  // ── A PUBLISHED ASSET NOT MIRRORED IN THE TREE (MOTIR-6190) ──────────────────
+  //  A design result is the source of truth and committing its files is optional
+  //  (`docs/decisions/design-result.md` AMENDMENT 5 Q1). MOTIR-6190 landed MOTIR-6033's
+  //  note as Part XXII of the ai-planning notes so a reader of the tree can find the
+  //  spec at all, and that Part names its own mocks and a mock it amends, none of
+  //  which is committed. Each is reached through `get_design` on the card named.
+  //  These rows are FORWARD-LOOKING: a pull request that mirrors the mock turns the
+  //  tight arm red, which is the signal to delete the row.
+  {
+    file: 'design/ai-planning/design-notes.md',
+    path: 'design/ai-planning/plan-review--decide.mock.html',
+    why: "Part XXII's own decision-surface mock, published on MOTIR-6033 (evidence cmueg6bue00kghwoikl5e6bxp) and not mirrored in the tree",
+  },
+  {
+    file: 'design/ai-planning/design-notes.md',
+    path: 'design/workbench/approvals-row--plan.mock.html',
+    why: "Part XXII's To-approve row mock, published on MOTIR-6033 (evidence cmueg6bue00kghwoikl5e6bxp) and not mirrored in the tree",
+  },
+  {
+    file: 'design/ai-planning/design-notes.md',
+    path: 'design/ai-chat/planning-workspace--resume.mock.html',
+    why: "the resume mock Part XXII amends, published on MOTIR-6019's design result and not mirrored in the tree",
+  },
   // ── ✅ RETIRED 2026-09-11 (MOTIR-5170, under Bug MOTIR-4925) ──────────────
   //  One FORWARD-LOOKING row stood here: `design/projects/design-notes.md` names
   //  `app/(authed)/settings/project/approvals/page.tsx`, the file MOTIR-4942's

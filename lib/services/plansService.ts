@@ -21,6 +21,14 @@ import {
   planRevisionsService,
   type PlanRevisionAgentActor,
 } from '@/lib/services/planRevisionsService';
+import {
+  REASON_CLASSIFIED_KIND,
+  REVISION_REASON_BRANCHES,
+  REVISION_REASON_EVIDENCE_MAX,
+  isRevisionReasonBranch,
+  isRuleRevisionReasonBranch,
+  type RevisionReasonBranch,
+} from '@/lib/plans/revisionReason';
 
 import { planRepository, type PlanUpdateInput } from '@/lib/repositories/planRepository';
 import {
@@ -109,6 +117,7 @@ import {
   PlanTargetImmutableError,
   UnresolvedPlanRefError,
   InvalidPlanHistoryCursorError,
+  PlanRevisionClassificationInvalidError,
 } from '@/lib/plans/errors';
 import {
   PLAN_REVISION_LEASE_MS,
@@ -5217,6 +5226,247 @@ export const plansService = {
     // best-effort, exactly as it is there.
     if (ended) await releasePlanTargetLocks(plan, ctx);
     return toPlanWithItemsDto(row, items);
+  },
+
+  /**
+   * RECORD WHY a change was asked of a plan that is not yet approved (Story
+   * MOTIR-5543 · Subtask MOTIR-6083) — one INTERNAL `reason_classified` row.
+   *
+   * ⚠️ IT IS RECORDED ON EVERY BRANCH, INCLUDING THE TWO THAT FILE NOTHING, and
+   * that is the card rather than a detail. A silent "no bug" is indistinguishable
+   * from a forgotten one, so *different solution, no bug* has to be a written
+   * judgement Motir can audit. Filing on every re-plan instead is what made the
+   * planner-bug home unreadable — hundreds of rows in which a reviewer preferring
+   * a side panel looks exactly like a plan that forgot to check whether its
+   * repository still exists.
+   *
+   * ⚠️ NO TENANT SEES IT. This is Motir's own judgement about its own planner:
+   * the row's kind is in `INTERNAL_PLAN_REVISION_CHANGE_KINDS`, every
+   * tenant-facing read excludes that set at the query
+   * (`planRevisionRepository`'s `TENANT_VISIBLE_PLAN_REVISION_WHERE`), and
+   * `PlanHistoryEventDto` is unchanged — no field was added for it to render.
+   * Epic 10 is the eventual reader.
+   *
+   * ⚠️ IT WRITES NO BUG. The caller files the planning bug and passes its id, on
+   * the two rule branches. This method's job is the RECORD; the doors above it
+   * (MOTIR-6086's MCP tool, MOTIR-6087's internal route) are what a planner
+   * reaches, and neither is this card's.
+   *
+   * The access check, the lock and the status refusal are `correctProposal`'s
+   * exactly — `ai:view_plan`, not `ai:decide_plan`, because classifying a
+   * requested change is part of authoring the correction rather than deciding
+   * the plan. An `approved` or `declined` plan is refused with the same
+   * {@link PlanNotEditableError} the correction doors raise: those plans are
+   * frozen, and a classification recorded against one would be a judgement about
+   * a change that can no longer happen.
+   */
+  async recordRevisionClassification(
+    args: {
+      planId: string;
+      branch: RevisionReasonBranch;
+      evidenceMd: string;
+      /** The planning bug by its work-item ID — what motir-ai's `createBug` hands back. */
+      planningBugId?: string | null;
+      /**
+       * The planning bug by its `MOTIR-<n>` KEY — what the runbook holds after
+       * `create_work_item`.
+       *
+       * ⚠️ TWO SPELLINGS OF ONE ARGUMENT, resolved HERE rather than at each door,
+       * because resolving a key needs the PLAN'S PROJECT and this method is the
+       * only place that already has it. A door that resolved it for itself would
+       * have to read the plan a second time just to learn the project — and the
+       * MCP transport is supposed to make one service call, not three.
+       *
+       * Giving both is refused rather than silently resolved: they are the same
+       * field in two forms, so a call sending both has not decided what it means.
+       */
+      planningBugKey?: string | null;
+      actor?: PlanRevisionAgentActor | null;
+    },
+    ctx: ServiceContext,
+  ): Promise<{
+    revisionId: string;
+    branch: RevisionReasonBranch;
+    planningBugId: string | null;
+    planningBugKey: string | null;
+    /** The row's OWN `changedAt`, so a caller reports when it was recorded
+     *  rather than when it asked. */
+    at: string;
+  }> {
+    const { planId, branch } = args;
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new PlanNotFoundError(planId);
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
+
+    if (!isRevisionReasonBranch(branch)) {
+      throw new PlanRevisionClassificationInvalidError(
+        planId,
+        String(branch),
+        `it is not one of the four branches: ${REVISION_REASON_BRANCHES.join(', ')}.`,
+      );
+    }
+
+    // The EVIDENCE, trimmed and bounded before anything is locked. Empty is
+    // refused on every branch, not only the two that file: the branch alone is a
+    // verdict with no working shown, and "recorded so it can be checked" is the
+    // property this whole row exists for.
+    const evidenceMd = (args.evidenceMd ?? '').trim();
+    if (evidenceMd.length === 0) {
+      throw new PlanRevisionClassificationInvalidError(
+        planId,
+        branch,
+        'it carries no evidence. Every branch records why it was chosen — quote the turn that raised the thing, or the rule search that came back empty.',
+      );
+    }
+    if (evidenceMd.length > REVISION_REASON_EVIDENCE_MAX) {
+      throw new PlanRevisionClassificationInvalidError(
+        planId,
+        branch,
+        `its evidence is ${evidenceMd.length} characters; the limit is ${REVISION_REASON_EVIDENCE_MAX}.`,
+      );
+    }
+
+    // ONE ARGUMENT, TWO SPELLINGS. Both given is refused rather than resolved —
+    // the same call `assertSingleTargetRepoInput` makes for the repository axis,
+    // and for the same reason: a caller sending two forms of one field has not
+    // decided what it means, and inventing a precedence rule would settle it for
+    // them silently.
+    const rawKey = args.planningBugKey?.trim() ?? '';
+    if (args.planningBugId && rawKey !== '') {
+      throw new PlanRevisionClassificationInvalidError(
+        planId,
+        branch,
+        'it names the planning bug twice — give `planningBugId` or `planningBugKey`, not both.',
+      );
+    }
+
+    // THE BRANCH AND THE BUG MUST AGREE. Both directions are refused, because
+    // both make the row say something its caller did not. Asked of the PAIR
+    // rather than of the resolved id, so a rule branch that sent no key at all
+    // is refused before a lookup it has nothing to look up.
+    const namesABug = Boolean(args.planningBugId) || rawKey !== '';
+    const filesABug = isRuleRevisionReasonBranch(branch);
+    if (filesABug && !namesABug) {
+      throw new PlanRevisionClassificationInvalidError(
+        planId,
+        branch,
+        "it is a branch about the planner, so it files exactly one planning bug — pass that bug's id. File the bug first; this row records which bug the classification produced.",
+      );
+    }
+    if (!filesABug && namesABug) {
+      throw new PlanRevisionClassificationInvalidError(
+        planId,
+        branch,
+        'it is a branch about what the person wants, so it files nothing — a planning bug here would be the noise this classification exists to remove.',
+      );
+    }
+
+    // THE KEY, RESOLVED — in the plan's OWN project, which is what makes the
+    // same-project rule below hold for this spelling by construction: a key in
+    // another project is not found rather than found-and-refused, which is the
+    // family's no-leak posture.
+    let planningBugId = args.planningBugId ?? null;
+    let planningBugKey: string | null = null;
+    if (rawKey !== '') {
+      const resolved = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findByIdentifier(plan.projectId, rawKey.toUpperCase(), tx),
+      );
+      if (!resolved) {
+        throw new PlanRevisionClassificationInvalidError(
+          planId,
+          branch,
+          `no work item \`${rawKey.toUpperCase()}\` exists in this plan's project.`,
+        );
+      }
+      planningBugId = resolved.id;
+      planningBugKey = rawKey.toUpperCase();
+    }
+
+    // THE BUG MUST BE A BUG, AND IT MUST BE IN THE PLAN'S OWN PROJECT.
+    //
+    // ⚠️ WHICH RULE THIS IS, because the card left it to be settled by reading
+    // the code: `bugDestinationService.resolvePlannerBug(projectId)` resolves the
+    // project's OWN `plannerBugDestinationFolderId`, else its own product bug
+    // destination, else its own root — so the shipped filer always lands a
+    // planning bug in the SAME project as the plan it was filed about. There is
+    // no cross-project hop to accommodate, and accepting one would let a
+    // classification point at a row in a project the reader of the plan cannot
+    // open. (`lib/ai/plannerBugHome.ts` documents the marker; the marker's job is
+    // only to survive a key renumbering, not to cross a project.)
+    if (planningBugId) {
+      const bug = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findById(planningBugId, tx),
+      );
+      if (!bug) {
+        throw new PlanRevisionClassificationInvalidError(
+          planId,
+          branch,
+          `the planning bug ${planningBugId} does not exist.`,
+        );
+      }
+      if (bug.kind !== 'bug') {
+        throw new PlanRevisionClassificationInvalidError(
+          planId,
+          branch,
+          `the work item ${planningBugId} is a \`${bug.kind}\`, not a \`bug\`. A classification points at the defect record it produced.`,
+        );
+      }
+      if (bug.projectId !== plan.projectId) {
+        throw new PlanRevisionClassificationInvalidError(
+          planId,
+          branch,
+          `the planning bug ${planningBugId} is in a different project from the plan. A planning bug is filed into its own project's planner-bug destination, so the two always match.`,
+        );
+      }
+    }
+
+    // ONE transaction, the same shape the correction doors use: lock the plan,
+    // re-read it under the lock, refuse a frozen status, write the row. The lock
+    // is what makes the status check meaningful — without it a plan can be
+    // approved between the read and the write, and the classification would land
+    // on a plan nothing can change any more.
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+      async (tx) => {
+        const locked = await planRepository.lockById(planId, tx);
+        if (!locked) throw new PlanNotFoundError(planId);
+        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+        if (!fresh) throw new PlanNotFoundError(planId);
+        assertPlanProposalsEditable(fresh);
+
+        return planRevisionsService.recordRevision(
+          {
+            planId,
+            // No `planItemId`: a classification is about the REQUEST, not about
+            // any one proposal — the same call the open, the close and
+            // `bug_filed` make.
+            planItemId: null,
+            changedById: ctx.userId,
+            changeKind: REASON_CLASSIFIED_KIND,
+            actor: args.actor ?? null,
+            // COUNT-SHAPED, as every `diff` is: two identifiers and no prose.
+            // The evidence rides `noteMd` precisely so this payload keeps the
+            // contract its own doc comment makes to every existing reader.
+            diff: { branch, planningBugId },
+            noteMd: evidenceMd,
+          },
+          tx,
+        );
+      },
+    );
+
+    // The KEY rides back only when the caller supplied one: a door that named
+    // the bug by id never asked for its key, and resolving one to report it
+    // would be a read nobody needs.
+    return {
+      revisionId: row.id,
+      branch,
+      planningBugId,
+      planningBugKey,
+      at: row.changedAt.toISOString(),
+    };
   },
 
   // `approvePlanForWorkItem` — the v1 plan-approval route's entrance — moved to
