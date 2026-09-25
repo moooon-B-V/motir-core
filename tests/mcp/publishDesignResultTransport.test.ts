@@ -8,12 +8,12 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { mcpCatalogue } from '@/lib/apiDocs/mcp';
-import * as route from '@/app/api/mcp/route';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { makeWorkWaitOn } from '../helpers/designWaits';
+import { mcpRouteFetch } from '../helpers/mcpRouteFetch';
 
 const store = new Map<string, { size: number; contentType: string }>();
 // The MINT half of the same store (bug MOTIR-4750) — faked as a GRANT rather
@@ -72,25 +72,9 @@ vi.mock('@/lib/blob/uploader', async (importOriginal) => ({
 
 const ENDPOINT = 'http://localhost/api/mcp';
 
-function routeFetch(token?: string): typeof fetch {
-  return (async (input: unknown, init: RequestInit = {}) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : (input as Request).url;
-    const headers = new Headers(init.headers ?? {});
-    if (token) headers.set('authorization', `Bearer ${token}`);
-    const method = (init.method ?? 'GET').toUpperCase();
-    const handler = method === 'GET' ? route.GET : method === 'DELETE' ? route.DELETE : route.POST;
-    return handler(new Request(url, { ...init, headers }) as never);
-  }) as unknown as typeof fetch;
-}
-
 async function connect(token: string): Promise<Client> {
   const transport = new StreamableHTTPClientTransport(new URL(ENDPOINT), {
-    fetch: routeFetch(token),
+    fetch: mcpRouteFetch(token),
   });
   const client = new Client({ name: 'publish-design-result-transport', version: '0.0.0' });
   await client.connect(transport);
