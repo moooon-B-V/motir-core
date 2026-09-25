@@ -289,7 +289,11 @@ Two consequences worth stating:
 - **`add_plan_items`' `modify` patch is the deliberate exception.** That object
   is declared `.passthrough()` so a field the service already understands can
   never be turned away by this schema; unknown keys inside a `patch` still reach
-  the service unchanged. The keys it DOES name — `difficulty` among them
+  the service unchanged — **and the service REFUSES them** (`INVALID_PROPOSAL`,
+  naming every such key), at the append and at `update_plan_proposal` alike
+  (MOTIR-6259). A `modify` has no `executor` key: re-typing a card that has no
+  executor seeds the type's default at approve, shown on the review as an
+  `executor` change row. The keys it DOES name — `difficulty` among them
   (MOTIR-6136) — are typed, so `patch.difficulty: "extreme"` is refused at the
   schema. Everything else — including `proposedFields` — is strict.
 
