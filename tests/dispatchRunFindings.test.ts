@@ -478,8 +478,8 @@ describe('the INGEST refuses a client-reported finding — both directions', () 
   // The forgery guard. The whole value of the record is that it says what
   // actually happened, and a run token that could append `bug_filed` could
   // assert a bug the run never filed.
-  it('rejects `bug_filed` and `plan_submitted` on the append body', () => {
-    for (const kind of ['bug_filed', 'plan_submitted']) {
+  it('rejects `bug_filed`, `plan_submitted` and `unbuildable_reported` on the append body', () => {
+    for (const kind of ['bug_filed', 'plan_submitted', 'unbuildable_reported']) {
       expect(dispatchRunEventInputSchema.safeParse({ kind }).success).toBe(false);
     }
   });
@@ -488,6 +488,48 @@ describe('the INGEST refuses a client-reported finding — both directions', () 
     for (const kind of ['card_claimed', 'agent_exited', 'leg_verdict', 'plan_approved', 'log']) {
       expect(dispatchRunEventInputSchema.safeParse({ kind }).success).toBe(true);
     }
+  });
+});
+
+describe('the RUN-FOUND REPORT is recorded at most once per LEG (MOTIR-6282)', () => {
+  // The report's identity is the leg, not anything inside the report: a runner
+  // that retries, or two prompt lanes that both reach the call, must leave ONE
+  // event on the leg — whatever each call concluded.
+  it('a second report on the same open leg records nothing, and the leg id is the key', async () => {
+    const leaf = await seedLeaf();
+    const runId = await openRunWithLiveLeg(leaf.key);
+
+    const first = await dispatchRunService.recordFinding(
+      { anchorWorkItemId: leaf.id, kind: 'unbuildable_reported', data: { outcome: 'no_plan' } },
+      fixture.ctx,
+    );
+    const second = await dispatchRunService.recordFinding(
+      { anchorWorkItemId: leaf.id, kind: 'unbuildable_reported', data: { outcome: 'filed' } },
+      fixture.ctx,
+    );
+
+    expect(first).toEqual({ recorded: true });
+    expect(second).toEqual({ recorded: false });
+
+    const findings = (await readBack(runId)).filter((e) => e.kind === 'unbuildable_reported');
+    expect(findings).toHaveLength(1);
+    const leg = await adminDb.dispatchRunCard.findFirstOrThrow({
+      where: { dispatchRunId: runId, workItemId: leaf.id },
+    });
+    expect(findings[0]!.cardId).toBe(leg.id);
+    // The FIRST conclusion stands, and the leg id rides in `data` — the path
+    // the dedupe matches on.
+    expect(findings[0]!.data).toEqual({ outcome: 'no_plan', dispatchRunCardId: leg.id });
+  });
+
+  it('no open leg means no report event, and no error', async () => {
+    const leaf = await seedLeaf();
+    await expect(
+      dispatchRunService.recordFinding(
+        { anchorWorkItemId: leaf.id, kind: 'unbuildable_reported', data: { outcome: 'filed' } },
+        fixture.ctx,
+      ),
+    ).resolves.toEqual({ recorded: false });
   });
 });
 

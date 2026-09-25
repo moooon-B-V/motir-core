@@ -73,6 +73,9 @@ import {
   PlanGrammarError,
   PlanRefGraphError,
   PlanRevisionClassificationInvalidError,
+  InvalidPlanHistoryCursorError,
+  ApprovedShapeVerdictTooManyIdsError,
+  ApprovedShapeChildKeyNotAChildError,
 } from '@/lib/plans/errors';
 import {
   EmptyPlanChangeIntentError,
@@ -85,6 +88,7 @@ import {
 } from '@/lib/planChange/errors';
 import { InvalidTargetError } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError } from '@/lib/ai/errors';
+import { RunFoundReportReasonInvalidError } from '@/lib/dispatchRuns/errors';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { AttachmentError } from '@/lib/blob/errors';
 import { DesignEvidenceError } from '@/lib/designEvidence/errors';
@@ -509,7 +513,21 @@ export function toToolError(err: unknown): CallToolResult {
     // drop the key on a no-bug branch, supply evidence, pass ONE of id/key — and
     // an agent can only act on that sentence if it arrives as a tool error
     // carrying the code, not as a JSON-RPC internal error.
-    err instanceof PlanRevisionClassificationInvalidError
+    err instanceof PlanRevisionClassificationInvalidError ||
+    // The approved-shape verdict door's three refusals (MOTIR-6227): a
+    // `childKeys` entry that is not a child of `key` (named), a set larger than
+    // one read answers, and a malformed plan-history cursor. Each is the
+    // caller's own input, fixable in one hop, and each must arrive as a code —
+    // a verdict read that fails opaquely is one an agent retries or guesses past.
+    err instanceof ApprovedShapeChildKeyNotAChildError ||
+    err instanceof ApprovedShapeVerdictTooManyIdsError ||
+    err instanceof InvalidPlanHistoryCursorError ||
+    // RUN_FOUND_REPORT_REASON_INVALID (MOTIR-6286) — `report_unbuildable_target`'s
+    // `reason` empty or over 4000 characters once trimmed. The runner's own
+    // input, fixable in one hop (send the same text as the card comment); the
+    // bound is the SERVICE's, so it must reach the runner as this code rather
+    // than as a JSON-RPC internal error.
+    err instanceof RunFoundReportReasonInvalidError
   ) {
     return toolError(err.code, err.message);
   }
