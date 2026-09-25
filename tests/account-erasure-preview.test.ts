@@ -316,7 +316,7 @@ describe('previewAccountErasure — a sole WORKSPACE membership is a choice, not
     // The reader is an org ADMIN, not its Owner, so the org-tier guard cannot
     // fire — which isolates the workspace tier. This is the case the card says the original framing got
     // wrong: `removeMemberInTx` refuses the last member LEAVING, but
-    // `deleteWorkspace` asserts membership without checking a role, so a
+    // `deleteWorkspaceForErasure` asks only for sole membership, not a role, so a
     // sole-membership workspace has two futures rather than none.
     const coOwner = await createTestUser();
     const user = await createTestUser();
@@ -634,7 +634,8 @@ describe('previewAccountErasure — it is a READ', () => {
     // implementation and the one the design rejects.
     const orgRemove = vi.spyOn(organizationsService, 'removeMember');
     const orgDemote = vi.spyOn(organizationsService, 'changeMemberRole');
-    const wsDelete = vi.spyOn(workspacesService, 'deleteWorkspace');
+    const wsDelete = vi.spyOn(workspacesService, 'deleteWorkspaceForErasure');
+    const wsRemoveAsAdmin = vi.spyOn(workspacesService, 'removeWorkspaceAsOrgAdmin');
     const wsRemove = vi.spyOn(workspacesService, 'removeMember');
 
     const probe = await probeReadOnly(() => accountErasureService.previewAccountErasure(user.id));
@@ -653,11 +654,13 @@ describe('previewAccountErasure — it is a READ', () => {
       expect(orgRemove).not.toHaveBeenCalled();
       expect(orgDemote).not.toHaveBeenCalled();
       expect(wsDelete).not.toHaveBeenCalled();
+      expect(wsRemoveAsAdmin).not.toHaveBeenCalled();
       expect(wsRemove).not.toHaveBeenCalled();
     } finally {
       orgRemove.mockRestore();
       orgDemote.mockRestore();
       wsDelete.mockRestore();
+      wsRemoveAsAdmin.mockRestore();
       wsRemove.mockRestore();
     }
   });

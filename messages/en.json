@@ -630,6 +630,7 @@
       "couldNotLink": "Could not link the selected work items.",
       "orgSecurityForbidden": "Only owners and admins of an organization can change its security settings.",
       "workspaceSecurityForbidden": "Only owners and admins of a workspace can change its security settings.",
+      "workspaceRemoveForbidden": "Only owners and admins of the organization can remove a workspace.",
       "refused": "That didn’t go through: {reason}"
     },
     "links": {

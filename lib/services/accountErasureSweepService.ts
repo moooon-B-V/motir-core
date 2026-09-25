@@ -15,6 +15,7 @@ import { userRepository } from '@/lib/repositories/userRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { accountErasureService } from '@/lib/services/accountErasureService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { WorkspaceNotSoleMemberError } from '@/lib/workspaces/errors';
 import { ERASED_USER_NAME, erasedEmailFor, erasureResumeFloor } from '@/lib/users/accountErasure';
 import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
 
@@ -176,7 +177,7 @@ interface ErasureTxResult {
  * There is no window between them.
  *
  * ⚠️ AND THE WORKSPACES ARE DELIBERATELY OUTSIDE IT — POST-COMMIT, LAST.
- * `workspacesService.deleteWorkspace` opens its own transactions and fires its
+ * `workspacesService.deleteWorkspaceForErasure` opens its own transactions and fires its
  * own `workspace_deleted` offboarding enqueue, so it cannot be nested inside
  * this one (`lib/workspaces/context.ts`: *"Never open a second"*). Running it
  * AFTER the commit is what keeps the cancel window at zero — by the time it
@@ -185,10 +186,9 @@ interface ErasureTxResult {
  * standing, which is what `findDueOrResumable`'s second arm exists to finish.
  *
  * EVERY MEMBERSHIP is held back from the transaction for the same reason, and
- * that ordering is FORCED: `deleteWorkspace` opens with `assertMembership`,
- * which resolves through the ORGANIZATION tier (6.10.4 — a stale workspace
- * membership with no org membership is DENIED). Dropping either tier first
- * makes the workspace deletes refuse. So they are erasure's last act, after
+ * that ordering is FORCED: `deleteWorkspaceForErasure` asserts, under a lock,
+ * that the user's workspace membership is the workspace's only one (MOTIR-6309).
+ * Dropping the memberships first makes the workspace deletes refuse. So they are erasure's last act, after
  * the account is already credential-less and anonymised and can no longer use
  * them for anything.
  *
@@ -279,7 +279,7 @@ async function eraseOneAccount(
           // the erasure commits and no cancel-window state can leave it
           // half-erased. Its BLOB cannot: deleting an object is an external
           // side effect with no rollback, so it waits for the commit — the
-          // position `deleteWorkspace` takes below, for the same reason.
+          // position `deleteWorkspaceForErasure` takes below, for the same reason.
           //
           // Read the pathnames BEFORE the delete: `deleteMany` answers with a
           // count, not with the rows, and after it there is nothing left to ask.
@@ -349,30 +349,51 @@ async function eraseOneAccount(
   }
 
   // ── DELETED: the workspaces that go with the account ──────────────────────
-  // ⚠️ THROUGH `deleteWorkspace`, AND THAT IS A CONTRACT RATHER THAN A STYLE
-  // CHOICE. That method enqueues the `workspace_deleted` code-graph offboarding
-  // reason, and — the ordering trap — enumerates the project ids BEFORE the
-  // cascade takes them. `CodeGraphOffboardReason` is a closed four-member set
-  // and `docs/decisions/code-graph-index-fleet.md` §14.1 is explicit that the
-  // FK cascade makes an unenqueued delete WORSE, because it removes the only
-  // inventory naming the snapshot keys. Reaching these rows any other way would
-  // owe a fifth reason plus that ordering; this run takes the existing path and
-  // owes neither. Deleting a workspace here is not an escalation: DECISION 3
-  // records that `deleteWorkspace` asserts membership and checks no role, so
-  // the sole member has always been allowed to do exactly this.
+  // ⚠️ THROUGH `deleteWorkspaceForErasure`, AND THAT IS A CONTRACT RATHER THAN A
+  // STYLE CHOICE. It runs the ONE workspace delete (`deleteWorkspaceCascade` in
+  // `workspacesService`), which enqueues the `workspace_deleted` code-graph
+  // offboarding reason, and — the ordering trap — enumerates the project ids
+  // BEFORE the cascade takes them. `CodeGraphOffboardReason` is a closed
+  // four-member set and `docs/decisions/code-graph-index-fleet.md` §14.1 is
+  // explicit that the FK cascade makes an unenqueued delete WORSE, because it
+  // removes the only inventory naming the snapshot keys. Reaching these rows any
+  // other way would owe a fifth reason plus that ordering; this run takes the
+  // existing path and owes neither.
+  //
+  // ⚠️ AND IT IS ERASURE'S OWN ENTRY, NOT THE ADMIN DOOR (MOTIR-6309). Removing a
+  // workspace interactively became an org-Admin act, and the person being erased
+  // is often a plain org Member — so this path no longer rides on "the delete
+  // checks no role". It asserts the rule DECISION 3 actually states instead:
+  // under a lock on the workspace's membership rows, this user is its SOLE
+  // member. A workspace somebody joined after `soleMemberWorkspaceIds` was read
+  // is refused (`WorkspaceNotSoleMemberError`) and SKIPPED — it is no longer the
+  // account's to delete — rather than thrown, which would wedge the resume arm
+  // on a workspace that can never pass.
   let workspacesDeleted = 0;
   for (const workspaceId of soleMemberWorkspaceIds) {
-    await workspacesService.deleteWorkspace({ workspaceId, actorUserId: userId });
+    try {
+      await workspacesService.deleteWorkspaceForErasure({ workspaceId, userId });
+    } catch (err) {
+      if (err instanceof WorkspaceNotSoleMemberError) {
+        console.warn(
+          `[accountErasure] workspace ${workspaceId} gained another member before its ` +
+            "delete; it is no longer the erased account's alone and is left standing.",
+        );
+        continue;
+      }
+      throw err;
+    }
     workspacesDeleted += 1;
   }
 
   // ── DELETED: the tenants they no longer belong to — LAST, and it has to be ─
   // ⚠️ THE MEMBERSHIPS CANNOT GO IN THE TRANSACTION ABOVE, and the reason is a
-  // gate rather than tidiness. `deleteWorkspace` opens with `assertMembership`,
-  // which resolves through the ORGANIZATION tier (Story 6.10.4: *"a user with a
-  // stale workspace membership but no org membership is DENIED"*), so removing
-  // either tier before the loop above makes every one of those deletes refuse —
-  // leaving standing exactly the workspaces DECISION 3 says go with the account.
+  // gate rather than tidiness. `deleteWorkspaceForErasure` refuses unless the
+  // user's workspace membership is the workspace's ONLY one (MOTIR-6309), so
+  // removing the memberships before the loop above makes every one of those
+  // deletes refuse — leaving standing exactly the workspaces DECISION 3 says go
+  // with the account. The org memberships go with them, after, for the same
+  // reason they always did: they are this account's last standing in a tenant.
   //
   // Running them after the commit is safe because the account is already
   // credential-less and anonymised by then: it cannot act on a membership it

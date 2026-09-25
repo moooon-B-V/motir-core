@@ -40,7 +40,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // §8's never-released rule is about who may take a name NEXT, not about who must
 // keep SERVING it — `reservesItsHostname`'s own comment says so — so a workspace
 // may give its subdomain back while the NAME stays out of the namespace for ever.
-// `workspacesService.deleteWorkspace` already had this shape scoped to a whole
+// The workspace delete (`deleteWorkspaceCascade`) already had this shape scoped to a whole
 // workspace (list → filter `reservesItsHostname` → `reserveMany` → delete, one
 // transaction); `release` is that path narrowed from *the workspace is going* to
 // *the subdomain is going*, and it follows it deliberately rather than by
@@ -312,7 +312,7 @@ function assertLabelClaimable(label: string): void {
  *
  * The first half is the `public_address.hostname` unique index, which holds a
  * name for as long as its row exists. This is the half that holds it once the
- * row is gone: `workspacesService.deleteWorkspace` writes a digest into
+ * row is gone: the workspace delete (`deleteWorkspaceCascade`) writes a digest into
  * `public_hostname_reservation` before the cascade takes the addresses, and this
  * is what reads it back.
  *

@@ -324,9 +324,15 @@ describe('⚠️ the bound read spans every workspace, not the active one', () =
     // The other direction, and the one that stops the fix from being "return
     // true whenever any workspace anywhere asks".
     const { owner, organizationId } = await twoWorkspaceFixture();
+    // Creating a workspace in an existing org is an org-Admin act (MOTIR-6309),
+    // so the Quiet workspace's creator is an Admin of the org first.
+    const grace = await makeUser('Grace');
+    await adminDb.organizationMembership.create({
+      data: { organizationId, userId: grace.id, role: ORGANIZATION_ROLE.admin },
+    });
     const { workspace: quiet } = await workspacesService.createWorkspace({
       name: 'Quiet',
-      ownerUserId: (await makeUser('Grace')).id,
+      ownerUserId: grace.id,
       organizationId,
     });
     const outsider = await makeUser('Hopper');

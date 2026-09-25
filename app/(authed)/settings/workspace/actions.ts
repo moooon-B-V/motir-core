@@ -9,6 +9,7 @@ import { getWorkspaceContext, WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
 import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { LastMemberError } from '@/lib/workspaces/errors';
+import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
 
 // Server Actions for the workspace settings page. HTTP/transport layer:
 // each reads the session + active workspace, calls exactly one service
@@ -126,9 +127,30 @@ export async function leaveWorkspaceAction(): Promise<ActionResult> {
   redirect('/dashboard');
 }
 
-export async function deleteWorkspaceAction(): Promise<ActionResult> {
+/**
+ * Remove the ACTIVE workspace — through the org-Admin door (MOTIR-6309).
+ * Removing a workspace is an org Owner's or Admin's act now, not any member's,
+ * so this calls `removeWorkspaceAsOrgAdmin` and turns its refusal into a
+ * value the dialog shows (a Member, or someone outside the org, is refused).
+ *
+ * ⚠️ AN INTERIM DOOR. The workspace-tier Delete row this action serves is
+ * retired by MOTIR-6312, which moves removal to the org Workspaces section
+ * (`/api/organizations/[orgId]/workspaces/[workspaceId]`); this action goes with
+ * that row.
+ */
+export async function removeWorkspaceAction(): Promise<ActionResult> {
   const { userId, workspaceId } = await requireContext();
-  await workspacesService.deleteWorkspace({ workspaceId, actorUserId: userId });
+  try {
+    await workspacesService.removeWorkspaceAsOrgAdmin({ workspaceId, actorUserId: userId });
+  } catch (err) {
+    if (err instanceof OrgForbiddenError || err instanceof OrganizationNotFoundError) {
+      return {
+        ok: false,
+        error: (await getErrorsTranslator())('actions.workspaceRemoveForbidden'),
+      };
+    }
+    throw err;
+  }
   await switchToRemainingOrClear(userId);
   redirect('/dashboard');
 }

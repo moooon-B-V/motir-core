@@ -18,12 +18,14 @@ import { organizationRepository } from '@/lib/repositories/organizationRepositor
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import {
+  bindWorkspaceContext,
   withUserContext,
   withWorkspaceContext,
   type TransactionBudget,
 } from '@/lib/workspaces/context';
 import { readMembership, readReachRole } from '@/lib/workspaces/membershipGate';
-import { bindOrganizationContext } from '@/lib/organizations/context';
+import { bindOrganizationContext, withOrgContext } from '@/lib/organizations/context';
+import { assertOrgCapability } from '@/lib/services/organizationAccessService';
 import { WORKSPACE_ROLE } from '@/lib/workspaces/roles';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { organizationsService } from '@/lib/services/organizationsService';
@@ -35,6 +37,8 @@ import {
   LastMemberError,
   NotAMemberError,
   SlugCollisionError,
+  WorkspaceNotFoundError,
+  WorkspaceNotSoleMemberError,
 } from '@/lib/workspaces/errors';
 import {
   toCurrentWorkspaceDTO,
@@ -43,9 +47,15 @@ import {
 } from '@/lib/mappers/workspaceMappers';
 import type {
   CurrentWorkspaceDTO,
+  OrgWorkspacePageDTO,
+  OrgWorkspaceRowDTO,
   WorkspaceMemberDTO,
   WorkspaceSummaryDTO,
 } from '@/lib/dto/workspaces';
+
+/** The org Workspaces section's page size (the members roster's, MOTIR-6304). */
+const ORG_WORKSPACES_DEFAULT_LIMIT = 10;
+const ORG_WORKSPACES_MAX_LIMIT = 100;
 
 // Workspaces service — business logic for the Workspace and
 // WorkspaceMembership entities.
@@ -64,9 +74,10 @@ import type {
 // workspaces. The workspace-context resolver calls this on a zero-
 // membership read; it is idempotent and concurrency-safe.
 //
-// The 1.2.6 settings surface adds `renameWorkspace`, `deleteWorkspace`,
-// `listMembers`, and `getWorkspaceSummary`, plus a last-member guard on
-// `removeMember`. Those workspace-scoped operations run inside
+// The 1.2.6 settings surface adds `renameWorkspace`, `listMembers`, and
+// `getWorkspaceSummary`, plus a last-member guard on `removeMember`. Removing a
+// workspace is an org-Admin act since MOTIR-6309 (`removeWorkspaceAsOrgAdmin`),
+// with account erasure's own entry beside it (`deleteWorkspaceForErasure`). Those workspace-scoped operations run inside
 // withWorkspaceContext so the workspace / workspace_membership RLS
 // policies see the per-transaction GUCs (app.user_id / app.workspace_id).
 
@@ -171,9 +182,9 @@ async function insertWorkspaceWithOwner(
   // tier — Workspace.organizationId is non-nullable). Two creation shapes:
   //
   //   * 2nd+ workspace under an ACTIVE org (organizationId provided, 6.10.4) —
-  //     the workspace nests under the existing org and the creator gets an
-  //     org membership via the UPWARD invariant (you cannot be in a workspace
-  //     without being in its org — 6.10.2 §5i) if they aren't one already.
+  //     the workspace nests under the existing org. Only an org Owner or Admin
+  //     may do this (MOTIR-6309), so the creator is always already an org
+  //     member and the upward invariant (6.10.2 §5i) holds without a join.
   //   * a brand-new account / first workspace (no organizationId) — mints its
   //     OWN default org with the creator as org owner (an org of one / OPC),
   //     the same one-org-per-workspace shape the 6.10.3 migration backfill gives
@@ -186,10 +197,17 @@ async function insertWorkspaceWithOwner(
   // this org-aware path; not done here.)
   let organizationId = input.organizationId;
   if (organizationId) {
+    // Creating a workspace in an EXISTING organization is an org-Admin act
+    // (MOTIR-6309; `role-model.md` §1): the creator must hold `manageWorkspaces`
+    // there. Asserted FIRST, inside this transaction and before any insert — a
+    // non-member reads the org as absent (404) and a plain Member is refused
+    // (403), and neither learns anything about the org's plan from the cap check
+    // below. It also retires the upward auto-join this branch used to perform:
+    // an actor who passes is by construction already an org member.
+    await assertOrgCapability(input.ownerUserId, organizationId, 'manageWorkspaces', tx);
     // §4.4 workspace cap (8.1.11): a 2nd+ workspace under an existing org is
     // gated (free org = exactly 1 workspace). Lock + count inside this tx.
     await entitlementsService.assertWithinWorkspaceCap(organizationId, tx);
-    await organizationsService.ensureOrgMembership(input.ownerUserId, organizationId, tx);
   } else {
     // §4.5 org-creation gate (8.1.11): minting a NEW org (the signup / "create
     // workspace under a fresh org" path) is itself an org create — gate it
@@ -232,8 +250,10 @@ export interface CreateWorkspaceInput {
   ownerUserId: string;
   /**
    * Story 6.10: when set, the workspace nests under this EXISTING organization
-   * (the "create a 2nd+ workspace under the active org" path) and the creator
-   * gets an org membership via the upward invariant. When omitted, a fresh
+   * (the "create a 2nd+ workspace under the active org" path); the creator
+   * must hold `manageWorkspaces` there — an org Owner or Admin (MOTIR-6309) —
+   * or the create throws `OrganizationNotFoundError` (a non-member, 404) /
+   * `OrgForbiddenError` (a Member, 403). When omitted, a fresh
    * default org is minted with the creator as org owner (the signup / first-
    * workspace OPC path).
    */
@@ -262,6 +282,135 @@ export interface LastActiveContext {
   projectId: string;
   workspaceId: string;
   organizationId: string;
+}
+
+/**
+ * The org-Admin door's authorisation (MOTIR-6309): the workspace exists, is the
+ * addressed org's when one was addressed, and the actor holds `manageWorkspaces`
+ * on it. Runs inside a `withWorkspaceContext` transaction, which binds user /
+ * workspace / project only, so it ADDS the org GUC before the capability read —
+ * the organization id comes from the workspace row itself, a trusted resolution.
+ */
+async function assertMayRemoveWorkspace(
+  input: { workspaceId: string; actorUserId: string; organizationId?: string },
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const organizationId = await workspaceRepository.findOrganizationId(input.workspaceId, tx);
+  if (
+    !organizationId ||
+    (input.organizationId !== undefined && input.organizationId !== organizationId)
+  ) {
+    throw new WorkspaceNotFoundError(input.workspaceId);
+  }
+  await bindOrganizationContext(tx, organizationId);
+  await assertOrgCapability(input.actorUserId, organizationId, 'manageWorkspaces', tx);
+}
+
+/**
+ * THE ONE WORKSPACE DELETE — shared by the org-Admin door and the erasure entry
+ * (MOTIR-6309), never copied. Deletes the workspace and (via onDelete: Cascade)
+ * every child row, inside a workspace-scoped transaction so the workspace RLS
+ * policy permits it.
+ *
+ * `guard` is the caller's AUTHORISATION, and it runs in BOTH transactions below:
+ * first, so an actor who may not delete is refused before anything is read; and
+ * again inside the delete's own transaction, so the decision and the write are
+ * one atomic step (a role change or a new member landing in between is seen).
+ *
+ * TWO things survive the cascade on purpose, and both are written HERE
+ * because here is the only place that still sees what is about to be lost:
+ * the code-graph offboarding row (§14.3, enqueued post-commit from ids read
+ * before the cascade) and the public-hostname RESERVATION (ADR §8, written
+ * INSIDE the delete's own transaction — Bug MOTIR-4366).
+ */
+async function deleteWorkspaceCascade(input: {
+  workspaceId: string;
+  actorUserId: string;
+  guard: (tx: Prisma.TransactionClient) => Promise<void>;
+}): Promise<void> {
+  // ⚠️ ENUMERATE THE PROJECTS BEFORE THE CASCADE TAKES THEM
+  // (MOTIR-2166 · `docs/decisions/code-graph-index-fleet.md` §14.3).
+  //
+  // This read has to happen HERE, above the delete, and it is the one ordering
+  // trap in Decision 10 that is easy to get wrong and impossible to notice
+  // afterwards. The other three offboarding triggers leave the project rows
+  // standing, so their scope is still readable post-commit; `workspaceRepository
+  // .delete` cascades the projects away. Read the list after it and there is
+  // nothing to enumerate — the graphs then have no queue row naming them and
+  // become permanently unreachable orphans, which is the precise end state §14
+  // exists to prevent, produced by the code meant to prevent it.
+  //
+  // INCLUDING ARCHIVED projects: an archived project's graph still exists (its
+  // own archive enqueued a WINDOWED row), and a workspace delete must supersede
+  // that with an immediate one. `findByWorkspace` filters archived out, so this
+  // deliberately uses the unfiltered read.
+  const projectIds = await withWorkspaceContext(
+    { userId: input.actorUserId, workspaceId: input.workspaceId },
+    async (tx) => {
+      await input.guard(tx);
+      return projectRepository.findAllIdsByWorkspace(input.workspaceId, tx);
+    },
+  );
+
+  // ⚠️ RESERVE THE PUBLIC HOSTNAMES IN THE SAME TRANSACTION AS THE DELETE
+  // (Bug MOTIR-4366 · `docs/decisions/public-tenant-addresses.md` §8, as
+  // amended).
+  //
+  // `public_address.workspace_id` is `ON DELETE CASCADE`, so this delete frees
+  // the workspace's live subdomain AND every label it ever retired back into a
+  // GLOBALLY unique namespace — where the next workspace to ask inherits every
+  // inbound link the departed one accumulated. §8 says a subdomain is never
+  // released, and the mechanism it relies on ("a retired label keeps its row,
+  // the row keeps the name") has no answer for the row's owner going away.
+  //
+  // ⚠️ AND THIS IS THE PATH THAT RUNS IT AUTOMATICALLY.
+  // `accountErasureSweepService` deletes a sole-membership workspace THROUGH
+  // this function (`deleteWorkspaceForErasure`) on a scheduled job, discharging a GDPR erasure request — so
+  // the release needed nobody to decide it, errored nothing, and logged
+  // nothing unusual.
+  //
+  // ONE transaction with the delete, deliberately, and not the two-step the
+  // `projectIds` read above is. That read only has to happen BEFORE the
+  // cascade; this write has to be ATOMIC with it, because the failure mode it
+  // repairs is exactly "the delete committed and the reservation did not".
+  //
+  // What is stored is a DIGEST, never the hostname: the deletion is often an
+  // erasure obligation and a hostname can itself be the personal datum
+  // (`jane-smith.<base>`). A claim only ever needs to TEST a candidate, which
+  // is the one thing a one-way hash still answers. `custom_domain` rows are
+  // excluded — that name belongs to the customer, not to us
+  // (`lib/publicAddresses/hostnameReservation.ts`).
+  await withWorkspaceContext(
+    { userId: input.actorUserId, workspaceId: input.workspaceId },
+    async (tx) => {
+      await input.guard(tx);
+      const addresses = await publicAddressRepository.listForWorkspaceInTx(input.workspaceId, tx);
+      await publicHostnameReservationRepository.reserveMany(
+        addresses
+          .filter((address) => reservesItsHostname(address.kind))
+          .map((address) => ({
+            hostnameHash: hostnameReservationHash(address.hostname),
+            retiredFromWorkspaceId: input.workspaceId,
+          })),
+        tx,
+      );
+      await workspaceRepository.delete(input.workspaceId, tx);
+    },
+  );
+
+  // POST-COMMIT, BEST-EFFORT — and IMMEDIATE, with no retention window (§14.3).
+  // The other three arms leave a surface to undo into, so their window is a real
+  // grace period; a hard delete leaves none, and "a grace period the user cannot
+  // reach is not a grace period" — a window here would only extend retention.
+  //
+  // The queue row survives this delete because `code_graph_offboarding` carries
+  // NO foreign key to workspace or project. That is the single most important
+  // property in the story, and this is the call that depends on it.
+  await codeGraphOffboardingService.enqueueQuietly({
+    coreWorkspaceId: input.workspaceId,
+    coreProjectIds: projectIds,
+    reason: 'workspace_deleted',
+  });
 }
 
 export const workspacesService = {
@@ -801,98 +950,128 @@ export const workspacesService = {
   },
 
   /**
-   * Delete a workspace and (via onDelete: Cascade) every child row —
-   * memberships now, workspace-scoped data from later Stories later.
-   * Asserts membership first, then deletes inside a workspace-scoped
-   * transaction so the workspace RLS policy permits the delete.
+   * REMOVE a workspace as an ORG ADMIN — the one interactive door onto deleting
+   * a workspace (MOTIR-6309; `role-model.md` §1: creating and removing
+   * workspaces is an org-Admin act). The actor needs the `manageWorkspaces`
+   * capability on the workspace's organization and NO membership in the
+   * workspace itself. Non-member of the org → `OrganizationNotFoundError` (404);
+   * a Member → `OrgForbiddenError` (403).
    *
-   * TWO things survive the cascade on purpose, and both are written HERE
-   * because here is the only place that still sees what is about to be lost:
-   * the code-graph offboarding row (§14.3, enqueued post-commit from ids read
-   * before the cascade) and the public-hostname RESERVATION (ADR §8, written
-   * INSIDE the delete's own transaction — Bug MOTIR-4366).
+   * `organizationId`, when given (the org-tier route addresses the workspace
+   * THROUGH an org), must be the workspace's own org, or the workspace reads as
+   * absent (`WorkspaceNotFoundError`, 404) — never removable through another
+   * org's URL.
+   *
+   * The delete itself is {@link deleteWorkspaceCascade}, shared with the erasure
+   * entry below; the capability is asserted in BOTH of its transactions, so the
+   * refusal is lock-step with the write rather than a check made earlier.
    */
-  async deleteWorkspace(input: { workspaceId: string; actorUserId: string }): Promise<void> {
-    await workspacesService.assertMembership(input.actorUserId, input.workspaceId);
+  async removeWorkspaceAsOrgAdmin(input: {
+    workspaceId: string;
+    actorUserId: string;
+    organizationId?: string;
+  }): Promise<void> {
+    await deleteWorkspaceCascade({
+      workspaceId: input.workspaceId,
+      actorUserId: input.actorUserId,
+      guard: (tx) => assertMayRemoveWorkspace(input, tx),
+    });
+  },
 
-    // ⚠️ ENUMERATE THE PROJECTS BEFORE THE CASCADE TAKES THEM
-    // (MOTIR-2166 · `docs/decisions/code-graph-index-fleet.md` §14.3).
-    //
-    // This read has to happen HERE, above the delete, and it is the one ordering
-    // trap in Decision 10 that is easy to get wrong and impossible to notice
-    // afterwards. The other three offboarding triggers leave the project rows
-    // standing, so their scope is still readable post-commit; `workspaceRepository
-    // .delete` cascades the projects away. Read the list after it and there is
-    // nothing to enumerate — the graphs then have no queue row naming them and
-    // become permanently unreachable orphans, which is the precise end state §14
-    // exists to prevent, produced by the code meant to prevent it.
-    //
-    // INCLUDING ARCHIVED projects: an archived project's graph still exists (its
-    // own archive enqueued a WINDOWED row), and a workspace delete must supersede
-    // that with an immediate one. `findByWorkspace` filters archived out, so this
-    // deliberately uses the unfiltered read.
-    const projectIds = await withWorkspaceContext(
-      { userId: input.actorUserId, workspaceId: input.workspaceId },
-      (tx) => projectRepository.findAllIdsByWorkspace(input.workspaceId, tx),
+  /**
+   * One keyset page of the organization's workspaces for the org Workspaces
+   * section (MOTIR-6309): each with its member and project counts. Owner and
+   * Admin only (`manageWorkspaces`) — a non-member 404s, a Member 403s. NEVER
+   * loads every workspace (the at-scale rule): `limit` is clamped and the page
+   * carries a `nextCursor`.
+   *
+   * ⚠️ THE COUNTS ARE READ UNDER A PER-ROW WORKSPACE BINDING, and that is the
+   * whole difficulty. `project` and `workspace_membership` admit rows only for
+   * the ACTIVE workspace (or, for memberships, the caller's own), so counted
+   * under the org context alone they answer ZERO for every workspace the Admin
+   * is not in — silently. Each row therefore re-binds `app.workspace_id` to that
+   * workspace before its two counts: the ids come from the org-scoped read just
+   * above, a trusted resolution, and each binding only narrows to one workspace
+   * of the org the actor was just authorised over.
+   */
+  async listOrganizationWorkspaces(input: {
+    organizationId: string;
+    actorUserId: string;
+    limit?: number;
+    cursor?: string | null;
+  }): Promise<OrgWorkspacePageDTO> {
+    const limit = Math.min(
+      Math.max(input.limit ?? ORG_WORKSPACES_DEFAULT_LIMIT, 1),
+      ORG_WORKSPACES_MAX_LIMIT,
     );
-
-    // ⚠️ RESERVE THE PUBLIC HOSTNAMES IN THE SAME TRANSACTION AS THE DELETE
-    // (Bug MOTIR-4366 · `docs/decisions/public-tenant-addresses.md` §8, as
-    // amended).
-    //
-    // `public_address.workspace_id` is `ON DELETE CASCADE`, so this delete frees
-    // the workspace's live subdomain AND every label it ever retired back into a
-    // GLOBALLY unique namespace — where the next workspace to ask inherits every
-    // inbound link the departed one accumulated. §8 says a subdomain is never
-    // released, and the mechanism it relies on ("a retired label keeps its row,
-    // the row keeps the name") has no answer for the row's owner going away.
-    //
-    // ⚠️ AND THIS IS THE PATH THAT RUNS IT AUTOMATICALLY.
-    // `accountErasureSweepService` deletes a sole-membership workspace THROUGH
-    // this method on a scheduled job, discharging a GDPR erasure request — so
-    // the release needed nobody to decide it, errored nothing, and logged
-    // nothing unusual.
-    //
-    // ONE transaction with the delete, deliberately, and not the two-step the
-    // `projectIds` read above is. That read only has to happen BEFORE the
-    // cascade; this write has to be ATOMIC with it, because the failure mode it
-    // repairs is exactly "the delete committed and the reservation did not".
-    //
-    // What is stored is a DIGEST, never the hostname: the deletion is often an
-    // erasure obligation and a hostname can itself be the personal datum
-    // (`jane-smith.<base>`). A claim only ever needs to TEST a candidate, which
-    // is the one thing a one-way hash still answers. `custom_domain` rows are
-    // excluded — that name belongs to the customer, not to us
-    // (`lib/publicAddresses/hostnameReservation.ts`).
-    await withWorkspaceContext(
-      { userId: input.actorUserId, workspaceId: input.workspaceId },
+    return withOrgContext(
+      { userId: input.actorUserId, organizationId: input.organizationId },
       async (tx) => {
-        const addresses = await publicAddressRepository.listForWorkspaceInTx(input.workspaceId, tx);
-        await publicHostnameReservationRepository.reserveMany(
-          addresses
-            .filter((address) => reservesItsHostname(address.kind))
-            .map((address) => ({
-              hostnameHash: hostnameReservationHash(address.hostname),
-              retiredFromWorkspaceId: input.workspaceId,
-            })),
+        await assertOrgCapability(input.actorUserId, input.organizationId, 'manageWorkspaces', tx);
+        const page = await workspaceRepository.listByOrganizationPage(
+          input.organizationId,
+          limit,
+          input.cursor ?? null,
           tx,
         );
-        await workspaceRepository.delete(input.workspaceId, tx);
+        const hasMore = page.length > limit;
+        const rows = hasMore ? page.slice(0, limit) : page;
+        const total = await workspaceRepository.countByOrganization(input.organizationId, tx);
+
+        const workspaces: OrgWorkspaceRowDTO[] = [];
+        for (const workspace of rows) {
+          await bindWorkspaceContext(tx, workspace.id);
+          const memberCount = await workspaceMembershipRepository.countByWorkspace(
+            workspace.id,
+            tx,
+          );
+          const projectCount = await projectRepository.countByWorkspace(workspace.id, tx);
+          workspaces.push({
+            id: workspace.id,
+            name: workspace.name,
+            slug: workspace.slug,
+            memberCount,
+            projectCount,
+            createdAt: workspace.createdAt.toISOString(),
+          });
+        }
+        return {
+          workspaces,
+          nextCursor: hasMore ? rows[rows.length - 1]!.id : null,
+          total,
+        };
       },
     );
+  },
 
-    // POST-COMMIT, BEST-EFFORT — and IMMEDIATE, with no retention window (§14.3).
-    // The other three arms leave a surface to undo into, so their window is a real
-    // grace period; a hard delete leaves none, and "a grace period the user cannot
-    // reach is not a grace period" — a window here would only extend retention.
-    //
-    // The queue row survives this delete because `code_graph_offboarding` carries
-    // NO foreign key to workspace or project. That is the single most important
-    // property in the story, and this is the call that depends on it.
-    await codeGraphOffboardingService.enqueueQuietly({
-      coreWorkspaceId: input.workspaceId,
-      coreProjectIds: projectIds,
-      reason: 'workspace_deleted',
+  /**
+   * Delete a workspace on behalf of ACCOUNT ERASURE — the system entry the
+   * sweep takes (MOTIR-6309). Erasure deletes the workspaces the leaving user is
+   * the SOLE member of (DECISION 3 of the Data & privacy design), and that user
+   * is often a plain org Member, so it cannot go through the Admin door above.
+   * It asserts exactly that rule instead: under a lock on the workspace's
+   * membership rows, the user's must be the only one. Anything else is
+   * `WorkspaceNotSoleMemberError` — a workspace somebody else now shares is not
+   * the account's to delete.
+   */
+  async deleteWorkspaceForErasure(input: { workspaceId: string; userId: string }): Promise<void> {
+    await deleteWorkspaceCascade({
+      workspaceId: input.workspaceId,
+      actorUserId: input.userId,
+      guard: async (tx) => {
+        const count = await workspaceMembershipRepository.countByWorkspaceForUpdate(
+          input.workspaceId,
+          tx,
+        );
+        const own = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+          input.userId,
+          input.workspaceId,
+          tx,
+        );
+        if (count !== 1 || !own) {
+          throw new WorkspaceNotSoleMemberError(input.userId, input.workspaceId);
+        }
+      },
     });
   },
 

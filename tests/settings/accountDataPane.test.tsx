@@ -293,7 +293,7 @@ describe('⚠️ the BLOCKED state — read at rest, never raised at submit', ()
     const html = await renderPane();
     // With an organization block on screen a reader has every reason to assume
     // their sole-membership workspaces are another one. They are not:
-    // `deleteWorkspace` asserts membership and checks no role.
+    // `deleteWorkspaceForErasure` asks only for sole membership and checks no role.
     expect(html).toContain('a block');
     expect(html).toContain('To keep one, invite somebody to it first.');
   });

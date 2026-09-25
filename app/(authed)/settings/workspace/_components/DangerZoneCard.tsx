@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useToast } from '@/components/ui/Toast';
-import { deleteWorkspaceAction, leaveWorkspaceAction } from '../actions';
+import { leaveWorkspaceAction, removeWorkspaceAction } from '../actions';
 
 export interface DangerZoneCardProps {
   workspaceName: string;
@@ -113,7 +113,7 @@ function DeleteConfirmModal({
     if (!matches) return;
     startTransition(async () => {
       // Success redirects; control only returns on an unexpected error.
-      const result = await deleteWorkspaceAction();
+      const result = await removeWorkspaceAction();
       if (!result.ok) {
         toast({
           variant: 'error',

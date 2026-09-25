@@ -278,6 +278,17 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'org_membership_insert_active_or_bootstrap admits the write; the read arm asserted below ' +
       'is org_membership_visible_active_or_own.',
   },
+  'lib/services/workspacesService.ts#assertMayRemoveWorkspace': {
+    tables: ['organization_membership'],
+    source: 'hand',
+    why:
+      'MOTIR-6309 — the org-Admin workspace-remove gate. It binds app.organization_id INSIDE ' +
+      'a `withWorkspaceContext` transaction (so app.user_id / app.workspace_id stay set), with ' +
+      "the org id read off the workspace row itself, then reads the actor's own org membership " +
+      'through `assertOrgCapability` — a SERVICE call the walk cannot follow, hence `hand`. ' +
+      'org_membership_visible_active_or_own admits that read on both halves (the org GUC it ' +
+      'just bound, and app.user_id = the row). It performs no write of its own.',
+  },
 };
 
 let rlsTables: Set<string>;

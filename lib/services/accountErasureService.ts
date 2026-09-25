@@ -190,8 +190,9 @@ export const accountErasureService = {
       );
     }
 
-    // A workspace the reader is the ONLY member of is DELETED — `deleteWorkspace`
-    // asserts membership and checks no role, so nothing stops it, and nobody
+    // A workspace the reader is the ONLY member of is DELETED —
+    // `deleteWorkspaceForErasure` asks only that they be its sole member and
+    // checks no role (MOTIR-6309), so nothing stops it, and nobody
     // else can open it once they are gone. A workspace they SHARE survives, and
     // only their attributions inside it are anonymised. The two arms are
     // exhaustive and disjoint, which is what stops a row being both counted as
