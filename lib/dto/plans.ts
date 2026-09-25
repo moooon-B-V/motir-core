@@ -1458,3 +1458,28 @@ export interface PlanHistoryListOptions {
   /** Plans per page; clamped server-side. */
   limit?: number;
 }
+
+/**
+ * AN UNDECIDED PLAN HOLDS THIS CARD (Story MOTIR-6017 · MOTIR-6265;
+ * `docs/decisions/agent-authored-plans.md` AMENDMENT 21 §§1–2) — the one shape both
+ * the up-front read (`planTargetLockService.readPlanHold`) and the refusal
+ * (`PLAN_TARGET_HELD`'s `plan` field, on every door) carry, so a surface draws the
+ * line and the Review plan door from either without a second read.
+ *
+ * `sessionId` + `planId` are `planRowDestination`'s whole input
+ * (`lib/planning/planDestination.ts`): a plan WITH a session opens the planning
+ * surface, one without opens `/plans/<planId>`.
+ */
+export interface PlanHoldDTO {
+  /** The held card's `KEY-n`. */
+  itemKey: string;
+  workItemId: string;
+  /** The plan holding it. */
+  planId: string;
+  /** Only an UNDECIDED status holds — the second line's copy key. */
+  planStatus: 'generating' | 'planned' | 'stale';
+  /** The plan's session, or null when it has none. */
+  sessionId: string | null;
+  /** The plan's first anchor key (its session's `targetKeys[0]`), or null. */
+  anchorKey: string | null;
+}

@@ -3,6 +3,7 @@ import {
   ContainerHasOpenChildrenError,
   IllegalTransitionError,
   MissingArtifactEvidenceError,
+  PlanTargetHeldError,
   UnknownStatusError,
 } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
@@ -51,6 +52,10 @@ export const STATUS_TRANSITION_REFUSALS = [
   // MOTIR-5526 — an `awaiting` approval gate owns the target status. Cleared by a
   // person deciding the gate, so a refusal and never a fault.
   ApprovalGatePendingError,
+  // MOTIR-6265 — an UNDECIDED plan holds the card at `planning` (AMENDMENT 21 §2).
+  // Cleared by a person deciding the plan, or withdrawing the proposal that names
+  // the card, so a refusal and never a fault.
+  PlanTargetHeldError,
 ] as const;
 
 /** An error `applyStatusTransition` raises as a REFUSAL — see the list above. */

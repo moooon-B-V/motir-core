@@ -16,6 +16,8 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { PlanTargetLockedError } from '@/lib/planChange/errors';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
+import { planHoldFor } from '@/lib/plans/planHold';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
 import { classifyBlockerReadiness } from '@/lib/workItems/blockerReadiness';
 import {
   PLANNING_STATUS_KEY,
@@ -336,12 +338,16 @@ async function acquireOne(
  * status — or, for a target a PLAN adopted from a hand-park, RESTING it at `todo`
  * / `blocked`, since there is no observed prior status to restore (MOTIR-6066).
  *
- * ⚠️ The restore is CONDITIONAL on the item still being at `planning`. A user who
- * dragged the card out of the Planning column has performed a MANUAL RELEASE —
- * that is the deliberate answer to "ordinary users can still move the status by
- * hand", and it is the right one: a lock whose only escape hatch is a background
- * sweep is a lock a person cannot get out of. Writing our remembered status back
- * over their move would silently undo a human decision.
+ * ⚠️ The restore is CONDITIONAL on the item still being at `planning`. It used to
+ * be justified as a MANUAL RELEASE — a person who dragged the card out had released
+ * it themselves. `agent-authored-plans.md` AMENDMENT 21 OVERTURNED that on
+ * 2026-09-25 (MOTIR-6017): while an undecided plan holds the card, no hand move out
+ * of `planning` is accepted at all, so a PLAN-held card can no longer be released
+ * by hand. The guard STAYS as the defensive arm §7 records — a card can still have
+ * left `planning` by a system write, the status-delete admin reassign, a SESSION
+ * lease (which never holds), an expired `generating` lease, or a move made before
+ * the hold deployed — and writing a remembered status over any of those would put
+ * the card somewhere nobody decided.
  */
 async function releaseOne(
   lock: PlanTargetLock,
@@ -448,10 +454,64 @@ async function restAdoptedTarget(
   return 'rested';
 }
 
+/**
+ * THE PLAN HOLD, read on the caller's transaction (Story MOTIR-6017 · MOTIR-6265;
+ * `agent-authored-plans.md` AMENDMENT 21 §§1–2): whether an UNDECIDED plan holds
+ * `item` at `planning`, and — when it does — everything a surface needs to draw
+ * the line and send its Review plan door where the plan is.
+ *
+ * ONE read shared by the status funnel's refusal (`applyStatusTransition`, under
+ * the item row lock), the up-front read ({@link planTargetLockService.readPlanHold})
+ * and the system movers that must not walk a held card out of `planning`
+ * (`mergeQueueExitService`). The RULE is `planHoldFor`'s; this only gathers its
+ * inputs. A card not at `planning` costs nothing: no read is made.
+ */
+export async function readPlanHoldWithin(
+  item: { id: string; identifier: string; status: string },
+  tx: Prisma.TransactionClient,
+  now: Date = new Date(),
+): Promise<PlanHoldDTO | null> {
+  if (item.status !== PLANNING_STATUS_KEY) return null;
+  const lock = await planTargetLockRepository.findByWorkItemId(item.id, tx);
+  if (!lock?.planId) return null;
+  const plan = await planRepository.findHoldSubject(lock.planId, tx);
+  const hold = planHoldFor({
+    itemStatus: item.status,
+    lock,
+    planStatus: plan?.status ?? null,
+    now,
+  });
+  if (!hold.held) return null;
+  return {
+    itemKey: item.identifier,
+    workItemId: item.id,
+    planId: hold.planId,
+    planStatus: hold.planStatus,
+    sessionId: plan?.sessionId ?? null,
+    anchorKey: plan?.session?.targetKeys[0] ?? null,
+  };
+}
+
 export const planTargetLockService = {
   /** The shared open-blocker read, exposed so approve's resting pass
    *  (`plansService.restPlanTargets`) asks it the same way a release does. */
   hasOpenBlockerWithin,
+
+  /**
+   * THE UP-FRONT READ (MOTIR-6265; AMENDMENT 21 §2): whether an undecided plan
+   * holds this card, and where its plan is — so the status control can lock
+   * every move and draw its Review plan door BEFORE anyone tries one, from the
+   * same rule the funnel refuses with. `null` when the card is not held: not at
+   * `planning`, no lock, a SESSION lock, an expired `generating` lease, or a
+   * decided plan. An item outside the caller's workspace is simply not held.
+   */
+  async readPlanHold(workItemId: string, ctx: ServiceContext): Promise<PlanHoldDTO | null> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const item = await workItemRepository.findById(workItemId, tx);
+      if (!item || item.workspaceId !== ctx.workspaceId) return null;
+      return readPlanHoldWithin(item, tx);
+    });
+  },
 
   /**
    * Take the lock on every target in a scope — the acquire that runs when a
@@ -775,7 +835,13 @@ export const planTargetLockService = {
           const plan = await planRepository.findById(lock.planId!, lock.workspaceId, tx);
           return plan?.status ?? null;
         });
-        if (planStatus === 'planned') {
+        // ⚠️ AND A `stale` PLAN'S LOCK NEVER EXPIRES EITHER (MOTIR-6265; AMENDMENT
+        // 21 §4). `stale` is NOT decided — it waits for a person exactly as
+        // `planned` does — and without this, a plan that drifted while a reviewer
+        // had it open would have its targets swept back to claimable after the
+        // window: the failure the park exists to prevent, by the one status D9
+        // forgot to name.
+        if (planStatus === 'planned' || planStatus === 'stale') {
           entries.push({ workItemId: lock.workItemId, outcome: 'plan_awaiting_review' });
           continue;
         }

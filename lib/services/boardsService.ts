@@ -53,6 +53,7 @@ import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   ApprovalGatePendingBoardMoveError,
+  PlanTargetHeldBoardMoveError,
   BoardColumnNotFoundError,
   BoardNotFoundError,
   ColumnNotEmptyError,
@@ -73,6 +74,7 @@ import {
   MissingArtifactEvidenceError,
   ContainerHasOpenChildrenError,
   ApprovalGatePendingError,
+  PlanTargetHeldError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
 import { WorkflowStatusNotFoundError } from '@/lib/workflows/errors';
@@ -673,6 +675,11 @@ export const boardsService = {
           err.message,
           await approvalGatesService.describePendingRefusal(err, ctx),
         );
+      }
+      // A drag of a card an undecided plan holds (MOTIR-6265). Its payload is
+      // already complete, so nothing is read here.
+      if (err instanceof PlanTargetHeldError) {
+        throw new PlanTargetHeldBoardMoveError(err.message, err.payload);
       }
       throw err;
     }

@@ -11,6 +11,7 @@ import {
   ContainerHasOpenChildrenError,
   IllegalTransitionError,
   MissingArtifactEvidenceError,
+  PlanTargetHeldError,
   StaleWorkItemError,
   UnknownStatusError,
   WorkItemNotFoundError,
@@ -61,6 +62,16 @@ const INSTANCES: Record<string, () => Error> = {
       gateKind: 'design_result',
       itemKey: 'ACME-3',
       workItemId: 'wi_1',
+    }),
+  PlanTargetHeldError: () =>
+    new PlanTargetHeldError({
+      statusKey: 'in_progress',
+      itemKey: 'ACME-4',
+      workItemId: 'wi_1',
+      planId: 'plan_1',
+      planStatus: 'planned',
+      sessionId: 'session_1',
+      anchorKey: 'ACME-4',
     }),
 };
 

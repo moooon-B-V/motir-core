@@ -36,6 +36,7 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 import {
   ContainerHasOpenChildrenError,
   ApprovalGatePendingError,
+  PlanTargetHeldError,
   IllegalTransitionError,
   UnknownStatusError,
 } from '@/lib/workItems/errors';
@@ -101,6 +102,10 @@ const SKIPPABLE = [
   // kind that did would refuse this promotion for that one card — which, like
   // the rest of this list, says nothing about the other cards the run delivered.
   ApprovalGatePendingError,
+  // THE PLAN HOLD (MOTIR-6265; AMENDMENT 21 §5(b)). A promotion only ever moves a
+  // card out of `implemented`, so it cannot meet a held card today — listed so a
+  // widened source status inherits the right answer rather than a failed job.
+  PlanTargetHeldError,
 ];
 
 /** The ONLY status a promotion moves a card out of. */
