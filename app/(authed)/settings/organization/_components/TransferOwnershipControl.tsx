@@ -344,15 +344,18 @@ function TransferOwnershipDialog({
               </div>
             </div>
           ) : null}
+        </Modal.Body>
 
+        {/* PINNED with the footer, outside the scroll body: on a short viewport the
+            body scrolls, and a confirmation at its foot sat half under the footer
+            while it was typed in (the MOTIR-6167 acceptance review). The field the
+            person is acting in — and the refusal it answers with — stay whole. */}
+        <div className="flex shrink-0 flex-col gap-(--spacing-md) pt-(--spacing-md)">
           <Input
             label={t('transfer.confirmLabel', { org: orgName })}
             placeholder={orgName}
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
-            // On a short viewport the body scrolls, and the field sits at its foot:
-            // bring the whole field (and its focus ring) into view while it is typed in.
-            onFocus={(e) => e.currentTarget.scrollIntoView?.({ block: 'nearest' })}
             disabled={isPending}
             autoComplete="off"
           />
@@ -367,7 +370,7 @@ function TransferOwnershipDialog({
               <span>{error}</span>
             </div>
           ) : null}
-        </Modal.Body>
+        </div>
 
         <Modal.Footer className="shrink-0">
           <Button variant="ghost" onClick={onClose} disabled={isPending}>
