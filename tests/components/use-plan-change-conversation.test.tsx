@@ -1187,3 +1187,138 @@ describe('usePlanChangeConversation — the live review (MOTIR-6295)', () => {
     expect(fetchReview).toHaveBeenCalledTimes(1);
   });
 });
+
+// ─── THE LIVE REVIEW's edges (MOTIR-6301, the live-drawing gate's top-up) ─────
+//
+// The arms of the live review the cases above do not reach, each a way the
+// hand-over or the poll can end other than the happy one. Without them the hook
+// sits under the 90% branch floor `vitest.config.ts` gates it at.
+describe('usePlanChangeConversation — the live review, its other endings (MOTIR-6301)', () => {
+  const WRITING = planReview([planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1' })], {
+    id: 'plan-1',
+    status: 'generating',
+    plannedAt: null,
+  });
+
+  async function flush() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  }
+
+  async function watchingNamedSession() {
+    vi.useFakeTimers();
+    getNamed.mockResolvedValue({
+      ...session(['Plan the billing epic.']),
+      id: 's-mcp',
+      viewerCanPlan: true,
+      pendingPlanId: 'plan-1',
+    });
+    fetchReview.mockResolvedValue(WRITING);
+    const hook = renderHook(() => usePlanChangeConversation({ sessionId: 's-mcp' }));
+    await flush();
+    await flush();
+    expect(hook.result.current.state.liveReview).toEqual(WRITING);
+    // The mount's own read (null for a generating plan) is not the hand-over's.
+    readPendingSpy.mockClear();
+    return hook;
+  }
+
+  // The file-level mock wraps the REAL read; each case here overrides it once, so
+  // the real one is put back after it.
+  let realRead: ReturnType<typeof readPendingSpy.getMockImplementation>;
+  beforeEach(() => {
+    realRead = readPendingSpy.getMockImplementation();
+    readPendingSpy.mockClear();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    readPendingSpy.mockReset();
+    if (realRead) readPendingSpy.mockImplementation(realRead);
+  });
+
+  it('a hand-over whose proposal read FAILS still ends the live review, and proposes nothing', async () => {
+    const { result } = await watchingNamedSession();
+    readPendingSpy.mockRejectedValue(new Error('offline'));
+    fetchReview.mockResolvedValue(REVIEW);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+    });
+    await flush();
+    expect(readPendingSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.state.liveReview).toBeNull();
+    expect(result.current.state.review).toBeNull();
+    expect(result.current.state.phase).toBe('idle');
+  });
+
+  it('a hand-over that finds nothing reviewable ends the live review with no review', async () => {
+    const { result } = await watchingNamedSession();
+    readPendingSpy.mockResolvedValue(null);
+    fetchReview.mockResolvedValue(REVIEW);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+    });
+    await flush();
+    expect(result.current.state.liveReview).toBeNull();
+    expect(result.current.state.review).toBeNull();
+    expect(result.current.state.phase).toBe('idle');
+  });
+
+  it('a hand-over that lands after the surface closed writes nothing', async () => {
+    const { result, unmount } = await watchingNamedSession();
+    let land!: (r: unknown) => void;
+    readPendingSpy.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          land = resolve;
+        }),
+    );
+    fetchReview.mockResolvedValue(REVIEW);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+    });
+    expect(readPendingSpy).toHaveBeenCalledTimes(1);
+    const last = result.current.state;
+    unmount();
+    await act(async () => {
+      land(REVIEW);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    // The unmounted hook kept the state it had; nothing was applied after close.
+    expect(result.current.state).toBe(last);
+    expect(last.liveReview).toEqual(WRITING);
+  });
+
+  it('three failed reads say FAILING and keep the last snapshot; a good read clears it', async () => {
+    const { result } = await watchingNamedSession();
+    fetchReview.mockRejectedValue(new TypeError('Failed to fetch'));
+    for (let i = 0; i < 3; i += 1) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2500);
+      });
+    }
+    expect(result.current.state.liveFailing).toBe(true);
+    expect(result.current.state.liveReview).toEqual(WRITING);
+
+    fetchReview.mockResolvedValue(WRITING);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+    });
+    expect(result.current.state.liveFailing).toBe(false);
+  });
+
+  it('a turn redirected AT THE DOOR with no plan id starts no live poll', async () => {
+    const { result } = await mounted();
+    submitAsk.mockResolvedValueOnce({
+      outcome: 'redirected',
+      jobId: 'job-door',
+      session: session(['yes']),
+    });
+    fetchReview.mockClear();
+    await act(async () => {
+      await result.current.send('yes');
+    });
+    expect(result.current.state.liveReview).toBeNull();
+    expect(fetchReview).not.toHaveBeenCalled();
+  });
+});

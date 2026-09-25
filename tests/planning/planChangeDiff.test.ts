@@ -5,6 +5,7 @@ import {
   isProposedNodeId,
   proposalForItem,
   proposedAddsForLevel,
+  touchedByProposal,
 } from '@/lib/planning/planChangeDiff';
 import { planReview, planReviewItem } from '../helpers/planReview';
 
@@ -180,5 +181,36 @@ describe('changedFields', () => {
 
   it('is empty for a modify that carries no diff', () => {
     expect(changedFields(planReviewItem({ op: 'modify' }))).toEqual([]);
+  });
+});
+
+// MOTIR-6301 (the live-drawing gate's coverage top-up). `touchedByProposal` lost
+// its only caller when MOTIR-6299 deleted `PlanChangeCanvas`'s grouping exclusion,
+// and with it every spec that reached it — which left this file under the 90%
+// floor `vitest.config.ts` gates it at. Its rule is pinned here, directly, for as
+// long as it is exported; deleting it (the cleanup MOTIR-6299 deferred) should
+// delete this block with it.
+describe('touchedByProposal — membership in the proposal, never a row status', () => {
+  const index = indexPlanReview(
+    planReview([
+      planReviewItem({ planItemId: 'pi_m', op: 'modify', nodeId: 'wi_21' }),
+      planReviewItem({ planItemId: 'pi_r', op: 'remove', nodeId: 'wi_24' }),
+      // A pending add touches its PARENT through `parentNodeId` alone.
+      planReviewItem({ planItemId: 'pi_a', nodeId: 'pi_a', parentNodeId: 'wi_story' }),
+      // A MATERIALIZED add is keyed by the work item it became.
+      planReviewItem({ planItemId: 'pi_d', nodeId: 'wi_new', identifier: 'PAY-30' }),
+    ]),
+  );
+
+  it('is true for a modify target, a remove target, an add parent and a materialized add', () => {
+    expect(touchedByProposal(index, 'wi_21')).toBe(true);
+    expect(touchedByProposal(index, 'wi_24')).toBe(true);
+    expect(touchedByProposal(index, 'wi_story')).toBe(true);
+    expect(touchedByProposal(index, 'wi_new')).toBe(true);
+  });
+
+  it('is false for a row the plan does not name, and for everything under an empty plan', () => {
+    expect(touchedByProposal(index, 'wi_99')).toBe(false);
+    expect(touchedByProposal(indexPlanReview(planReview([])), 'wi_21')).toBe(false);
   });
 });

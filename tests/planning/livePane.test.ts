@@ -123,6 +123,28 @@ describe('liveArrivals + levelTrail — where Go there drills, named by its key'
     expect(trail[1]).toMatchObject({ crumbKey: 'MOTIR-7' });
   });
 
+  it('a level the walk cannot reach keeps the walk’s answer — no key is invented (MOTIR-6301)', () => {
+    // A folder no proposal is filed into: nothing names it, so there is no last
+    // crumb to key, and the trail is returned as the walk found it.
+    expect(levelTrail([committed], 'folder:gone', 'New')).toEqual([]);
+  });
+
+  it('an archived-ancestor level still gets its one crumb, keyed, when no title survives (MOTIR-6301)', () => {
+    // The degrade `trailTo` owns: no carried chain and no parent title, so the
+    // single crumb is built from the key alone — and the pill can still name it.
+    const orphan = planReviewItem({
+      planItemId: 'po',
+      nodeId: 'po',
+      parentNodeId: 'wi_gone',
+      parentIdentifier: 'MOTIR-9',
+      parentTitle: null,
+      parentTrail: [],
+    });
+    const trail = levelTrail([orphan], 'wi_gone', 'New');
+    expect(trail.map((c) => c.id)).toEqual(['wi_gone']);
+    expect(trail[0]).toMatchObject({ crumbKey: 'MOTIR-9' });
+  });
+
   it('a proposed container: its crumb says New, with no key to name it by', () => {
     const trail = levelTrail([container, child], 'pc', 'New');
     expect(trail).toEqual([{ id: 'pc', label: 'New · New story' }]);
