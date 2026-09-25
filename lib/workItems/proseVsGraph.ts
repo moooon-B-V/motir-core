@@ -603,7 +603,9 @@ export function criterionRepoPaths(
     if (CRITERION_BULLET_RE.test(raw)) criterionIndex += 1;
     if (criterionIndex === 0) continue; // the heading and any lead-in prose
     for (const m of raw.replace(INLINE_MARKUP_RE, '').matchAll(PATH_TOKEN_RE)) {
-      const path = m[0];
+      // A path ending a sentence arrives with its full stop — strip it the way
+      // {@link bodyFilePaths} does, or the finding reports `x.ts.` (MOTIR-6321).
+      const path = m[0].replace(TRAILING_DOTS_RE, '');
       const repo = resolvePathRepo(path, candidates);
       if (repo !== null) found.push({ path, repo, criterionIndex });
     }
