@@ -17,7 +17,11 @@ import {
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
-import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import {
+  withUserContext,
+  withWorkspaceContext,
+  type TransactionBudget,
+} from '@/lib/workspaces/context';
 import { readMembership } from '@/lib/workspaces/membershipGate';
 import { bindOrganizationContext } from '@/lib/organizations/context';
 import { WORKSPACE_ROLE } from '@/lib/workspaces/roles';
@@ -70,6 +74,41 @@ const SLUG_MAX_LENGTH = 60;
 const SLUG_SUFFIX_LENGTH = 4;
 const SLUG_SUFFIX_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const SLUG_RETRY_ATTEMPTS = 3;
+
+/**
+ * The budget the active-WORKSPACE resolver runs under (MOTIR-6253) — raised
+ * from Prisma's 5000 ms default because of what the transaction WAITS for,
+ * never because of what it does. The same argument as the 2FA gate's
+ * `TWO_FACTOR_GATE_TX` (MOTIR-5866) and the active-project resolver's
+ * `ACTIVE_PROJECT_RESOLVE_TX` (MOTIR-6254), on the door in front of both:
+ * `getWorkspaceContext` runs this for every signed-in page, action and route.
+ *
+ * It does almost nothing: one `set_config`, then a handful of indexed reads —
+ * the cookie-pinned membership, the last-active pointer, the first membership,
+ * and the org access gate's three reads for whichever candidate wins. It writes
+ * nothing and takes NO lock at all. Production still expired it — four events
+ * between 2026-08-30 and 2026-09-24 on `GET /api/workbench/stream`, and the one
+ * whose evidence was stored reads *5000 ms, however 30459 ms passed*, refused at
+ * the access gate's first read. So the statement BEFORE it had returned ~30 s
+ * late, behind a lock or a stall no transaction this small can cause or avoid.
+ *
+ * ⚠️ THE DEFAULT NEVER SHORTENED THAT WAIT. Prisma does not cancel the statement
+ * in flight when the timer fires; it refuses the next statement after the one in
+ * flight returns. So the request waited the full 30 s and THEN answered 500. The
+ * 5 s default exists to bound how long a transaction holds LOCKS, and this one
+ * holds none, so a longer ceiling lengthens nothing but the wait itself.
+ *
+ * ⚠️ AND IT IS 60 s, NOT THE SIBLINGS' 30 s, BECAUSE THE OBSERVED WAIT WAS OVER
+ * 30 s. The two sibling doors sized their ceiling at more than half again their
+ * own observed waits (17.7 s, 6.4 s); 30 s here would have failed the one event
+ * this budget exists for. 60 s is about twice it. `maxWaitMs` stays Prisma's
+ * default — this is about a transaction that STARTED and then waited, not about
+ * waiting for a connection to start one.
+ */
+export const ACTIVE_WORKSPACE_RESOLVE_TX: TransactionBudget = {
+  timeoutMs: 60_000,
+  maxWaitMs: 2_000,
+};
 
 function slugify(name: string): string {
   const slug = name
@@ -440,38 +479,42 @@ export const workspacesService = {
     cookieWorkspaceId: string | null,
     userName?: string,
   ): Promise<string | null> {
-    const existing = await withUserContext(userId, async (tx) => {
-      if (cookieWorkspaceId) {
-        const pinned = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
-          userId,
-          cookieWorkspaceId,
-          tx,
-        );
-        if (
-          pinned &&
-          (await organizationsService.resolveWorkspaceAccess(userId, pinned.workspaceId, tx))
-        ) {
-          return pinned.workspaceId;
+    const existing = await withUserContext(
+      userId,
+      async (tx) => {
+        if (cookieWorkspaceId) {
+          const pinned = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
+            userId,
+            cookieWorkspaceId,
+            tx,
+          );
+          if (
+            pinned &&
+            (await organizationsService.resolveWorkspaceAccess(userId, pinned.workspaceId, tx))
+          ) {
+            return pinned.workspaceId;
+          }
         }
-      }
-      // No valid cookie pin. Before the first-by-createdAt default, try the
-      // user's GLOBAL last-active project (Subtask 8.8.27): land them back in
-      // the workspace of the project they last worked in (cross-device,
-      // account-keyed — the Linear "last visited context" standard). The
-      // resolver re-checks the access gate, so a since-revoked membership or an
-      // archived/deleted project falls through cleanly to the default below.
-      const lastActive = await this.resolveLastActiveContext(userId, tx);
-      if (lastActive) return lastActive.workspaceId;
+        // No valid cookie pin. Before the first-by-createdAt default, try the
+        // user's GLOBAL last-active project (Subtask 8.8.27): land them back in
+        // the workspace of the project they last worked in (cross-device,
+        // account-keyed — the Linear "last visited context" standard). The
+        // resolver re-checks the access gate, so a since-revoked membership or an
+        // archived/deleted project falls through cleanly to the default below.
+        const lastActive = await this.resolveLastActiveContext(userId, tx);
+        if (lastActive) return lastActive.workspaceId;
 
-      const first = await workspaceMembershipRepository.findFirstByUserWithWorkspace(userId, tx);
-      if (
-        first &&
-        (await organizationsService.resolveWorkspaceAccess(userId, first.workspaceId, tx))
-      ) {
-        return first.workspaceId;
-      }
-      return null;
-    });
+        const first = await workspaceMembershipRepository.findFirstByUserWithWorkspace(userId, tx);
+        if (
+          first &&
+          (await organizationsService.resolveWorkspaceAccess(userId, first.workspaceId, tx))
+        ) {
+          return first.workspaceId;
+        }
+        return null;
+      },
+      ACTIVE_WORKSPACE_RESOLVE_TX,
+    );
 
     if (existing) return existing;
 
