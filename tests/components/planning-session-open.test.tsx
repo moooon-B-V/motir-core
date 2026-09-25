@@ -281,6 +281,39 @@ describe('opening the overlay — the hook', () => {
     expect(failed.result.current.state.errorCode).toBeNull();
   });
 
+  it('an open torn down while the pending plan is read writes nothing — abort, late answer, late failure', async () => {
+    getNamed.mockResolvedValue(session(['q'], { id: 's9', pendingPlanId: 'plan_7' }));
+
+    // The unmount's abort reaches the read: that answer belongs to nobody.
+    fetchReview.mockImplementation(
+      (_id: string, signal: AbortSignal) =>
+        new Promise((_, reject) =>
+          signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))),
+        ),
+    );
+    const aborted = renderHook(() => usePlanChangeConversation({ sessionId: 's9' }));
+    await waitFor(() => expect(fetchReview).toHaveBeenCalledTimes(1));
+    aborted.unmount();
+    expect(aborted.result.current.state.phase).toBe('loading');
+
+    // An answer, or a failure, that lands after the surface closed is dropped.
+    for (const settle of ['resolve', 'reject'] as const) {
+      let release!: { resolve: (v: unknown) => void; reject: (e: unknown) => void };
+      fetchReview
+        .mockReset()
+        .mockReturnValue(new Promise((resolve, reject) => (release = { resolve, reject })));
+      const late = renderHook(() => usePlanChangeConversation({ sessionId: 's9' }));
+      await waitFor(() => expect(fetchReview).toHaveBeenCalledTimes(1));
+      late.unmount();
+      await act(async () => {
+        if (settle === 'resolve') release.resolve(planReview([planReviewItem()]));
+        else release.reject(new Error('500'));
+      });
+      expect(late.result.current.state.phase).toBe('loading');
+      expect(late.result.current.state.review).toBeNull();
+    }
+  });
+
   it('an id that resolves to nothing lands on the shipped SESSION_UNAVAILABLE path', async () => {
     getNamed.mockRejectedValue(new Error('404'));
     const { result } = renderHook(() => usePlanChangeConversation({ sessionId: 'gone' }));
