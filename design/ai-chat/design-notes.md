@@ -3481,3 +3481,189 @@ the canvas opens on. They are filed as their own card — MOTIR-6196, flag 4 bel
 section. **A DELTA, per `CLAUDE.md`'s rule** — the base sheet is not edited, and there is no `.png`
 (AMENDMENT 4 retired the export). Published as MOTIR-6159's design result, which is what
 MOTIR-6160 and MOTIR-6161 are `blocked_by`.
+
+## ⭐ A pending change to the LEVEL you are standing in — the level change band (MOTIR-6241, 2026-09-24)
+
+**Asset:** `planning-workspace--level-change.mock.html` — a **DELTA**, eight panels, holding only
+what changes.
+**Card:** MOTIR-6241, the design prerequisite for MOTIR-6223.
+
+This is the second half of MOTIR-2070's objection. MOTIR-6159 answered the first half — standing
+inside the target removes the node the ring was drawn on, so the mark moved to the crumb and the
+target stays NAMED. The item stays named from inside; **a CHANGE to it does not.** So the answer is
+drawn in the same vocabulary rather than beside it.
+
+### What this amends, by path
+
+| amended                                                                         | how                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `design/ai-chat/planning-workspace--arrival.mock.html`                          | its breadcrumb bar gains a SECOND ROW when the pending plan touches the level. Panels 1, 3, 4, 6, 7b and 8 are inherited and NOT redrawn; only panels 2 (the target crumb) and 5 (the follow affordance) are touched, and both are UPHELD rather than changed — see below |
+| this file, § _⭐ The canvas ARRIVES INSIDE the node being planned (MOTIR-6159)_ | its § _The answer to MOTIR-2070_ gains its second half; its § _The person who NAVIGATED FIRST_ gains one arming condition for an affordance whose copy, tokens and behaviour are otherwise untouched                                                                      |
+| the base sheets' copied DARK token block                                        | it omits the six `--el-tint-*` values the real theme re-declares for dark. The delta restores them from `packages/design-system/theme.css`. See _One correction to the inherited tokens_ below                                                                            |
+
+**⚠️ The crumb's _"unchanged from the shipped active crumb"_ specification is NOT amended — it is
+UPHELD, and the band is what makes upholding it affordable.** MOTIR-6241 asked this question
+directly, and the answer is the one that took the most deciding. The crumb keeps the **committed**
+title, because the crumb is what the canvas navigates by and a crumb showing a proposed title would
+disagree with the card the root level draws for the same item. The proposed value lives **one row
+below it**, in the band, so `was → now` is a single glance and neither element has to lie.
+
+### 0. What was RENDERED first, and what it settled
+
+Per the design-against-shipped-reality rule, and per the _read the COMPONENT before writing that the
+product is broken_ lesson. **The running app** was driven into the exact state this design is about —
+a production `next build` of `origin/main` `ede67c2b0`, served on a real Postgres, signed in, with
+the `seedAiAugmentReplan` tree and a seeded contextual proposal that **renames the anchor epic and
+adds a story under it**. Nothing below is read off this delta's own stylesheet.
+
+| what was measured                                                        | what it settled                                                                                                                                                                                 |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| standing INSIDE the target, with `1 added, 1 changed` in the confirm bar | **0** nodes carry `data-diff-state="change"` and **1** carries `data-diff-state="add"`. The defect is real and it is exactly this: the add is legible, the change has no drawing at all         |
+| the same proposal at the ROOT                                            | the change frame IS drawn — the `--el-info` ring, the `✎ CHANGED` corner tag and the bottom chip reading **`title · status`**. `status` is the re-scope reset (MOTIR-5359), not just the rename |
+| the breadcrumb `nav`'s box                                               | **704 × 46 px** at a 1440px viewport — `basis-[44rem]` hit exactly — and **696 × 46 px** at 720px. It is `flex-1 min-w-0`, so it narrows to the gutters rather than overflowing                 |
+| the ROOT level's chrome                                                  | **no breadcrumb bar at all.** The canvas renders one only when drilled, which is why the band is never a root-level element                                                                     |
+| the workspace at a 720px viewport                                        | it STACKS: the canvas pane collapses to a ~110px strip showing **no nodes**, and the bar is the only canvas chrome left. This is what decided the band's PLACEMENT — see the decision below     |
+| the target crumb                                                         | ships exactly as MOTIR-6159 drew it: the `target` glyph in `--el-accent-on-surface`, the 2px accent underline, `aria-current="page"`. Inherited untouched                                       |
+
+### THE DECISION — the level header, drawn as a second row inside the breadcrumb bar
+
+MOTIR-6223 names three candidates and deliberately decides between none of them. **Chosen:
+candidate 2, the level header.** Its placement — a row INSIDE the bar rather than a band of its own —
+is this design's, not the card's, and the reasons are below.
+
+**Candidate 1, on the breadcrumb CRUMB — REJECTED**, for three reasons of which the first settles it.
+**(a) The crumb is already spoken for:** MOTIR-6159 put the planning-target mark there, and a second
+mark on the same element would have one 18rem box saying two different things (_this is what the
+planner is pointed at_ / _this is about to change_). **(b) A crumb cannot carry the diff LINE.** What
+the reader needs is not _something changed_ but _title and status changed, to this_, and a crumb
+truncating at `max-w-[18rem]` would drop the mark first. **(c) The crumb is NAVIGATION** — a diff mark
+on a control whose press does something unrelated invites a click that does nothing about the change.
+And `remove` is undrawable there outright: a struck-through link to a level about to cease is
+incoherent.
+
+**Candidate 3, extend the follow affordance — REJECTED, because its sentence is false here.**
+_"Plan is in ARP-1 · Go there"_ means _the plan is somewhere you are NOT_; when the plan changes the
+level you are standing in, the plan is exactly where you ARE. Extending that control to also announce
+the level's own change would give one control two opposite meanings. **It remains the right answer to
+the OTHER half of MOTIR-6223** — a proposal landing BESIDE the anchor — and this design composes it
+there _unchanged_, because there its sentence is already true. Composing is not extending.
+
+**Why the band lives INSIDE the bar**, which is the part the card left open:
+
+1. **The bar is already the one element on screen that stands for the LEVEL** — that is MOTIR-6159's
+   own answer to MOTIR-2070. This is the same objection's second half, so it belongs in the same
+   place.
+2. **It adds no object to the canvas.** The card, its `--el-border`, its `--radius-card`, its
+   `--el-surface` fill and its `--shadow-card` are the shipped bar's; the band is a row inside them.
+3. **At narrow width it is the only canvas chrome that survives** (measured above). A band docked to
+   the canvas's bottom edge, or a header under the bar, is invisible at 720px.
+4. **It is adjacent to the crumb it is about**, so the reader never has to associate two distant
+   things — which is also what lets the crumb keep the committed title.
+
+### The BAND — every part is a part that already ships
+
+Nothing here is invented. Each element is one the node's own `PlanChangeDiffFrame`
+(`components/planning/PlanChangeDiffNode.tsx`) already draws, moved from a card corner onto a row.
+
+| element              | token / primitive                                                                                                                                                                                      | why                                                                                                                                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the row              | a second row in the shipped `nav` — `flex-col`, crumbs unchanged in row one; `mt-[5px] pt-[5px] border-t`                                                                                              | reuses the bar's own card, so the band cannot drift from the bar it belongs to                                                                                                                 |
+| border treatment     | solid `--el-border-soft` for `change`; dashed `--el-accent` for `add`; dashed `--el-danger` for `remove`                                                                                               | the node frame's own rule verbatim — dashed is this surface's grammar for "proposed, not real yet", and `change` is the only solid one because it is the only state touching a card that STAYS |
+| state chip           | the frame's corner tag — `--el-tint-sky` / `--el-tint-lavender` / `--el-tint-rose` on `--el-text-strong`, `font-mono` 10px uppercase, `--radius-badge`; lucide `pencil` / `plus` / `minus` at `size-3` | same three tones, same glyph-plus-word pairing, so one vocabulary covers a card and a level. Never colour alone                                                                                |
+| sentence             | `--el-text`, 12px, `truncate`                                                                                                                                                                          | names the SUBJECT in words — "This level" — so the band can never be read as being about a card on the board. The only part that truncates                                                     |
+| diff line            | the frame's bottom chip — `--el-tint-sky` (rose on `remove`), `--el-text-strong`, 10px semibold, `max-w-[16rem] truncate`                                                                              | the same `changedFields()` words the frame joins with `·`. It is the information the missing frame would have carried                                                                          |
+| outcome chip         | `ms-auto`; `--el-tint-mint` / `--el-muted`, the frame's fused outcome chip                                                                                                                             | once the plan is decided the band says so in the same word, tone and right-hand placement the frame uses. Absent while undecided                                                               |
+| screen-reader prefix | `sr-only` `"Pending change to this level: "`                                                                                                                                                           | the folder crumb's `srPrefix` discipline, one row down. Never colour alone and never glyph alone                                                                                               |
+| appear / disappear   | `transition-opacity duration-[180ms] motion-reduce:transition-none`                                                                                                                                    | the exact idiom `ProjectRoadmapCanvas` already uses for its follow crossfade. Under reduced motion the band simply is or is not there                                                          |
+
+**Primitives composed, none hand-rolled:** the shipped `Crumb` and its `nav` (`ProjectRoadmapCanvas`),
+`PlanChangeDiffFrame`'s tag and field chips, and the shipped follow affordance. This delta introduces
+no new component.
+
+### The four states of the LEVEL
+
+| state                          | when                                       | what the band says                                                                                                                                                    |
+| ------------------------------ | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CHANGED**                    | `index.changesById` holds the focus node   | `✎ changed` · _"This level — title → «proposed»"_ · the diff line. The proposed value is shown only for `title`, because the crumb directly above carries the old one |
+| **REMOVED**                    | `index.removalsById` holds it              | `− removed` · the shipped `willRemove` words, _"goes on approve"_ · a rose chip naming what goes with it. The crumb is NOT struck through — it is still the way out   |
+| **THE LEVEL IS ITSELF AN ADD** | the reader drilled into a `proposed:` node | `+ added` · _"This level is proposed — nothing here exists yet"_. Without it, the canvas's own _"No items at this level"_ reads as a fact about the tree              |
+| **NOTHING CHANGED**            | the focus node is untouched                | **the band is ABSENT** — the bar that ships today, byte for byte. No "no changes" line: a row every reader must read in order to learn nothing is worse than no row   |
+
+**What this deliberately does NOT draw.** `diffStateForItem` has a fourth verdict, `locked` — a
+terminal card the proposal cannot touch. The band's subject is a **pending change**, and `locked` is
+the absence of one, so it falls to the NOTHING-CHANGED state. The planner's rail already says it once
+in words: _"Anything already finished is left untouched — I can't change done work."_
+
+### BESIDE the anchor — the shipped affordance, composed
+
+The other half of MOTIR-6223: planning from `Login UI` while the run adds a sibling under
+`Authentication`. Nothing on this level changes, so there is no band; the plan is one crumb up. The
+**"Plan is in {identifier} · Go there"** affordance MOTIR-6161 added already says exactly that, so it
+is composed here with its copy, its tokens, its placement and its behaviour untouched. **Only its
+ARMING gains a second condition:** today it appears after the canvas DECLINES a follow request; it
+also appears when the pending proposal places nothing on the reader's level and places something on
+another. Where several levels carry proposals it names the one holding the most, ties going to the
+nearest common ancestor of the reader's level. The band and the affordance can be on screen together —
+the band is row two, the affordance stays in row one pushed right by its own `ms-auto` — and they never
+contend for a slot. At the ROOT there is no bar at all: MOTIR-6159 already decided the affordance
+brings one with it; the band does not, because the root level is the project and a project is not a
+work item a plan can change.
+
+### Several changes at once
+
+The band never competes with the node frames, because the two are on different surfaces at different
+scales: the frames are 280×124 cards on the recessed `--el-canvas` board, the band is one 12px row of
+chrome on the raised `--el-surface` bar. The same `changed` word appears in both, and that is the
+point — one language for a card and for a level. What distinguishes them is the SUBJECT: the band says
+_"This level"_ in words, and the frame says nothing because the card it wraps names itself. **The band
+carries no COUNT** — counts belong to the confirm bar, which owns the whole plan rather than this
+level.
+
+### COPY, with its keys
+
+New strings live under **`planningWorkspace.arrival`**, beside `crumbTargetPrefix` and `goToTarget` —
+the namespace that already holds everything MOTIR-6154 added about where the canvas stands.
+
+| key                               | `messages/en.json`                                       | `messages/zh.json`                  |
+| --------------------------------- | -------------------------------------------------------- | ----------------------------------- |
+| `arrival.levelChange.srPrefix`    | `Pending change to this level:`                          | `此层级的待定变更：`                |
+| `arrival.levelChange.changed`     | `This level`                                             | `当前层级`                          |
+| `arrival.levelChange.titleTo`     | `title → {title}`                                        | `标题 → {title}`                    |
+| `arrival.levelChange.removed`     | `This level goes on approve`                             | `确认后移除当前层级`                |
+| `arrival.levelChange.removedWith` | `with {count, plural, one {# child} other {# children}}` | `连同 {count} 个子项`               |
+| `arrival.levelChange.added`       | `This level is proposed — nothing here exists yet`       | `当前层级为提案 — 此处尚无任何内容` |
+
+**Reused, not re-added:** the state words are `planningWorkspace.conversation.diff.add` / `.change` /
+`.remove` and the field names are `…diff.field.*`, exactly as the node frame joins them; the outcome
+words are `planReview.outcomeAccepted` / `outcomeDeclined`. The "goes on approve" phrasing is
+`…diff.willRemove`'s own. Six new keys, and not one new word for something the surface already says.
+
+### ACCESS PATH — the door, not just the room
+
+The band has no control that opens it: it is reached by **arriving at a level a pending plan changes**.
+So the path is the three steps that produce that state, and panel 8 draws all three.
+
+1. **The door** — the shipped per-item entrance (`work-item-plan-entrance`, the **Re-plan** /
+   **Plan with AI** button on a work item page), unchanged. It is what opens the workspace ANCHORED at
+   that item.
+2. **The surface opens INSIDE the target** — MOTIR-6159's arrival rule, inherited whole. No band yet;
+   nothing has been proposed.
+3. **A turn settles into REVIEW** — the band fades in with the level's reload, on the same `diffKey`
+   beat that draws the node frames, and fades out when the plan is approved or discarded.
+
+Every entrance reaches it, because the band is a property of the LEVEL and not of the door: a Plans
+row and a To-approve row take the same arrival rule (MOTIR-6160), a project-level `Plan with AI` opens
+at the root and reaches the band when the follow-move lands inside the target, and **drilling by hand
+reaches it too** — the band says _this level_, never _your target_.
+
+### One correction to the inherited tokens
+
+The dark block this delta inherits — copied from `planning-workspace.mock.html` through
+`planning-workspace--arrival.mock.html` — omits the six `--el-tint-*` values. The real theme
+(`packages/design-system/theme.css`, § _Pastel tints dimmed for dark backgrounds_) re-declares all six
+for dark, and the copy simply stops short of them, because no panel in either base sheet puts a tint
+chip in dark. This delta's state chip and its diff line ARE tint chips, so inheriting the gap would
+have put `--el-text-strong` (`#e5e5e5` in dark) on a light pastel. **The product is correct and the
+copy was short**: the values are restored by ROLE from the theme, never invented. Recorded here rather
+than fixed silently, because the two base sheets still carry the gap and the next delta that draws a
+tint chip in dark will meet it again.

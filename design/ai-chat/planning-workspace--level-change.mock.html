@@ -1,0 +1,2061 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A pending change to the LEVEL you are standing in — delta (MOTIR-6241)</title>
+
+    <!--
+      ══════════════════════════════════════════════════════════════════════════
+      A DELTA MOCK. It holds ONLY the panels that CHANGE.
+      ══════════════════════════════════════════════════════════════════════════
+
+      WHAT IT AMENDS, by path:
+        · design/ai-chat/planning-workspace--arrival.mock.html   — the design of
+          record for this surface (MOTIR-6159). Its panel 2 (THE TARGET CRUMB)
+          and panel 5 (THE PERSON NAVIGATED FIRST, which draws the
+          "Plan is in … · Go there" affordance) are the two it touches.
+        · design/ai-chat/design-notes.md
+            § "⭐ The canvas ARRIVES INSIDE the node being planned (MOTIR-6159)",
+              its § "The answer to MOTIR-2070" and its § "The person who
+              NAVIGATED FIRST"
+
+      Everything those two assets decide is INHERITED and NOT redrawn: the
+      `Modal size="full"` frame, the scrim, the canvas·rail split, the exit
+      chrome, the arrival RULE (`ancestors ++ [target]`), the TARGET CRUMB's
+      glyph / underline / sr-prefix, the follow-move and its 180ms crossfade,
+      and the node-level diff frames. This delta changes ONE thing: what the
+      breadcrumb bar says about a pending change to the LEVEL ITSELF.
+
+      The token block below is copied VERBATIM from
+      `planning-workspace--arrival.mock.html`, which copied it from
+      `planning-workspace.mock.html`. No token is invented here.
+
+      ⚠️ A NOTE ON WHAT THIS STYLESHEET IS. It is a hand-written rendering of the
+      shipped components, not their CSS. Every claim a panel below makes about
+      what the PRODUCT does was measured against the RUNNING app (see § "What was
+      RENDERED first" in the notes) — never read off this file.
+    -->
+
+    <style>
+      /* ═══════════════════════════════════════════════════════════════════════
+         TOKENS — copied verbatim from `planning-workspace.mock.html`, the sheet
+         this delta amends. Roles only; no invented hue.
+         `--el-text-muted` / `--el-text-faint` are DECLARED so the ink scanners
+         resolve them by name, and used only where the measured table allows:
+         muted never on a tinted surface, faint only on `aria-hidden`
+         decoration (CLAUDE.md's table, MOTIR-2455).
+         ═══════════════════════════════════════════════════════════════════════ */
+      :root {
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+
+        --el-page-bg: var(--color-background);
+        --el-card: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
+
+        --el-overlay-scrim: #00000066;
+        --el-canvas: #ecebe7;
+        --el-danger-text: #ffffff;
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+
+        --radius-card: 12px;
+        --radius-modal: 12px;
+        --radius-input: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --height-control: 28px;
+        --spacing-control-x: 8px;
+        --spacing-control-y: 4px;
+        --spacing-chip-x: 6px;
+        --spacing-card-padding: 16px;
+        --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+
+        --el-success: #1aae39;
+        --el-warning: #dd5b00;
+        --el-info: #0075de;
+        --el-danger: #e03131;
+
+        --el-tint-sky: #dcecfa;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-peach: #ffe8d4;
+        --el-tint-rose: #fde0ec;
+        --el-tint-yellow: #fef7d6;
+
+        --el-type-epic: #ff64c8;
+        --el-type-story: #1aae39;
+        --el-type-task: #0075de;
+        --el-type-bug: #e03131;
+        --el-type-subtask: #2a9d99;
+
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      :root {
+        --color-background: #ffffff;
+        --color-primary-fill: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-accent: #ff64c8;
+        --color-link: #0070d2;
+      }
+      :root,
+      [data-palette] {
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-link: var(--color-link);
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --el-accent-on-surface: var(--color-primary-fill);
+        --el-accent-wash: color-mix(in srgb, var(--el-accent) 8%, var(--el-card));
+      }
+      /* ⚠️ BEFORE the dark block, for the reason the base sheet states: a custom
+         property's `var()` substitutes where it is DECLARED, so the Tier-3
+         binding is re-emitted on `[data-theme]` (MOTIR-3592). */
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-primary-fill: #6c5cdd;
+        --color-primary-foreground: #ffffff;
+        --color-accent: #ff64c8;
+        --el-text: #f3f4f6;
+        --el-text-strong: #e5e5e5;
+        --el-text-secondary: #a4a097;
+        --el-text-muted: #8b8880;
+        --el-text-faint: #6b6862;
+        --el-page-bg: var(--color-background);
+        --el-card: #0f0f0f;
+        --el-surface: #1a1a1a;
+        --el-surface-soft: #161616;
+        --el-muted: #1f1f1f;
+        --el-canvas: #141414;
+        --el-border: #2a2a2a;
+        --el-border-soft: #1f1f1f;
+        --el-border-strong: #3a3a3a;
+        --el-accent: #6c5cdd;
+        --el-accent-text: #ffffff;
+        --el-accent-pressed: #5645d4;
+        --el-highlight: #ff64c8;
+        --el-accent-wash: color-mix(in srgb, var(--el-accent) 14%, var(--el-page-bg));
+        /* ⚠️ ADDED BY THIS DELTA — the base sheet’s dark block omits them.
+           The six pastel TINTS are re-declared for dark in the real theme
+           (packages/design-system/theme.css, § "Pastel tints dimmed for dark
+           backgrounds"), and the base sheet’s copy stops short of them because no
+           panel it draws puts a tint chip in dark. This delta’s state chip and its
+           diff line ARE tint chips, so the omission would have put
+           --el-text-strong (#e5e5e5 in dark) on a LIGHT pastel. The PRODUCT is
+           correct and the copy was short: values taken by ROLE from the theme,
+           never invented.
+           (This is the mock-CSS-is-your-own-copy trap, met from the other side.) */
+        --el-tint-peach: #3a2a1a;
+        --el-tint-rose: #3a1f2a;
+        --el-tint-mint: #1a2f25;
+        --el-tint-lavender: #2a253a;
+        --el-tint-sky: #1a2a3a;
+        --el-tint-yellow: #3a341a;
+      }
+
+      /* ═══ BOARD CHROME ═══════════════════════════════════════════════════
+         Its annotations owe AA too (docs/decisions/design-board-chrome-aa.md),
+         so every caption is `--el-text-secondary` — 6.18–6.80:1 on every
+         surface in both themes — never `--el-text-muted`. */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        -webkit-font-smoothing: antialiased;
+      }
+      .page-head {
+        padding: 40px 40px 8px;
+        max-width: 1500px;
+        margin: 0 auto;
+      }
+      .page-head h1 {
+        margin: 0 0 8px;
+        font-size: 26px;
+        letter-spacing: -0.015em;
+        color: var(--el-text);
+      }
+      .page-head p {
+        margin: 0 0 6px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 108ch;
+      }
+      .ref {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-accent-on-surface);
+      }
+      .sheet {
+        max-width: 1500px;
+        margin: 0 auto 28px;
+        padding: 0 40px;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin: 26px 0 10px;
+        padding-top: 18px;
+        border-top: 1px solid var(--el-border);
+      }
+      .sheethead .n {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--el-accent-text);
+        background: var(--el-accent);
+        border-radius: var(--radius-badge);
+        padding: 2px 9px;
+        flex: none;
+      }
+      .sheethead h2 {
+        margin: 0;
+        font-size: 17px;
+        letter-spacing: -0.01em;
+        color: var(--el-text);
+      }
+      .note {
+        font-size: 13px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+        margin: 8px 0 14px;
+        max-width: 112ch;
+      }
+      .note b {
+        color: var(--el-text);
+      }
+      .note code,
+      .sheethead code,
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+        background: var(--el-muted);
+        border-radius: var(--radius-kbd);
+        padding: 1px 5px;
+        color: var(--el-text-strong);
+      }
+      .cap {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        margin: 7px 0 0;
+      }
+      .cap b {
+        color: var(--el-text);
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      .grid3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        border-radius: var(--radius-badge);
+        padding: 2px var(--spacing-chip-x);
+        font-family: var(--font-mono);
+      }
+      .tag.was {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .tag.now {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .tag.same {
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+      }
+
+      /* ═══ THE SURFACE — composed, never redrawn ═══════════════════════════
+         The frame, the split and the exit bar are sheet 6's. They appear here
+         only so the canvas has the box it really sits in. */
+      .surface {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-card);
+        box-shadow: var(--shadow-card);
+      }
+      .exitbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface);
+        padding: 6px 16px;
+        height: 49px; /* sheet 6's measured exit-chrome bar */
+      }
+      .exitbtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        background: none;
+        border: 0;
+      }
+      .kbd {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-kbd);
+        padding: 0 4px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .projname {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .panes {
+        display: grid;
+        grid-template-columns: 1fr 260px;
+        min-height: 316px;
+      }
+      .panes.narrow {
+        grid-template-columns: 1fr;
+      }
+      .rail {
+        border-left: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        padding: 12px;
+      }
+      .railline {
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .railbubble {
+        margin-top: 10px;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 9px 11px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+
+      /* ═══ THE CANVAS PANE ═════════════════════════════════════════════════ */
+      .canvas {
+        position: relative;
+        background: var(--el-canvas);
+        background-image: radial-gradient(
+          color-mix(in srgb, var(--el-text) 8%, transparent) 1px,
+          transparent 1px
+        );
+        background-size: 16px 16px;
+        padding: 52px 16px 16px;
+        min-height: 316px;
+      }
+
+      /* The BREADCRUMB — the shipped `nav` the canvas anchors top-left.
+         Mirrors ProjectRoadmapCanvas's real markup: a Back control, then an
+         `<ol>` of crumbs separated by an aria-hidden chevron; the last crumb
+         carries `aria-current="page"` and is `font-semibold text-(--el-text)`,
+         the rest are `--el-text-secondary`. */
+      .crumbbar {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        right: 12px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        max-width: 44rem;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        padding: 4px 8px;
+        box-shadow: var(--shadow-card);
+      }
+      .backbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        flex: none;
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        border: 0;
+        background: none;
+      }
+      .crumbs {
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin: 0;
+        padding: 0;
+        font-size: 13px;
+        min-width: 0;
+      }
+      .crumbs li {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+      }
+      .chev {
+        flex: none;
+        color: var(--el-text-faint); /* aria-hidden decoration — the shipped value */
+      }
+      .crumb {
+        border: 0;
+        background: none;
+        max-width: 18rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .crumb.here {
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      /* ★ THE ONE NEW CRUMB KIND — the TARGET crumb.
+         It reuses the seam the FOLDER crumb already established (a leading
+         14px lucide glyph + an sr-only prefix, `isFolderCrumb`), so nothing
+         about the breadcrumb's shape is new: only which glyph and which word. */
+      .crumb.target {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .crumb.target .tglyph {
+        flex: none;
+        color: var(--el-accent-on-surface);
+      }
+      .crumb.target .tunder {
+        box-shadow: inset 0 -2px 0 0 var(--el-accent);
+      }
+      .sronly {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+
+      /* NODES — the shipped WorkItemNode footprint, in outline. */
+      .level {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        align-items: flex-start;
+      }
+      /* THE CARD — the shipped shell, at 0.67 scale (the real footprint is
+         NODE_W×NODE_H = 280×124 and does not fit a side-by-side board).
+         Every value is the component's own: a raised `--el-surface` tile on the
+         recessed `--el-canvas` board, `--radius-card`, a 1px `--el-border` and
+         `--shadow-card`. Padding 9px is the shipped 14px (`p-3.5`) at the same
+         scale. Panel 9 is where this shell is specified rather than merely used. */
+      .node {
+        position: relative;
+        width: 188px;
+        min-height: 76px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-card);
+        padding: 9px 10px;
+      }
+      /* The OP layer — a proposal. The ONLY things it changes are the border
+         style/colour and the fill; everything else is the shell above. */
+      .node.op-add {
+        border-style: dashed;
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+      }
+      .node.op-modify {
+        box-shadow:
+          0 0 0 2px var(--el-info),
+          var(--shadow-card);
+      }
+      .node.st-ready {
+        background: var(--el-tint-mint);
+      }
+      .node.st-done {
+        background: var(--el-tint-sky);
+      }
+      .opbadge {
+        position: absolute;
+        top: -9px;
+        left: 9px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: 1px var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .opbadge.info {
+        background: var(--el-info);
+        color: var(--el-accent-text);
+      }
+      .statepill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: 0 var(--spacing-chip-x);
+        font-size: 10px;
+        font-weight: 600;
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+      }
+      .statepill.ready {
+        background: var(--el-success);
+        color: var(--el-accent-text);
+      }
+      .surfacelabel {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+      }
+      .board {
+        background: var(--el-canvas);
+        background-image: radial-gradient(
+          color-mix(in srgb, var(--el-text) 8%, transparent) 1px,
+          transparent 1px
+        );
+        background-size: 16px 16px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px 14px 14px;
+      }
+      .node .kid {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--el-text-secondary);
+      }
+      .node .ttl {
+        margin-top: 3px;
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--el-text);
+      }
+      .node .kindbar {
+        position: absolute;
+        left: 0;
+        top: 10px;
+        bottom: 10px;
+        width: 3px;
+        border-radius: var(--radius-badge);
+      }
+      .k-epic {
+        background: var(--el-type-epic);
+      }
+      .k-story {
+        background: var(--el-type-story);
+      }
+      .k-subtask {
+        background: var(--el-type-subtask);
+      }
+      /* The shipped `PlanningTargetFrame`: a 2px accent ring + a palette-derived
+         glow + the "Target" pill. Copied by ROLE from the component. */
+      .node.ringed::after {
+        content: '';
+        position: absolute;
+        inset: -2px;
+        border: 2px solid var(--el-accent);
+        border-radius: var(--radius-card);
+        box-shadow:
+          0 0 14px color-mix(in srgb, var(--el-accent) 24%, transparent),
+          0 0 28px -4px color-mix(in srgb, var(--el-highlight) 30%, transparent);
+        pointer-events: none;
+      }
+      .node .targetpill {
+        position: absolute;
+        top: -9px;
+        right: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        padding: 1px var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+      .emptylevel {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 22px;
+        text-align: center;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        background: color-mix(in srgb, var(--el-card) 60%, transparent);
+      }
+      .skel {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        width: 188px;
+        height: 76px;
+      }
+
+      /* The FOLLOW-MOVE's live region + its quiet affordance. */
+      .liveregion {
+        margin-top: 10px;
+        border: 1px dashed var(--el-accent);
+        border-radius: var(--radius-control);
+        padding: 7px 10px;
+        font-size: 12px;
+        color: var(--el-text);
+        background: var(--el-accent-wash);
+      }
+      .liveregion .lbl {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-accent-on-surface);
+        display: block;
+        margin-bottom: 2px;
+      }
+      /* ★ THE QUIET AFFORDANCE — the ONLY new control this design adds.
+         It sits in the breadcrumb bar's own row, after the crumbs. Not a toast,
+         not a modal, and it never moves the canvas by itself. */
+      .goto {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        flex: none;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-card);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .goto .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        flex: none;
+      }
+
+      .frames {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        align-items: start;
+      }
+      .miniframe {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-card);
+      }
+      .miniframe .canvas {
+        min-height: 188px;
+        padding: 48px 12px 12px;
+      }
+      .miniframe .node {
+        width: 128px;
+        min-height: 58px;
+      }
+      .miniframe .crumbbar {
+        top: 10px;
+        left: 10px;
+        right: 10px;
+      }
+      .stepno {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--el-text-secondary);
+        padding: 6px 10px 0;
+        display: block;
+      }
+
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+        margin: 6px 0 4px;
+      }
+      table.spec th,
+      table.spec td {
+        border: 1px solid var(--el-border);
+        padding: 7px 9px;
+        text-align: left;
+        vertical-align: top;
+        color: var(--el-text-secondary);
+        line-height: 1.55;
+      }
+      table.spec th {
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      table.spec td b {
+        color: var(--el-text);
+      }
+      .themepair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .darkwrap {
+        background: var(--el-page-bg);
+        border-radius: var(--radius-card);
+        padding: 10px;
+      }
+
+      /* ═══ ★ THE ONE NEW ELEMENT — THE LEVEL CHANGE BAND ═══════════════════
+         A SECOND ROW inside the canvas's own breadcrumb `nav`. It adds no
+         floating object to the canvas: the card, its border, its radius, its
+         `--el-surface` fill and its `--shadow-card` are the shipped bar's, and
+         the band is a row inside them.
+
+         The shipped nav is `flex items-center`; carrying a second row makes it
+         `flex-col`, with today's contents unchanged inside the first row. */
+      .crumbbar.stacked {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+      }
+      .crumbbar.stacked .crumbrow {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+      }
+      /* A two-row bar is taller, and the bar is an ABSOLUTE overlay on the board
+         (`absolute top-3 left-3 right-3 z-10` in the shipped canvas). So the
+         board's own top inset grows with it here, exactly as the canvas's arrival
+         fit does in the product. */
+      .canvas.hasband {
+        padding-top: 94px;
+      }
+      .miniframe .canvas.hasband {
+        padding-top: 88px;
+      }
+      .levelband {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        margin-top: 5px;
+        padding-top: 5px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text);
+      }
+      /* The BORDER TREATMENT carries the state, exactly as the node frame's
+         does: `change` is the only SOLID one, because it is the only state that
+         touches a card that STAYS. Dashed is this design's shipped grammar for
+         "proposed, not real yet" (PlanChangeDiffNode.tsx, the `.remove` note). */
+      .levelband.is-add {
+        border-top-style: dashed;
+        border-top-color: var(--el-accent);
+      }
+      .levelband.is-remove {
+        border-top-style: dashed;
+        border-top-color: var(--el-danger);
+      }
+      /* The STATE CHIP — the node frame's corner tag, in the same three tones
+         and the same mono/uppercase type. It is not at a card corner here, so it
+         sits inline; nothing else about it changes. */
+      .opchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        flex: none;
+        border-radius: var(--radius-badge);
+        padding: 1px var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+      .opchip.is-change {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .opchip.is-add {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .opchip.is-remove {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      /* The SENTENCE. Truncates; the chip beside it never does. */
+      .bandtext {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* The DIFF LINE — the same chip the change frame draws at `right-2
+         -bottom-2`, with the same `field.*` words joined by ` · `. */
+      .fieldchip {
+        flex: none;
+        border-radius: var(--radius-badge);
+        padding: 1px var(--spacing-chip-x);
+        font-size: 10px;
+        font-weight: 600;
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        max-width: 16rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .fieldchip.rose {
+        background: var(--el-tint-rose);
+      }
+      /* The OUTCOME, once the plan has one — the same word, the same tokens and
+         the same right-hand placement the frame's fused chip uses. */
+      .outcomechip {
+        margin-left: auto;
+        flex: none;
+        border-radius: var(--radius-badge);
+        padding: 1px var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+      .outcomechip.accepted {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .outcomechip.declined {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      /* Board-only: the red/green annotation rules this delta uses to say what
+         ships today versus what this design adds. Chrome, never product. */
+      .verdict {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+      }
+      .dot-bad,
+      .dot-good {
+        width: 8px;
+        height: 8px;
+        border-radius: var(--radius-badge);
+        flex: none;
+      }
+      .dot-bad {
+        background: var(--el-danger);
+      }
+      .dot-good {
+        background: var(--el-success);
+      }
+      .persistbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface);
+        padding: 8px 14px;
+      }
+      .persistbar .counts {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .persistbar .sub {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .persistbar .btns {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+      }
+      .btn {
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) 10px;
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        background: none;
+        color: var(--el-text-secondary);
+      }
+      .btn.primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        align-items: start;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="page-head">
+      <h1>A pending change to the LEVEL you are standing in</h1>
+      <p>
+        A <b>delta</b> on
+        <span class="ref">design/ai-chat/planning-workspace--arrival.mock.html</span>
+        (MOTIR-6159, the design of record for this surface) and its notes section
+        <b>The canvas ARRIVES INSIDE the node being planned</b>. Only the panels that change are
+        drawn. The overlay frame, the scrim, the canvas·rail split, the exit chrome, the arrival
+        rule, the target crumb, the follow-move and the node-level diff frames are all inherited
+        unchanged.
+      </p>
+      <p>
+        <b>The problem.</b> Since MOTIR-6154 the canvas opens INSIDE the target, so the target is
+        the LEVEL and not one of <code>base.nodes</code>.
+        <code>decoratePlanChangeLevel</code> frames nodes ON a level, and a level has no node to
+        frame — so a proposal that renames, re-parents or removes the target draws nothing at all,
+        while the confirm bar counts it. The person is asked to confirm a change they cannot see.
+      </p>
+      <p class="ref">MOTIR-6241 · hands to MOTIR-6223 · amends MOTIR-6159 · epic MOTIR-6010</p>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">1</span>
+        <h2>What ships today, measured — and the one line that fixes it</h2>
+      </div>
+      <p class="note">
+        Both boards below are the SAME moment: the workspace opened on
+        <code>ARP-1 Authentication</code> by <b>Re-plan</b>, one turn sent, the plan proposing
+        <i>rename the epic</i> + <i>add a story under it</i>. The left board is
+        <b>a trace of the running app</b> (the render in § <i>What was RENDERED first</i>); the
+        right board adds the one element this design introduces.
+      </p>
+
+      <div class="grid2">
+        <div>
+          <p class="verdict"><span class="dot-bad" aria-hidden="true"></span> Ships today</p>
+          <div class="surface">
+            <div class="exitbar">
+              <button class="exitbtn" type="button">✕ Close</button>
+              <span class="kbd">Esc</span>
+              <span class="projname">Augment Replan</span>
+            </div>
+            <div class="panes">
+              <div class="canvas">
+                <nav class="crumbbar" aria-label="Breadcrumb">
+                  <button class="backbtn" type="button" aria-label="Back">‹</button>
+                  <ol class="crumbs">
+                    <li><button class="crumb" type="button">Roadmap</button></li>
+                    <li>
+                      <span class="chev" aria-hidden="true">›</span>
+                      <button class="crumb here target" type="button" aria-current="page">
+                        <span class="tglyph" aria-hidden="true">◎</span>
+                        <span class="sronly">Planning target:</span>
+                        <span class="tunder">ARP-1 · Authentication</span>
+                      </button>
+                    </li>
+                  </ol>
+                </nav>
+                <div class="level">
+                  <div class="node st-ready">
+                    <span class="kindbar k-story"></span>
+                    <span class="statepill ready">Ready</span>
+                    <div class="kid" style="margin-top: 5px">ARP-2</div>
+                    <div class="ttl">Login UI</div>
+                  </div>
+                  <div class="node st-ready">
+                    <span class="kindbar k-story"></span>
+                    <span class="statepill ready">Ready</span>
+                    <div class="kid" style="margin-top: 5px">ARP-3</div>
+                    <div class="ttl">Password Reset</div>
+                  </div>
+                  <div class="node op-add">
+                    <span class="opbadge">+ added</span>
+                    <span class="kindbar k-story"></span>
+                    <div class="kid" style="margin-top: 5px">New</div>
+                    <div class="ttl">Account recovery</div>
+                  </div>
+                </div>
+              </div>
+              <div class="rail">
+                <p class="railline">MOTIR AI · plan change</p>
+                <div class="railbubble">
+                  1 added, 1 changed — it's on the canvas, nothing is saved yet.
+                </div>
+              </div>
+            </div>
+            <div class="persistbar">
+              <span>
+                <span class="counts">1 added, 1 changed</span><br />
+                <span class="sub">Approving adds these to your backlog.</span>
+              </span>
+              <span class="btns">
+                <button class="btn" type="button">Decline</button>
+                <button class="btn primary" type="button">✓ Approve</button>
+              </span>
+            </div>
+          </div>
+          <p class="cap">
+            The ADD is perfectly legible. The <b>rename is nowhere on screen</b>: measured on the
+            running app, <b>0</b> nodes on this level carry
+            <code>data-diff-state="change"</code> while the bar counts <code>1 changed</code>. The
+            only way to see it is to click <b>Roadmap</b> and leave the level the surface
+            deliberately opened on.
+          </p>
+        </div>
+
+        <div>
+          <p class="verdict"><span class="dot-good" aria-hidden="true"></span> This design</p>
+          <div class="surface">
+            <div class="exitbar">
+              <button class="exitbtn" type="button">✕ Close</button>
+              <span class="kbd">Esc</span>
+              <span class="projname">Augment Replan</span>
+            </div>
+            <div class="panes">
+              <div class="canvas hasband">
+                <nav class="crumbbar stacked" aria-label="Breadcrumb">
+                  <div class="crumbrow">
+                    <button class="backbtn" type="button" aria-label="Back">‹</button>
+                    <ol class="crumbs">
+                      <li><button class="crumb" type="button">Roadmap</button></li>
+                      <li>
+                        <span class="chev" aria-hidden="true">›</span>
+                        <button class="crumb here target" type="button" aria-current="page">
+                          <span class="tglyph" aria-hidden="true">◎</span>
+                          <span class="sronly">Planning target:</span>
+                          <span class="tunder">ARP-1 · Authentication</span>
+                        </button>
+                      </li>
+                    </ol>
+                  </div>
+                  <div class="levelband">
+                    <span class="sronly">Pending change to this level:</span>
+                    <span class="opchip is-change">✎ changed</span>
+                    <span class="bandtext"
+                      >This level — title → <b>Authentication &amp; sessions</b></span
+                    >
+                    <span class="fieldchip">title · status</span>
+                  </div>
+                </nav>
+                <div class="level">
+                  <div class="node st-ready">
+                    <span class="kindbar k-story"></span>
+                    <span class="statepill ready">Ready</span>
+                    <div class="kid" style="margin-top: 5px">ARP-2</div>
+                    <div class="ttl">Login UI</div>
+                  </div>
+                  <div class="node st-ready">
+                    <span class="kindbar k-story"></span>
+                    <span class="statepill ready">Ready</span>
+                    <div class="kid" style="margin-top: 5px">ARP-3</div>
+                    <div class="ttl">Password Reset</div>
+                  </div>
+                  <div class="node op-add">
+                    <span class="opbadge">+ added</span>
+                    <span class="kindbar k-story"></span>
+                    <div class="kid" style="margin-top: 5px">New</div>
+                    <div class="ttl">Account recovery</div>
+                  </div>
+                </div>
+              </div>
+              <div class="rail">
+                <p class="railline">MOTIR AI · plan change</p>
+                <div class="railbubble">
+                  1 added, 1 changed — it's on the canvas, nothing is saved yet.
+                </div>
+              </div>
+            </div>
+            <div class="persistbar">
+              <span>
+                <span class="counts">1 added, 1 changed</span><br />
+                <span class="sub">Approving adds these to your backlog.</span>
+              </span>
+              <span class="btns">
+                <button class="btn" type="button">Decline</button>
+                <button class="btn primary" type="button">✓ Approve</button>
+              </span>
+            </div>
+          </div>
+          <p class="cap">
+            The <b>LEVEL CHANGE BAND</b> — a second row inside the canvas's own breadcrumb bar. It
+            adds no floating object: the card, its border, its radius, its
+            <code>--el-surface</code> fill and its <code>--shadow-card</code> are the shipped bar's.
+            <code>1 changed</code> now has something on screen that is it.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">2</span>
+        <h2>THE DECISION — why the band, and not the other two</h2>
+      </div>
+      <p class="note">
+        MOTIR-6223 names three candidates and deliberately does not choose between them. This is the
+        choice, with its reasons.
+        <b
+          >Chosen: candidate 2, the level header — drawn as a second ROW INSIDE the breadcrumb
+          bar</b
+        >
+        rather than as a band of its own, so it adds no new object to the canvas.
+      </p>
+
+      <table class="spec">
+        <tr>
+          <th style="width: 22%">Candidate</th>
+          <th style="width: 12%">Verdict</th>
+          <th>Reasoning</th>
+        </tr>
+        <tr>
+          <td><b>1 — on the breadcrumb CRUMB</b></td>
+          <td><span class="tag was">rejected</span></td>
+          <td>
+            Three reasons, and the first alone settles it.
+            <b>(a) The crumb is already spoken for</b>: MOTIR-6159 put the planning-target mark
+            there — the <code>target</code> glyph plus the 2px accent underline — and a second mark
+            on the same element would have the crumb saying two different things (<i
+              >this is what the planner is pointed at</i
+            >, <i>this is about to change</i>) in one 18rem box.
+            <b>(b) A crumb cannot carry the diff LINE.</b> What the reader needs is not
+            <i>something changed</i> but <i>title and status changed, to this</i>, and the crumb has
+            nowhere to put it — it truncates at <code>max-w-[18rem]</code>, so the mark would be the
+            first thing to go. <b>(c) The crumb is NAVIGATION.</b> Clicking it navigates; a diff
+            mark on a control whose press does something unrelated invites a click that does nothing
+            about the change. And <code>remove</code> is undrawable there outright: a struck-through
+            link to a level that is about to cease is incoherent.
+          </td>
+        </tr>
+        <tr>
+          <td><b>2 — a level header / banner</b></td>
+          <td><span class="tag now">CHOSEN</span></td>
+          <td>
+            It is the only candidate that can carry the <b>whole</b> node vocabulary — the state
+            chip, the word, and the diff line naming what changed — which is exactly the information
+            the missing frame would have carried. It represents the LEVEL as an object, which is the
+            thing that has no drawing. <b>Placed as a second ROW inside the breadcrumb bar</b>,
+            because that bar is already the one element on screen that stands for the level (that is
+            MOTIR-6159's own answer to MOTIR-2070), because it inherits a card that already exists
+            rather than adding one, and because at narrow width it is the only canvas chrome that
+            survives at all (panel 7).
+          </td>
+        </tr>
+        <tr>
+          <td><b>3 — extend the follow affordance</b></td>
+          <td><span class="tag was">rejected</span></td>
+          <td>
+            <b>Its sentence is false here.</b> <i>“Plan is in ARP-1 · Go there”</i> means
+            <i>the plan is somewhere you are NOT</i>; when the plan changes the level you are
+            standing in, the plan is exactly where you ARE, and a control offering to take you there
+            would be offering to take you where you already are. Extending it to also announce the
+            level's own change would give one control two opposite meanings.
+            <b>It is still the right answer to the other half of MOTIR-6223</b> — a proposal that
+            lands BESIDE the anchor — and panel 5 composes it there <i>unchanged</i>, because there
+            its sentence is already true. Composing it is not extending it.
+          </td>
+        </tr>
+      </table>
+
+      <p class="note" style="margin-top: 14px">
+        <b>What this does NOT draw, and why.</b>
+        <code>diffStateForItem</code> has a fourth state, <code>locked</code> — a terminal card the
+        proposal cannot touch. The band does not draw it. The band's subject is a
+        <b>pending change</b>, and <code>locked</code> is the absence of one; a level with no
+        pending change draws no band at all (panel 4, state D), and saying
+        <i>“nothing is changing here”</i> in words would be a line every reader has to read in order
+        to learn nothing. The rail already says it once, in the planner's own voice:
+        <i>“Anything already finished is left untouched — I can't change done work.”</i>
+      </p>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">3</span>
+        <h2>THE BAND — anatomy, in both themes</h2>
+      </div>
+      <p class="note">
+        Nothing here is invented. Every part is a part the node's own
+        <code>PlanChangeDiffFrame</code> already draws, moved from a card corner onto a row: the
+        <b>state chip</b> is the frame's corner tag (same three tones, same mono/uppercase), the
+        <b>diff line</b> is the chip the frame draws at <code>right-2 -bottom-2</code>, and the
+        <b>border treatment</b> follows the frame's own solid-versus-dashed rule.
+      </p>
+
+      <div class="themepair">
+        <div>
+          <div class="surface" style="padding: 18px">
+            <nav
+              class="crumbbar stacked"
+              aria-label="Breadcrumb"
+              style="position: static; max-width: none; margin-bottom: 12px"
+            >
+              <div class="crumbrow">
+                <button class="backbtn" type="button" aria-label="Back">‹</button>
+                <ol class="crumbs">
+                  <li><button class="crumb" type="button">Roadmap</button></li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span>
+                    <button class="crumb here target" type="button" aria-current="page">
+                      <span class="tglyph" aria-hidden="true">◎</span>
+                      <span class="sronly">Planning target:</span>
+                      <span class="tunder">ARP-1 · Authentication</span>
+                    </button>
+                  </li>
+                </ol>
+              </div>
+              <div class="levelband">
+                <span class="sronly">Pending change to this level:</span>
+                <span class="opchip is-change">✎ changed</span>
+                <span class="bandtext"
+                  >This level — title → <b>Authentication &amp; sessions</b></span
+                >
+                <span class="fieldchip">title · status</span>
+              </div>
+            </nav>
+            <p class="cap" style="margin: 0">
+              <b>Light.</b> The crumb above is untouched — it keeps the committed title, because it
+              is what the canvas navigates by. The band is where the proposed value lives, one line
+              under it, so <i>was → now</i> is one glance and the crumb never disagrees with the
+              card the root level draws.
+            </p>
+          </div>
+        </div>
+        <div class="darkwrap" data-theme="dark">
+          <div class="surface" style="padding: 18px">
+            <nav
+              class="crumbbar stacked"
+              aria-label="Breadcrumb"
+              style="position: static; max-width: none; margin-bottom: 12px"
+            >
+              <div class="crumbrow">
+                <button class="backbtn" type="button" aria-label="Back">‹</button>
+                <ol class="crumbs">
+                  <li><button class="crumb" type="button">Roadmap</button></li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span>
+                    <button class="crumb here target" type="button" aria-current="page">
+                      <span class="tglyph" aria-hidden="true">◎</span>
+                      <span class="sronly">Planning target:</span>
+                      <span class="tunder">ARP-1 · Authentication</span>
+                    </button>
+                  </li>
+                </ol>
+              </div>
+              <div class="levelband">
+                <span class="sronly">Pending change to this level:</span>
+                <span class="opchip is-change">✎ changed</span>
+                <span class="bandtext"
+                  >This level — title → <b>Authentication &amp; sessions</b></span
+                >
+                <span class="fieldchip">title · status</span>
+              </div>
+            </nav>
+            <p class="cap" style="margin: 0">
+              <b>Dark.</b> Every value is token-derived, so the pair flips with the theme and
+              re-tints with <code>data-palette</code>. This delta declares no hue of its own.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <p class="surfacelabel" style="margin: 18px 0 6px">
+        Once the plan is DECIDED — the overlay survives the decision (MOTIR-3162)
+      </p>
+      <div class="board" style="max-width: 720px">
+        <nav
+          class="crumbbar stacked"
+          aria-label="Breadcrumb"
+          style="position: static; max-width: none"
+        >
+          <div class="crumbrow">
+            <button class="backbtn" type="button" aria-label="Back">‹</button>
+            <ol class="crumbs">
+              <li><button class="crumb" type="button">Roadmap</button></li>
+              <li>
+                <span class="chev" aria-hidden="true">›</span>
+                <button class="crumb here target" type="button" aria-current="page">
+                  <span class="tglyph" aria-hidden="true">◎</span>
+                  <span class="sronly">Planning target:</span>
+                  <span class="tunder">ARP-1 · Authentication</span>
+                </button>
+              </li>
+            </ol>
+          </div>
+          <div class="levelband">
+            <span class="sronly">Pending change to this level:</span>
+            <span class="opchip is-change">✎ changed</span>
+            <span class="bandtext">This level — title → <b>Authentication &amp; sessions</b></span>
+            <span class="fieldchip">title · status</span>
+            <span class="outcomechip accepted">accepted</span>
+          </div>
+        </nav>
+      </div>
+      <div class="board" style="max-width: 720px; margin-top: 10px">
+        <nav
+          class="crumbbar stacked"
+          aria-label="Breadcrumb"
+          style="position: static; max-width: none"
+        >
+          <div class="crumbrow">
+            <button class="backbtn" type="button" aria-label="Back">‹</button>
+            <ol class="crumbs">
+              <li><button class="crumb" type="button">Roadmap</button></li>
+              <li>
+                <span class="chev" aria-hidden="true">›</span>
+                <button class="crumb here target" type="button" aria-current="page">
+                  <span class="tglyph" aria-hidden="true">◎</span>
+                  <span class="sronly">Planning target:</span>
+                  <span class="tunder">ARP-1 · Authentication</span>
+                </button>
+              </li>
+            </ol>
+          </div>
+          <div class="levelband">
+            <span class="sronly">Pending change to this level:</span>
+            <span class="opchip is-change">✎ changed</span>
+            <span class="bandtext">This level — title → <b>Authentication &amp; sessions</b></span>
+            <span class="fieldchip">title · status</span>
+            <span class="outcomechip declined">declined</span>
+          </div>
+        </nav>
+      </div>
+      <p class="cap">
+        The decision does not remove the band, exactly as it does not remove the node frames: the
+        outcome is FUSED to the state, in the frame’s own word, tone and right-hand placement (<code
+          >--el-tint-mint</code
+        >
+        accepted, <code>--el-muted</code> declined). One language across a card and a level, in the
+        decided state as much as the pending one.
+      </p>
+      <table class="spec">
+        <tr>
+          <th style="width: 18%">Element</th>
+          <th style="width: 32%">Token / primitive</th>
+          <th>Why</th>
+        </tr>
+        <tr>
+          <td><b>The row</b></td>
+          <td>
+            a second row inside the shipped <code>nav</code> — <code>flex-col</code>, the crumbs
+            unchanged in row one; <code>margin-top 5px</code>, <code>padding-top 5px</code>,
+            <code>border-top 1px --el-border-soft</code>
+          </td>
+          <td>
+            Reuses the bar's own <code>--el-surface</code> card, <code>--radius-card</code>,
+            <code>--el-border</code> and <code>--shadow-card</code>. Nothing new is placed on the
+            canvas, and the band cannot drift from the bar it belongs to.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Border treatment</b></td>
+          <td>
+            solid <code>--el-border-soft</code> for <code>change</code>; dashed
+            <code>--el-accent</code> for <code>add</code>; dashed <code>--el-danger</code> for
+            <code>remove</code>
+          </td>
+          <td>
+            The node frame's own rule, verbatim: dashed is this surface's grammar for “proposed, not
+            real yet”, and <code>change</code> is the only solid one because it is the only state
+            that touches a card that STAYS.
+          </td>
+        </tr>
+        <tr>
+          <td><b>State chip</b></td>
+          <td>
+            the frame's corner tag — <code>--el-tint-sky</code> / <code>--el-tint-lavender</code> /
+            <code>--el-tint-rose</code> on <code>--el-text-strong</code>, mono 10px, uppercase,
+            <code>--radius-badge</code>, lucide <code>pencil</code> / <code>plus</code> /
+            <code>minus</code> at <code>size-3</code>
+          </td>
+          <td>
+            The same three tones and the same glyph-plus-word pairing the node wears, so one
+            vocabulary covers a card and a level. Never colour alone; the word is real text.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Sentence</b></td>
+          <td><code>--el-text</code>, 12px, <code>truncate</code></td>
+          <td>
+            Names the SUBJECT in words — “This level” — so the band can never be read as being about
+            a card on the board. It is the only part that truncates; the chips beside it do not.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Diff line</b></td>
+          <td>
+            the frame's bottom chip — <code>--el-tint-sky</code> (rose on <code>remove</code>),
+            <code>--el-text-strong</code>, 10px semibold, <code>max-w-[16rem] truncate</code>
+          </td>
+          <td>
+            The same <code>changedFields()</code> words the frame joins with <code>·</code>. It is
+            the information the missing frame would have carried, so it is carried here unchanged —
+            measured on the running app as <code>title · status</code> for this plan.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Outcome chip</b></td>
+          <td>
+            <code>margin-left:auto</code>; <code>--el-tint-mint</code> / <code>--el-muted</code>,
+            the frame's fused outcome chip
+          </td>
+          <td>
+            Once the plan is decided, the band says so in the same word, tone and right-hand
+            placement the node frame uses. Absent while the plan is undecided.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Screen-reader prefix</b></td>
+          <td><code>sr-only</code> “Pending change to this level: ”</td>
+          <td>
+            The folder crumb's <code>srPrefix</code> discipline, one row down. The band is never
+            colour alone and never glyph alone.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Appear / disappear</b></td>
+          <td>
+            <code>transition-opacity duration-[180ms] motion-reduce:transition-none</code>
+          </td>
+          <td>
+            The exact idiom <code>ProjectRoadmapCanvas</code> already uses for its follow crossfade.
+            Under reduced motion the band simply is or is not there; nothing else changes.
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">4</span>
+        <h2>THE FOUR STATES of the level itself</h2>
+      </div>
+      <p class="note">
+        One row, four states. <b>A — CHANGED</b> and <b>B — REMOVED</b> are the level as a committed
+        card the proposal touches. <b>C — THE LEVEL IS ITSELF AN ADD</b>: the reader has drilled
+        into a proposed container, so nothing on this level exists yet either.
+        <b>D — NOTHING CHANGED</b>: the band is <i>absent</i>, not an empty shell.
+      </p>
+
+      <div class="frames">
+        <div class="miniframe">
+          <span class="stepno">A · changed</span>
+          <div class="canvas hasband">
+            <nav class="crumbbar stacked" aria-label="Breadcrumb">
+              <div class="crumbrow">
+                <button class="backbtn" type="button" aria-label="Back">‹</button>
+                <ol class="crumbs">
+                  <li>
+                    <button class="crumb here target" type="button" aria-current="page">
+                      <span class="tglyph" aria-hidden="true">◎</span>
+                      <span class="tunder">ARP-1 · Authentication</span>
+                    </button>
+                  </li>
+                </ol>
+              </div>
+              <div class="levelband">
+                <span class="opchip is-change">✎ changed</span>
+                <span class="bandtext">This level — title →&nbsp;<b>Auth &amp; sessions</b></span>
+              </div>
+            </nav>
+            <div class="level">
+              <div class="node st-ready">
+                <span class="kindbar k-story"></span>
+                <div class="kid">ARP-2</div>
+                <div class="ttl">Login UI</div>
+              </div>
+            </div>
+          </div>
+          <p class="cap" style="padding: 0 10px 10px">
+            The diff line names every changed field; when <code>title</code> is among them the band
+            shows the proposed value, because the crumb directly above shows the old one.
+          </p>
+        </div>
+
+        <div class="miniframe">
+          <span class="stepno">B · removed</span>
+          <div class="canvas hasband">
+            <nav class="crumbbar stacked" aria-label="Breadcrumb">
+              <div class="crumbrow">
+                <button class="backbtn" type="button" aria-label="Back">‹</button>
+                <ol class="crumbs">
+                  <li>
+                    <button class="crumb here target" type="button" aria-current="page">
+                      <span class="tglyph" aria-hidden="true">◎</span>
+                      <span class="tunder">ARP-1 · Authentication</span>
+                    </button>
+                  </li>
+                </ol>
+              </div>
+              <div class="levelband is-remove">
+                <span class="opchip is-remove">− removed</span>
+                <span class="bandtext">This level goes on approve</span>
+                <span class="fieldchip rose">with 2 children</span>
+              </div>
+            </nav>
+            <div class="level">
+              <div class="node st-ready">
+                <span class="kindbar k-story"></span>
+                <div class="kid">ARP-2</div>
+                <div class="ttl">Login UI</div>
+              </div>
+            </div>
+          </div>
+          <p class="cap" style="padding: 0 10px 10px">
+            Dashed <code>--el-danger</code> rule; the shipped <code>willRemove</code> words (“goes
+            on approve”). The crumb is NOT struck through — it is still how the reader navigates
+            out, and the rose wash stays on the card at the level above.
+          </p>
+        </div>
+
+        <div class="miniframe">
+          <span class="stepno">C · the level is an add</span>
+          <div class="canvas hasband">
+            <nav class="crumbbar stacked" aria-label="Breadcrumb">
+              <div class="crumbrow">
+                <button class="backbtn" type="button" aria-label="Back">‹</button>
+                <ol class="crumbs">
+                  <li>
+                    <button class="crumb here" type="button" aria-current="page">
+                      Account recovery
+                    </button>
+                  </li>
+                </ol>
+              </div>
+              <div class="levelband is-add">
+                <span class="opchip is-add">+ added</span>
+                <span class="bandtext">This level is proposed — nothing here exists yet</span>
+              </div>
+            </nav>
+            <div class="level">
+              <div class="node op-add">
+                <span class="kindbar k-subtask"></span>
+                <div class="kid">New</div>
+                <div class="ttl">Recovery codes</div>
+              </div>
+            </div>
+          </div>
+          <p class="cap" style="padding: 0 10px 10px">
+            Reached by drilling into a proposed container. The crumb carries the bare title (a
+            proposal has no key yet, and no target mark — it is not a work item). Without the band,
+            the canvas's own <i>“No items at this level”</i> would read as a fact about the tree.
+          </p>
+        </div>
+      </div>
+
+      <div style="margin-top: 16px">
+        <p class="surfacelabel">D · nothing changed at this level — the band is absent</p>
+        <div class="board" style="max-width: 560px">
+          <nav class="crumbbar" aria-label="Breadcrumb" style="position: static; max-width: none">
+            <button class="backbtn" type="button" aria-label="Back">‹</button>
+            <ol class="crumbs">
+              <li><button class="crumb" type="button">Roadmap</button></li>
+              <li>
+                <span class="chev" aria-hidden="true">›</span>
+                <button class="crumb here target" type="button" aria-current="page">
+                  <span class="tglyph" aria-hidden="true">◎</span>
+                  <span class="sronly">Planning target:</span>
+                  <span class="tunder">ARP-1 · Authentication</span>
+                </button>
+              </li>
+            </ol>
+          </nav>
+        </div>
+        <p class="cap">
+          Byte for byte the bar that ships today — one row, <code>flex items-center</code>, 46px
+          tall. <b>No “no changes” line</b>: a row every reader must read in order to learn nothing
+          is worse than no row, and the confirm bar already carries the plan's counts.
+        </p>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">5</span>
+        <h2>BESIDE the anchor — the shipped affordance, composed unchanged</h2>
+      </div>
+      <p class="note">
+        The other half of MOTIR-6223: planning from <code>ARP-2 Login UI</code> while the run adds a
+        sibling under <code>ARP-1 Authentication</code>. <b>Nothing on this level changes</b>, so
+        there is no band — the plan is not here, it is one crumb up. That is the exact sentence
+        MOTIR-6161's affordance already says, so it is <b>composed, not extended</b>: same control,
+        same copy, same tokens, same place in the bar's row.
+      </p>
+
+      <div class="board">
+        <nav class="crumbbar" aria-label="Breadcrumb" style="position: static; max-width: none">
+          <button class="backbtn" type="button" aria-label="Back">‹</button>
+          <ol class="crumbs">
+            <li><button class="crumb" type="button">Roadmap</button></li>
+            <li>
+              <span class="chev" aria-hidden="true">›</span>
+              <button class="crumb" type="button">ARP-1 · Authentication</button>
+            </li>
+            <li>
+              <span class="chev" aria-hidden="true">›</span>
+              <button class="crumb here target" type="button" aria-current="page">
+                <span class="tglyph" aria-hidden="true">◎</span>
+                <span class="sronly">Planning target:</span>
+                <span class="tunder">ARP-2 · Login UI</span>
+              </button>
+            </li>
+          </ol>
+          <button class="goto" type="button">
+            <span class="dot" aria-hidden="true"></span>
+            Plan is in ARP-1 · Go there
+          </button>
+        </nav>
+      </div>
+
+      <table class="spec">
+        <tr>
+          <th style="width: 26%">Axis</th>
+          <th>Specification</th>
+        </tr>
+        <tr>
+          <td><b>What changes</b></td>
+          <td>
+            <b>Only WHEN it is armed.</b> Today it appears after the canvas DECLINES a follow
+            request (the reader navigated first). It also appears when the pending proposal places
+            nothing on the level the reader is standing on and places something on another level —
+            which is the same sentence, reached a second way. Its copy, its tokens, its placement
+            and what pressing it does are all untouched.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Which level it names</b></td>
+          <td>
+            The level carrying the proposal. Where several do, the one holding the <b>most</b>
+            proposals; ties go to the nearest common ancestor of the reader's level, which is always
+            reachable by crumb.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Band and affordance together</b></td>
+          <td>
+            Possible, and correct: this level changes AND the plan also lands elsewhere. The band is
+            row two, the affordance stays in row one pushed right by its own
+            <code>margin-left:auto</code>. They never contend for a slot.
+          </td>
+        </tr>
+        <tr>
+          <td><b>At the root</b></td>
+          <td>
+            There is no bar at the root — measured: the canvas renders a breadcrumb only when
+            drilled. MOTIR-6159 already decided the affordance brings the bar with it (the bar
+            renders with the root crumb alone); the band does <b>not</b>, because at the root the
+            level is the project, and a project is not a work item a plan can change.
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">6</span>
+        <h2>SEVERAL changes at once — the band must not compete with the frames</h2>
+      </div>
+      <p class="note">
+        The level changed, a child was added and a child is going. Three statements, and the reader
+        has to be able to tell which is about WHERE THEY ARE and which is about WHAT THEY SEE.
+        <b>They never compete, because they are on different surfaces at different scales</b>: the
+        frames are on 280×124 cards on the recessed board; the band is one 12px row of chrome on the
+        raised bar. The band also carries no COUNT — counts belong to the confirm bar, which owns
+        the whole plan rather than this level.
+      </p>
+
+      <div class="surface">
+        <div class="panes">
+          <div class="canvas hasband">
+            <nav class="crumbbar stacked" aria-label="Breadcrumb">
+              <div class="crumbrow">
+                <button class="backbtn" type="button" aria-label="Back">‹</button>
+                <ol class="crumbs">
+                  <li><button class="crumb" type="button">Roadmap</button></li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span>
+                    <button class="crumb here target" type="button" aria-current="page">
+                      <span class="tglyph" aria-hidden="true">◎</span>
+                      <span class="sronly">Planning target:</span>
+                      <span class="tunder">ARP-1 · Authentication</span>
+                    </button>
+                  </li>
+                </ol>
+              </div>
+              <div class="levelband">
+                <span class="sronly">Pending change to this level:</span>
+                <span class="opchip is-change">✎ changed</span>
+                <span class="bandtext"
+                  >This level — title →&nbsp;<b>Authentication &amp; sessions</b></span
+                >
+                <span class="fieldchip">title · status</span>
+              </div>
+            </nav>
+            <div class="level">
+              <div class="node st-ready">
+                <span class="kindbar k-story"></span>
+                <span class="statepill ready">Ready</span>
+                <div class="kid" style="margin-top: 5px">ARP-2</div>
+                <div class="ttl">Login UI</div>
+              </div>
+              <div class="node op-modify">
+                <span class="opbadge info">✎ changed</span>
+                <span class="kindbar k-story"></span>
+                <div class="kid" style="margin-top: 5px">ARP-3</div>
+                <div class="ttl">Password Reset</div>
+              </div>
+              <div class="node op-add">
+                <span class="opbadge">+ added</span>
+                <span class="kindbar k-story"></span>
+                <div class="kid" style="margin-top: 5px">New</div>
+                <div class="ttl">Account recovery</div>
+              </div>
+            </div>
+          </div>
+          <div class="rail">
+            <p class="railline">MOTIR AI · plan change</p>
+            <div class="railbubble">1 added, 2 changed — nothing is saved yet.</div>
+          </div>
+        </div>
+        <div class="persistbar">
+          <span>
+            <span class="counts">1 added, 2 changed</span><br />
+            <span class="sub">Approving adds these to your backlog.</span>
+          </span>
+          <span class="btns">
+            <button class="btn" type="button">Decline</button>
+            <button class="btn primary" type="button">✓ Approve</button>
+          </span>
+        </div>
+      </div>
+      <p class="cap">
+        The same <code>✎ changed</code> word appears twice, and that is the point: one language for
+        a card and for the level. What distinguishes them is the SUBJECT — the band says
+        <i>“This level”</i> in words, and the frame says nothing because the card it wraps names
+        itself.
+      </p>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">7</span>
+        <h2>NARROW width — where the bar is the only chrome left</h2>
+      </div>
+      <p class="note">
+        <b>Measured, at a 720px viewport:</b> the workspace stacks, the canvas pane collapses to a
+        ~110px strip that shows <b>no nodes at all</b>, and the breadcrumb bar is the only canvas
+        chrome a reader can still read. That is the strongest argument for putting the level's
+        statement inside the bar rather than beside it or under it: a band docked to the canvas's
+        bottom edge, or a header below the bar, is <i>invisible</i> at this width. The bar is
+        <code>flex-1 min-w-0</code> under its <code>basis-[44rem]</code>, so it narrows to the
+        gutters — measured 704px wide at 1440, 696px at 720 — and the band narrows with it.
+      </p>
+
+      <div class="grid2">
+        <div>
+          <div class="surface" style="max-width: 420px">
+            <div class="exitbar">
+              <button class="exitbtn" type="button">✕ Close</button>
+              <span class="projname">Motir</span>
+            </div>
+            <div class="panes narrow">
+              <div class="canvas hasband" style="min-height: 150px; padding-bottom: 8px">
+                <nav class="crumbbar stacked" aria-label="Breadcrumb">
+                  <div class="crumbrow">
+                    <button class="backbtn" type="button" aria-label="Back">‹</button>
+                    <ol class="crumbs">
+                      <li>
+                        <button class="crumb here target" type="button" aria-current="page">
+                          <span class="tglyph" aria-hidden="true">◎</span>
+                          <span class="sronly">Planning target:</span>
+                          <span class="tunder">ARP-1 · Authentication</span>
+                        </button>
+                      </li>
+                    </ol>
+                  </div>
+                  <div class="levelband">
+                    <span class="opchip is-change">✎ changed</span>
+                    <span class="bandtext">This level — title → Authentication &amp; sessio…</span>
+                  </div>
+                </nav>
+              </div>
+            </div>
+            <div class="persistbar">
+              <span>
+                <span class="counts">1 added, 1 changed</span><br />
+                <span class="sub">Approving adds these to your backlog.</span>
+              </span>
+            </div>
+          </div>
+          <p class="cap">
+            <b>Narrow.</b> The SENTENCE truncates and the CHIP does not — the same rule the target
+            crumb's glyph and underline already keep, so the state survives when the words do not.
+            The diff-line chip is the first thing dropped when the row cannot hold all three.
+          </p>
+        </div>
+        <div class="darkwrap" data-theme="dark">
+          <div class="surface" style="max-width: 420px">
+            <div class="exitbar">
+              <button class="exitbtn" type="button">✕ Close</button>
+              <span class="projname">Motir</span>
+            </div>
+            <div class="panes narrow">
+              <div class="canvas hasband" style="min-height: 150px; padding-bottom: 8px">
+                <nav class="crumbbar stacked" aria-label="Breadcrumb">
+                  <div class="crumbrow">
+                    <button class="backbtn" type="button" aria-label="Back">‹</button>
+                    <ol class="crumbs">
+                      <li>
+                        <button class="crumb here target" type="button" aria-current="page">
+                          <span class="tglyph" aria-hidden="true">◎</span>
+                          <span class="tunder">ARP-1 · Authentication</span>
+                        </button>
+                      </li>
+                    </ol>
+                  </div>
+                  <div class="levelband is-remove">
+                    <span class="opchip is-remove">− removed</span>
+                    <span class="bandtext">This level goes on approve</span>
+                  </div>
+                </nav>
+              </div>
+            </div>
+            <div class="persistbar">
+              <span>
+                <span class="counts">1 removed</span><br />
+                <span class="sub">Approving applies this to your backlog.</span>
+              </span>
+            </div>
+          </div>
+          <p class="cap">
+            <b>Dark, removed.</b> The dashed <code>--el-danger</code> rule and the rose chip both
+            flip through the token layer. <b>Reduced motion:</b> the 180ms opacity fade is the only
+            animation, and <code>motion-reduce:transition-none</code> removes it — the band is
+            simply there, and the screen-reader prefix carries the meaning either way.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="sheet">
+      <div class="sheethead">
+        <span class="n">8</span>
+        <h2>THE ACCESS PATH — the door, not just the room</h2>
+      </div>
+      <p class="note">
+        The band has no control that opens it: it is reached by
+        <b>arriving at a level a pending plan changes</b>. So the access path is the three steps
+        that produce that state, and the door is the first of them — the per-item
+        <b>Re-plan</b> entrance, which is what makes the surface open INSIDE the target in the first
+        place.
+      </p>
+
+      <div class="steps">
+        <div class="miniframe">
+          <span class="stepno">1 · the door</span>
+          <div style="padding: 12px">
+            <p class="surfacelabel" style="margin-bottom: 6px">Work item ARP-1</p>
+            <div class="node" style="width: auto">
+              <span class="kindbar k-epic"></span>
+              <div class="kid">ARP-1</div>
+              <div class="ttl">Authentication</div>
+            </div>
+            <button
+              class="goto"
+              type="button"
+              style="
+                margin: 10px 0 0;
+                background: var(--el-accent);
+                color: var(--el-accent-text);
+                border-color: var(--el-accent);
+              "
+            >
+              Re-plan with Motir AI
+            </button>
+          </div>
+          <p class="cap" style="padding: 0 10px 10px">
+            The shipped per-item entrance (<code>work-item-plan-entrance</code>), unchanged. It is
+            the affordance that opens the workspace ANCHORED at this item.
+          </p>
+        </div>
+
+        <div class="miniframe">
+          <span class="stepno">2 · it opens INSIDE the target</span>
+          <div class="canvas" style="min-height: 150px">
+            <nav class="crumbbar" aria-label="Breadcrumb">
+              <button class="backbtn" type="button" aria-label="Back">‹</button>
+              <ol class="crumbs">
+                <li><button class="crumb" type="button">Roadmap</button></li>
+                <li>
+                  <span class="chev" aria-hidden="true">›</span>
+                  <button class="crumb here target" type="button" aria-current="page">
+                    <span class="tglyph" aria-hidden="true">◎</span>
+                    <span class="tunder">ARP-1 · Authentication</span>
+                  </button>
+                </li>
+              </ol>
+            </nav>
+            <div class="level">
+              <div class="node st-ready">
+                <span class="kindbar k-story"></span>
+                <div class="kid">ARP-2</div>
+                <div class="ttl">Login UI</div>
+              </div>
+            </div>
+          </div>
+          <p class="cap" style="padding: 0 10px 10px">
+            MOTIR-6159's arrival, inherited whole. No band yet — nothing has been proposed.
+          </p>
+        </div>
+
+        <div class="miniframe">
+          <span class="stepno">3 · a turn settles → the band</span>
+          <div class="canvas hasband" style="min-height: 170px">
+            <nav class="crumbbar stacked" aria-label="Breadcrumb">
+              <div class="crumbrow">
+                <button class="backbtn" type="button" aria-label="Back">‹</button>
+                <ol class="crumbs">
+                  <li><button class="crumb" type="button">Roadmap</button></li>
+                  <li>
+                    <span class="chev" aria-hidden="true">›</span>
+                    <button class="crumb here target" type="button" aria-current="page">
+                      <span class="tglyph" aria-hidden="true">◎</span>
+                      <span class="tunder">ARP-1 · Authentication</span>
+                    </button>
+                  </li>
+                </ol>
+              </div>
+              <div class="levelband">
+                <span class="opchip is-change">✎ changed</span>
+                <span class="bandtext">This level — title →&nbsp;<b>Auth &amp; sessions</b></span>
+              </div>
+            </nav>
+            <div class="level">
+              <div class="node op-add">
+                <span class="kindbar k-story"></span>
+                <span class="opbadge">+ added</span>
+                <div class="kid" style="margin-top: 5px">New</div>
+                <div class="ttl">Account recovery</div>
+              </div>
+            </div>
+          </div>
+          <p class="cap" style="padding: 0 10px 10px">
+            The band fades in with the level's reload (the same <code>diffKey</code> beat that draws
+            the node frames), and fades out when the plan is approved or discarded.
+          </p>
+        </div>
+      </div>
+
+      <table class="spec">
+        <tr>
+          <th style="width: 26%">Entrance</th>
+          <th>Does it reach the band?</th>
+        </tr>
+        <tr>
+          <td><b>Re-plan / Plan with AI</b> on a work item</td>
+          <td>
+            <b>Yes</b> — the surface opens inside that item, so the item IS the level and a proposal
+            touching it draws the band. This is the path MOTIR-6223 reports.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Plan with AI</b> from the project (no target)</td>
+          <td>
+            The canvas opens at the ROOT, where there is no bar. Once a target settles the
+            follow-move takes the reader inside it, and the band is there when it lands.
+          </td>
+        </tr>
+        <tr>
+          <td><b>A Plans row / a To-approve row</b></td>
+          <td>
+            Same arrival rule, same answer — MOTIR-6160 made one rule serve all three entrances, and
+            the band is a property of the level, not of the door.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Drilling by hand</b></td>
+          <td>
+            <b>Yes.</b> The band is drawn for whatever level the reader is standing on, target or
+            not — it says <i>this level</i>, never <i>your target</i>. Walking down into a card the
+            plan changes shows it; walking back out removes it.
+          </td>
+        </tr>
+      </table>
+    </div>
+  </body>
+</html>
