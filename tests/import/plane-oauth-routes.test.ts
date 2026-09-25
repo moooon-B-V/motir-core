@@ -15,7 +15,7 @@ import { truncateAuthTables } from '../helpers/db';
 // Story 7.16 · MOTIR-1656 — HTTP smoke for the two Plane import "Connect" OAuth
 // routes + a service-level read-back check. Mirrors jira-oauth-routes.test.ts:
 // the only mock is the session (CLAUDE.md — the test env has no cookies), here
-// `auth.api.getSession`, which the real workspace-context resolver reads and
+// `readSession`, which the real workspace-context resolver reads and
 // then self-heals against the real Postgres. Plane's token endpoint is stubbed
 // via a global `fetch` mock; persistence + encryption hit the real DB through
 // the real service → substrate → repository → Prisma chain.
@@ -25,7 +25,8 @@ import { truncateAuthTables } from '../helpers/db';
 
 const session: { current: { user: { id: string; name?: string } } | null } = { current: null };
 vi.mock('@/lib/auth', () => ({
-  auth: { api: { getSession: async () => session.current } },
+  // `resolveWorkspaceContext` reads through `readSession` (MOTIR-5864).
+  readSession: async () => session.current,
   getSession: async () => session.current,
 }));
 
