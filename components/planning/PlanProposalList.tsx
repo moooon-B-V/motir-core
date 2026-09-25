@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, FolderX, RotateCw } from 'lucide-react';
 
@@ -263,10 +263,13 @@ function ProposalRow({
   item,
   outcome,
   onOpen,
+  motion,
 }: {
   item: PlanReviewItemDto;
   outcome: PlanItemOutcome | null;
   onOpen: (item: PlanReviewItemDto, trigger: HTMLButtonElement) => void;
+  /** The live list's entrance / exit (MOTIR-6300, §23.9) — absent on a still list. */
+  motion?: 'enter' | 'exit';
 }) {
   const t = useTranslations('planReview');
   // The facts line is NODES joined by `·`, not one string (story MOTIR-6095 ·
@@ -323,8 +326,12 @@ function ProposalRow({
       className={
         'relative grid grid-cols-[1.125rem_1fr_auto] items-start gap-3 rounded-(--radius-control) ' +
         'px-(--spacing-control-x) py-(--spacing-control-y) hover:bg-(--el-surface) ' +
-        'focus-within:ring-2 focus-within:ring-(--focus-ring-color) active:bg-(--el-surface-soft)'
+        'focus-within:ring-2 focus-within:ring-(--focus-ring-color) active:bg-(--el-surface-soft)' +
+        (motion ? ` plan-list-row--${motion}` : '')
       }
+      data-motion={motion}
+      // A leaving row is on its way out: it takes no focus and no click.
+      inert={motion === 'exit' || undefined}
     >
       <IssueTypeIcon type={issueTypeOf(item.kind)} className="mt-0.5 h-4 w-4" />
       <div className="min-w-0">
@@ -440,10 +447,30 @@ export interface PlanProposalListProps {
    * wrong in the same line that says `no key yet` (Part VIII §3).
    */
   outcome: PlanItemOutcome | null;
+  /**
+   * The plan is being WRITTEN (MOTIR-6300; design Part XXIII §23.9). The empty
+   * statement is present-tense — the shipped one says the plan FINISHED, which a
+   * generating plan has not — and rows that arrive after the list mounted enter
+   * with the card's entrance, while a withdrawn row leaves with the exit. OFF by
+   * default: the plan page never passes it.
+   */
+  live?: boolean;
+  /**
+   * The plan was DISCARDED before it finished (§23.12): the empty statement keeps
+   * the shipped title and drops the body, whose *"Declining ends it"* is false of
+   * a plan already declined.
+   */
+  discarded?: boolean;
 }
 
-export function PlanProposalList({ items, outcome }: PlanProposalListProps) {
+export function PlanProposalList({
+  items,
+  outcome,
+  live = false,
+  discarded = false,
+}: PlanProposalListProps) {
   const t = useTranslations('planReview');
+  const { entering, leaving } = useLiveRows(items, live);
   // The SAME read modal the canvas's View pill opens — this body does not gain a
   // second read view, which is the property Part XIII §7 is about. It is mounted
   // HERE rather than lifted to the island because the two bodies are mutually
@@ -495,12 +522,18 @@ export function PlanProposalList({ items, outcome }: PlanProposalListProps) {
     requestAnimationFrame(() => triggerRef.current?.focus());
   }, []);
 
-  if (items.length === 0) {
+  if (items.length === 0 && leaving.length === 0) {
     return (
       <div className="flex h-full items-center justify-center p-8">
         <div className="max-w-[24rem] text-center">
-          <p className="text-sm font-semibold text-(--el-text)">{t('listEmptyTitle')}</p>
-          <p className="mt-1 text-xs text-(--el-text-secondary)">{t('listEmptyBody')}</p>
+          <p className="text-sm font-semibold text-(--el-text)">
+            {t(live ? 'listWritingTitle' : 'listEmptyTitle')}
+          </p>
+          {discarded ? null : (
+            <p className="mt-1 text-xs text-(--el-text-secondary)">
+              {t(live ? 'listWritingBody' : 'listEmptyBody')}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -510,11 +543,13 @@ export function PlanProposalList({ items, outcome }: PlanProposalListProps) {
     <div className="h-full overflow-y-auto p-3" data-testid="plan-proposal-list">
       {SECTIONS.map((section) => {
         const rows = items.filter((item) => item.op === section.op);
+        // A WITHDRAWN row is drawn at the end of its section while it leaves.
+        const gone = leaving.filter((item) => item.op === section.op);
         // ⚠️ ALL THREE SECTIONS, and each only when non-empty. A list showing two
         // ops under a row whose item count includes three is a surface arguing
         // with itself — and that count is on the row that got the reader here.
         // `remove` is rare, not excluded.
-        if (rows.length === 0) return null;
+        if (rows.length === 0 && gone.length === 0) return null;
         return (
           <section key={section.op} className="mb-4 last:mb-0">
             <h3 className="mb-1.5 flex items-center gap-2 px-(--spacing-control-x) text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
@@ -528,6 +563,16 @@ export function PlanProposalList({ items, outcome }: PlanProposalListProps) {
                   item={item}
                   outcome={outcome}
                   onOpen={openPeek}
+                  {...(entering.has(item.planItemId) ? { motion: 'enter' as const } : {})}
+                />
+              ))}
+              {gone.map((item) => (
+                <ProposalRow
+                  key={item.planItemId}
+                  item={item}
+                  outcome={outcome}
+                  onOpen={openPeek}
+                  motion="exit"
                 />
               ))}
             </ul>
@@ -544,3 +589,59 @@ export function PlanProposalList({ items, outcome }: PlanProposalListProps) {
     </div>
   );
 }
+
+/** How long a withdrawn row is retained for its exit: `--transition-duration` + 50ms. */
+const ROW_EXIT_MS = 150 + 50;
+
+/**
+ * THE LIVE LIST's presence (MOTIR-6300; design Part XXIII §23.9) — which rows
+ * ARRIVED since the list mounted, and which LEFT and are still fading out. The
+ * snapshot is the unit, exactly as on the canvas: an id that appears enters, one
+ * that disappears leaves. The first read of the list plays nothing, a read that
+ * changes nothing plays nothing, and under reduced motion rows simply are or are
+ * not there — nothing is retained. Off (`live` false) it is inert.
+ */
+function useLiveRows(
+  items: PlanReviewItemDto[],
+  live: boolean,
+): { entering: ReadonlySet<string>; leaving: PlanReviewItemDto[] } {
+  const [seen, setSeen] = useState<{
+    items: PlanReviewItemDto[];
+    entering: ReadonlySet<string>;
+    leaving: PlanReviewItemDto[];
+  }>(() => ({ items, entering: new Set(), leaving: [] }));
+  if (live && items !== seen.items) {
+    const before = new Set(seen.items.map((i) => i.planItemId));
+    const now = new Set(items.map((i) => i.planItemId));
+    const arrived = items.filter((i) => !before.has(i.planItemId)).map((i) => i.planItemId);
+    const reduced = prefersReducedMotion();
+    const left = reduced ? [] : seen.items.filter((i) => !now.has(i.planItemId));
+    setSeen({
+      items,
+      // An entrance stays marked once played — the class holds its end state.
+      entering: reduced
+        ? new Set()
+        : new Set([...[...seen.entering].filter((id) => now.has(id)), ...arrived]),
+      leaving: [...seen.leaving.filter((i) => !now.has(i.planItemId)), ...left],
+    });
+  } else if (!live && seen.items !== items) {
+    setSeen({ items, entering: new Set(), leaving: [] });
+  }
+  // A leaving row is dropped once its exit has played.
+  const leavingCount = seen.leaving.length;
+  useEffect(() => {
+    if (leavingCount === 0) return;
+    const timer = setTimeout(() => setSeen((s) => ({ ...s, leaving: [] })), ROW_EXIT_MS);
+    return () => clearTimeout(timer);
+  }, [leavingCount]);
+  return live
+    ? { entering: seen.entering, leaving: seen.leaving }
+    : { entering: EMPTY, leaving: [] };
+}
+
+const EMPTY: ReadonlySet<string> = new Set();
+
+const prefersReducedMotion = (): boolean =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;

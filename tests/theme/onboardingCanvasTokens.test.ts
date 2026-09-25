@@ -116,7 +116,12 @@ describe('each cited consumer routes through the dedicated token', () => {
 
   it('PlanningCanvas edges use --el-canvas-edge-*, never --el-border*', () => {
     const src = read('components/planning/PlanningCanvas.tsx');
-    const edges = src.slice(src.indexOf('canvas-edges'), src.indexOf('canvas-world'));
+    // The path is drawn by ONE function, `drawEdge`, shared by the live edge layer
+    // and the layer that holds a removed edge for its fade (MOTIR-6297) — so the
+    // slice starts there and runs through both layers.
+    const start = src.indexOf('const drawEdge');
+    expect(start).toBeGreaterThan(-1);
+    const edges = src.slice(start, src.indexOf('canvas-world'));
     expect(edges).toContain('stroke-(--el-canvas-edge-pending)');
     expect(edges).toContain('stroke-(--el-canvas-edge-committed)');
     expect(edges).not.toMatch(/stroke-\(--el-border/);

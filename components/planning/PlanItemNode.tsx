@@ -2,14 +2,13 @@
 
 import { AlertTriangle, ArchiveX, ChevronRight, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import {
   CrossBlockedFlag,
   GhostAnchor,
+  WorkItemCardShell,
   WorkItemStatusPill,
 } from '@/components/planning/WorkItemNode';
 import type { IssueType } from '@/lib/issues/parentRules';
-import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 import type { PlanItemChangeDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 import {
   changeToText,
@@ -65,13 +64,38 @@ function toKind(raw: string): IssueType {
   return KNOWN_KINDS.has(raw as IssueType) ? (raw as IssueType) : 'task';
 }
 
-const KIND_TINT: Record<IssueType, string> = {
-  epic: 'bg-(--el-tint-rose)',
-  story: 'bg-(--el-tint-mint)',
-  task: 'bg-(--el-tint-sky)',
-  bug: 'bg-(--el-tint-peach)',
-  subtask: 'bg-(--el-tint-lavender)',
-};
+// ⚠️ NO `KIND_TINT` HERE (MOTIR-6296, absorbing bug MOTIR-6196). An identical
+// copy of `WorkItemNode`'s map used to live on this line, and with it a second
+// drawing of the whole card body (`p-3` against the committed card's `p-3.5`).
+// The card is now `WorkItemCardShell`, and this file contributes only the op
+// LAYER over it.
+
+/**
+ * The hatched surface that makes a LOCKED proposal legibly immutable (the shipped
+ * `GhostAnchor` hatch technique, in neutral tokens — the stripes are drawn over
+ * the real card, so its own content stays readable underneath).
+ *
+ * Its HOME is the one card (MOTIR-6296 · Part XXIII §23.4): `locked` is drawn
+ * ONLY on a `modify` / `remove` whose target is terminal, which is a fact about a
+ * PROPOSAL, so it lives with the proposal's layer, and nowhere else draws it.
+ *
+ * Deliberately SPARSE + palette-derived: the stripes must read as "hatched, so
+ * not editable" without competing with the card's own title underneath (a dense
+ * hatch made the struck-through title unreadable in the live render).
+ */
+export const LOCK_HATCH =
+  'repeating-linear-gradient(135deg, transparent, transparent 13px, color-mix(in srgb, var(--el-muted) 60%, transparent) 13px, color-mix(in srgb, var(--el-muted) 60%, transparent) 15px)';
+
+/**
+ * Is this proposal LOCKED — a `modify` or `remove` aimed at a card that is
+ * already finished? (Part XXIII §23.4: the ONE place `locked` appears.) Read off
+ * the target's lifecycle CATEGORY from the wire, never a hand-copied status set
+ * (bug MOTIR-3170): the status set is project-defined rows, and `cancelled` is as
+ * terminal as `done` because the workflow files it under the same category.
+ */
+export function isLockedProposal(item: Pick<PlanReviewItemDto, 'op' | 'statusCategory'>): boolean {
+  return (item.op === 'modify' || item.op === 'remove') && item.statusCategory === 'done';
+}
 
 function staleReasonLabel(r: StaleReason, t: ReturnType<typeof useTranslations>): string {
   switch (r.code) {
@@ -136,10 +160,14 @@ export function PlanItemNode({
   const showDifficulty =
     item.op === 'add' && item.difficulty != null && kind !== 'epic' && kind !== 'story';
 
-  // Op-specific frame. None reuses the cross-story red dashed/hatch language.
+  const locked = isLockedProposal(item);
+
+  // Op-specific frame — what the op MEANS, layered on the shell (which owns the
+  // border weight, radius and padding). None reuses the cross-story red
+  // dashed/hatch language.
   const frame =
     item.op === 'add'
-      ? 'border border-dashed border-(--el-accent) bg-(--el-tint-lavender) shadow-(--shadow-card)'
+      ? 'border-dashed border-(--el-accent) bg-(--el-tint-lavender) shadow-(--shadow-card)'
       : item.op === 'remove'
         ? // ⚠️ NO `opacity` ON EITHER ARM (MOTIR-4475). A DECIDED `remove` already
           // dropped the fade (Part VI §3, MOTIR-4260); the PENDING one carried
@@ -165,129 +193,122 @@ export function PlanItemNode({
           // node on its own `--el-canvas` board and measures the composite, so a
           // re-introduced `opacity-*` on a text-bearing subtree goes red here
           // rather than on somebody's screen.
-          'border border-(--el-border-strong) bg-(--el-muted) shadow-(--shadow-subtle)'
-        : 'border border-(--el-border) bg-(--el-surface) ring-2 ring-(--el-info) shadow-(--shadow-card)';
+          'border-(--el-border-strong) bg-(--el-muted) shadow-(--shadow-subtle)'
+        : 'border-(--el-border) bg-(--el-surface) ring-2 ring-(--el-info) shadow-(--shadow-card)';
 
   return (
-    <div
-      // Fixed footprint (= the layout's NODE_W/NODE_H) so a node never grows into
-      // the row below — the deterministic layout spaces rows by NODE_H.
-      style={{ width: NODE_W, height: NODE_H }}
-      className={`relative flex flex-col overflow-hidden rounded-(--radius-card) p-3 ${frame}`}
+    <WorkItemCardShell
+      frameClassName={frame}
       data-op={item.op}
       data-outcome={outcome ?? undefined}
+      data-locked={locked ? 'true' : undefined}
       data-testid="plan-item-node"
-    >
-      {/* The outcome SPINE — decorative reinforcement only; the word in the op
-          chip carries the meaning, which is what keeps this off colour-alone and
-          discharges 1.4.11 on the bar itself. */}
-      {outcome ? (
-        <span
-          aria-hidden="true"
-          data-testid="plan-item-outcome-spine"
-          className={`absolute inset-y-0 start-0 w-1 ${
-            outcome === 'accepted' ? 'bg-(--el-success)' : 'bg-(--el-text-muted)'
-          }`}
-        />
-      ) : null}
-      {/* TOP ROW — the op badge (left) + the status pill / stale flag (right). */}
-      <div className="flex shrink-0 items-center gap-2">
-        <OpBadge op={item.op} outcome={outcome} t={t} />
-        <div className="ml-auto flex items-center gap-1.5">
-          {showStale ? (
+      // A locked proposal cannot be applied — the approve is refused server-side
+      // for a finished target — so say so rather than imply it.
+      aria-disabled={locked ? true : undefined}
+      // TOP ROW — the op badge (left) + the status pill / stale flag (right).
+      statusRow={
+        <>
+          <PlanItemOpBadge op={item.op} outcome={outcome} />
+          <div className="ml-auto flex items-center gap-1.5">
+            {showStale ? (
+              <span
+                data-testid="stale-badge"
+                title={staleReasons.join(' · ')}
+                className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-yellow) px-1.5 py-0.5 text-[11px] font-semibold text-(--el-text-strong)"
+              >
+                <AlertTriangle className="size-3" aria-hidden="true" />
+                {t('staleBadge')}
+              </span>
+            ) : null}
+            {/* The target's status in the COMMITTED card's vocabulary — the same
+                chip, fed the same wire identity (`statusLabel` / `statusCategory`),
+                so a custom status reads as itself, never as a default. */}
+            {item.status ? (
+              <WorkItemStatusPill
+                status={item.status}
+                label={item.statusLabel}
+                category={item.statusCategory}
+              />
+            ) : null}
+            {crossBlocked ? (
+              <CrossBlockedFlag />
+            ) : item.hasChildren ? (
+              <ChevronRight
+                className="size-4 shrink-0 text-(--el-text-muted)"
+                aria-hidden="true"
+                data-testid="drill-affordance"
+              />
+            ) : null}
+            {/* A leaf `add`'s DIFFICULTY (story MOTIR-6095 · MOTIR-6137, design
+                Part XX §20.3) — at the right end of the top row, where an `add`
+                has nothing today, never in the bottom slot (spending it clamps the
+                title to one line). ONLY an `add`: a `modify` card says what
+                CHANGES (its diff line), and a container never carries one. None ⇒
+                nothing drawn — the card has no field labels to hang a `None` on. */}
+            {showDifficulty ? (
+              <DifficultyIndicator
+                difficulty={item.difficulty!}
+                compact={{
+                  srLabel: t('field_difficulty'),
+                  className: 'text-xs text-(--el-text-secondary)',
+                  testId: 'plan-item-difficulty',
+                }}
+              />
+            ) : null}
+          </div>
+        </>
+      }
+      kind={kind}
+      identifier={item.identifier ?? t('newItem')}
+      title={item.title}
+      // The struck title is `remove`'s second signal (MOTIR-4260) — a strike RULE
+      // is a graphic rather than text; the ink is the shell's secondary.
+      titleStruck={item.op === 'remove'}
+      // ⚠️ ONE LINE WHENEVER THE BOTTOM SLOT IS SPENT (Part XVII §17.2). The node is
+      // a fixed 280 × 124: a two-line title plus the key plus a 16px slot does not
+      // fit, and the body's `overflow-hidden` cut the second title line through its
+      // middle. One clean ellipsis, the full title in `title`.
+      titleSingleLine={hasSlot}
+      footer={
+        showDiff ? (
+          // MODIFY diff — a compact old→new line (the first change; "+N" when more).
+          <PlanItemDiffLine changes={item.changes} />
+        ) : showPlacement ? (
+          <PlacementLine folderPath={item.folderPath} folderMissing={item.folderMissing} />
+        ) : showReason ? (
+          <ReasonLine reason={item.removeReason!} label={t('removeReason')} />
+        ) : null
+      }
+      overlay={
+        <>
+          {/* The outcome SPINE — decorative reinforcement only; the word in the op
+              chip carries the meaning, which is what keeps this off colour-alone
+              and discharges 1.4.11 on the bar itself. Drawn HERE and nowhere else
+              (MOTIR-6296): the one card owns the one spine. */}
+          {outcome ? (
             <span
-              data-testid="stale-badge"
-              title={staleReasons.join(' · ')}
-              className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-yellow) px-1.5 py-0.5 text-[11px] font-semibold text-(--el-text-strong)"
-            >
-              <AlertTriangle className="size-3" aria-hidden="true" />
-              {t('staleBadge')}
-            </span>
-          ) : null}
-          {item.status ? (
-            <WorkItemStatusPill
-              status={item.status}
-              label={item.statusLabel}
-              category={item.statusCategory}
-            />
-          ) : null}
-          {crossBlocked ? (
-            <CrossBlockedFlag />
-          ) : item.hasChildren ? (
-            <ChevronRight
-              className="size-4 shrink-0 text-(--el-text-muted)"
               aria-hidden="true"
-              data-testid="drill-affordance"
+              data-testid="plan-item-outcome-spine"
+              className={`absolute inset-y-0 start-0 w-1 ${
+                outcome === 'accepted' ? 'bg-(--el-success)' : 'bg-(--el-text-muted)'
+              }`}
             />
           ) : null}
-          {/* A leaf `add`'s DIFFICULTY (story MOTIR-6095 · MOTIR-6137, design
-              Part XX §20.3) — at the right end of the top row, where an `add`
-              has nothing today, never in the bottom slot (spending it clamps the
-              title to one line). ONLY an `add`: a `modify` card says what
-              CHANGES (its diff line), and a container never carries one. None ⇒
-              nothing drawn — the card has no field labels to hang a `None` on. */}
-          {showDifficulty ? (
-            <DifficultyIndicator
-              difficulty={item.difficulty!}
-              compact={{
-                srLabel: t('field_difficulty'),
-                className: 'text-xs text-(--el-text-secondary)',
-                testId: 'plan-item-difficulty',
-              }}
+          {/* LOCKED — the hatch over a `modify` / `remove` of a finished target
+              (Part XXIII §23.4). Over the op's own frame, never instead of it: the
+              info ring / struck title still say what was proposed. */}
+          {locked ? (
+            <span
+              aria-hidden="true"
+              data-testid="plan-item-lock-hatch"
+              className="pointer-events-none absolute inset-0 rounded-(--radius-card)"
+              style={{ backgroundImage: LOCK_HATCH }}
             />
           ) : null}
-        </div>
-      </div>
-
-      {/* BODY — the kind tile + identifier + title. */}
-      <div className="mt-1.5 flex min-h-0 flex-1 items-start gap-2 overflow-hidden">
-        <span
-          className={`flex size-7 shrink-0 items-center justify-center rounded-(--radius-control) ${KIND_TINT[kind]}`}
-          aria-hidden="true"
-        >
-          <IssueTypeIcon type={kind} className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <span className="block font-mono text-xs text-(--el-text-secondary)">
-            {item.identifier ?? t('newItem')}
-          </span>
-          <span
-            // ⚠️ ONE LINE WHENEVER THE BOTTOM SLOT IS SPENT (Part XVII §17.2). The
-            // node is a fixed 280 × 124: a two-line title plus the key plus a 16px
-            // slot does not fit, and the body's `overflow-hidden` cut the second
-            // title line through its middle — which a `modify`'s diff line already
-            // did before any folder existed. One clean ellipsis, the full title in
-            // `title`.
-            // MOTIR-5459 — `block` rides WITH `truncate`, never beside `line-clamp-2`:
-            // `truncate` needs a block box for its ellipsis, while `.block` is emitted
-            // after `.line-clamp-2` and would take `display` back from its
-            // `-webkit-box`, leaving the two-line clamp inert.
-            title={hasSlot ? item.title : undefined}
-            className={`mt-0.5 text-sm leading-snug font-semibold ${hasSlot ? 'block truncate' : 'line-clamp-2'} ${
-              // MOTIR-4260 — `--el-text-secondary`, not `--el-text-muted`: the
-              // `remove` frame six elements up paints `bg-(--el-muted)`, where
-              // the muted ink is 4.12:1 in light (AA is 4.5) and secondary is
-              // 6.18:1. Secondary clears AA on every background in both themes,
-              // so this ink does not have to know which frame the node drew.
-              // It is also what `design/ai-planning`'s `.node.remove .ttl`
-              // specified; the implementation had drifted. The `line-through`
-              // is unchanged — it is the second signal for `removed`, and a
-              // strike RULE is a graphic rather than text.
-              item.op === 'remove' ? 'text-(--el-text-secondary) line-through' : 'text-(--el-text)'
-            }`}
-          >
-            {item.title}
-          </span>
-        </div>
-      </div>
-
-      {/* MODIFY diff — a compact old→new line (the first change; "+N" when more). */}
-      {showDiff ? <DiffLine changes={item.changes} t={t} /> : null}
-      {showPlacement ? (
-        <PlacementLine folderPath={item.folderPath} folderMissing={item.folderMissing} />
-      ) : null}
-      {showReason ? <ReasonLine reason={item.removeReason!} label={t('removeReason')} /> : null}
-    </div>
+        </>
+      }
+    />
   );
 }
 
@@ -317,15 +338,14 @@ function ReasonLine({ reason, label }: { reason: string; label: string }) {
  * colour-alone (Part I §4's a11y rule) — the spine on the node is decorative
  * reinforcement for a zoom-out, never the signal.
  */
-function OpBadge({
+export function PlanItemOpBadge({
   op,
-  outcome,
-  t,
+  outcome = null,
 }: {
   op: PlanReviewItemDto['op'];
   outcome?: PlanItemOutcome | null;
-  t: ReturnType<typeof useTranslations>;
 }) {
+  const t = useTranslations('planReview');
   const seg = 'inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5 text-[11px] font-semibold';
   const opSeg =
     op === 'add'
@@ -396,13 +416,12 @@ function fieldLabel(t: ReturnType<typeof useTranslations>, field: string): strin
   return t.has(key) ? t(key) : field;
 }
 
-function DiffLine({
-  changes,
-  t,
-}: {
-  changes: PlanItemChangeDto[];
-  t: ReturnType<typeof useTranslations>;
-}) {
+/**
+ * A `modify`'s FIELD-CHANGE line — the first change as old → new, "+N" when more.
+ * Exported (MOTIR-6296) so a later surface composes it rather than copying it.
+ */
+export function PlanItemDiffLine({ changes }: { changes: PlanItemChangeDto[] }) {
+  const t = useTranslations('planReview');
   const first = changes[0]!;
   const more = changes.length - 1;
   // A move into or out of a FOLDER is labelled `Placement` and draws its folder

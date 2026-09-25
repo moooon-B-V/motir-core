@@ -270,6 +270,11 @@
     "approvedOutcome": "已将 {n} 个工作项加入待办列表",
     "declinedOutcome": "计划已拒绝 — 你的工作项树未作改动",
     "discardedOutcome": "计划在完成前被弃置 — 你的工作项未作改动",
+    "liveWriting": "正在编写",
+    "liveReconnecting": "正在重新连接 — 显示的是最近一次更新",
+    "liveAnnounce": "计划新增了 {count} 个工作项",
+    "listWritingTitle": "尚无提案",
+    "listWritingBody": "计划编写过程中，工作项会出现在这里。",
     "abandonedOutcome": "生成始终未完成 — 该计划已自动结束",
     "viewInBacklog": "在待办列表中查看",
     "staleConfirmTitle": "部分工作项可能已过期",
@@ -6777,12 +6782,15 @@
       "reopened": "从计划页面重新打开 · 发起人 {name} · 最近活动 {when}",
       "reopenedYours": "从计划页面重新打开 · 由你发起 · 最近活动 {when}",
       "readOnly": "你可以阅读此对话。继续对话需要使用 Motir AI 规划的权限。",
-      "someone": "某人"
+      "someone": "某人",
+      "mcpNoTurns": "此计划背后的对话发生在 {harness} 中，因此不会显示在这里。可在下方提出修改。"
     },
     "arrival": {
       "crumbTargetPrefix": "规划目标：",
       "movedAnnouncement": "正在显示 {target} 内的工作",
-      "goToTarget": "方案在 {identifier} · 前往"
+      "goToTarget": "方案在 {identifier} · 前往",
+      "arrivedIn": "{identifier} 中有 {count} 项新内容 · 前往",
+      "arrivedAcross": "其他层级有 {count} 项新内容 · 最新在 {identifier} · 前往"
     },
     "dividerAria": "调整对话窗口宽度"
   },
