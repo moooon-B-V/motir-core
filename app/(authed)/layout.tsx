@@ -571,6 +571,9 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     settingsPermissions={settingsPermissions}
                     aiPlanningConfigured={aiPlanningConfigured}
                     publicProjectsAvailable={publicProjectsAvailable}
+                    canManageOrgSettings={
+                      activeOrg ? orgCan(activeOrg.role, 'manageOrgSettings') : false
+                    }
                   />
 
                   {/* The floating "M" entrance (MOTIR-1299) — the second of the two

@@ -630,7 +630,6 @@
       "couldNotLink": "Could not link the selected work items.",
       "orgSecurityForbidden": "Only owners and admins of an organization can change its security settings.",
       "workspaceSecurityForbidden": "Only owners and admins of a workspace can change its security settings.",
-      "workspaceRemoveForbidden": "Only owners and admins of the organization can remove a workspace.",
       "refused": "That didn’t go through: {reason}"
     },
     "links": {
@@ -1845,16 +1844,10 @@
       "heading": "Danger zone",
       "leaveWorkspace": "Leave workspace",
       "leaveWorkspaceDesc": "You'll lose access to all data in this workspace.",
-      "lastMemberTooltip": "You're the last member — delete the workspace instead.",
-      "deleteWorkspace": "Delete workspace",
-      "deleteWorkspaceDesc": "Permanently delete this workspace and all its data. This cannot be undone.",
-      "delete": "Delete",
-      "deleteErrorTitle": "Could not delete workspace",
-      "deleteModalTitle": "Delete {workspaceName}?",
-      "deleteModalDesc": "This will permanently delete the workspace and all its data (projects, work items, members). This action cannot be undone.",
-      "deleteModalCodeIndex": "The code index Motir built from this workspace's repositories is removed immediately — deleting a workspace has no recovery window.",
-      "confirmLabel": "Type {workspaceName} to confirm",
-      "deleteConfirmButton": "Delete workspace"
+      "lastMemberTooltip": "You’re the last member. An organization admin can remove this workspace.",
+      "lastMemberTooltipAdmin": "You’re the last member. Remove the workspace from Organization settings → Workspaces instead.",
+      "removeHint": "To remove this workspace, go to Organization settings → Workspaces.",
+      "removeHintFoldIn": "To remove this workspace, use Workspaces above."
     },
     "project": {
       "empty": {
@@ -4880,6 +4873,7 @@
     "settings": {
       "title": "Organization settings",
       "subtitle": "Manage the {org} organization — the account your workspaces live under. Only organization owners and admins can change these.",
+      "subtitleMember": "Manage the {org} organization — the account your workspaces live under.",
       "general": "General",
       "generalSub": "The organization’s identity across all its workspaces.",
       "youreTheOwner": "You’re the owner",
@@ -4994,6 +4988,32 @@
       "errorNotFound": "No Motir account for {email}. Invite them to a workspace first — they’ll join the organization automatically.",
       "errorAlready": "{email} is already in this organization.",
       "errorGeneric": "Couldn’t add that person. Try again."
+    },
+    "workspaces": {
+      "title": "Workspaces",
+      "subtitle": "Every workspace in {org}. Only owners and admins can create or remove one.",
+      "count": "{count, plural, one {# workspace} other {# workspaces}}",
+      "new": "New workspace",
+      "rowMeta": "{members, plural, one {# member} other {# members}} · {projects, plural, one {# project} other {# projects}}",
+      "remove": "Remove",
+      "removeAria": "Remove {workspace}",
+      "pager": "Showing {from}–{to} of {total}",
+      "prev": "Prev",
+      "next": "Next",
+      "page": "Page {n} of {m}",
+      "loading": "Loading workspaces…",
+      "emptyTitle": "No workspaces yet",
+      "emptyDescription": "A workspace groups the projects one team works on. Create one to start tracking work in {org}.",
+      "errorTitle": "Couldn’t load workspaces",
+      "errorDescription": "Something went wrong fetching this organization’s workspaces. Try again.",
+      "removeTitle": "Remove {workspace}?",
+      "removeDesc": "This permanently deletes the workspace and everything in it: {projects, plural, one {# project} other {# projects}} with their work items, sprints and boards. Its {members, plural, one {# member loses} other {# members lose}} access to it; they stay in {org}.",
+      "removeCodeIndex": "The code index Motir built from this workspace’s repositories is removed immediately — removing a workspace has no recovery window.",
+      "removeLastWorkspace": "This is {org}’s only workspace. After removing it, the organization has no workspace until someone creates one.",
+      "removeConfirmLabel": "Type {workspace} to confirm",
+      "removeConfirmButton": "Remove workspace",
+      "removed": "{workspace} removed",
+      "removeErrorTitle": "Couldn’t remove {workspace}"
     },
     "states": {
       "emptyTitle": "It’s just you so far",

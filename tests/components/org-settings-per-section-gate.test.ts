@@ -57,11 +57,12 @@ describe('the org Settings home gates per SECTION, not per page', () => {
     // card is named inside an `isAdmin` branch.
     // `AcceptanceVideoCard` left this list with the card itself (MOTIR-5172): the
     // switch is a PROJECT setting now, and the org page draws no trace of it.
-    for (const card of ['OrgGeneralCard', 'BillingCard']) {
+    // `OrgWorkspacesCard` joined with MOTIR-6312 (the org Workspaces section).
+    for (const card of ['OrgGeneralCard', 'BillingCard', 'OrgWorkspacesCard']) {
       expect(src.includes(card), `${card} is no longer rendered by ${PAGE}`).toBe(true);
     }
     expect(
-      /\{isAdmin \?\s*\(\s*<>/.test(src),
+      /\{isAdmin && members \?\s*\(\s*<>/.test(src),
       'the org-scoped cards are no longer wrapped in an isAdmin branch',
     ).toBe(true);
     // The ORG danger zone is the OWNER's (MOTIR-6313, design MOTIR-6303 panels
@@ -85,13 +86,23 @@ describe('the org Settings home gates per SECTION, not per page', () => {
     const foldIn = src.indexOf('<WorkspaceFoldInSection');
     expect(foldIn, 'the fold-in is gone from the org settings page').toBeGreaterThan(-1);
 
-    const adminBranch = src.indexOf('{isAdmin ? (');
-    const adminBranchEnd = src.indexOf(') : (', adminBranch);
+    const adminBranch = src.indexOf('{isAdmin && members ? (');
+    const adminBranchEnd = src.indexOf(') : null}', adminBranch);
+    expect(adminBranch, 'the admin branch is gone').toBeGreaterThan(-1);
     expect(
       foldIn > adminBranchEnd,
       'WorkspaceFoldInSection moved inside the isAdmin branch — a plain org ' +
         'member would lose the workspace Name / Members / Danger-zone sections, ' +
         'and with them the only route to Leave workspace (§6d).',
+    ).toBe(true);
+  });
+
+  it('a MEMBER meets ABSENCE, never panel 5d’s refusal — and a 404 when nothing is folded in (MOTIR-6312)', () => {
+    // The forbidden card was the refused-not-hidden shape; the design retires it.
+    expect(src.includes('states.forbiddenTitle'), 'panel 5d’s forbidden card is back').toBe(false);
+    expect(
+      /if \(!isAdmin && !foldInWorkspace\) notFound\(\);/.test(src),
+      'a Member with nothing folded in no longer gets a 404',
     ).toBe(true);
   });
 });

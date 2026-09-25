@@ -5,6 +5,7 @@ import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
 import type { OrganizationDTO } from '@/lib/dto/organizations';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import { isWorkspaceTierRevealed } from '@/lib/workspaces/tierDisclosure';
+import { orgCan } from '@/lib/organizations/capabilities';
 
 // The shell's CONTEXT PATH — `org › workspace › project`, the one row that says
 // where you are (Story 6.10.5, then MOTIR-2556 · `design/shell/design-notes.md`
@@ -116,17 +117,36 @@ export function ShellTierNav({
   // literal `>= 2` used to live here and was the only statement of the rule;
   // it now has three other readers that must agree with it.
   const showWorkspaceSwitcher = isWorkspaceTierRevealed(workspaces.length);
+  // Who may CREATE a workspace (MOTIR-6312): an Owner or Admin of the active
+  // org, or someone with no org at all (they create their own). Read off the
+  // role this component is already handed — no second fetch.
+  const canCreateWorkspace = !activeOrg || orgCan(activeOrg.role, 'manageWorkspaces');
+  const orgControl = (
+    <OrgControl
+      activeOrg={activeOrg}
+      orgs={orgs}
+      cloudBilling={cloudBilling}
+      workspaceTierRevealed={showWorkspaceSwitcher}
+    />
+  );
+  const workspaceSwitcher = (
+    <WorkspaceSwitcher
+      workspaces={workspaces}
+      activeWorkspaceId={activeWorkspaceId}
+      canCreateWorkspace={canCreateWorkspace}
+    />
+  );
 
   // The drawer carries the ancestors, unconditionally and unchanged — this is
   // exactly the cluster that shipped before the project tier existed.
   if (placement === 'drawer') {
     return (
       <div className="flex min-w-0 items-center gap-1">
-        <OrgControl activeOrg={activeOrg} orgs={orgs} cloudBilling={cloudBilling} />
+        {orgControl}
         {showWorkspaceSwitcher ? (
           <>
             <Separator />
-            <WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
+            {workspaceSwitcher}
           </>
         ) : null}
       </div>
@@ -139,13 +159,11 @@ export function ShellTierNav({
   // and `display: none` below it.
   return (
     <div className="flex min-w-0 items-center gap-1">
-      <span className="hidden md:contents">
-        <OrgControl activeOrg={activeOrg} orgs={orgs} cloudBilling={cloudBilling} />
-      </span>
+      <span className="hidden md:contents">{orgControl}</span>
       {showWorkspaceSwitcher ? (
         <span className="hidden xl:contents">
           <Separator />
-          <WorkspaceSwitcher workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
+          {workspaceSwitcher}
         </span>
       ) : null}
       <span className="hidden md:contents">

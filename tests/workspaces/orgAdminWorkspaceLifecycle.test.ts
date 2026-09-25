@@ -229,7 +229,8 @@ describe('GET /api/organizations/[orgId]/workspaces', () => {
       total: number;
     };
     expect(page1.total).toBe(3);
-    expect(page1.workspaces.map((w) => w.name)).toEqual(['Home', 'Two']);
+    // Sorted by NAME (MOTIR-6312 · the Workspaces card's order).
+    expect(page1.workspaces.map((w) => w.name)).toEqual(['Home', 'Three']);
     // Counted under a per-row workspace binding — an Admin who is in NONE of
     // these workspaces must still see the true numbers, not zeros.
     expect(page1.workspaces[0]).toMatchObject({ memberCount: 2, projectCount: 1 }); // Owner + Member
@@ -238,7 +239,7 @@ describe('GET /api/organizations/[orgId]/workspaces', () => {
     const second = (await (
       await list(organizationId, `?limit=2&cursor=${page1.nextCursor}`)
     ).json()) as typeof page1;
-    expect(second.workspaces.map((w) => w.name)).toEqual(['Three']);
+    expect(second.workspaces.map((w) => w.name)).toEqual(['Two']);
     expect(second.nextCursor).toBeNull();
   });
 

@@ -147,7 +147,7 @@ describe('the settings rail', () => {
 });
 
 describe('the ⌘K palette', () => {
-  function renderPalette(workspaceCount: number) {
+  function renderPalette(workspaceCount: number, canManageOrgSettings = true) {
     return renderWithIntl(
       <AppCommandPalette
         workspaces={Array.from({ length: workspaceCount }, (_, i) => ({
@@ -159,9 +159,15 @@ describe('the ⌘K palette', () => {
         activeWorkspaceId="ws0"
         projects={[PROJECT]}
         activeProjectId={PROJECT.id}
+        canManageOrgSettings={canManageOrgSettings}
       />,
     );
   }
+
+  it('does NOT offer the org security pane to an org MEMBER (MOTIR-6312) — the page refuses them', () => {
+    renderPalette(2, false);
+    expect(screen.queryByRole('option', { name: /go to organization security/i })).toBeNull();
+  });
 
   it('offers the ORG security pane at every count — an organization always exists', () => {
     for (const count of [1, 2]) {

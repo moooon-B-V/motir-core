@@ -67,6 +67,7 @@ function renderOrgControl() {
       activeOrg={{ id: ACME.id, name: ACME.name, role: 'owner' }}
       orgs={[ACME]}
       cloudBilling={false}
+      workspaceTierRevealed={false}
     />,
   );
 }
@@ -122,6 +123,7 @@ describe('the org menu — New workspace', () => {
         activeOrg={{ id: ACME.id, name: ACME.name, role: 'owner' }}
         orgs={[ACME]}
         cloudBilling={false}
+        workspaceTierRevealed={false}
       />,
       { locale: 'zh', messages: zhMessages },
     );
@@ -185,7 +187,7 @@ describe('the org menu — New workspace', () => {
 describe('the workspace switcher — Create workspace', () => {
   it('surfaces the cap refusal MESSAGE rather than "Could not create workspace"', async () => {
     createWorkspaceAction.mockResolvedValue(REFUSAL);
-    render(<WorkspaceSwitcher workspaces={[WS]} activeWorkspaceId={WS.id} />);
+    render(<WorkspaceSwitcher workspaces={[WS]} activeWorkspaceId={WS.id} canCreateWorkspace />);
 
     await openSwitcherCreateWorkspace('zyx');
 
@@ -200,7 +202,7 @@ describe('the workspace switcher — Create workspace', () => {
 
   it('tells a zh reader in Chinese, never in the server English', async () => {
     createWorkspaceAction.mockResolvedValue(REFUSAL);
-    render(<WorkspaceSwitcher workspaces={[WS]} activeWorkspaceId={WS.id} />, {
+    render(<WorkspaceSwitcher workspaces={[WS]} activeWorkspaceId={WS.id} canCreateWorkspace />, {
       locale: 'zh',
       messages: zhMessages,
     });
@@ -226,7 +228,7 @@ describe('the workspace switcher — Create workspace', () => {
 
   it('keeps the generic message for a genuine throw', async () => {
     createWorkspaceAction.mockRejectedValue(new Error('connection terminated'));
-    render(<WorkspaceSwitcher workspaces={[WS]} activeWorkspaceId={WS.id} />);
+    render(<WorkspaceSwitcher workspaces={[WS]} activeWorkspaceId={WS.id} canCreateWorkspace />);
 
     await openSwitcherCreateWorkspace('zyx');
 
@@ -237,7 +239,7 @@ describe('the workspace switcher — Create workspace', () => {
 
   it('still toasts success and refreshes on the happy path', async () => {
     createWorkspaceAction.mockResolvedValue({ ok: true, workspace: WS });
-    render(<WorkspaceSwitcher workspaces={[WS]} activeWorkspaceId={WS.id} />);
+    render(<WorkspaceSwitcher workspaces={[WS]} activeWorkspaceId={WS.id} canCreateWorkspace />);
 
     await openSwitcherCreateWorkspace('Fresh');
 

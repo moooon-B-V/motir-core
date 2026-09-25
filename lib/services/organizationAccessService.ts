@@ -106,6 +106,21 @@ export async function isOrgAdminForWorkspace(
   userId: string,
   workspaceId: string,
 ): Promise<boolean> {
+  return orgCanForWorkspace(userId, workspaceId, 'manageOrgSettings');
+}
+
+/**
+ * {@link isOrgAdminForWorkspace} for ANY capability — whether the actor holds
+ * `capability` on the organisation that owns `workspaceId`. The same rendering
+ * question, asked of a different row of the table: the workspace danger zone
+ * asks `manageWorkspaces` to decide whether to point at where removal went
+ * (MOTIR-6312). Same fail-closed posture: an unresolvable workspace is `false`.
+ */
+export async function orgCanForWorkspace(
+  userId: string,
+  workspaceId: string,
+  capability: OrgCapability,
+): Promise<boolean> {
   try {
     return await withWorkspaceContext({ userId, workspaceId }, async (tx) => {
       const organizationId = await resolveOrganizationId(workspaceId, tx);
@@ -114,7 +129,7 @@ export async function isOrgAdminForWorkspace(
         userId,
         tx,
       );
-      return orgCan(membership?.role, 'manageOrgSettings');
+      return orgCan(membership?.role, capability);
     });
   } catch {
     // An unresolvable workspace is a caller error, not an admin. The room renders

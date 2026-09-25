@@ -305,9 +305,13 @@ export function SidebarNav({
   // anywhere in the product.
   if (isOrganizationSettingsPath(pathname)) {
     const orgSections: SidebarSection[] = groupOrganizationSettingsNav(
-      visibleOrganizationSettingsNav({ isOrgAdmin: organization?.isOrgAdmin ?? false }, undefined, {
-        billingAvailable,
-      }),
+      visibleOrganizationSettingsNav(
+        { isOrgAdmin: organization?.isOrgAdmin ?? false, workspaceTierRevealed },
+        undefined,
+        {
+          billingAvailable,
+        },
+      ),
     ).map(({ group, entries }) => ({
       id: `org-settings-${group}`,
       label: ts(`organization.nav.group.${group}`),

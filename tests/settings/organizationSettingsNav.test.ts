@@ -60,14 +60,17 @@ describe('organizationSettingsNav — totality (route ↔ entry, mistake #29)', 
     // REPLACED by this one rather than deleted, so the reasoning survives its
     // occasion.
     //
-    // ⚠️ The gate is the substantive half. §6 of `organization-tier.md`: "a
-    // hidden tier may not remove a capability … relocating a surface preserves
-    // its gate." `/settings/workspace/github` checks NO role, so the ROW is
-    // org-membership-gated and owner/admin lives on the page's write controls.
+    // ⚠️ The gate is the substantive half, and it CHANGED with the role model
+    // (MOTIR-6312 · the Git-row flag in `design/org-admin/design-notes.md`,
+    // approved 2026-09-25). It used to be org-membership-gated for §6's reason —
+    // `/settings/workspace/github` checked no role. A Member's abilities now come
+    // entirely from their workspace roles (`role-model.md` §1), so the org
+    // repository inventory is Owner/Admin reading, and the page's own read gate
+    // moved with the row.
     const git = ORGANIZATION_SETTINGS_NAV.find((e) => e.id === 'git');
     expect(git?.href).toBe('/settings/organization/git');
     expect(git?.group).toBe('general');
-    expect(git?.orgAdminOnly).toBeUndefined();
+    expect(git?.orgAdminOnly).toBe(true);
   });
 
   it('has no duplicate hrefs and no duplicate ids', () => {
@@ -84,8 +87,9 @@ describe('organizationSettingsNav — totality (route ↔ entry, mistake #29)', 
 });
 
 describe('the two FILTER AXES — what the actor holds, and what this build has', () => {
-  const ADMIN = { isOrgAdmin: true };
-  const MEMBER = { isOrgAdmin: false };
+  const ADMIN = { isOrgAdmin: true, workspaceTierRevealed: true };
+  const MEMBER = { isOrgAdmin: false, workspaceTierRevealed: false };
+  const MEMBER_REVEALED = { isOrgAdmin: false, workspaceTierRevealed: true };
   const CLOUD = { billingAvailable: true };
   const SELF_HOST = { billingAvailable: false };
 
@@ -94,7 +98,7 @@ describe('the two FILTER AXES — what the actor holds, and what this build has'
     expect(ids).toEqual(['organization', 'git', 'members', 'security', 'usage', 'billing']);
   });
 
-  it('a PLAIN org member sees `Organisation` AND `Git` — neither is optional', () => {
+  it('a PLAIN org member BELOW the reveal sees `Organisation` alone', () => {
     // The row that must survive, and the reason it carries no admin flag: below
     // the workspace-tier reveal the index page hosts the FOLDED-IN workspace
     // sections (`organization-tier.md` §6d), and a workspace invitee reaches
@@ -102,10 +106,18 @@ describe('the two FILTER AXES — what the actor holds, and what this build has'
     // anywhere in the product — only through it. Hiding this row closes the only
     // route to a capability, which is exactly the defect §6d was written to
     // repair.
-    // `Git` is here for §6's reason (see the registry entry); `Organisation` for
-    // §6d's, below.
+    // `Git` is gone since the role model (MOTIR-6312, see the registry entry).
     const ids = visibleOrganizationSettingsNav(MEMBER, undefined, CLOUD).map((e) => e.id);
-    expect(ids).toEqual(['organization', 'git']);
+    expect(ids).toEqual(['organization']);
+  });
+
+  it('a PLAIN org member ABOVE the reveal sees NO row — the index page 404s for them', () => {
+    // MOTIR-6312 · panel 3d: at 2+ workspaces nothing on the org page is theirs,
+    // so the row would be a door onto a 404. An Admin keeps it at every count.
+    expect(visibleOrganizationSettingsNav(MEMBER_REVEALED, undefined, CLOUD)).toEqual([]);
+    expect(visibleOrganizationSettingsNav(ADMIN, undefined, CLOUD).map((e) => e.id)).toContain(
+      'organization',
+    );
   });
 
   it('`Billing & plans` is ABSENT off cloud, and `Usage & cost` is not', () => {
@@ -121,28 +133,38 @@ describe('the two FILTER AXES — what the actor holds, and what this build has'
     // The property that makes a missing prop safe. `visibleSettingsNav` on the
     // project registry defaults closed for the same reason: a surface that forgets
     // the availability flag must drop the row, never offer a door onto a corridor.
-    expect(visibleOrganizationSettingsNav().map((e) => e.id)).toEqual(['organization', 'git']);
+    // Since MOTIR-6312 the actor default is a Member ABOVE the reveal, which is
+    // the most closed arm there is: no row at all.
+    expect(visibleOrganizationSettingsNav().map((e) => e.id)).toEqual([]);
   });
 });
 
 describe('grouping — a group with no surviving rows is not rendered', () => {
   it('renders the three groups in order for an admin on cloud', () => {
     const groups = groupOrganizationSettingsNav(
-      visibleOrganizationSettingsNav({ isOrgAdmin: true }, undefined, { billingAvailable: true }),
+      visibleOrganizationSettingsNav({ isOrgAdmin: true, workspaceTierRevealed: true }, undefined, {
+        billingAvailable: true,
+      }),
     );
     expect(groups.map((g) => g.group)).toEqual(['general', 'access', 'billing']);
   });
 
   it('drops the emptied groups entirely — no heading over nothing', () => {
     const groups = groupOrganizationSettingsNav(
-      visibleOrganizationSettingsNav({ isOrgAdmin: false }, undefined, { billingAvailable: true }),
+      visibleOrganizationSettingsNav(
+        { isOrgAdmin: false, workspaceTierRevealed: false },
+        undefined,
+        { billingAvailable: true },
+      ),
     );
     expect(groups.map((g) => g.group)).toEqual(['general']);
   });
 
   it('keeps a PARTIALLY filtered group, with its survivors', () => {
     const groups = groupOrganizationSettingsNav(
-      visibleOrganizationSettingsNav({ isOrgAdmin: true }, undefined, { billingAvailable: false }),
+      visibleOrganizationSettingsNav({ isOrgAdmin: true, workspaceTierRevealed: true }, undefined, {
+        billingAvailable: false,
+      }),
     );
     const billing = groups.find((g) => g.group === 'billing');
     expect(billing?.entries.map((e) => e.id)).toEqual(['usage']);

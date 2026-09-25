@@ -3,6 +3,8 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { orgCanForWorkspace } from '@/lib/services/organizationAccessService';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { resolveWorkspaceTierDisclosure } from '@/lib/workspaces/tierDisclosure.server';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NameCard } from './_components/NameCard';
@@ -60,7 +62,14 @@ export default async function WorkspaceSettingsPage() {
   const workspace = await workspacesService.getWorkspaceSummary(ctx.workspaceId, ctx.userId);
   if (!workspace) redirect('/dashboard');
 
-  const members = await workspacesService.listMembers(ctx.workspaceId, ctx.userId);
+  // `canRemoveWorkspace` — whether to point at where removing this workspace
+  // went (MOTIR-6312): the Owner or an Admin of its org. A pointer, not a door —
+  // a Member sees none. `allSettledOrThrow`, never a bare `Promise.all`: both
+  // arms open a transaction (MOTIR-3066).
+  const [members, canRemoveWorkspace] = await allSettledOrThrow([
+    workspacesService.listMembers(ctx.workspaceId, ctx.userId),
+    orgCanForWorkspace(ctx.userId, ctx.workspaceId, 'manageWorkspaces'),
+  ]);
   const memberCount = members.length;
 
   return (
@@ -81,7 +90,11 @@ export default async function WorkspaceSettingsPage() {
         currentUserId={ctx.userId}
       />
 
-      <DangerZoneCard workspaceName={workspace.name} isLastMember={memberCount <= 1} />
+      <DangerZoneCard
+        isLastMember={memberCount <= 1}
+        canRemoveWorkspace={canRemoveWorkspace}
+        placement="workspace"
+      />
     </div>
   );
 }

@@ -1,25 +1,45 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useTransition } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { TriangleAlert } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useToast } from '@/components/ui/Toast';
-import { leaveWorkspaceAction, removeWorkspaceAction } from '../actions';
+import { leaveWorkspaceAction } from '../actions';
 
 export interface DangerZoneCardProps {
-  workspaceName: string;
   isLastMember: boolean;
+  /**
+   * `manageWorkspaces` on the workspace's org — an Owner or Admin. It decides
+   * two things, both POINTERS rather than doors: the one-line hint saying where
+   * removing the workspace went, and which wording the last-member tooltip uses.
+   */
+  canRemoveWorkspace: boolean;
+  /** Where the card is mounted: `/settings/workspace`, or the org page's
+   *  one-workspace fold-in — the hint names a different place from each. */
+  placement: 'workspace' | 'foldIn';
 }
 
-export function DangerZoneCard({ workspaceName, isLastMember }: DangerZoneCardProps) {
+// The WORKSPACE-tier danger zone after the move (MOTIR-6312 ·
+// `design/org-admin/org-admin--workspaces-at-org-tier.mock.html` panel 2).
+//
+// ⚠️ LEAVE STAYS; DELETE IS GONE. Removing a workspace is an org-Admin act now
+// (MOTIR-6309), and its only door is the org settings page's Workspaces card.
+// This one component is mounted by BOTH `/settings/workspace` and the org page's
+// one-workspace fold-in (`WorkspaceFoldInSection`), so the one edit removes the
+// row from both. Whoever remembers Delete here is told where it went — a
+// pointer, never a second Remove button — and a Member, who cannot remove at
+// all, is told nothing.
+export function DangerZoneCard({
+  isLastMember,
+  canRemoveWorkspace,
+  placement,
+}: DangerZoneCardProps) {
   const t = useTranslations('settings');
   const { toast } = useToast();
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function handleLeave() {
@@ -58,7 +78,13 @@ export function DangerZoneCard({ workspaceName, isLastMember }: DangerZoneCardPr
           </p>
         </div>
         {isLastMember ? (
-          <Tooltip content={t('danger.lastMemberTooltip')}>
+          <Tooltip
+            content={
+              canRemoveWorkspace
+                ? t('danger.lastMemberTooltipAdmin')
+                : t('danger.lastMemberTooltip')
+            }
+          >
             {/* span wrapper: a disabled button doesn't fire the hover events Radix Tooltip needs. */}
             <span tabIndex={0}>{leaveButton}</span>
           </Tooltip>
@@ -67,121 +93,21 @@ export function DangerZoneCard({ workspaceName, isLastMember }: DangerZoneCardPr
         )}
       </div>
 
-      <div className="my-4 h-px bg-(--el-border)" />
-
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="font-sans text-sm font-medium text-(--el-text)">
-            {t('danger.deleteWorkspace')}
-          </p>
-          <p className="text-(--el-text-muted) font-sans text-xs">
-            {t('danger.deleteWorkspaceDesc')}
-          </p>
-        </div>
-        <Button variant="danger" onClick={() => setDeleteOpen(true)}>
-          {t('danger.delete')}
-        </Button>
-      </div>
-
-      <DeleteConfirmModal
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        workspaceName={workspaceName}
-      />
-    </Card>
-  );
-}
-
-function DeleteConfirmModal({
-  open,
-  onOpenChange,
-  workspaceName,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  workspaceName: string;
-}) {
-  const t = useTranslations('settings');
-  const tc = useTranslations('common');
-  const { toast } = useToast();
-  const [typed, setTyped] = useState('');
-  const [isPending, startTransition] = useTransition();
-  // Case-sensitive exact match enables the destructive button.
-  const matches = typed === workspaceName;
-
-  function handleDelete() {
-    if (!matches) return;
-    startTransition(async () => {
-      // Success redirects; control only returns on an unexpected error.
-      const result = await removeWorkspaceAction();
-      if (!result.ok) {
-        toast({
-          variant: 'error',
-          title: t('danger.deleteErrorTitle'),
-          description: result.error,
-        });
-      }
-    });
-  }
-
-  return (
-    <Modal
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) setTyped('');
-        onOpenChange(o);
-      }}
-      size="md"
-    >
-      <div className="mb-(--spacing-md) flex items-start gap-3">
-        <span
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-          style={{ backgroundColor: 'var(--el-tint-rose)' }}
+      {canRemoveWorkspace ? (
+        <p
+          className="text-(--el-text-secondary) mt-(--spacing-md) flex items-center gap-2 font-sans text-xs"
+          data-testid="workspace-remove-hint"
         >
-          <TriangleAlert className="h-5 w-5" style={{ color: 'var(--el-danger)' }} />
-        </span>
-        <div>
-          <h2 className="font-serif text-xl font-semibold text-(--el-text)">
-            {t('danger.deleteModalTitle', { workspaceName })}
-          </h2>
-          <p className="text-(--el-text-muted) mt-1 font-sans text-sm">
-            {t('danger.deleteModalDesc')}
-          </p>
-          {/* IMMEDIATE, and the copy must say so (MOTIR-2171 · §14.3). The other
-              three offboarding triggers leave the project row standing, so their
-              30-day window is a real grace period; a workspace delete is a hard
-              cascade with no surface left to undo into. Copy that flattened the two
-              into one reassuring sentence would promise a recovery window that does
-              not exist for the most destructive action the product offers — worse
-              than saying nothing, because the user would rely on it. */}
-          <p className="text-(--el-text-muted) mt-1 font-sans text-sm">
-            {t('danger.deleteModalCodeIndex')}
-          </p>
-        </div>
-      </div>
-
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleDelete();
-        }}
-      >
-        <Input
-          label={t('danger.confirmLabel', { workspaceName })}
-          placeholder={workspaceName}
-          value={typed}
-          onChange={(e) => setTyped(e.target.value)}
-          autoFocus
-        />
-        <Modal.Footer>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isPending}>
-            {tc('cancel')}
-          </Button>
-          <Button type="submit" variant="danger" disabled={!matches} loading={isPending}>
-            {t('danger.deleteConfirmButton')}
-          </Button>
-        </Modal.Footer>
-      </form>
-    </Modal>
+          <Info className="text-(--el-icon-muted) h-3.5 w-3.5 shrink-0" aria-hidden />
+          {placement === 'foldIn' ? (
+            t('danger.removeHintFoldIn')
+          ) : (
+            <Link href="/settings/organization" className="text-(--el-link) hover:underline">
+              {t('danger.removeHint')}
+            </Link>
+          )}
+        </p>
+      ) : null}
+    </Card>
   );
 }

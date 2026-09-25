@@ -188,6 +188,7 @@ describe('the org menu carries the door onto it', () => {
           activeOrg={{ id: 'org_acme', name: 'Acme', role: 'owner' }}
           orgs={[{ id: 'org_acme', name: 'Acme', slug: 'acme' }]}
           cloudBilling={false}
+          workspaceTierRevealed={false}
         />
       </ToastProvider>,
     );
@@ -208,6 +209,7 @@ describe('the org menu carries the door onto it', () => {
           activeOrg={{ id: 'org_acme', name: 'Acme', role: 'owner' }}
           orgs={[{ id: 'org_acme', name: 'Acme', slug: 'acme' }]}
           cloudBilling={false}
+          workspaceTierRevealed={false}
         />
       </ToastProvider>,
     );

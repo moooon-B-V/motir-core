@@ -630,7 +630,6 @@
       "couldNotLink": "无法关联所选工作项。",
       "orgSecurityForbidden": "只有组织的所有者或管理员才能更改其安全设置。",
       "workspaceSecurityForbidden": "只有工作区的所有者或管理员才能更改其安全设置。",
-      "workspaceRemoveForbidden": "只有组织的所有者或管理员才能移除工作区。",
       "refused": "操作未完成：{reason}"
     },
     "links": {
@@ -1845,16 +1844,10 @@
       "heading": "危险操作区",
       "leaveWorkspace": "离开工作区",
       "leaveWorkspaceDesc": "你将失去对该工作区所有数据的访问权限。",
-      "lastMemberTooltip": "你是最后一名成员——请改为删除工作区。",
-      "deleteWorkspace": "删除工作区",
-      "deleteWorkspaceDesc": "永久删除该工作区及其所有数据。此操作无法撤销。",
-      "delete": "删除",
-      "deleteErrorTitle": "无法删除工作区",
-      "deleteModalTitle": "删除 {workspaceName}？",
-      "deleteModalDesc": "这将永久删除该工作区及其所有数据（项目、工作项、成员）。此操作无法撤销。",
-      "deleteModalCodeIndex": "Motir 为该工作区的仓库建立的代码索引会被立即删除——删除工作区没有任何恢复期。",
-      "confirmLabel": "输入 {workspaceName} 以确认",
-      "deleteConfirmButton": "删除工作区"
+      "lastMemberTooltip": "你是最后一名成员。组织管理员可以移除该工作区。",
+      "lastMemberTooltipAdmin": "你是最后一名成员。请改为在「组织设置 → 工作区」中移除该工作区。",
+      "removeHint": "如需移除该工作区，请前往「组织设置 → 工作区」。",
+      "removeHintFoldIn": "如需移除该工作区，请使用上方的「工作区」。"
     },
     "project": {
       "empty": {
@@ -4880,6 +4873,7 @@
     "settings": {
       "title": "组织设置",
       "subtitle": "管理 {org} 组织——你的工作区都归属于这个账户。仅组织所有者和管理员可以更改这些设置。",
+      "subtitleMember": "管理 {org} 组织——你的工作区都归属于这个账户。",
       "general": "常规",
       "generalSub": "组织在所有工作区中的标识。",
       "youreTheOwner": "你是所有者",
@@ -4994,6 +4988,32 @@
       "errorNotFound": "没有与 {email} 对应的 Motir 账户。请先邀请其加入某个工作区——他们会自动加入该组织。",
       "errorAlready": "{email} 已在该组织中。",
       "errorGeneric": "无法添加该成员。请重试。"
+    },
+    "workspaces": {
+      "title": "工作区",
+      "subtitle": "{org} 中的所有工作区。仅所有者和管理员可以创建或移除工作区。",
+      "count": "{count, plural, other {# 个工作区}}",
+      "new": "新建工作区",
+      "rowMeta": "{members, plural, other {# 名成员}} · {projects, plural, other {# 个项目}}",
+      "remove": "移除",
+      "removeAria": "移除 {workspace}",
+      "pager": "显示第 {from}–{to} 个，共 {total} 个",
+      "prev": "上一页",
+      "next": "下一页",
+      "page": "第 {n} 页，共 {m} 页",
+      "loading": "正在加载工作区…",
+      "emptyTitle": "还没有工作区",
+      "emptyDescription": "工作区用于归集一个团队负责的项目。创建一个工作区，开始在 {org} 中跟踪工作。",
+      "errorTitle": "无法加载工作区",
+      "errorDescription": "获取该组织的工作区时出错。请重试。",
+      "removeTitle": "移除 {workspace}？",
+      "removeDesc": "这将永久删除该工作区及其中的一切：{projects, plural, other {# 个项目}}及其工作项、迭代和看板。其中的 {members, plural, other {# 名成员}}将失去对它的访问权限，但仍留在 {org} 中。",
+      "removeCodeIndex": "Motir 为该工作区的仓库建立的代码索引会被立即删除——移除工作区没有任何恢复期。",
+      "removeLastWorkspace": "这是 {org} 唯一的工作区。移除后，该组织将没有任何工作区，直到有人新建一个。",
+      "removeConfirmLabel": "输入 {workspace} 以确认",
+      "removeConfirmButton": "移除工作区",
+      "removed": "已移除 {workspace}",
+      "removeErrorTitle": "无法移除 {workspace}"
     },
     "states": {
       "emptyTitle": "目前只有你一个人",

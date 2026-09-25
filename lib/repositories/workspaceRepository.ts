@@ -74,8 +74,8 @@ export const workspaceRepository = {
 
   /**
    * One keyset-paginated PAGE of an organization's workspaces, ordered by
-   * (createdAt asc, id asc) so the order is stable across pages (MOTIR-6309 —
-   * the org Workspaces section). Returns up to `limit + 1` rows so the service
+   * (name asc, id asc) so the order is stable across pages (MOTIR-6309 — the org
+   * Workspaces section; by name since MOTIR-6312). Returns up to `limit + 1` rows so the service
    * can tell whether a next page exists without a second count; `cursorId` is
    * the last workspace id of the previous page (Prisma `cursor` + `skip: 1`).
    * `tx` REQUIRED: the org-member read arm (`workspace_org_member_read`) admits
@@ -89,7 +89,10 @@ export const workspaceRepository = {
   ): Promise<Workspace[]> {
     return tx.workspace.findMany({
       where: { organizationId },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      // By NAME, the id breaking ties so the keyset cursor stays total — the org
+      // Workspaces card lists them the way a reader scans for one (MOTIR-6312 ·
+      // design panel 1, "Sorted by name").
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
       take: limit + 1,
       ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
     });

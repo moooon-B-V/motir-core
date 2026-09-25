@@ -85,6 +85,12 @@ export const ORGANIZATION_SETTINGS_NAV_GROUP_ORDER: OrganizationSettingsNavGroup
 export interface OrganizationSettingsNavActor {
   /** `orgCan(role, 'manageOrgSettings')` — owner or admin (`lib/organizations/capabilities.ts`). */
   isOrgAdmin: boolean;
+  /**
+   * Whether the active org has ≥2 workspaces (`isWorkspaceTierRevealed`). Read
+   * only by the `foldInHost` row: above the reveal the org index page hosts
+   * nothing of a plain member's, and answers them 404 (MOTIR-6312).
+   */
+  workspaceTierRevealed: boolean;
 }
 
 /**
@@ -99,7 +105,7 @@ export interface OrganizationSettingsNavAvailability {
 }
 
 const NO_CLOUD: OrganizationSettingsNavAvailability = { billingAvailable: false };
-const NO_ADMIN: OrganizationSettingsNavActor = { isOrgAdmin: false };
+const NO_ADMIN: OrganizationSettingsNavActor = { isOrgAdmin: false, workspaceTierRevealed: true };
 
 export interface OrganizationSettingsNavEntry {
   /** Stable id — also the command-palette action id (`org-settings-<id>`). */
@@ -122,6 +128,14 @@ export interface OrganizationSettingsNavEntry {
    * read is no role at all.
    */
   orgAdminOnly?: true;
+  /**
+   * The org index page's own rule: Owner/Admin always, a plain org member only
+   * BELOW the workspace-tier reveal, where the page hosts the folded-in
+   * workspace sections (§6d) — Leave workspace among them. Above the reveal the
+   * page has nothing of theirs and 404s for them, so a row there would be a door
+   * onto a 404 (MOTIR-6312 · `org-admin--workspaces-at-org-tier.mock.html` 3d).
+   */
+  foldInHost?: true;
   /**
    * Cloud builds only — the route `notFound()`s on a self-host build, so a row
    * would point at a 404. Same flag, same default-closed handling, as the project
@@ -157,6 +171,9 @@ export const ORGANIZATION_SETTINGS_NAV: OrganizationSettingsNavEntry[] = [
     // alternative surface anywhere in the product. Hiding the row would close the
     // only route to it, which is precisely the defect §6d was written to repair.
     // The page keeps gating PER SECTION; the row is the door to the page.
+    // ABOVE the reveal a member has no section there at all (MOTIR-6312), so the
+    // row follows the page's 404 — `foldInHost`.
+    foldInHost: true,
   },
   {
     id: 'git',
@@ -164,16 +181,18 @@ export const ORGANIZATION_SETTINGS_NAV: OrganizationSettingsNavEntry[] = [
     href: '/settings/organization/git',
     icon: GitBranch,
     labelKey: 'git',
-    // ⚠️ NOT `orgAdminOnly`, and §6 of `docs/decisions/organization-tier.md` is
-    // why: "a hidden tier may not remove a capability … relocating a surface
-    // preserves its gate." The surface this page relocates FROM,
-    // `/settings/workspace/github`, checks a session and a workspace context and
-    // NO ROLE AT ALL — every workspace member reads it today, and every workspace
-    // member is an org member by §5's upward invariant. Admin-gating the row
-    // would have taken a shipped capability away silently.
-    //
-    // The owner/admin gate lives on the page's WRITE controls instead, and in the
-    // service beneath them (`organizationRepoService.disconnectFromOrganisation`).
+    // ⚠️ `orgAdminOnly` SINCE THE ROLE MODEL (MOTIR-6312 · `design/org-admin/
+    // design-notes.md` § *Workspaces are created and removed at the org tier*,
+    // the Git-row flag, approved 2026-09-25). This row used to be open to every
+    // org member for §6's reason — the surface it relocated from,
+    // `/settings/workspace/github`, checked no role. `role-model.md` §1 now says
+    // a Member's abilities come ENTIRELY from their workspace roles, so the org
+    // repository inventory is Owner/Admin reading. What a Member keeps is the
+    // per-project half of the same information, at Settings › Project ›
+    // Repositories (MOTIR-4674). The page's own READ gate moved with the row
+    // (`/settings/organization/git` renders the forbidden state to a Member), so
+    // the row is not merely hidden over a readable URL.
+    orgAdminOnly: true,
     //
     // `general`, beside `Organisation`, for the reason the project rail puts
     // `repositories` there: it is the tenant's own resources, not a permission
@@ -259,7 +278,10 @@ export function visibleOrganizationSettingsNav(
   available: OrganizationSettingsNavAvailability = NO_CLOUD,
 ): OrganizationSettingsNavEntry[] {
   return entries.filter(
-    (entry) => isAvailable(entry, available) && (!entry.orgAdminOnly || actor.isOrgAdmin),
+    (entry) =>
+      isAvailable(entry, available) &&
+      (!entry.orgAdminOnly || actor.isOrgAdmin) &&
+      (!entry.foldInHost || actor.isOrgAdmin || !actor.workspaceTierRevealed),
   );
 }
 

@@ -99,6 +99,13 @@ export interface AppCommandPaletteProps {
    * failure, one surface over. Defaults CLOSED.
    */
   publicProjectsAvailable?: boolean;
+  /**
+   * `manageOrgSettings` on the active org — an Owner or Admin. Gates the org
+   * Security deep link: the page refuses a Member, so for them the action would
+   * be a second door onto a refusal the org menu no longer offers (MOTIR-6312).
+   * Defaults CLOSED, like every other door this palette derives from a grant.
+   */
+  canManageOrgSettings?: boolean;
 }
 
 export function AppCommandPalette({
@@ -109,6 +116,7 @@ export function AppCommandPalette({
   settingsPermissions,
   aiPlanningConfigured = false,
   publicProjectsAvailable = false,
+  canManageOrgSettings = false,
 }: AppCommandPaletteProps) {
   const t = useTranslations('shell');
   const ts = useTranslations('settings');
@@ -369,12 +377,16 @@ export function AppCommandPalette({
   // onto it.
   // Not gated on the workspace-tier reveal either — an organization exists at
   // every count, unlike the workspace settings home above.
-  navActions.push({
-    id: 'nav-org-security',
-    label: t('commandPalette.goToOrgSecurity'),
-    icon: <ShieldCheck />,
-    onSelect: () => go('/settings/organization/security'),
-  });
+  // ⚠️ AND GATED ON THE ORG ROLE (MOTIR-6312): the org menu's Security row is
+  // absent for a Member, and this is the same door.
+  if (canManageOrgSettings) {
+    navActions.push({
+      id: 'nav-org-security',
+      label: t('commandPalette.goToOrgSecurity'),
+      icon: <ShieldCheck />,
+      onSelect: () => go('/settings/organization/security'),
+    });
+  }
   // The WORKSPACE half (MOTIR-3647), under the same condition the route itself
   // applies: below the tier-reveal threshold `/settings/workspace/security`
   // 404s, so an entry here would offer a dead address. The control is still
