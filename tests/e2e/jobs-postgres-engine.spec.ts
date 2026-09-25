@@ -259,7 +259,7 @@ test('@smoke an operator replays a dead-lettered run and the REPLAY succeeds on 
 
   await gotoJobs(page);
   await page.getByRole('link', { name: /Dead letter/ }).click();
-  const replay = page.getByRole('button', { name: 'Replay' });
+  const replay = page.getByRole('button', { name: 'Replay', exact: true });
   await expect(replay).toBeEnabled();
   await replay.click();
   await expect(page.getByText('Job replayed', { exact: true })).toBeVisible();

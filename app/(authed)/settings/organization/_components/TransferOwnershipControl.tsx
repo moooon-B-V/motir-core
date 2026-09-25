@@ -266,98 +266,103 @@ function TransferOwnershipDialog({
           e.preventDefault();
           submit();
         }}
-        className="flex flex-col gap-(--spacing-md)"
+        className="flex min-h-0 flex-1 flex-col"
       >
-        <fieldset disabled={isPending} className={isPending ? 'opacity-60' : undefined}>
-          <legend className="mb-1.5 font-sans text-sm font-medium text-(--el-text)">
-            {t('transfer.pickerLabel')}
-          </legend>
-          <div className="rounded-(--radius-card) border border-(--el-border)">
-            <div className="border-b border-(--el-border) p-2">
-              <Input
-                aria-label={t('transfer.searchPlaceholder')}
-                placeholder={t('transfer.searchPlaceholder')}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                addonStart={<Search className="text-(--el-text-muted) h-4 w-4" aria-hidden />}
+        {/* Modal.Body owns the ring-safe scroll recipe (MOTIR-2491): the member
+            list, the consequence line and an inline error can outgrow a short
+            viewport, so the fields scroll and the footer below stays pinned. */}
+        <Modal.Body className="gap-(--spacing-md)">
+          <fieldset disabled={isPending} className={isPending ? 'opacity-60' : undefined}>
+            <legend className="mb-1.5 font-sans text-sm font-medium text-(--el-text)">
+              {t('transfer.pickerLabel')}
+            </legend>
+            <div className="rounded-(--radius-card) border border-(--el-border)">
+              <div className="border-b border-(--el-border) p-2">
+                <Input
+                  aria-label={t('transfer.searchPlaceholder')}
+                  placeholder={t('transfer.searchPlaceholder')}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  addonStart={<Search className="text-(--el-text-muted) h-4 w-4" aria-hidden />}
+                />
+              </div>
+              <MemberList
+                load={load}
+                members={members}
+                query={query}
+                selectedId={selected?.userId ?? null}
+                onSelect={(m) => {
+                  setSelected(m);
+                  setError(null);
+                }}
+                onRetry={() => void fetchPage(query, cursorStack[pageIndex] ?? null, pageIndex)}
               />
-            </div>
-            <MemberList
-              load={load}
-              members={members}
-              query={query}
-              selectedId={selected?.userId ?? null}
-              onSelect={(m) => {
-                setSelected(m);
-                setError(null);
-              }}
-              onRetry={() => void fetchPage(query, cursorStack[pageIndex] ?? null, pageIndex)}
-            />
-            <div className="flex items-center justify-between gap-3 border-t border-(--el-border) px-3 py-2">
-              <span className="text-(--el-text-muted) font-sans text-xs" aria-live="polite">
-                {t('transfer.pickerFoot', { from, to, total })}
-              </span>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={t('transfer.previous')}
-                  onClick={goPrev}
-                  disabled={pageIndex === 0 || load === 'loading'}
-                >
-                  <ChevronLeft className="h-4 w-4" aria-hidden />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={t('transfer.next')}
-                  onClick={goNext}
-                  disabled={!page?.nextCursor || load === 'loading'}
-                >
-                  <ChevronRight className="h-4 w-4" aria-hidden />
-                </Button>
+              <div className="flex items-center justify-between gap-3 border-t border-(--el-border) px-3 py-2">
+                <span className="text-(--el-text-muted) font-sans text-xs" aria-live="polite">
+                  {t('transfer.pickerFoot', { from, to, total })}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={t('transfer.previous')}
+                    onClick={goPrev}
+                    disabled={pageIndex === 0 || load === 'loading'}
+                  >
+                    <ChevronLeft className="h-4 w-4" aria-hidden />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={t('transfer.next')}
+                    onClick={goNext}
+                    disabled={!page?.nextCursor || load === 'loading'}
+                  >
+                    <ChevronRight className="h-4 w-4" aria-hidden />
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        </fieldset>
+          </fieldset>
 
-        {selected ? (
-          <div
-            className="flex items-start gap-2 rounded-(--radius-card) p-3"
-            style={{ backgroundColor: 'var(--el-tint-lavender)' }}
-            data-testid="transfer-consequence"
-          >
-            <Crown className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-strong)" aria-hidden />
-            <div className="font-sans text-sm">
-              <p className="font-semibold text-(--el-text-strong)">
-                {t('transfer.consequence', { name: displayName(selected) })}
-              </p>
-              <p className="text-(--el-text-secondary) mt-0.5">{t('transfer.consequenceSub')}</p>
+          {selected ? (
+            <div
+              className="flex items-start gap-2 rounded-(--radius-card) p-3"
+              style={{ backgroundColor: 'var(--el-tint-lavender)' }}
+              data-testid="transfer-consequence"
+            >
+              <Crown className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-strong)" aria-hidden />
+              <div className="font-sans text-sm">
+                <p className="font-semibold text-(--el-text-strong)">
+                  {t('transfer.consequence', { name: displayName(selected) })}
+                </p>
+                <p className="text-(--el-text-secondary) mt-0.5">{t('transfer.consequenceSub')}</p>
+              </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        <Input
-          label={t('transfer.confirmLabel', { org: orgName })}
-          placeholder={orgName}
-          value={typed}
-          onChange={(e) => setTyped(e.target.value)}
-          disabled={isPending}
-          autoComplete="off"
-        />
+          <Input
+            label={t('transfer.confirmLabel', { org: orgName })}
+            placeholder={orgName}
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            disabled={isPending}
+            autoComplete="off"
+          />
 
-        {error ? (
-          <div
-            role="alert"
-            className="flex items-start gap-2 rounded-(--radius-card) p-3 font-sans text-sm text-(--el-text-strong)"
-            style={{ backgroundColor: 'var(--el-tint-rose)' }}
-          >
-            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-(--el-danger)" aria-hidden />
-            <span>{error}</span>
-          </div>
-        ) : null}
+          {error ? (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-(--radius-card) p-3 font-sans text-sm text-(--el-text-strong)"
+              style={{ backgroundColor: 'var(--el-tint-rose)' }}
+            >
+              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-(--el-danger)" aria-hidden />
+              <span>{error}</span>
+            </div>
+          ) : null}
+        </Modal.Body>
 
-        <Modal.Footer>
+        <Modal.Footer className="shrink-0">
           <Button variant="ghost" onClick={onClose} disabled={isPending}>
             {tc('cancel')}
           </Button>
@@ -437,7 +442,7 @@ function MemberList({
               <span className="block truncate font-sans text-sm font-medium text-(--el-text)">
                 {displayName(m)}
               </span>
-              <span className="text-(--el-text-muted) block truncate font-sans text-xs">
+              <span className="text-(--el-text-secondary) block truncate font-sans text-xs">
                 {m.email}
               </span>
             </span>
