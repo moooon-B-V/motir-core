@@ -5,7 +5,7 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 
 // THE APPROVAL OVERLAY'S ONE PLAN ARM (Story MOTIR-6012 · MOTIR-6037; ADR
-// `approval-gates.md` §11.5b; design `design/ai-planning/design-notes.md` Part XX §20.2).
+// `approval-gates.md` §11.5b; design `design/ai-planning/design-notes.md` Part XXII §22.2).
 // A plan gate is never decided in the overlay and renders no port. Nothing writes
 // `?approval=` for it, so an address that hands the overlay one is a stale or
 // hand-typed link — and the overlay SENDS the reader on: to the planning surface at the

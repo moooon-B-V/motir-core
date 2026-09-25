@@ -190,7 +190,7 @@ describe('the overlay address — the parameter NAMES are the design contract', 
   // when either home is renamed without the other, which is the whole reason the
   // design records them rather than whichever file was written first.
   // `planSession` joined with MOTIR-6024 (MOTIR-6019's design, §19.8), and `planVia`
-  // with MOTIR-6037 (MOTIR-6033's design, Part XX §20.2).
+  // with MOTIR-6037 (MOTIR-6033's design, Part XXII §22.2).
   const DESIGN_NAMES = ['plan', 'planFrom', 'planItem', 'planRepo', 'planSession', 'planVia'];
 
   it('emits exactly the names the design records, and no others', () => {
@@ -371,7 +371,7 @@ describe('the ROUTE-era exports are GONE (MOTIR-4732)', () => {
   });
 });
 
-describe('planVia — the entrance a NAMED session was reopened from (MOTIR-6037, §20.2)', () => {
+describe('planVia — the entrance a NAMED session was reopened from (MOTIR-6037, §22.2)', () => {
   it('is written only WITH a named session', () => {
     const withSession = planningOverlaySearch({
       kind: 'work-item',

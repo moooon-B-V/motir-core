@@ -886,14 +886,14 @@ export interface PlanReviewGateDto {
   /** Whether THIS reader holds the plan's decide permission (`ai:decide_plan`). */
   canDecide: boolean;
   /** WHO the gate was routed to — the see-but-not-decide line's *Waiting on {name}*
-   *  (MOTIR-6037; design Part XX §20.5). Null when nobody resolves. OPTIONAL on the
+   *  (MOTIR-6037; design Part XXII §22.5). Null when nobody resolves. OPTIONAL on the
    *  type for the same fixture reason as {@link PlanReviewDto.gate}. */
   routedToName?: string | null;
 }
 
 /**
  * THE PLAN'S CONVERSATION, as the decision surfaces read it (Story MOTIR-6012 ·
- * MOTIR-6037; design Part XX §20.2, §20.5): whether the plan has a planning session with
+ * MOTIR-6037; design Part XXII §22.2, §22.5): whether the plan has a planning session with
  * turns to return to, and what it targeted. A plan with none opens on its own page,
  * which says why; one with a conversation is reopened on the planning surface.
  */
