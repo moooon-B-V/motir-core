@@ -112,5 +112,7 @@ function contextValueKey(context: PlanningLaunchContext): string {
   const session = 'sessionId' in context ? (context.sessionId ?? '') : '';
   // …and so does the entrance it was reopened from — `planVia` (MOTIR-6037).
   const via = 'via' in context ? (context.via ?? '') : '';
-  return `${context.kind}|${target}|${hasPlan}|${session}|${via}`;
+  // …and so does a refused gate's id — `planGate` (MOTIR-6210).
+  const gate = context.kind === 'refused-gate' ? context.gateId : '';
+  return `${context.kind}|${target}|${hasPlan}|${session}|${via}|${gate}`;
 }

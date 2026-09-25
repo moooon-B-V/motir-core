@@ -99,6 +99,12 @@ export async function POST(
   // The conversation the client holds (MOTIR-6023). Absent on a first turn,
   // which STARTS the session (or lands on the caller's resumable one).
   const sessionId = sessionIdFrom((body as { sessionId?: unknown })?.sessionId);
+  // The REFUSED gate a seeded re-plan starts from (MOTIR-6210) — an optional
+  // string, sent only on the turn that has no session yet. The service ignores it
+  // whenever a `sessionId` is present; anything but a non-empty string is absent.
+  const rawSeed = (body as { seedGateId?: unknown })?.seedGateId;
+  const seedGateId =
+    typeof rawSeed === 'string' && rawSeed.trim().length > 0 ? { seedGateId: rawSeed.trim() } : {};
 
   try {
     const result = resubmit
@@ -111,6 +117,7 @@ export async function POST(
             anchorId: id,
             targetKeys: parsed.targetKeys,
             ...sessionId,
+            ...seedGateId,
             prompt,
             // MOTIR-2226: read strictly — anything but `true` is "not an answer",
             // which is the disposition the transcript records forever after.

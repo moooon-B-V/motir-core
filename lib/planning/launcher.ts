@@ -39,6 +39,12 @@ export type PlanningMode = 'project' | 'generation' | 'replan' | 'contextual' | 
  * - `roadmap` — the Board↔Roadmap surface.
  * - `convention-refine` — refine a coding convention in the universal chat
  *   (MOTIR-1663: the Code-health page's "Refine with Motir" entry).
+ * - `refused-gate` — re-plan the work item a REFUSED decision sits on (story
+ *   MOTIR-6068 · MOTIR-6210; `approval-gates.md` §10f). It carries the GATE's id
+ *   and nothing else: the overlay reads the seed (`GET /api/approval-gates/{id}/
+ *   planning-seed`) and resolves it to a `work-item` re-plan on the refused card
+ *   with the first turn written and unsent — or, for any gate it may not read, to
+ *   a plain `project` launch. No reason text and no title ever ride the address.
  */
 export type PlanningLaunchContext =
   | { kind: 'project'; hasPlan?: boolean; sessionId?: string; via?: PlanningEntrance }
@@ -50,7 +56,8 @@ export type PlanningLaunchContext =
       via?: PlanningEntrance;
     }
   | { kind: 'roadmap' }
-  | { kind: 'convention-refine'; repoKey: string };
+  | { kind: 'convention-refine'; repoKey: string }
+  | { kind: 'refused-gate'; gateId: string };
 
 /**
  * The shipped planning-workspace entry path — the ESTABLISHED-project host
@@ -108,6 +115,10 @@ export function resolvePlanningMode(context: PlanningLaunchContext): PlanningMod
       return 'roadmap';
     case 'convention-refine':
       return 'contextual';
+    // A refusal is re-planned by definition: the card was decided, and the
+    // person said it was wrong. The seed resolves the anchor; the mode is known.
+    case 'refused-gate':
+      return 'replan';
     case 'project':
       if (context.hasPlan === undefined) return 'project';
       return context.hasPlan ? 'replan' : 'generation';
@@ -141,6 +152,7 @@ const PLANNING_ORIGINS: readonly PlanningOrigin[] = [
   'work-item',
   'roadmap',
   'convention-refine',
+  'refused-gate',
 ];
 
 /**
@@ -161,6 +173,9 @@ export interface PlanningLaunch {
   /** Where that named session was reopened FROM (`planVia`, MOTIR-6037) — present only
    *  with `sessionId`, and only for an entrance other than the Plans page. */
   via?: PlanningEntrance;
+  /** The REFUSED gate a `refused-gate` launch re-plans from (`planGate`, MOTIR-6210) —
+   *  present only for that origin, and only when the address carries one. */
+  gateId?: string;
 }
 
 /** The default a missing / unknown `?mode=` falls back to (never an error). */
@@ -260,6 +275,14 @@ export const OVERLAY_PARAM_NAMES = {
    * line.
    */
   via: 'planVia',
+  /**
+   * The REFUSED GATE a re-plan is seeded from (story MOTIR-6068 · MOTIR-6210; design
+   * `design/ai-chat/design-notes.md` § *The SEEDED re-plan* → *The ADDRESS*). Written
+   * ONLY for a `refused-gate` origin, as `plan=replan&planFrom=refused-gate&planGate=<id>`,
+   * and read only for that origin. It is the gate's id and NOTHING else — the reason
+   * is read from the server, never carried in the URL (§10f).
+   */
+  gate: 'planGate',
 } as const;
 
 /**
@@ -302,6 +325,7 @@ export function planningOverlaySearch(context: PlanningLaunchContext): URLSearch
   });
   if (context.kind === 'work-item') params.set(OVERLAY_PARAM_NAMES.item, context.itemKey);
   if (context.kind === 'convention-refine') params.set(OVERLAY_PARAM_NAMES.repo, context.repoKey);
+  if (context.kind === 'refused-gate') params.set(OVERLAY_PARAM_NAMES.gate, context.gateId);
   if ((context.kind === 'project' || context.kind === 'work-item') && context.sessionId) {
     params.set(OVERLAY_PARAM_NAMES.session, context.sessionId);
     // The entrance rides ONLY with a named session: it says where THAT session was
@@ -438,6 +462,9 @@ export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLau
     sessionId && first(readParam(params, OVERLAY_PARAM_NAMES.via)) === 'approvals'
       ? ('approvals' as const)
       : null;
+  // The gate rides ONLY its own origin, like `planItem` and `planRepo` do.
+  const gateId =
+    from === 'refused-gate' ? first(readParam(params, OVERLAY_PARAM_NAMES.gate)) : null;
   return {
     mode: parsePlanningMode(readParam(params, OVERLAY_PARAM_NAMES.mode)),
     from,
@@ -448,5 +475,6 @@ export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLau
     // key is present only when it does — every other launch reads as before.
     ...(sessionId ? { sessionId } : {}),
     ...(via ? { via } : {}),
+    ...(gateId ? { gateId } : {}),
   };
 }

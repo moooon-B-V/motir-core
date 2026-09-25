@@ -125,6 +125,15 @@ export interface PlanChangeRailProps {
    * The ABANDONED path never sets it — nothing was completed to acknowledge.
    */
   justReturnedFromOnboarding?: boolean;
+  /**
+   * THE SEEDED FIRST TURN (story MOTIR-6068 · MOTIR-6210) — a refused decision's
+   * re-plan opens with the turn already written, UNSENT, in the composer (design
+   * MOTIR-6206 sheets 2–5). It is the draft's INITIAL value and nothing more:
+   * nothing is sent on mount, the person may edit or clear it, and while it is in
+   * the field the starter chips stay hidden — a starter `setDraft`s its own text,
+   * so pressing one would silently throw the seed away.
+   */
+  initialDraft?: string;
   state: PlanChangeConversationState;
   /** The indexed proposal — the rail MIRRORS the canvas bar's counts. */
   index: PlanChangeDiffIndex;
@@ -172,6 +181,7 @@ export function PlanChangeRail({
   launch,
   projectName,
   justReturnedFromOnboarding,
+  initialDraft,
   state,
   index,
   targets,
@@ -207,7 +217,16 @@ export function PlanChangeRail({
   const tc = useTranslations('planningWorkspace.conversation');
   const ts = useTranslations('planningWorkspace.session');
   const format = useFormatter();
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(initialDraft ?? '');
+  // THE SEEDED SEND THAT FAILED keeps its words (MOTIR-6210). The composer clears
+  // the field the moment it submits, and an anchored first turn has no optimistic
+  // bubble — so a refused seeded send (`422 SEED_NOT_APPLICABLE`, or any failure)
+  // would otherwise leave the person with nothing. The text of the seeded rail's
+  // FIRST send is held here, and put back when that send comes back as an error.
+  // Adjusted DURING RENDER, React's "storing information from previous renders"
+  // shape, rather than in an effect: the error is a render input, not an event.
+  const [seededSend, setSeededSend] = useState<string | null>(null);
+  const [seenErrorCode, setSeenErrorCode] = useState(state.errorCode);
 
   const busy = state.phase === 'streaming' || state.phase === 'deciding';
   const turns = state.session?.turns ?? [];
@@ -242,7 +261,17 @@ export function PlanChangeRail({
           onCorrect: onCorrectTurn,
         }
       : null;
-  const showStarters = userTurns.length === 0 && !busy && state.phase !== 'loading';
+  if (state.errorCode !== seenErrorCode) {
+    setSeenErrorCode(state.errorCode);
+    if (state.errorCode && seededSend !== null && userTurns.length === 0) {
+      if (draft === '') setDraft(seededSend);
+      setSeededSend(null);
+    }
+  }
+  // No starters while the rail HOLDS A SEED (design MOTIR-6206 sheet 2): the seed
+  // is the start. Cleared, the rail is an ordinary item re-plan again.
+  const holdsSeed = Boolean(initialDraft) && draft.trim() !== '';
+  const showStarters = userTurns.length === 0 && !busy && state.phase !== 'loading' && !holdsSeed;
   // An ITEM re-plan opens by ASKING (MOTIR-910 / design panels 2 + 4 + 5): the
   // composer is pre-focused and prompts for what's wrong, and what the user types
   // is the FIRST CHAT TURN — the reason itself, which MOTIR-908 classifies. There
@@ -713,7 +742,10 @@ export function PlanChangeRail({
           targets={targets}
           onAddTarget={onAddTarget}
           onRemoveTarget={onRemoveTarget}
-          onSubmit={onSend}
+          onSubmit={(text) => {
+            if (initialDraft && userTurns.length === 0) setSeededSend(text);
+            onSend(text);
+          }}
           placeholder={composerPlaceholder}
           autoFocus={askingForReason}
           // ⚠️ NO LONGER `busy` (MOTIR-4274). The composer stays LIVE while a run

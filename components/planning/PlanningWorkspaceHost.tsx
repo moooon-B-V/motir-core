@@ -185,6 +185,20 @@ export interface PlanningWorkspaceHostProps {
    * the conversation rather than anywhere this component draws.
    */
   justReturnedFromOnboarding?: boolean;
+  /**
+   * THE SEEDED FIRST TURN (story MOTIR-6068 · MOTIR-6210) — the refusal seed's
+   * `firstTurn`, which the overlay resolved before this host mounted. It is the
+   * composer's INITIAL draft, unsent: nothing is posted on mount, and the person
+   * may send, edit or clear it (design MOTIR-6206 sheets 2–5).
+   */
+  initialDraft?: string;
+  /** The REFUSED gate the first send carries, so the session it starts
+   *  remembers it (MOTIR-6207's stamp). Paired with `initialDraft`. */
+  seedGateId?: string | null;
+  /** `launch.sessionId` is the seed's `seededSessionId` — a RESUME of the
+   *  viewer's own recent seeded conversation, not a Plans-row reopen, so the rail
+   *  draws no reopened line (design MOTIR-6206 sheet 7). */
+  sessionIsResume?: boolean;
 }
 
 export function PlanningWorkspaceHost({
@@ -199,6 +213,9 @@ export function PlanningWorkspaceHost({
   initialTarget = null,
   initialCanvasTrail,
   justReturnedFromOnboarding,
+  initialDraft,
+  seedGateId = null,
+  sessionIsResume = false,
 }: PlanningWorkspaceHostProps) {
   const t = useTranslations('planningWorkspace');
   const tPlanReview = useTranslations('planReview');
@@ -311,6 +328,10 @@ export function PlanningWorkspaceHost({
     // A NAMED conversation (`planSession=`, a Plans row) reopens that one
     // (MOTIR-6024).
     sessionId: launch.sessionId ?? null,
+    // A refusal's seeded re-plan (MOTIR-6210): the resumed return, or the seed
+    // the first send carries.
+    sessionIsResume,
+    seedGateId,
   });
 
   // The rail sends TEXT; the anchors come from the set this host owns, so the
@@ -692,6 +713,7 @@ export function PlanningWorkspaceHost({
           launch={launch}
           projectName={projectName}
           {...(justReturnedFromOnboarding ? { justReturnedFromOnboarding: true } : {})}
+          {...(initialDraft ? { initialDraft } : {})}
           state={state}
           index={index}
           targets={targets}
