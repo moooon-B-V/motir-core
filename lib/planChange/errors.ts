@@ -202,3 +202,20 @@ export class PlanSeedNotApplicableError extends Error {
     this.name = 'PlanSeedNotApplicableError';
   }
 }
+
+/**
+ * The REFUSAL SEED read found nothing to offer THIS viewer (story MOTIR-6068 ·
+ * MOTIR-6208; `approval-gates.md` §10f). ONE error for every way the read fails
+ * — the gate id is unknown, the gate lives in another workspace or project, its
+ * work item is not browsable by the viewer, it is not a refusal
+ * `isRefusalSeedGate` accepts, or its kind has no composer — so an answer never
+ * distinguishes a gate that exists but is hidden from one that does not exist.
+ * It carries NO gate fields and no reason text. → 404 `{ code: 'NOT_FOUND' }`.
+ */
+export class PlanningSeedNotFoundError extends Error {
+  readonly code = 'NOT_FOUND' as const;
+  constructor() {
+    super('No planning seed is available for this gate.');
+    this.name = 'PlanningSeedNotFoundError';
+  }
+}

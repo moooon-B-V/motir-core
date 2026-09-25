@@ -6534,6 +6534,18 @@
     }
   },
   "planningWorkspace": {
+    "refusalSeed": {
+      "heading": "{key} · {title}",
+      "verb": {
+        "decisionApproval": "这个决策被要求修改。",
+        "decisionConfirmation": "这个决策已被推翻。",
+        "decisionChoice": "这个选择的选项都没有被选中。"
+      },
+      "reason": "给出的理由：\n“{reason}”",
+      "supersedes": "它曾取代的工作项：{keys}",
+      "keySeparator": "、",
+      "ask": "请根据这个理由重新规划这个工作项。"
+    },
     "noProjectTitle": "未选择项目",
     "noProjectDescription": "从切换器中选择或创建一个项目，即可用 Motir AI 规划。",
     "canvasAria": "{project} 的计划",

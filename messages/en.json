@@ -6538,6 +6538,18 @@
     }
   },
   "planningWorkspace": {
+    "refusalSeed": {
+      "heading": "{key} · {title}",
+      "verb": {
+        "decisionApproval": "Changes were requested on this decision.",
+        "decisionConfirmation": "This decision was overturned.",
+        "decisionChoice": "None of the options on this choice was picked."
+      },
+      "reason": "The reason given:\n“{reason}”",
+      "supersedes": "The work items it superseded: {keys}",
+      "keySeparator": ", ",
+      "ask": "Re-plan this work item from that reason."
+    },
     "noProjectTitle": "No project selected",
     "noProjectDescription": "Pick or create a project from the switcher to plan with Motir AI.",
     "canvasAria": "{project} plan",
