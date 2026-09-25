@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
 import { parseReadyFilters } from '@/lib/api/v1/ready/schema';
+import { emitOpenApiDocument } from '@/lib/api/v1/openapi/emit';
 import { REPO_ROOT, specifiersOf } from '../../helpers/importGraph';
 
 // MOTIR-2458 — the `/ready` query-string vocabularies, and where they come from.
@@ -81,6 +82,36 @@ describe('the /ready filter vocabularies (MOTIR-2458)', () => {
     expect(parse('?kind=bug&kind=task').kinds).toEqual(['bug', 'task']);
     expect(parse('?priority=high&priority=highest').priority).toEqual(['high', 'highest']);
     expect(parse('')).toEqual({});
+  });
+
+  it('reads `allowSoftBlock` as a strict boolean, carrying only `true` (MOTIR-6366)', () => {
+    expect(parse('?allowSoftBlock=true')).toEqual({ allowSoftBlock: true });
+    expect(parse('?allowSoftBlock=%20true%20')).toEqual({ allowSoftBlock: true });
+    // `false`, empty and absent all parse to the pre-flag filter, byte for byte.
+    expect(parse('?allowSoftBlock=false')).toEqual({});
+    expect(parse('?allowSoftBlock=')).toEqual({});
+    for (const bad of ['yes', '1', 'TRUE', 'on']) {
+      expect(() => parse(`?allowSoftBlock=${bad}`)).toThrow(InvalidRequestError);
+      try {
+        parse(`?allowSoftBlock=${bad}`);
+      } catch (err) {
+        expect((err as InvalidRequestError).code).toBe('INVALID_READY_FILTER');
+      }
+    }
+  });
+
+  it('the OpenAPI document lists `allowSoftBlock` on the ready read as an optional true/false', () => {
+    const doc = emitOpenApiDocument() as {
+      paths: Record<
+        string,
+        { get?: { parameters?: { name: string; required?: boolean; schema?: unknown }[] } }
+      >;
+    };
+    const param = doc.paths['/api/v1/projects/{projectKey}/ready']?.get?.parameters?.find(
+      (p) => p.name === 'allowSoftBlock',
+    );
+    expect(param).toMatchObject({ in: 'query', required: false });
+    expect(param?.schema).toMatchObject({ enum: ['true', 'false'] });
   });
 
   it('imports the generated Prisma client for TYPES only — never as a runtime value', () => {

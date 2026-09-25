@@ -258,8 +258,15 @@ const ANCESTOR_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
 const normalizeAncestorKey = (raw: string): string => raw.trim().toUpperCase();
 
 /**
- * Read `?kind=&priority=&assigneeId=&ancestor=&sprintId=` into the shipped
- * `ReadyListFilter`.
+ * The two spellings `?allowSoftBlock=` accepts (MOTIR-6366). Declared once so
+ * the parser and the OpenAPI parameter (`lib/api/v1/planning/operations.ts`)
+ * name the same vocabulary — a generated client types it as this union.
+ */
+export const ALLOW_SOFT_BLOCK_VALUES = ['true', 'false'] as const;
+
+/**
+ * Read `?kind=&priority=&assigneeId=&ancestor=&sprintId=&allowSoftBlock=` into
+ * the shipped `ReadyListFilter`.
  *
  * ⚠️ TWO KINDS OF FACET, and the difference decides how far this function can
  * take each one (MOTIR-3196). `kind` / `priority` / `assigneeId` are
@@ -334,6 +341,21 @@ export function parseReadyFilters(req: Request): ReadyListFilter {
   const rawSprint = params.get('sprintId');
   const sprintRef = rawSprint === null || rawSprint.trim() === '' ? null : rawSprint.trim();
 
+  // A BOOLEAN, spelled `true` / `false` and nothing else (MOTIR-6366). Anything
+  // else is the same 422 an unknown `kind` is: `?allowSoftBlock=yes` read as
+  // "no" would hand the caller the narrower set it asked to widen, silently.
+  // Empty is omitted, the same wire accident as an empty `sprintId`.
+  const rawSoftBlock = params.get('allowSoftBlock')?.trim() ?? '';
+  if (
+    rawSoftBlock !== '' &&
+    !(ALLOW_SOFT_BLOCK_VALUES as readonly string[]).includes(rawSoftBlock)
+  ) {
+    throw new InvalidRequestError(
+      'INVALID_READY_FILTER',
+      `Malformed \`allowSoftBlock\`: ${rawSoftBlock}. Expected \`true\` or \`false\`.`,
+    );
+  }
+
   return {
     ...(kinds.length > 0 ? { kinds } : {}),
     ...(priorities.length > 0 ? { priority: priorities } : {}),
@@ -342,6 +364,7 @@ export function parseReadyFilters(req: Request): ReadyListFilter {
       : {}),
     ...(ancestorKeys.length > 0 ? { ancestorKeys } : {}),
     ...(sprintRef !== null ? { sprintRef } : {}),
+    ...(rawSoftBlock === 'true' ? { allowSoftBlock: true } : {}),
   };
 }
 

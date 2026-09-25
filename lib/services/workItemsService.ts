@@ -6656,6 +6656,9 @@ export const workItemsService = {
    *     excluded).
    *   - **Ready (cascade, 7.0.13)** — its own `is_blocked_by` blockers are all
    *     terminal in their own project AND every ANCESTOR is ready.
+   *     `filter.allowSoftBlock` (MOTIR-6366) drops the ANCESTOR half only: a
+   *     leaf held solely by an ancestor's block (a SOFT block) is listed, one
+   *     with its own open blocker (a HARD block) never is.
    *
    * Computed TOP-DOWN, by layer (NOT a whole-table scan): start at the roots,
    * keep the ready ones, descend ONLY into ready containers, collect ready
@@ -6678,7 +6681,12 @@ export const workItemsService = {
     }
     const limit = clampReadyLimit(filter.limit);
     const cursor = filter.cursor ? decodeReadyCursor(filter.cursor) : undefined;
-    const all = await collectReadyLeaves(projectId, project.workspaceId, ctx, filter);
+    // `allowSoftBlock` (MOTIR-6366) is read HERE and only here: it is passed to
+    // the walk as its own argument rather than riding the facet object, so the
+    // three dispatch reads below cannot inherit it through a spread filter.
+    const all = await collectReadyLeaves(projectId, project.workspaceId, ctx, filter, {
+      allowSoftBlock: filter.allowSoftBlock === true,
+    });
     const start = cursor ? all.findIndex((r) => isAfterReadyCursor(r, cursor)) : 0;
     const begin = start === -1 ? all.length : start;
     const window = all.slice(begin, begin + limit);
@@ -6825,7 +6833,9 @@ export const workItemsService = {
    */
   async getNextReady(
     projectId: string,
-    filter: Omit<ReadyListFilter, 'limit' | 'cursor'> & { excludeIds?: string[] },
+    filter: Omit<ReadyListFilter, 'limit' | 'cursor' | 'allowSoftBlock'> & {
+      excludeIds?: string[];
+    },
     ctx: ServiceContext,
   ): Promise<ReadyItemDispatchDto | null> {
     const project = await readProject(projectId, ctx);
@@ -7181,7 +7191,7 @@ export const workItemsService = {
    */
   async countReady(
     projectId: string,
-    filter: Omit<ReadyListFilter, 'limit' | 'cursor'>,
+    filter: Omit<ReadyListFilter, 'limit' | 'cursor' | 'allowSoftBlock'>,
     ctx: ServiceContext,
   ): Promise<{ count: number; hasMore: boolean }> {
     const project = await readProject(projectId, ctx);
@@ -7354,6 +7364,14 @@ const EXPANSION_NUDGE_THRESHOLD = 3;
  * faceted axes (kind / assignee / priority) narrow the COLLECTED leaves only —
  * the traversal ignores them so a matching leaf under a non-matching ancestor is
  * still reachable. Returned sorted `(type asc, priority desc, key asc)`.
+ *
+ * `options.allowSoftBlock` (MOTIR-6366, `listReady` only) keeps the OWN-ready
+ * requirement on every collected leaf but stops the prune: a container whose
+ * own blockers are open is still descended into, so the leaves it holds are
+ * collected when THEIR own blockers are satisfied. That container then counts
+ * toward its children only as an ancestor — a SOFT block — and is never itself
+ * collected (it has children). A not-own-ready leaf stays excluded either way.
+ * Readiness is the same `computeOwnBlockerReadiness` predicate in both modes.
  */
 async function collectReadyLeaves(
   projectId: string,
@@ -7366,7 +7384,9 @@ async function collectReadyLeaves(
     ancestorKeys?: string[];
     sprintRef?: string;
   },
+  options: { allowSoftBlock?: boolean } = {},
 ): Promise<ReadyLayerRow[]> {
+  const allowSoftBlock = options.allowSoftBlock === true;
   // Resolve the two REFERENCE facets BEFORE the walk, so a mistyped key costs
   // one round-trip instead of a full traversal, and so an unresolvable one can
   // never be mistaken for "matched nothing" (`InvalidReadyFilterError`).
@@ -7392,13 +7412,17 @@ async function collectReadyLeaves(
     );
     const descend: string[] = [];
     for (const row of frontier) {
-      if (ownReady.get(row.id) === false) continue; // not ready → prune the subtree
+      const isOwnReady = ownReady.get(row.id) !== false;
+      // Not ready → prune the subtree. Under `allowSoftBlock` only a LEAF is
+      // dropped for its own blockers; a not-ready CONTAINER is still descended,
+      // so its block reaches its children as an ancestor's (soft) block.
+      if (!isOwnReady && !(allowSoftBlock && row.hasChildren)) continue;
       // STRICTLY beneath: a row is in scope because of an ANCESTOR of it, never
       // because of itself — which is what excludes the named container from its
       // own result, and what makes a childless one answer with an empty page.
       const inScope = row.parentId !== null && scopedContainers.has(row.parentId);
       if (row.hasChildren) {
-        descend.push(row.id); // ready container → descend
+        descend.push(row.id); // container (ready, or soft-blocking) → descend
         if (inScope || (ancestorIds !== null && ancestorIds.has(row.id))) {
           scopedContainers.add(row.id);
         }
