@@ -3774,12 +3774,13 @@ function generationActor(
  * (MOTIR-3981, `run-findings-protocol.md` Q5).
  *
  * ⚠️ EVERY ARM RETURNS QUIETLY. No source job, no session, a project-wide or
- * multi-anchor scope, an anchor that no longer resolves, no open leg — every one
- * of them is an ordinary plan that belongs to no run, which is most plans. The
- * absence of a finding is the correct record, not a miss to log.
+ * multi-anchor scope, an anchor that no longer resolves, no leg open when the plan
+ * was created — every one of them is an ordinary plan that belongs to no run,
+ * which is most plans. The absence of a finding is the correct record, not a
+ * miss to log.
  */
 async function recordSubmittedPlanFinding(
-  row: { id: string; projectId: string; sessionId: string | null },
+  row: { id: string; projectId: string; sessionId: string | null; createdAt: Date },
   proposalCount: number,
   ctx: ServiceContext,
 ): Promise<void> {
@@ -3812,6 +3813,13 @@ async function recordSubmittedPlanFinding(
         anchorWorkItemId: anchor.id,
         kind: 'plan_submitted',
         findingId: row.id,
+        // ⚠️ THE LEG OPEN WHEN THE PLAN WAS CREATED, not the one open now
+        // (MOTIR-6279). This runs when the plan reaches `planned`, and on a real
+        // refusal that is after the agent exited, the CLI settled the leg
+        // `replanned` and very often closed the run — so "open now" finds
+        // nothing. It also keeps a PERSON's plan, opened before a run picked the
+        // card up, off that run's leg when it happens to close mid-leg.
+        at: row.createdAt,
         // The POINTER and the one number the row renders: what the reader is
         // being asked to approve. Never the proposals themselves — the plan is
         // a live row that can be revised, and a frozen copy would go stale
@@ -4626,8 +4634,9 @@ export const plansService = {
     );
 
     // WHAT THE RUN PRODUCED (MOTIR-3981, `run-findings-protocol.md` Q5). A plan
-    // that reaches `planned` while a dispatched agent's leg is open is that
-    // run's finding — the ASK the record could describe but never name, which is
+    // CREATED while a dispatched agent's leg was open is that run's finding —
+    // whenever it reaches `planned`, which is usually after the leg settled
+    // (MOTIR-6279) — the ASK the record could describe but never name, which is
     // why `batchPlan.ts`'s skip label promises "a re-plan is waiting for you in
     // Motir" and cannot say which one.
     //
