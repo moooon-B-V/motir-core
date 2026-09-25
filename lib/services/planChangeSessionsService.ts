@@ -15,6 +15,8 @@ import {
 } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { isRefusalSeedGate } from '@/lib/planning/refusalSeed';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
@@ -38,6 +40,7 @@ import {
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
+  PlanSeedNotApplicableError,
   PlanSessionNotFoundError,
 } from '@/lib/planChange/errors';
 import { PROJECT_SCOPE_KEY, type PlanChangeScope } from '@/lib/planChange/scope';
@@ -397,6 +400,117 @@ async function resumeOrStartWithin(
   return sessionId;
 }
 
+/**
+ * The SEED GUARD (AMENDMENT 17 §9; MOTIR-6207). The gate's validity is the
+ * CALLER's precondition — the seed read (MOTIR-6208) only offers a seed for a
+ * refused gate — and it is asserted again HERE, under the transaction that
+ * writes the stamp, so a forged or stale `seedGateId` can never be recorded.
+ *
+ * The gate row is LOCKED (`approvalGateRepository.lockById`, `FOR UPDATE`) and
+ * read under that lock: the stamp is a READ-DERIVED write (it is legal only
+ * while the gate is refused), so a decision racing this turn either commits
+ * first and is seen here, or waits for this transaction.
+ *
+ * Refuses with ONE {@link PlanSeedNotApplicableError} when the gate is missing
+ * or hidden by RLS, lives in another workspace or project, is not a refusal
+ * {@link isRefusalSeedGate} accepts, or belongs to a work item the scope does
+ * not anchor on (a card-less gate included).
+ */
+async function assertSeedApplicableWithin(
+  pctx: ProjectContext,
+  scope: PlanChangeScope,
+  seedGateId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const gate = await approvalGateRepository.lockById(seedGateId, tx);
+  if (
+    !gate ||
+    gate.workspaceId !== pctx.workspaceId ||
+    gate.projectId !== pctx.projectId ||
+    !isRefusalSeedGate(gate) ||
+    !gate.workItemId
+  ) {
+    throw new PlanSeedNotApplicableError(seedGateId);
+  }
+  const item = await workItemRepository.findById(gate.workItemId, tx);
+  if (
+    !item ||
+    item.projectId !== pctx.projectId ||
+    !scope.targetKeys.includes(item.identifier.toUpperCase())
+  ) {
+    throw new PlanSeedNotApplicableError(seedGateId);
+  }
+}
+
+/**
+ * RESUME-SEEDED-OR-START under the member's scope lock (AMENDMENT 17 §9) — the
+ * seeded twin of {@link resumeOrStartWithin}, and deliberately NOT a flag on it.
+ * The unseeded path resumes the member's most recent conversation in the scope;
+ * a seeded turn landing there would stamp a gate on a conversation it did not
+ * start. So this resumes ONLY the member's recent session seeded by the SAME
+ * gate, and otherwise creates a new one carrying `seedGateId` — with the same
+ * target take-over from the member's older sessions of the scope (§6).
+ *
+ * The choice between resume and create is read-derived, so it is made under
+ * the SAME `lockScopeForUser` lock as the unseeded path: two first turns racing
+ * for one gate queue there, and the second re-reads the first's session. The
+ * seed guard runs under the lock too, before anything is written.
+ */
+async function resumeSeededOrStartWithin(
+  pctx: ProjectContext,
+  scope: PlanChangeScope,
+  seedGateId: string,
+  now: Date,
+  tx: Prisma.TransactionClient,
+): Promise<string> {
+  await planChangeSessionRepository.lockScopeForUser(
+    pctx.projectId,
+    scope.scopeKey,
+    pctx.userId,
+    tx,
+  );
+  await assertSeedApplicableWithin(pctx, scope, seedGateId, tx);
+
+  const seeded = await planChangeSessionRepository.findSeededForUser(
+    pctx.projectId,
+    seedGateId,
+    pctx.userId,
+    pctx.workspaceId,
+    resumableSince(now),
+    tx,
+  );
+  if (seeded) {
+    await planTargetLockService.acquireForScopeWithin(seeded.id, scope.targetKeys, pctx, now, tx);
+    return seeded.id;
+  }
+
+  const created = await planChangeSessionRepository.create(
+    {
+      workspaceId: pctx.workspaceId,
+      projectId: pctx.projectId,
+      createdById: pctx.userId,
+      scopeKey: scope.scopeKey,
+      targetKeys: scope.targetKeys,
+      origin: 'conversation',
+      seedGateId,
+      lastActivityAt: now,
+    },
+    tx,
+  );
+  const predecessors = await planChangeSessionRepository.listIdsForUserInScope(
+    pctx.projectId,
+    scope.scopeKey,
+    pctx.userId,
+    pctx.workspaceId,
+    created.id,
+    tx,
+  );
+  await planTargetLockService.acquireForScopeWithin(created.id, scope.targetKeys, pctx, now, tx, {
+    takeOverFrom: predecessors,
+  });
+  return created.id;
+}
+
 export const planChangeSessionsService = {
   /**
    * The RESUME read (AMENDMENT 17 §3): the caller's OWN most recent session for
@@ -547,6 +661,78 @@ export const planChangeSessionsService = {
         return toDto(row, pctx, tx);
       },
     );
+  },
+
+  /**
+   * A SEEDED first turn (AMENDMENT 17 §9; story MOTIR-6068 · MOTIR-6207) — the
+   * re-plan a refused decision opens, started from the gate that refused it. In
+   * ONE transaction: take the member's scope lock, assert the seed (the gate is
+   * a refusal `isRefusalSeedGate` accepts, in this workspace and project, on a
+   * work item the scope anchors on — else {@link PlanSeedNotApplicableError} and
+   * nothing is written), resume the member's recent session seeded by THIS gate
+   * or create one with `seedGateId`, then append the turn exactly as
+   * {@link startWithFirstTurn} does.
+   *
+   * It never resumes an unseeded session, nor one seeded by a different gate,
+   * and the stamp is written only when the session is created — never onto an
+   * existing row. The result is the session the turn landed on, so a caller
+   * that lost a race observes the winner's id. `ai:plan`-gated: it writes.
+   */
+  async startSeededWithFirstTurn(
+    pctx: ProjectContext,
+    scope: PlanChangeScope,
+    body: string,
+    seedGateId: string,
+    opts: { isAnswer?: boolean } = {},
+  ): Promise<PlanChangeSessionDto> {
+    const trimmed = body.trim();
+    if (!trimmed) throw new EmptyPlanChangeTurnError();
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await assertCanPlan(pctx.projectId, ctx);
+    const now = new Date();
+
+    return withWorkspaceContext(
+      { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
+      async (tx) => {
+        const sessionId = await resumeSeededOrStartWithin(pctx, scope, seedGateId, now, tx);
+        const row = await appendWithin(
+          sessionId,
+          pctx,
+          { role: 'user', body: trimmed, authorId: pctx.userId, isAnswer: opts.isAnswer === true },
+          {},
+          tx,
+        );
+        return toDto(row, pctx, tx);
+      },
+    );
+  },
+
+  /**
+   * The SEEDED-session read the refusal's door returns to (AMENDMENT 17 §9;
+   * MOTIR-6207): the id of the caller's OWN session seeded by `seedGateId`
+   * whose last activity is inside the resume window, else `null`. Another
+   * member's seeded session is never returned — sessions are per member
+   * (MOTIR-6011 §6) — and neither is an expired one. Browse-gated like
+   * {@link findResumable}; WRITES NOTHING and takes no lock.
+   */
+  async findSeededSession(
+    pctx: ProjectContext,
+    seedGateId: string,
+    now: Date = new Date(),
+  ): Promise<string | null> {
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    await projectAccessService.assertCanBrowse(pctx.projectId, ctx);
+    const row = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+      planChangeSessionRepository.findSeededForUser(
+        pctx.projectId,
+        seedGateId,
+        pctx.userId,
+        pctx.workspaceId,
+        resumableSince(now),
+        tx,
+      ),
+    );
+    return row?.id ?? null;
   },
 
   /**

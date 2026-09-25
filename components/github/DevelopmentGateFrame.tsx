@@ -10,6 +10,10 @@ import {
   type GateVerb,
 } from '@/components/approvals/ApprovalGateControl';
 import { useRefusalVerb } from '@/components/approvals/RefusalReason';
+import {
+  asksToReplanAfterPress,
+  useRefusalReplanSlots,
+} from '@/components/approvals/RefusalReplan';
 import { useOptimisticStatusWriter } from '@/app/(authed)/items/[key]/_components/OptimisticStatusProvider';
 import type {
   approveAndMergeAction,
@@ -210,6 +214,7 @@ export function DevelopmentGateFrame({
   notice,
   verbsDisabled = false,
   handOver,
+  canReplan = false,
   children,
 }: {
   read: DevelopmentGateRead;
@@ -269,6 +274,12 @@ export function DevelopmentGateFrame({
    * sentence names. Every other state keeps the frame, without verbs.
    */
   handOver?: { routedToViewer: boolean };
+  /**
+   * THE RE-PLAN WITH AI DOOR (Story MOTIR-6068 · MOTIR-6211) — `WorkItemPlanEntrance`'s
+   * condition for this reader on this card (may plan, not archived). A `decision_approval`
+   * sent back offers the seeded planner from its record; false or omitted, it offers none.
+   */
+  canReplan?: boolean;
   children: ReactNode;
 }) {
   const t = useTranslations('approvalGate.pullRequestApproval');
@@ -306,6 +317,9 @@ export function DevelopmentGateFrame({
   // Members whose latest press was *Queue again* rather than *Retry merge* (MOTIR-5635) —
   // what words their progress line and a refusal's title.
   const [requeued, setRequeued] = useState<ReadonlySet<string>>(new Set());
+  // THE ASK (MOTIR-6211; design panel 0): the refusal THIS reader just pressed here, by
+  // gate id. Transient and never stored — a reload shows the record's door, never the ask.
+  const [replanAsk, setReplanAsk] = useState<string | null>(null);
   // ⚠️ A ROW VERB ON THE RE-ASKED GATE TAKES THE FRAME'S CONFIRM (Story MOTIR-5799 ·
   // MOTIR-5806; § 28 panel 8a). The press IS a new approval, so it is asked for the same
   // way the frame's own Approve is — one band, one list of consequences, one pending and
@@ -551,6 +565,9 @@ export function DevelopmentGateFrame({
     setDecided(result.gate);
     applyOptimisticStatus(result.gate.outcomeRef);
     announceGateDecided({ gate: result.gate, filesKept: null });
+    // A DECISION sent back offers the seeded planner (§10h) — it ASKS first, in the band
+    // the record now draws. Commits sent back (`pull_request_approval`) offer nothing yet.
+    if (asksToReplanAfterPress(result.gate)) setReplanAsk(result.gate.id);
     router.refresh();
     return null;
   }
@@ -959,6 +976,18 @@ export function DevelopmentGateFrame({
       </>
     ) : null;
   const decisionAccepted = isDecision && gate.state === 'approved';
+  // Request changes on a decision: the record's door back to the seeded planner, or the
+  // ask in its place for the reader who just pressed it (MOTIR-6211).
+  const { door: replanDoor, ask: replanAskBand } = useRefusalReplanSlots({
+    gate,
+    itemKey: itemIdentifier,
+    replan: {
+      canReplan,
+      asking: replanAsk === gate.id,
+      onAskDone: () => setReplanAsk(null),
+    },
+    sectioned: false,
+  });
   const acceptedBlob = decisionAccepted ? parseDecisionVersion(gate.subjectVersion)?.blob : null;
   const recordDetail = decisionAccepted ? (
     // Panels 4 and 6a: the accepted BLOB named, then — while a pull request is still open —
@@ -979,7 +1008,9 @@ export function DevelopmentGateFrame({
       {why ? <span>{why}</span> : null}
       {exitParts}
     </>
-  ) : null;
+  ) : (
+    replanDoor
+  );
 
   // ⚠️ THE KIND LABEL FOLLOWS THE GATE, not the block (Story MOTIR-5652 · Subtask MOTIR-5667;
   // `design-result.md` AMENDMENT 6 Q1). A design card with commits holds TWO gates and the
@@ -1077,6 +1108,7 @@ export function DevelopmentGateFrame({
           routedToLabel={read.routedToLabel}
           alert={alert ?? notice}
           recordDetail={recordDetail}
+          recordBand={replanAskBand}
           recordLead={
             decisionAccepted && gate.decidedByLabel && gate.decisionSource !== 'github'
               ? tDecision.rich('accepted', {

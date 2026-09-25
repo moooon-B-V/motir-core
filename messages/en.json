@@ -6601,10 +6601,31 @@
       "filteredEmptyTitle": "No conversations in this state",
       "filteredEmptyDescription": "This project's other conversations are under All.",
       "loadMoreError": "Couldn’t load more conversations.",
-      "loadMoreRetry": "Retry"
+      "loadMoreRetry": "Retry",
+      "seed": {
+        "label": "Re-plan of <mono>{key}</mono>",
+        "verb": {
+          "decisionApproval": "Request changes",
+          "decisionConfirmation": "Overturn",
+          "decisionChoice": "None of these"
+        },
+        "aria": "Open {key}, the work item this conversation re-plans"
+      }
     }
   },
   "planningWorkspace": {
+    "refusalSeed": {
+      "heading": "{key} · {title}",
+      "verb": {
+        "decisionApproval": "Changes were requested on this decision.",
+        "decisionConfirmation": "This decision was overturned.",
+        "decisionChoice": "None of the options on this choice was picked."
+      },
+      "reason": "The reason given:\n“{reason}”",
+      "supersedes": "The work items it superseded: {keys}",
+      "keySeparator": ", ",
+      "ask": "Re-plan this work item from that reason."
+    },
     "noProjectTitle": "No project selected",
     "noProjectDescription": "Pick or create a project from the switcher to plan with Motir AI.",
     "canvasAria": "{project} plan",
@@ -8419,6 +8440,16 @@
     }
   },
   "approvalGate": {
+    "replanDoor": {
+      "label": "Re-plan with AI",
+      "aria": "Re-plan {item} with AI from this refusal"
+    },
+    "replanAsk": {
+      "title": "Re-plan {key} with Motir AI?",
+      "opens": "Motir AI opens on {key} with your reason already written as the first message.",
+      "unsent": "Nothing is sent until you send it — you can edit it first.",
+      "yes": "Re-plan with AI"
+    },
     "state": {
       "awaitingYou": "Awaiting you",
       "awaiting": "Awaiting",

@@ -58,6 +58,10 @@ vi.mock('@/lib/planning/substratePoll', async (importOriginal) => ({
   fetchPlanningSubstrate: (...a: unknown[]) => fetchPlanningSubstrate(...a),
 }));
 vi.mock('@/lib/planning/planningAnchorClient', () => ({ fetchPlanningAnchor }));
+// A `refused-gate` launch reads its seed first (MOTIR-6210). Its own suite is
+// `planning-overlay-refusal-seed.test.tsx`; here the read answers the 404 so the
+// launch falls back to the project workspace, which is all the Back case needs.
+vi.mock('@/lib/planning/planningSeedClient', () => ({ fetchPlanningSeed: async () => null }));
 
 // The actor's permission set — the shell's provider, which is the whole reason
 // the overlay needs no `canManage` prop.
@@ -628,6 +632,14 @@ describe('coverage · Keep planning after a Back, for every launch shape', () =>
       search: 'plan=replan&planFrom=project',
       path: '/backlog',
       expected: '/backlog?plan=replan&planFrom=project',
+    },
+    {
+      // MOTIR-6210 — the address round-trips as the GATE, never the card it
+      // resolved to, so a re-push keeps seeding (or resuming) from the refusal.
+      name: 'a refused-gate launch',
+      search: 'plan=replan&planFrom=refused-gate&planGate=cmg7k2q0',
+      path: '/items/MOTIR-7',
+      expected: '/items/MOTIR-7?plan=replan&planFrom=refused-gate&planGate=cmg7k2q0',
     },
   ];
 

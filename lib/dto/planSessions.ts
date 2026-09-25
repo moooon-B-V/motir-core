@@ -26,6 +26,27 @@ export type PlanSessionStateDto = (typeof PLAN_SESSION_STATE_VALUES)[number];
 /** How many sessions hold each plan state — total over the vocabulary. */
 export type PlanSessionStateCountsDto = Record<PlanSessionStateDto, number>;
 
+/**
+ * The gate kinds a session can be SEEDED by (story MOTIR-6068 · MOTIR-6209) —
+ * the three refusals `isRefusalSeedGate` accepts today. Widening it is
+ * MOTIR-6070 / MOTIR-6071's, together with the row's verb lookup, which is
+ * TOTAL over this list.
+ */
+export const PLAN_SESSION_SEED_GATE_KINDS = [
+  'decision_approval',
+  'decision_confirmation',
+  'decision_choice',
+] as const;
+
+export type PlanSessionSeedGateKindDto = (typeof PLAN_SESSION_SEED_GATE_KINDS)[number];
+
+/** Where a SEEDED session came from: the refused gate's work item and kind. */
+export interface PlanSessionSeedDto {
+  /** The refused work item's identifier (`ACME-44`) — the row links to it. */
+  cardKey: string;
+  gateKind: PlanSessionSeedGateKindDto;
+}
+
 /** One row of the list: one session, and the one plan it is known by. */
 export interface PlanSessionRowDto {
   id: string;
@@ -42,6 +63,11 @@ export interface PlanSessionRowDto {
   latestPlan: { id: string; status: PlanStatusDto; title: string | null } | null;
   /** How many plans the session holds — `latestPlan` included. */
   planCount: number;
+  /** The refused gate that SEEDED the session (MOTIR-6207's `seedGateId`),
+   *  resolved to its work item. Null on an unseeded session, when the gate row is
+   *  gone (`SetNull`), and when the viewer cannot browse the gate's work item —
+   *  an unresolvable seed reads exactly like no seed (MOTIR-6209). */
+  seed: PlanSessionSeedDto | null;
 }
 
 export interface PlanSessionListPageDto {
