@@ -471,7 +471,11 @@ describe('THE COMPOSITION (MOTIR-4053) — file, name the key, and the story is 
       [
         {
           op: 'add',
-          proposedFields: { title: 'Rebuild the export on the streaming reader', kind: 'story' },
+          // A TASK: a bug is a leaf, and a blocked_by joins two items on the same
+          // level (MOTIR-6367 refuses a story blocked_by a bug). The composition
+          // under test — held while the bug is open, released once it closes — is
+          // the same at the leaf level.
+          proposedFields: { title: 'Rebuild the export on the streaming reader', kind: 'task' },
           blockedByRefs: [bug.id],
         },
       ],

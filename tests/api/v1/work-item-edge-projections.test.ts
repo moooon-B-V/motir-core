@@ -264,7 +264,8 @@ describe("projection 3 — the blocked ANCESTOR's title", () => {
 
   it('carries the title ALONGSIDE the still-published key', async () => {
     const caller = await createV1ProjectCaller({ scopes: ['read'] });
-    const blocker = await makeItem(caller, 'the thing in the way');
+    // A root STORY: the parent's blocker must sit on its level (MOTIR-6369).
+    const blocker = await makeItem(caller, 'the thing in the way', { kind: 'story' });
     const parent = await makeItem(caller, 'the parent', { kind: 'story' });
     const child = await makeItem(caller, 'the child', { parentId: parent.id, kind: 'subtask' });
     await blockedBy(caller, parent.id, blocker.id);
@@ -291,7 +292,8 @@ describe("projection 3 — the blocked ANCESTOR's title", () => {
 
   it('reports the SAME ancestor the MCP `get_work_item` tool reports', async () => {
     const caller = await createV1ProjectCaller({ scopes: ['read'] });
-    const blocker = await makeItem(caller, 'the thing in the way');
+    // A root STORY: the parent's blocker must sit on its level (MOTIR-6369).
+    const blocker = await makeItem(caller, 'the thing in the way', { kind: 'story' });
     const parent = await makeItem(caller, 'the parent', { kind: 'story' });
     const child = await makeItem(caller, 'the child', { parentId: parent.id, kind: 'subtask' });
     await blockedBy(caller, parent.id, blocker.id);

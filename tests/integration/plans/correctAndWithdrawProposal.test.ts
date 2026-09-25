@@ -111,6 +111,14 @@ describe('a correction reaches the columns the deepen turn excludes', () => {
   it('changes parentRef, blockedByRefs, targetRepo and targetRepoRole on a `planned` plan', async () => {
     const fx = await makeWorkItemFixture();
     const { planId, firstId, secondId } = await planWithTwoAdds(fx);
+    // A same-level blocker for the moved task: a task blocked_by its own parent
+    // story is cross-level, refused since MOTIR-6367.
+    const peer = await plansService.addProposals(
+      planId,
+      [{ op: 'add', proposedFields: { title: 'A peer task', kind: 'task' } }],
+      fx.ctx,
+    );
+    const peerId = peer.appendedItemIds[0]!;
     await plansService.markPlanned(planId, fx.ctx);
 
     await plansService.correctProposal(
@@ -118,7 +126,7 @@ describe('a correction reaches the columns the deepen turn excludes', () => {
       secondId,
       {
         parentRef: `${TEMP_REF_PREFIX}${firstId}`,
-        blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`],
+        blockedByRefs: [`${TEMP_REF_PREFIX}${peerId}`],
         // BOTH halves of the repo pin. The NAME's `null` is the unpin, which
         // needs no repository domain to resolve; the ROLE (MOTIR-3865) is
         // validated against the closed vocabulary, which needs none either —
@@ -132,7 +140,7 @@ describe('a correction reaches the columns the deepen turn excludes', () => {
 
     const corrected = await row(secondId);
     expect(corrected.parentRef).toBe(`${TEMP_REF_PREFIX}${firstId}`);
-    expect(corrected.blockedByRefs).toEqual([`${TEMP_REF_PREFIX}${firstId}`]);
+    expect(corrected.blockedByRefs).toEqual([`${TEMP_REF_PREFIX}${peerId}`]);
     expect(corrected.proposedFields).toMatchObject({ targetRepo: null, targetRepoRole: 'api' });
   });
 
@@ -168,7 +176,9 @@ describe('a correction reaches the columns the deepen turn excludes', () => {
     await plansService.correctProposal(
       planId,
       secondId,
-      { blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`] },
+      // Re-kinded to a STORY in the same correction, so the edge to the story
+      // prerequisite is same-level (MOTIR-6367).
+      { kind: 'story', blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`] },
       fx.ctx,
     );
     expect((await row(secondId)).blockedByRefs).toEqual([`${TEMP_REF_PREFIX}${firstId}`]);
@@ -309,7 +319,9 @@ describe('the withdraw', () => {
     await plansService.correctProposal(
       planId,
       secondId,
-      { blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`] },
+      // Re-kinded to a STORY in the same correction, so the edge to the story
+      // prerequisite is same-level (MOTIR-6367).
+      { kind: 'story', blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`] },
       fx.ctx,
     );
 

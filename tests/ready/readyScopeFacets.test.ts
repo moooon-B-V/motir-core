@@ -112,7 +112,8 @@ describe('the ANCESTOR facet', () => {
     // already excludes it; the facet must not resurrect it.
     const fx = await makeWorkItemFixture();
     const epic = await make(fx, { title: 'The epic', kind: 'epic' });
-    const gate = await make(fx, { title: 'Not done yet' });
+    // A root STORY, on the gated story's level (MOTIR-6369).
+    const gate = await make(fx, { title: 'Not done yet', kind: 'story' });
     const blockedStory = await make(fx, { title: 'Gated story', kind: 'story', parentId: epic.id });
     await block(fx, blockedStory.id, gate.id);
     const leaf = await make(fx, {

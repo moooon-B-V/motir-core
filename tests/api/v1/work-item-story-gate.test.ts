@@ -752,7 +752,8 @@ describe('gate — coverage top-up: the detail presenter across every link group
     await link(item.key, clone.key, 'clones');
 
     // A blocker on the PARENT — the cascade arm `blockedByAncestorKey` reports.
-    const ancestorBlocker = await create('task', 'Blocks the parent');
+    // A root STORY, on the parent's level (MOTIR-6369).
+    const ancestorBlocker = await create('story', 'Blocks the parent');
     await link(story.key, ancestorBlocker.key, 'blocked_by');
 
     const GET = await route(STORY_ROUTES[1], 'GET');
