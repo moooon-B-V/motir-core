@@ -347,10 +347,16 @@ describe('the backlog and the board', () => {
   it('as a VIEWER: no drag, no enabled create, no bulk selection, no writing row or column menu', async () => {
     await renderCollections('viewer');
     await screen.findByTestId('board');
+    // The backlog section renders after the board: wait for it, or every
+    // `queryBy… toBeNull()` below passes against a section that is not there yet
+    // (MOTIR-6347).
+    await screen.findByTestId('create-issue-backlog');
     expect(screen.queryByTestId('backlog-row-check-GAT-1')).toBeNull();
     expect(screen.queryByTestId('backlog-row-actions-GAT-1')).toBeNull();
     expect(screen.queryByTestId('create-sprint')).toBeNull();
-    expect(screen.getByTestId('create-issue-backlog').getAttribute('aria-disabled')).toBe('true');
+    expect((await screen.findByTestId('create-issue-backlog')).getAttribute('aria-disabled')).toBe(
+      'true',
+    );
     expect(screen.queryAllByRole('button', { name: 'Column actions' })).toHaveLength(0);
     const group = screen.getByRole('group', { name: 'Swimlane group by' });
     expect(
@@ -367,7 +373,7 @@ describe('the backlog and the board', () => {
     expect(await screen.findByTestId('backlog-row-actions-GAT-1')).toBeTruthy();
     expect(screen.getByTestId('backlog-row-check-GAT-1')).toBeTruthy();
     expect(screen.getByTestId('create-sprint')).toBeTruthy();
-    expect(screen.getByTestId('create-issue-backlog').tagName).toBe('BUTTON');
+    expect((await screen.findByTestId('create-issue-backlog')).tagName).toBe('BUTTON');
     expect(screen.queryByText(/Read-only access — you can view this board/)).toBeNull();
   });
 });

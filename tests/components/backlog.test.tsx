@@ -524,7 +524,7 @@ describe('the backlog’s permission-gated controls (MOTIR-6174)', () => {
     expect(screen.queryByTestId('backlog-row-actions-PROD-150')).toBeNull();
     expect(screen.queryByTestId('backlog-row-check-PROD-150')).toBeNull();
     // In-place Create: DISABLED, with the reason (row 8).
-    const create = screen.getByTestId('create-issue-backlog');
+    const create = await screen.findByTestId('create-issue-backlog');
     expect(create.tagName).toBe('SPAN');
     expect(create.getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(create);
@@ -534,7 +534,7 @@ describe('the backlog’s permission-gated controls (MOTIR-6174)', () => {
   it('an actor who may edit but not groom creates, and still cannot move or plan sprints', async () => {
     renderAs(EDITOR_ONLY);
     expect(await screen.findByText('Sprint 24')).toBeTruthy();
-    expect(screen.getByTestId('create-issue-backlog').tagName).toBe('BUTTON');
+    expect((await screen.findByTestId('create-issue-backlog')).tagName).toBe('BUTTON');
     expect(screen.queryByTestId('create-sprint')).toBeNull();
     expect(screen.queryByTestId('complete-sprint-active1')).toBeNull();
     expect(screen.queryByTestId('backlog-row-actions-PROD-150')).toBeNull();
@@ -549,6 +549,6 @@ describe('the backlog’s permission-gated controls (MOTIR-6174)', () => {
     expect(screen.getByRole('button', { name: 'Start sprint' })).toBeTruthy();
     expect(screen.getByTestId('complete-sprint-active1')).toBeTruthy();
     expect(screen.getByTestId('sprint-actions-active1')).toBeTruthy();
-    expect(screen.getByTestId('create-issue-backlog').tagName).toBe('BUTTON');
+    expect((await screen.findByTestId('create-issue-backlog')).tagName).toBe('BUTTON');
   });
 });
