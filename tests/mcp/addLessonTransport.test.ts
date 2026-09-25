@@ -4,11 +4,11 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { db } from '@/lib/db';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
-import * as route from '@/app/api/mcp/route';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import { mcpRouteFetch } from '../helpers/mcpRouteFetch';
 
 // MOTIR-3362 — `add_lesson` through the REAL MCP transport: the gate proved
 // WIRED rather than merely written.
@@ -47,26 +47,9 @@ const ARGS = {
   howToApply: 'Set the target repository before sealing a card that ships code.',
 };
 
-/** A `fetch` that dispatches the SDK transport straight into the real route. */
-function routeFetch(token?: string): typeof fetch {
-  return (async (input: unknown, init: RequestInit = {}) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : (input as Request).url;
-    const headers = new Headers(init.headers ?? {});
-    if (token) headers.set('authorization', `Bearer ${token}`);
-    const method = (init.method ?? 'GET').toUpperCase();
-    const handler = method === 'GET' ? route.GET : method === 'DELETE' ? route.DELETE : route.POST;
-    return handler(new Request(url, { ...init, headers }) as never);
-  }) as unknown as typeof fetch;
-}
-
 async function connect(token: string): Promise<Client> {
   const transport = new StreamableHTTPClientTransport(new URL(ENDPOINT), {
-    fetch: routeFetch(token),
+    fetch: mcpRouteFetch(token),
   });
   const client = new Client({ name: 'add-lesson-transport', version: '0.0.0' });
   await client.connect(transport);

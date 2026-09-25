@@ -25,7 +25,7 @@ const { CLI_TOKEN_GRANT } = await import('@/lib/mcp/toolPermissions');
 const { isGrantable } = await import('@/lib/tokens/grant');
 const { PERMISSION_NOT_GRANTED_CODE } = await import('@/lib/mcp/permissionGate');
 const { CLI_CLIENT_ID } = await import('@/lib/cliDevice/constants');
-const route = await import('@/app/api/mcp/route');
+const { mcpRouteFetch } = await import('../helpers/mcpRouteFetch');
 const { makeWorkItemFixture } = await import('../fixtures/workItemFixtures');
 const { TEST_PASSWORD } = await import('../fixtures/userFixtures');
 const { truncateAuthTables } = await import('../helpers/db');
@@ -164,31 +164,9 @@ async function loginAsDevice(fx: WorkItemFixture, hostname = 'workbox'): Promise
 
 // ── the consumer side: the REAL /api/mcp route ──────────────────────────────
 
-/**
- * A `fetch` that dispatches the SDK transport's requests straight into the real
- * route handler, injecting the bearer the way an MCP client would — the same
- * adapter `tests/mcp/story-roundtrip.test.ts` uses, so this drives the genuine
- * `withMcpAuth` gate and production resolvers rather than a hand-built server.
- */
-function routeFetch(token?: string): typeof fetch {
-  return (async (input: unknown, init: RequestInit = {}) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : (input as Request).url;
-    const headers = new Headers(init.headers ?? {});
-    if (token) headers.set('authorization', `Bearer ${token}`);
-    const method = (init.method ?? 'GET').toUpperCase();
-    const handler = method === 'GET' ? route.GET : method === 'DELETE' ? route.DELETE : route.POST;
-    return handler(new Request(url, { ...init, headers }) as never);
-  }) as unknown as typeof fetch;
-}
-
 async function connectMcp(token: string): Promise<Client> {
   const transport = new StreamableHTTPClientTransport(new URL(MCP_ENDPOINT), {
-    fetch: routeFetch(token),
+    fetch: mcpRouteFetch(token),
   });
   const client = new Client({ name: 'cli-connect-story', version: '0.0.0' });
   await client.connect(transport);

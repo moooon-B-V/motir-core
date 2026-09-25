@@ -62,7 +62,11 @@ vi.mock('@/app/(authed)/items/[key]/approvalGateActions', () => ({
   retryApproveAndMergeMemberAction,
   queueAgainAutoAction,
 }));
-vi.mock('@/lib/approvals/decidedGates', () => ({ announceGateDecided: vi.fn() }));
+vi.mock('@/lib/approvals/decidedGates', () => ({
+  announceGateDecided: vi.fn(),
+  // Read only by the item page's hand-over (MOTIR-6323); no announcement reaches it here.
+  useDecidedGate: () => null,
+}));
 
 // The item page's late stack, with only its unrelated neighbours stubbed — the same set
 // `late-stack-development-block.test.tsx` stubs.
@@ -90,10 +94,8 @@ const { ApprovalOverlay } = await import('@/components/approvals/ApprovalOverlay
 type LateReads = import('@/app/(authed)/items/[key]/_components/lateReads').LateReads;
 
 const pra = en.approvalGate.pullRequestApproval;
-const dec = en.approvalGate.decision;
 const fill = (text: string, vars: Record<string, string | number>) =>
   text.replace(/\{(\w+)\}/g, (_, key: string) => String(vars[key]));
-const plain = (text: string) => text.replace(/<\/?b>/g, '');
 
 const CORE_V = `${CORE_PR.repo}#${CORE_PR.number}@${CORE_PR.headSha}`;
 const GATEWAY_V = `${GATEWAY_PR.repo}#${GATEWAY_PR.number}@${GATEWAY_PR.headSha}`;
@@ -306,49 +308,39 @@ const decisionLed = () =>
     },
   });
 
-describe('the item page — a DESIGN-led frame beside an awaiting merge gate (MOTIR-6080)', () => {
-  it('the consequence names BOTH pull requests one press merges', async () => {
+// ⚠️ AMENDED by MOTIR-6323: the item page HANDS THE DECISION OVER. A decider's page draws the
+// block and the band's ONE door — no frame and no press — so the page half of MOTIR-6080 is
+// that the band COUNTS the set one press merges and opens the overlay on the LEADING gate;
+// the press and its per-row outcomes are the overlay's, asserted below.
+const door = () => screen.getByRole('link', { name: en.approvalGate.statusHeld.reviewAndApprove });
+
+describe('the item page — a DESIGN-led question beside an awaiting merge gate (MOTIR-6080)', () => {
+  it('the band counts BOTH pull requests one press merges, and opens the DESIGN question', async () => {
     await renderItemPage(designLed());
 
     expect(
-      screen.getByText(fill(pra.consequence.named, { prs: PAIR, key: 'ACME-12' })),
+      screen.getByText(
+        new RegExp(`^${en.approvalGate.designResult.kindLabel} · 2 pull requests · `),
+      ),
     ).toBeTruthy();
+    expect(door().getAttribute('href')).toContain('design_result');
   });
 
-  it('after Approve and merge each pull-request row shows its press outcome', async () => {
-    pressResolves(DESIGN_AWAITING);
+  it('no press on the page — the verb is the overlay’s', async () => {
     await renderItemPage(designLed());
 
-    await pressApproveAndMerge();
-
-    expect(approveAndMergeAction.mock.calls[0]![0]).toMatchObject({ gateId: DESIGN_AWAITING.id });
-    expectRowOutcomes();
+    expect(screen.queryByRole('button', { name: pra.verb.approveAndMerge })).toBeNull();
+    expect(approveAndMergeAction).not.toHaveBeenCalled();
   });
 });
 
-describe('the item page — a DECISION-led frame beside an awaiting merge gate (MOTIR-6080)', () => {
-  it('the consequence is the decision’s own copy, naming the open pull requests — unchanged', async () => {
+describe('the item page — a DECISION-led question beside an awaiting merge gate (MOTIR-6080)', () => {
+  it('the band opens the DECISION question, and the page draws no press', async () => {
     await renderItemPage(decisionLed());
 
-    const decisionPrs = fill(pra.list.pair, {
-      a: `${CORE_PR.repo} · #${CORE_PR.number}`,
-      b: `${GATEWAY_PR.repo} · #${GATEWAY_PR.number}`,
-    });
-    expect(document.body.textContent).toContain(
-      plain(fill(dec.consequence, { prs: decisionPrs, key: 'ACME-12' })),
-    );
-  });
-
-  it('after Approve and merge each pull-request row shows its press outcome', async () => {
-    pressResolves(DECISION_AWAITING);
-    await renderItemPage(decisionLed());
-
-    await pressApproveAndMerge();
-
-    expect(approveAndMergeAction.mock.calls[0]![0]).toMatchObject({
-      gateId: DECISION_AWAITING.id,
-    });
-    expectRowOutcomes();
+    expect(door().getAttribute('href')).toContain('decision_approval');
+    expect(screen.getByText(pra.cta.bodyDecision)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: pra.verb.approveAndMerge })).toBeNull();
   });
 });
 

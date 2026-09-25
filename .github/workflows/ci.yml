@@ -279,6 +279,21 @@ jobs:
   # package lanes and nothing else. They fail open with the other two: a push to
   # `main` has no base, so it still runs every package lane.
   #
+  # ⚠️ …EXCEPT A MANIFEST WHOSE ONLY CHANGES ARE THE ONES A RELEASE MAKES. The
+  # Changesets release PR (#3130) is CHANGELOGs, a consumed `.changeset/*.md`,
+  # version bumps in `packages/*/package.json` and the matching bump of one
+  # package's range on a sibling — and the manifests alone put it on the whole
+  # app matrix and the image builds for fields neither reads: the app takes the
+  # packages through `workspace:*`, and the image lanes build without
+  # publishing. So a top-level package manifest that is the same JSON once
+  # `version`, and any non-`workspace:` range on a sibling workspace package,
+  # are masked on both sides contributes nothing to `app` or `images`. It STILL
+  # sets its package lane — the CLI's own suite asserts its version. Every way
+  # the comparison can fail (added or deleted file, no merge base, unparseable
+  # JSON) counts the file as changed: fail open. A `packages/*/CHANGELOG.md` is
+  # exempt from `images` the same way — the other half of what a release PR
+  # touches.
+  #
   # ⚠️ EVERY FLAG DEFAULTS TO `true`, AND THAT DIRECTION IS THE WHOLE SAFETY ARGUMENT.
   # A predicate that fails open costs a wasted lane; one that fails closed
   # merges untested code, which is the defect this job was written to remove.
@@ -392,6 +407,51 @@ jobs:
           fi
           echo "$files"
 
+          # The "before" side of a three-dot diff is the MERGE BASE, so the
+          # release-only test below reads the manifest from there too.
+          merge_base=$(git merge-base "$base" "$head" 2>/dev/null) || merge_base=''
+
+          # The names of the workspace's own packages, for the sibling-range
+          # rule below. Empty on any failure, which only narrows the exemption.
+          workspace_names=''
+          for dir in $(git ls-tree --name-only "$head" packages/ 2>/dev/null || true); do
+            name=$(git show "$head:$dir/package.json" 2>/dev/null | node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8")).name ?? ""))' 2>/dev/null) || continue
+            workspace_names="$workspace_names $name"
+          done
+
+          # JSON on stdin, re-serialised without the fields a Changesets release
+          # rewrites: its own `version`, and its ranges on SIBLING packages
+          # (Changesets bumps `@motir/brand`'s peer range on
+          # `@motir/design-system` in the same PR). A sibling range on the
+          # `workspace:` protocol is kept, because switching to or from it
+          # changes what installs. Node rather than jq: the Vitest runner that
+          # executes this script has no jq.
+          without_release_fields() {
+            WORKSPACE_NAMES="$workspace_names" node -e '
+              const j = JSON.parse(require("fs").readFileSync(0, "utf8"));
+              const siblings = new Set(process.env.WORKSPACE_NAMES.split(" ").filter(Boolean));
+              delete j.version;
+              for (const field of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+                for (const [dep, range] of Object.entries(j[field] ?? {})) {
+                  if (siblings.has(dep) && !String(range).startsWith("workspace:")) j[field][dep] = "<sibling>";
+                }
+              }
+              process.stdout.write(JSON.stringify(j));
+            '
+          }
+
+          # Is this a top-level workspace manifest whose ONLY changes are the
+          # ones a release makes? Any failure answers "no" — the fail-open
+          # direction.
+          release_only_manifest() {
+            [[ "$1" =~ ^packages/[^/]+/package\.json$ ]] || return 1
+            [ -n "$merge_base" ] || return 1
+            local before after
+            before=$(git show "$merge_base:$1" 2>/dev/null | without_release_fields 2>/dev/null) || return 1
+            after=$(git show "$head:$1" 2>/dev/null | without_release_fields 2>/dev/null) || return 1
+            [ -n "$before" ] && [ "$before" = "$after" ]
+          }
+
           app=false
           images=false
           pkg_cli=false
@@ -400,6 +460,32 @@ jobs:
 
           while IFS= read -r f; do
             [ -n "$f" ] || continue
+            # The package lanes (MOTIR-5323): the package's own directory, then
+            # the install inputs all three lanes consume. The guard re-derives
+            # those inputs from the lanes' job bodies and the composite action
+            # they use, so a lane that gains an input this list lacks goes red.
+            case "$f" in
+              packages/cli/*) pkg_cli=true ;;
+              packages/orchestrator/*) pkg_orchestrator=true ;;
+              packages/design-system/*) pkg_design_system=true ;;
+            esac
+            case "$f" in
+              pnpm-lock.yaml|pnpm-workspace.yaml|package.json|.npmrc|.github/actions/pnpm/*|.github/workflows/ci.yml) pkg_cli=true pkg_orchestrator=true pkg_design_system=true ;;
+            esac
+            # A release-only manifest (see the job header) stops here: its
+            # package lane is set above, and it reaches neither `app` nor
+            # `images`.
+            if release_only_manifest "$f"; then
+              echo "$f: release-only manifest change — no app or image lane for it"
+              continue
+            fi
+            # A package CHANGELOG is already outside `app` (`*.md` below); it is
+            # outside `images` too. It sits in the image's `COPY . .` context but
+            # no build step reads it, and without this every release PR still
+            # pays for the image lanes.
+            case "$f" in
+              packages/*/CHANGELOG.md) continue ;;
+            esac
             # Anything that is NOT docs / design / plan-seed makes this a code
             # change. Written as "no exclusion matched" so a path nobody
             # anticipated counts as code — the fail-open direction again.
@@ -448,18 +534,6 @@ jobs:
               Dockerfile|.dockerignore) images=true ;;
               .github/workflows/sandbox-images.yml|.github/workflows/runner-image.yml) images=true ;;
               .github/workflows/ci.yml|.github/actions/buildx/*) images=true ;;
-            esac
-            # The package lanes (MOTIR-5323): the package's own directory, then
-            # the install inputs all three lanes consume. The guard re-derives
-            # those inputs from the lanes' job bodies and the composite action
-            # they use, so a lane that gains an input this list lacks goes red.
-            case "$f" in
-              packages/cli/*) pkg_cli=true ;;
-              packages/orchestrator/*) pkg_orchestrator=true ;;
-              packages/design-system/*) pkg_design_system=true ;;
-            esac
-            case "$f" in
-              pnpm-lock.yaml|pnpm-workspace.yaml|package.json|.npmrc|.github/actions/pnpm/*|.github/workflows/ci.yml) pkg_cli=true pkg_orchestrator=true pkg_design_system=true ;;
             esac
           done <<<"$files"
 

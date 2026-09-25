@@ -30,8 +30,11 @@ You will find it on the work item's page, in the **Design result** section.
 In a project set to ask before merging, **Motir raises one approve-and-merge gate
 on the work item a run delivered, once every pull request that run opened for it
 has passed its checks** — one gate over all of them, whichever repositories they
-are in. You will find it in the work item's **Development** section, where the
-subject is the pull requests themselves and the run's **How to test**.
+are in. The work item's **Development** section shows it — the pull requests
+themselves and the run's **How to test** — with one control, **Review & approve**.
+That opens the approval full screen, and **that is where you answer it**: the
+Development section, like every other section of the work-item page, never
+carries the verbs itself.
 
 A push to any of those pull requests **withdraws** the question: you would
 otherwise be approving commits that are no longer the ones that merge. Nobody
@@ -48,8 +51,9 @@ draft withdraws a question that was already waiting.
 A `type: decision` work item decided by an agent ships its decision as **one file under
 `docs/decisions/`** in a pull request. When that pull request's head is seen, Motir asks
 you to accept the decision: the work item's **Development** section shows the document
-itself, rendered, with the pull request beneath it. The document is the question; the
-pull request is what accepting it merges. There is no _How to test_ part: a decision
+itself, rendered, with the pull request beneath it, and **Review & approve** opens both full
+screen, where you answer. The document is the question; the pull request is what accepting
+it merges. There is no _How to test_ part: a decision
 ships a document, not something to run.
 
 **One press answers both.** _Approve and merge_ records that you accept the decision and

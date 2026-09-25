@@ -99,16 +99,23 @@ export const dispatchRunEventRepository = {
    *
    * Matched on the id INSIDE `data` rather than on a column, because the
    * identity is the thing found and it differs per kind — `workItemId` for a
-   * bug, `planId` for a plan. Both are written by `recordFinding`, so the path
-   * is not a guess about somebody else's payload.
+   * bug, `planId` for a plan, and `dispatchRunCardId` for a run-found report
+   * (MOTIR-6282: ONE report per LEG, whatever it concluded). All three are
+   * written by `recordFinding`, so the path is not a guess about somebody
+   * else's payload.
    */
   async findFindingOnRun(
     dispatchRunId: string,
-    kind: 'bug_filed' | 'plan_submitted',
+    kind: 'bug_filed' | 'plan_submitted' | 'unbuildable_reported',
     findingId: string,
     tx: Prisma.TransactionClient,
   ): Promise<{ id: string } | null> {
-    const path = kind === 'bug_filed' ? ['workItemId'] : ['planId'];
+    const path =
+      kind === 'bug_filed'
+        ? ['workItemId']
+        : kind === 'plan_submitted'
+          ? ['planId']
+          : ['dispatchRunCardId'];
     return tx.dispatchRunEvent.findFirst({
       where: { dispatchRunId, kind, data: { path, equals: findingId } },
       select: { id: true },

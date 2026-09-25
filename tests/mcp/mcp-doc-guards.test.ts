@@ -225,3 +225,42 @@ describe('the guards cannot be carried off by a page move again (MOTIR-4269)', (
     expect(imports.filter((specifier) => specifier?.includes('apiDocs/guide'))).toEqual([]);
   });
 });
+
+// MOTIR-6227 — `get_approved_shape_verdict`'s contract section. It lives HERE,
+// not in the tool's own DB-backed spec, because its subject is `docs/mcp.md`:
+// a documentation-only pull request switches the Vitest lane off, and this
+// lane is the one that still runs (tests/helpers/docsGuardLane.ts). Keyed on the
+// tool's literal name so this spec keeps importing nothing that reaches Prisma.
+describe('`get_approved_shape_verdict` is documented with its CHANGE definition (MOTIR-6227)', () => {
+  it('docs/mcp.md carries its section after `get_plan`, stating both directions', () => {
+    const doc = read('docs/mcp.md');
+    const start = doc.indexOf('#### `get_approved_shape_verdict`');
+    expect(start).toBeGreaterThan(doc.indexOf('#### `get_plan`'));
+    const section = doc.slice(start, doc.indexOf('\n#### ', start + 1));
+    expect(section).toContain('THE CHANGE DEFINITION');
+    expect(section).toMatch(/\*\*Counts:\*\*/);
+    expect(section).toMatch(/\*\*Does not count:\*\*/);
+    expect(section).toContain('status transitions');
+    expect(section).toContain('`no_plan` is an ANSWER');
+  });
+});
+
+// MOTIR-6286 — `report_unbuildable_target`'s contract section. HERE, in the
+// docs-guard lane, for the same reason as the verdict tool's above; keyed on the
+// literal name so this spec still imports nothing that reaches Prisma.
+describe('`report_unbuildable_target` is documented as an acknowledgement (MOTIR-6286)', () => {
+  it('docs/mcp.md carries its section after `get_approved_shape_verdict`', () => {
+    const doc = read('docs/mcp.md');
+    const start = doc.indexOf('#### `report_unbuildable_target`');
+    expect(start).toBeGreaterThan(doc.indexOf('#### `get_approved_shape_verdict`'));
+    const section = doc.slice(start, doc.indexOf('\n#### ', start + 1));
+    for (const input of ['`projectKey`', '`targetKey`', '`reason`']) {
+      expect(section).toContain(input);
+    }
+    expect(section).toContain('{ "acknowledged": true, "recordedOnRun": true }');
+    expect(section).toContain('returns nothing to act');
+    expect(section).toContain('safe to repeat — one record per leg');
+    expect(section).toContain('called by a dispatched runner');
+    expect(section).toContain('RUN_FOUND_REPORT_REASON_INVALID');
+  });
+});

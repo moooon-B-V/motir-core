@@ -1025,6 +1025,33 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_approved_shape_verdict: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      childKeys: {
+        type: 'array',
+        items: { type: 'string', minLength: 1 },
+        maxItems: 49,
+        description:
+          "OPTIONAL — the keys of `key`'s CHILDREN you want a verdict on too (at most 49), typically the ones a parent-run found wrong. Each must be a direct child of `key`: one that is not is REFUSED with `APPROVED_SHAPE_NOT_A_CHILD` naming it, never silently dropped or answered.",
+      },
+      historyCursor: {
+        type: 'string',
+        minLength: 1,
+        description:
+          "OPTIONAL — the `planHistory.nextCursor` a previous call returned, for the next page of the card's plan history. The verdict does not depend on it: it is always computed over the WHOLE history.",
+      },
+    },
+    required: ['key'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_design: {
     type: 'object',
     properties: {
@@ -1700,6 +1727,31 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['projectKey', 'lessonId', 'occurrenceRef'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  report_unbuildable_target: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value. Case-insensitive.',
+      },
+      targetKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The card you stopped on — the one you were dispatched to build (e.g. "ACME-7"). Case-insensitive.',
+      },
+      reason: {
+        type: 'string',
+        description:
+          'Why the card cannot be built — the SAME text as the comment you left on it (1–4000 characters once trimmed). Describe what is wrong with the CARD.',
+      },
+    },
+    required: ['projectKey', 'targetKey', 'reason'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },

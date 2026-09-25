@@ -3,6 +3,7 @@ import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { closeOverlay, openDevelopmentOverlay } from './_helpers/development-decide';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
 import { linkPr } from './_helpers/pr-link';
 import { approvalSentence } from './_helpers/approval-sentence';
@@ -344,11 +345,16 @@ test.describe('an agent’s decision waits for a person', () => {
 
     await chapter('No decision document: Approve is disabled, and says why', async () => {
       await page.goto(`/items/${seed.missing.identifier}`);
-      const dev = developmentCard(page);
+      const card = developmentCard(page);
+      await expect(
+        card.getByRole('group', { name: dec.portTitle, exact: true }).getByRole('status'),
+      ).toContainText('This pull request adds no decision document.', { timeout: 60_000 });
+      // ⚠️ AMENDED by MOTIR-6323: the verbs, and why Approve is disabled, are the approval
+      // overlay's — the card hands the decision over through its band.
+      const dev = await openDevelopmentOverlay(page);
       const slot = dev.getByRole('group', { name: dec.portTitle, exact: true });
       await expect(slot.getByRole('status')).toContainText(
         'This pull request adds no decision document.',
-        { timeout: 60_000 },
       );
       await expect(dev.getByText(dec.blocked, { exact: true })).toBeVisible();
       await expect(
@@ -365,14 +371,16 @@ test.describe('an agent’s decision waits for a person', () => {
       expect((await action).status()).toBe(200);
       await expect(dev.getByText(en.approvalGate.state.changesRequested)).toBeVisible();
       expect(journal().filter((call) => call.method === 'PUT')).toHaveLength(1);
+      await closeOverlay(page);
     });
     await beat();
 
     await chapter('A person’s decision: no decision gate anywhere', async () => {
       await page.goto(`/items/${seed.human.identifier}`);
       const dev = developmentCard(page);
+      // ⚠️ AMENDED by MOTIR-6323: the pull requests' own question, asked by the band's door.
       await expect(
-        dev.getByRole('button', { name: pra.verb.approveAndMerge, exact: true }),
+        dev.getByRole('link', { name: en.approvalGate.statusHeld.reviewAndApprove, exact: true }),
       ).toBeVisible({ timeout: 60_000 });
       // The frame is the pull requests' own; there is no decision document to accept.
       await expect(dev.getByRole('group', { name: dec.portTitle, exact: true })).toHaveCount(0);

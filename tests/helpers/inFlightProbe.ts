@@ -44,6 +44,14 @@ afterEach(async () => {
   const opened = globalThis as unknown as { prisma?: unknown; adminPrisma?: unknown };
   if (!opened.prisma && !opened.adminPrisma) return;
 
+  // A request the test handed to a route handler in-process but whose client
+  // never awaited it (the MCP SDK's SSE-stream GET) is the TEST's own work, so
+  // it is awaited here rather than reported — see `serverWork.ts` (MOTIR-6324).
+  // Only the handler's promise is awaited: whatever a handler starts and does
+  // not await itself still outlives this line and is still reported below.
+  const { settleServerWork } = await import('./serverWork');
+  await settleServerWork();
+
   const { inFlightBackends, describeInFlight } = await import('./inFlightWork');
   let leftover;
   try {

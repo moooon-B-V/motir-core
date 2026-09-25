@@ -15,6 +15,7 @@ import {
   firstRepoStraddleCriterion,
   hasCriterionPathTokens,
   isOrderingCheckExempt,
+  isSelfBlockingDesignCheckExempt,
   isSubsumptionCheckExempt,
   overGateSizing,
   selfBlockingDesignCriteria,
@@ -76,7 +77,7 @@ export interface ProseAdvisorySubject {
   /**
    * The card's work TYPE and EXECUTOR — read by the ORDERING check's
    * exemption ({@link isOrderingCheckExempt}) and, `type` alone, by the
-   * SELF-BLOCKING-DESIGN check's scope ({@link selfBlockingDesignAdvisory});
+   * SELF-BLOCKING-DESIGN check's scope ({@link isSelfBlockingDesignCheckExempt});
    * never by the reference scan.
    * Required so every caller has to decide what it knows; `null` is a real
    * answer ("untyped", and therefore not exempt).
@@ -499,12 +500,19 @@ function sizingAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvisoryDto
  * surface arm reads as building a rendered surface, and there is no finite list of
  * asset words to exclude that with. So the TYPE is the scope test. A card of any
  * other type that both commissions a design and builds the surface still emits.
+ *
+ * The test is {@link isSelfBlockingDesignCheckExempt}, exported and asserted
+ * directly so a later widening of the prose predicate cannot silently re-open it
+ * (MOTIR-6245). Its fixtures add the two other sentence shapes a design card's
+ * criteria take — panels named by NUMBER (MOTIR-6236) and the render-the-shipped-
+ * surface precondition (MOTIR-6241). 7 of the 16 open design cards carried the
+ * false entry when this was measured.
  */
 function selfBlockingDesignAdvisory(
   subject: ProseAdvisorySubject,
 ): WorkItemProseAdvisoryDto | null {
   if (subject.hasChildren) return null;
-  if (subject.type === 'design') return null;
+  if (isSelfBlockingDesignCheckExempt(subject.type)) return null;
   if (subject.hasDesignBlocker) return null;
   const found = selfBlockingDesignCriteria(subject.descriptionMd);
   if (!found) return null;
@@ -928,7 +936,9 @@ export async function buildDispatchProseAdvisories(
   // finding, so a body that is clear with children ignored is clear either way,
   // and no caller carries `hasChildren` on its row shape. Only a card that WOULD
   // fire pays for the row read below.
-  const selfBlockingCandidate = selfBlockingDesignCriteria(item.descriptionMd) !== null;
+  const selfBlockingCandidate =
+    !isSelfBlockingDesignCheckExempt(type) &&
+    selfBlockingDesignCriteria(item.descriptionMd) !== null;
   // The counted-own-blockers check's clear-ness (MOTIR-5428) — the SEVENTH pure
   // scan. A hit needs the edge read below even when every older family is clear.
   const blockerCountCandidate = firstBlockerCountClaim(item.descriptionMd) !== null;

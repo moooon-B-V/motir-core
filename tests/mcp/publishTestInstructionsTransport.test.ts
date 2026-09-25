@@ -6,7 +6,6 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 import { CLI_TOKEN_GRANT, toolPermission } from '@/lib/mcp/toolPermissions';
-import * as route from '@/app/api/mcp/route';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import {
   TEST_INSTRUCTIONS_MAX_BODY_BYTES,
@@ -17,6 +16,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { organizationIdOf } from '../helpers/organizationOf';
+import { mcpRouteFetch } from '../helpers/mcpRouteFetch';
 
 // `publish_test_instructions` OVER THE SHIPPED TRANSPORT (Story MOTIR-4906 ·
 // MOTIR-5331). The assertion this card is really buying: **a CLI-minted token
@@ -31,25 +31,9 @@ import { organizationIdOf } from '../helpers/organizationOf';
 const ENDPOINT = 'http://localhost/api/mcp';
 const SHA = 'a1b2c3d'.padEnd(40, '0');
 
-function routeFetch(token: string): typeof fetch {
-  return (async (input: unknown, init: RequestInit = {}) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : (input as Request).url;
-    const headers = new Headers(init.headers ?? {});
-    headers.set('authorization', `Bearer ${token}`);
-    const method = (init.method ?? 'GET').toUpperCase();
-    const handler = method === 'GET' ? route.GET : method === 'DELETE' ? route.DELETE : route.POST;
-    return handler(new Request(url, { ...init, headers }) as never);
-  }) as unknown as typeof fetch;
-}
-
 async function connect(token: string): Promise<Client> {
   const transport = new StreamableHTTPClientTransport(new URL(ENDPOINT), {
-    fetch: routeFetch(token),
+    fetch: mcpRouteFetch(token),
   });
   const client = new Client({ name: 'publish-test-instructions-transport', version: '0.0.0' });
   await client.connect(transport);

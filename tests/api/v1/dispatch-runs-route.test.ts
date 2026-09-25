@@ -236,6 +236,21 @@ describe('the dispatch-run ingest routes', () => {
     expect(await res.json()).toMatchObject({ code: 'UNKNOWN_DISPATCH_RUN_CARD' });
   });
 
+  it('422 — a SERVER-WRITTEN finding kind is refused at the edge, `unbuildable_reported` included', async () => {
+    // MOTIR-3981 / MOTIR-6282: `dispatchEventKindSchema` omits these on purpose,
+    // so a client holding a run token cannot forge a bug, a plan or a run-found
+    // report the server never recorded. Asserted through the ROUTE, not only the
+    // schema, so a handler that stopped parsing through it would fail here.
+    const { id, key } = await seedRun(caller);
+    for (const kind of ['bug_filed', 'plan_submitted', 'unbuildable_reported']) {
+      const res = await appendEvents(caller, id, {
+        events: [{ kind, workItemKey: key, data: { outcome: 'filed' } }],
+      });
+      expect(res.status, kind).toBe(422);
+      expect(await res.json()).toMatchObject({ code: 'INVALID_BODY' });
+    }
+  });
+
   it('413 — DISPATCH_RUN_BODY_TOO_LARGE, refused rather than truncated', async () => {
     const { id } = await seedRun(caller);
 

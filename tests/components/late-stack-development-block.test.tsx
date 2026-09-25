@@ -26,6 +26,9 @@ vi.mock('next/navigation', async (importOriginal) => ({
     back: vi.fn(),
     forward: vi.fn(),
   }),
+  // The Development band's door builds its overlay address from the page's own (MOTIR-6323).
+  usePathname: () => '/items/ACME-12',
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock('next-intl/server', () => ({
   getTranslations: async (namespace: string) =>
@@ -526,34 +529,45 @@ describe('the item page’s re-asked merge gate names the approval it replaced',
       retryDecidesGateId: gate.id,
     });
     const base = reads();
-    const ui = await LateUpperSections({
-      reads: Promise.resolve({
-        ...base,
-        mergeGate: {
-          ...base.mergeGate,
-          gate,
-          canDecide: true,
-          members: [member(CORE_V, CORE_PR.id, false), member(GATEWAY_V, GATEWAY_PR.id, true)],
-          earlierApproval: {
-            decidedByLabel: 'Ada L.',
-            decidedAt: '2026-09-15T14:22:00.000Z',
-            commits: 2,
+    const stack = (canDecide: boolean) =>
+      LateUpperSections({
+        reads: Promise.resolve({
+          ...base,
+          mergeGate: {
+            ...base.mergeGate,
+            gate,
+            canDecide,
+            members: [member(CORE_V, CORE_PR.id, false), member(GATEWAY_V, GATEWAY_PR.id, true)],
+            earlierApproval: {
+              decidedByLabel: 'Ada L.',
+              decidedAt: '2026-09-15T14:22:00.000Z',
+              commits: 2,
+            },
           },
-        },
-      }),
-      itemId: 'wi-acme-12',
-      itemIdentifier: 'ACME-12',
-      currentUserId: 'u-viewer',
-      canEdit: true,
-      repoDelivery: [],
-      deliveries: [],
-    });
-    const { container } = render(ui);
+        }),
+        itemId: 'wi-acme-12',
+        itemIdentifier: 'ACME-12',
+        currentUserId: 'u-viewer',
+        canEdit: true,
+        repoDelivery: [],
+        deliveries: [],
+      });
+    // ⚠️ A READER WHO MAY ONLY LOOK (MOTIR-6323): the page's frame is theirs — a decider's
+    // question is handed over to the overlay (the case below), which draws the same band.
+    const { container, unmount } = render(await stack(false));
 
     const line = container.querySelector('[data-earlier-approval]');
     expect(line?.textContent).toBe(
       `Approved earlier by Ada L. · ${new Date('2026-09-15T14:22:00.000Z').toLocaleString()} · 2 commits — not merged`,
     );
+    unmount();
+
+    // The DECIDER's page hands the re-asked question over: the band's door, no frame.
+    const decider = render(await stack(true));
+    expect(decider.container.querySelector('[data-earlier-approval]')).toBeNull();
+    expect(
+      decider.getByRole('link', { name: messages.approvalGate.statusHeld.reviewAndApprove }),
+    ).toBeTruthy();
   });
 });
 
