@@ -1370,7 +1370,7 @@ three files is written first.
 | **`planItem`**    | the ANCHOR's work-item key. Written **only** when `planFrom=work-item`; the overlay hands it to `GET /api/work-items/planning-anchor` (MOTIR-4727)                                                                                                                                   | `MOTIR-<n>`                                                    | the overlay                           |
 | **`planRepo`**    | the repository key. Written **only** when `planFrom=convention-refine`                                                                                                                                                                                                               | a repo key                                                     | the overlay                           |
 | **`planSession`** | a SESSION's id — reopens that planning conversation by id, the window notwithstanding (MOTIR-6019's published design, §19.8; built by MOTIR-6024). Read only when `plan` is present and `planFrom` is `project` or `work-item`                                                       | a session id                                                   | the overlay                           |
-| **`planVia`**     | the ENTRANCE a named session was reopened from, so the rail's reopened line tells the truth (MOTIR-6033's published design, `design/ai-planning/design-notes.md` Part XX §20.2; built by MOTIR-6037). Read only with `planSession`; absent, or any other value, means the Plans page | `plans` · `approvals`                                          | the rail's reopened line              |
+| **`planVia`**     | the ENTRANCE a named session was reopened from, so the rail's reopened line tells the truth (MOTIR-6033's landed design — `design/ai-planning/design-notes.md` Part XXII §22.2; built by MOTIR-6037). Read only with `planSession`; absent, or any other value, means the Plans page | `plans` · `approvals`                                          | the rail's reopened line              |
 
 **Why the mode rides on `plan` rather than on a fifth name.** The overlay needs ONE parameter
 whose mere presence means _open_, exactly as `?run=` and `?peek=` do; the mode is already total
@@ -3370,10 +3370,11 @@ Every other string on these panels is already in the catalogue and is **reused, 
 | the **project launcher** / roadmap empty state | `planFrom=project` or `roadmap`, no item                                              | the root, then the follow-move                                              |
 
 **No new address parameter.** The To-approve row already writes `planItem=` when its plan has a
-target — MOTIR-6033's published design, § _20.2 The ACCESS PATH_ — so all three targeted entrances
-hand the arrival rule the same key. That is what makes "one arrival rule" a fact rather than an
-aspiration. (⚠️ That design is **published only** and is not committed to this repository; cite it
-by its card key, not by a Part number — see flag 3.)
+target — MOTIR-6033's design, `design/ai-planning/design-notes.md` Part XXII § _22.2 The ACCESS
+PATH_ — so all three targeted entrances hand the arrival rule the same key. That is what makes "one
+arrival rule" a fact rather than an aspiration. (When this was written that design was **published
+only**, so this sentence cited it by card key; MOTIR-6190 has since landed it as Part XXII — see
+flag 3.)
 
 ### What is INHERITED and not redrawn
 
@@ -3426,6 +3427,10 @@ tokens rather than new primitives.
    08:30, PR #3082); MOTIR-6033's Part XX was published as a design result and never committed, so
    the citation resolves to the wrong section. Filed as its own bug; this section cites MOTIR-6033
    by card key for that reason.
+   **RESOLVED (MOTIR-6192).** MOTIR-6190 has since landed MOTIR-6033's design as **Part XXII**
+   (its §20.N is §22.N there), so the ADDRESS row now cites Part XXII §22.2. The rule for citing a
+   design that is published but not landed is stated once, under the index table of
+   `design/ai-planning/design-notes.md`.
 
 4. **The PROPOSAL card is a second drawing of the committed card, not a layer over it.** Rendered
    side by side (the table in § _ONE CARD, THREE SURFACES_): the shell agrees on footprint, radius,

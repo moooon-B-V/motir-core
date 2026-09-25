@@ -35,6 +35,14 @@ published design results too (`list_designs` with `pathPrefix: design/ai-plannin
 has been published but not landed here has already used its number. Part XXII records the one time
 that was missed.
 
+**And a Part is CITED by number only once it has landed here.** A design that is published but not
+landed is cited by its card key and the result's own section — _MOTIR-<n>'s published design result,
+§<m>_ — never as "Part <N>", because that number belongs to the result and this file may meanwhile
+give it to a different Part. When the design lands, move its citations to the Part it landed as. (The
+case this comes from: MOTIR-6033's result called itself Part XX, MOTIR-6134's difficulty design took
+Part XX here, and a citation of "Part XX §20.2" for `planVia` resolved to the difficulty design —
+MOTIR-6192.)
+
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
 Part III **amends Part I's asset in place** — it adds one meta entry, carrying the plan's REQUESTER
