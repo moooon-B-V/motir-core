@@ -14,7 +14,7 @@ import type {
 
 // THE PLAN's TO-APPROVE ROW (Story MOTIR-6012 · Subtask MOTIR-6037), built to
 // `design/workbench/approvals-row--plan.mock.html` and `design/ai-planning/design-notes.md`
-// Part XX §20.2–§20.3. A `plan_approval` gate belongs to NO work item, so everything the
+// Part XXII §22.2–§22.3. A `plan_approval` gate belongs to NO work item, so everything the
 // row draws is its SUBJECT: the four leading-line forms, the details, the Being-rewritten
 // hold, the decided records — and a door that returns the reader to the PLANNING SURFACE
 // (`planSession` + `planVia=approvals`), never the approval overlay, or to `/plans/<id>`
@@ -147,7 +147,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('the LEADING LINE — what the plan is about, in four forms (§20.3, Panel 1)', () => {
+describe('the LEADING LINE — what the plan is about, in four forms (§22.3, Panel 1)', () => {
   it('one target: *Plan for {target title}*, the title is the target’s quick-view door, the key follows', () => {
     renderWithIntl(<ApprovalRow record={{ section: 'awaiting', row: waiting() }} />);
     expect(screen.getByText('Plan for')).toBeTruthy();
@@ -335,7 +335,7 @@ describe('the STATES in To approve (Panel 2)', () => {
   });
 });
 
-describe('the DOOR — the planning surface, never the approval overlay (§20.2)', () => {
+describe('the DOOR — the planning surface, never the approval overlay (§22.2)', () => {
   it('a targeted plan: a plain click opens the planning overlay at its conversation, from To approve', () => {
     renderWithIntl(<ApprovalRow record={{ section: 'awaiting', row: waiting() }} />);
     const notPrevented = fireEvent.click(door());

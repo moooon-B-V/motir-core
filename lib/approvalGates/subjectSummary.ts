@@ -158,7 +158,7 @@ export function excerptNote(noteMd: string | null): string | null {
  * its loader — the same sentence the handler registry enforces, one layer over.
  */
 const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
-  // MOTIR-6035 — a PLAN row (design Part XX §20.3's field table). `subjectId` is the
+  // MOTIR-6035 — a PLAN row (design Part XXII §22.3's field table). `subjectId` is the
   // plan, and the row has no card, so everything it draws is read here: three queries
   // for the whole page — the plans, their trails (for `held`), and the targets' titles
   // per project. A plan that no longer exists is absent.

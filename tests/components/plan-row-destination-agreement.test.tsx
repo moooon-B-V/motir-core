@@ -147,7 +147,7 @@ describe('an UNDECIDED plan: both rows open the SAME conversation', () => {
     const fromApprovals = overlayOf(approvalsRowAddress(approvalSubject(FACTS)));
 
     // The To-approve row alone carries `planVia`, so the reopened line can say
-    // which list it came from (§20.2). Everything else must be identical.
+    // which list it came from (§22.2). Everything else must be identical.
     expect(fromApprovals.planVia).toBe('approvals');
     expect(fromPlans.planVia).toBeUndefined();
     const { planVia: _via, ...rest } = fromApprovals;

@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/Toast';
 import type { CarryOverDestination, SprintDto, SprintReportDto } from '@/lib/dto/sprints';
 import type { StatusByKey } from './backlogShared';
 import { SprintReport } from './SprintReport';
+import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 
 // Complete-sprint flow (Story 4.4 · Subtask 4.4.6). The complete modal + carry-over
 // chooser the design (design/sprints/sprint-lifecycle.mock.html panels 4–6)
@@ -70,6 +71,7 @@ export function CompleteSprintDialog({
   const { toast } = useToast();
 
   const [report, setReport] = useState<SprintReportDto | null>(null);
+  const canViewReports = useProjectAccess().can('report:view');
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [reloadKey, setReloadKey] = useState(0);
   const [carryTarget, setCarryTarget] = useState<CarryTarget>('backlog');
@@ -208,13 +210,18 @@ export function CompleteSprintDialog({
           {/* The standalone closed-sprint report (a bookmarkable route) — Jira
               keeps closed-sprint reports reachable after the success state closes.
               A real <Link> styled as a ghost button (no <button> inside an <a>). */}
-          <Link
-            href={`/sprints/${completedSprint.id}/report`}
-            className={buttonVariants({ variant: 'ghost', size: 'md' })}
-          >
-            <ExternalLink className="h-4 w-4" aria-hidden />
-            {t('completeSprintFlow.viewFullReport')}
-          </Link>
+          {/* MOTIR-6175 — the report room asks for `report:view`, and reaching this
+              dialog takes `sprint:manage`: two different keys, which a custom
+              role can hold one of. The door shows only when the room opens. */}
+          {canViewReports ? (
+            <Link
+              href={`/sprints/${completedSprint.id}/report`}
+              className={buttonVariants({ variant: 'ghost', size: 'md' })}
+            >
+              <ExternalLink className="h-4 w-4" aria-hidden />
+              {t('completeSprintFlow.viewFullReport')}
+            </Link>
+          ) : null}
           <Button variant="primary" onClick={() => handleOpenChange(false)}>
             {t('completeSprintFlow.doneClose')}
           </Button>

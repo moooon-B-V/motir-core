@@ -122,7 +122,12 @@ export function ShellTierNav({
   if (placement === 'drawer') {
     return (
       <div className="flex min-w-0 items-center gap-1">
-        <OrgControl activeOrg={activeOrg} orgs={orgs} cloudBilling={cloudBilling} />
+        <OrgControl
+          activeOrg={activeOrg}
+          orgs={orgs}
+          cloudBilling={cloudBilling}
+          workspaceTierRevealed={showWorkspaceSwitcher}
+        />
         {showWorkspaceSwitcher ? (
           <>
             <Separator />
@@ -140,7 +145,12 @@ export function ShellTierNav({
   return (
     <div className="flex min-w-0 items-center gap-1">
       <span className="hidden md:contents">
-        <OrgControl activeOrg={activeOrg} orgs={orgs} cloudBilling={cloudBilling} />
+        <OrgControl
+          activeOrg={activeOrg}
+          orgs={orgs}
+          cloudBilling={cloudBilling}
+          workspaceTierRevealed={showWorkspaceSwitcher}
+        />
       </span>
       {showWorkspaceSwitcher ? (
         <span className="hidden xl:contents">
