@@ -299,6 +299,12 @@ type ApprovingPlanEntry = WorkItemPlanHistoryEntryDto & { decidedAt: string };
  * The LATEST `approved` plan in a card's history, or null. Pages the history
  * read to its end (it is oldest first), so this is the one "which plans touched
  * this card" query there is — no second one.
+ *
+ * ⚠️ ASSERTS NOTHING (MOTIR-6284): it pages {@link readPlanHistoryPage}, the
+ * computation beneath {@link plansService.listPlanHistoryForWorkItem}'s
+ * `ai:view_plan` assertion. Both of its callers own the gate question — the
+ * gated verdict asserts the key before it gets here, and the server-internal
+ * {@link plansService.resolveApprovedShapeForReport} deliberately does not.
  */
 async function latestApprovedPlanEntry(
   projectId: string,
@@ -308,7 +314,7 @@ async function latestApprovedPlanEntry(
   let latest: ApprovingPlanEntry | null = null;
   let cursor: string | null = null;
   do {
-    const page: WorkItemPlanHistoryPageDto = await plansService.listPlanHistoryForWorkItem(
+    const page: WorkItemPlanHistoryPageDto = await readPlanHistoryPage(
       projectId,
       workItemId,
       { cursor, limit: PLAN_HISTORY_MAX_LIMIT },
@@ -322,6 +328,107 @@ async function latestApprovedPlanEntry(
     cursor = page.nextCursor;
   } while (cursor !== null);
   return latest;
+}
+
+/**
+ * ONE PAGE of a card's plan history — the COMPUTATION beneath
+ * {@link plansService.listPlanHistoryForWorkItem}'s `ai:view_plan` assertion
+ * (MOTIR-6284), unexported. That method's header documents the page, the fold
+ * and the query count; this is its body, moved and unchanged, so the gated door
+ * answers byte-for-byte as it did.
+ *
+ * ⚠️ ASSERTS NOTHING. Every caller owns the gate question: the gated door asserts
+ * the key first; {@link latestApprovedPlanEntry} is reached only from a caller
+ * that already decided it.
+ */
+async function readPlanHistoryPage(
+  projectId: string,
+  workItemId: string,
+  options: PlanHistoryListOptions,
+  ctx: ServiceContext,
+): Promise<WorkItemPlanHistoryPageDto> {
+  const limit = clampPlanHistoryLimit(options.limit);
+  const after = decodePlanHistoryCursor(options.cursor);
+
+  const { page, hasMore, rows } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+    const plans = await planRepository.findPageRelatedToWorkItem(
+      workItemId,
+      ctx.workspaceId,
+      projectId,
+      limit + 1,
+      after,
+      tx,
+    );
+    const page = plans.slice(0, limit);
+    if (page.length === 0) return { page, hasMore: false, rows: [] };
+    const rows = await planItemRepository.findHistoryByWorkItemId(
+      workItemId,
+      ctx.workspaceId,
+      projectId,
+      page.map((plan) => plan.id),
+      tx,
+    );
+    return { page, hasMore: plans.length > limit, rows };
+  });
+
+  const byPlan = new Map<string, WorkItemPlanHistoryEntryDto>();
+  for (const row of rows) {
+    let entry = byPlan.get(row.plan.id);
+    if (!entry) {
+      entry = toWorkItemPlanHistoryEntryDto(row.plan);
+      byPlan.set(row.plan.id, entry);
+    }
+    // An `add` reaches this read through ONE of two columns, and which one is
+    // the whole difference: its `workItemId` is this card (materialize wrote
+    // the created id back — the plan CREATED it) or its `parentRef` is (a
+    // CHILD under it). A `modify` / `remove` only ever targets.
+    if (row.op === 'add' && row.workItemId !== workItemId) {
+      entry.relation.childCount += 1;
+      entry.proposalIds.children.push(row.id);
+    } else {
+      entry.relation.op = row.op;
+      entry.proposalIds.self = row.id;
+    }
+  }
+
+  // Emitted in the PAGE's order. A plan on the page with no folded row lost
+  // its last related proposal between the two reads (a withdraw); it is
+  // omitted rather than rendered claiming nothing, and the cursor still
+  // advances past it.
+  const items = page.flatMap((plan) => {
+    const entry = byPlan.get(plan.id);
+    return entry ? [entry] : [];
+  });
+  return {
+    items,
+    nextCursor: hasMore ? encodePlanHistoryCursor(page[page.length - 1]!) : null,
+  };
+}
+
+/**
+ * The verdicts for an already-deduplicated, already-bounded id set — the
+ * COMPUTATION beneath {@link plansService.resolveApprovedShapeVerdict}'s
+ * `ai:view_plan` assertion (MOTIR-6284), unexported and unchanged. Answers in the
+ * order `workItemIds` was supplied.
+ *
+ * ⚠️ ASSERTS NOTHING — its one caller asserted the key and bounded `ids` first.
+ */
+async function computeApprovedShapeVerdicts(
+  projectId: string,
+  workItemIds: readonly string[],
+  ids: readonly string[],
+  ctx: ServiceContext,
+): Promise<WorkItemApprovedShapeVerdictPageDto> {
+  const verdicts = new Map<string, WorkItemApprovedShapeVerdictDto>();
+  for (const workItemId of ids) {
+    const approving = await latestApprovedPlanEntry(projectId, workItemId, ctx);
+    if (!approving) {
+      verdicts.set(workItemId, noPlanVerdict(workItemId));
+      continue;
+    }
+    verdicts.set(workItemId, await verdictAgainst(workItemId, approving, ctx));
+  }
+  return { items: workItemIds.map((id) => verdicts.get(id)!) };
 }
 
 function noPlanVerdict(workItemId: string): WorkItemApprovedShapeVerdictDto {
@@ -5794,65 +5901,7 @@ export const plansService = {
     ctx: ServiceContext,
   ): Promise<WorkItemPlanHistoryPageDto> {
     await projectAccessService.assertPermission(projectId, ctx, 'ai:view_plan');
-    const limit = clampPlanHistoryLimit(options.limit);
-    const after = decodePlanHistoryCursor(options.cursor);
-
-    const { page, hasMore, rows } = await withWorkspaceServiceContext(
-      ctx.workspaceId,
-      async (tx) => {
-        const plans = await planRepository.findPageRelatedToWorkItem(
-          workItemId,
-          ctx.workspaceId,
-          projectId,
-          limit + 1,
-          after,
-          tx,
-        );
-        const page = plans.slice(0, limit);
-        if (page.length === 0) return { page, hasMore: false, rows: [] };
-        const rows = await planItemRepository.findHistoryByWorkItemId(
-          workItemId,
-          ctx.workspaceId,
-          projectId,
-          page.map((plan) => plan.id),
-          tx,
-        );
-        return { page, hasMore: plans.length > limit, rows };
-      },
-    );
-
-    const byPlan = new Map<string, WorkItemPlanHistoryEntryDto>();
-    for (const row of rows) {
-      let entry = byPlan.get(row.plan.id);
-      if (!entry) {
-        entry = toWorkItemPlanHistoryEntryDto(row.plan);
-        byPlan.set(row.plan.id, entry);
-      }
-      // An `add` reaches this read through ONE of two columns, and which one is
-      // the whole difference: its `workItemId` is this card (materialize wrote
-      // the created id back — the plan CREATED it) or its `parentRef` is (a
-      // CHILD under it). A `modify` / `remove` only ever targets.
-      if (row.op === 'add' && row.workItemId !== workItemId) {
-        entry.relation.childCount += 1;
-        entry.proposalIds.children.push(row.id);
-      } else {
-        entry.relation.op = row.op;
-        entry.proposalIds.self = row.id;
-      }
-    }
-
-    // Emitted in the PAGE's order. A plan on the page with no folded row lost
-    // its last related proposal between the two reads (a withdraw); it is
-    // omitted rather than rendered claiming nothing, and the cursor still
-    // advances past it.
-    const items = page.flatMap((plan) => {
-      const entry = byPlan.get(plan.id);
-      return entry ? [entry] : [];
-    });
-    return {
-      items,
-      nextCursor: hasMore ? encodePlanHistoryCursor(page[page.length - 1]!) : null,
-    };
+    return readPlanHistoryPage(projectId, workItemId, options, ctx);
   },
 
   /**
@@ -5911,17 +5960,58 @@ export const plansService = {
     if (ids.length > APPROVED_SHAPE_VERDICT_MAX_IDS) {
       throw new ApprovedShapeVerdictTooManyIdsError(ids.length, APPROVED_SHAPE_VERDICT_MAX_IDS);
     }
+    return computeApprovedShapeVerdicts(projectId, workItemIds, ids, ctx);
+  },
 
-    const verdicts = new Map<string, WorkItemApprovedShapeVerdictDto>();
-    for (const workItemId of ids) {
-      const approving = await latestApprovedPlanEntry(projectId, workItemId, ctx);
-      if (!approving) {
-        verdicts.set(workItemId, noPlanVerdict(workItemId));
-        continue;
-      }
-      verdicts.set(workItemId, await verdictAgainst(workItemId, approving, ctx));
-    }
-    return { items: workItemIds.map((id) => verdicts.get(id)!) };
+  /**
+   * The approved-shape verdict for ONE work item, and the plan that approved it —
+   * the SERVER-INTERNAL read beneath {@link resolveApprovedShapeVerdict}'s
+   * `ai:view_plan` assertion (Story MOTIR-5544 · Subtask MOTIR-6284,
+   * `docs/decisions/run-found-trigger-dispatched-path.md`, *Its key*).
+   *
+   * ⚠️ NOT AN ENTRANCE, AND IT ASSERTS NO PERMISSION. No route, action, hook or
+   * tool calls this. Its ONE legitimate caller is the run-found report service
+   * (`lib/services/runFoundReportService.ts`, MOTIR-6285), which acts on a
+   * dispatched runner's report under a CLI-minted token — and `CLI_TOKEN_GRANT`
+   * deliberately does not carry `ai:view_plan`. It may skip the key because that
+   * caller hands its caller an ACKNOWLEDGEMENT only — never the verdict, the plan
+   * or a bug key — so what the gate protects never reaches anyone who lacks it:
+   * the gate is not laundered. `tests/plans/approvedShapeForReportEntrances.test.ts`
+   * fails the build on any other production file that references this name.
+   *
+   * Every read still runs under `withWorkspaceServiceContext(ctx.workspaceId, …)`,
+   * exactly as the gated path does, so RLS confines it to the caller's own
+   * workspace. `approvingPlan` is the approving entry's plan and its author triple,
+   * which the SERVER writes (`Plan.authorSource`, never taken from a caller); it is
+   * `null` exactly when the verdict is `no_plan`.
+   */
+  async resolveApprovedShapeForReport(
+    projectId: string,
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<{
+    verdict: WorkItemApprovedShapeVerdictDto;
+    approvingPlan: {
+      id: string;
+      /** A plan's title is nullable on the row (an untitled plan). */
+      title: string | null;
+      authorSource: PlanAuthorSourceDto | null;
+      authorHarness: string | null;
+      authorModel: string | null;
+    } | null;
+  }> {
+    const approving = await latestApprovedPlanEntry(projectId, workItemId, ctx);
+    if (!approving) return { verdict: noPlanVerdict(workItemId), approvingPlan: null };
+    return {
+      verdict: await verdictAgainst(workItemId, approving, ctx),
+      approvingPlan: {
+        id: approving.planId,
+        title: approving.planTitle,
+        authorSource: approving.author.source,
+        authorHarness: approving.author.harness,
+        authorModel: approving.author.model,
+      },
+    };
   },
 
   /**
