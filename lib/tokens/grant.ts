@@ -107,10 +107,11 @@ export const V1_ONLY_PERMISSIONS: readonly PermissionKey[] = ['ai:decide_plan'];
  * So the key genuinely narrows a token, and a picker switch for it controls
  * something real: grantable by the same rule as every other key here.
  *
- * `plan:view_any` (MOTIR-6330). `run:view_any` joins when the run reads assert it
- * (MOTIR-6331).
+ * `plan:view_any` (MOTIR-6330) and `run:view_any` (MOTIR-6331 — the run index,
+ * the run modal and its stream, and the close-out prompt the CLI reads through
+ * `GET /api/v1/dispatch-runs/{id}/close-out-prompt`).
  */
-export const RECORD_VIEW_PERMISSIONS: readonly PermissionKey[] = ['plan:view_any'];
+export const RECORD_VIEW_PERMISSIONS: readonly PermissionKey[] = ['plan:view_any', 'run:view_any'];
 
 /**
  * The permissions a token may be granted — DERIVED, never hand-listed.

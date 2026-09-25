@@ -331,6 +331,7 @@ describe('expandStoredGrant — reading a row written before this story', () => 
       'lesson:view',
       'lesson:reinforce',
       'plan:view_any',
+      'run:view_any',
     ];
     expect([...grant].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),

@@ -67,14 +67,10 @@ describe('the catalog carries both keys, enforced, in the project domain', () =>
     // in lib/projects/access.ts are part of THIS card rather than the route's:
     // there is no moment where the catalog advertises a key nothing resolves
     // through.
-    // MOTIR-6328 parks the Plans and Runs rooms' view keys here, the way MOTIR-5305
-    // parked `approval:view_any`: MOTIR-6330 wires `plan:view_any` and MOTIR-6331
-    // wires `run:view_any`, each emptying its own entry in the same change.
-    const parked = ['run:view_any'];
-    expect([...PLANNED_PERMISSIONS]).toEqual(parked);
-    expect([...ENFORCED_PERMISSIONS].sort()).toEqual(
-      PERMISSIONS.filter((k) => !parked.includes(k)).sort(),
-    );
+    // (MOTIR-6328 parked `plan:view_any` / `run:view_any` here for two commits;
+    // MOTIR-6330 and MOTIR-6331 wired them and emptied it.)
+    expect([...PLANNED_PERMISSIONS]).toEqual([]);
+    expect([...ENFORCED_PERMISSIONS].sort()).toEqual([...PERMISSIONS].sort());
   });
 
   it('renders in a domain group rather than falling outside the grid', () => {

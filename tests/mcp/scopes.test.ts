@@ -128,12 +128,7 @@ describe('CLI_TOKEN_GRANT (the device-approval fixed grant)', () => {
   });
 
   it('is entirely grantable', () => {
-    // MOTIR-6329 — `run:view_any` becomes grantable when the run reads land
-    // (MOTIR-6331), which removes this filter; `plan:view_any` did in MOTIR-6330.
-    const awaitingRead = ['run:view_any'];
-    for (const key of CLI_TOKEN_GRANT.filter((k) => !awaitingRead.includes(k))) {
-      expect(isGrantable(key), key).toBe(true);
-    }
+    for (const key of CLI_TOKEN_GRANT) expect(isGrantable(key), key).toBe(true);
   });
 });
 
@@ -209,6 +204,7 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // it at read time, from the token's provenance (`expandStoredGrant`,
       // MOTIR-6329), which the forward map does not carry.
       'plan:view_any',
+      'run:view_any',
     ];
     expect([...union].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),

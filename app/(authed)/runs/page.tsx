@@ -227,8 +227,8 @@ async function RunsIndexData({
     <RunsIndex
       projectKey={projectKey}
       scopeKey={scopeKey}
-      initialLive={live}
-      initialPast={past}
+      initialLive={live?.runs ?? null}
+      initialPast={past?.runs ?? null}
       pageSize={PAGE}
     />
   );

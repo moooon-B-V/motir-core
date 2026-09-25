@@ -43,6 +43,18 @@ export interface DispatchRunPage {
   cursor?: string | undefined;
   /** Omit for every status; a non-empty list narrows the query itself. */
   statuses?: DispatchRunStatus[] | undefined;
+  /**
+   * The Runs room's `mine` scope (Story MOTIR-6179 · MOTIR-6331): only runs
+   * this user STARTED. Omit for every run. Applied by the QUERY, like
+   * `statuses`, so a page is never shortened after the read; it rides the
+   * `[projectId, startedAt]` / `[scopeWorkItemId, startedAt]` indexes.
+   */
+  createdById?: string | undefined;
+}
+
+/** The `mine` narrowing, as a `where` fragment — empty when absent. */
+function startedBy(createdById: string | undefined) {
+  return createdById ? { createdById } : {};
 }
 
 /**
@@ -223,11 +235,15 @@ export const dispatchRunRepository = {
    */
   async listByWorkItem(
     workItemId: string,
-    { take, cursor }: { take: number; cursor?: string | undefined },
+    {
+      take,
+      cursor,
+      createdById,
+    }: { take: number; cursor?: string | undefined; createdById?: string | undefined },
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRunWithCards[]> {
     return tx.dispatchRun.findMany({
-      where: { cards: { some: { workItemId } } },
+      where: { cards: { some: { workItemId } }, ...startedBy(createdById) },
       include: WITH_CARDS,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take,
@@ -244,11 +260,15 @@ export const dispatchRunRepository = {
    */
   async listByScope(
     scopeWorkItemId: string,
-    { take, cursor, statuses }: DispatchRunPage,
+    { take, cursor, statuses, createdById }: DispatchRunPage,
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRunWithCards[]> {
     return tx.dispatchRun.findMany({
-      where: { scopeWorkItemId, ...(statuses ? { status: { in: statuses } } : {}) },
+      where: {
+        scopeWorkItemId,
+        ...(statuses ? { status: { in: statuses } } : {}),
+        ...startedBy(createdById),
+      },
       include: WITH_CARDS,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take,
@@ -266,11 +286,15 @@ export const dispatchRunRepository = {
    */
   async listByProject(
     projectId: string,
-    { take, cursor, statuses }: DispatchRunPage,
+    { take, cursor, statuses, createdById }: DispatchRunPage,
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRunWithCards[]> {
     return tx.dispatchRun.findMany({
-      where: { projectId, ...(statuses ? { status: { in: statuses } } : {}) },
+      where: {
+        projectId,
+        ...(statuses ? { status: { in: statuses } } : {}),
+        ...startedBy(createdById),
+      },
       include: WITH_CARDS,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take,
@@ -331,9 +355,10 @@ export const dispatchRunRepository = {
   async listActiveByProject(
     projectId: string,
     tx: Prisma.TransactionClient,
+    createdById?: string,
   ): Promise<DispatchRunWithCards[]> {
     return tx.dispatchRun.findMany({
-      where: { projectId, status: 'running' },
+      where: { projectId, status: 'running', ...startedBy(createdById) },
       include: WITH_CARDS,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
     });

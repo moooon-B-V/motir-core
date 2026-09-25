@@ -334,12 +334,7 @@ describe('GUARDS — the properties no single card owns', () => {
   });
 
   it('the CLI device grant is grantable and withholds the irreversible key', () => {
-    // MOTIR-6329 — `run:view_any` becomes grantable when the run reads land
-    // (MOTIR-6331), which removes this filter; `plan:view_any` did in MOTIR-6330.
-    const awaitingRead = ['run:view_any'];
-    for (const key of CLI_TOKEN_GRANT.filter((k) => !awaitingRead.includes(k))) {
-      expect(GRANTABLE_PERMISSIONS).toContain(key);
-    }
+    for (const key of CLI_TOKEN_GRANT) expect(GRANTABLE_PERMISSIONS).toContain(key);
     expect(CLI_TOKEN_GRANT).not.toContain('work_item:delete');
   });
 

@@ -58,10 +58,9 @@ describe('the catalog carries `ai:decide_plan` as an enforced `ai` key', () => {
   });
 
   it('leaves PLANNED_PERMISSIONS empty — the gate lands in the same change as the key', () => {
-    // MOTIR-6328 parks the Plans and Runs rooms' view keys here, the way MOTIR-5305
-    // parked `approval:view_any`: MOTIR-6330 wires `plan:view_any` and MOTIR-6331
-    // wires `run:view_any`, each emptying its own entry in the same change.
-    expect([...PLANNED_PERMISSIONS]).toEqual(['run:view_any']);
+    // (MOTIR-6328 parked `plan:view_any` / `run:view_any` here for two commits;
+    // MOTIR-6330 and MOTIR-6331 wired them and emptied it.)
+    expect([...PLANNED_PERMISSIONS]).toEqual([]);
   });
 
   it('renders in the `ai` domain group, beside the key it was split from', () => {

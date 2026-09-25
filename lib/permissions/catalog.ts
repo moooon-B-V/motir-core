@@ -374,7 +374,9 @@ const PERMISSION_META: Record<
   // header warns about. `plan:view_any` is consulted by the plan reads' served
   // scope (`planSessionsService`, `plansService.getPlanForReader`, MOTIR-6330).
   'plan:view_any': { domain: 'plan', enforcement: 'enforced' }, // MOTIR-6328 · MOTIR-6330
-  'run:view_any': { domain: 'run', enforcement: 'planned' }, // MOTIR-6328
+  // `run:view_any` is consulted by the run reads' served scope and their
+  // record-level admit (`dispatchRunService`, MOTIR-6331).
+  'run:view_any': { domain: 'run', enforcement: 'enforced' }, // MOTIR-6328 · MOTIR-6331
   'public_request:comment': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:submit': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:upvote': { domain: 'public_request', enforcement: 'enforced' },
