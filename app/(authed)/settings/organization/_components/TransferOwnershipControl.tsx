@@ -328,7 +328,14 @@ function TransferOwnershipDialog({
               </div>
             </div>
           </fieldset>
+        </Modal.Body>
 
+        {/* PINNED with the footer, outside the scroll body: on a short viewport the
+            body scrolls, and what sat at its foot — the consequence line, then the
+            confirmation while it was typed in — was cut off (the MOTIR-6167
+            acceptance review). What the person is deciding and acting in stays
+            whole; only the member picker scrolls. */}
+        <div className="flex shrink-0 flex-col gap-(--spacing-md) pt-(--spacing-md)">
           {selected ? (
             <div
               className="flex items-start gap-2 rounded-(--radius-card) p-3"
@@ -344,13 +351,6 @@ function TransferOwnershipDialog({
               </div>
             </div>
           ) : null}
-        </Modal.Body>
-
-        {/* PINNED with the footer, outside the scroll body: on a short viewport the
-            body scrolls, and a confirmation at its foot sat half under the footer
-            while it was typed in (the MOTIR-6167 acceptance review). The field the
-            person is acting in — and the refusal it answers with — stay whole. */}
-        <div className="flex shrink-0 flex-col gap-(--spacing-md) pt-(--spacing-md)">
           <Input
             label={t('transfer.confirmLabel', { org: orgName })}
             placeholder={orgName}
