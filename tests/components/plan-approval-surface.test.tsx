@@ -10,7 +10,7 @@ import type { PlanReviewDto, PlanReviewGateDto } from '@/lib/dto/planReview';
 import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 
 // THE PLANNING SURFACE IS WHERE A PLAN IS DECIDED (Story MOTIR-6012 · MOTIR-6037;
-// `design/ai-planning/design-notes.md` Part XX §20.4–§20.6, `plan-review--decide.mock.html`
+// `design/ai-planning/design-notes.md` Part XXII §22.4–§22.6, `plan-review--decide.mock.html`
 // Panels 2–7 and 9). The host is rendered with the REAL bar and the REAL rail, so each
 // state is asserted on both of the surface's decision places at once — the gate on the
 // canvas bar, and its mirror in the rail's review block — and the close guard's veto is
@@ -254,7 +254,7 @@ describe('HELD — the planner is writing a new version (Panel 4, §11.5c)', () 
       const decline = scope.getByRole('button', { name: 'Decline' }) as HTMLButtonElement;
       expect(approve.disabled).toBe(true);
       expect(decline.disabled).toBe(true);
-      // Described by the held line beside them (§20.9).
+      // Described by the held line beside them (§22.9).
       expect(approve.getAttribute('aria-describedby')).toBeTruthy();
       expect(scope.getByText(reason)).toBeTruthy();
       expect(scope.queryByText(/Approving adds these/)).toBeNull();
@@ -429,7 +429,7 @@ describe('the HAND-OFF before generation (Panel 9)', () => {
     expect(within(handoff).getByRole('link', { name: 'To approve' }).getAttribute('href')).toBe(
       '/workbench?tab=approvals',
     );
-    // Inside the rail's log (§20.9).
+    // Inside the rail's log (§22.9).
     expect(handoff.closest('[role="log"]')).not.toBeNull();
   });
 
@@ -440,7 +440,7 @@ describe('the HAND-OFF before generation (Panel 9)', () => {
   });
 });
 
-describe('CLOSING raises NO discard guard for a gated or a generating plan (§20.6, §20.11 flag 1)', () => {
+describe('CLOSING raises NO discard guard for a gated or a generating plan (§22.6, §22.11 flag 1)', () => {
   it('an ASKED plan closes straight through, and nothing is discarded', () => {
     conversation.state = stateWith({ review: review() });
     const { closeGuardRef } = renderHost();
@@ -490,7 +490,7 @@ describe('CLOSING raises NO discard guard for a gated or a generating plan (§20
   });
 });
 
-describe('REOPENED FROM TO APPROVE — the row’s `planVia=approvals` (§20.2, §20.5)', () => {
+describe('REOPENED FROM TO APPROVE — the row’s `planVia=approvals` (§22.2, §22.5)', () => {
   const reopened = {
     startedBy: { id: 'u1', name: 'Dana Ortiz' },
     mine: true,

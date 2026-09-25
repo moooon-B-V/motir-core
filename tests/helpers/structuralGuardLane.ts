@@ -394,6 +394,12 @@ export const STRUCTURAL_GUARD_SPECS = [
   // database, renders nothing, and imports only `node:*` and `importGraph`'s
   // `stripComments`, so it carries no coverage into the merged report.
   'tests/theme/switchPrimitiveOnly.test.ts',
+  // ── tests/permissions/ — the write-control guard (MOTIR-6176) ─────────────
+  // Lists `app/` and `components/` with `git ls-files` and reads every file,
+  // checking that a client control calling a gated server action reads a
+  // capability first. It opens no database and renders nothing; its pairing
+  // table (`writeControlPairing.ts`) is data only.
+  'tests/permissions/writeControlGuard.test.ts',
 ] as const;
 
 /**

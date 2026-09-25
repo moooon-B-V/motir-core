@@ -337,6 +337,15 @@ const OUT_OF_CREDITS_CODES = new Set(['MOTIR_AI_OUT_OF_CREDITS', 'out_of_credits
 const MAILBOX_POLL_MS = 3000;
 
 /**
+ * How often an open surface re-reads a plan whose gate is AWAITING, so a revision
+ * lease taken or released SOMEWHERE ELSE — a second tab, another member, an agent
+ * revising over MCP — reaches its verbs (bug MOTIR-6151). It bounds how long the
+ * surface can offer a press the door will refuse, and it is the refresh bound the
+ * acceptance criterion names. A focus or a return to the tab re-reads at once.
+ */
+export const PLAN_GATE_POLL_MS = 3000;
+
+/**
  * The FIRST act of a run — the rail's opening line and the live line, one
  * object (MOTIR-4069). `design/ai-chat/plan-change-run-live.mock.html` sheet 3
  * draws `submitted` and `reading` as act lines like any other, so a run's record
@@ -1409,7 +1418,7 @@ export function usePlanChangeConversation({
         progress: null,
         errorCode: null,
       }));
-      // THE ROW SETTLES IN PLACE (MOTIR-6037; design Part XX §20.2, § 20's rule). The
+      // THE ROW SETTLES IN PLACE (MOTIR-6037; design Part XXII §22.2, § 20's rule). The
       // To-approve list under this overlay is a client island `router.refresh()` cannot
       // reach, so an asked plan's decision travels through the decided-gates store.
       announcePlanGateDecided(review, 'approved');
@@ -1526,6 +1535,57 @@ export function usePlanChangeConversation({
       clearInterval(timer);
     };
   }, [state.phase, state.jobId, state.queued]);
+
+  /**
+   * WATCH the plan's gate while it waits on a decision (bug MOTIR-6151).
+   *
+   * ⚠️ THIS SURFACE ONLY EVER RE-READ A PLAN IT WAS WRITING. A revision lease taken
+   * anywhere else left `review.gate.held` exactly as the last read found it, so Approve
+   * and Decline stayed live and the press was refused by the door
+   * (`PLAN_REVISION_IN_FLIGHT`) — nothing wrong was written, but the reader was offered
+   * a decision the plan could not take until they navigated. The page-state contract's
+   * client-island rule: this island seeds its own state, so nothing but its own read
+   * reaches it.
+   *
+   * ⚠️ BOUNDED BY ITS OWN CONDITION, like the mailbox watch above. It runs only while a
+   * reader could PRESS something — an undecided plan in `review` whose gate is
+   * `awaiting` — and a run of this surface's own (`streaming`) or a decision in flight
+   * (`deciding`) tears it down, aborting the read in hand, so a late answer never lands
+   * over the decision. A hidden tab skips its ticks and catches up on return.
+   */
+  const gateAwaiting = state.review?.gate?.state === 'awaiting';
+  useEffect(() => {
+    const planId = state.planId;
+    if (state.phase !== 'review' || state.decided !== null || !planId || !gateAwaiting) return;
+
+    const controller = new AbortController();
+    const reread = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      void (async () => {
+        try {
+          const fresh = await fetchPlanReview(planId, controller.signal);
+          if (!mountedRef.current || controller.signal.aborted) return;
+          setState((s) =>
+            s.planId === planId && s.phase === 'review' && s.decided === null
+              ? { ...s, review: fresh }
+              : s,
+          );
+        } catch {
+          /* a failed read is not a finding: the next tick asks again. */
+        }
+      })();
+    };
+    const timer = setInterval(reread, PLAN_GATE_POLL_MS);
+    window.addEventListener('focus', reread);
+    document.addEventListener('visibilitychange', reread);
+
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+      window.removeEventListener('focus', reread);
+      document.removeEventListener('visibilitychange', reread);
+    };
+  }, [state.phase, state.decided, state.planId, gateAwaiting]);
 
   /**
    * END the run (Story MOTIR-4054 · MOTIR-4068).

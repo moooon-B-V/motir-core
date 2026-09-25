@@ -28,8 +28,9 @@
 //
 // DETERMINISM (`motir-core/CLAUDE.md` § E2E): every wait is a landmark, a row, a
 // `waitForURL`, the decide route's response, or a committed read. The planning
-// surface does not poll a plan it is not writing, so a seam's write is observed
-// through a fresh read of the page (a navigation), never by waiting for a repaint.
+// surface re-reads an awaiting plan on a timer and on focus (MOTIR-6151), but a
+// timer is not a landmark: a seam's write is still observed through a fresh read of
+// the page (a navigation), never by waiting for a repaint.
 // `beat()` / the chapter hold are PACING only, each after the assertion that proved
 // the state.
 import { writeFileSync } from 'node:fs';

@@ -156,7 +156,7 @@ export interface PlanChangeRailProps {
   onStop?: () => void;
   /**
    * THE PLAN GATE'S STATE for the plan in hand (Story MOTIR-6012 · MOTIR-6037; design
-   * Part XX §20.4–§20.5) — the SAME derivation the canvas bar reads, so the review block
+   * Part XXII §22.4–§22.5) — the SAME derivation the canvas bar reads, so the review block
    * mirrors the gate it sits beside. Absent → `ungated`: the shipped words.
    */
   gateView?: PlanGateView;
@@ -353,7 +353,7 @@ export function PlanChangeRail({
             with an earlier conversation for this scope points to it — until this
             conversation has a turn, when the rail is about it instead. */}
         {state.reopened && launch.via === 'approvals' ? (
-          // REOPENED FROM TO APPROVE (MOTIR-6037; design Part XX §20.2, §20.5): the
+          // REOPENED FROM TO APPROVE (MOTIR-6037; design Part XXII §22.2, §22.5): the
           // row's address carries `planVia=approvals`, so this line names the entrance
           // the reader actually used — MOTIR-6019's shape, its own glyph.
           <p
@@ -483,12 +483,12 @@ export function PlanChangeRail({
             the newest act is still announced and nothing that addressed this
             surface has to change. */}
         {/* THE HAND-OFF BEFORE GENERATION (Story MOTIR-6012 · MOTIR-6037; design
-            Part XX §20.6, Panel 9). The moment a PLAN run starts writing, the planner
+            Part XXII §22.6, Panel 9). The moment a PLAN run starts writing, the planner
             says so in its own turn — a KEYED bubble, like `lockedNote`, so the words
             are the catalogue's and never the model's — and that the reader may leave:
             the run carries on server-side and the plan will be waiting in To approve.
             A revision of the plan in hand gets its own form. The link is a real
-            anchor to the tab (§20.9). */}
+            anchor to the tab (§22.9). */}
         {writing ? (
           <Bubble role="assistant" testId="plan-handoff">
             {tp.rich(rewritingPlan ? 'handoff.rewriting' : 'handoff.writing', {
@@ -1262,8 +1262,8 @@ function EarlierNotice({
 }
 
 /**
- * THE REVIEW BLOCK OF AN ASKED PLAN (Story MOTIR-6012 · MOTIR-6037; design Part XX
- * §20.4–§20.5, `plan-review--decide.mock.html` Panels 2–7, 10). The rail's mirror of the
+ * THE REVIEW BLOCK OF AN ASKED PLAN (Story MOTIR-6012 · MOTIR-6037; design Part XXII
+ * §22.4–§22.5, `plan-review--decide.mock.html` Panels 2–7, 10). The rail's mirror of the
  * canvas bar, speaking the gate's words: *Nothing saved yet*, the consequence line (or
  * the held reason in its place), and Decline · Approve. Decline confirms once in the
  * approve language's band, which REPLACES the verbs here. A reader who may not decide

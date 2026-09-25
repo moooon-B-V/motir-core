@@ -194,7 +194,11 @@ export function Combobox<T extends string>({
   onQueryChange,
   footer,
 }: ComboboxProps<T>) {
-  const [open, setOpen] = useState(autoOpen);
+  // A DISABLED combobox never opens — not even when it mounts with `autoOpen`
+  // (MOTIR-6173). An inline editor that mounts open for an actor who may not
+  // write used to hand them a live menu whose pick the server then refused
+  // (MOTIR-4822); the trigger was disabled, the menu was not.
+  const [open, setOpen] = useState(autoOpen && !disabled);
   // Server-driven mode (6.9.2): when `onQueryChange` is provided the query is
   // controlled by the parent and client filtering is bypassed (the server's
   // `options` are authoritative). Otherwise the query is internal state.
@@ -383,6 +387,7 @@ export function Combobox<T extends string>({
   }, [active, open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openMenu() {
+    if (disabled) return;
     // Uncontrolled mode resets its own type-ahead on open; server-driven mode
     // leaves the query to the parent (it owns the lifecycle — resets on form
     // open / relationship change), so reopening keeps the current results.
@@ -405,6 +410,7 @@ export function Combobox<T extends string>({
   }
 
   function commit(i: number) {
+    if (disabled) return;
     const opt = filtered[i];
     if (!opt || opt.disabled) return;
     onChange(opt.value);

@@ -64,7 +64,7 @@ const CARD_KINDS = ALL_KINDS.filter((kind) => kind !== 'plan_approval');
 /** The kinds this build RENDERS with ONE `workbench.approvals.sentence.*` key — every
  *  one owes its own sentence. `plan_approval` (registered by MOTIR-6035) is not among
  *  them: its leading line has FOUR forms (design `design/ai-planning/design-notes.md`
- *  §20.3), so its row takes its own branch reading `approvalGate.planApproval.row.*`
+ *  §22.3), so its row takes its own branch reading `approvalGate.planApproval.row.*`
  *  (MOTIR-6037) — asserted by its own case in SEAM 3 below. */
 const REGISTERED_KINDS = CARD_KINDS.filter(
   (kind) => !(UNREGISTERED_GATE_KINDS as readonly string[]).includes(kind),
@@ -283,7 +283,7 @@ describe('SEAM 3 · every gate kind has a sentence, in both locales', () => {
     },
   );
 
-  it('`plan_approval` has its OWN leading-line forms in en and zh (MOTIR-6037, §20.3)', () => {
+  it('`plan_approval` has its OWN leading-line forms in en and zh (MOTIR-6037, §22.3)', () => {
     for (const messages of [en, zh]) {
       const row = messages.approvalGate.planApproval.row;
       expect(row.targeted).toMatch(/<title>\{name\}<\/title>/);

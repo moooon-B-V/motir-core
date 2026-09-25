@@ -33,14 +33,19 @@ export default async function TriagePage() {
   // left is a session-less request — and it redirects rather than rendering.
   if (!ctx) redirect('/sign-in');
 
-  // The inbox is for users who can ACT. A non-throwing capability check (browse +
-  // edit) gates the surface: a viewer who can't edit gets the no-access state, a
-  // non-browser is hidden behind the same state (no existence leak).
-  const caps = await projectAccessService.getSettingsCapabilities(ctx.projectId, {
+  // The inbox is for users who can ACT on it. A non-throwing read of the actor's
+  // keys gates the surface on `work_item:triage` — the key `getTriageQueue` below
+  // asserts, and the one the sidebar's Triage row is offered on (MOTIR-6175). It
+  // gated on `work_item:edit` until then, which disagreed with both in the
+  // direction a custom role can reach: an actor holding triage without edit was
+  // shown the door and refused the room, and one holding edit without triage
+  // passed this gate and then had the queue read refused. A non-browser holds no
+  // key at all, so they land on the same state (no existence leak).
+  const held = await projectAccessService.getPermissions(ctx.projectId, {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
-  if (!caps.canBrowse || !caps.canEdit) {
+  if (!held.has('work_item:triage')) {
     return (
       <div className="flex flex-col gap-6">
         <header className="flex flex-col gap-1">

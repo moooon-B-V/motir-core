@@ -1205,7 +1205,7 @@ function recordsDecidedWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateWh
   return {
     projectId: { in: scope.projectIds },
     // An OVERTURN is a decision a person made (MOTIR-5956) — the room lists it. So is a
-    // plan a person DECLINED (MOTIR-6037; design Part XX §20.3, Panel 3).
+    // plan a person DECLINED (MOTIR-6037; design Part XXII §22.3, Panel 3).
     state: { in: ['approved', 'changes_requested', 'overturned', 'declined'] },
     ...(scope.fullView ? {} : { decidedById: scope.userId }),
   };

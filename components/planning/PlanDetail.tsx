@@ -266,7 +266,7 @@ export function PlanDetail({
           // sentence for: a revision took the lease between the render and the press,
           // and the reader is told why rather than shown a plan that looks decidable.
           if (err.code === 'PLAN_REVISION_IN_FLIGHT') setErrorCode(err.code);
-          // …and the STALE refusal of an asked plan (MOTIR-6037; design Part XX §20.5):
+          // …and the STALE refusal of an asked plan (MOTIR-6037; design Part XXII §22.5):
           // nothing was decided, and the reader is told the plan moved under them, in
           // the design's words, above the re-read verbs.
           if (err.code === 'APPROVAL_GATE_STALE_SUBJECT' || err.code === 'PLAN_GATE_AWAITING') {

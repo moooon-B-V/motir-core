@@ -29,6 +29,8 @@ export function LabelsCard({
   initialLabels: LabelDto[];
 }) {
   const t = useTranslations('issueViews');
+  // MOTIR-6173 — a read-only actor keeps the DISABLED chevron and its reason.
+  const tpa = useTranslations('projectAccess');
   // MOTIR-2473 — the key this control's own write asserts:
   // `projectAccessService.assertCanEdit` resolves `work_item:edit`.
   const { can } = useProjectAccess();
@@ -43,7 +45,7 @@ export function LabelsCard({
   return (
     <FieldCard
       label={t('labelsField')}
-      editable={canEdit}
+      readOnlyReason={canEdit ? undefined : tpa('readOnlyHint')}
       editing={editing}
       onToggle={() => {
         setEditing((cur) => !cur);

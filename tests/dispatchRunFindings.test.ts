@@ -706,6 +706,141 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
   });
 });
 
+describe('a plan that reaches `planned` AFTER its leg settled (MOTIR-6279)', () => {
+  // THE REAL ORDERING of a dispatched refusal. `submit_plan_session` opens the
+  // plan `generating` and returns at once; the agent exits; the CLI settles the
+  // leg `replanned` (and may close the run) — and only THEN does the model finish
+  // and `markPlanned` run. Every test above closes the plan while the leg is
+  // still open, which is the one ordering a real refusal never has.
+
+  /** The thread a dispatched agent's `submit_plan_session` leaves behind. */
+  async function anchoredThread(key: string, jobId: string): Promise<string> {
+    const thread = await adminDb.planChangeSession.create({
+      data: {
+        workspaceId: fixture.workspaceId,
+        projectId: fixture.projectId,
+        scopeKey: key,
+        lastJobId: jobId,
+      },
+    });
+    return thread.id;
+  }
+
+  async function legOf(runId: string, workItemId: string) {
+    return adminDb.dispatchRunCard.findFirstOrThrow({
+      where: { dispatchRunId: runId, workItemId },
+    });
+  }
+
+  it('records the plan on the leg that was open when the plan was CREATED — leg settled, run closed, then `planned`', async () => {
+    const leaf = await seedLeaf();
+    const runId = await openRunWithLiveLeg(leaf.key);
+
+    // 1. The agent submits: the plan exists, `generating`, while the leg is open.
+    const jobId = `job_late_${leaf.key.toLowerCase()}`;
+    const sessionId = await anchoredThread(leaf.key, jobId);
+    const plan = await plansService.createPlan(
+      fixture.projectId,
+      { title: 'The work item was wrong', sourceJobId: jobId, session: { sessionId } },
+      fixture.ctx,
+    );
+
+    // 2. The agent exits and the CLI settles the leg `replanned`.
+    await dispatchRunService.appendEvents(
+      runId,
+      [{ kind: 'card_settled', workItemKey: leaf.key, disposition: 'replanned' }],
+      fixture.ctx,
+    );
+    // 3. The loop closes the run.
+    await dispatchRunService.close(runId, { stopReason: 'replanned' }, fixture.ctx);
+
+    // 4. The model finishes: proposals land and the plan reaches `planned`.
+    await closeWithProposal(plan.id);
+
+    // The ordering this case exists for, read back from the rows themselves
+    // rather than assumed from the call order.
+    const leg = await legOf(runId, leaf.id);
+    const run = await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: runId } });
+    const planned = await adminDb.plan.findUniqueOrThrow({ where: { id: plan.id } });
+    expect(leg.disposition).toBe('replanned');
+    expect(run.status).not.toBe('running');
+    expect(planned.createdAt.getTime()).toBeLessThanOrEqual(leg.endedAt!.getTime());
+    expect(leg.endedAt!.getTime()).toBeLessThanOrEqual(run.endedAt!.getTime());
+    expect(run.endedAt!.getTime()).toBeLessThanOrEqual(planned.plannedAt!.getTime());
+
+    const findings = (await readBack(runId)).filter((e) => e.kind === 'plan_submitted');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.cardId).toBe(leg.id);
+    expect(findings[0]!.data).toEqual({ planId: plan.id, proposalCount: 1 });
+  });
+
+  it('records it when the leg settled but the run is still running on to the next card', async () => {
+    const leaf = await seedLeaf();
+    const runId = await openRunWithLiveLeg(leaf.key);
+
+    const jobId = `job_settled_${leaf.key.toLowerCase()}`;
+    const sessionId = await anchoredThread(leaf.key, jobId);
+    const plan = await plansService.createPlan(
+      fixture.projectId,
+      { title: 'Refused, and the loop moved on', sourceJobId: jobId, session: { sessionId } },
+      fixture.ctx,
+    );
+    await dispatchRunService.appendEvents(
+      runId,
+      [{ kind: 'card_settled', workItemKey: leaf.key, disposition: 'replanned' }],
+      fixture.ctx,
+    );
+    await closeWithProposal(plan.id);
+
+    const findings = (await readBack(runId)).filter((e) => e.kind === 'plan_submitted');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.cardId).toBe((await legOf(runId, leaf.id)).id);
+  });
+
+  it('records nothing for a plan a PERSON opened on the same work item before the leg started', async () => {
+    const leaf = await seedLeaf();
+
+    // The person's conversation — same anchor, same shape — opened with no run
+    // in flight at all.
+    const jobId = `job_person_${leaf.key.toLowerCase()}`;
+    const sessionId = await anchoredThread(leaf.key, jobId);
+    const plan = await plansService.createPlan(
+      fixture.projectId,
+      { title: 'A person re-planning by hand', sourceJobId: jobId, session: { sessionId } },
+      fixture.ctx,
+    );
+
+    // A run then picks the card up, and the person's plan reaches `planned`
+    // while that leg is open. The leg did not produce this plan.
+    const runId = await openRunWithLiveLeg(leaf.key);
+    await closeWithProposal(plan.id);
+
+    expect((await readBack(runId)).filter((e) => e.kind === 'plan_submitted')).toHaveLength(0);
+  });
+
+  it('records nothing for a plan a PERSON opened after the leg had already settled', async () => {
+    const leaf = await seedLeaf();
+    const runId = await openRunWithLiveLeg(leaf.key);
+    await dispatchRunService.appendEvents(
+      runId,
+      [{ kind: 'card_settled', workItemKey: leaf.key, disposition: 'implemented' }],
+      fixture.ctx,
+    );
+    await dispatchRunService.close(runId, { stopReason: 'drained' }, fixture.ctx);
+
+    const jobId = `job_after_${leaf.key.toLowerCase()}`;
+    const sessionId = await anchoredThread(leaf.key, jobId);
+    const plan = await plansService.createPlan(
+      fixture.projectId,
+      { title: 'Re-planned after the run', sourceJobId: jobId, session: { sessionId } },
+      fixture.ctx,
+    );
+    await closeWithProposal(plan.id);
+
+    expect((await readBack(runId)).filter((e) => e.kind === 'plan_submitted')).toHaveLength(0);
+  });
+});
+
 describe('a finding never crosses a workspace boundary', () => {
   it('a bug filed in one workspace does not land on another workspace’s run', async () => {
     // The anchor lookup filters on `workItemId` alone, so what keeps it inside

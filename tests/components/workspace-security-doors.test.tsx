@@ -147,9 +147,10 @@ describe('the settings rail', () => {
 });
 
 describe('the ⌘K palette', () => {
-  function renderPalette(workspaceCount: number) {
+  function renderPalette(workspaceCount: number, isOrgAdmin = true) {
     return renderWithIntl(
       <AppCommandPalette
+        isOrgAdmin={isOrgAdmin}
         workspaces={Array.from({ length: workspaceCount }, (_, i) => ({
           id: `ws${i}`,
           name: `Workspace ${i}`,
@@ -163,7 +164,7 @@ describe('the ⌘K palette', () => {
     );
   }
 
-  it('offers the ORG security pane at every count — an organization always exists', () => {
+  it('offers the ORG security pane to an org owner/admin at every count — an organization always exists', () => {
     for (const count of [1, 2]) {
       cleanup();
       renderPalette(count);
@@ -171,6 +172,17 @@ describe('the ⌘K palette', () => {
         screen.getByRole('option', { name: /go to organization security/i }),
         `count=${count}`,
       ).toBeTruthy();
+    }
+  });
+
+  it('offers it to NOBODY else — the pane answers a plain org member with the forbidden panel (MOTIR-6175)', () => {
+    for (const count of [1, 2]) {
+      cleanup();
+      renderPalette(count, false);
+      expect(
+        screen.queryByRole('option', { name: /go to organization security/i }),
+        `count=${count}`,
+      ).toBeNull();
     }
   });
 

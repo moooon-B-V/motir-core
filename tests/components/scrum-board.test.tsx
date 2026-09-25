@@ -42,6 +42,7 @@ import type {
   SprintSummaryDto,
 } from '@/lib/dto/boards';
 import type { WorkflowDto } from '@/lib/dto/workflows';
+import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
 
 function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardCardDto {
   return {
@@ -224,11 +225,30 @@ describe('Scrum board (4.5.3) — sprint header', () => {
     expect(screen.queryByTestId('board-points-c1')).toBeNull();
   });
 
-  it('hides the Complete-sprint entry when the actor cannot edit', async () => {
+  // MOTIR-6174 — the entry is gated on `sprint:manage`, the key `completeSprint`
+  // asserts, not on `work_item:edit`: the built-in roles pair the two, a custom
+  // role need not, and the case that tells them apart is the one below.
+  it.each([
+    ['a Viewer (browse + report:view)', ['project:browse', 'report:view'], false],
+    [
+      'an editor WITHOUT sprint:manage (a custom role)',
+      ['project:browse', 'work_item:edit'],
+      false,
+    ],
+    ['a Member (holds sprint:manage)', ['project:browse', 'work_item:edit', 'sprint:manage'], true],
+  ] as const)('the Complete-sprint entry for %s', async (_who, permissions, shown) => {
     vi.stubGlobal('fetch', mockFetchOk(projection({ type: 'scrum', sprint: sprint() })));
-    render(<BoardContainer projectName="Motir" workflow={WORKFLOW} canEdit={false} />);
+    render(
+      <ProjectAccessProvider permissions={[...permissions]}>
+        <BoardContainer
+          projectName="Motir"
+          workflow={WORKFLOW}
+          canEdit={permissions.includes('work_item:edit' as never)}
+        />
+      </ProjectAccessProvider>,
+    );
     await screen.findByTestId('sprint-header');
-    expect(screen.queryByTestId('scrum-complete-sprint')).toBeNull();
+    expect(screen.queryByTestId('scrum-complete-sprint') !== null).toBe(shown);
   });
 });
 
@@ -262,4 +282,61 @@ describe('Scrum board (4.5.3) — no active sprint', () => {
     await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
     expect(screen.queryByText('No active sprint')).toBeNull();
   });
+});
+
+// ── MOTIR-6174 — the board offers no write to an actor without its key ─────────
+// Each case renders through the layout's own `ProjectAccessProvider` with the
+// permission SET an actor resolves to, never the provider-less default (which
+// answers every key true and would make a Viewer case vacuous).
+describe('the board’s permission-gated controls (MOTIR-6174)', () => {
+  const VIEWER = ['project:browse', 'report:view'] as const;
+  const MEMBER = ['project:browse', 'work_item:edit', 'sprint:manage', 'report:view'] as const;
+  const CONFIGURER = [...MEMBER, 'board:configure'] as const;
+
+  function renderAs(permissions: readonly string[]) {
+    vi.stubGlobal('fetch', mockFetchOk(projection()));
+    return render(
+      <ProjectAccessProvider permissions={[...permissions] as never}>
+        <div id="board-toolbar-groupby-slot" className="contents" />
+        <BoardContainer
+          projectName="Motir"
+          workflow={WORKFLOW}
+          canEdit={permissions.includes('work_item:edit')}
+        />
+      </ProjectAccessProvider>,
+    );
+  }
+
+  it('a Viewer reads the read-only banner as COPY, not as the i18n key it used to render', async () => {
+    renderAs(VIEWER);
+    const banner = await screen.findByText(
+      'Read-only access — you can view this board but can’t move or edit work items.',
+    );
+    expect(banner.getAttribute('role')).toBe('status');
+    expect(screen.queryByText(/boards\.readOnlyBoardBanner/)).toBeNull();
+  });
+
+  it.each([
+    ['a Viewer', VIEWER, false],
+    ['a Member (no board:configure — the server refuses them)', MEMBER, false],
+    ['a board configurer', CONFIGURER, true],
+  ] as const)('the Group-by control for %s', async (_who, permissions, live) => {
+    renderAs(permissions);
+    const group = await screen.findByRole('group', { name: 'Swimlane group by' });
+    const buttons = within(group).getAllByRole('button');
+    expect(buttons.every((b) => (b as HTMLButtonElement).disabled)).toBe(!live);
+  });
+
+  it.each([
+    ['a Viewer', VIEWER, false],
+    ['a Member', MEMBER, false],
+    ['a board configurer', CONFIGURER, true],
+  ] as const)(
+    'the column ⋯ menu (Set WIP limit · Board settings) for %s',
+    async (_who, permissions, shown) => {
+      renderAs(permissions);
+      await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
+      expect(screen.queryAllByRole('button', { name: 'Column actions' }).length > 0).toBe(shown);
+    },
+  );
 });

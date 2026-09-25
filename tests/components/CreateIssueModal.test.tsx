@@ -98,6 +98,8 @@ function Shell() {
             activeWorkspaceId={null}
             projects={[]}
             activeProjectId={null}
+            // The palette offers Create only to an actor who can create (MOTIR-6175).
+            settingsPermissions={['work_item:edit']}
           />
         </CreateIssueProvider>
       </CommandPaletteProvider>

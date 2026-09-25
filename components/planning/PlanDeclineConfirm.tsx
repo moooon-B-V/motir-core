@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/utils/cn';
 
 // DECLINE ASKS ONCE (Story MOTIR-6012 · MOTIR-6037; `design/ai-planning/design-notes.md`
-// Part XX §20.4, `plan-review--decide.mock.html` Panels 3, 8 and 10).
+// Part XXII §22.4, `plan-review--decide.mock.html` Panels 3, 8 and 10).
 //
 // It is the approve language's own `confirming` band, composed from
 // `ApprovalGateControl` rather than invented here: an inline band over the verbs, NEVER a

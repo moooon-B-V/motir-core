@@ -5,8 +5,8 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 import { planReview, planReviewItem } from '../helpers/planReview';
 import type { PlanReviewDto, PlanReviewGateDto } from '@/lib/dto/planReview';
 
-// THE PLAN PAGE DECIDES AN ASKED PLAN TOO (Story MOTIR-6012 · MOTIR-6037; design Part XX
-// §20.4–§20.5, `plan-review--decide.mock.html` Panel 8). Its existing CTA IS the gate's
+// THE PLAN PAGE DECIDES AN ASKED PLAN TOO (Story MOTIR-6012 · MOTIR-6037; design Part XXII
+// §22.4–§22.5, `plan-review--decide.mock.html` Panel 8). Its existing CTA IS the gate's
 // Approve and its ghost Decline IS the gate's Decline; what an asked plan adds is the
 // decline's confirm band with an OPTIONAL reason, the stale refusal in the design's
 // words, and — for a plan with no conversation to return to — the notice saying why it
@@ -128,7 +128,7 @@ describe('Decline confirms once, with an OPTIONAL reason (Panel 8)', () => {
   });
 });
 
-describe('REFUSED AS STALE — in the design’s words (§20.5)', () => {
+describe('REFUSED AS STALE — in the design’s words (§22.5)', () => {
   it('a stale approve re-reads the plan and says it changed, as an alert', async () => {
     mocks.approvePlanRequest.mockRejectedValueOnce(
       new PlanRequestError(409, 'APPROVAL_GATE_STALE_SUBJECT'),

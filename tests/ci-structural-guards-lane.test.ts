@@ -150,6 +150,7 @@ const CANDIDATES = candidateGuardsIn(ALL_TEST_FILES, readSource);
  * this class (see the header), so these are asserted present instead of derived.
  */
 const SELF_WALKING_MEMBERS = [
+  'tests/permissions/writeControlGuard.test.ts',
   'tests/rateLimit/one-counter-guard.test.ts',
   'tests/rateLimit/storeDeadline.test.ts',
   'tests/theme/inkContrastLint.test.ts',

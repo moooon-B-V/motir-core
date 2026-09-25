@@ -600,7 +600,7 @@ export interface PlanGateHeldDTO {
 
 /**
  * WHICH PLAN is waiting, at row scale (Story MOTIR-6012 · MOTIR-6035; design
- * `design/ai-planning/design-notes.md` Part XX §20.3's field table). A plan gate has no
+ * `design/ai-planning/design-notes.md` Part XXII §22.3's field table). A plan gate has no
  * card (`workItem` is null on its row), so everything the row draws is here.
  */
 export interface PlanApprovalSubjectSummaryDTO {
@@ -773,7 +773,7 @@ export interface ApprovalRecordDecidedRowDto {
   gateId: string;
   kind: ApprovalGateKindDTO;
   /** `declined` joined with MOTIR-6037: a plan a person ENDED is a decision the room
-   *  lists (design `design/ai-planning/design-notes.md` Part XX §20.3, Panel 3). */
+   *  lists (design `design/ai-planning/design-notes.md` Part XXII §22.3, Panel 3). */
   state: Extract<
     ApprovalGateStateDTO,
     'approved' | 'changes_requested' | 'overturned' | 'declined'
