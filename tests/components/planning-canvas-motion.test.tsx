@@ -489,3 +489,23 @@ describe('app/globals.css — the motion rules sit behind `no-preference`', () =
     expect(body).not.toMatch(/animation|transition/);
   });
 });
+
+describe('PlanningCanvas motion — animateInitial (MOTIR-6300)', () => {
+  it('a mount with animateInitial plays its first snapshot as ARRIVALS, staggered', () => {
+    render(
+      <PlanningCanvas nodes={[A, B]} edges={[AB]} renderNode={renderNode} motion animateInitial />,
+    );
+    expect(motionOf(node('a'))).toBe('enter');
+    expect(motionOf(node('b'))).toBe('enter');
+    expect(node('b')!.style.animationDelay).toBe('40ms');
+    tick(SLOW + 40);
+    expect(cls(livePaths()[0]!)).toContain('canvas-edge--enter');
+    tick(BASE);
+    expect(anyMotion()).toBe(0);
+  });
+
+  it('is inert without motion — the static canvas never animates', () => {
+    render(<PlanningCanvas nodes={[A, B]} edges={[AB]} renderNode={renderNode} animateInitial />);
+    expect(anyMotion()).toBe(0);
+  });
+});

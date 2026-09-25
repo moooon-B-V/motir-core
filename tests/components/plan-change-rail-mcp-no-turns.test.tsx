@@ -37,6 +37,7 @@ const BASE: PlanChangeConversationState = {
   liveReview: null,
   liveVersion: 0,
   liveFailing: false,
+  discardedReview: null,
   decided: null,
   jobId: null,
   planId: null,

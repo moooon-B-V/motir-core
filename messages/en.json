@@ -270,6 +270,11 @@
     "approvedOutcome": "Added {n, plural, one {# item} other {# items}} to your backlog",
     "declinedOutcome": "Plan declined — your tree was left untouched",
     "discardedOutcome": "Plan discarded before it finished — your work items are unchanged",
+    "liveWriting": "Being written",
+    "liveReconnecting": "Reconnecting — showing the last update",
+    "liveAnnounce": "{count, plural, one {# item} other {# items}} added to the plan",
+    "listWritingTitle": "Nothing proposed yet",
+    "listWritingBody": "Items appear here as the plan is written.",
     "abandonedOutcome": "Generation never finished — this plan was ended automatically",
     "viewInBacklog": "View in backlog",
     "staleConfirmTitle": "Some items may be out of date",
@@ -6781,7 +6786,9 @@
     "arrival": {
       "crumbTargetPrefix": "Planning target:",
       "movedAnnouncement": "Showing work inside {target}",
-      "goToTarget": "Plan is in {identifier} · Go there"
+      "goToTarget": "Plan is in {identifier} · Go there",
+      "arrivedIn": "{count} new in {identifier} · Go there",
+      "arrivedAcross": "{count} new elsewhere · latest in {identifier} · Go there"
     },
     "dividerAria": "Resize the conversation"
   },

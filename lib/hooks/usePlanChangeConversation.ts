@@ -200,13 +200,25 @@ export interface PlanChangeConversationState {
    * ⚠️ A HAND-OVER, NOT A SECOND REVIEW. When the poll OBSERVES the plan leave
    * `generating` — the transition, once — the existing proposed-review path
    * (`readPendingProposal` → {@link review}) runs exactly once and this goes back
-   * to `null`. Nothing here draws it yet; mounting it is a later card's.
+   * to `null` — in the SAME update that sets `review`, so the planning surface's
+   * pane, which draws `liveReview ?? review`, is never without a plan in between
+   * and is not remounted (MOTIR-6300).
    */
   liveReview: PlanReviewDto | null;
   /** Bumped on every applied live snapshot. */
   liveVersion: number;
   /** The live poll has failed several reads in a row (the last snapshot stands). */
   liveFailing: boolean;
+  /**
+   * The plan this session WATCHED being written, when it ended DISCARDED rather
+   * than proposed (MOTIR-6300; design Part XXIII §23.12): `generating → declined`
+   * with `decisionReason: 'discarded'` — a plan closed holding zero proposals,
+   * decided by nobody. `readPendingProposal` is null for it, so {@link review}
+   * never carries it; this is the last snapshot, kept so the pane that drew the
+   * plan live can say how it ended instead of vanishing. Only an OBSERVED
+   * transition sets it, and a new run clears it.
+   */
+  discardedReview: PlanReviewDto | null;
   /**
    * WHICH WAY the current `review` was decided, or `null` while it is still
    * pending (MOTIR-3162). It is what tells the canvas to draw the accepted or
@@ -299,6 +311,7 @@ const INITIAL: PlanChangeConversationState = {
   liveReview: null,
   liveVersion: 0,
   liveFailing: false,
+  discardedReview: null,
   decided: null,
   jobId: null,
   planId: null,
@@ -603,7 +616,15 @@ export function usePlanChangeConversation({
       // the run's own read to file, not this one's.
       const transitioned = sawGeneratingRef.current === livePlanId;
       sawGeneratingRef.current = null;
-      if (transitioned) void handOver(livePlanId);
+      if (!transitioned) return;
+      // DISCARDED while it was being written (§23.12): nothing is proposed, so there
+      // is nothing to hand over — the ended snapshot replaces the live one in ONE
+      // update, so the pane that drew it stays mounted and says how it ended.
+      if (snap.status === 'declined' && snap.decisionReason === 'discarded') {
+        setState((s) => ({ ...s, liveReview: null, discardedReview: snap }));
+        return;
+      }
+      void handOver(livePlanId);
     },
   });
 
@@ -895,6 +916,7 @@ export function usePlanChangeConversation({
           // still awaits a decision on.
           review: s.decided ? null : s.review,
           liveReview: null,
+          discardedReview: null,
           decided: null,
           ...firstAct('submitted'),
           errorCode: null,
@@ -988,6 +1010,7 @@ export function usePlanChangeConversation({
             planId: submitted.planId,
             review: s.decided ? null : s.review,
             liveReview: null,
+            discardedReview: null,
             decided: null,
             ...firstAct('submitted'),
             errorCode: null,
@@ -1065,6 +1088,8 @@ export function usePlanChangeConversation({
             session: settled.session,
             jobId: settled.jobId,
             planId: settled.planId,
+            // A plan run starts here, so an earlier discarded plan stops describing it.
+            discardedReview: null,
             // The hand-off is an act like any other: it joins the record as well
             // as replacing the live line (MOTIR-4069).
             progress: { kind: 'redirected' },

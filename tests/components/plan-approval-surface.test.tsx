@@ -92,6 +92,7 @@ function stateWith(over: Partial<PlanChangeConversationState> = {}): PlanChangeC
     liveReview: null,
     liveVersion: 0,
     liveFailing: false,
+    discardedReview: null,
     decided: null,
     jobId: null,
     planId: 'plan_1',

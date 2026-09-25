@@ -161,6 +161,14 @@ export interface PlanningCanvasProps {
    * surface's live pane opts in (MOTIR-6300).
    */
   motion?: boolean;
+  /**
+   * With `motion` on: this MOUNT's first snapshot is an ARRIVAL, not a baseline
+   * (MOTIR-6300). Read once, at mount. The consumer sets it when the level it is
+   * drawing was EMPTY a moment ago on the same level, in front of the reader, so
+   * the cards that fill it enter (staggered, then their arrows) rather than
+   * appearing settled. Anything else keeps "the first read plays nothing" (§23.4).
+   */
+  animateInitial?: boolean;
   className?: string;
 }
 
@@ -378,6 +386,7 @@ export function PlanningCanvas({
   ariaLabel,
   arrival,
   motion = false,
+  animateInitial = false,
   className,
 }: PlanningCanvasProps) {
   const t = useTranslations('roadmap.canvas');
@@ -396,7 +405,11 @@ export function PlanningCanvas({
   // Adjusted DURING render when a new snapshot arrives (React's "state from a prop
   // change" idiom), so a new node's very first render already carries its
   // `data-motion`, and a leaving node is never unmounted before it is retained.
-  const [mo, setMo] = useState<MotionState>(() => idleMotion(motion, { nodes, edges }));
+  // An `animateInitial` mount starts from the EMPTY level it watched, so its first
+  // snapshot diffs as arrivals through the ordinary path below.
+  const [mo, setMo] = useState<MotionState>(() =>
+    idleMotion(motion, motion && animateInitial ? { nodes: [], edges: [] } : { nodes, edges }),
+  );
   if (motion) {
     if (!mo.armed) {
       // Switched on under a mounted canvas: what is drawn now is the FIRST read.

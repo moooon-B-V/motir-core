@@ -293,6 +293,26 @@ body {
     animation: canvas-fade-out var(--transition-fast) var(--canvas-ease-exit) forwards;
   }
 }
+/* THE LIVE LIST (MOTIR-6300; design Part XXIII §23.9) — the same pane's other
+   body. A row that arrives while the plan is written takes the card's entrance
+   with a 4px rise; a withdrawn row leaves with the card's exit. Static by default,
+   added under `no-preference` exactly as the canvas's motion is: under reduced
+   motion rows simply are or are not there. */
+@keyframes plan-list-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .plan-list-row--enter {
+    animation: plan-list-row-enter var(--transition-slow) var(--canvas-ease-enter) both;
+  }
+  .plan-list-row--exit {
+    pointer-events: none;
+    animation: canvas-fade-out var(--transition-duration) var(--canvas-ease-exit) forwards;
+  }
+}
 /* The DEEPEN outline — the mark ON the board is the accent INK, never the fill
    (`--el-accent-on-surface` owes 3:1 on `--el-canvas`; MOTIR-4474). A static
    STATE: under reduced motion it is the whole of an arrival's and a deepen's cue,

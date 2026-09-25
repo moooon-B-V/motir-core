@@ -6745,7 +6745,7 @@ are or are not there.
 _"No proposals — This plan finished without proposing anything. Declining ends it — nothing in your
 backlog changes."_ A generating plan has not finished and cannot be declined from here. So while the
 plan is `generating` the list's empty statement is present-tense: **"Nothing proposed yet"** /
-**"Cards appear here as the plan is written."** (sheet 9 A). The shipped statement stays for a plan
+**"Items appear here as the plan is written."** (sheet 9 A; corrected at build, §23.14). The shipped statement stays for a plan
 that really did finish empty.
 
 ## 23.10 The dropped read
@@ -6820,12 +6820,19 @@ Both catalogues are owed — `messages/en.json` AND `messages/zh.json` (the zh-p
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `planReview.liveWriting`                  | Being written                                                                                                  | 正在编写                                                                    |
 | `planReview.liveReconnecting`             | Reconnecting — showing the last update                                                                         | 正在重新连接 — 显示的是最近一次更新                                         |
-| `planReview.liveAnnounce`                 | {count, plural, one {# card} other {# cards}} added to the plan                                                | 计划新增了 {count} 张卡片                                                   |
+| `planReview.liveAnnounce`                 | {count, plural, one {# item} other {# items}} added to the plan                                                | 计划新增了 {count} 个工作项                                                 |
 | `planReview.listWritingTitle`             | Nothing proposed yet                                                                                           | 尚无提案                                                                    |
-| `planReview.listWritingBody`              | Cards appear here as the plan is written.                                                                      | 计划编写过程中，卡片会出现在这里。                                          |
+| `planReview.listWritingBody`              | Items appear here as the plan is written.                                                                      | 计划编写过程中，工作项会出现在这里。                                        |
 | `planningWorkspace.arrival.arrivedIn`     | {count} new in {identifier} · Go there                                                                         | {identifier} 中有 {count} 项新内容 · 前往                                   |
 | `planningWorkspace.arrival.arrivedAcross` | {count} new elsewhere · latest in {identifier} · Go there                                                      | 其他层级有 {count} 项新内容 · 最新在 {identifier} · 前往                    |
 | `planningWorkspace.session.mcpNoTurns`    | The conversation behind this plan happened in {harness}, so it isn’t shown here. Ask below to change the plan. | 此计划背后的对话发生在 {harness} 中，因此不会显示在这里。可在下方提出修改。 |
+
+**⚠️ CORRECTED AT BUILD (MOTIR-6300, 2026-09-25) — two strings above.** As approved, `liveAnnounce`
+and `listWritingBody` said _card(s)_ / 卡片. That is this corpus's shorthand for a work item, not the
+product's noun, and the shipped reader-facing-noun guard (`tests/i18n-catalog.test.ts`) refuses it. They
+ship as _item(s)_ / 工作项, and the two rows above record the shipped strings. The approved published
+result (evidence `cmugtqshe007shytxfxtjiaxl`) still carries the old wording; this mirror records what
+ships.
 
 **Reused, verbatim:** `planReview.discardedOutcome` (23.12), `planReview.listEmptyTitle` (23.12),
 `planningWorkspace.arrival.goToTarget` (23.7). Every other string in the asset is the shipped

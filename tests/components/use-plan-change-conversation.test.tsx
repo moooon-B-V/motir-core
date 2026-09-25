@@ -1129,6 +1129,42 @@ describe('usePlanChangeConversation — the live review (MOTIR-6295)', () => {
     expect(readPendingSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('a plan DISCARDED while it was written keeps its last snapshot as `discardedReview` (MOTIR-6300)', async () => {
+    vi.useFakeTimers();
+    getNamed.mockResolvedValue({
+      ...session(['Plan the billing epic.']),
+      id: 's-mcp',
+      viewerCanPlan: true,
+      pendingPlanId: 'plan-1',
+    });
+    fetchReview.mockResolvedValue(WRITING);
+    const { result } = renderHook(() => usePlanChangeConversation({ sessionId: 's-mcp' }));
+    await flush();
+    await flush();
+    expect(result.current.state.liveReview).toEqual(WRITING);
+    expect(result.current.state.discardedReview).toBeNull();
+
+    // The agent closes the plan holding nothing: `generating → declined`, discarded.
+    readPendingSpy.mockClear();
+    const ended = {
+      ...WRITING,
+      items: [],
+      status: 'declined' as const,
+      decisionReason: 'discarded' as const,
+    };
+    fetchReview.mockResolvedValue(ended);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+    });
+    await flush();
+    // ONE update: the live snapshot leaves as the ended one arrives — and nothing
+    // is handed over, because nothing was proposed.
+    expect(result.current.state.liveReview).toBeNull();
+    expect(result.current.state.discardedReview).toEqual(ended);
+    expect(result.current.state.review).toBeNull();
+    expect(readPendingSpy).not.toHaveBeenCalled();
+  });
+
   it('a named session whose pending plan is already PROPOSED opens in review, with no live poll', async () => {
     vi.useFakeTimers();
     getNamed.mockResolvedValue({
