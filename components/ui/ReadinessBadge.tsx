@@ -14,7 +14,12 @@ import { cn } from '@/lib/utils/cn';
 // A full-width tinted banner sits at the top of the relationships panel:
 //  - ready   → mint (`--el-tint-mint`) + a success check + "Ready to start".
 //  - blocked → peach (`--el-tint-peach`) + a warning alert + "Blocked", naming
-//    the open (non-terminal) blockers as links so the reason is legible.
+//    the open (non-terminal) blockers as links so the reason is legible (HARD).
+//  - soft    → yellow (`--el-tint-yellow`) + a `--el-text-strong` alert +
+//    "Parent blocked" (MOTIR-6377, design `relationships--soft-block.mock.html`):
+//    no OWN open blocker, but a blocked ancestor holds the item out of the ready
+//    set — the fix lives on the ancestor. Own blockers win (HARD), and a bare
+//    not-ready verdict with neither cause stays the peach "Blocked".
 // State is conveyed by TEXT ("Ready to start" / "Blocked"), never colour alone
 // (the icon + tint are redundant cues) — clears the shell-a11y axe sweep. Tints
 // carry the hue in the BACKGROUND with `--el-text-strong` text (finding #35 AA).
@@ -76,17 +81,32 @@ export function ReadinessBadge({
     );
   }
 
+  // SOFT (MOTIR-6377): not ready, no own open blocker, a blocked ancestor to
+  // name. Only the surface, the glyph's colour and the heading change — the
+  // shape, detail line and links are the HARD banner's. Charcoal on the yellow
+  // tint measures 11.38:1 light / 9.89:1 dark (base palette; ≥ 9.89:1 across
+  // every palette — asserted in tests/components/readiness-badge-soft.test.tsx).
+  const soft = blockers.length === 0 && blockedByAncestor !== null;
+
   return (
     <div
+      data-readiness={soft ? 'soft' : 'hard'}
       className={cn(
-        'bg-(--el-tint-peach) flex items-start gap-2.5 rounded-(--radius-card) px-3.5 py-3',
+        soft ? 'bg-(--el-tint-yellow)' : 'bg-(--el-tint-peach)',
+        'flex items-start gap-2.5 rounded-(--radius-card) px-3.5 py-3',
         className,
       )}
     >
-      <CircleAlert className="text-(--el-warning) mt-0.5 h-[18px] w-[18px] shrink-0" aria-hidden />
+      <CircleAlert
+        className={cn(
+          soft ? 'text-(--el-text-strong)' : 'text-(--el-warning)',
+          'mt-0.5 h-[18px] w-[18px] shrink-0',
+        )}
+        aria-hidden
+      />
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="text-(--el-text-strong) font-sans text-sm font-semibold">
-          {t('readiness.blocked')}
+          {soft ? t('readiness.parentBlocked') : t('readiness.blocked')}
         </span>
         {blockers.length > 0 ? (
           <span className="text-(--el-text-strong) font-sans text-[13px]">

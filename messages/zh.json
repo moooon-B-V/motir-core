@@ -1655,7 +1655,8 @@
       "allResolved": "所有阻塞已解决",
       "blocked": "受阻",
       "waiting": "正在等待 {count, plural, other {# 个工作项}}",
-      "waitingOnParent": "正在等待上级工作项"
+      "waitingOnParent": "正在等待上级工作项",
+      "parentBlocked": "上级受阻"
     },
     "sprintPicker": {
       "label": "Sprint",
