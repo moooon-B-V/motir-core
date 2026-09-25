@@ -152,6 +152,15 @@ const inFlight = new Set<Promise<unknown>>();
 const drop = { planReads: 0, failed: 0 };
 /** Every plan read served, in order — the poll's own trail. */
 const planReads: string[] = [];
+/**
+ * The subset of `planReads` issued by the GENERATING poll (`useGeneratingPlanPoll`),
+ * told apart by the caller on the stack. The hand-over case needs it: after the plan
+ * leaves `generating` the surface DOES keep reading it, on purpose — MOTIR-6151's
+ * gate watch re-reads an awaiting plan so a lease taken elsewhere holds its verbs —
+ * so "no further plan read" is the wrong claim. "No further GENERATING-poll read"
+ * is the right one.
+ */
+const generatingPollReads: string[] = [];
 /** Anything fetched that this seam does not serve. Asserted empty. */
 const unserved: string[] = [];
 
@@ -176,6 +185,7 @@ function installFetch(): void {
       const plan = /^\/api\/plans\/([^/]+)$/.exec(path);
       if (plan) {
         planReads.push(path);
+        if (new Error().stack?.includes('useGeneratingPlanPoll')) generatingPollReads.push(path);
         if (drop.planReads > 0) {
           drop.planReads -= 1;
           drop.failed += 1;
@@ -275,6 +285,7 @@ beforeEach(async () => {
   viewsLog.length = 0;
   search.value = '';
   planReads.length = 0;
+  generatingPollReads.length = 0;
   unserved.length = 0;
   drop.planReads = 0;
   drop.failed = 0;
@@ -720,16 +731,17 @@ describe('MOTIR-6301 · one review model, drawn identically live and proposed', 
     expect(edgeKeys()).toEqual(edgeKeys(liveModel));
     // The proposed pane does not move — motion is the live pane's alone.
     expect(model().motion).toBe(false);
-    // …and the poll has stopped: no further read is issued. SETTLE first: the
-    // confirm bar's own one-off plan read can still be in flight when the bar
-    // is found, and counting it as a poll tick made this flaky on CI. A poll
-    // that had NOT stopped still adds one read per tick below, so the check
-    // keeps its teeth.
+    // …and the GENERATING poll has stopped: it issues no further read. Not "no
+    // further plan read at all": once the plan is awaiting a decision, MOTIR-6151's
+    // gate watch re-reads it on its own interval, deliberately — counting those
+    // failed this case twice on CI. A generating poll that had NOT stopped would
+    // still add one read per tick here.
     await settle();
-    const reads = planReads.length;
+    expect(generatingPollReads.length).toBeGreaterThan(0);
+    const pollReads = generatingPollReads.length;
     await tick();
     await tick();
-    expect(planReads.length).toBe(reads);
+    expect(generatingPollReads.length).toBe(pollReads);
   });
 });
 
