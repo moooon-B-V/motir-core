@@ -311,6 +311,11 @@ describe('the states this story adds', () => {
     fireEvent.click(chip);
 
     expect(handlers.onSend).not.toHaveBeenCalled();
-    expect(screen.getByRole('textbox').getAttribute('value')).toBe("What's blocked, and why?");
+    // `.value`, not the `value` ATTRIBUTE: the composer is a `<textarea>`
+    // since MOTIR-6238 and a textarea has no `value` attribute at all, so the
+    // attribute read is `null` for every draft. The assertion is unchanged.
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
+      "What's blocked, and why?",
+    );
   });
 });
