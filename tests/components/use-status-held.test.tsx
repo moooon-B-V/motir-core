@@ -4,6 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import { useStatusHeld } from '@/components/issues/useStatusHeld';
 import type { HeldTransitionDTO } from '@/lib/dto/approvalGate';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
 
 // The status control's HELD state (Story MOTIR-4887 · MOTIR-5528 · MOTIR-5530's
 // coverage floor) — seeded from the read, folded forward by a refusal and a move,
@@ -133,5 +134,131 @@ describe('useStatusHeld', () => {
     rerender({ status: 'done' });
     expect(result.current.lines.map((l) => l.statusKey)).toEqual(['approved']);
     expect(result.current.held).toEqual([{ statusKey: 'approved', waitingOn: 'decision' }]);
+  });
+
+  // ── A PLAN HOLD (Story MOTIR-6017 · MOTIR-6267) ─────────────────────────────
+  const withPlanning: WorkflowStatusDto[] = [
+    { ...statuses[0]!, id: 's0', key: 'planning', label: 'Planning', category: 'todo' },
+    ...statuses,
+  ];
+  const hold = (over: Partial<PlanHoldDTO> = {}): PlanHoldDTO => ({
+    itemKey: 'PROD-1',
+    workItemId: 'wi_1',
+    planId: 'pln_1',
+    planStatus: 'planned',
+    sessionId: 'pcs_1',
+    anchorKey: 'PROD-1',
+    ...over,
+  });
+
+  it('a plan hold locks EVERY option but the current one, tagged as the plan’s', () => {
+    const { result } = renderHook(() =>
+      useStatusHeld([held({})], withPlanning, 'planning', hold()),
+    );
+    expect(result.current.plan).toMatchObject({ planId: 'pln_1' });
+    expect(result.current.held).toEqual([
+      { statusKey: 'in_review', waitingOn: 'plan' },
+      { statusKey: 'approved', waitingOn: 'plan' },
+      { statusKey: 'done', waitingOn: 'plan' },
+    ]);
+    // The gate's own line is still there, for the notice to say beneath the plan.
+    expect(result.current.lines.map((l) => l.statusKey)).toEqual(['done']);
+  });
+
+  it('no plan hold → no plan, and only the gate’s own locks', () => {
+    const { result } = renderHook(() => useStatusHeld([held({})], withPlanning, 'planning', null));
+    expect(result.current.plan).toBeNull();
+    expect(result.current.held).toEqual([{ statusKey: 'done', waitingOn: 'decision' }]);
+
+    const bare = renderHook(() => useStatusHeld(undefined, withPlanning, 'planning'));
+    expect(bare.result.current.plan).toBeNull();
+    expect(bare.result.current.held).toEqual([]);
+  });
+
+  it('a PLAN_TARGET_HELD refusal folds the plan in; a move that went through drops it', () => {
+    const { result } = renderHook(() => useStatusHeld(undefined, withPlanning, 'planning', null));
+    act(() => result.current.onPlanHeldRefused(hold({ planStatus: 'generating' })));
+    expect(result.current.plan).toMatchObject({ planStatus: 'generating' });
+    expect(result.current.held).toHaveLength(3);
+
+    act(() => result.current.onMoved('in_review'));
+    expect(result.current.plan).toBeNull();
+    expect(result.current.held).toEqual([]);
+  });
+
+  it('the hold drops at READ time once the card is no longer at Planning, whatever moved it', () => {
+    const { result, rerender } = renderHook(
+      ({ status }) => useStatusHeld(undefined, withPlanning, status, hold()),
+      { initialProps: { status: 'planning' } },
+    );
+    expect(result.current.plan).not.toBeNull();
+
+    rerender({ status: 'in_review' });
+    expect(result.current.plan).toBeNull();
+    expect(result.current.held).toEqual([]);
+  });
+
+  it('a refusal while the page still shows an OLDER status stands there, until the card shows anything else', () => {
+    // The plan took the card after render: the server says Planning, the page says In Review.
+    const { result, rerender } = renderHook(
+      ({ status }) => useStatusHeld(undefined, withPlanning, status, null),
+      { initialProps: { status: 'in_review' } },
+    );
+    act(() => result.current.onPlanHeldRefused(hold()));
+    expect(result.current.plan).toMatchObject({ planId: 'pln_1' });
+    expect(result.current.held.map((h) => h.statusKey)).toEqual(['planning', 'approved', 'done']);
+
+    rerender({ status: 'done' });
+    expect(result.current.plan).toBeNull();
+  });
+
+  it('a NEW read of the plan replaces the folded one', () => {
+    const { result, rerender } = renderHook(
+      ({ plan }) => useStatusHeld(undefined, withPlanning, 'planning', plan),
+      { initialProps: { plan: null as PlanHoldDTO | null } },
+    );
+    expect(result.current.plan).toBeNull();
+    rerender({ plan: hold({ planStatus: 'stale' }) });
+    expect(result.current.plan).toMatchObject({ planStatus: 'stale' });
+    rerender({ plan: null });
+    expect(result.current.plan).toBeNull();
+  });
+
+  // ── The story gate's top-up (Story MOTIR-6017 · MOTIR-6269's coverage floor) ──
+
+  it('a plan with NO session and NO anchor is still a distinct read — the null fields sign too', () => {
+    const { result, rerender } = renderHook(
+      ({ plan }) => useStatusHeld(undefined, withPlanning, 'planning', plan),
+      { initialProps: { plan: hold() } },
+    );
+    expect(result.current.plan).toMatchObject({ sessionId: 'pcs_1' });
+    // Only the session and the anchor change: a new read all the same.
+    rerender({ plan: hold({ sessionId: null, anchorKey: null }) });
+    expect(result.current.plan).toMatchObject({ sessionId: null, anchorKey: null });
+  });
+
+  it('a gate read with no gate row and no routed-to label signs as its own read', () => {
+    const bare = held({ gateId: null, routedToLabel: null });
+    const { result, rerender } = renderHook(({ read }) => useStatusHeld(read, statuses), {
+      initialProps: { read: [bare] },
+    });
+    act(() => result.current.onMoved('done'));
+    expect(result.current.lines).toEqual([]);
+    // Same CONTENT, fresh identity → nothing resets.
+    rerender({ read: [{ ...bare }] });
+    expect(result.current.lines).toEqual([]);
+  });
+
+  it('a refusal with no current status stands until a move; a move INTO Planning keeps the plan', () => {
+    const { result } = renderHook(() => useStatusHeld(undefined, withPlanning));
+    act(() => result.current.onPlanHeldRefused(hold()));
+    expect(result.current.plan).toMatchObject({ planId: 'pln_1' });
+
+    // Arriving at Planning is not leaving it — the hold is about leaving.
+    act(() => result.current.onMoved('planning'));
+    expect(result.current.plan).toMatchObject({ planId: 'pln_1' });
+
+    act(() => result.current.onMoved('in_review'));
+    expect(result.current.plan).toBeNull();
   });
 });

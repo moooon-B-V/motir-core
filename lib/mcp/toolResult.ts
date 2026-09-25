@@ -8,6 +8,7 @@ import {
   MissingArtifactEvidenceError,
   ContainerHasOpenChildrenError,
   ApprovalGatePendingError,
+  PlanTargetHeldError,
   ParentCycleError,
   ReporterNotInWorkspaceError,
   TypeNotAllowedOnKindError,
@@ -272,6 +273,10 @@ export function toToolError(err: unknown): CallToolResult {
     // approving it is what makes the move — so the agent reports the gate rather
     // than retrying or editing a workflow that is not wrong.
     err instanceof ApprovalGatePendingError ||
+    // The plan hold (MOTIR-6265). The message says a plan is rewriting the card
+    // and that deciding the plan (or withdrawing the proposal naming it) is the
+    // way out — so an agent reports the plan instead of retrying the move.
+    err instanceof PlanTargetHeldError ||
     err instanceof IllegalParentTypeError ||
     err instanceof DepthLimitExceededError ||
     // Re-parent cycle (move_to_parent, MOTIR-1017): the DB cycle trigger's

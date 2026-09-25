@@ -6,6 +6,8 @@ import type { WorkItemDto, WorkItemPlacementDto, WorkItemSummaryDto } from '@/li
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
+import { planRowDestination } from '@/lib/planning/planDestination';
 
 // The inline rail commits through the edit Server Actions + refreshes the route;
 // stub those, the parent-candidates fetch, the router, and the toast so the
@@ -341,6 +343,123 @@ describe('CoreFieldsPanel (inline rail)', () => {
 // different island (Story MOTIR-5309 · MOTIR-5381). The rail reports a SUCCESSFUL
 // parent change to the page's placement channel; the channel re-reads and the
 // breadcrumb repaints — no whole-page refresh.
+describe('CoreFieldsPanel — a PLAN holds the status (MOTIR-6267)', () => {
+  const planningWorkflow: WorkflowDto = {
+    ...workflow,
+    statuses: [
+      {
+        id: 's0',
+        projectId: 'proj_1',
+        key: 'planning',
+        label: 'Planning',
+        category: 'todo',
+        color: null,
+        position: 'a',
+        isInitial: false,
+      },
+      ...workflow.statuses,
+    ],
+  };
+  const hold: PlanHoldDTO = {
+    itemKey: 'PROD-7',
+    workItemId: 'wi_1',
+    planId: 'pln_1',
+    planStatus: 'generating',
+    sessionId: 'pcs_1',
+    anchorKey: 'PROD-7',
+  };
+  const doorHref = planRowDestination({
+    planStatus: hold.planStatus,
+    planId: hold.planId,
+    sessionId: hold.sessionId,
+    host: '/items/PROD-7',
+    anchorKey: hold.anchorKey,
+  }).href;
+
+  function renderHeld(planHold: PlanHoldDTO | null, { readOnly = false } = {}) {
+    const tree = (
+      <CoreFieldsPanel
+        item={makeItem({ status: 'planning' })}
+        members={members}
+        workflow={planningWorkflow}
+        parent={null}
+        reporterIsSelf
+        planHold={planHold}
+      />
+    );
+    return render(
+      readOnly ? <ProjectAccessProvider permissions={[]}>{tree}</ProjectAccessProvider> : tree,
+    );
+  }
+
+  it('says so on the status card with Review plan, and locks EVERY option but the current', () => {
+    renderHeld(hold);
+
+    const notice = screen.getByTestId('status-held-notice');
+    expect(notice.textContent).toContain("Status can't be changed while a plan is open.");
+    expect(notice.textContent).toContain('Motir AI is still writing this plan.');
+    expect(within(notice).getByRole('link', { name: 'Review plan' }).getAttribute('href')).toBe(
+      doorHref,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Status' }));
+    fireEvent.click(screen.getByRole('combobox'));
+    for (const name of ['To Do', 'In Progress', 'Done']) {
+      const option = screen.getByRole('option', { name: new RegExp(name) });
+      expect(option.getAttribute('aria-disabled')).toBe('true');
+      expect(option.textContent).toContain('held by plan');
+      fireEvent.click(option);
+    }
+    expect(screen.getByRole('option', { name: 'Planning' }).getAttribute('aria-disabled')).not.toBe(
+      'true',
+    );
+    expect(statusSpy).not.toHaveBeenCalled();
+  });
+
+  it('no plan hold → no line, and every option pickable', () => {
+    renderHeld(null);
+    expect(screen.queryByTestId('status-held-notice')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Status' }));
+    fireEvent.click(screen.getByRole('combobox'));
+    expect(screen.getByRole('option', { name: 'Done' }).getAttribute('aria-disabled')).not.toBe(
+      'true',
+    );
+    expect(screen.queryByText('held by plan')).toBeNull();
+  });
+
+  it('a reader who cannot edit still sees the line AND the door', () => {
+    renderHeld({ ...hold, planStatus: 'planned' }, { readOnly: true });
+    const notice = screen.getByTestId('status-held-notice');
+    expect(notice.textContent).toContain('This plan is waiting for approval.');
+    expect(within(notice).getByRole('link', { name: 'Review plan' })).toBeTruthy();
+  });
+
+  it('a PLAN_TARGET_HELD answer REVERTS the status and draws the line — not a toast', async () => {
+    statusSpy.mockResolvedValue({
+      ok: false,
+      error: 'held',
+      field: 'status',
+      code: 'PLAN_TARGET_HELD',
+      plan: { ...hold, planStatus: 'stale', sessionId: null },
+    });
+    renderHeld(null);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Status' }));
+    fireEvent.click(screen.getByRole('combobox'));
+    fireEvent.click(screen.getByRole('option', { name: 'Done' }));
+    await act(async () => {});
+
+    expect(statusSpy).toHaveBeenCalledWith({ id: 'wi_1', toStatusKey: 'done' });
+    expect(toastSpy).not.toHaveBeenCalled();
+    expect(screen.getByText('Planning')).toBeTruthy();
+    const notice = screen.getByTestId('status-held-notice');
+    expect(notice.textContent).toContain('This plan needs attention before it can be approved.');
+    expect(within(notice).getByRole('link', { name: 'Review plan' }).getAttribute('href')).toBe(
+      '/plans/pln_1',
+    );
+  });
+});
+
 describe('CoreFieldsPanel → placement channel', () => {
   const oldEpic = {
     id: 'wi_old',

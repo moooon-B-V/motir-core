@@ -63,10 +63,11 @@ export const statusDerivationOnTransitioned = defineJob(
   async (ctx, services) => {
     const payload = ctx.event.data as WorkItemTransitionedData;
 
-    // `-v2` (MOTIR-5526): the rollup's result gained `approval_pending`, so a memo
+    // `-v3` (MOTIR-6265): the rollup's result gained `plan_held`, as `-v2`
+    // (MOTIR-5526) gained `approval_pending`, so a memo
     // written under the old id carries the narrower shape. The derivation is an
     // idempotent read-derived write, so re-executing on a resumed run is safe.
-    const rollup = await ctx.step.run('roll-up-parent-v2', () =>
+    const rollup = await ctx.step.run('roll-up-parent-v3', () =>
       services.parentStatusRollup.rollUpForChild(payload.workItemId, payload.workspaceId),
     );
     // The cascade is decided by the TRANSITION this event carries, not by re-reading
@@ -162,10 +163,11 @@ export const statusDerivationOnCreated = defineJob(
     // its parent itself. A root item returns `no_parent` after one indexed read,
     // which is the cheap no-op this event needs — it fires on EVERY item
     // creation in the workspace.
-    // `-v2` (MOTIR-5526): the rollup's result gained `approval_pending`, so a memo
+    // `-v3` (MOTIR-6265): the rollup's result gained `plan_held`, as `-v2`
+    // (MOTIR-5526) gained `approval_pending`, so a memo
     // written under the old id carries the narrower shape. The derivation is an
     // idempotent read-derived write, so re-executing on a resumed run is safe.
-    return ctx.step.run('recompute-parent-v2', () =>
+    return ctx.step.run('recompute-parent-v3', () =>
       services.parentStatusRollup.rollUpForChild(payload.workItemId, payload.workspaceId),
     );
   },
@@ -200,8 +202,8 @@ export const statusDerivationOnChildSetChanged = defineJob(
     const outcomes = [];
     for (const [i, parentId] of payload.parentIds.entries()) {
       outcomes.push(
-        // `-v2`: the same result widening as the steps above (MOTIR-5526).
-        await ctx.step.run(`recompute-parent-v2-${i}`, () =>
+        // `-v3`: the same result widening as the steps above (MOTIR-5526, MOTIR-6265).
+        await ctx.step.run(`recompute-parent-v3-${i}`, () =>
           services.parentStatusRollup.recomputeParent(parentId, payload.workspaceId, trigger),
         ),
       );
@@ -271,10 +273,11 @@ export const statusDerivationOnRequested = defineJob(
     // there is nothing to re-read. No `trigger.occurredAt` — the pinned child is
     // still IN the set with its new status, so the aggregate dates the edit
     // itself, which is what keeps this idempotent under redelivery.
-    // `-v2` (MOTIR-5526): the rollup's result gained `approval_pending`, so a memo
+    // `-v3` (MOTIR-6265): the rollup's result gained `plan_held`, as `-v2`
+    // (MOTIR-5526) gained `approval_pending`, so a memo
     // written under the old id carries the narrower shape. The derivation is an
     // idempotent read-derived write, so re-executing on a resumed run is safe.
-    return ctx.step.run('recompute-parent-v2', () =>
+    return ctx.step.run('recompute-parent-v3', () =>
       services.parentStatusRollup.recomputeParent(payload.parentId, payload.workspaceId),
     );
   },

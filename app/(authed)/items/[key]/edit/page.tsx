@@ -11,6 +11,7 @@ import { resolveAliasedIssueKey } from '@/lib/issues/aliasRedirect';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { EditIssueForm } from './_components/EditIssueForm';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { RelationshipsPanel } from '../_components/RelationshipsPanel';
 import { IssueQuickViewController } from '../../_components/IssueQuickViewController';
 
@@ -81,7 +82,7 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
   // the read view pays one discarded read. That is deliberate: the redirect is
   // the rare path, and the alternative charges a second round trip to every
   // successful edit.
-  const [{ canEdit }, members, heldTransitions] = await Promise.all([
+  const [{ canEdit }, members, heldTransitions, planHold] = await Promise.all([
     projectAccessService.getCapabilities(ctx.projectId, serviceCtx),
     assignableMembersService.list({
       projectId: ctx.projectId,
@@ -91,6 +92,9 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
     // The moves an approval HOLDS (MOTIR-5528) — the status field says so here
     // as on the detail page. Concurrent for the same reason as `members`.
     approvalGatesService.listHeldTransitions(detail.item.id, serviceCtx),
+    // The undecided PLAN holding the card at Planning (MOTIR-6267) — every move
+    // locked, said on the status field with its Review plan door.
+    planTargetLockService.readPlanHold(detail.item.id, serviceCtx),
   ]);
   if (!canEdit) {
     redirect(`/items/${detail.item.identifier}`);
@@ -104,6 +108,7 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
         workflow={detail.workflow}
         members={members}
         heldTransitions={heldTransitions}
+        planHold={planHold}
         aiConfigured={isMotirAiConfigured()}
       />
       <RelationshipsPanel

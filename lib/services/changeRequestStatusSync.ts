@@ -48,6 +48,7 @@ import {
   ApprovalGatePendingError,
   IllegalTransitionError,
   MissingArtifactEvidenceError,
+  PlanTargetHeldError,
   UnknownStatusError,
 } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
@@ -150,6 +151,7 @@ export type ChangeRequestSyncResult = {
     | 'illegal_transition'
     | 'open_children' // the item is a CONTAINER whose own children are not landed — it stays where it is (MOTIR-3229)
     | 'approval_pending' // an `awaiting` approval gate owns the target status — the merge waits for the decision (MOTIR-5526)
+    | 'plan_held' // an UNDECIDED plan holds the item at `planning` — the merge moves nothing until the plan is decided (MOTIR-6265)
     | 'access_denied'
     | 'unknown_installation'
     | 'unknown_repo'
@@ -1086,6 +1088,26 @@ async function reportTransitionRefusal(
       });
     }
   }
+  if (result.outcome === 'plan_held' && !resolved.mergeAlreadyRecorded) {
+    try {
+      await commentsService.addComment(
+        resolved.workItemId,
+        {
+          bodyMd: planHeldCommentBody({
+            noun: changeRequestNoun(resolved.provider),
+            number: cr.number,
+          }),
+        },
+        { userId: resolved.actorUserId, workspaceId: resolved.workspaceId },
+      );
+    } catch (noteErr) {
+      console.error('[changeRequestStatusSync] plan-held note failed; item still held', {
+        workItemId: resolved.workItemId,
+        number: cr.number,
+        error: noteErr instanceof Error ? noteErr.message : 'unknown',
+      });
+    }
+  }
   if (result.outcome === 'missing_artifact_evidence' && !resolved.mergeAlreadyRecorded) {
     try {
       await commentsService.addComment(
@@ -1155,6 +1177,19 @@ function missingArtifactEvidenceCommentBody(args: { noun: string; number: number
  *  Same two obligations as its siblings: name the fact that answers *"why isn't
  *  this Done?"*, and state the condition that WILL complete the item. It
  *  describes what did NOT happen; the sync leaves the item where it was. */
+/** The plan-held note (MOTIR-6265) — posted when a merge lands on an item an
+ *  UNDECIDED plan holds at `planning`. Like every hold note here it describes what
+ *  did NOT happen and names what will clear it, so the close-out sweep reads a
+ *  decision rather than a stuck integration. */
+function planHeldCommentBody(args: { noun: string; number: number }): string {
+  return (
+    `⚠️ **Merged, but a plan is open on this item** — ${args.noun} #${args.number} merged ` +
+    `while an undecided plan was rewriting this item, so the merge does **not** move it — ` +
+    `its status is left at **Planning**.\n\n` +
+    `The plan decides what happens next: approving or declining it releases the item.`
+  );
+}
+
 function approvalPendingCommentBody(args: {
   noun: string;
   number: number;
@@ -1465,6 +1500,12 @@ export function classifyTransitionError(
   // the status itself, because no open pull request is left to defer to.
   if (err instanceof ApprovalGatePendingError)
     return { event: 'pull_request', outcome: 'approval_pending', workItemId, toStatus };
+  // THE PLAN HOLD (MOTIR-6265; `agent-authored-plans.md` AMENDMENT 21 §5(b)). The
+  // merge derives a status from the card's OLD shape, which is exactly what an
+  // undecided plan is replacing. A REFUSAL, recorded and never a failed delivery:
+  // deciding the plan clears it, and the merge is already on the record.
+  if (err instanceof PlanTargetHeldError)
+    return { event: 'pull_request', outcome: 'plan_held', workItemId, toStatus };
   throw err;
 }
 

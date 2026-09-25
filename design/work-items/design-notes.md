@@ -8706,3 +8706,124 @@ Already in both catalogues (MOTIR-6096): `activity.fields.difficulty` _Difficult
 | the activity entry — nothing to build; MOTIR-6096 already registered the field and its label                                                                                                     | —              |
 
 **Not drawn, and owed by nobody:** a List column or a Board-card badge (the story asks for a filter), the plan review's rendering of a proposed difficulty (the sibling planner story, MOTIR-6095), and any model-choice UI.
+
+---
+
+## ⭐ The status control says a PLAN holds it — every move locked while an undecided plan rewrites the card (Story MOTIR-6017 · MOTIR-6263 — `status-held-by-decision--plan-hold.mock.html`, DATED 2026-09-25)
+
+**A DELTA of § _The status control says so_** (MOTIR-5523,
+`status-held-by-decision.mock.html`). That asset is a RECORD and is not edited: it still draws
+exactly what it drew, for a move held by an APPROVAL GATE. This section adds the case where the
+card is held by an **undecided PLAN**, and the delta mock holds only the panels that change.
+
+**The rule it depicts** is `docs/decisions/agent-authored-plans.md` **AMENDMENT 21**: a work item is
+HELD when its status is `planning`, a `plan_target_lock` row names it with a non-null `planId`, and
+that plan is `generating`, `planned` or `stale`. Every non-system move out is refused with
+`PLAN_TARGET_HELD`.
+
+### What DIFFERS from the gate-held state — the three things a builder cannot infer
+
+1. **A gate holds ONE status; a plan holds EVERY move.** So the dropdown shows **every** option
+   disabled and tagged, not one. This is the largest visible difference and it is what panel 1b is
+   for: there is no move left to offer, because the plan owns all of them.
+2. **The door is _Review plan_, never _Review & approve_**, and it goes where
+   `planRowDestination` (`lib/planning/planDestination.ts`, MOTIR-6043) sends the plan — the
+   **planning surface** for a plan with a session, **`/plans/<id>`** for one without. It **never**
+   opens the approval overlay (`docs/decisions/approval-gates.md` §11.5b). The glyph is `Sparkles`,
+   the icon the product already uses for Motir AI (`components/planning/PlanWithAILauncher.tsx`),
+   rather than the gate's `ScanEye` — the two doors go to different places and should not look
+   identical.
+3. **The box carries TWO lines, not one.** The refusal is constant; the second line says what the
+   plan is DOING, because that is what tells a reader how long this lasts and whether it is waiting
+   on them.
+
+### The panels
+
+| #      | state                                          | what it settles                                                                                  |
+| ------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 1 · 1b | plan `generating`                              | the closed control, then the dropdown with **every** option locked                               |
+| 2      | plan `planned`                                 | waiting for approval; same door, second line changes                                             |
+| 3      | plan `stale`                                   | `stale` is UNDECIDED so it still holds (AMENDMENT 21 §1) and its lock no longer expires (§4)     |
+| 4      | plan with **no session**                       | `planRowDestination`'s `no-conversation`: the door opens `/plans/<id>`. The COPY does not change |
+| 5      | **not held** — a planning SESSION with no plan | the ordinary control, no box. Drawn so the builder adds no line where none belongs               |
+| 6      | plan **and** an `awaiting` gate                | both lines render, plan FIRST, gate line with no button                                          |
+| 7      | a reader who cannot edit                       | the line **and** the door still show                                                             |
+| 8      | the `/items` row                               | the anchored refusal, in place of the snap-back toast — the ACCESS PATH from the list            |
+| 9      | the quick view at its narrowest                | the box wraps and the door drops to its own line; no separate rule needed                        |
+
+Every panel is drawn in **en and zh**.
+
+### The two things nobody had drawn, decided here with their reasons
+
+**(a) A plan AND a gate both holding — BOTH lines render, the plan FIRST, and only the plan line
+carries a button.** AMENDMENT 16 D3 keeps an `awaiting` gate alive across the park, so the two
+genuinely coexist. They are two different refusals with two different destinations, so saying only
+one would leave a reader who resolves it still stuck. The plan goes first because it is the wider
+hold — it owns every move, the gate owns one — and because **deciding the gate is itself refused
+while the plan holds** (AMENDMENT 21 §6). That is why the gate line here has **no** _Review &
+approve_ button: it would be a door onto a refusal. Its sentence says instead that it can be decided
+once the plan is. The two lines use the shipped component's own `<hr>`-separated multi-line form
+(`StatusHeldNotice`), so this needs no new container.
+
+**(b) A reader who cannot edit sees the line AND the door.** The base asset withholds the button
+from a see-only reader, correctly — that button DECIDES. **This one does not decide anything: it
+goes and looks.** The planning surface is a READ surface as much as a decide one (§11.5b hosts the
+conversation beside the plan), and a reader who cannot edit still has the question the line answers:
+_why is this card stuck?_ Withholding the door would leave them told a plan exists with no way to
+see it. The control itself is already read-only for them; nothing about the hold changes that.
+
+### The copy, and the string keys the code card writes
+
+Written by **MOTIR-6267**, under `approvalGate.statusHeld` beside the gate's existing keys:
+
+| key                    | en                                                                                              | zh                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `planHeld`             | Status can't be changed while a plan is open.                                                   | 计划未决定前无法更改状态。                                            |
+| `planState.generating` | Motir AI is still writing this plan.                                                            | Motir AI 正在撰写该计划。                                             |
+| `planState.planned`    | This plan is waiting for approval.                                                              | 该计划正在等待审批。                                                  |
+| `planState.stale`      | This plan needs attention before it can be approved.                                            | 该计划需要先处理，然后才能批准。                                      |
+| `reviewPlan`           | Review plan                                                                                     | 审阅计划                                                              |
+| `planHeldOption`       | held by plan                                                                                    | 计划占用中                                                            |
+| `planAndGate`          | A <strong>{decision}</strong> is waiting on this card too — it can be decided once the plan is. | 该卡片还有一项<strong>{decision}</strong>在等待——计划决定后才能处理。 |
+
+`reviewPlan` deliberately reuses the wording already shipped in
+`approvalGate.planApproval.row.reviewRow` (_"Review plan — {sentence}"_ / _"审阅计划 — {sentence}"_),
+so the To-approve row and this door name the same act with the same words. `planAndGate` takes
+`{decision}` from the existing `decisionNoun` map rather than introducing a second vocabulary for
+gate kinds.
+
+### What the code composes — reuse, do not redraw
+
+- **`components/issues/StatusHeldNotice.tsx`** — the box, verbatim: `rounded-(--radius-control)`,
+  `border-(--el-border-soft)`, `bg-(--el-tint-yellow)`, `px-(--spacing-control-x)`
+  `py-(--spacing-control-y)`, a `Lock` glyph at `h-3.5 w-3.5`, one 13px `leading-snug` line per
+  entry and an `<hr>` between entries. A plan line is a new line SHAPE in this component, not a new
+  component.
+- **`components/issues/useStatusHeld.ts`** — the hook the item page, quick view and edit page share.
+  A plan hold is seeded from the same server read and folded forward by the same refusal path.
+- **`components/issues/heldRefusal.ts`** — the anchored form panel 8 draws, and `readHeldRefusal`'s
+  `code` branch, which gains `PLAN_TARGET_HELD` beside `APPROVAL_GATE_PENDING`.
+- **`--el-status-planning`** (`packages/design-system/theme.css`, `var(--color-accent-teal)`) is the
+  Planning dot and pill hue. The base mock predates the Planning status and does not define it; the
+  delta adds the token from the shipped theme rather than picking a colour.
+
+### Grounding, and one honest limit
+
+The delta's stylesheet and icon sprite are the base mock's, carried over **verbatim**, so the two
+assets cannot drift; the shipped component markup above was read at `origin/main` `7f74fba8e` rather
+than reconstructed. The asset was rendered headlessly in both themes and every panel inspected.
+
+**The limit:** the render used DejaVu / Noto substitutes, because `--font-sans`'s
+`-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto` are not installed on the box that drew it.
+That stack is copied unchanged from `app/globals.css` and from the base mock, and is not this card's
+to change. The substitute is WIDER than the real face, so every box that fits in the render fits in
+the product — the check is conservative, not optimistic.
+
+### Not drawn here, and owed by whom
+
+| surface                                                                         | owner                                             |
+| ------------------------------------------------------------------------------- | ------------------------------------------------- |
+| the item page, quick view and edit page status control, and its en + zh strings | **MOTIR-6267**                                    |
+| the board card's refusal and the `/items` inline-edit refusal in place          | **MOTIR-6268** (composing this section's panel 8) |
+| the board card's own anchored refusal drawing                                   | **MOTIR-6264**, the board-design delta            |
+| the planning surface and the plan page the door LANDS on                        | already shipped — MOTIR-6012, MOTIR-6043          |

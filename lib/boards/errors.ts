@@ -13,6 +13,7 @@
 // move path doesn't invent a parallel work-item-not-found error.
 
 import type { ApprovalGatePendingPayloadDTO } from '@/lib/dto/approvalGate';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
 
 /**
  * A cross-column move resolved to an ILLEGAL workflow transition under the
@@ -55,6 +56,26 @@ export class ApprovalGatePendingBoardMoveError extends Error {
     super(message);
     this.name = 'ApprovalGatePendingBoardMoveError';
     this.gate = gate;
+  }
+}
+
+/**
+ * A cross-column move of a card an UNDECIDED plan holds at `planning` (Story
+ * MOTIR-6017 · Subtask MOTIR-6265; `agent-authored-plans.md` AMENDMENT 21). Like
+ * {@link ApprovalGatePendingBoardMoveError} the edge is legal, so it is not the
+ * snap-back toast's {@link IllegalBoardMoveError}: the board renders it ON THE CARD
+ * with a Review plan door. → 409 carrying `code: 'PLAN_TARGET_HELD'` and `plan`.
+ *
+ * Re-raised from `PlanTargetHeldError`, whose payload is already complete — no
+ * enrichment read follows.
+ */
+export class PlanTargetHeldBoardMoveError extends Error {
+  readonly code = 'PLAN_TARGET_HELD' as const;
+  readonly plan: PlanHoldDTO;
+  constructor(message: string, plan: PlanHoldDTO) {
+    super(message);
+    this.name = 'PlanTargetHeldBoardMoveError';
+    this.plan = plan;
   }
 }
 

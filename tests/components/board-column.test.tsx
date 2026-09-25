@@ -33,6 +33,7 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     position: 'a0',
     ready: true,
     pendingDecision: null,
+    planHold: null,
     ...over,
   };
 }

@@ -2214,6 +2214,10 @@ export default defineConfig({
         'components/issues/heldRefusal.ts',
         'components/issues/useStatusHeld.ts',
         'app/**/boards/_components/BoardHeldRefusal.tsx',
+        // Story MOTIR-6017 · MOTIR-6269 — THE PLAN HOLD's one statement of the rule
+        // (AMENDMENT 21 §1), shared by the funnel's refusal and the up-front read.
+        // The three components above carry its surface; measured before pinning.
+        'lib/plans/planHold.ts',
         // Bug MOTIR-5191 — ADR §2's routing rule and the *waiting on* display
         // name, shared by the item page's read and the Approvals queue. Two pure
         // functions with one job each, so they are measured and pinned here per
@@ -2690,6 +2694,8 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
+        // Story MOTIR-6017 · MOTIR-6269 — measured against the story's own specs.
+        'lib/plans/planHold.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'app/**/boards/_components/BoardHeldRefusal.tsx': {
           lines: 90,
           functions: 90,

@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
 import { PlanningResizableFrame } from '@/components/planning/PlanningResizableFrame';
+import { PLANNING_FRAME_STACKED_ROWS } from '@/components/planning/planningFrameRows';
 
 // The reusable AI planning workspace shell (introduced by Subtask 7.3.5 /
 // MOTIR-833). The full-screen, two-pane frame EVERY AI-planning surface shares:
@@ -43,7 +44,9 @@ export interface PlanningWorkspaceProps {
    * plan page's rail"*, and MOTIR-6236's is *"This host is NOT a split — it keeps
    * its own rail width"*. `PlanDetail`, `GenerationFlow`, `DiscoveryOnboarding`
    * and `PlanningWorkspaceSkeleton` therefore keep the FIXED `22rem` column,
-   * byte for byte, and a `false` here renders the identical markup it always did.
+   * and a `false` here renders the same two-column track it always did. The one
+   * thing the two frames now share is the STACK below `md` — its row template
+   * (MOTIR-6281, `planningFrameRows.ts`), which the fixed frame lacked.
    *
    * It is the same shape MOTIR-6237 used one file over for `Textarea`'s
    * auto-grow — *"every current caller keeps its fixed `rows`"* — which is the
@@ -81,7 +84,14 @@ export function PlanningWorkspace({
   }
   return (
     <>
-      <div className={`grid grid-cols-1 md:grid-cols-[1fr_22rem] ${className ?? 'h-dvh w-full'}`}>
+      {/* ⚠️ THE STACK'S ROW TEMPLATE IS THE RESIZABLE FRAME'S, SHARED (MOTIR-6281).
+          Below `md` this frame stacked in implicit `auto` rows too, and the plan
+          page's canvas measured 0px at 767×720 with its review rail exactly as it
+          arrives. The `md:` two-column track is untouched. */}
+      <div
+        data-testid="planning-workspace-frame"
+        className={`grid grid-cols-1 md:grid-cols-[1fr_22rem] ${PLANNING_FRAME_STACKED_ROWS} ${className ?? 'h-dvh w-full'}`}
+      >
         {canvas}
         {chat}
       </div>
