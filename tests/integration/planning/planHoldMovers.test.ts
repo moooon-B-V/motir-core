@@ -21,8 +21,10 @@ import { join, relative } from 'node:path';
 //      repository-set re-evaluation, the queue-exit settle and an automation rule
 //      each RECORD their outcome and throw nothing; an exempt `system` writer (the
 //      downward cascade) still moves the card.
-//   5. §6 — an approval gate's decide door on a held card is refused and the gate
-//      is left `awaiting`.
+//   5. AMENDMENT 16 D3 / D8 and §6 — parking a card from In Review supersedes its
+//      `awaiting` gate as `pulled_back`, a decline restores it to In Review and
+//      re-asks what its evidence still owes, a reconcile can raise a gate on a held
+//      card, and that gate's decide door is refused and the gate is left `awaiting`.
 //   6. THE ARCHITECTURE GUARDS — no door reads `plan_target_lock` itself,
 //      `STATUS_TRANSITION_REFUSALS` holds the error, and no plan-hold path borrows
 //      the approval overlay's address.
@@ -47,6 +49,7 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubPullRequestService } from '@/lib/services/githubPullRequestService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { settleUnlandedOutcome } from '@/lib/services/mergeQueueExitService';
+import { reconcileGatesFor } from '@/lib/services/gateSetFor';
 import { plansService } from '@/lib/services/plansService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -691,9 +694,9 @@ describe('the merge-driven movers — the sync and the repository-set re-evaluat
   });
 });
 
-// ── 5 · §6 — an approval gate's decide door on a held card ──────────────────
+// ── 5 · D3 · D8 · §6 — the park, the decline and a gate on a held card ─────
 
-describe('§6 — deciding a surviving approval gate on a held card is refused, and the gate stays `awaiting`', () => {
+describe('D3 · D8 · §6 — the park closes an awaiting gate, a decline re-asks it, and deciding one raised on a held card is refused', () => {
   async function reviewedItem() {
     const story = await seedCard('Story', { kind: 'story' });
     const item = await seedCard('Design', { kind: 'subtask', parentId: story.id });
@@ -702,7 +705,7 @@ describe('§6 — deciding a surviving approval gate on a held card is refused, 
     return item;
   }
 
-  const raiseGate = (itemId: string) =>
+  const raiseGate = (itemId: string, subjectId = `subject-${itemId}`) =>
     withWorkspaceContext(fx.ctx, (tx) =>
       approvalGateRepository.create(
         {
@@ -710,15 +713,30 @@ describe('§6 — deciding a surviving approval gate on a held card is refused, 
           projectId: fx.projectId,
           workItemId: itemId,
           kind: 'design_result',
-          subjectId: `subject-${itemId}`,
+          subjectId,
         },
         tx,
       ),
     );
 
+  /** A design result the gate predicate reads as CURRENT, so `reconcileGatesFor`
+   *  owes the card a `design_result` question about it. */
+  async function currentDesign(itemId: string): Promise<string> {
+    const id = `design-${itemId}`;
+    await adminDb.designEvidence.create({
+      data: { id, workspaceId: fx.workspaceId, workItemId: itemId },
+    });
+    return id;
+  }
+
+  const awaitingOn = (itemId: string) =>
+    adminDb.approvalGate.findMany({ where: { workItemId: itemId, state: 'awaiting' } });
+
   /** A card parked from In Review under an undecided plan, with an `awaiting`
-   *  design gate standing on it. The gate is raised AFTER the park — see the
-   *  `it.fails` below for why it cannot be raised before it today. */
+   *  design gate standing on it. The gate is raised AFTER the park, because that is
+   *  the only order in which one can stand on a held card: the park itself closes
+   *  every gate raised before it (AMENDMENT 16 D3, pinned below), and a gate on a
+   *  held card is one a reconcile raised afterwards (AMENDMENT 21 §6, also below). */
   async function gatedThenHeld() {
     const item = await reviewedItem();
     const planId = await plannedModify(item.id);
@@ -727,25 +745,72 @@ describe('§6 — deciding a surviving approval gate on a held card is refused, 
     return { item, gateId: gate.id, planId };
   }
 
-  // ⚠️ A DEFECT, REPRODUCED (not fixed here — MOTIR-6269 changes no product code).
-  // AMENDMENT 16 D3 says the park is a `{ system: true }` write, so
-  // `withdrawsPendingQuestion` returns false and an `awaiting` gate "survives the
-  // whole park-and-release cycle by construction" — and AMENDMENT 21 §6 is written
-  // on that premise. But `planTargetLockService`'s acquire parks with
-  // `applyStatusTransition(item.id, PLANNING_STATUS_KEY, ctx, tx)` — NO `system`
-  // flag — so parking a card from In Review is a hand-shaped move out of the review
-  // band and supersedes its gate as `pulled_back`. `it.fails` pins the reproduction:
-  // it turns RED the day the park stops withdrawing the question, and must then
-  // become an ordinary `it`.
-  it.fails('AMENDMENT 16 D3: a gate raised BEFORE the park survives it', T, async () => {
-    const item = await reviewedItem();
-    const gate = await raiseGate(item.id);
-    await plannedModify(item.id);
-    expect(await statusOf(item.id)).toBe(PLANNING_STATUS_KEY);
-    expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } })).state).toBe(
-      'awaiting',
-    );
-  });
+  // AMENDMENT 16 D3, as corrected by MOTIR-6339: the park is a status write with NO
+  // `system` flag (`planTargetLockService`'s acquire), so leaving In Review for
+  // `planning` is a move out of the review band, and `approval-gates.md` §6d rule 6
+  // supersedes the gate in the park's own transaction.
+  it(
+    'AMENDMENT 16 D3: parking a card from In Review supersedes its awaiting gate as `pulled_back`',
+    T,
+    async () => {
+      const item = await reviewedItem();
+      const gate = await raiseGate(item.id);
+      await plannedModify(item.id);
+      expect(await statusOf(item.id)).toBe(PLANNING_STATUS_KEY);
+
+      const closed = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
+      expect(closed.state).toBe('superseded');
+      expect(closed.supersededCause).toBe('pulled_back');
+      expect(await awaitingOn(item.id)).toHaveLength(0);
+    },
+  );
+
+  it(
+    'AMENDMENT 16 D8: a decline restores In Review with a NEW gate for the question its evidence still owes',
+    T,
+    async () => {
+      const item = await reviewedItem();
+      const evidenceId = await currentDesign(item.id);
+      const first = await raiseGate(item.id, evidenceId);
+      const planId = await plannedModify(item.id);
+      expect(await awaitingOn(item.id)).toHaveLength(0);
+
+      await plansService.declinePlan(planId, fx.ctx);
+
+      expect(await statusOf(item.id)).toBe('in_review');
+      // The superseded row is never re-opened; the restore's re-ask raised a fresh one.
+      expect(
+        (await adminDb.approvalGate.findUniqueOrThrow({ where: { id: first.id } })).state,
+      ).toBe('superseded');
+      const reasked = await awaitingOn(item.id);
+      expect(reasked).toHaveLength(1);
+      expect(reasked[0]).toMatchObject({ kind: 'design_result', subjectId: evidenceId });
+      expect(reasked[0]!.id).not.toBe(first.id);
+    },
+  );
+
+  it(
+    'AMENDMENT 21 §6 is reachable: a reconcile raises the owed question on a card the plan holds',
+    T,
+    async () => {
+      const item = await reviewedItem();
+      const evidenceId = await currentDesign(item.id);
+      await raiseGate(item.id, evidenceId);
+      await plannedModify(item.id);
+      expect(await awaitingOn(item.id)).toHaveLength(0);
+
+      // What the pull-request reconcile does for every non-terminal card it delivers.
+      const raised = await withWorkspaceContext(fx.ctx, async (tx) =>
+        reconcileGatesFor(await tx.workItem.findUniqueOrThrow({ where: { id: item.id } }), tx),
+      );
+
+      expect(raised).toEqual(['design_result']);
+      expect(await statusOf(item.id)).toBe(PLANNING_STATUS_KEY);
+      expect(await awaitingOn(item.id)).toMatchObject([
+        { kind: 'design_result', subjectId: evidenceId },
+      ]);
+    },
+  );
 
   const approve = (gateId: string) =>
     approvalGatesService.decide(
