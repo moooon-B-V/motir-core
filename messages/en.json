@@ -8394,6 +8394,16 @@
     }
   },
   "approvalGate": {
+    "replanDoor": {
+      "label": "Re-plan with AI",
+      "aria": "Re-plan {item} with AI from this refusal"
+    },
+    "replanAsk": {
+      "title": "Re-plan {key} with Motir AI?",
+      "opens": "Motir AI opens on {key} with your reason already written as the first message.",
+      "unsent": "Nothing is sent until you send it — you can edit it first.",
+      "yes": "Re-plan with AI"
+    },
     "state": {
       "awaitingYou": "Awaiting you",
       "awaiting": "Awaiting",

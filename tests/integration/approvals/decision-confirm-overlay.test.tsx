@@ -57,9 +57,10 @@ vi.mock('next/navigation', async () => {
     useSearchParams: () => useSyncExternalStore(nav.subscribe, () => nav.params),
   };
 });
+const { shallowReplace } = vi.hoisted(() => ({ shallowReplace: vi.fn() }));
 vi.mock('@/lib/navigation/shallowUrl', () => ({
   shallowPush: (href: string) => nav.go(href),
-  shallowReplace: vi.fn(),
+  shallowReplace,
 }));
 
 const { GET: gateRoute } = await import('@/app/api/work-items/approval-gate/route');
@@ -180,9 +181,22 @@ describe('Overturn, from the overlay', () => {
     expect(await within(dialog).findByText('“We agreed to keep Postgres.”', {}, SLOW)).toBeTruthy();
     expect(within(dialog).getByText(t.band.replanOwed)).toBeTruthy();
     expect(within(dialog).getAllByText(story.identifier).length).toBeGreaterThan(0);
-    expect(within(dialog).getByText(`Exports (${epic.identifier})`)).toBeTruthy();
+    // MOTIR-6211: the plain epic entrance is gone — the band ASKS to re-plan THIS decision,
+    // seeded, and nothing opens until the reader says yes.
+    expect(within(dialog).queryByText(`Exports (${epic.identifier})`)).toBeNull();
+    const askTitle = en.approvalGate.replanAsk.title.replace('{key}', decision.identifier);
+    expect(within(dialog).getByRole('group', { name: askTitle })).toBeTruthy();
+    expect(shallowReplace).not.toHaveBeenCalled();
     // The overturn changed no other work item.
     expect(await statusOf(story.id)).toBe('todo');
+    fireEvent.click(within(dialog).getByRole('button', { name: en.approvalGate.replanAsk.yes }));
+    const written = new URL(shallowReplace.mock.calls[0]![0] as string, 'http://localhost:3000');
+    expect(written.searchParams.get('approval')).toBeNull();
+    expect(written.searchParams.get('planFrom')).toBe('refused-gate');
+    const gate = await adminDb.approvalGate.findFirstOrThrow({
+      where: { workItemId: decision.id, kind: 'decision_confirmation' },
+    });
+    expect(written.searchParams.get('planGate')).toBe(gate.id);
   });
 });
 

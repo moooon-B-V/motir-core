@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
 import { CircleAlert, FileText } from 'lucide-react';
 import { MarkdownView } from '@/components/ui/MarkdownView';
-import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance';
+import { useRefusalReplanSlots, type RefusalReplanProps } from './RefusalReplan';
 import type { DecisionChange, DecisionDraft } from '@/lib/approvalGates/decisionRecord';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import { attachmentContentPath } from '@/lib/blob/referencedUrls';
@@ -13,7 +13,6 @@ import type {
   ApprovalGateDTO,
   ConfirmedRecordDTO,
   DecisionDefectDTO,
-  DecisionEpicDTO,
   GateDecision,
   SupersededItemDTO,
 } from '@/lib/dto/approvalGate';
@@ -177,7 +176,12 @@ export interface DecisionConfirmGateFrameProps {
   recordCount: number;
   /** The ids of the records present now — a stamped one missing from them was deleted. */
   presentRecordIds: string[];
-  epic: DecisionEpicDTO | null;
+  /**
+   * THE RE-PLAN WITH AI DOOR, and the ask right after an Overturn (Story MOTIR-6068 ·
+   * MOTIR-6211). The overturned record offers the SEEDED planner on this decision, in
+   * place of the plain epic entrance it used to carry. Omitted: no door.
+   */
+  replan?: RefusalReplanProps;
   canDecide: boolean;
   routedToLabel: string | null;
   /** The card's `KEY-<n>`, named in the consequence and confirm lines. */
@@ -200,7 +204,7 @@ export function DecisionConfirmGateFrame({
   record,
   recordCount,
   presentRecordIds,
-  epic,
+  replan,
   canDecide,
   routedToLabel,
   identifier,
@@ -258,6 +262,12 @@ export function DecisionConfirmGateFrame({
     ? format.dateTime(new Date(gate.decidedAt), { dateStyle: 'medium', timeStyle: 'short' })
     : '';
   const name = gate.decidedByLabel ?? '';
+  const { door, ask } = useRefusalReplanSlots({
+    gate,
+    itemKey: identifier,
+    replan,
+    sectioned: layout === 'section',
+  });
 
   return (
     <ApprovalGateControl
@@ -302,10 +312,11 @@ export function DecisionConfirmGateFrame({
             noteMd={gate.noteMd}
             keys={gate.replanOwed?.keys ?? keys}
             items={view.supersedesItems}
-            epic={epic}
+            door={door}
           />
         ) : undefined
       }
+      recordBand={ask}
       onDecide={onDecide}
       onShowCurrentVersion={onShowCurrentVersion}
       focusPortOnMount={focusPortOnMount}
@@ -347,17 +358,24 @@ function ConfirmedBand({
   );
 }
 
-/** Design Panel 4a — the note, the owed re-plan and the Re-plan door on the epic. */
+/**
+ * Design Panel 4a — the note, the owed re-plan and its chips, then **Re-plan with AI**.
+ *
+ * ⚠️ THE PLAIN EPIC ENTRANCE IS GONE (MOTIR-6211; `approval-control--replan-door.mock.html`
+ * panel 1c). It opened a BLANK planner on the epic; the door opens the planner on THIS
+ * decision, SEEDED with the note and the superseded keys. The owed chip, its line and every
+ * superseded chip stay exactly as they were.
+ */
 function OverturnedBand({
   noteMd,
   keys,
   items,
-  epic,
+  door,
 }: {
   noteMd: string | null;
   keys: string[];
   items: SupersededItemDTO[];
-  epic: DecisionEpicDTO | null;
+  door: ReactNode;
 }) {
   const t = useTranslations('approvalGate.decisionConfirm.band');
   const titled = new Map(items.map((item) => [item.key, item.title]));
@@ -379,22 +397,7 @@ function OverturnedBand({
           <SupersededChip key={key} item={{ key, title: titled.get(key) ?? null }} />
         ))}
       </span>
-      {epic ? (
-        <span className="flex basis-full items-center gap-2">
-          <WorkItemPlanEntrance
-            itemKey={epic.key}
-            hasChildren
-            kind="epic"
-            hasDescription={epic.hasDescription}
-            canPlan={epic.canPlan}
-            archived={epic.archived}
-            statusCategory={epic.statusCategory}
-          />
-          <span className="text-(--el-text-secondary)">
-            {epic.title} ({epic.key})
-          </span>
-        </span>
-      ) : null}
+      {door}
     </>
   );
 }

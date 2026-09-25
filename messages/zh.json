@@ -8390,6 +8390,16 @@
     }
   },
   "approvalGate": {
+    "replanDoor": {
+      "label": "用 AI 重新规划",
+      "aria": "根据这次拒绝用 AI 重新规划 {item}"
+    },
+    "replanAsk": {
+      "title": "用 Motir AI 重新规划 {key}？",
+      "opens": "Motir AI 会在 {key} 上打开，并把你的理由写成第一条消息。",
+      "unsent": "在你发送之前不会发出任何内容——你可以先修改。",
+      "yes": "用 AI 重新规划"
+    },
     "state": {
       "awaitingYou": "等待你处理",
       "awaiting": "等待处理",
