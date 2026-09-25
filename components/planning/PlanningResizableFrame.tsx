@@ -23,6 +23,7 @@ import {
   RAIL_KEYBOARD_STEP_PX,
   RAIL_RESET_DURATION_MS,
 } from '@/lib/planning/railWidth';
+import { PLANNING_FRAME_STACKED_ROWS } from '@/components/planning/planningFrameRows';
 
 /**
  * The RESIZABLE two-pane frame (MOTIR-6250) — the planning workspace's split,
@@ -326,21 +327,9 @@ export function PlanningResizableFrame({
       }
       className={[
         'relative grid grid-cols-1 md:grid-cols-[1fr_var(--rail-w)]',
-        // ⚠️ BELOW `md` THE STACK NEEDS AN EXPLICIT ROW TEMPLATE (MOTIR-6276).
-        // Without one the two panes sit in IMPLICIT `auto` rows, sized from their
-        // content: the canvas's drawing area is `min-h-0 flex-1` and contributes
-        // nothing but its chrome, while the transcript has real content height.
-        // `auto` rows only share the frame's FREE space, so once a conversation
-        // fills the frame there is none, and the drawn canvas measured 0px tall
-        // between its top bar and its footer at 767×720 — the Approve bar visible,
-        // the plan it approves not. `fr` tracks divide the height regardless of
-        // content, and `minmax(0, …)` lets each pane scroll inside its own row
-        // rather than pushing the other out. The canvas is the pane drawn first
-        // and the one a proposed plan is read in, so it takes the larger share;
-        // the conversation keeps a floor tall enough for its header and composer.
-        // `md:grid-rows-none` returns the split to the single implicit row it has
-        // always had, so nothing at or above the breakpoint changes.
-        'grid-rows-[minmax(0,3fr)_minmax(12rem,2fr)] md:grid-rows-none',
+        // Below `md` the stack needs an explicit row template (MOTIR-6276) — shared
+        // with the fixed frame, and explained where it is defined.
+        PLANNING_FRAME_STACKED_ROWS,
         // Text SELECTION is suppressed only while dragging — a drag across a
         // transcript otherwise selects it. Nothing is dimmed or frozen.
         dragging ? 'select-none' : '',

@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
+import { PLANNING_FRAME_STACKED_ROWS } from '@/components/planning/planningFrameRows';
 import { __resetPlanningRailWidthForTests } from '@/lib/hooks/usePlanningRailWidth';
 import {
   defaultRailWidth,
@@ -382,9 +383,28 @@ describe('the OPT-IN boundary — four other consumers keep the fixed frame', ()
     render(<PlanningWorkspace canvas={<div>canvas</div>} chat={<div>chat</div>} />);
     expect(screen.queryByTestId('planning-resizable-frame')).toBeNull();
     expect(screen.queryByTestId('planning-split-divider')).toBeNull();
-    // Byte-for-byte the class list `PlanDetail`, `GenerationFlow`,
-    // `DiscoveryOnboarding` and `PlanningWorkspaceSkeleton` have always had.
+    // The two-column track `PlanDetail`, `GenerationFlow`, `DiscoveryOnboarding`
+    // and `PlanningWorkspaceSkeleton` have always had at and above `md`.
     expect(document.querySelector('.md\\:grid-cols-\\[1fr_22rem\\]')).toBeTruthy();
+  });
+
+  it('gives the fixed frame the SAME stacked row template as the resizable one (MOTIR-6281)', () => {
+    // Below `md` the fixed frame stacked in implicit `auto` rows, and the plan page's
+    // canvas measured 0px at 767×720 — the geometry is proven in
+    // `tests/e2e/plan-detail-narrow.spec.ts`. This pins that both frames read ONE
+    // constant, so the stack cannot be fixed on one frame and drift on the other.
+    const { unmount } = render(<PlanningWorkspace canvas={<div />} chat={<div />} />);
+    const fixed = screen.getByTestId('planning-workspace-frame');
+    for (const cls of PLANNING_FRAME_STACKED_ROWS.split(' ')) {
+      expect(fixed.classList.contains(cls)).toBe(true);
+    }
+    expect(fixed.classList.contains('md:grid-cols-[1fr_22rem]')).toBe(true);
+    unmount();
+    renderSplit();
+    const resizable = screen.getByTestId('planning-resizable-frame');
+    for (const cls of PLANNING_FRAME_STACKED_ROWS.split(' ')) {
+      expect(resizable.classList.contains(cls)).toBe(true);
+    }
   });
 
   it('still renders the guard overlay on both paths', () => {
