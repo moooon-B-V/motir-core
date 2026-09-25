@@ -6675,30 +6675,6 @@
         "discard": "放弃没有成功。提议仍在画布上等待处理 —— 可以重试，或直接确认。",
         "askSilent": "没有得到任何回复。换一种方式提问试试。"
       },
-      "diff": {
-        "add": "新增",
-        "change": "修改",
-        "locked": "已锁定",
-        "cantChange": "无法改动",
-        "field": {
-          "title": "标题",
-          "priority": "优先级",
-          "type": "类型",
-          "executor": "执行者",
-          "estimate": "预估工时",
-          "description": "描述",
-          "explanation": "说明",
-          "points": "故事点",
-          "difficulty": "难度",
-          "links": "依赖关系",
-          "parent": "父级",
-          "repo": "目标仓库",
-          "repoRole": "仓库角色",
-          "status": "状态"
-        },
-        "remove": "移除",
-        "willRemove": "确认后移除"
-      },
       "answeredFrom": "{count, plural, =0 {回答未引用任何内容} other {依据 # 个工作项作答}}",
       "correctToPlan": "改为提出变更",
       "correctToAsk": "改为回答这个问题",

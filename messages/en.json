@@ -6679,30 +6679,6 @@
         "discard": "Discarding didn't go through. The proposal is still waiting on the canvas — try again, or approve it.",
         "askSilent": "Nothing came back. Try asking that a different way."
       },
-      "diff": {
-        "add": "added",
-        "change": "changed",
-        "locked": "locked",
-        "cantChange": "can't change",
-        "field": {
-          "title": "title",
-          "priority": "priority",
-          "type": "type",
-          "executor": "executor",
-          "estimate": "estimate",
-          "description": "description",
-          "explanation": "explanation",
-          "points": "points",
-          "difficulty": "difficulty",
-          "links": "dependencies",
-          "parent": "parent",
-          "repo": "repository",
-          "repoRole": "repository role",
-          "status": "status"
-        },
-        "remove": "removed",
-        "willRemove": "goes on approve"
-      },
       "answeredFrom": "{count, plural, =0 {Answered without citing anything} one {Answered from # work item} other {Answered from # work items}}",
       "correctToPlan": "Propose changes instead",
       "correctToAsk": "Answer this instead",
