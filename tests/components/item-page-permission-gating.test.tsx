@@ -292,6 +292,14 @@ describe('the work item page rail — as a project MEMBER, nothing is taken away
     expect(updateIssueAction).toHaveBeenCalledWith(expect.objectContaining({ type: 'design' }));
   });
 
+  it('pressing a live chevron does not steal focus (its mouse-down is swallowed)', () => {
+    renderRail(MEMBER);
+    const chevron = screen.getByRole('button', { name: 'Edit Priority' });
+    const ev = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    chevron.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
   it('the Due date picker opens its calendar', () => {
     renderRail(MEMBER);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Due date' }));
