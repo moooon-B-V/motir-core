@@ -39,6 +39,9 @@ export interface UpsertGithubCheckRunInput {
    *  treats NULLs in a unique index as distinct, so a nullable member would
    *  stop the upsert converging (see the schema's note). */
   checkSuiteId: string;
+  /** A suite's own roll-up row, not a check (MOTIR-6274) — see the schema's
+   *  note. Omitted = a check, which is every row but a GitHub `check_suite`'s. */
+  suiteAggregate?: boolean;
   conclusion: string;
 }
 
