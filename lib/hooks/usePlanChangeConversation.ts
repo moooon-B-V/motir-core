@@ -1249,7 +1249,7 @@ export function usePlanChangeConversation({
         progress: null,
         errorCode: null,
       }));
-      // THE ROW SETTLES IN PLACE (MOTIR-6037; design Part XX §20.2, § 20's rule). The
+      // THE ROW SETTLES IN PLACE (MOTIR-6037; design Part XXII §22.2, § 20's rule). The
       // To-approve list under this overlay is a client island `router.refresh()` cannot
       // reach, so an asked plan's decision travels through the decided-gates store.
       announcePlanGateDecided(review, 'approved');

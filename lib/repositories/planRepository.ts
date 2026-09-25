@@ -361,7 +361,7 @@ export const planRepository = {
    */
   /**
    * What the plan gate's To-approve ROW draws, for a page of plans in ONE round trip
-   * (Story MOTIR-6012 · MOTIR-6035; design Part XX §20.3's field table): the title, the
+   * (Story MOTIR-6012 · MOTIR-6035; design Part XXII §22.3's field table): the title, the
    * author triple, the conversation and its targets, the project's name and the
    * proposal count. A plan that no longer exists is simply absent.
    */

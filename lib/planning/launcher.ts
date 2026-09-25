@@ -88,7 +88,7 @@ export type PlanningLaunchContext =
 
 /**
  * WHERE A NAMED SESSION WAS REOPENED FROM (`planVia`, Story MOTIR-6012 · MOTIR-6037;
- * `design/ai-planning/design-notes.md` Part XX §20.2). Only the To-approve row writes
+ * `design/ai-planning/design-notes.md` Part XXII §22.2). Only the To-approve row writes
  * it, and only its reopened line reads it: *Reopened from To approve* rather than the
  * Plans-page line every `planSession` address printed before. Absent means the Plans
  * page, so every shipped link keeps its meaning.
@@ -254,8 +254,8 @@ export const OVERLAY_PARAM_NAMES = {
    */
   session: 'planSession',
   /**
-   * The ENTRANCE a named session was reopened from (MOTIR-6037; design Part XX
-   * §20.2) — `approvals` from a To-approve row. Read only with `planSession`; absent
+   * The ENTRANCE a named session was reopened from (MOTIR-6037; design Part XXII
+   * §22.2) — `approvals` from a To-approve row. Read only with `planSession`; absent
    * or any other value means the Plans page. Its one reader is the rail's reopened
    * line.
    */
