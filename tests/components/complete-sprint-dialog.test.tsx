@@ -9,6 +9,8 @@ import type { SprintDto, SprintReportDto } from '@/lib/dto/sprints';
 import type { CycleGraphDto } from '@/lib/dto/reports';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { RankedIssuePageDto } from '@/lib/dto/backlog';
+import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 
 // Complete-sprint flow UI (Story 4.4 · Subtask 4.4.6). The CompleteSprintDialog
 // wires the design's complete modal + carry-over chooser (panels 4–5) and the
@@ -152,11 +154,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderDialog(over: { sprint?: SprintDto; plannedSprints?: SprintDto[] } = {}): {
+function renderDialog(
+  over: { sprint?: SprintDto; plannedSprints?: SprintDto[]; permissions?: PermissionKey[] } = {},
+): {
   onCompleted: ReturnType<typeof vi.fn>;
 } {
   const onCompleted = vi.fn();
-  render(
+  const dialog = (
     <ToastProvider>
       <CompleteSprintDialog
         open
@@ -169,7 +173,14 @@ function renderDialog(over: { sprint?: SprintDto; plannedSprints?: SprintDto[] }
         statusByKey={statusByKey}
         onCompleted={onCompleted}
       />
-    </ToastProvider>,
+    </ToastProvider>
+  );
+  render(
+    over.permissions ? (
+      <ProjectAccessProvider permissions={over.permissions}>{dialog}</ProjectAccessProvider>
+    ) : (
+      dialog
+    ),
   );
   return { onCompleted };
 }
@@ -251,6 +262,17 @@ describe('CompleteSprintDialog (4.4.6)', () => {
     // The standalone closed-sprint report is reachable from the success state.
     const link = screen.getByRole('link', { name: /Open full report/ });
     expect(link.getAttribute('href')).toBe('/sprints/sp6/report');
+  });
+
+  // MOTIR-6175 — reaching this dialog takes `sprint:manage`; the report room asks
+  // for `report:view`. A custom role can hold the first without the second, and
+  // then the door to the full report is not offered.
+  it('offers the full-report door only to an actor who can open the report room', async () => {
+    renderDialog({ permissions: ['project:browse', 'sprint:manage'] });
+    await screen.findByText('29 of 42 points');
+    fireEvent.click(completeButton());
+    expect(await screen.findByRole('heading', { name: 'Sprint 6 report' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Open full report/ })).toBeNull();
   });
 
   it('disables "A future sprint" with a hint when the project has no planned sprint', async () => {
