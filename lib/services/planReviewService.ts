@@ -29,6 +29,8 @@ import type {
   PlanWithItemsDto,
   StaleReason,
 } from '@/lib/dto/plans';
+import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import { resolveExecutor } from '@/lib/issues/executorDefaults';
 import type { PlanRevision, Prisma } from '@/generated/prisma/client';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { PLAN_ITEM_SETTABLE_RAIL_FIELDS } from '@/lib/dto/planReview';
@@ -223,6 +225,21 @@ type PatchedFieldKey = Extract<
   | 'targetRepoRole'
 >;
 
+/**
+ * The executor a `modify` leaves its target with (bug MOTIR-6259): the target's
+ * own, unless the patch re-types a target that has none — then the type's
+ * default, by `resolveExecutor`, the one rule `applyModify` and the direct door
+ * both write through. `null` when there is no target to read.
+ */
+function seededExecutor(
+  patch: PlanItemPatch | null,
+  target: WorkItem | undefined,
+): ExecutorDto | null {
+  const current = (target?.executor ?? null) as ExecutorDto | null;
+  if (!target || !patch || patch.type === undefined) return current;
+  return resolveExecutor((patch.type ?? null) as WorkItemTypeDto | null, undefined, current);
+}
+
 /** The OLD → NEW field changes a `modify` proposes (its diff overlay).
  *
  *  `nameParent` renders a parent id as the reader's own word for it — the
@@ -251,6 +268,14 @@ function buildChanges(
   }
   if (patch.type !== undefined && patch.type !== (target?.type ?? null)) {
     changes.push({ field: 'type', from: target?.type ?? null, to: patch.type ?? null });
+  }
+  // THE SEEDED EXECUTOR (bug MOTIR-6259) — no patch key produces it; the approve
+  // DERIVES it, through the SAME `resolveExecutor` `applyModify` calls, so this
+  // row and the write cannot disagree. It appears only when a re-type lands on a
+  // target with no executor, which is exactly when the approve will write one.
+  const seeded = seededExecutor(patch, target);
+  if (seeded !== (target?.executor ?? null)) {
+    changes.push({ field: 'executor', from: target?.executor ?? null, to: seeded });
   }
   // Leaf sizing re-scope (MOTIR-1532) — surface it so the approver SEES the new
   // points/estimate before approving. `storyPoints` is a Prisma Decimal on the
@@ -1318,11 +1343,19 @@ export const planReviewService = {
           proposed?.targetRepoRole ?? null,
           null,
         ),
-        // ⚠️ `executor` HAS NO PATCH KEY — a plan cannot change who executes a
-        // card — so there is no proposed side for a `modify` and the target's
-        // live value IS the value the card will have. It does not go through
-        // `proposedValue` because that function's parameter is a patch key.
-        executor: item.op === 'add' ? (proposed?.executor ?? null) : (target?.executor ?? null),
+        // ⚠️ `executor` HAS NO PATCH KEY — a plan cannot choose who executes a
+        // committed card — so a `modify` has no proposed side. What it CAN do is
+        // re-type a target that has no executor, and then the approve SEEDS the
+        // type's default (bug MOTIR-6259); the rail answers what the card WILL
+        // BE, so it reads the same derivation `applyModify` writes. It does not
+        // go through `proposedValue` because that function's parameter is a
+        // patch key.
+        executor:
+          item.op === 'add'
+            ? (proposed?.executor ?? null)
+            : item.op === 'modify'
+              ? seededExecutor(item.patch as PlanItemPatch | null, target)
+              : (target?.executor ?? null),
         planningProvenance: item.op === 'add' ? (proposed?.planningProvenance ?? null) : null,
         // ⚠️ `add`-ONLY, on `planningProvenance`'s own terms (Story MOTIR-5062 ·
         // MOTIR-5065): the subject describes the PASS that derived it, not the

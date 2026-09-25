@@ -307,8 +307,9 @@ describe('guards a coverage number cannot see', () => {
     const opened = await call(client, CREATE_PLAN_TOOL_NAME, { projectKey: fx.projectIdentifier });
     const planId = struct(opened).id;
     // Smuggled onto the patch: the schema declares no `todos` there, and
-    // `applyModify` writes only `PLAN_ITEM_PATCH_KEYS`.
-    await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+    // `applyModify` writes only `PLAN_ITEM_PATCH_KEYS`. Since MOTIR-6259 the
+    // append REFUSES it by name rather than storing a key nothing applies.
+    const smuggled = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,
       proposals: [
         {
@@ -317,6 +318,13 @@ describe('guards a coverage number cannot see', () => {
           patch: { title: 'A re-scoped title', todos: [{ text: 'Should never land' }] },
         },
       ],
+    });
+    expect(smuggled.isError).toBe(true);
+    expect(JSON.stringify(smuggled.content)).toContain('`todos`');
+    // The same re-scope WITHOUT the steps is what a plan can say about this card.
+    await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: target.id, patch: { title: 'A re-scoped title' } }],
     });
     await plansService.markPlanned(planId, fx.ctx);
 

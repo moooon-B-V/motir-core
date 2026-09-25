@@ -140,3 +140,67 @@ export async function finishSessionPlan(sessionId: string, title: string): Promi
   await plansService.markPlanned(plan.id, ctx);
   return plan.id;
 }
+
+/**
+ * Finish a session's run with a plan of SEVERAL cards under one parent, ONE OF
+ * THEM BLOCKED BY ANOTHER — the shape MOTIR-6188's walk needs and the one
+ * {@link finishSessionPlan} deliberately does not produce.
+ *
+ * `finishSessionPlan` appends a single `task` with no edges, which is all its
+ * callers ever wanted: they are about the gate, not about what the canvas draws.
+ * This story is about what the canvas draws, so it needs a PENDING `blocked_by`
+ * — the dashed arrow between two proposed cards is the thing the surface and the
+ * plan page have to agree on.
+ *
+ * ⚠️ TWO `addProposals` CALLS, and that is the contract rather than a style
+ * choice: a `planItem:` ref resolves only against proposals the plan ALREADY
+ * HOLDS, so the blocked card cannot travel in the same batch as its blocker.
+ *
+ * Returns the plan id and the proposed titles in append order — the blocker
+ * first, so a caller can name the arrow's two ends without re-reading the plan.
+ */
+export async function finishSessionPlanWithEdge(
+  sessionId: string,
+  parentWorkItemId: string,
+  titles: [string, string, string],
+): Promise<{ planId: string; blockerTitle: string; blockedTitle: string }> {
+  const plan = await adminDb.plan.findFirstOrThrow({
+    where: { sessionId },
+    orderBy: { createdAt: 'desc' },
+  });
+  const session = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } });
+  const ctx: ServiceContext = { userId: session.createdById!, workspaceId: session.workspaceId };
+
+  const first = await plansService.addProposals(
+    plan.id,
+    [
+      {
+        op: 'add',
+        proposedFields: { title: titles[0], kind: 'subtask' },
+        parentRef: parentWorkItemId,
+      },
+      {
+        op: 'add',
+        proposedFields: { title: titles[2], kind: 'subtask' },
+        parentRef: parentWorkItemId,
+      },
+    ],
+    ctx,
+  );
+
+  await plansService.addProposals(
+    plan.id,
+    [
+      {
+        op: 'add',
+        proposedFields: { title: titles[1], kind: 'subtask' },
+        parentRef: parentWorkItemId,
+        blockedByRefs: [`planItem:${first.appendedItemIds[0]}`],
+      },
+    ],
+    ctx,
+  );
+
+  await plansService.markPlanned(plan.id, ctx);
+  return { planId: plan.id, blockerTitle: titles[0], blockedTitle: titles[1] };
+}

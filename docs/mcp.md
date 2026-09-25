@@ -289,7 +289,11 @@ Two consequences worth stating:
 - **`add_plan_items`' `modify` patch is the deliberate exception.** That object
   is declared `.passthrough()` so a field the service already understands can
   never be turned away by this schema; unknown keys inside a `patch` still reach
-  the service unchanged. The keys it DOES name — `difficulty` among them
+  the service unchanged — **and the service REFUSES them** (`INVALID_PROPOSAL`,
+  naming every such key), at the append and at `update_plan_proposal` alike
+  (MOTIR-6259). A `modify` has no `executor` key: re-typing a card that has no
+  executor seeds the type's default at approve, shown on the review as an
+  `executor` change row. The keys it DOES name — `difficulty` among them
   (MOTIR-6136) — are typed, so `patch.difficulty: "extreme"` is refused at the
   schema. Everything else — including `proposedFields` — is strict.
 
@@ -999,6 +1003,14 @@ APPROVED designs.
 **Output** — `structuredContent`: with `blockersOf`, `{ designs: DesignVerdict[] }`;
 otherwise `{ items: ApprovedDesign[], nextCursor }`. Both derive from the
 `/api/v1` design components, so the two surfaces cannot drift.
+
+**A filtered page is filled, not cut.** With `pathPrefix` or `query`, the tool
+reads on past the cards the filter drops until the page holds `limit` designs or
+the project's designs run out, so an empty page normally means nothing matched.
+It reads at most 1,000 cards per call; past that ceiling a page can come back
+SHORT, even empty, with a `nextCursor` — and the text summary then says more
+pages remain rather than "No approved designs matched". Keep paging until
+`nextCursor` is null before concluding nothing matches (MOTIR-6272).
 
 **No download links, on either arm.** A link lives minutes, so a page of them
 would expire before you read the list. Find the design here; call

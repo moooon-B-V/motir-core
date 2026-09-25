@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth';
+import { readSession } from '@/lib/auth';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { WorkspaceContext } from './context';
 
@@ -56,7 +56,9 @@ function parseCookieHeader(header: string | null, name: string): string | null {
  * null when there is no session or the user has no memberships.
  */
 export async function resolveWorkspaceContext(request: Request): Promise<WorkspaceContext | null> {
-  const session = await auth.api.getSession({ headers: request.headers });
+  // Through `readSession`, so a dropped connection on the session read is retried
+  // and named rather than escaping as Better-Auth's 500 (MOTIR-5864).
+  const session = await readSession(request.headers);
   if (!session) return null;
 
   const userId = session.user.id;

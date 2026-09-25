@@ -18,7 +18,7 @@
       WHAT IT DRAWS, and what DIFFERS from the base. The base draws a move held
       by an APPROVAL GATE: one held line per held status, and a Review & approve
       door into the full-screen approval overlay. This delta draws a card held by
-      an UNDECIDED PLAN (agent-authored-plans.md AMENDMENT 20):
+      an UNDECIDED PLAN (agent-authored-plans.md AMENDMENT 21):
 
         · a gate holds ONE status, a plan holds EVERY move out of Planning — so
           the whole dropdown is locked, not one option;
@@ -679,7 +679,7 @@
           by the board design <strong>MOTIR-6264</strong>. A <strong>delta</strong> of
           <code>status-held-by-decision.mock.html</code>, which is a record and is not edited: only
           the panels that CHANGE are drawn here. While an undecided plan holds the card at
-          <strong>Planning</strong> (<code>agent-authored-plans.md</code> AMENDMENT 20 §1), every
+          <strong>Planning</strong> (<code>agent-authored-plans.md</code> AMENDMENT 21 §1), every
           move out is refused with <code>PLAN_TARGET_HELD</code>, the whole dropdown is locked, and
           the door is <strong>Review plan</strong> — to the planning surface for a plan with a
           session, to <code>/plans/&lt;id&gt;</code> for one without, and <strong>never</strong> the
@@ -1240,7 +1240,7 @@
           ><span class="chip">sessionId <strong>set</strong></span>
         </div>
         <p class="cap">
-          Stale is UNDECIDED, so it still holds (AMENDMENT 20 §1) and its lock no longer expires
+          Stale is UNDECIDED, so it still holds (AMENDMENT 21 §1) and its lock no longer expires
           (§4). Same door.
         </p>
         <div class="rail">
@@ -1281,7 +1281,7 @@
           ><span class="chip">sessionId <strong>set</strong></span>
         </div>
         <p class="cap">
-          stale 属于「未决定」，因此仍然占用（AMENDMENT 20 §1），且其锁不再过期（§4）。按钮相同。
+          stale 属于「未决定」，因此仍然占用（AMENDMENT 21 §1），且其锁不再过期（§4）。按钮相同。
         </p>
         <div class="rail">
           <div class="fcard">
@@ -1410,7 +1410,7 @@
           ><span class="chip">planId <strong>null</strong></span>
         </div>
         <p class="cap">
-          A session-held lock never holds (AMENDMENT 20 §1). The ordinary control, no box, every
+          A session-held lock never holds (AMENDMENT 21 §1). The ordinary control, no box, every
           legal move offered.
         </p>
         <div class="rail">
@@ -1492,7 +1492,7 @@
           ><span class="chip">planId <strong>null</strong></span>
         </div>
         <p class="cap">
-          会话锁从不占用状态（AMENDMENT 20 §1）。普通控件，无提示框，所有合法变更均可选。
+          会话锁从不占用状态（AMENDMENT 21 §1）。普通控件，无提示框，所有合法变更均可选。
         </p>
         <div class="rail">
           <div class="fcard">
@@ -1583,7 +1583,7 @@
         <p class="cap">
           Two refusals, two different doors — so both are said, in the shipped component's own
           hr-separated form. The plan line is FIRST and is the only one with a button: deciding the
-          gate is itself refused while the plan holds (AMENDMENT 20 §6), so offering Review &
+          gate is itself refused while the plan holds (AMENDMENT 21 §6), so offering Review &
           approve here would be a door onto a refusal.
         </p>
         <div class="rail">

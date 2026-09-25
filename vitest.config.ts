@@ -2133,6 +2133,15 @@ export default defineConfig({
         'components/planning/PlanningWorkspaceOverlay.tsx',
         'components/planning/PlanCloseGuard.tsx',
         'components/planning/PlanningWorkspaceHost.tsx',
+        // Story MOTIR-6155 · Subtask MOTIR-6186 — the plan page's List | Canvas
+        // pane, lifted into ONE component that the plan page AND the planning
+        // surface both mount. It is this story's own file and carries only the
+        // switch and the choice of body, so gating it gates nothing but this
+        // story's work — which is exactly the trade this section's header asks
+        // for, and the reason `PlanDetail.tsx` is still deliberately absent
+        // (see the note above): that island carries far more logic than this
+        // story owns. Measured at 100 / 100 / 100 by MOTIR-6187's gate.
+        'components/planning/PlanProposalViews.tsx',
         'app/api/work-items/planning-anchor/route.ts',
         // The `/planning` FORWARD. A route-group path is entered as `app/**/…`
         // (the note above) — `app/(authed)/planning/page.tsx` resolves to nothing.
@@ -2483,6 +2492,34 @@ export default defineConfig({
         'lib/services/workItemCiStateBackfillService.ts',
         'components/github/ciStateMeta.ts',
         'components/github/CiStateBadge.tsx',
+        // ── Story MOTIR-6156 · THE MULTI-LINE COMPOSER (Subtask MOTIR-6239) ──
+        // MEASURED on this branch before being pinned, per this list's own rule:
+        // 97.11 statements / 90.43 branches / 100 functions / 100 lines, over the
+        // eleven planning component suites. Gated at the project floor below.
+        //
+        // ⚠️ TWO FILES THE CARD NAMES ARE NOT HERE, and both are dispositions
+        // rather than omissions.
+        //
+        // `packages/design-system/src/components/ui/Textarea.tsx` is NOT
+        // MEASURABLE from this lane. motir-core imports the BUILT package
+        // (`@motir/design-system` → `dist/`), so no test here loads that source
+        // file; an entry for it would report 0% and gate the whole suite red for
+        // ever. The package's own vitest config declares no coverage at all, so
+        // there is no lane to move it to either. Its behaviour is covered by
+        // MOTIR-6237's 24 cases over the shipped artifact
+        // (`tests/components/textarea-autogrow.test.tsx`) plus the default-is-a-
+        // contract and caller-pinning cases in
+        // `tests/integration/planning/multilineComposerStoryGate.test.tsx`.
+        //
+        // `components/planning/PlanChangeRail.tsx` is deliberately NOT gated.
+        // MOTIR-6239 asks for coverage on its CHANGED LINES — three classes on
+        // the user bubble — and those are asserted directly
+        // (`tests/components/plan-change-rail.test.tsx`, the MOTIR-6238 suite).
+        // The file itself measured 78.19 / 71.86 / 80.64 / 78.33: it is a
+        // 1,300-line rail this story widened by one className, and gating it
+        // here would gate this story on code no card in it wrote — the trap the
+        // `changeRequestCiFeedback.ts` note above names.
+        'components/planning/PlanChangeComposer.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -2493,6 +2530,17 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // ── Story MOTIR-6156 · THE MULTI-LINE COMPOSER (Subtask MOTIR-6239) ──
+        // Measured at 97.11 / 90.43 / 100 / 100 on this branch. The branch axis
+        // has the thinnest margin in this list — its residue is three `if (!el)
+        // return` ref guards that cannot be reached without breaking the ref, so
+        // the honest ceiling is close to the floor.
+        'components/planning/PlanChangeComposer.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // ── Story MOTIR-6016 · DIFFICULTY (Subtask MOTIR-6102) ───────────────
         'lib/issues/difficulty.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/hooks/useActivityRevision.ts': {
@@ -2916,6 +2964,12 @@ export default defineConfig({
           statements: 90,
         },
         'components/planning/PlanningWorkspaceHost.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/planning/PlanProposalViews.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

@@ -1,5 +1,6 @@
 import { cache } from 'react';
 import { betterAuth, type Auth, type BetterAuthOptions } from 'better-auth';
+import { isAPIError } from 'better-auth/api';
 import { prismaAdapter } from '@better-auth/prisma-adapter';
 import { passkey } from '@better-auth/passkey';
 import { nextCookies } from 'better-auth/next-js';
@@ -677,8 +678,65 @@ export const auth: Auth<typeof authOptions> = betterAuth(authOptions);
  * tree calling Better-Auth directly (the control that proves the harness can
  * see duplicates at all).
  */
-export const getSession = cache(async () => {
-  return auth.api.getSession({
-    headers: await headers(),
-  });
-});
+export const getSession = cache(async () => readSession(await headers()));
+
+/**
+ * The session could not be READ — the database did not answer — as opposed to
+ * there being no session. `code` is what a route answers with (a 503, see
+ * `requireCompliantSession`), and `cause` is Better-Auth's own error.
+ */
+export class SessionUnavailableError extends Error {
+  readonly code = 'SESSION_UNAVAILABLE';
+
+  constructor(cause: unknown) {
+    super('The session could not be read: the database did not answer.', { cause });
+    this.name = 'SessionUnavailableError';
+  }
+}
+
+/** One retry, on a fresh pooled connection — the attempt count, not a retry count. */
+const SESSION_READ_ATTEMPTS = 2;
+const SESSION_READ_RETRY_DELAY_MS = 100;
+
+/**
+ * `auth.api.getSession` for explicit request headers, with its two THROWS
+ * given their meaning (MOTIR-5864). Every session read in the app goes through
+ * here — `getSession()` above for the `next/headers` context, and
+ * `resolveWorkspaceContext` for a handler holding a `Request`.
+ *
+ * ⚠️ BETTER-AUTH'S `getSession` DOES NOT RETURN `null` FOR EVERY FAILURE. Its
+ * route body catches ANY non-API error — a dropped connection on the session
+ * read included — and re-throws it as `APIError(INTERNAL_SERVER_ERROR,
+ * "Failed to get session")` (`better-auth/dist/api/routes/session.mjs`). So a
+ * `P1017` / `ECONNRESET` on `prisma.session.findFirst()` left every caller by
+ * THROWING, past its own no-session arm: fifteen unhandled 500s on the bell's
+ * unread-count poll, 2026-08-30 → 2026-09-20 (Sentry MOTIR-CORE-9), each with
+ * that Prisma error one breadcrumb earlier.
+ *
+ *   · a 5xx `APIError` is the DATABASE, not the person. It is retried once —
+ *     `pg` discards the broken connection, so the second read takes a fresh
+ *     one — and if that fails too it becomes `SessionUnavailableError`, which
+ *     the route gates answer as a handled 503.
+ *   · the 401 `APIError` is Better-Auth's OTHER `FAILED_TO_GET_SESSION`: the
+ *     session row was deleted while it was being refreshed (a sign-out or a
+ *     revoke racing the request). That person HAS no session, so it is `null`.
+ *   · anything else is not a session-read failure this knows how to name, and
+ *     is re-thrown untouched.
+ */
+export async function readSession(requestHeaders: Headers) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= SESSION_READ_ATTEMPTS; attempt++) {
+    try {
+      return await auth.api.getSession({ headers: requestHeaders });
+    } catch (error) {
+      if (!isAPIError(error)) throw error;
+      if (error.statusCode === 401) return null;
+      if (error.statusCode < 500) throw error;
+      lastError = error;
+    }
+    if (attempt < SESSION_READ_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, SESSION_READ_RETRY_DELAY_MS));
+    }
+  }
+  throw new SessionUnavailableError(lastError);
+}

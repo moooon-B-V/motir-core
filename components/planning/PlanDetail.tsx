@@ -4,14 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
-import { List, Workflow } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
-import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
 import { FOLDER_REF_PREFIX } from '@/lib/plans/refs';
-import { PlanProposalList } from '@/components/planning/PlanProposalList';
-import { Segmented } from '@/components/ui/Segmented';
+import { PlanProposalViews } from '@/components/planning/PlanProposalViews';
 import {
   PLAN_VIEW_PARAM,
   defaultPlanView,
@@ -449,69 +446,50 @@ export function PlanDetail({
           // takes a band and never the pane, for every project with code to
           // establish. What is added is the population where the band is not
           // drawn AT ALL (`design/repository-set/design-notes.md` §7b).
-          <div className="flex h-full min-h-0 w-full flex-col">
-            {/* The PANE HEADER (Part VIII §2). The pane had none —
-                `PlanningWorkspace`'s `canvas` slot is filled edge to edge — so
-                one is decided here rather than found. It sits at the TOP of the
-                pane, ABOVE the establish band, because the bar governs the BODY
-                and the band is not part of the body: Part VI decided the step
-                STACKS above the canvas, and a switcher under the band would make
-                the band read as chrome belonging to one of the two views.
-                (Part VIII reserved this bar's right end for Part IX's
-                Show-changes control; Part IX RELEASED it and put that control in
-                the canvas's own cluster, so the bar holds the switcher alone.) */}
-            <div className="flex h-11 shrink-0 items-center border-b border-(--el-border) bg-(--el-surface) px-(--spacing-control-x)">
-              <Segmented<PlanViewDto>
-                label={t('viewSwitchAria')}
-                value={view}
-                onChange={onViewChange}
-                options={[
-                  { value: 'list', label: t('viewList'), icon: <List className="size-3.5" /> },
-                  {
-                    value: 'canvas',
-                    label: t('viewCanvas'),
-                    icon: <Workflow className="size-3.5" />,
-                  },
-                ]}
-              />
-            </div>
-            {repositorySet && setHasEstablishWork(repositorySet.view.set.rows) ? (
-              <div
-                data-testid="plan-detail-establish-band"
-                className="shrink-0 border-b border-(--el-border) bg-(--el-surface)"
-              >
-                {/* ⚠️ `connectHref` is the MEMBER's own GitHub account (Story
-                    MOTIR-4669 · MOTIR-4682). Both places it is used ask the
-                    reader to connect THEIR identity — the "connect your own" CTA
-                    and a row's `not invited` action — and an identity is the one
-                    git fact that is not the organisation's to grant. It pointed
-                    at `/settings/workspace/github`, a route MOTIR-4680 deleted. */}
-                <RepositorySetStep
-                  projectKey={repositorySet.projectKey}
-                  initialView={repositorySet.view}
-                  backlogHref="/items"
-                  connectHref="/settings/account/git"
-                  onOutcomeChange={setReportedCodeOutcome}
-                />
-              </div>
-            ) : null}
-            <div className="min-h-0 flex-1">
-              {/* A SECOND BODY in the same pane, never a re-drawing of the first.
-                  The canvas answers where a proposal LANDS; the list answers what
-                  exactly is being approved, which is a question about a SET. */}
-              {view === 'list' ? (
-                <PlanProposalList items={review.items} outcome={outcome} />
-              ) : (
-                <PlanReviewCanvas
-                  items={review.items}
-                  projectKey={projectKey}
-                  version={version}
-                  outcome={outcome}
-                  ariaLabel={ariaLabel ?? t('canvasAria')}
-                />
-              )}
-            </div>
-          </div>
+          // ⚠️ THE HEADER, THE SWITCH AND BOTH BODIES NOW LIVE IN
+          // `PlanProposalViews` (Subtask MOTIR-6185). They were inline here, and
+          // this page was their only host; the planning SURFACE is about to mount
+          // the same component (MOTIR-6186), and two copies of the list, the
+          // canvas and the switch between them are two places that can disagree
+          // about what a plan contains.
+          //
+          // Nothing moved out of THIS island except the JSX. The URL binding
+          // stays here — the view is CONTROLLED, and the two hosts hold it
+          // differently on purpose (this page in the URL, the overlay locally,
+          // `design-notes.md` Part XXI decision 3) — and so do the pinned
+          // default, the establish band's own predicate, `refetch` and `version`.
+          <PlanProposalViews
+            items={review.items}
+            outcome={outcome}
+            projectKey={projectKey}
+            version={version}
+            ariaLabel={ariaLabel ?? t('canvasAria')}
+            view={view}
+            onViewChange={onViewChange}
+            band={
+              repositorySet && setHasEstablishWork(repositorySet.view.set.rows) ? (
+                <div
+                  data-testid="plan-detail-establish-band"
+                  className="shrink-0 border-b border-(--el-border) bg-(--el-surface)"
+                >
+                  {/* ⚠️ `connectHref` is the MEMBER's own GitHub account (Story
+                      MOTIR-4669 · MOTIR-4682). Both places it is used ask the
+                      reader to connect THEIR identity — the "connect your own"
+                      CTA and a row's `not invited` action — and an identity is
+                      the one git fact that is not the organisation's to grant. It
+                      pointed at `/settings/workspace/github`, a route MOTIR-4680
+                      deleted. */}
+                  <RepositorySetStep
+                    projectKey={repositorySet.projectKey}
+                    initialView={repositorySet.view}
+                    backlogHref="/items"
+                    connectHref="/settings/account/git"
+                    onOutcomeChange={setReportedCodeOutcome}
+                  />
+                </div>
+              ) : null
+            }
+          />
         }
         chat={
           <PlanReviewRail

@@ -1651,25 +1651,87 @@ describe('ProjectRoadmapCanvas — "Reset layout" respects the fold inset', () =
     );
     await screen.findByText('a');
     const reset = screen.getByRole('button', { name: 'Reset layout' });
-    expect(reset.className).toContain('bottom-[calc(1rem+var(--canvas-fold-inset,0px))]');
+    // Asserted on the variable by NAME, not on the whole offset string: MOTIR-6186
+    // added a second, full-width inset this control also adds, and a literal here
+    // would fail for a change that leaves this property perfectly intact.
+    expect(reset.className).toContain('var(--canvas-fold-inset,0px)');
+    expect(reset.className).toMatch(/bottom-\[calc\(1rem\+/);
     // Anchored right — the only side the orb can reach.
     expect(reset.className).toContain('right-3');
   });
 
-  it('leaves every LEFT-anchored overlay at its shipped offset', async () => {
+  it('leaves every LEFT-anchored overlay clear of the FOLD inset', async () => {
     const withDep: RoadmapLevel = {
       nodes: [node('A', 'a'), node('B', 'b')],
       deps: [{ from: 'A', to: 'B', kind: 'dependency' }],
     };
     render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDep)} locatable />);
     // The legend and Locate are bottom-LEFT; the orb cannot reach them, so the fold
-    // must not move them.
+    // must not move them. THIS IS THE PROPERTY MOTIR-3839 BOUGHT, and it is asserted
+    // on the fold variable by NAME rather than on a whole offset string — because
+    // MOTIR-6186 added a second, full-width inset that these overlays DO read, and
+    // an assertion on the literal offset would have made the two indistinguishable.
     const legend = await screen.findByTestId('edge-legend');
-    expect(legend.className).toContain('bottom-[4.25rem]');
     expect(legend.className).toContain('left-3');
-    expect(screen.getByTestId('locate-button').parentElement!.className).toContain(
-      'bottom-4 left-[8.25rem]',
+    expect(legend.className).not.toContain('--canvas-fold-inset');
+
+    const locate = screen.getByTestId('locate-button').parentElement!;
+    expect(locate.className).toContain('left-[8.25rem]');
+    expect(locate.className).not.toContain('--canvas-fold-inset');
+  });
+
+  // ── THE FULL-WIDTH FOOT (MOTIR-6186) ──────────────────────────────────────
+  //
+  // The planning surface's confirm bar used to be a `shrink-0` sibling BELOW this
+  // canvas's box. Since MOTIR-6186 it floats OVER the box's bottom edge, so that
+  // hiding it when there is nothing to decide resizes nothing — and a bar that
+  // spans the full width reaches every bottom-anchored overlay, not just the
+  // bottom-RIGHT one the orb can touch.
+  //
+  // So `--canvas-foot-inset` is a SECOND variable rather than a reuse of
+  // `--canvas-fold-inset`: the two describe differently-shaped obstructions, and
+  // the test above is the reason they cannot be merged. Both default to `0px`.
+  it('lifts EVERY bottom-anchored overlay by the FOOT inset — all four read it', async () => {
+    const withDep: RoadmapLevel = {
+      nodes: [node('A', 'a'), node('B', 'b')],
+      deps: [{ from: 'A', to: 'B', kind: 'dependency' }],
+    };
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={() => Promise.resolve(withDep)}
+        locatable
+        onResetPositions={() => {}}
+        onNodeMove={() => {}}
+        positions={{ A: { x: 500, y: 500 } }}
+      />,
     );
+
+    const legend = await screen.findByTestId('edge-legend');
+    expect(legend.className).toContain('var(--canvas-foot-inset,0px)');
+    expect(screen.getByTestId('locate-button').parentElement!.className).toContain(
+      'var(--canvas-foot-inset,0px)',
+    );
+    // …including the bottom-RIGHT one, which therefore adds BOTH insets.
+    const reset = screen.getByRole('button', { name: 'Reset layout' });
+    expect(reset.className).toContain('var(--canvas-foot-inset,0px)');
+    expect(reset.className).toContain('var(--canvas-fold-inset,0px)');
+  });
+
+  it('defaults the foot inset to 0, so every other mount is where it was', async () => {
+    // The whole safety of a second variable: a consumer that declares neither —
+    // `/roadmap`, the plan page, the item page's Children panel — is untouched.
+    const withDep: RoadmapLevel = {
+      nodes: [node('A', 'a'), node('B', 'b')],
+      deps: [{ from: 'A', to: 'B', kind: 'dependency' }],
+    };
+    const { container } = render(
+      <ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDep)} locatable />,
+    );
+    await screen.findByTestId('edge-legend');
+
+    // Nothing in the rendered tree DECLARES the variable, so every reader of it
+    // resolves to its `0px` fallback.
+    expect(container.innerHTML).not.toContain('--canvas-foot-inset:');
   });
 
   // ── THE TARGET CRUMB (MOTIR-6160, Story MOTIR-6154) ───────────────────────

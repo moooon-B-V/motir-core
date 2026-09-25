@@ -3490,9 +3490,49 @@ how hard a card is to reason about is one of the most consequential things a re-
 The review renderer is its own card (MOTIR-6137); until it lands the parity guards carry a named,
 self-expiring owed entry for it.
 
+## AMENDMENT 20 — a `modify` that RE-TYPES its target SEEDS the executor, and a patch key the plan cannot apply is REFUSED (bug MOTIR-6259, 2026-09-25)
+
+**The gap.** AMENDMENT 4 D3a made `executor` settable on an `add` and the TARGET's on every other
+op, so `PlanItemPatch` has no `executor` key. That was decided before a re-plan could RE-TYPE a card,
+which is exactly where the target's executor stops being meaningful. `applyModify` wrote `update.type`
+directly and never went near `executor`, so it skipped the direct door's seed-if-absent rule too.
+A re-plan that re-typed an UNTYPED card as `decision` therefore approved to `decision` beside
+`executor: null`. Both decision gates key on that pair (`decision_approval` on `coding_agent`,
+`decision_confirmation` on `human`), so the card raised neither, and the decision it existed to put
+in front of a person could never be asked. And an author who sent `patch.executor` to fix it got a
+success: the MCP schema passes an unknown key through, and the merge then copied only
+`PLAN_ITEM_PATCH_KEYS`, so the key was dropped without a word.
+
+### §1 — the re-type SEEDS, through the direct door's rule; D3a stands
+
+When a `modify` carries `type`, approve resolves the executor through `resolveExecutor`
+(`lib/issues/executorDefaults.ts`), the same function `workItemsService` writes through: a target
+with an executor keeps it, and a target with none gets `defaultExecutorForType(<the new type>)`.
+The patch still has no `executor` key. **Rejected: giving `PlanItemPatch` an `executor` key.** That
+would reopen D3a for every `modify` to fix the one case D3a predates. It would also move a field
+that decides which gate a card raises through the plan door, where an approver reading titles
+may not notice it change. A card whose executor has to differ from its type's default is set on the
+work item itself, exactly as it is for any card no plan touches.
+
+### §2 — the reviewer SEES the seed
+
+The approve DERIVES the seeded executor, so it is an `executor` CHANGE row (`PLAN_ITEM_CHANGE_FIELDS`),
+the same way AMENDMENT 16's resting `status` is. It is not a settable rail field, and the review
+rail's `executor` reads the same derivation. `planReviewService` and `applyModify` both call
+`resolveExecutor`, so the row and the write cannot disagree.
+
+### §3 — an unknown patch key is REFUSED, by name, at the append and the correction
+
+`assertKnownPatchKeys` (`lib/plans/validatePatchKeys.ts`) refuses any `patch` key
+`PLAN_ITEM_PATCH_KEYS` does not list, as `INVALID_PROPOSAL`, naming every such key. It runs at the
+append and at `update_plan_proposal`, never at approve: a plan persisted before this check holds
+only the keys the merge already kept, and refusing at approve would put the author's mistake in
+front of a reviewer who cannot fix it. The MCP `patchSchema` stays `.passthrough()`, so the refusal
+is the SERVICE's and every door that appends a patch gets it.
+
 ---
 
-## AMENDMENT 20 — an UNDECIDED plan OWNS its parked cards' status: the manual release is overturned (story MOTIR-6017 · MOTIR-6262, 2026-09-25)
+## AMENDMENT 21 — an UNDECIDED plan OWNS its parked cards' status: the manual release is overturned (story MOTIR-6017 · MOTIR-6262, 2026-09-25)
 
 **The gap.** AMENDMENT 16 gave a plan the power to PARK every committed target it names, and gave
 the DECISION the power to give each one back. It did not make the park hold. `planning` keeps both

@@ -48,7 +48,9 @@ const inputSchema = {
     .optional()
     .describe(
       'Return only designs holding a file whose repository path starts with this prefix — how a ' +
-        'delta mock’s amended BASE is found (e.g. `design/work-items/`). Ignored with `blockersOf`.',
+        'delta mock’s amended BASE is found (e.g. `design/work-items/`). Ignored with `blockersOf`. ' +
+        '⚠️ A filtered page can be SHORT — even empty — while more pages remain: keep paging ' +
+        'until `nextCursor` is null before concluding nothing matches.',
     ),
   query: z
     .string()
@@ -61,7 +63,11 @@ const inputSchema = {
     .string()
     .min(1)
     .optional()
-    .describe('Opaque page cursor from a previous call’s `nextCursor`. Ignored with `blockersOf`.'),
+    .describe(
+      'Opaque page cursor from a previous call’s `nextCursor`. Ignored with `blockersOf`. A ' +
+        'SHORT page with a non-null cursor is normal when `pathPrefix` or `query` is set, so keep ' +
+        'paging until it is null.',
+    ),
   limit: z
     .number()
     .int()
@@ -107,8 +113,19 @@ function summarizeVerdicts(verdicts: DesignVerdictDto[], ofKey: string): string 
   return lines.join('\n');
 }
 
-function summarizeDesigns(designs: ApprovedDesignDto[], nextCursor: string | null): string {
+export function summarizeDesigns(designs: ApprovedDesignDto[], nextCursor: string | null): string {
   if (designs.length === 0) {
+    // ⚠️ AN EMPTY PAGE WITH A CURSOR IS NOT "NOTHING MATCHED" (MOTIR-6272). The
+    // service reads on past the cards a filter drops, but it stops at a
+    // candidate ceiling, so a filter that matches almost nothing can still
+    // answer an empty page with more to read. Saying "no match" there sent a
+    // caller away one page short of the design it was looking for.
+    if (nextCursor) {
+      return (
+        'No approved design on this page, and MORE PAGES REMAIN — this is not "nothing ' +
+        `matched". Pass cursor "${nextCursor}" to keep reading.`
+      );
+    }
     return 'No approved designs matched. A design still under review is not listed — it is not something to build against.';
   }
   const lines = [`${designs.length} approved design(s), newest first:`, ''];

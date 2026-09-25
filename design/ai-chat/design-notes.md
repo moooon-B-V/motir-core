@@ -1370,7 +1370,7 @@ three files is written first.
 | **`planItem`**    | the ANCHOR's work-item key. Written **only** when `planFrom=work-item`; the overlay hands it to `GET /api/work-items/planning-anchor` (MOTIR-4727)                                                                                                                                   | `MOTIR-<n>`                                                    | the overlay                           |
 | **`planRepo`**    | the repository key. Written **only** when `planFrom=convention-refine`                                                                                                                                                                                                               | a repo key                                                     | the overlay                           |
 | **`planSession`** | a SESSION's id — reopens that planning conversation by id, the window notwithstanding (MOTIR-6019's published design, §19.8; built by MOTIR-6024). Read only when `plan` is present and `planFrom` is `project` or `work-item`                                                       | a session id                                                   | the overlay                           |
-| **`planVia`**     | the ENTRANCE a named session was reopened from, so the rail's reopened line tells the truth (MOTIR-6033's published design, `design/ai-planning/design-notes.md` Part XX §20.2; built by MOTIR-6037). Read only with `planSession`; absent, or any other value, means the Plans page | `plans` · `approvals`                                          | the rail's reopened line              |
+| **`planVia`**     | the ENTRANCE a named session was reopened from, so the rail's reopened line tells the truth (MOTIR-6033's landed design — `design/ai-planning/design-notes.md` Part XXII §22.2; built by MOTIR-6037). Read only with `planSession`; absent, or any other value, means the Plans page | `plans` · `approvals`                                          | the rail's reopened line              |
 
 **Why the mode rides on `plan` rather than on a fifth name.** The overlay needs ONE parameter
 whose mere presence means _open_, exactly as `?run=` and `?peek=` do; the mode is already total
@@ -3370,10 +3370,11 @@ Every other string on these panels is already in the catalogue and is **reused, 
 | the **project launcher** / roadmap empty state | `planFrom=project` or `roadmap`, no item                                              | the root, then the follow-move                                              |
 
 **No new address parameter.** The To-approve row already writes `planItem=` when its plan has a
-target — MOTIR-6033's published design, § _20.2 The ACCESS PATH_ — so all three targeted entrances
-hand the arrival rule the same key. That is what makes "one arrival rule" a fact rather than an
-aspiration. (⚠️ That design is **published only** and is not committed to this repository; cite it
-by its card key, not by a Part number — see flag 3.)
+target — MOTIR-6033's design, `design/ai-planning/design-notes.md` Part XXII § _22.2 The ACCESS
+PATH_ — so all three targeted entrances hand the arrival rule the same key. That is what makes "one
+arrival rule" a fact rather than an aspiration. (When this was written that design was **published
+only**, so this sentence cited it by card key; MOTIR-6190 has since landed it as Part XXII — see
+flag 3.)
 
 ### What is INHERITED and not redrawn
 
@@ -3426,6 +3427,10 @@ tokens rather than new primitives.
    08:30, PR #3082); MOTIR-6033's Part XX was published as a design result and never committed, so
    the citation resolves to the wrong section. Filed as its own bug; this section cites MOTIR-6033
    by card key for that reason.
+   **RESOLVED (MOTIR-6192).** MOTIR-6190 has since landed MOTIR-6033's design as **Part XXII**
+   (its §20.N is §22.N there), so the ADDRESS row now cites Part XXII §22.2. The rule for citing a
+   design that is published but not landed is stated once, under the index table of
+   `design/ai-planning/design-notes.md`.
 
 4. **The PROPOSAL card is a second drawing of the committed card, not a layer over it.** Rendered
    side by side (the table in § _ONE CARD, THREE SURFACES_): the shell agrees on footprint, radius,
@@ -3481,3 +3486,251 @@ the canvas opens on. They are filed as their own card — MOTIR-6196, flag 4 bel
 section. **A DELTA, per `CLAUDE.md`'s rule** — the base sheet is not edited, and there is no `.png`
 (AMENDMENT 4 retired the export). Published as MOTIR-6159's design result, which is what
 MOTIR-6160 and MOTIR-6161 are `blocked_by`.
+
+---
+
+## ⭐ The MULTI-LINE planning composer — growth to its cap, and the line-broken user bubble (MOTIR-6236, 2026-09-24)
+
+**Asset:** `design/ai-chat/planning-workspace--multiline-composer.mock.html` — a **DELTA**, thirteen
+sheets, light and dark, **at a 480px conversation pane** (panels 1–11) and **at the 352px floor**
+(panel 12). It amends `planning-workspace.mock.html`
+(MOTIR-1193), `target-picker.mock.html` (MOTIR-1490), `plan-change-planner-speaks.mock.html`
+(MOTIR-2225), `plan-change-run-live.mock.html` (MOTIR-4066) and
+`design/ai-planning/plan-revision.mock.html` (MOTIR-3597). **Those five are records of their own
+moment and are not edited.**
+
+**Story MOTIR-6156.** The composer is one component — `components/planning/PlanChangeComposer.tsx` —
+with two hosts: the planning surface's rail (`PlanChangeRail.tsx:710`) and the plan page's revise box
+(`PlanReviewRail.tsx:415`, `mentions={false}`). It ships as a single-line `<input type="text">`. It
+becomes a **multi-line field that grows with its content to a cap, then scrolls inside itself**.
+
+### ⚠️ REDRAWN AT THE SPLIT'S WIDTH — what changed, and what did not
+
+**The first version of this asset drew every panel at the rail's then-fixed `22rem`, and its design
+gate was answered REQUEST CHANGES for exactly that:** _"the right conversation window is too narrow,
+so the textarea is too narrow too."_ The width is not this card's to choose. It is **MOTIR-6249**'s
+approved resizable split, and the numbers are shipped in `lib/planning/railWidth.ts` — whose own
+header says every one of them is a decision of that design result, which this asset therefore READS
+rather than re-derives:
+
+| shipped constant            | value  | what it means here                                |
+| --------------------------- | ------ | ------------------------------------------------- |
+| `RAIL_MIN_PX`               | `352`  | the floor — panel 12's width                      |
+| `RAIL_DEFAULT_FRACTION`     | `1/3`  | the conversation's share of the split container   |
+| `RAIL_MAX_FRACTION`         | `0.5`  | the drag ceiling — 720px at a 1440 container      |
+| `RAIL_DEFAULT_CROSSOVER_PX` | `1056` | below it a third is under the floor and it clamps |
+| `SPLIT_MIN_CONTAINER_PX`    | `768`  | below it there is no split at all                 |
+
+`defaultRailWidth(1440)` = `clamp(352, 480, 720)` = **480px**, canvas 960px. That is what panels 1–11
+are drawn at, and the board reads it from one `--rail-w` token so no panel can disagree with another.
+
+**The floor is not an edge case.** Below the 1056px crossover the default clamps to 352px, so every
+split container between 768px and 1056px opens at exactly the width the rejected first version was
+drawn at. Panel 12 is that width, and **its boards are the first version's markup re-used rather than
+re-drawn** — 352px stopped being the DEFAULT, not a real width.
+
+**The plan page's revise box is not a split host** and keeps its own width; measured, its 378px
+default behaves like the 480px one, not like the floor.
+
+### What the WIDTH actually changed — measured, not asserted
+
+Read back out of a headless Chromium render of the committed board (1440×1000, dSF 1) by overriding
+`--rail-w` and re-measuring, rather than computed from the tokens:
+
+| rail pane           | field | target tray    | the same 3-line message |
+| ------------------- | ----- | -------------- | ----------------------- |
+| **352px** (floor)   | 302px | 79px / 3 lines | **4 rows**              |
+| 378px (plan page)   | 328px | 58px / 2 lines | 3 rows                  |
+| **480px** (default) | 430px | 58px / 2 lines | **3 rows**              |
+| 720px (ceiling)     | 670px | 26px / 1 line  | 3 rows                  |
+
+Two findings follow, and neither is visible in the markup:
+
+- **The same typed message costs a FOURTH row at the floor.** Panel 12's grown board is therefore
+  drawn at 104px (4 rows), not at the 84px the 480px board uses. Re-using the 84px board there would
+  have clipped its own content under `overflow-y: hidden` — silently, with no scrollbar, because a
+  mock's height is an inline number and not the auto-grow the code will do.
+- **The target tray is the one footer element whose height the split really changes** (three lines at
+  the floor, two at the default, one at the ceiling), which is why it is the term that moves in the
+  worst-case footer below.
+
+### How the asset was made, and which fragments carry which warranty
+
+Every **composer** fragment is the REAL emitted markup of the shipped component, captured from a
+headless render through the repo's own `tests/helpers/renderWithIntl` harness → `container.innerHTML`,
+in eight states. **Exactly one node is changed in each: the `<input>` becomes a `<textarea>`.** The
+**user-bubble** and **rail-header** fragments are NOT renders — their class strings are copied
+byte-for-byte from `PlanChangeRail.tsx`'s `Bubble` (`:1124-1152`) and from
+`plan-change-run-live.mock.html`, which is a render of that rail. The stylesheet is Tailwind's
+compiled output, lifted verbatim from that same asset.
+
+**Four things the render corrected that reading the `.tsx` did not:**
+
+1. **Send is a SIBLING of the field**, not a child — one `flex items-center gap-2` row. So growth
+   moves Send unless the row is re-aligned, which is why alignment is a decision this card owes.
+2. **The `@` trigger is `position: absolute; left: 1.5`** inside that centring row, so it drifts to
+   the vertical middle of a grown field with no class of its own changing.
+3. **The user bubble has NO whitespace handling and no `min-w-0`.** `{turn.body}` is a bare text
+   child of a `<div>`, so **a multi-line message collapses to one run-on line today.**
+4. **A textarea does not vertically centre one line the way an `<input>` does.** Reproducing the
+   shipped 44px at one row is therefore arithmetic, not a token — see below.
+
+### The measurements, and the four decisions
+
+**Height.** `--height-input` (44px) at one row, **+ one `line-height` (20px) per further row**:
+44 / 64 / 84 / … / **184 at the cap**. The vertical padding that makes one row _exactly_ the shipped
+44px is derived rather than taken from a token —
+`(--height-input − line-height − 2 × border) ÷ 2` = `(44 − 20 − 2) ÷ 2` = **11px**. Using
+`--spacing-input-y` (12px) instead makes the at-rest field **46px**, which is a visible 2px growth on
+a composer nobody has typed into. **The code reads line-height, padding and border from the computed
+style and clamps** (MOTIR-6237's own contract), so the clamp stays exact under every type scale and
+density; the numbers here are those tokens' current values, not constants to hard-code.
+
+1. **THE CAP IS 8 ROWS (184px) — unchanged by the split, and re-measured at it.** This confirms the
+   story's assumption. **The cap is a VERTICAL budget and the split changed WIDTH, so the number does
+   not move**; what moves is the worst case around it. Re-measured on the rendered board, the
+   worst-case footer — cap **plus** target tray **plus** running bar — is:
+
+   | pane width      | cap | tray (+8px gap) | running bar (+8px) | worst-case footer |
+   | --------------- | --- | --------------- | ------------------ | ----------------- |
+   | 352px (floor)   | 184 | 87              | 56                 | **327px**         |
+   | 480px (default) | 184 | 66              | 56                 | **306px**         |
+   | 720px (ceiling) | 184 | 34              | 56                 | **274px**         |
+
+   At 480px on a 900px-tall viewport that leaves the transcript ~525px — the majority of the rail,
+   which is the argument the eight rows were chosen on, now checked at the width the composer
+   actually ships at. At ten rows the 480px stack is ~346px and the transcript drops toward half on a
+   shorter viewport. **Eight is still the last row count at which the transcript stays the larger
+   region in the worst case, and it is now the last count at the FLOOR too** (327px), which is the
+   binding case rather than the default. The revise box takes the same cap.
+
+   ⚠️ **The earlier figure in this section was `24 + 34 + 56 + 184 ≈ 298px`, and it under-counted the
+   tray** — it used a one-line tray (34px), which the render only produces at the 720px ceiling. The
+   numbers above replace it.
+
+   **A wider field does not mean a taller one.** It means the same paragraph reaches the cap LATER:
+   measured, the sample message is 3 rows at 480px and 4 at 352px.
+
+2. **`@` AND SEND ALIGN TO THE BOTTOM** — `items-end` on the control row, `bottom-1.5` on the
+   trigger. Centre-aligning walks both controls down the field as it grows, so the target a person is
+   aiming at moves while they type; bottom-aligning holds them a fixed distance from the caret's last
+   line. It is also where MUI X's chat composer puts its send control, in a toolbar below the field.
+   **The price, stated rather than buried: at rest the row is 44px and Send is 32px, so
+   bottom-aligning drops Send 6px lower than today's centring.** That 6px is the only visible change
+   to the untouched composer, and it buys a control that never moves again from one row to eight.
+3. **NO PERSISTENT KEYBOARD HINT**, and **no message key is owed** in either locale. Checked against
+   two references. **MUI X's Chat Composer** documents the behaviour — _"submits on Enter and inserts
+   a newline on Shift+Enter"_ — and its published component anatomy carries no hint element; the
+   behaviour is implicit. **Slack** documents _"Create a new line: Shift Enter"_ in its **help
+   centre**, not as composer chrome. At `22rem` a permanent hint line costs ~18px of the one region
+   that never scrolls, forever, to teach a convention both references treat as already known.
+   _(Both checks are of published documentation, not of a rendered screenshot — said plainly so the
+   next reader knows what was and was not verified.)_
+4. **THE MANUAL RESIZE HANDLE IS GONE** — `resize-none`, replacing the primitive's `resize-y`. The
+   two fight: a hand-dragged height is overwritten by the next keystroke's measurement.
+
+### The bubble
+
+`whitespace-pre-wrap` so the typed newlines survive, plus **`wrap-anywhere` and `min-w-0`** so a long
+unbroken token (a URL, a key) breaks inside the bubble instead of widening it past the rail.
+`wrap-anywhere` is the class the shipped rail already uses for exactly this on the revision-held line
+(`PlanReviewRail.tsx:398`), so this is the surface's own treatment rather than a new one.
+**Assistant bubbles are unchanged** — they render Markdown through `MarkdownView`, which blocks its
+own paragraphs. Only the user bubble renders raw typed text.
+
+### The sheets, and which shipped card owns the behaviour each draws
+
+| #   | State                                                           | Width  | Behaviour owned by                                  |
+| --- | --------------------------------------------------------------- | ------ | --------------------------------------------------- |
+| 1   | At rest — byte-identical to today                               | 480px  | MOTIR-1193 (the rail), MOTIR-1491 (the `@` trigger) |
+| 2   | Grown to three rows; the transcript shrinks and scrolls         | 480px  | this card                                           |
+| 3   | At the cap; a ten-line paste scrolls inside the field           | 480px  | this card                                           |
+| 4   | Grown, with the target tray                                     | 480px  | MOTIR-1491                                          |
+| 5   | Grown, with the answer bar; Send reads **Answer**               | 480px  | MOTIR-2226                                          |
+| 6   | Grown, with the running bar and **Stop**; a queued mid-run turn | 480px  | MOTIR-4068, MOTIR-4274                              |
+| 7   | Disabled while grown; the draft AND its height are kept         | 480px  | MOTIR-6033 §20.5                                    |
+| 8   | A pre-filled multi-line draft, sized on first paint             | 480px  | MOTIR-6210 (a later consumer)                       |
+| 9   | The user bubble keeps its line breaks                           | 480px  | this card                                           |
+| 10  | A long unbroken token wraps inside the bubble                   | 480px  | this card                                           |
+| 11  | The plan page's revise box, at rest and grown                   | 378px¹ | MOTIR-3601                                          |
+| 12  | **At the conversation's MINIMUM width** — rest, grown, capped   | 352px  | MOTIR-6249 (the floor), this card (the composer)    |
+| 13  | The decisions, the anatomy, and what is unchanged               | —      | —                                                   |
+
+¹ The revise box is not a split host, so it is drawn at its own pane width rather than at the split's
+default. The board renders it in the same 480px column as its siblings; the 378px figure is the plan
+page's measured container-derived default, and the composer's behaviour is identical at both.
+
+**Access path — UNCHANGED, and drawn so.** The rail composer is reached through the planning surface
+(the Plan-with-AI entrance, MOTIR-910 / MOTIR-1193); the revise box on a plan's page (MOTIR-3601).
+Every state is drawn **inside its host frame**, not as a floating field, so the entry context is
+visible. This card adds no new door.
+
+### Primitives and tokens
+
+The shared **`Textarea`** (MOTIR-6237 gives it `autoGrow` + `maxRows`), **`Button`**
+(`primary`/`secondary`, `sm`), **`Spinner`**, **`PlanningTargetChip`**, **`BrandMark`**. Nothing is
+hand-rolled. Shape flows through `--radius-input|card|control|badge|btn`, `--spacing-input-x|y`,
+`--spacing-chip-x|y`, `--height-input`, `--height-btn-sm`; colour through the `--el-*` element layer
+only.
+
+> **⚠️ A NOTE FOR WHOEVER LIFTS THIS STYLESHEET NEXT.** Tailwind v4 **tree-shakes `@theme`
+> variables** — it emits only the ones a compiled utility actually references. The sheet lifted from
+> `plan-change-run-live.mock.html` was built for a board that never used `py-(--spacing-input-y)`, so
+> **that token was absent from `:root` and the rule silently computed to `0`**. A lifted stylesheet
+> carries the tokens of the asset it came from, not the whole theme. This was caught only by
+> RENDERING the board and measuring the box; it is invisible in the markup.
+>
+> **⚠️ AND THE REDRAW FOUND ONE MORE, INHERITED FROM THE FIRST VERSION: `--focus-ring-color`.** It is
+> referenced **74 times** on this board — every `focus-visible:ring-` on the field, the `@` trigger,
+> Send and Stop — and the lifted sheet never defined it, so all 74 focus rings computed to nothing in
+> both themes. It is now declared in the board's supplementary `:root`, verbatim from
+> `packages/design-system/theme.css:262` (`var(--color-primary)`, whose referent the lifted sheet does
+> carry). Same hazard as `--spacing-input-y` above, one token further on — and the reason this section
+> says to RENDER rather than to read.
+>
+> **The remaining undefined references were checked and are dead**, not a third instance:
+> `--tilt-*`, `--font-*-source` and `--default-font-*-settings` are named only by rules the lifted
+> sheet brought with it that **no element on this board matches** (the board's markup mentions none of
+> them). They are left undeclared rather than padded in, so the sheet stays lifted verbatim and the
+> `:root` block holds only tokens this board actually resolves.
+
+### GIVES / TAKES — every key the asset names
+
+**GIVES** — **MOTIR-6238** (the composer card): the cap, the height arithmetic, the bottom alignment,
+the `whitespace-pre-wrap` + `wrap-anywhere` + `min-w-0` bubble, and the no-hint decision (so it owes
+no new string). **MOTIR-6237** (the primitive): the one-row-equals-`--height-input` contract, the
+per-row increment, and `resize-none`. **MOTIR-6210**: sheet 8's pre-filled shape.
+
+**GIVES, added by the redraw** — **MOTIR-6238** also gets **the two widths to build and test at**:
+480px, and the 352px floor that every split container under the 1056px crossover opens at.
+**MOTIR-6239** and **MOTIR-6240** get that floor as a second width their integration seams and their
+E2E walk are exercised at, which panel 12 is the drawing of.
+
+**CONSUMED, not amended** — **MOTIR-6249** and **MOTIR-6250**. This asset reads their settled numbers
+out of `lib/planning/railWidth.ts` and chooses none of them. The edge is carried at the STORY level
+(MOTIR-6156 `blocked_by` MOTIR-6248), because a `blocked_by` runs between siblings under one parent.
+
+**TAKES — nothing, from any card.** No criterion on MOTIR-6237, MOTIR-6238, MOTIR-6239, MOTIR-6240,
+MOTIR-6206, MOTIR-6210, MOTIR-6249 or MOTIR-6250 is contradicted or removed: the cap this asset
+settles is the number those cards already say they read from it, it is **unchanged** by the redraw, and
+the story's own eight-line assumption is confirmed rather than corrected. **No amendment to any card is
+owed by this PR.**
+
+**The one correction the redraw makes is to THIS ASSET'S OWN first version**, not to a card, and both
+are recorded above rather than quietly overwritten: the target tray's _"three or more chips at 22rem"_
+threshold (falsified by the render — two chips already wrap at 480px) and the worst-case footer's
+`≈298px` (which under-counted the tray).
+
+Referenced for provenance only, unchanged by this asset: MOTIR-1193, MOTIR-1490, MOTIR-1491,
+MOTIR-2225, MOTIR-2226, MOTIR-3597, MOTIR-3601, MOTIR-4066, MOTIR-4068, MOTIR-4274, MOTIR-6033,
+MOTIR-6156, MOTIR-6010. `MOTIR-812` / `MOTIR-918` are the repo's own composer test fixtures, used as
+sample tray chips. `MOTIR-4944` appears inside the lifted stylesheet's own comment.
+
+### Deliverable
+
+`design/ai-chat/planning-workspace--multiline-composer.mock.html` (THIRTEEN sheets, light + dark;
+panels 1–11 at the split's 480px default, panel 12 at its 352px floor) · this section · the AMENDMENT
+pointer in `design/ai-planning/design-notes.md` Part XII. **A DELTA, per `CLAUDE.md`'s rule** — the five
+base assets it amends are records of their own moment and are not edited, and there is no `.png`
+(AMENDMENT 4 retired the export). Published as MOTIR-6236's design result, which is what MOTIR-6238 is
+`blocked_by`.

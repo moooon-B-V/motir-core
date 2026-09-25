@@ -8716,7 +8716,7 @@ Already in both catalogues (MOTIR-6096): `activity.fields.difficulty` _Difficult
 exactly what it drew, for a move held by an APPROVAL GATE. This section adds the case where the
 card is held by an **undecided PLAN**, and the delta mock holds only the panels that change.
 
-**The rule it depicts** is `docs/decisions/agent-authored-plans.md` **AMENDMENT 20**: a work item is
+**The rule it depicts** is `docs/decisions/agent-authored-plans.md` **AMENDMENT 21**: a work item is
 HELD when its status is `planning`, a `plan_target_lock` row names it with a non-null `planId`, and
 that plan is `generating`, `planned` or `stale`. Every non-system move out is refused with
 `PLAN_TARGET_HELD`.
@@ -8743,7 +8743,7 @@ that plan is `generating`, `planned` or `stale`. Every non-system move out is re
 | ------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | 1 · 1b | plan `generating`                              | the closed control, then the dropdown with **every** option locked                               |
 | 2      | plan `planned`                                 | waiting for approval; same door, second line changes                                             |
-| 3      | plan `stale`                                   | `stale` is UNDECIDED so it still holds (AMENDMENT 20 §1) and its lock no longer expires (§4)     |
+| 3      | plan `stale`                                   | `stale` is UNDECIDED so it still holds (AMENDMENT 21 §1) and its lock no longer expires (§4)     |
 | 4      | plan with **no session**                       | `planRowDestination`'s `no-conversation`: the door opens `/plans/<id>`. The COPY does not change |
 | 5      | **not held** — a planning SESSION with no plan | the ordinary control, no box. Drawn so the builder adds no line where none belongs               |
 | 6      | plan **and** an `awaiting` gate                | both lines render, plan FIRST, gate line with no button                                          |
@@ -8760,7 +8760,7 @@ carries a button.** AMENDMENT 16 D3 keeps an `awaiting` gate alive across the pa
 genuinely coexist. They are two different refusals with two different destinations, so saying only
 one would leave a reader who resolves it still stuck. The plan goes first because it is the wider
 hold — it owns every move, the gate owns one — and because **deciding the gate is itself refused
-while the plan holds** (AMENDMENT 20 §6). That is why the gate line here has **no** _Review &
+while the plan holds** (AMENDMENT 21 §6). That is why the gate line here has **no** _Review &
 approve_ button: it would be a door onto a refusal. Its sentence says instead that it can be decided
 once the plan is. The two lines use the shipped component's own `<hr>`-separated multi-line form
 (`StatusHeldNotice`), so this needs no new container.
