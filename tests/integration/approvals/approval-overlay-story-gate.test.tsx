@@ -461,6 +461,28 @@ describe('GUARD · ONE decide path — no second approve control', () => {
     expect(callers).toEqual([OVERLAY]);
   });
 
+  // ⚠️ THE CHECK ABOVE READS A CALL, AND A DOOR IS ALSO PASSED AS A REFERENCE (Bug
+  // MOTIR-6323). The item page handed `decideApprovalGateAction` and `approveAndMergeAction`
+  // to its Development block as values — `decide: decideApprovalGateAction` — so the frame
+  // there drew *Approve and merge* · *Request changes* while the call-site guard stayed green.
+  // This one asks who HOLDS either door at all: a type-only mention (`import type`, `typeof`)
+  // names the shape and grants nothing.
+  it('the decision doors are held by the overlay alone — the Development section hands them over too (MOTIR-6323)', () => {
+    const DOORS = /\b(decideApprovalGateAction|approveAndMergeAction)\b/;
+    const holders = ['app', 'components', 'lib']
+      .flatMap(sourceFiles)
+      .filter((f) => !f.endsWith('approvalGateActions.ts'))
+      .filter((f) =>
+        DOORS.test(
+          codeOf(f)
+            .replace(/import\s+type\s*\{[^}]*\}\s*from\s*['"][^'"]+['"];?/g, '')
+            .replace(/typeof\s+(decideApprovalGateAction|approveAndMergeAction)\b/g, ''),
+        ),
+      )
+      .sort();
+    expect(holders).toEqual([OVERLAY]);
+  });
+
   it('the Approvals list composes no frame of its own any more', () => {
     const list = codeOf('app/(authed)/workbench/_components/ApprovalsList.tsx');
     expect(list).not.toContain('ApprovalGateControl');

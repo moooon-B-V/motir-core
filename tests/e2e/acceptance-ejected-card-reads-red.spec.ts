@@ -8,6 +8,7 @@ import { gotoLoadedBoard } from './_helpers/board';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
 import { E2E_INSTALLATION_ID } from './_helpers/github-const';
 import { linkPr } from './_helpers/pr-link';
+import { closeOverlay, openDevelopmentOverlay } from './_helpers/development-decide';
 import {
   WEB_REPO,
   headShaFor,
@@ -220,8 +221,12 @@ function failedGroupCheck(): Record<string, unknown> {
   };
 }
 
+// ⚠️ AMENDED by MOTIR-6323: every approval on this card is pressed in the APPROVAL OVERLAY,
+// opened from the Development band — the section hands the decision over like every other
+// section. The presses, their confirms and every assertion on what they did are unchanged;
+// only the door moved. What the page shows between presses is the server's read.
 async function pressApproveAndMerge(page: Page): Promise<void> {
-  const dev = developmentCard(page);
+  const dev = await openDevelopmentOverlay(page);
   await dev.getByRole('button', { name: pra.verb.approveAndMerge, exact: true }).click();
   const action = serverAction(page);
   await dev
@@ -231,6 +236,7 @@ async function pressApproveAndMerge(page: Page): Promise<void> {
     })
     .click();
   expect((await action).status()).toBe(200);
+  await closeOverlay(page);
 }
 
 async function approvedIntoTheQueue(page: Page, card: SeededCard, scenario: Scenario) {
@@ -347,13 +353,23 @@ test.describe('an ejected card reads red', () => {
       await open(page, ejected);
       const row = prRow(page, number);
       await expect(row.getByText(pra.outcome.leftQueue, { exact: true })).toBeVisible();
-      await expect(row.getByRole('button', { name: pra.outcome.queueAgain })).toBeVisible();
       const part = fixPart(page);
       await expect(part).toContainText(`${prName(number)} left the merge queue.`);
       await expect(part).toContainText(`motir fix ${ejected.identifier}`);
       await expect(part.getByText(plain(fix.which.checks), { exact: true })).toBeVisible();
       await show(part);
       await beat();
+      // ⚠️ AMENDED by MOTIR-6323: *Queue again* IS a new approval (MOTIR-5806), so it is the
+      // overlay's; the card's row keeps *Left the queue* and offers no press of its own.
+      await expect(row.getByRole('button', { name: pra.outcome.queueAgain })).toHaveCount(0);
+      const dev = await openDevelopmentOverlay(page);
+      await expect(
+        dev
+          .locator('li')
+          .filter({ hasText: prName(number) })
+          .getByRole('button', { name: pra.outcome.queueAgain }),
+      ).toBeVisible();
+      await closeOverlay(page);
     });
     await beat();
 
@@ -377,9 +393,15 @@ test.describe('an ejected card reads red', () => {
       await expect(part).toContainText('Being fixed by you');
       // Nothing to choose while an agent holds the repair (X4) — and Queue again stays.
       await expect(part.getByText(plain(fix.which.checks), { exact: true })).toHaveCount(0);
+      // ⚠️ AMENDED by MOTIR-6323: Queue again stays — in the overlay, where it is pressed.
+      const dev = await openDevelopmentOverlay(page);
       await expect(
-        prRow(page, number).getByRole('button', { name: pra.outcome.queueAgain }),
+        dev
+          .locator('li')
+          .filter({ hasText: prName(number) })
+          .getByRole('button', { name: pra.outcome.queueAgain }),
       ).toBeVisible();
+      await closeOverlay(page);
       await show(part);
       await beat();
 
@@ -401,8 +423,13 @@ test.describe('an ejected card reads red', () => {
       // the board's red is gone. What changed is that *Queue again* IS a new approval, so
       // it takes the frame's confirm before it acts — so the spec now presses twice to
       // reach the same state, rather than being re-pointed at a different one.
-      await row.getByRole('button', { name: pra.outcome.queueAgain }).click();
-      const dev = developmentCard(page);
+      // ⚠️ AMENDED by MOTIR-6323: the same two presses, in the approval overlay.
+      const dev = await openDevelopmentOverlay(page);
+      await dev
+        .locator('li')
+        .filter({ hasText: prName(number) })
+        .getByRole('button', { name: pra.outcome.queueAgain })
+        .click();
       const action = serverAction(page);
       await dev
         .getByRole('button', {
@@ -411,6 +438,7 @@ test.describe('an ejected card reads red', () => {
         })
         .click();
       expect((await action).status()).toBe(200);
+      await closeOverlay(page);
       await expect(row.getByText(pra.outcome.queued, { exact: true })).toBeVisible();
       await expect(statusCard(page)).toContainText(en.approvalGate.state.approved);
       await beat();

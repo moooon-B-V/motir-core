@@ -45,7 +45,8 @@ export type CardStep = (typeof CARD_STEPS)[number];
  *     reader that something happened TO THIS CARD when it did not.
  *   · **`log`**, which is the opt-in body and belongs in the console rather
  *     than in the step list.
- *   · **the FINDINGS** (`bug_filed`, `plan_submitted`, MOTIR-3981) — CARD-scoped,
+ *   · **the FINDINGS** (`bug_filed`, `plan_submitted`, MOTIR-3981, and
+ *     `unbuildable_reported`, MOTIR-6282) — CARD-scoped,
  *     but what the run OBSERVED and wrote down rather than a stage its leg
  *     passed through. The run modal draws them in their own strip.
  *
@@ -85,6 +86,9 @@ export const EVENT_STEP = {
   // reported by `leg_verdict` — which owns the step — a moment later.
   bug_filed: null,
   plan_submitted: null,
+  // The run-found report (MOTIR-6282) — a finding too: what the report
+  // concluded on the leg, not a stage the leg passed through.
+  unbuildable_reported: null,
 } as const satisfies Record<DispatchEventKind, CardStep | null>;
 
 /**

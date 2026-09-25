@@ -16,7 +16,8 @@ import type {
   decideApprovalGateAction,
   retryApproveAndMergeMemberAction,
 } from '@/app/(authed)/items/[key]/approvalGateActions';
-import { announceGateDecided } from '@/lib/approvals/decidedGates';
+import { GateCallToActionBand } from '@/components/approvals/GateCallToActionBand';
+import { announceGateDecided, useDecidedGate } from '@/lib/approvals/decidedGates';
 import { membersOf, type MemberVersion } from '@/lib/approvalGates/memberVersion';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import type {
@@ -62,9 +63,16 @@ import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 // server read (`members`) says only that the merge gate still awaits. Showing a reason the
 // page no longer has would be inventing one.
 //
-// ⚠️ THE ACTIONS ARRIVE AS PROPS. The item page hands its server actions down; a surface that
-// hands none (every test of the block, and any read-only host) draws the frame with no verbs,
+// ⚠️ THE ACTIONS ARRIVE AS PROPS. A host hands its server actions down; a surface that hands
+// none (every test of the block, and any read-only host) draws the frame with no verbs,
 // exactly as it did before this card.
+//
+// ⚠️ THE ITEM PAGE HANDS THE DECISION OVER (Bug MOTIR-6323; `design/work-items/design-notes.md`
+// § *The item page HANDS THE DECISION OVER*, planning flag 2). A `GateDecision` is submitted
+// from ONE place, the approval overlay, so the overlay is the only host that passes `decide`
+// and `approveAndMerge`. The item page passes `handOver` and `retryMember` alone: an awaiting
+// gate its reader may decide becomes the block plus the call-to-action band, and a decided
+// gate keeps *Retry merge* / *Queue again*, which carry out the decision already made.
 
 export interface DevelopmentGateRead {
   gate: ApprovalGateDTO;
@@ -122,10 +130,14 @@ function parseDecisionVersion(version: string | null): { path: string; blob: str
   return { path, blob: version.slice(at + 1) };
 }
 
-/** The item page's server actions this frame presses. */
+/**
+ * The server actions this frame presses. `decide` and `approveAndMerge` are the DECISION
+ * doors and only the approval overlay passes them (MOTIR-6323); without both the frame draws
+ * no verb, and a row press that would approve a re-asked gate is not offered.
+ */
 export interface DevelopmentGateActions {
-  decide: typeof decideApprovalGateAction;
-  approveAndMerge: typeof approveAndMergeAction;
+  decide?: typeof decideApprovalGateAction;
+  approveAndMerge?: typeof approveAndMergeAction;
   retryMember: typeof retryApproveAndMergeMemberAction;
 }
 
@@ -197,6 +209,7 @@ export function DevelopmentGateFrame({
   decision = null,
   notice,
   verbsDisabled = false,
+  handOver,
   children,
 }: {
   read: DevelopmentGateRead;
@@ -249,6 +262,13 @@ export function DevelopmentGateFrame({
    * refuses a press, so this claims no guarantee.
    */
   verbsDisabled?: boolean;
+  /**
+   * THE ITEM PAGE (MOTIR-6323): while the gate awaits a reader who may decide it, draw the
+   * block unframed and close it with the call-to-action band into the approval overlay.
+   * `routedToViewer` says whether the question is routed to this reader, which the band's
+   * sentence names. Every other state keeps the frame, without verbs.
+   */
+  handOver?: { routedToViewer: boolean };
   children: ReactNode;
 }) {
   const t = useTranslations('approvalGate.pullRequestApproval');
@@ -269,7 +289,17 @@ export function DevelopmentGateFrame({
   // The reader asked for the current version (MOTIR-5235): the frame that mounts from the
   // re-read focuses its port, and no ordinary render ever does.
   const [rereadAsked, setRereadAsked] = useState(false);
-  const gate = decided && decided.id === read.gate.id ? decided : read.gate;
+  // A decision the OVERLAY announced for this gate (MOTIR-6323): the page underneath drops its
+  // band in the same reconcile, rather than offering *Review & approve* over a decided question
+  // until the server render lands — the `DesignResultSection` rule. Read only by the page
+  // (`handOver`): the overlay's own frame IS the announcer, and holds the decision itself.
+  const announced = useDecidedGate(read.gate.id);
+  const gate =
+    decided && decided.id === read.gate.id
+      ? decided
+      : handOver && read.gate.state === 'awaiting' && announced
+        ? announced.gate
+        : read.gate;
   const [pressing, setPressing] = useState(false);
   const [outcomes, setOutcomes] = useState<ReadonlyMap<string, PressOutcome>>(new Map());
   const [retrying, setRetrying] = useState<ReadonlySet<string>>(new Set());
@@ -288,6 +318,11 @@ export function DevelopmentGateFrame({
     label: string;
     queueAgain: { failure: boolean } | null;
   } | null>(null);
+  // THE DECISION DOORS — the overlay's alone (MOTIR-6323). Without both, nothing here decides.
+  const decideActions =
+    actions?.decide && actions.approveAndMerge
+      ? { decide: actions.decide, approveAndMerge: actions.approveAndMerge }
+      : null;
 
   const members = membersOf(read.mergeSubjectVersion ?? gate.subjectVersion);
   const count = members.length;
@@ -374,10 +409,14 @@ export function DevelopmentGateFrame({
     void retryMember(member.subjectVersion, pullRequestId, queueAgain);
   }
 
+  // A row press on an AWAITING gate is an approval, so only a host holding the decision doors
+  // offers it (MOTIR-6323); on a decided gate it carries out the decision already made.
+  const rowPressable = read.canDecide && actions && (gate.state !== 'awaiting' || decideActions);
+
   function retryFor(member: MemberVersion, pullRequestId: string | null) {
     return {
       onRetry:
-        read.canDecide && actions && pullRequestId
+        rowPressable && pullRequestId
           ? () => pressRow(member, pullRequestId, t('outcome.retry'), null)
           : null,
       retrying: retrying.has(member.subjectVersion),
@@ -388,7 +427,7 @@ export function DevelopmentGateFrame({
     const failure = fact.exit?.disposition === 'failure';
     return {
       onQueueAgain:
-        read.canDecide && actions && fact.pullRequestId
+        rowPressable && fact.pullRequestId
           ? () => pressRow(member, fact.pullRequestId!, t('outcome.queueAgain'), { failure })
           : null,
       queueing: retrying.has(member.subjectVersion),
@@ -470,13 +509,13 @@ export function DevelopmentGateFrame({
     _optionId?: string,
     noteMd?: string,
   ): Promise<GateRefusal | null> {
-    if (!actions) return null;
+    if (!decideActions) return null;
     if (decision === 'approve') {
       setPressing(true);
-      let result: Awaited<ReturnType<DevelopmentGateActions['approveAndMerge']>>;
+      let result: Awaited<ReturnType<typeof decideActions.approveAndMerge>>;
       try {
         // The stamp THIS read handed over — what is on screen, never refetched (MOTIR-5235).
-        result = await actions.approveAndMerge({
+        result = await decideActions.approveAndMerge({
           gateId: gate.id,
           identifier: itemIdentifier,
           stamp: read.stamp ?? '',
@@ -499,7 +538,7 @@ export function DevelopmentGateFrame({
       router.refresh();
       return null;
     }
-    const result = await actions.decide({
+    const result = await decideActions.decide({
       gateId: gate.id,
       decision,
       identifier: itemIdentifier,
@@ -605,7 +644,7 @@ export function DevelopmentGateFrame({
   const decisionShown = decisionDocumentShown(decisionDoc);
   const b = (chunks: ReactNode) => <b className="font-semibold text-(--el-text)">{chunks}</b>;
   const monoSpan = (chunks: ReactNode) => <span className="font-mono">{chunks}</span>;
-  function decisionMeta(): ReactNode {
+  function decisionMeta(): string {
     const prCount = decisionPrs.length;
     const withRun = <K extends string>(key: K) => (runLabel ? key : (`${key}NoRun` as const));
     if (gate.state === 'superseded') {
@@ -638,7 +677,7 @@ export function DevelopmentGateFrame({
   }
 
   // ── Band 3 ────────────────────────────────────────────────────────────────────
-  const verbs: GateVerb[] = actions
+  const verbs: GateVerb[] = decideActions
     ? [
         // Sending the work back moves nothing, and now CONFIRMS: the confirm band is where
         // the REQUIRED reason is written (ADR §10a) — the press asks why, not "are you sure".
@@ -674,7 +713,7 @@ export function DevelopmentGateFrame({
   const acceptanceLeads = gate.kind === 'acceptance_result';
   const prsNamed = nameList(members.map(nameOf));
   const consequence = isDecision
-    ? actions
+    ? decideActions
       ? decisionShown
         ? decisionPrs.length > 0
           ? tDecision.rich('consequence', {
@@ -689,12 +728,12 @@ export function DevelopmentGateFrame({
       // members that did not land go back where they came from — a merge queue, or the
       // host once a setting allows it — rather than the whole set being sent for the first
       // time. The general line is still right for every other awaiting gate.
-      actions && reasked && unlandedNames.length > 0
+      decideActions && reasked && unlandedNames.length > 0
       ? t(settingHeld ? 'reasked.whySetting' : 'reasked.why', {
           pr: nameList(unlandedNames),
           key: itemIdentifier,
         })
-      : actions && count > 0
+      : decideActions && count > 0
         ? acceptanceLeads
           ? tAcceptance('consequenceMerges', { key: itemIdentifier, prs: prsNamed })
           : count <= 2
@@ -721,7 +760,7 @@ export function DevelopmentGateFrame({
             : t('reasked.confirm.merge', { pr: nameOf(rowPressMember) }),
           t('confirm.movesToApproved', { key: itemIdentifier }),
         ]
-      : actions
+      : decideActions
         ? acceptanceLeads
           ? [
               tAcceptance('confirm.records'),
@@ -942,6 +981,55 @@ export function DevelopmentGateFrame({
     </>
   ) : null;
 
+  // ⚠️ THE KIND LABEL FOLLOWS THE GATE, not the block (Story MOTIR-5652 · Subtask MOTIR-5667;
+  // `design-result.md` AMENDMENT 6 Q1). A design card with commits holds TWO gates and the
+  // DESIGN one leads: the frame is its port, with the pull requests beneath it as what
+  // approving will merge. Band 1 saying *Pull requests* over a design subject is the near
+  // miss this level is about — a question that IS there, wearing the words of a different
+  // one, which a reviewer would answer anyway.
+  const kindLabel =
+    gate.kind === 'design_result'
+      ? tDesign('kindLabel')
+      : isDecision
+        ? tDecision('kindLabel')
+        : acceptanceLeads
+          ? tAcceptance('kindLabel')
+          : t('kindLabel');
+
+  // ⚠️ THE ITEM PAGE HANDS THE DECISION OVER (Bug MOTIR-6323). The section card is the
+  // container and *Development* its only label, so the block renders as it does with no gate
+  // and the band closes it — no frame, no port, no verb. The band names the question's own
+  // kind where it is not the pull requests' (a design, decision or acceptance leading them),
+  // and it opens the overlay on that kind, which is the gate the one press answers.
+  if (handOver && gate.state === 'awaiting' && read.canDecide) {
+    const meta = isDecision ? decisionMeta() : (subjectMeta ?? t('meta.count', { count }));
+    return (
+      // The rows keep what a reload knows about each member — *Left the queue*, *Queued to
+      // merge* — with no press: on an awaiting gate a row verb is an approval (`rowPressable`).
+      <MergeOutcomeProvider value={rowOutcomes}>
+        {children}
+        <div className="mt-4">
+          <GateCallToActionBand
+            kind={gate.kind}
+            subjectLabel={gate.kind === 'pull_request_approval' ? meta : `${kindLabel} · ${meta}`}
+            askedAt={gate.createdAt}
+            itemIdentifier={itemIdentifier}
+            routedElsewhereName={handOver.routedToViewer ? null : read.routedToLabel}
+            body={t(
+              gate.kind === 'design_result'
+                ? 'cta.bodyDesign'
+                : isDecision
+                  ? 'cta.bodyDecision'
+                  : gate.kind === 'acceptance_result'
+                    ? 'cta.bodyAcceptance'
+                    : 'cta.body',
+            )}
+          />
+        </div>
+      </MergeOutcomeProvider>
+    );
+  }
+
   // The item page's frame steps out of its card's padding so the bands meet the
   // card's edges; the overlay HAS no card — the dialog is the container — so it
   // takes no wrapper at all (§ 24, *FILL, not FLUSH*).
@@ -970,27 +1058,11 @@ export function DevelopmentGateFrame({
           // What a refusal names — § 30 Panels 5a / 5b say which card did not move, and on
           // which host the conflict was reported (MOTIR-5916).
           refusalContext={{ itemIdentifier, host: t('host') }}
-          // ⚠️ THE KIND LABEL FOLLOWS THE GATE, not the block (Story MOTIR-5652 ·
-          // Subtask MOTIR-5667; `design-result.md` AMENDMENT 6 Q1). A design card
-          // with commits holds TWO gates and the DESIGN one leads: the frame is its
-          // port, with the pull requests beneath it as what approving will merge.
-          // Band 1 saying *Pull requests* over a design subject is the near miss
-          // this level is about — a question that IS there, wearing the words of a
-          // different one, which a reviewer would answer anyway.
-          //
-          // Band 3 is deliberately UNCHANGED: the verb and the consequence are the
-          // shipped approve-and-merge wording, because one press is what merges the
-          // set (MOTIR-5664), and a second visual language for the same act would be
-          // the duplication this level exists to remove.
-          kindLabel={
-            gate.kind === 'design_result'
-              ? tDesign('kindLabel')
-              : isDecision
-                ? tDecision('kindLabel')
-                : acceptanceLeads
-                  ? tAcceptance('kindLabel')
-                  : t('kindLabel')
-          }
+          // Band 3 is deliberately UNCHANGED whatever the kind label says: the verb and the
+          // consequence are the shipped approve-and-merge wording, because one press is
+          // what merges the set (MOTIR-5664), and a second visual language for the same act
+          // would be the duplication this level exists to remove.
+          kindLabel={kindLabel}
           subjectMeta={isDecision ? decisionMeta() : subjectMeta}
           // `data-port` lifts the block's code surfaces to `--el-card` on the port's
           // `--el-surface` (§20 Decisions: the same fill would leave only the edge).

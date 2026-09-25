@@ -7,6 +7,7 @@ import { signIn } from './_helpers/shell-session';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
 import { linkPr } from './_helpers/pr-link';
 import { approvalSentence } from './_helpers/approval-sentence';
+import { closeOverlay, openDevelopmentOverlay } from './_helpers/development-decide';
 import {
   API_REPO,
   WEB_REPO,
@@ -129,6 +130,10 @@ const prRow = (page: Page, repo: SeedRepo, number: number, m: Messages = en): Lo
   developmentCard(page, m)
     .locator('li')
     .filter({ hasText: prName(repo, number) });
+
+/** One pull-request row of the approval overlay's Development block. */
+const overlayRow = (dialog: Locator, repo: SeedRepo, number: number): Locator =>
+  dialog.locator('li').filter({ hasText: prName(repo, number) });
 
 /** The detail rail's Status field card. */
 const statusCard = (page: Page): Locator =>
@@ -286,17 +291,23 @@ test.describe('the acceptance-video gate', () => {
 
     await chapter('The story run: the recording leads, its code beneath it', async () => {
       await page.goto(`/items/${seed.storyRun.story.identifier}`);
-      const dev = developmentCard(page);
-      await expect(dev).toHaveCount(1, { timeout: 60_000 });
-      // ONE frame: the receipt is the subject, the pull requests and How to test the port.
+      const card = developmentCard(page);
+      await expect(card).toHaveCount(1, { timeout: 60_000 });
+      await expect(card.getByTestId('acceptance-development-slot')).toHaveCount(1);
+      await expect(card.getByRole('button', { name: 'The basket still holds it' })).toBeVisible();
+      await expect(prRow(page, WEB_REPO, web)).toHaveCount(1);
+      await expect(prRow(page, API_REPO, api)).toHaveCount(1);
+      // ⚠️ AMENDED by MOTIR-6323: the card hands the decision over — no verb on the page,
+      // and the ONE frame, with the receipt as its subject, is the approval overlay's.
+      await expect(
+        card.getByRole('button', { name: pra.verb.approveAndMerge, exact: true }),
+      ).toHaveCount(0);
+      const dev = await openDevelopmentOverlay(page);
       const port = dev.getByRole('group', { name: en.approvalGate.port.label, exact: true });
       await expect(dev.getByTestId('acceptance-development-slot')).toHaveCount(1);
-      await expect(dev.getByRole('button', { name: 'The basket still holds it' })).toBeVisible();
       await expect(
         port.getByRole('group', { name: en.github.development.howToTest.title }),
       ).toHaveCount(1);
-      await expect(prRow(page, WEB_REPO, web)).toHaveCount(1);
-      await expect(prRow(page, API_REPO, api)).toHaveCount(1);
       // ONE verb pair, and it says what it merges — and what it does not.
       await expect(
         dev.getByRole('button', { name: pra.verb.approveAndMerge, exact: true }),
@@ -310,13 +321,15 @@ test.describe('the acceptance-video gate', () => {
           { exact: true },
         ),
       ).toBeVisible();
+      await closeOverlay(page);
       // The standalone Acceptance section is NOT drawn: one question, one place.
       await expect(acceptanceCard(page)).toHaveCount(0);
     });
     await beat();
 
     await chapter('One press: the story is accepted and its code merges', async () => {
-      const dev = developmentCard(page);
+      // ⚠️ AMENDED by MOTIR-6323: the same press, in the approval overlay.
+      const dev = await openDevelopmentOverlay(page);
       await dev.getByRole('button', { name: pra.verb.approveAndMerge, exact: true }).click();
       // The confirm step names all three consequences, the video among them — as the thing
       // that is frozen, and the thing that is NOT merged.
@@ -340,12 +353,13 @@ test.describe('the acceptance-video gate', () => {
       expect(mergedThroughTheSeam()).toEqual(
         expect.arrayContaining([prKey(WEB_REPO, web), prKey(API_REPO, api)]),
       );
-      await expect(statusCard(page)).toContainText(en.approvalGate.state.approved);
       for (const [repo, number] of membersOf('storyRun')) {
         await expect(
-          prRow(page, repo, number).getByText(pra.outcome.merged, { exact: true }),
+          overlayRow(dev, repo, number).getByText(pra.outcome.merged, { exact: true }),
         ).toBeVisible();
       }
+      await closeOverlay(page);
+      await expect(statusCard(page)).toContainText(en.approvalGate.state.approved);
     });
     await beat();
 
@@ -442,8 +456,9 @@ test.describe('the acceptance-video gate', () => {
       await expect(dev.getByTestId('acceptance-development-slot')).toHaveCount(1, {
         timeout: 60_000,
       });
+      // ⚠️ AMENDED by MOTIR-6323: the one question is asked by the band's ONE control.
       await expect(
-        dev.getByRole('button', { name: pra.verb.approveAndMerge, exact: true }),
+        dev.getByRole('link', { name: en.approvalGate.statusHeld.reviewAndApprove, exact: true }),
       ).toHaveCount(1);
       await expect(acceptanceCard(page)).toHaveCount(0);
     });
@@ -458,8 +473,9 @@ test.describe('the acceptance-video gate', () => {
         .context()
         .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: new URL('/', page.url()).href }]);
       await page.goto(`/items/${seed.zh.story.identifier}`);
-      const dev = developmentCard(page, ZH);
-      await expect(dev).toHaveCount(1, { timeout: 60_000 });
+      await expect(developmentCard(page, ZH)).toHaveCount(1, { timeout: 60_000 });
+      // ⚠️ AMENDED by MOTIR-6323: the same walk, in the approval overlay.
+      const dev = await openDevelopmentOverlay(page, ZH);
       await expect(dev.getByTestId('acceptance-development-slot')).toHaveCount(1);
       await expect(
         dev.getByText(
@@ -482,9 +498,10 @@ test.describe('the acceptance-video gate', () => {
       expect((await action).status()).toBe(200);
       for (const [repo, number] of membersOf('zh')) {
         await expect(
-          prRow(page, repo, number, ZH).getByText(zpra.outcome.merged, { exact: true }),
+          overlayRow(dev, repo, number).getByText(zpra.outcome.merged, { exact: true }),
         ).toBeVisible();
       }
+      await closeOverlay(page);
     });
     await beat();
   });
