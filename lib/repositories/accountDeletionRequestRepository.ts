@@ -181,7 +181,7 @@ export const accountDeletionRequestRepository = {
    *   * `completed` and finished since `resumeFloor` — the RESUME arm. The
    *     erasure commits in one locked transaction and then deletes the
    *     reader's sole-membership workspaces AFTER it (through
-   *     `workspacesService.deleteWorkspace`, which opens its own transactions
+   *     `workspacesService.deleteWorkspaceForErasure`, which opens its own transactions
    *     and so cannot be inside one). A crash between the two leaves a
    *     `completed` request whose workspaces still stand, and the first arm can
    *     never see it again. `lib/users/accountErasure.ts`'s

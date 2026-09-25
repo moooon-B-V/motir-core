@@ -3,7 +3,11 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { projectRoleDefinitionRepository } from '@/lib/repositories/projectRoleDefinitionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
-import { readMembership, readOwnMembership } from '@/lib/workspaces/membershipGate';
+import {
+  composeOwnerReach,
+  readMembership,
+  readOwnMembership,
+} from '@/lib/workspaces/membershipGate';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import type { MemberRole, Project } from '@/generated/prisma/client';
 import {
@@ -110,6 +114,18 @@ async function resolveInputs(
     throw new ProjectNotFoundError(projectId);
   }
   const workspaceMembership = await readMembership(ctx.userId, ctx.workspaceId, tx);
+  // THE ORG OWNER'S REACH INTO EVERY PROJECT (MOTIR-6308; `role-model.md` §1).
+  // The resolver's always-pass rail is `isWorkspaceManager(workspaceRole)`, and
+  // this input used to be the STORED membership role alone — so an Owner never
+  // added to a workspace was let in by the workspace gate and then refused inside
+  // every project of it. The Owner's input is now the manager tier; the
+  // resolver's own table is untouched.
+  const workspaceRole = await composeOwnerReach(
+    ctx.userId,
+    ctx.workspaceId,
+    workspaceMembership?.role ?? null,
+    tx,
+  );
   // ONE round trip for the membership AND the custom role it points at (Story
   // MOTIR-2257 · MOTIR-2470) — a `findUnique` with an `include` is a single
   // Prisma operation, so inside a transaction both tables are read on the same
@@ -123,7 +139,7 @@ async function resolveInputs(
     );
   return {
     accessLevel: project.accessLevel,
-    workspaceRole: workspaceMembership?.role ?? null,
+    workspaceRole,
     projectRole: projectMembership?.role ?? null,
     customRolePermissions: projectMembership?.roleDefinition?.permissions ?? null,
   };
@@ -183,18 +199,30 @@ async function resolvePublicInputs(
   // and the lookup is keyed on `(actorUserId, projectId)`, so the binding makes
   // exactly the actor's own row visible and nothing else. A cross-org viewer with
   // no membership still resolves to null, which is the same answer as before.
-  const projectMembership = await (tx
-    ? projectMembershipRepository.findByUserAndProjectWithRoleDefinition(actorUserId, projectId, tx)
-    : withWorkspaceContext({ userId: actorUserId, workspaceId: project.workspaceId }, (t) =>
-        projectMembershipRepository.findByUserAndProjectWithRoleDefinition(
-          actorUserId,
-          projectId,
-          t,
-        ),
-      ));
+  //
+  // The org Owner's manager tier (MOTIR-6308) is read under the SAME binding and
+  // for the same reason: the project is proved `public`, so its workspace id came
+  // from the database, and the owner join is keyed on the actor's own row.
+  const readBound = async (t: Prisma.TransactionClient) => {
+    const membership = await projectMembershipRepository.findByUserAndProjectWithRoleDefinition(
+      actorUserId,
+      projectId,
+      t,
+    );
+    const role = await composeOwnerReach(
+      actorUserId,
+      project.workspaceId,
+      workspaceMembership?.role ?? null,
+      t,
+    );
+    return { membership, role };
+  };
+  const { membership: projectMembership, role: workspaceRole } = await (tx
+    ? readBound(tx)
+    : withWorkspaceContext({ userId: actorUserId, workspaceId: project.workspaceId }, readBound));
   return {
     accessLevel: project.accessLevel,
-    workspaceRole: workspaceMembership?.role ?? null,
+    workspaceRole,
     projectRole: projectMembership?.role ?? null,
     customRolePermissions: projectMembership?.roleDefinition?.permissions ?? null,
   };
@@ -340,7 +368,13 @@ export const projectAccessService = {
       );
     }
     const workspaceMembership = await readMembership(ctx.userId, ctx.workspaceId, tx);
-    const workspaceRole = workspaceMembership?.role ?? null;
+    // The org Owner reads as the manager tier here too (MOTIR-6308).
+    const workspaceRole = await composeOwnerReach(
+      ctx.userId,
+      ctx.workspaceId,
+      workspaceMembership?.role ?? null,
+      tx,
+    );
     // Owner/admin always browse everything; a non-member never browses any.
     if (isWorkspaceManager(workspaceRole)) return projects;
     if (workspaceRole == null) return [];

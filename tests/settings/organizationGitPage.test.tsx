@@ -269,11 +269,21 @@ describe('the DISCONNECT dialog', () => {
   });
 });
 
-describe('⚠️ reading is org MEMBERSHIP; writing is org ADMIN', () => {
-  it('a plain member sees the inventory and NO destructive control', () => {
-    // §6 of `organization-tier.md` forbids a relocation that narrows an audience,
-    // and `/settings/workspace/github` checked no role at all. Absent, not
-    // disabled — an entry point is a promise about a room.
+describe('⚠️ reading is org ADMIN since the role model; the client still hides what it is not given', () => {
+  it('the PAGE refuses a plain member before any inventory read (MOTIR-6312)', () => {
+    // The Git-row flag in `design/org-admin/design-notes.md` (approved
+    // 2026-09-25): a Member's abilities come entirely from their workspace roles,
+    // so the org repository inventory is Owner/Admin reading, and the page's READ
+    // gate moved with the rail row — a hidden row over a readable URL would be
+    // neither hidden nor refused. Panel 5d's forbidden state, then nothing else.
+    const gate = PAGE.indexOf('if (!(await isOrgAdminForWorkspace(ctx.userId, ctx.workspaceId)))');
+    expect(gate, 'the page no longer gates its read on the org role').toBeGreaterThan(-1);
+    expect(PAGE.indexOf('<OrgGitBody', gate)).toBeGreaterThan(gate);
+    expect(PAGE.slice(gate, PAGE.indexOf('<OrgGitBody', gate))).toContain('states.forbiddenTitle');
+  });
+
+  it('given no disconnect grant, the inventory draws NO destructive control', () => {
+    // Absent, not disabled — an entry point is a promise about a room.
     renderInventory({ canDisconnect: false });
     expect(screen.getByText('motir-core')).toBeTruthy();
     expect(screen.getByText('Used by 3 projects')).toBeTruthy();

@@ -21,7 +21,8 @@ function isOrganizationRole(value: unknown): value is OrganizationRole {
 }
 
 // GET — one paginated page of the org's members across its workspaces. Query:
-// `cursor` (the membership id from a prior page's nextCursor) + `limit`. ANY
+// `cursor` (the membership id from a prior page's nextCursor) + `limit`, and
+// optionally `q` + `excludeOwner=1` (the transfer picker, MOTIR-6313). ANY
 // org member may read the roster (the service's assertOrgMember gate). The
 // at-scale rule (finding #57): a page at a time, never load-all.
 export async function GET(
@@ -35,6 +36,10 @@ export async function GET(
 
   const url = new URL(req.url);
   const cursor = url.searchParams.get('cursor');
+  // MOTIR-6313 — the transfer picker: `q` searches name/email, and
+  // `excludeOwner=1` leaves the Owner off the page and out of the total.
+  const q = url.searchParams.get('q');
+  const excludeOwner = url.searchParams.get('excludeOwner') === '1';
   const limitParam = url.searchParams.get('limit');
   const parsedLimit = limitParam === null ? undefined : Number.parseInt(limitParam, 10);
   const limit =
@@ -48,6 +53,8 @@ export async function GET(
       actorUserId: session.user.id,
       cursor,
       limit,
+      q,
+      excludeOwner,
     });
     return NextResponse.json(page);
   } catch (err) {

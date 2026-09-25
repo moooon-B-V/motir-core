@@ -21,8 +21,9 @@ import type { LucideIcon } from 'lucide-react';
 // `visibleWorkspaceSettingsNav(revealed)` returns all three rows or none. There
 // is deliberately **no role axis**, and that is a DISPOSITION rather than an
 // omission: all three routes check a session and a workspace context and **no
-// role at all** (`workspacesService.renameWorkspace` / `deleteWorkspace` assert
-// membership only; the jobs page gates only its System tab and its DLQ replay
+// role at all** (`workspacesService.renameWorkspace` asserts membership only —
+// the Delete row's action is org-Admin-gated since MOTIR-6309, and that row
+// moves to the org tier with MOTIR-6312; the jobs page gates only its System tab and its DLQ replay
 // control, per-request, inside the page). `docs/decisions/organization-tier.md`
 // §6d forbids a relocation that NARROWS a gate, so an `adminOnly` flag here
 // would take a shipped capability away silently.

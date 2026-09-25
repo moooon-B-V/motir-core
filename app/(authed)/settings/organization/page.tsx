@@ -1,8 +1,7 @@
 import { Suspense } from 'react';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
-import { Lock } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -13,19 +12,24 @@ import {
 } from '@/lib/workspaces/tierDisclosure';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
-import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
+import { orgCan } from '@/lib/organizations/capabilities';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { OrgGeneralCard } from './_components/OrgGeneralCard';
 import { BillingCard } from './_components/BillingCard';
 import { WorkspaceFoldInSection } from './_components/WorkspaceFoldInSection';
 import { JobRunsFoldInSection } from './_components/JobRunsFoldInSection';
 import { DangerZoneCard } from './_components/DangerZoneCard';
+import { OrgWorkspacesCard } from './_components/OrgWorkspacesCard';
+import { ORG_WORKSPACES_PAGE_SIZE } from './_components/workspacesPageSize';
 
 // Organization settings (Story 6.10.5, design/org-admin panel 2) — the
-// org-scoped Settings home. Org owner/admin only: a plain org member sees the
-// forbidden panel (5d), not the controls. The active org is resolved from the
+// org-scoped Settings home. The org-scoped cards are owner/admin only, and a
+// plain org member sees them ABSENT — not panel 5d's forbidden card, which
+// MOTIR-6312 retired (the refused-not-hidden shape) — keeping only the folded-in
+// workspace sections below the reveal, and a 404 above it. The active org is resolved from the
 // org cookie (the shell switcher sets it). NO billing/credit surface here —
 // that is 7.12.5 / Epic 8 (only a passive "Coming soon" placeholder).
 
@@ -36,7 +40,18 @@ export default async function OrganizationSettingsPage({
    *  Below the workspace-tier reveal this page hosts that dashboard, and a
    *  dashboard whose tabs, filters and pages are URL-driven needs a URL on the
    *  page that renders it. Every other section here ignores these. */
-  searchParams: Promise<{ tab?: string; status?: string; page?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    status?: string;
+    page?: string;
+    /** MOTIR-6314's deep link names the org to open (the one blocking an account
+     *  deletion), which need not be the active one. Honoured only for an org the
+     *  viewer belongs to — `resolveActiveOrganization` checks membership. */
+    org?: string;
+    /** `transfer-ownership` opens the Owner's transfer dialog on arrival
+     *  (MOTIR-6313). Ignored for a viewer without `transferOwnership`. */
+    dialog?: string;
+  }>;
 }) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
@@ -69,7 +84,7 @@ export default async function OrganizationSettingsPage({
   const orgCookie = cookieStore.get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
   const current = await organizationsService.resolveActiveOrganization(
     session.user.id,
-    preferredOrganizationId(activeWorkspace, orgCookie),
+    jobsParams.org || preferredOrganizationId(activeWorkspace, orgCookie),
   );
 
   if (!current) {
@@ -84,8 +99,11 @@ export default async function OrganizationSettingsPage({
   }
 
   const org = current.organization;
-  const isAdmin =
-    current.role === ORGANIZATION_ROLE.owner || current.role === ORGANIZATION_ROLE.admin;
+  const isAdmin = orgCan(current.role, 'manageOrgSettings');
+  // The Danger zone is the OWNER's (design MOTIR-6303 panels 2–3): an Admin holds
+  // org settings but not `transferOwnership`, and gets no card at all.
+  const canTransfer = orgCan(current.role, 'transferOwnership');
+  const canManageWorkspaces = orgCan(current.role, 'manageWorkspaces');
 
   // ⚠️ GATED PER SECTION, NOT PER PAGE (MOTIR-3519 · organization-tier.md §6d).
   //
@@ -118,6 +136,14 @@ export default async function OrganizationSettingsPage({
   const foldInWorkspace = isWorkspaceTierRevealed(orgWorkspaces.length)
     ? null
     : (orgWorkspaces[0] ?? null);
+
+  // A plain org MEMBER with nothing folded in — 2+ workspaces, or none — has
+  // nothing on this page at all: every org-scoped card is absent for them. So
+  // the page answers 404, matching the non-member posture, rather than render
+  // an empty page or panel 5d's refusal (MOTIR-6312 · panel 3d). The rail row
+  // and the org menu's `Settings` row follow the same rule, so no door leads
+  // here.
+  if (!isAdmin && !foldInWorkspace) notFound();
   // MOTIR-3448 — allocation row 13: the frame, and (once) a wave.
   //
   // ⚠️ THE WAVE IS GONE, AND SO IS ITS REASON (MOTIR-5172). The asset counted
@@ -136,7 +162,9 @@ export default async function OrganizationSettingsPage({
           {t('settings.title')}
         </h1>
         <p className="text-(--el-text-muted) font-sans text-sm">
-          {t('settings.subtitle', { org: org.name })}
+          {isAdmin
+            ? t('settings.subtitle', { org: org.name })
+            : t('settings.subtitleMember', { org: org.name })}
         </p>
       </header>
 
@@ -146,6 +174,10 @@ export default async function OrganizationSettingsPage({
           orgName={org.name}
           role={current.role}
           isAdmin={isAdmin}
+          canTransfer={canTransfer}
+          openTransfer={canTransfer && jobsParams.dialog === 'transfer-ownership'}
+          canManageWorkspaces={canManageWorkspaces}
+          activeWorkspaceId={ctx?.workspaceId ?? null}
           actorUserId={session.user.id}
           actorEmail={session.user.email}
           orgWorkspaceCount={orgWorkspaces.length}
@@ -169,6 +201,10 @@ async function OrgPaneBody({
   orgName,
   role,
   isAdmin,
+  canTransfer,
+  openTransfer,
+  canManageWorkspaces,
+  activeWorkspaceId,
   actorUserId,
   actorEmail,
   orgWorkspaceCount,
@@ -179,52 +215,69 @@ async function OrgPaneBody({
   orgName: string;
   role: React.ComponentProps<typeof OrgGeneralCard>['role'];
   isAdmin: boolean;
+  canTransfer: boolean;
+  openTransfer: boolean;
+  canManageWorkspaces: boolean;
+  activeWorkspaceId: string | null;
   actorUserId: string;
   actorEmail: string;
   orgWorkspaceCount: number;
   foldInWorkspace: { id: string } | null;
   jobsParams: { tab?: string; status?: string; page?: string };
 }) {
-  const t = await getTranslations('orgAdmin');
-  const { total: memberCount } = await organizationsService.listMembers({
-    organizationId: orgId,
-    actorUserId,
-    limit: 1,
-  });
+  // The org-scoped reads, for an Owner/Admin only — a Member's view of this
+  // page is the fold-in alone, and neither read is theirs to make.
+  // `allSettledOrThrow`, never a bare `Promise.all`: each arm opens a
+  // transaction (MOTIR-3066).
+  const [members, workspacesPage] = isAdmin
+    ? await allSettledOrThrow([
+        organizationsService.listMembers({ organizationId: orgId, actorUserId, limit: 1 }),
+        canManageWorkspaces
+          ? workspacesService.listOrganizationWorkspaces({
+              organizationId: orgId,
+              actorUserId,
+              limit: ORG_WORKSPACES_PAGE_SIZE,
+            })
+          : Promise.resolve(null),
+      ])
+    : [null, null];
 
   return (
     <>
-      {isAdmin ? (
+      {isAdmin && members ? (
         <>
           <OrgGeneralCard
             orgId={orgId}
             initialName={orgName}
             role={role}
             workspaceCount={orgWorkspaceCount}
-            memberCount={memberCount}
+            memberCount={members.total}
           />
+
+          {/* The org-tier home for creating and removing workspaces (MOTIR-6312 ·
+              panel 1), directly under General. */}
+          {workspacesPage ? (
+            <OrgWorkspacesCard
+              orgId={orgId}
+              orgName={orgName}
+              initialPage={workspacesPage}
+              activeWorkspaceId={activeWorkspaceId}
+            />
+          ) : null}
 
           {/* The live billing "door" (8.1.7, design/billing panel 1) replaces the
               passive placeholder — cloud-only (ADR §6): off-cloud there is no
               billing surface at all, so the card simply doesn't render. */}
           {isCloudBilling() ? <BillingCard /> : null}
         </>
-      ) : (
-        // Panel 5d's forbidden treatment, applied to the ORG-SCOPED sections
-        // rather than to the page. The member keeps whatever this page hosts for
-        // them below.
-        <EmptyState
-          icon={<Lock className="h-12 w-12" aria-hidden />}
-          title={t('states.forbiddenTitle')}
-          description={t('states.forbiddenDescription', { org: orgName })}
-        />
-      )}
+      ) : null}
 
       {foldInWorkspace ? (
         <WorkspaceFoldInSection
           workspaceId={foldInWorkspace.id}
           actorUserId={actorUserId}
           workspaceCount={orgWorkspaceCount}
+          canManageWorkspaces={canManageWorkspaces}
         />
       ) : null}
 
@@ -247,7 +300,9 @@ async function OrgPaneBody({
         />
       ) : null}
 
-      {isAdmin ? <DangerZoneCard /> : null}
+      {canTransfer ? (
+        <DangerZoneCard orgId={orgId} orgName={orgName} openTransfer={openTransfer} />
+      ) : null}
     </>
   );
 }

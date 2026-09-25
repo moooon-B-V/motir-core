@@ -160,8 +160,6 @@ describe('the plan-change conversation reviews and confirms the PLAN (MOTIR-1746
     'components/planning/PlanChangeRail.tsx',
     'components/planning/PlanChangeCanvas.tsx',
     'components/planning/PlanChangeConfirmBar.tsx',
-    'components/planning/planChangeLevel.tsx',
-    'components/planning/PlanChangeDiffNode.tsx',
     'lib/planning/planChangeDiff.ts',
     // The OTHER entrance moved off the same dead delta by MOTIR-1747: the
     // `/ready` expansion nudge. (The item-scoped expand/replan dock was the

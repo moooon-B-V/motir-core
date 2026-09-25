@@ -63,6 +63,14 @@ vi.mock('@/lib/planning/planReview', async (orig) => ({
   readPendingProposal: (...a: unknown[]) => readPending(...a),
 }));
 
+// The run's plan is live-polled while it is written (MOTIR-6295). This suite is
+// about the stream, not the poll, so the poll's read never settles: no request
+// leaves the process, and the hook aborts it on unmount.
+vi.mock('@/lib/planning/planReviewClient', async (orig) => ({
+  ...(await orig<typeof import('@/lib/planning/planReviewClient')>()),
+  fetchPlanReview: () => new Promise(() => {}),
+}));
+
 const { usePlanChangeConversation } = await import('@/lib/hooks/usePlanChangeConversation');
 
 const SESSION = {

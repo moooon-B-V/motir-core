@@ -18,7 +18,7 @@
 //                the preview NAMES them and the copy renders them.
 //
 // The verdict (`blocked`) is the ORGANIZATION tier, and it is a READ — DECISION
-// 5's table: an organization guard (`assertNotLastOwner`) is a HARD BLOCK, a
+// 5's table: an organization guard (the Owner's locked membership) is a HARD BLOCK, a
 // workspace guard (`LastMemberError`) is not a block at all but the CHOICE the
 // `deleted` group's `soleMemberWorkspaces` presents.
 
@@ -115,10 +115,11 @@ export interface ErasureBlockingOrganizationDTO {
  */
 export interface AccountErasurePreviewDTO {
   /**
-   * `true` exactly when the reader is the last owner of an organization that
-   * OTHER people belong to — the condition `assertNotLastOwner` asserts
-   * (`lib/services/organizationsService.ts`, owner count ≤ 1), evaluated as a
-   * read. The delete path is never called to produce it.
+   * `true` exactly when the reader is the owner of an organization that OTHER
+   * people belong to — the Owner's membership is locked against removal
+   * (`OwnerMembershipLockedError`, `lib/services/organizationsService.ts`,
+   * MOTIR-6307), evaluated as a read. The delete path is never called to
+   * produce it.
    */
   blocked: boolean;
   /** The blocking organization when `blocked`, else `null`. */

@@ -223,7 +223,7 @@ test('@smoke replay: an owner replays a dead-lettered send, which re-runs and su
 
   await gotoJobs(page);
   await page.getByRole('link', { name: /Dead letter/ }).click();
-  const replay = page.getByRole('button', { name: 'Replay' });
+  const replay = page.getByRole('button', { name: 'Replay', exact: true });
   await expect(replay).toBeEnabled();
   await replay.click();
   await expect(page.getByText('Job replayed', { exact: true })).toBeVisible();
@@ -346,7 +346,7 @@ test('@smoke role gating: a non-owner member sees a disabled Replay with a toolt
   await memberPage.getByRole('link', { name: /Dead letter/ }).click();
 
   // Replay is disabled (the load-bearing gate)…
-  const replay = memberPage.getByRole('button', { name: 'Replay' });
+  const replay = memberPage.getByRole('button', { name: 'Replay', exact: true });
   await expect(replay).toBeVisible();
   await expect(replay).toBeDisabled();
   // …with the gating tooltip. Radix mounts tooltip content in a portal only on

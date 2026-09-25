@@ -23,7 +23,8 @@ import type { Prisma } from '@/generated/prisma/client';
 // ⚠️ AND `retired_from_workspace_id` NO LONGER NAMES ONLY A DELETED WORKSPACE
 // (Amendment 2, MOTIR-4454). The schema's own comment on that column and this
 // table's RLS migration were both written for Amendment 1, where the only writer
-// was `workspacesService.deleteWorkspace` and the workspace was on its way out —
+// was the workspace delete (then `workspacesService.deleteWorkspace`, now
+// `deleteWorkspaceCascade` since MOTIR-6309) and the workspace was on its way out —
 // so both describe the value as naming a workspace that no longer exists. A
 // release writes it while the workspace is alive. Nothing about the column's
 // shape or its policies changes: it is still not a relation, the
@@ -61,7 +62,7 @@ export const publicHostnameReservationRepository = {
    * the generalisation returns exactly the old number.
    *
    * ⚠️ `retired_from_workspace_id` is NOT only a deleted workspace's id any
-   * more. Amendment 1 wrote it from `workspacesService.deleteWorkspace`, where
+   * more. Amendment 1 wrote it from the workspace delete (`deleteWorkspaceCascade`), where
    * the workspace was on its way out; a release writes it while the workspace is
    * alive, which is what makes this count answerable at all.
    */

@@ -182,6 +182,11 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
     reason: 'no role check beyond workspace membership',
   },
   'settings/organization/git/actions.ts#listGitlabProjectsAction': READ,
+  'settings/organization/actions.ts#reconcileActiveWorkspaceAction': {
+    kind: 'self',
+    reason:
+      'the session’s own active-workspace cookie, re-pointed after an org-tier remove (MOTIR-6312); the removal itself is the gated DELETE route',
+  },
   'settings/organization/security/actions.ts#setOrganizationRequireTwoFactorAction': {
     kind: 'role',
     role: 'org:owner-or-admin',
@@ -237,11 +242,6 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
   },
 
   // ── workspace settings ─────────────────────────────────────────────────────
-  'settings/workspace/actions.ts#deleteWorkspaceAction': {
-    kind: 'known-gap',
-    card: 'MOTIR-6309',
-    reason: 'membership only; the org-Admin gate is MOTIR-6309’s',
-  },
   'settings/workspace/actions.ts#leaveWorkspaceAction': {
     kind: 'self',
     reason: 'the actor’s own membership',
@@ -336,10 +336,6 @@ export const CONTROL_EXEMPTIONS: Record<string, ControlExemption> = {
   'app/(authed)/settings/organization/git/_components/GitlabProjectSyncSwitch.tsx': {
     kind: 'known-gap',
     card: 'MOTIR-6320',
-  },
-  'app/(authed)/settings/workspace/_components/DangerZoneCard.tsx': {
-    kind: 'known-gap',
-    card: 'MOTIR-6309',
   },
   'app/(authed)/settings/workspace/_components/MembersCard.tsx': {
     kind: 'known-gap',

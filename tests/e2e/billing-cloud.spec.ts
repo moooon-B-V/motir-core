@@ -215,12 +215,12 @@ test('@smoke permission gate: a non-admin member gets the view-only / ask-your-o
   // BY ROLE — the forbidden state is an `EmptyState`, whose title is an `<h2>`
   // (MOTIR-4822, as above).
   await expect(
-    page.getByRole('heading', { name: 'Billing is managed by your org owner' }),
+    page.getByRole('heading', { name: 'Billing is managed by your organization’s admins' }),
   ).toBeVisible();
-  // The only affordance is "contact an owner" — never an active billing CTA.
+  // The only affordance is "contact an admin" — never an active billing CTA.
   await expect(page.getByRole('button', { name: 'Choose a Motir AI plan' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Change plan' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Manage plan & payment' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Upgrade Motir' })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Contact an owner' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Contact an admin' })).toBeVisible();
 });

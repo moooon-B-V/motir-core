@@ -4,7 +4,7 @@ import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { PlanChangeCanvas } from '@/components/planning/PlanChangeCanvas';
-import { decoratePlanChangeLevel } from '@/components/planning/planChangeLevel';
+import { mergePlanLevel } from '@/components/planning/planLevel';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { indexPlanReview, proposedAddsForLevel } from '@/lib/planning/planChangeDiff';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
@@ -19,6 +19,12 @@ import { planReview, planReviewItem } from '../helpers/planReview';
 // proposals carries a `changes` badge (decision 3), a folder move is drawn once,
 // at its destination (decision 4), the folder crumb navigates (decision 5), and a
 // proposal whose folder was deleted stays at the root (decision 6).
+//
+// ⚠️ MOTIR-6299: `PlanChangeCanvas` is now the pane for the "no plan" state, so
+// its over-the-wire cases below assert the folder tree it draws with NO plan
+// (decisions 1 and 5). Where a proposal sits in a folder, and the badge on the
+// folder holding it (decisions 2, 3), are drawn by `PlanReviewCanvas` — the pane
+// every plan is shown in — and are held in `planReviewCanvasFolders.test.tsx`.
 
 const PARKED = { id: 'f1', name: 'Parked' };
 const Y2025 = { id: 'f2', name: '2025' };
@@ -187,43 +193,27 @@ describe('indexPlanReview — where a proposal SITS (decisions 2, 4, 6)', () => 
   });
 });
 
-describe('decoratePlanChangeLevel — a folder move is drawn once, at its DESTINATION (decision 4)', () => {
-  const rootRead = levelData([wireNode('wi_moving', 'Bulk re-import from a saved mapping')], []);
-
-  it('takes the moving card OFF its source level', () => {
-    const index = indexPlanReview(planReview([moveIntoParked()]));
-    const level = decoratePlanChangeLevel(buildWorkItemLevel(rootRead), rootRead, index, null);
-    expect(level.nodes.map((n) => n.id)).not.toContain('wi_moving');
-  });
-
-  it('draws it on the destination folder’s level, framed as a change with its Placement line', () => {
-    const index = indexPlanReview(planReview([moveIntoParked()]));
+// Re-homed from the deleted `planChangeLevel.tsx` onto the one level builder.
+// The SOURCE half — the moving card taken off the root — is `PlanReviewCanvas`'s
+// `departingIds` pass, held over the wire in `planReviewCanvasFolders.test.tsx`
+// ("draws a move into a folder once — off the root, onto the folder").
+describe('mergePlanLevel — a folder move is drawn once, at its DESTINATION (decision 4)', () => {
+  it('draws it on the destination folder’s level with its Placement line', () => {
     const folderRead = levelData([], []);
-    const level = decoratePlanChangeLevel(
-      buildWorkItemLevel(folderRead),
-      folderRead,
-      index,
-      'folder:f1',
-    );
+    const level = mergePlanLevel(buildWorkItemLevel(folderRead), [moveIntoParked()], 'folder:f1');
     expect(level.nodes.map((n) => n.id)).toEqual(['wi_moving']);
     render(<>{level.nodes[0]!.content}</>);
     expect(screen.getByTestId('diff-line').textContent).toContain('Placement');
   });
 
   it('once APPROVED the read already carries it there, and it is not drawn a second time', () => {
-    const index = indexPlanReview(planReview([moveIntoParked()]));
     const folderRead = levelData([wireNode('wi_moving', 'Bulk re-import from a saved mapping')]);
-    const level = decoratePlanChangeLevel(
-      buildWorkItemLevel(folderRead),
-      folderRead,
-      index,
-      'folder:f1',
-    );
+    const level = mergePlanLevel(buildWorkItemLevel(folderRead), [moveIntoParked()], 'folder:f1');
     expect(level.nodes.filter((n) => n.id === 'wi_moving')).toHaveLength(1);
   });
 });
 
-describe('PlanChangeCanvas — folders over the wire (decisions 1, 2, 3, 5)', () => {
+describe('PlanChangeCanvas — folders over the wire, with no plan (decisions 1, 5)', () => {
   const tree = {
     __root__: {
       nodes: [wireNode('E1', 'Road epic', 'epic', true)],
@@ -241,34 +231,22 @@ describe('PlanChangeCanvas — folders over the wire (decisions 1, 2, 3, 5)', ()
     f0: { nodes: [], edges: [], offLevelBlockers: [], folders: [] },
   };
 
-  it('reads the folder-aware root, draws the folder cards, and badges the one holding proposals', async () => {
+  it('reads the folder-aware root and draws the folder cards — with no change badge', async () => {
     const spy = serve(tree);
-    const index = indexPlanReview(planReview([filedAdd()]));
-    render(<PlanChangeCanvas projectKey="MOTIR" index={index} diffKey="k1" />);
+    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k1" />);
 
     expect(await screen.findByText('Parked')).toBeTruthy();
     await act(async () => {});
     expect(String(spy.mock.calls[0]![0])).toBe('/api/projects/MOTIR/roadmap?folders=1');
     expect(el('folder:f1')).toBeTruthy();
     expect(el('folder:f0')).toBeTruthy();
-    // The filed proposal is NOT at the root (decision 2)…
-    expect(el('proposed:pi_filed')).toBeNull();
-    // …and the folder it sits under says so, deep (decision 3); the empty one does not.
-    expect(within(el('folder:f1') as HTMLElement).getByTestId('folder-changes').textContent).toBe(
-      '1 change',
-    );
-    expect(within(el('folder:f0') as HTMLElement).queryByTestId('folder-changes')).toBeNull();
-    expect(
-      within(el('folder:f1') as HTMLElement)
-        .getByTestId('folder-node')
-        .getAttribute('aria-label'),
-    ).toContain('1 proposed change inside');
+    // No plan, so no folder claims to hold a proposal.
+    expect(document.querySelector('[data-testid="folder-changes"]')).toBeNull();
   });
 
-  it('drills folder by folder to where the proposal sits, reading each level by folderId, and a folder crumb navigates back', async () => {
+  it('drills folder by folder, reading each level by folderId, and a folder crumb navigates back', async () => {
     const spy = serve(tree);
-    const index = indexPlanReview(planReview([filedAdd()]));
-    render(<PlanChangeCanvas projectKey="MOTIR" index={index} diffKey="k1" />);
+    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k1" />);
     await screen.findByText('Parked');
 
     await drill('folder:f1');
@@ -281,31 +259,23 @@ describe('PlanChangeCanvas — folders over the wire (decisions 1, 2, 3, 5)', ()
     );
 
     await drill('folder:f2');
-    await waitFor(() => expect(el('proposed:pi_filed')).toBeTruthy());
-    expect(screen.getByText('Importer retries with backoff')).toBeTruthy();
-    // The node spends no slot on its folder — the crumb says where it is (decision 2).
-    expect(screen.queryByTestId('placement-line')).toBeNull();
+    await waitFor(() =>
+      expect(spy.mock.calls.map(([u]) => String(u))).toContain(
+        '/api/projects/MOTIR/roadmap?folders=1&folderId=f2',
+      ),
+    );
+    expect(await screen.findByText('This folder is empty')).toBeTruthy();
 
     const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
     const parkedCrumb = within(nav).getByRole('button', { name: /Parked/ });
     fireEvent.click(parkedCrumb);
     await waitFor(() => expect(el('B9')).toBeTruthy());
-    expect(el('proposed:pi_filed')).toBeNull();
-    // Back on Parked's level, 2025 still carries the proposal's badge.
-    expect(within(el('folder:f2') as HTMLElement).getByTestId('folder-changes').textContent).toBe(
-      '1 change',
-    );
+    expect(el('folder:f2')).toBeTruthy();
   });
 
   it('an EMPTY folder’s level says so in folder words', async () => {
     serve(tree);
-    render(
-      <PlanChangeCanvas
-        projectKey="MOTIR"
-        index={indexPlanReview(planReview([filedAdd()]))}
-        diffKey="k1"
-      />,
-    );
+    render(<PlanChangeCanvas projectKey="MOTIR" diffKey="k1" />);
     await screen.findByText('Later');
     await drill('folder:f0');
     expect(await screen.findByText('This folder is empty')).toBeTruthy();
