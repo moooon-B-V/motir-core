@@ -13,6 +13,7 @@ import { CANCELLED_STATUS_KEY } from '@/lib/workItems/provenanceBackfill';
 import type { DesignEvidenceWithAssets } from '@/lib/mappers/designEvidenceMappers';
 import { toApprovedDesignDto } from '@/lib/mappers/designAccessMappers';
 import type {
+  ApprovedDesignDto,
   ApprovedDesignPageDto,
   DesignDownloadLinkDto,
   DesignVerdictDto,
@@ -263,42 +264,66 @@ export const designAccessService = {
       const keys = await statusKeysFor(project.id, ctx.workspaceId);
       if (keys.doneKey === null) return { designs: [], nextCursor: null };
 
-      const cursorKey = opts.cursor ? Number(opts.cursor) : null;
-      // One page of CANDIDATES — `design` cards at the project's done status.
-      // Over-read by one so `nextCursor` reports the truth rather than guessing
-      // from a full page.
-      const candidates = await workItemRepository.findByProjectTypeAndStatusPage(
-        project.id,
-        {
-          type: 'design',
-          statusKey: keys.doneKey,
-          ...(cursorKey !== null ? { beforeKey: cursorKey } : {}),
-          ...(opts.query ? { titleContains: opts.query } : {}),
-        },
-        limit + 1,
-        tx,
-      );
+      // ⚠️ READ ON UNTIL THE PAGE IS FULL OR THE CANDIDATES RUN OUT (MOTIR-6272).
+      // A candidate is a `design` card at the done status, and it can still be
+      // dropped AFTER it is read — no approved design, or no asset under
+      // `pathPrefix`. Cutting one batch of candidates and filtering it answered
+      // an EMPTY page with a cursor whenever a whole batch was dropped, and a
+      // caller reading that as "nothing matched" stopped one page short of the
+      // match. So batches are read until `limit` designs are collected, the
+      // candidates are exhausted, or `MAX_CANDIDATES_PER_READ` is reached — only
+      // that last case can still answer a short page with a cursor, and the
+      // cursor then says so.
+      const designs: ApprovedDesignDto[] = [];
+      let beforeKey = opts.cursor ? Number(opts.cursor) : null;
+      let consumed = 0;
+      let exhausted = false;
+      while (designs.length < limit && !exhausted && consumed < MAX_CANDIDATES_PER_READ) {
+        // Over-read by one so the last batch knows whether anything follows it.
+        const candidates = await workItemRepository.findByProjectTypeAndStatusPage(
+          project.id,
+          {
+            type: 'design',
+            statusKey: keys.doneKey,
+            ...(beforeKey !== null ? { beforeKey } : {}),
+            ...(opts.query ? { titleContains: opts.query } : {}),
+          },
+          limit + 1,
+          tx,
+        );
+        const batch = candidates.slice(0, limit);
+        const hits = await resolveLadder(
+          batch.map((row) => row.id),
+          tx,
+        );
 
-      const page = candidates.slice(0, limit);
-      const ids = page.map((row) => row.id);
-      const hits = await resolveLadder(ids, tx);
-
-      const designs = page.flatMap((card) => {
-        const hit = hits.get(card.id);
-        if (!hit || hit.row.withdrawnAt !== null) return [];
-        const dto = toApprovedDesignDto(card, hit.row);
-        if (opts.pathPrefix && !dto.assets.some((a) => a.sourcePath.startsWith(opts.pathPrefix!))) {
-          return [];
+        let read = 0;
+        for (const card of batch) {
+          read += 1;
+          beforeKey = card.key;
+          const hit = hits.get(card.id);
+          if (hit && hit.row.withdrawnAt === null) {
+            const dto = toApprovedDesignDto(card, hit.row);
+            if (
+              !opts.pathPrefix ||
+              dto.assets.some((a) => a.sourcePath.startsWith(opts.pathPrefix!))
+            ) {
+              designs.push(dto);
+            }
+          }
+          if (designs.length === limit) break;
         }
-        return [dto];
-      });
+        consumed += read;
+        // Nothing follows only when this batch was the tail AND it was read to
+        // its end — a page that filled mid-batch still has cards after it.
+        exhausted = candidates.length <= limit && read === batch.length;
+      }
 
       // ⚠️ THE CURSOR ADVANCES OVER CANDIDATES, NOT OVER RESULTS. A `done`
       // design card with no approved design, or one every asset filter dropped,
-      // is still a card this page CONSUMED — resuming from the last card
+      // is still a card this read CONSUMED — resuming from the last card
       // RETURNED would re-walk it for ever when a whole page filters out.
-      const last = page[page.length - 1];
-      const nextCursor = candidates.length > limit && last ? String(last.key) : null;
+      const nextCursor = !exhausted && beforeKey !== null ? String(beforeKey) : null;
       return { designs, nextCursor };
     });
   },
@@ -350,6 +375,13 @@ export const designAccessService = {
 const DOWNLOAD_TTL_SECONDS = 300;
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
+/**
+ * How many candidate cards ONE `listApprovedDesigns` call may read while it
+ * fills a filtered page (MOTIR-6272). Bounds the work a filter that matches
+ * almost nothing can make one request do; past it the page is answered short
+ * with a cursor, and the caller keeps paging.
+ */
+const MAX_CANDIDATES_PER_READ = 1000;
 
 /** `design/work-items/detail.mock.html` → `detail.mock.html`. */
 export function basenameOf(sourcePath: string): string {

@@ -1221,7 +1221,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         minLength: 1,
         description:
-          'Return only designs holding a file whose repository path starts with this prefix — how a delta mock’s amended BASE is found (e.g. `design/work-items/`). Ignored with `blockersOf`.',
+          'Return only designs holding a file whose repository path starts with this prefix — how a delta mock’s amended BASE is found (e.g. `design/work-items/`). Ignored with `blockersOf`. ⚠️ A filtered page can be SHORT — even empty — while more pages remain: keep paging until `nextCursor` is null before concluding nothing matches.',
       },
       query: {
         type: 'string',
@@ -1233,7 +1233,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         minLength: 1,
         description:
-          'Opaque page cursor from a previous call’s `nextCursor`. Ignored with `blockersOf`.',
+          'Opaque page cursor from a previous call’s `nextCursor`. Ignored with `blockersOf`. A SHORT page with a non-null cursor is normal when `pathPrefix` or `query` is set, so keep paging until it is null.',
       },
       limit: {
         type: 'integer',

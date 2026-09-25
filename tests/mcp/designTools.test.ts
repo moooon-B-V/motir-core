@@ -19,7 +19,8 @@ vi.mock('@/lib/blob/uploader', async (importOriginal) => ({
 }));
 
 const { runGetDesign, GET_DESIGN_TOOL_NAME } = await import('@/lib/mcp/tools/getDesign');
-const { runListDesigns, LIST_DESIGNS_TOOL_NAME } = await import('@/lib/mcp/tools/listDesigns');
+const { runListDesigns, summarizeDesigns, LIST_DESIGNS_TOOL_NAME } =
+  await import('@/lib/mcp/tools/listDesigns');
 const { TOOL_PERMISSIONS, CLI_TOKEN_GRANT } = await import('@/lib/mcp/toolPermissions');
 const { MCP_TOOL_NAMES, buildMcpServer } = await import('@/lib/mcp/registry');
 const { isExemptTool } = await import('@/lib/mcp/payloads/exemptions');
@@ -250,6 +251,36 @@ describe('`list_designs`', () => {
       .structuredContent as { items: unknown[]; nextCursor: string | null };
     expect(firstPage.items).toHaveLength(1);
     expect(firstPage.nextCursor).not.toBeNull();
+  });
+
+  it('an EMPTY page that still has a cursor says MORE PAGES REMAIN, never "No approved designs matched" (MOTIR-6272)', () => {
+    const text = summarizeDesigns([], '6033');
+    expect(text).not.toMatch(/No approved designs matched/);
+    expect(text).toMatch(/more pages remain/i);
+    expect(text).toContain('Pass cursor "6033"');
+    // The last page — empty, no cursor — is the one answer that may say so.
+    expect(summarizeDesigns([], null)).toMatch(/^No approved designs matched\./);
+  });
+
+  it('a filtered listing reads past the cards its filter drops, so the match is on the FIRST page (MOTIR-6272)', async () => {
+    const cards: WorkItem[] = [];
+    for (const label of ['p0', 'q1', 'q2']) {
+      const card = await designCard(`Surface ${label}`);
+      await makeWorkWaitOn(card.id, fx, { title: `Build ${label}` });
+      await publishAndApprove(card, label);
+      cards.push(card);
+    }
+    const result = await runListDesigns(
+      { projectKey: fx.projectIdentifier, pathPrefix: 'design/frame/p', limit: 1 },
+      fx.ctx,
+    );
+    const page = result.structuredContent as {
+      items: Array<{ designCardKey: string }>;
+      nextCursor: string | null;
+    };
+    expect(page.items.map((d) => d.designCardKey)).toEqual([cards[0]!.identifier]);
+    expect(page.nextCursor).toBeNull();
+    expect(textOf(result)).toContain(cards[0]!.identifier);
   });
 
   it('a card waiting on nothing says so rather than answering an empty list', async () => {
