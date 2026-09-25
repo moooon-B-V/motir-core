@@ -64,10 +64,17 @@ const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' 
 const composer = (page: Page) => rail(page).getByRole('textbox');
 const sendButton = (page: Page) => rail(page).getByRole('button', { name: 'Send' });
 const entrance = (page: Page) => page.getByRole('main').getByTestId('work-item-plan-entrance');
-/** The CANVAS pane — the resizable frame's first track. It carries no test id of
- *  its own, and the frame is the only thing that owns the two-track geometry. */
+/**
+ * The CANVAS pane — the resizable frame's first track. It carries no test id of
+ * its own, and the frame is the only thing that owns the two-track geometry.
+ *
+ * Rooted at the OVERLAY, not at the page: a page-rooted strict locator can match
+ * a node nobody put there, because React keeps the previous subtree mounted
+ * while the new one streams and its hidden SSR staging block is in the DOM too
+ * (`tests/e2e-page-rooted-locators.test.ts`).
+ */
 const canvasPane = (page: Page) =>
-  page.getByTestId('planning-resizable-frame').locator('> div').first();
+  workspace(page).getByTestId('planning-resizable-frame').locator('> div').first();
 
 const reviewRail = (page: Page) => page.getByRole('complementary', { name: 'Plan review' });
 const reviseBox = (page: Page) => reviewRail(page).getByRole('textbox');
@@ -378,7 +385,7 @@ test('a request to Motir AI can be a paragraph — on the planning surface and o
       expect(body.prompt).toBe(REVISION.join('\n'));
 
       // While the revision is held, the box is disabled and carries nothing stale.
-      await expect(page.getByTestId('plan-revision-running')).toBeVisible();
+      await expect(reviewRail(page).getByTestId('plan-revision-running')).toBeVisible();
       await expect(reviseBox(page)).toBeDisabled();
       await expect(reviseBox(page)).toHaveValue('');
       await beat();
