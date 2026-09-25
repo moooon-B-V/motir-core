@@ -504,6 +504,132 @@ the evidence the amendment rests on.
 - It does not treat "the actor cannot use this" as a UI-only fact. A row that
   hides without a matching server guard is a bug, not a shortcut.
 
+## Amendment 2026-09-25 — three surfaces the treatment table did not rule on
+
+**Author:** MOTIR-6326, under epic MOTIR-6164. **Extends:** the treatment table in
+§ _Amendment 2026-08-08_ above, with rows **10–12**. **Mock:**
+`permission-gated-ui--uncovered-surfaces.mock.html`, a DELTA of `permission-gated-ui.mock.html`
+(six panels and a trace table, drawn as a Viewer beside a Member). **Found by:** the
+permission-gating inventory, `docs/permissions/ui-gating-inventory.md` (story MOTIR-6166), which
+marked five rows **NEEDS DESIGN** because no row of the table covered them.
+
+The three-part rule does not change: hide an entry point, disable an in-place control with its
+reason, guard every destination on the server. This section applies the rule's own dividing line to
+three surfaces the 2026-08-08 table did not list. Two of the answers reuse an existing row's
+treatment at a different scale, and the third is plain row-1 HIDE. **No new treatment is
+introduced.**
+
+### Drawn against a render
+
+`/items` (list and tree), `/backlog` and `/boards` were rendered as a project Viewer and a Member on
+`origin/main` @ `936c17022`, seeded with `tests/e2e/_helpers/permission-gated-ui-seed.ts`. The
+render confirmed what the inventory said and added two facts the card did not have:
+
+- **A Viewer's `/items` list and a Member's are pixel-identical** except for the faded
+  **New work item** button. The Member's row holds five edit triggers (Priority, Assignee,
+  Estimate, Points, Status); the Viewer's holds none. Nothing on the page says the difference is a
+  permission.
+- **The board card is not an `EstimateBadge` call site.** `BoardCard.tsx` renders its own static
+  `.pts` span for every actor (the badge's own call-site comment explains why). So row B45's "board"
+  limb has no read-only state to explain (panel 4).
+- **Title is not inline-edited** in the shipped list. The inline set is status, assignee, priority,
+  due and estimate (`IssueInlineEdit.tsx`), plus the Points badge. Rows B46 / A29 name "title…"
+  loosely.
+
+### Treatment table — rows 10–12
+
+| #   | Affordance family                                                                                                                                                                      | Treatment                                                                                                                                                         | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Shipped today                                                                                                                                                                                           |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 10  | **Collection inline cell** — the `/items` list and tree cells a Member edits in place (status / assignee / priority / due / estimate, `IssueInlineEdit.tsx`; the Points badge, row 11) | **DISABLE at the surface** — each cell renders its plain value, and the PAGE carries one read-only notice (row 7's grammar)                                       | It is an in-place control on a surface the actor can see, so row 6's reasoning holds: something has to teach that the action exists. But the control repeats on every row. A per-cell disabled trigger would add five `aria-disabled` tab stops per row, each announcing the same sentence, so a keyboard user pays for the reason on every row. Row 7 already settled this at collection scale: the board's cards simply do not drag, and one `role="status"` banner says why. The row the actor opens (quick view, detail page) then carries the per-field reason (row 6, shipped by MOTIR-6173).                             | **GAP.** The cells render their plain value (the provider returns a null context without `work_item:edit`) and nothing on the page says why. There is no notice.                                        |
+| 11  | **Inline estimate badge** — `EstimateBadge` where it sits in a collection: the backlog row and the list's Points column                                                                | **DISABLE at the surface** — the badge keeps its shipped read-only arm, and the host surface carries the notice (row 10's list notice; the backlog gains its own) | Same scale argument as row 10. There is also a reason specific to the badge: its read-only arm is what EVERY actor sees in a project that estimates in Time or Issue count. A reason drawn on the chip would be false for a Member in those projects, so the chip cannot carry it. The item page rail and the quick view are row 6, not this row: there the field is always story points (`forceStoryPoints`), so a per-field reason is never wrong. Today those two surfaces draw no reason either, which is an implementation miss against row 6 filed as MOTIR-6338. The board card is not this family (panel 4).            | **GAP.** The static chip with no reason, on both the backlog and the list.                                                                                                                              |
+| 12  | **Onboarding resume door** — the sidebar **Resume onboarding** row and its ⌘K twin (`SidebarNav.tsx`, `AppCommandPalette.tsx`)                                                         | **HIDE** unless the actor holds `ai:plan`; **GUARD** the destination with a redirect                                                                              | It is an entry point (row 1's family) to a flow whose writes the actor cannot make: every discovery answer goes through `aiChatService` and the design step through `aiPreplanService.saveDesignChoice`, and both assert `ai:plan`. For a Viewer the door is not "the highest-priority next action" (the row's own comment); it is a promise the product refuses at the first answer. The in-progress STATE still decides whether the door exists at all. The KEY decides whether this actor gets it. The shipped comment "a state, not a permission" is half right: it is both, exactly as the "Plan with AI" pill already is. | **GAP.** Gated on AI configured, an active project and an unfinished onboarding, with no key. The palette's own comment calls it "a state, not a permission". The destination does not check `ai:plan`. |
+
+### Row 10 / 11 — the notice, and where it goes
+
+- **Markup:** the shipped board banner, verbatim: `role="status"`, `rounded-(--radius-card) border
+border-(--el-border) bg-(--el-surface) px-(--spacing-card-padding) py-(--spacing-control-y)
+text-sm text-(--el-text-secondary)` (`BoardContainer.tsx`). **No new primitive.** If the
+  implementing card extracts it into a shared component, it replaces the board's two copies too, so
+  there is one banner rather than three.
+- **Placement:** between the page's toolbar and its content (the table on `/items`, the first
+  region on `/backlog`). On `/items` it belongs to the PAGE, so the List / Tree switch neither moves
+  nor repeats it (panels 1–2).
+- **Keyed on the capability the page's writes assert**, read through `useProjectAccess`:
+  - `/items`: shown when `!can('work_item:edit')`, the exact condition under which
+    `IssueInlineEditProvider` already returns its null context. One predicate, two readers.
+  - `/backlog`: shown when `!can('work_item:edit')` (the badge and the inline create); otherwise
+    when `!can('sprint:manage')`, with the second copy string. The second case is the partial role
+    MOTIR-6174 left unexplained: it hid the drag, the selection box, the ⋯ menu and Create sprint
+    for an actor without `sprint:manage` and said nothing (panel 3, third column). A Member holding
+    both keys sees no notice.
+- **Not shown on an empty `/items`:** the first-run state (`design/work-items/items-first-run.mock.html`
+  panel 3, MOTIR-5540) already drops the create action for an actor who cannot create, and with no
+  cells there is no read-only state to explain.
+- **The cells are NOT changed.** A Viewer's cell stays a plain, unfocusable value, as it ships.
+
+### Row 12 — the guard
+
+A direct navigation to `/onboarding/discovery` (`ONBOARDING_RESUME_PATH`) by an actor without
+`ai:plan` **redirects**. It reuses the page's own exit for a finished onboarding:
+`onboardingReturnHref(…) ?? '/roadmap'`, the `onboardingRanAt` branch (panel 6). This is the
+redirect precedent `/items/[key]/edit` set for an edit surface, not the base asset's no-access
+screen. The page is a workspace to act in, and it already has a "nothing for you to do here" exit,
+so there is no new screen and no new copy. The server refusals stay what rule 3 relies on.
+The other `/onboarding/*` pages are the same family. The implementing card reads each page's writes
+and applies the same guard where they assert `ai:plan`.
+
+**Where the key is read.** The (authed) layout already computes `showPlanWithAi` from
+`satisfiesRequirement(AI_PLANNING_REQUIREMENT, held)`. `resumeGateEnabled` takes the same boolean,
+so the client never fetches `/api/ai/pre-plan` for an actor who could not use the answer. The ⌘K
+twin moves under the same `satisfiesRequirement` check as "Plan with AI" beside it. With both AI
+actions gone, the **AI** heading goes too: the shipped "a heading with nothing under it" rule
+already does that.
+
+**Hiding takes no capability away.** An actor without `ai:plan` could not resume the onboarding
+before this change (the first answer is refused), so nothing needs relocating. The session is still
+there for a teammate who holds the key.
+
+### Copy (`projectAccess.*`, both catalogues)
+
+| Key                       | en                                                                                                      | zh                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `readOnlyItemsBanner`     | Read-only access — you can view these work items but can’t edit them.                                   | 只读访问——你可以查看这些工作项，但无法编辑。                         |
+| `readOnlyBacklogBanner`   | Read-only access — you can view the backlog but can’t rank, estimate or edit work items.                | 只读访问——你可以查看待办列表，但无法排序、估算或编辑工作项。         |
+| `noGroomingBacklogBanner` | You can edit work items here, but ranking them and planning sprints needs permission to manage sprints. | 你可以在这里编辑工作项，但排序和规划 Sprint 需要管理 Sprint 的权限。 |
+
+The first two follow the shipped `readOnlyBoardBanner` sentence shape (_Read-only access — you can
+view … but can’t …_) and its zh twin. Row 12 adds no copy.
+
+### Inventory rows this disposes of
+
+The implementing card marks each of these in `docs/permissions/ui-gating-inventory.md`, moving it
+from **NEEDS DESIGN** to its treatment, owned by that card:
+
+| Inventory row                                   | Disposed of by                                   | Treatment                                                                                              |
+| ----------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| **B46** — `/items` list + tree inline cells     | row 10                                           | DISABLE at the surface: `readOnlyItemsBanner`, cells unchanged                                         |
+| **A29** — list inline-edit cells                | row 10 (the inventory already says "see B46")    | as B46                                                                                                 |
+| **A37** — status cell (list inline edit)        | row 10 (the inventory already says "see B46")    | as B46                                                                                                 |
+| **B45** — inline estimate badge                 | row 11 (backlog, list); panel 4 (board, no work) | DISABLE at the surface: the list is covered by B46's strip; the backlog gains its own, in two variants |
+| **D76** — sidebar Resume onboarding (+ ⌘K twin) | row 12                                           | HIDE on `ai:plan` + redirect guard on `/onboarding/discovery`                                          |
+
+### Tokens & a11y
+
+Every product colour in the mock is an `--el-*` token and every shape an element-semantic token. The
+token block and the review chrome are copied 1:1 from `permission-gated-ui.mock.html`. Seven Tier-3
+tokens it did not need are added, each defined as `packages/design-system/theme.css` defines it
+(the priority tints, `--el-text-identifier`, `--el-accent-on-surface`, `--el-icon-muted`,
+`--el-icon-active`). The notice's ink is `--el-text-secondary` on `--el-surface`: the shipped
+banner's pair, which clears AA in both themes. The notice is `role="status"`, so a screen reader
+announces the reason once per page rather than once per cell.
+
+### Source of truth
+
+As in the base asset: when a string or structure here disagrees with shipped code, **the code
+wins**, except that the RULE (this section's rows 10–12, and the 2026-08-08 table they extend) is a
+SPEC. On the day it landed, the shipped code disagreed with all three rows by construction, and that
+disagreement is the implementing card's work.
+
 ## Tokens & a11y
 
 Colour is `--el-*` only (no Tier-0 `--color-*`); shape is the element-semantic
