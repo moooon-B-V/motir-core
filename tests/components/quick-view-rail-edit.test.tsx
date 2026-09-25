@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { QuickViewData } from '@/lib/dto/quickView';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
+import { planRowDestination } from '@/lib/planning/planDestination';
 
 // The editable quick-view rail (MOTIR-2563) — the chrome, the five
 // self-contained editors, and the behind-the-modal signal.
@@ -24,9 +26,10 @@ vi.mock('next/navigation', () => ({
 }));
 
 const updateIssueAction = vi.fn();
+const changeStatusAction = vi.fn();
 vi.mock('@/app/(authed)/items/[key]/edit/actions', () => ({
   updateIssueAction: (...args: unknown[]) => updateIssueAction(...args),
-  changeStatusAction: vi.fn(),
+  changeStatusAction: (...args: unknown[]) => changeStatusAction(...args),
 }));
 
 import { IssueQuickViewPanel } from '@/app/(authed)/items/_components/IssueQuickViewPanel';
@@ -91,6 +94,7 @@ beforeEach(() => {
   updateIssueAction.mockReset();
   updateIssueAction.mockResolvedValue({ ok: true, updatedAt: '2026-06-11T00:00:00.000Z' });
   refresh.mockReset();
+  changeStatusAction.mockReset();
   searchParamsString = 'peek=PROD-7';
 });
 
@@ -486,5 +490,95 @@ describe('custom fields — per-type editors and the disclosure', () => {
     expect(
       within(row('Target release')).getByRole('button', { name: 'Edit Target release' }),
     ).toBeTruthy();
+  });
+});
+
+// THE STATUS CONTROL SAYS A PLAN HOLDS IT (Story MOTIR-6017 · MOTIR-6267) — the
+// peek's status field, from the quick-view read's `planHold` or a refusal.
+describe('the status field when a PLAN holds the card (MOTIR-6267)', () => {
+  const statuses: QuickViewData['workflow']['statuses'] = [
+    ['planning', 'Planning', 'todo'],
+    ['todo', 'To Do', 'todo'],
+    ['in_progress', 'In Progress', 'in_progress'],
+    ['done', 'Done', 'done'],
+  ].map(([key, label, category], i) => ({
+    id: `s${i}`,
+    projectId: 'p',
+    key: key!,
+    label: label!,
+    category: category as 'todo',
+    color: null,
+    position: `a${i}`,
+    isInitial: i === 0,
+  }));
+  const hold: PlanHoldDTO = {
+    itemKey: 'PROD-7',
+    workItemId: DATA.id,
+    planId: 'pln_3',
+    planStatus: 'generating',
+    sessionId: 'pcs_3',
+    anchorKey: 'PROD-7',
+  };
+  const AT_PLANNING: QuickViewData = {
+    ...DATA,
+    status: 'planning',
+    statusLabel: 'Planning',
+    statusCategory: 'todo',
+    workflow: { statuses, transitions: [], policyMode: 'open' },
+  };
+
+  it('draws the line with Review plan and locks every option but the current', async () => {
+    render(<IssueQuickViewPanel state="ready" data={{ ...AT_PLANNING, planHold: hold }} />);
+
+    const notice = screen.getByTestId('status-held-notice');
+    expect(notice.textContent).toContain("Status can't be changed while a plan is open.");
+    expect(notice.textContent).toContain('Motir AI is still writing this plan.');
+    expect(within(notice).getByRole('link', { name: 'Review plan' }).getAttribute('href')).toBe(
+      planRowDestination({
+        planStatus: hold.planStatus,
+        planId: hold.planId,
+        sessionId: hold.sessionId,
+        host: '/items?peek=PROD-7',
+        anchorKey: hold.anchorKey,
+      }).href,
+    );
+
+    fireEvent.click(within(row('Status')).getByRole('button', { name: 'Edit Status' }));
+    for (const name of ['To Do', 'In Progress', 'Done']) {
+      const option = await screen.findByRole('option', { name: new RegExp(name) });
+      expect(option.getAttribute('aria-disabled')).toBe('true');
+      expect(option.textContent).toContain('held by plan');
+    }
+  });
+
+  it('a null plan hold draws no line and locks nothing', async () => {
+    render(<IssueQuickViewPanel state="ready" data={{ ...AT_PLANNING, planHold: null }} />);
+    expect(screen.queryByTestId('status-held-notice')).toBeNull();
+    fireEvent.click(within(row('Status')).getByRole('button', { name: 'Edit Status' }));
+    const done = await screen.findByRole('option', { name: 'Done' });
+    expect(done.getAttribute('aria-disabled')).not.toBe('true');
+  });
+
+  it('a PLAN_TARGET_HELD answer reverts and draws the line — no row error', async () => {
+    changeStatusAction.mockResolvedValue({
+      ok: false,
+      error: 'held by a plan',
+      field: 'status',
+      code: 'PLAN_TARGET_HELD',
+      plan: { ...hold, planStatus: 'planned', sessionId: null },
+    });
+    render(<IssueQuickViewPanel state="ready" data={AT_PLANNING} />);
+
+    fireEvent.click(within(row('Status')).getByRole('button', { name: 'Edit Status' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Done' }));
+
+    const notice = await screen.findByTestId('status-held-notice');
+    expect(changeStatusAction).toHaveBeenCalledWith({ id: DATA.id, toStatusKey: 'done' });
+    expect(notice.textContent).toContain('This plan is waiting for approval.');
+    expect(within(notice).getByRole('link', { name: 'Review plan' }).getAttribute('href')).toBe(
+      '/plans/pln_3',
+    );
+    expect(within(row('Status')).getByText('Planning')).toBeTruthy();
+    expect(screen.queryByText('held by a plan')).toBeNull();
   });
 });

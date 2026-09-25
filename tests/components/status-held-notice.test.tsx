@@ -10,10 +10,19 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams('tab=activity'),
 }));
 vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush: shallowPushSpy }));
+// A plan hold must NEVER open the approval overlay (ADR `approval-gates.md`
+// §11.5b) — the real address builder, spied so a plan line can prove it is unused.
+vi.mock('@/lib/approvals/overlayAddress', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/approvals/overlayAddress')>();
+  return { ...actual, withApprovalOverlay: vi.fn(actual.withApprovalOverlay) };
+});
 
 import { StatusHeldNotice, type StatusHeldLine } from '@/components/issues/StatusHeldNotice';
 import { StatusPicker } from '@/components/issues/StatusPicker';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
+import { planRowDestination } from '@/lib/planning/planDestination';
+import { withApprovalOverlay } from '@/lib/approvals/overlayAddress';
 
 // THE STATUS CONTROL SAYS SO (Story MOTIR-4887 · Subtask MOTIR-5528), built to
 // `design/work-items/status-held-by-decision.mock.html`. One line per held status;
@@ -119,6 +128,108 @@ describe('StatusHeldNotice', () => {
   });
 });
 
+// THE STATUS CONTROL SAYS A PLAN HOLDS IT (Story MOTIR-6017 · MOTIR-6267), built to
+// `design/work-items/status-held-by-decision--plan-hold.mock.html`.
+describe('StatusHeldNotice — a plan hold', () => {
+  const plan = (over: Partial<PlanHoldDTO> = {}): PlanHoldDTO => ({
+    itemKey: 'PROD-7',
+    workItemId: 'wi_7',
+    planId: 'pln_7c3a91',
+    planStatus: 'generating',
+    sessionId: 'pcs_41f8',
+    anchorKey: 'PROD-7',
+    ...over,
+  });
+  /** The door's href, as the ONE destination rule computes it for this page. */
+  const expectedHref = (p: PlanHoldDTO) =>
+    planRowDestination({
+      planStatus: p.planStatus,
+      planId: p.planId,
+      sessionId: p.sessionId,
+      host: '/items/PROD-7?tab=activity',
+      anchorKey: p.anchorKey,
+    }).href;
+
+  it.each([
+    ['generating', 'Motir AI is still writing this plan.'],
+    ['planned', 'This plan is waiting for approval.'],
+    ['stale', 'This plan needs attention before it can be approved.'],
+  ] as const)(
+    'plan %s: the refusal, what the plan is doing, and Review plan onto the planning surface',
+    (planStatus, second) => {
+      const hold = plan({ planStatus });
+      render(<StatusHeldNotice itemKey="PROD-7" lines={[]} plan={hold} />);
+
+      const notice = screen.getByTestId('status-held-notice');
+      expect(notice.textContent).toContain("Status can't be changed while a plan is open.");
+      expect(notice.textContent).toContain(second);
+      const door = within(notice).getByRole('link', { name: 'Review plan' });
+      const href = expectedHref(hold);
+      expect(href).toContain('planSession=pcs_41f8');
+      expect(door.getAttribute('href')).toBe(href);
+      expect(door.getAttribute('data-plan-door')).toBe('planning-surface');
+
+      fireEvent.click(door);
+      expect(shallowPushSpy).toHaveBeenCalledWith(href);
+      expect(withApprovalOverlay).not.toHaveBeenCalled();
+    },
+  );
+
+  it('a plan with NO session opens /plans/<id> as an ordinary link — same copy', () => {
+    const hold = plan({ planStatus: 'planned', sessionId: null });
+    render(<StatusHeldNotice itemKey="PROD-7" lines={[]} plan={hold} />);
+
+    const notice = screen.getByTestId('status-held-notice');
+    expect(notice.textContent).toContain("Status can't be changed while a plan is open.");
+    expect(notice.textContent).toContain('This plan is waiting for approval.');
+    const door = within(notice).getByRole('link', { name: 'Review plan' });
+    expect(door.getAttribute('href')).toBe(expectedHref(hold));
+    expect(door.getAttribute('href')).toBe('/plans/pln_7c3a91');
+    expect(door.getAttribute('data-plan-door')).toBe('plan-page');
+    expect(withApprovalOverlay).not.toHaveBeenCalled();
+  });
+
+  it('a plan AND a gate: both lines, the plan FIRST, and the gate line carries NO button', () => {
+    render(
+      <StatusHeldNotice
+        itemKey="PROD-7"
+        lines={[line({ canDecide: true })]}
+        plan={plan({ planStatus: 'planned' })}
+      />,
+    );
+    const notice = screen.getByTestId('status-held-notice');
+    const rows = notice.querySelectorAll('[data-waiting-on]');
+    expect([...rows].map((r) => r.getAttribute('data-waiting-on'))).toEqual(['plan', 'decision']);
+    expect(rows[1]!.textContent).toBe(
+      'A design approval is waiting on this item too — it can be decided once the plan is.',
+    );
+    // The one door is the plan's; there is no Review & approve.
+    expect(
+      within(notice)
+        .getAllByRole('link')
+        .map((l) => l.textContent),
+    ).toEqual(['Review plan']);
+    expect(withApprovalOverlay).not.toHaveBeenCalled();
+  });
+
+  it('renders nothing with no plan and no lines', () => {
+    render(<StatusHeldNotice itemKey="PROD-7" lines={[]} plan={null} />);
+    expect(screen.queryByTestId('status-held-notice')).toBeNull();
+  });
+
+  it('ships in zh', () => {
+    render(
+      <StatusHeldNotice itemKey="PROD-7" lines={[line({})]} plan={plan({ planStatus: 'stale' })} />,
+      { locale: 'zh', messages: zhMessages },
+    );
+    const text = screen.getByTestId('status-held-notice').textContent ?? '';
+    expect(text).toContain('计划未决定前无法更改状态。');
+    expect(text).toContain('该计划需要先处理，然后才能批准。');
+    expect(text).toContain('计划决定后才能处理');
+    expect(screen.getByRole('link', { name: '审阅计划' })).toBeTruthy();
+  });
+});
+
 describe('StatusPicker — held targets', () => {
   const statuses: WorkflowStatusDto[] = [
     ['in_review', 'In Review', 'in_progress'],
@@ -163,5 +274,29 @@ describe('StatusPicker — held targets', () => {
     expect(onChange).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('option', { name: /In Progress/ }));
     expect(onChange).toHaveBeenCalledWith('in_progress');
+  });
+
+  it('a plan hold tags a locked option *held by plan* (MOTIR-6267)', () => {
+    const onChange = vi.fn();
+    render(
+      <StatusPicker
+        statuses={statuses}
+        transitions={[]}
+        policyMode="open"
+        value="in_review"
+        onChange={onChange}
+        held={statuses
+          .filter((s) => s.key !== 'in_review')
+          .map((s) => ({ statusKey: s.key, waitingOn: 'plan' as const }))}
+      />,
+    );
+    fireEvent.click(screen.getByRole('combobox'));
+    for (const name of [/In Progress/, /Approved/, /Done/]) {
+      const option = screen.getByRole('option', { name });
+      expect(option.getAttribute('aria-disabled')).toBe('true');
+      expect(option.textContent).toContain('held by plan');
+      fireEvent.click(option);
+    }
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

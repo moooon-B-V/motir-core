@@ -52,8 +52,11 @@ export interface StatusPickerProps {
    * decision) or *moves on merge* (waiting on the merge) — shown so the reader
    * learns the move exists and why it is held, and never committable. Every other
    * target is unchanged.
+   *
+   * A PLAN hold (MOTIR-6267; `agent-authored-plans.md` AMENDMENT 21) locks every
+   * target but the current one, each tagged *held by plan*.
    */
-  held?: ReadonlyArray<{ statusKey: string; waitingOn: 'decision' | 'merge' }>;
+  held?: ReadonlyArray<{ statusKey: string; waitingOn: 'decision' | 'merge' | 'plan' }>;
 }
 
 export function StatusPicker({
@@ -99,7 +102,13 @@ export function StatusPicker({
             className="inline-flex items-center gap-1 text-xs text-(--el-text-secondary)"
           >
             <Glyph aria-hidden className="h-3 w-3" />
-            {tHeld(hold.waitingOn === 'merge' ? 'movesOnMerge' : 'needsApproval')}
+            {tHeld(
+              hold.waitingOn === 'merge'
+                ? 'movesOnMerge'
+                : hold.waitingOn === 'plan'
+                  ? 'planHeldOption'
+                  : 'needsApproval',
+            )}
           </span>
         ),
       };

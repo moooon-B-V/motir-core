@@ -357,6 +357,26 @@ describe('readPlanHold — the up-front read', () => {
   );
 });
 
+describe('the quick-view read carries the plan hold (MOTIR-6267)', () => {
+  const peek = (identifier: string) =>
+    workItemsService.getQuickView(fx.project.id, identifier, fx.project.accessLevel, fx.ctx, 'en');
+
+  it(
+    'a held card’s peek carries the same PlanHoldDTO the up-front read returns; a free one carries null',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const card = await seedCard();
+      await plannedModify(card.id);
+      const expected = await planTargetLockService.readPlanHold(card.id, fx.ctx);
+      expect(expected).not.toBeNull();
+      expect((await peek(card.identifier)).planHold).toEqual(expected);
+
+      const free = await seedCard('Free');
+      expect((await peek(free.identifier)).planHold).toBeNull();
+    },
+  );
+});
+
 describe('the race with the plan’s own release', () => {
   it(
     'a hand move and a decline on one held card end in exactly one legal outcome',

@@ -8751,7 +8751,16 @@
       },
       "reviewAndApprove": "Review & approve",
       "needsApproval": "needs approval",
-      "movesOnMerge": "moves on merge"
+      "movesOnMerge": "moves on merge",
+      "planHeld": "Status can't be changed while a plan is open.",
+      "planState": {
+        "generating": "Motir AI is still writing this plan.",
+        "planned": "This plan is waiting for approval.",
+        "stale": "This plan needs attention before it can be approved."
+      },
+      "reviewPlan": "Review plan",
+      "planHeldOption": "held by plan",
+      "planAndGate": "A <strong>{decision}</strong> is waiting on this item too — it can be decided once the plan is."
     },
     "decision": {
       "kindLabel": "Decision",

@@ -29,6 +29,7 @@ import { StatusPicker } from '@/components/issues/StatusPicker';
 import { StatusHeldNotice } from '@/components/issues/StatusHeldNotice';
 import { useStatusHeld } from '@/components/issues/useStatusHeld';
 import type { HeldTransitionDTO } from '@/lib/dto/approvalGate';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
 import { SprintPicker } from '@/components/issues/SprintPicker';
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
@@ -83,6 +84,12 @@ export interface CoreFieldsPanelProps {
    * picker. Defaults to `[]`, the state almost every card is in.
    */
   heldTransitions?: HeldTransitionDTO[];
+  /**
+   * The undecided PLAN holding the card at Planning (Story MOTIR-6017 ·
+   * MOTIR-6267) — every move locked, and the status card says so with a Review
+   * plan door, to an editor and a reader alike. Defaults to none.
+   */
+  planHold?: PlanHoldDTO | null;
   members: WorkspaceMemberDTO[];
   workflow: WorkflowDto;
   /** The resolved parent summary (for the Parent card's display). */
@@ -186,6 +193,7 @@ export function CoreFieldsPanel({
   labelsComponents,
   sprints = [],
   heldTransitions,
+  planHold,
 }: CoreFieldsPanelProps) {
   const router = useRouter();
   const t = useTranslations('issueViews');
@@ -238,7 +246,7 @@ export function CoreFieldsPanel({
   const eff = { ...item, status: pageStatus, ...overrides };
   // The held moves, filtered by the status the card shows NOW — an approval that
   // repaints the page in place moves it without going through this panel.
-  const statusHeld = useStatusHeld(heldTransitions, workflow.statuses, eff.status);
+  const statusHeld = useStatusHeld(heldTransitions, workflow.statuses, eff.status, planHold);
   const effParent = parentOverride !== undefined ? parentOverride : parent;
 
   // THE FOLDER FIELD (Story MOTIR-5309 · MOTIR-5377). Its value is the page's
@@ -362,6 +370,11 @@ export function CoreFieldsPanel({
         // status control with its door — not in a toast that points nowhere.
         revert(['status']);
         statusHeld.onRefused(toStatusKey, res.gate);
+      } else if (res.code === 'PLAN_TARGET_HELD' && res.plan) {
+        // A plan took the card after render (MOTIR-6267): revert, and draw the
+        // plan's line with its Review plan door — never a toast.
+        revert(['status']);
+        statusHeld.onPlanHeldRefused(res.plan);
       } else {
         revert(['status']);
         toast({ variant: 'error', title: res.error });
@@ -439,7 +452,11 @@ export function CoreFieldsPanel({
           )}
           {/* The held message sits UNDER the value and stays visible whether or not
               the picker is open (design § The status control says so). */}
-          <StatusHeldNotice itemKey={item.identifier} lines={statusHeld.lines} />
+          <StatusHeldNotice
+            itemKey={item.identifier}
+            lines={statusHeld.lines}
+            plan={statusHeld.plan}
+          />
         </div>
       </FieldCard>
 

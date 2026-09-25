@@ -8747,7 +8747,16 @@
       },
       "reviewAndApprove": "审阅并批准",
       "needsApproval": "需要审批",
-      "movesOnMerge": "合并后变更"
+      "movesOnMerge": "合并后变更",
+      "planHeld": "计划未决定前无法更改状态。",
+      "planState": {
+        "generating": "Motir AI 正在撰写该计划。",
+        "planned": "该计划正在等待审批。",
+        "stale": "该计划需要先处理，然后才能批准。"
+      },
+      "reviewPlan": "审阅计划",
+      "planHeldOption": "计划占用中",
+      "planAndGate": "该工作项还有一项<strong>{decision}</strong>在等待——计划决定后才能处理。"
     },
     "decision": {
       "kindLabel": "决策",

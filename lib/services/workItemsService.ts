@@ -67,7 +67,7 @@ import { asksTheConfirmQuestion } from '@/lib/approvalGates/decisionConfirmation
 import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { APPROVED_STATUS_KEY, heldMoves } from '@/lib/approvalGates/heldMoves';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
-import { readPlanHoldWithin } from '@/lib/services/planTargetLockService';
+import { planTargetLockService, readPlanHoldWithin } from '@/lib/services/planTargetLockService';
 import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { pullRequestApprovalMembersService } from '@/lib/services/pullRequestApprovalMembersService';
@@ -6235,6 +6235,10 @@ export const workItemsService = {
     // The moves an approval HOLDS (Story MOTIR-4887 · MOTIR-5528) — the peek's
     // status field says so the way the detail page's does, from the same read.
     const heldTransitions = await approvalGatesService.listHeldTransitions(detail.item.id, ctx);
+    // The undecided PLAN holding the card at Planning (Story MOTIR-6017 · MOTIR-6267)
+    // — the peek's status field locks every move and says so with its Review plan
+    // door, from the same read the item page makes.
+    const planHold = await planTargetLockService.readPlanHold(detail.item.id, ctx);
     const view = toQuickViewData(
       detail,
       members,
@@ -6252,7 +6256,7 @@ export const workItemsService = {
       folderPath,
       designEvidence,
     );
-    return { ...view, heldTransitions, mergeMembers };
+    return { ...view, heldTransitions, planHold, mergeMembers };
   },
 
   /**
