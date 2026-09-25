@@ -335,7 +335,7 @@ function TransferOwnershipDialog({
             confirmation while it was typed in — was cut off (the MOTIR-6167
             acceptance review). What the person is deciding and acting in stays
             whole; only the member picker scrolls. */}
-        <div className="flex shrink-0 flex-col gap-(--spacing-md) pt-(--spacing-md)">
+        <div className="flex shrink-0 flex-col gap-(--spacing-sm) pt-(--spacing-xs)">
           {selected ? (
             <div
               className="flex items-start gap-2 rounded-(--radius-card) p-3"
