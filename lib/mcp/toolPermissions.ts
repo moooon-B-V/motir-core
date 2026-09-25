@@ -364,8 +364,9 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // `ai:view_plan` themselves — a map entry claiming less would be a second,
   // weaker statement of the same gate. ⚠️ This leaves it UNREACHABLE from
   // `CLI_TOKEN_GRANT`, deliberately: a dispatched agent is not the caller
-  // (`docs/decisions/run-findings-protocol.md` Q3) — the shipped planner reads
-  // the verdict through its internal AI route. Do not widen the grant for it;
+  // (`docs/decisions/run-findings-protocol.md` Q3) — on the dispatched path the
+  // server reads the verdict itself and never returns it
+  // (`docs/decisions/run-found-trigger-dispatched-path.md`). Do not widen the grant for it;
   // `tests/mcp/get-approved-shape-verdict.test.ts` asserts the refusal off the
   // constant.
   get_approved_shape_verdict: 'ai:view_plan',

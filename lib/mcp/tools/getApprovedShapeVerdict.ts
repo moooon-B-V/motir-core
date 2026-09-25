@@ -29,8 +29,9 @@ import { resolveWorkItemByKey, workItemKeyField } from './workItemRef';
 // ⚠️ `ai:view_plan`, NOT `project:browse`, and therefore UNREACHABLE from
 // `CLI_TOKEN_GRANT` on purpose. Both services assert that key themselves; the
 // map entry states the same gate. A dispatched agent is not this tool's caller
-// (`docs/decisions/run-findings-protocol.md` Q3): the shipped planner reads the
-// verdict through its internal AI route instead.
+// (`docs/decisions/run-findings-protocol.md` Q3): on the dispatched path the
+// SERVER reads the verdict itself when the runner reports an unbuildable target,
+// and never hands it back (`docs/decisions/run-found-trigger-dispatched-path.md`).
 //
 // ORDER OF THE REFUSALS, and why. The card key is resolved first (not-found,
 // no existence leak); the history read then asserts `ai:view_plan` — so a
