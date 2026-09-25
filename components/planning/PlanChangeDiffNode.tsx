@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Lock, Minus, Pencil, Plus } from 'lucide-react';
-import { PlanItemNode, type PlanItemOutcome } from '@/components/planning/PlanItemNode';
+import { LOCK_HATCH, PlanItemNode, type PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 import {
   changedFields,
@@ -53,14 +53,9 @@ const TAG_TONE: Record<PlanChangeDiffState, string> = {
   locked: 'bg-(--el-muted) text-(--el-text-secondary)',
 };
 
-/** The hatched surface that makes a LOCKED node legibly immutable (the shipped
- *  `GhostAnchor` hatch technique, in neutral tokens — the stripes are drawn over
- *  the real card, so its own content stays readable underneath). */
-// Deliberately SPARSE + palette-derived: the stripes must read as "hatched, so
-// not editable" without competing with the card's own title underneath (a dense
-// hatch made the struck-through title unreadable in the live render).
-const LOCK_HATCH =
-  'repeating-linear-gradient(135deg, transparent, transparent 13px, color-mix(in srgb, var(--el-muted) 60%, transparent) 13px, color-mix(in srgb, var(--el-muted) 60%, transparent) 15px)';
+// The LOCKED hatch now lives with the one card (`PlanItemNode`'s `LOCK_HATCH`,
+// MOTIR-6296), which draws it on a `modify` / `remove` of a finished target. This
+// frame imports it for its own `locked` state until MOTIR-6299 deletes the frame.
 
 export interface PlanChangeDiffFrameProps {
   state: PlanChangeDiffState;
@@ -195,11 +190,11 @@ export function ProposedAddNode({
   outcome?: PlanItemOutcome | null;
 }) {
   return (
-    // The frame carries the outcome and so does the node inside it — the node's
-    // own chip is the shipped one from MOTIR-3161, reused verbatim, which is what
-    // makes "one language across both canvases" true rather than asserted.
+    // The FRAME carries the outcome — its fused tag word and its spine — and the
+    // node inside it does not (MOTIR-6296): passing it to both drew TWO outcome
+    // spines on one card. One spine remains until MOTIR-6299 deletes this frame.
     <PlanChangeDiffFrame state="add" outcome={outcome}>
-      <PlanItemNode item={add.item} outcome={outcome} />
+      <PlanItemNode item={add.item} />
     </PlanChangeDiffFrame>
   );
 }

@@ -246,11 +246,13 @@ describe('decoratePlanChangeLevel — the decided outcome', () => {
       const proposed = level.nodes.find((n) => n.id.endsWith('pi_new'))!;
       renderWithIntl(<>{proposed.content}</>);
 
-      // The frame says it AND the node inside says it — and the node's chip is the
-      // SHIPPED `PlanItemNode` one from MOTIR-3161, reused verbatim. That is what
-      // makes "one language across both canvases" true rather than asserted.
+      // The FRAME says it, and says it ONCE (MOTIR-6296). The node inside used to
+      // be handed the outcome too, which drew a second word and — the defect — a
+      // second outcome spine on the same card. Until MOTIR-6299 deletes the frame,
+      // the frame is the one carrier on this path.
       expect(screen.getByTestId('plan-change-outcome').textContent).toBe(outcome);
-      expect(screen.getByTestId('plan-item-outcome').textContent).toBe(outcome);
+      expect(screen.queryByTestId('plan-item-outcome')).toBeNull();
+      expect(document.querySelectorAll('[data-testid$="outcome-spine"]')).toHaveLength(1);
     },
   );
 
