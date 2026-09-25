@@ -1171,6 +1171,29 @@ function namesRenderedSurface(text: string): boolean {
   return SURFACE_NOUN_RE.test(text) && SURFACE_VERB_RE.test(text);
 }
 
+/**
+ * Whether a card is OUTSIDE the self-blocking-design check's scope by its TYPE
+ * alone (MOTIR-6245): a `type: design` card IS the design card the finding's
+ * remedy would lift a criterion into, so the finding cannot be true of it.
+ *
+ * The prose predicate cannot answer this, and it must not be taught to. Its
+ * per-criterion exclusion ({@link namesDesignAsset}) keys on the criterion naming
+ * an artefact, so a design card's criterion that identifies its panels by NUMBER
+ * (*"Panels 2, 3 and 10 show that growth moves nothing outside the rail"*,
+ * MOTIR-6236) or obliges it to RENDER the shipped surface before drawing
+ * (MOTIR-6241) names none and lands in the surface arm. Widening the artefact
+ * matchers to catch both would be the *"any criterion on a card that produces
+ * an asset"* reading {@link selfBlockingDesignCriteria} already rejects. The
+ * card's own type is insensitive to which sentence the criterion used, so it is
+ * the caller's third scope test beside `hasChildren` and `hasDesignBlocker`.
+ *
+ * Exported so the scope is asserted DIRECTLY rather than only through a fixture
+ * a later widening of the prose predicate could silently re-open.
+ */
+export function isSelfBlockingDesignCheckExempt(type: string | null | undefined): boolean {
+  return type === 'design';
+}
+
 /** The SELF-BLOCKING-DESIGN finding: the two criteria that must not share a card. */
 export interface SelfBlockingDesignCriteria {
   /** 1-based index of the criterion whose deliverable is the DESIGN ASSET. */

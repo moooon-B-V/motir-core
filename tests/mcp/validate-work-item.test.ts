@@ -14,6 +14,10 @@ import type { ExecutorDto, WorkItemTypeDto, WorkItemValidityDto } from '@/lib/dt
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import {
+  MOTIR_6236_DESIGN_CARD_CRITERIA,
+  MOTIR_6241_DESIGN_CARD_CRITERIA,
+} from '../fixtures/designCardCriteria';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -1700,6 +1704,77 @@ describe('workItemsService.validateWorkItem — the SELF-BLOCKING-DESIGN advisor
     expect(result.advisories).toMatchObject([
       { item: child.identifier, severity: 'likely-self-blocking-design' },
     ]);
+  });
+
+  // THE TYPE SCOPE TEST (MOTIR-6245). A `type: design` card IS the card the LIFT
+  // remedy would create, so the finding cannot be true of it — yet its own
+  // criteria name panels by number (MOTIR-6236) or oblige it to render the
+  // shipped surface first (MOTIR-6241), and the prose predicate reads both as
+  // BUILDING a surface. 7 of the 16 open design cards carried the false entry.
+  const typedCard = (
+    fx: Awaited<ReturnType<typeof makeWorkItemFixture>>,
+    descriptionMd: string,
+    type: WorkItemTypeDto,
+    placement: { kind?: IssueType; parentId?: string } = {},
+  ) =>
+    workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: placement.kind ?? 'task',
+        title: `A ${type} card`,
+        descriptionMd,
+        parentId: placement.parentId,
+        type,
+        executor: 'coding_agent',
+        storyPoints: 3,
+        estimateMinutes: 45,
+      },
+      fx.ctx,
+    );
+
+  it('MOTIR-6236 REGRESSION: says NOTHING about a childless `type: design` card, whatever its criteria say', async () => {
+    const fx = await makeWorkItemFixture();
+    for (const body of [MOTIR_6236_DESIGN_CARD_CRITERIA, MOTIR_6241_DESIGN_CARD_CRITERIA]) {
+      const item = await typedCard(fx, body, 'design');
+      const result = await workItemsService.validateWorkItem(fx.projectId, item.identifier, fx.ctx);
+      expect(result.advisories.filter((a) => a.severity === 'likely-self-blocking-design')).toEqual(
+        [],
+      );
+    }
+  });
+
+  it('…and on the SUBTREE path — a story no longer reports its design child', async () => {
+    // The path MOTIR-6236 was reported through: `validate_work_item` on its story.
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'The multi-line composer' },
+      fx.ctx,
+    );
+    await typedCard(fx, MOTIR_6236_DESIGN_CARD_CRITERIA, 'design', {
+      kind: 'subtask',
+      parentId: story.id,
+    });
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(result.advisories.filter((a) => a.severity === 'likely-self-blocking-design')).toEqual(
+      [],
+    );
+  });
+
+  it('the SAME body on a non-design card still fires — the scope test reads the TYPE, not the prose', async () => {
+    // The control: nothing about the body changed, only the card's type, so the
+    // silence above is the scope test and not a narrowed predicate.
+    const fx = await makeWorkItemFixture();
+    const item = await typedCard(fx, MOTIR_6236_DESIGN_CARD_CRITERIA, 'code');
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, item.identifier, fx.ctx);
+    expect(result.advisories).toContainEqual({
+      kind: 'shape',
+      item: item.identifier,
+      severity: 'likely-self-blocking-design',
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 2,
+    });
   });
 });
 

@@ -14,6 +14,7 @@ import {
   firstRepoStraddleCriterion,
   hasCriterionPathTokens,
   isOrderingCheckExempt,
+  isSelfBlockingDesignCheckExempt,
   isSubsumptionCheckExempt,
   overGateSizing,
   resolvePathRepo,
@@ -22,6 +23,10 @@ import {
   namesDesignDocumentAmendment,
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
+import {
+  MOTIR_6236_DESIGN_CARD_CRITERIA,
+  MOTIR_6241_DESIGN_CARD_CRITERIA,
+} from '../fixtures/designCardCriteria';
 
 // The PURE half of the prose-vs-graph advisory (MOTIR-1969) — reference
 // extraction + the acceptance-criteria section heuristic that promotes a
@@ -1212,5 +1217,33 @@ describe('an AMENDMENT to an existing design document is a design criterion (MOT
       '2. The design notes are extended with the copy table for every string that moves.',
     ].join('\n');
     expect(selfBlockingDesignCriteria(designOnly)).toBeNull();
+  });
+});
+
+describe('isSelfBlockingDesignCheckExempt — the TYPE scope test (MOTIR-6245)', () => {
+  it('exempts a `type: design` card, and nothing else', () => {
+    expect(isSelfBlockingDesignCheckExempt('design')).toBe(true);
+    for (const type of ['code', 'test', 'content', 'chore', 'decision', 'deploy']) {
+      expect(isSelfBlockingDesignCheckExempt(type)).toBe(false);
+    }
+    // Untyped is a real answer and is NOT exempt — the check still asks the prose.
+    expect(isSelfBlockingDesignCheckExempt(null)).toBe(false);
+    expect(isSelfBlockingDesignCheckExempt(undefined)).toBe(false);
+  });
+
+  it('is what silences a design card — the PROSE half still fires on both sub-shapes', () => {
+    // Pinned so the scope test cannot be retired on the belief that the prose
+    // predicate now handles these: it does not, and the exclusion is not to be
+    // widened to make it (see `selfBlockingDesignCriteria`'s own note).
+    // Criterion 2 names its panel by number, and no asset.
+    expect(selfBlockingDesignCriteria(MOTIR_6236_DESIGN_CARD_CRITERIA)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 2,
+    });
+    // Criterion 2 obliges the card to RENDER the shipped surface before drawing.
+    expect(selfBlockingDesignCriteria(MOTIR_6241_DESIGN_CARD_CRITERIA)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 2,
+    });
   });
 });
