@@ -89,7 +89,12 @@ vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
   };
 });
 
-import { usePlanChangeConversation, narrateFrame } from '@/lib/hooks/usePlanChangeConversation';
+import {
+  usePlanChangeConversation,
+  narrateFrame,
+  PLAN_GATE_POLL_MS,
+} from '@/lib/hooks/usePlanChangeConversation';
+import { planGateView } from '@/lib/planning/planGateView';
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
 import { PlanRequestError } from '@/lib/planning/planReviewClient';
 import { useDecidedGateState } from '@/lib/approvals/decidedGates';
@@ -1275,3 +1280,141 @@ describe('usePlanChangeConversation — THE ACT RAIL is a record (MOTIR-4069)', 
     expect(result.current.state.acts.length).toBeLessThanOrEqual(first);
   });
 });
+
+describe('usePlanChangeConversation — a revision lease taken ELSEWHERE reaches the verbs (MOTIR-6151)', () => {
+  // The lease is driven from OUTSIDE this surface: nothing the hook does takes it —
+  // the review READ is the only thing that changes, exactly as when a second tab,
+  // another member or an agent over MCP revises the plan. Every assertion is on the
+  // ONE derivation the canvas bar and the rail's review block both render
+  // (`planGateView`), so "held" here is what disables both verbs there.
+  function gated(gateId: string, heldBy: string | null | undefined): PlanReviewDto {
+    return {
+      ...REVIEW,
+      gate: {
+        id: gateId,
+        state: 'awaiting',
+        stamp: `stamp-${gateId}`,
+        held:
+          heldBy === undefined
+            ? null
+            : { reason: 'revision_in_flight', heldBy, expiresAt: '2026-09-25T12:00:00.000Z' },
+        canDecide: true,
+      },
+    };
+  }
+
+  const view = (review: PlanReviewDto | null) => planGateView({ review, rewriting: false });
+
+  async function deciding(review: PlanReviewDto) {
+    fetchReview.mockResolvedValue(review);
+    const hook = await mounted();
+    await act(async () => {
+      await hook.result.current.send('Add recurring invoices.');
+    });
+    expect(hook.result.current.state.phase).toBe('review');
+    return hook;
+  }
+
+  const focus = () =>
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a lease taken elsewhere HOLDS both verbs on focus, and its release frees them again', async () => {
+    const { result } = await deciding(gated('gate-focus', undefined));
+    expect(view(result.current.state.review).kind).toBe('decide');
+
+    fetchReview.mockResolvedValue(gated('gate-focus', 'Claude Code'));
+    focus();
+    await waitFor(() =>
+      expect(view(result.current.state.review)).toEqual({ kind: 'held', heldBy: 'Claude Code' }),
+    );
+
+    fetchReview.mockResolvedValue(gated('gate-focus', undefined));
+    focus();
+    await waitFor(() => expect(view(result.current.state.review).kind).toBe('decide'));
+  });
+
+  it('with no focus at all, the POLL catches the lease within its bound, and the release too', async () => {
+    // The clock also advances with real time, so the mount's own `waitFor` still settles;
+    // the poll is then stepped explicitly, one bound at a time.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { result } = await deciding(gated('gate-poll', undefined));
+    const before = fetchReview.mock.calls.length;
+
+    fetchReview.mockResolvedValue(gated('gate-poll', null));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PLAN_GATE_POLL_MS);
+    });
+    expect(fetchReview.mock.calls.length).toBeGreaterThan(before);
+    expect(view(result.current.state.review)).toEqual({ kind: 'held', heldBy: null });
+
+    fetchReview.mockResolvedValue(gated('gate-poll', undefined));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PLAN_GATE_POLL_MS);
+    });
+    expect(view(result.current.state.review).kind).toBe('decide');
+  });
+
+  it('a HIDDEN tab skips its ticks — the read waits for the reader to come back', async () => {
+    await deciding(gated('gate-hidden', undefined));
+    const before = fetchReview.mock.calls.length;
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    try {
+      focus();
+      expect(fetchReview.mock.calls.length).toBe(before);
+    } finally {
+      visibility.mockRestore();
+    }
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await waitFor(() => expect(fetchReview.mock.calls.length).toBe(before + 1));
+  });
+
+  it('a plan nobody was asked about is not watched — no gate, no read', async () => {
+    await deciding(REVIEW);
+    const before = fetchReview.mock.calls.length;
+    focus();
+    expect(fetchReview.mock.calls.length).toBe(before);
+  });
+
+  it('a DECIDED plan is not watched, and a read in flight at the decision never lands over it', async () => {
+    const { result } = await deciding(gated('gate-decided', undefined));
+    const late = deferred<PlanReviewDto>();
+    fetchReview.mockReturnValueOnce(late.promise);
+    focus();
+    await waitFor(() => expect(fetchReview).toHaveBeenCalledTimes(2));
+
+    fetchReview.mockResolvedValue(MATERIALIZED_REVIEW);
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(result.current.state.decided).toBe('accepted');
+    const decided = result.current.state.review;
+
+    late.resolve(gated('gate-decided', 'Claude Code'));
+    await act(async () => {
+      await late.promise;
+    });
+    expect(result.current.state.review).toBe(decided);
+
+    const after = fetchReview.mock.calls.length;
+    focus();
+    expect(fetchReview.mock.calls.length).toBe(after);
+  });
+
+  it('stops watching on unmount', async () => {
+    const { unmount } = await deciding(gated('gate-unmount', undefined));
+    unmount();
+    const before = fetchReview.mock.calls.length;
+    focus();
+    expect(fetchReview.mock.calls.length).toBe(before);
+  });
+});
+
+const MATERIALIZED_REVIEW: PlanReviewDto = { ...REVIEW, status: 'approved' };

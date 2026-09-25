@@ -803,10 +803,15 @@ export function CoreFieldsPanel({
 
       {/* Story points (Subtask 4.3.4) — the agile estimate, DISTINCT from the
           TIME Estimate below (design panel 2). The badge owns its own
-          click-to-edit picker, so this card has no chevron (editable={false});
-          `forceStoryPoints` keeps it a story-points field regardless of the
-          project's display statistic. */}
-      <FieldCard label={t('storyPoints')} editable={false}>
+          click-to-edit picker, so for an actor who can edit this card has no
+          chevron (editable={false}) — a second one would be a second affordance
+          for one field. A read-only actor gets the disabled chevron with its
+          reason like every neighbour (MOTIR-6338, treatment-table row 6): the
+          badge falls to its static chip, and without it the card would read as
+          a field nobody edits. `forceStoryPoints` keeps it a story-points field
+          regardless of the project's display statistic, so the reason is never
+          wrong here. */}
+      <FieldCard label={t('storyPoints')} editable={readOnly} readOnlyReason={readOnlyReason}>
         <EstimateBadge
           itemId={item.id}
           storyPoints={item.storyPoints}

@@ -502,7 +502,11 @@ export const dispatchRunService = {
    * run, so it may never change what the run DID.
    *
    * ⚠️ NO OPEN LEG MEANS NO EVENT, and that is the correct record rather than a
-   * miss — see {@link dispatchRunCardRepository.findOpenLegForWorkItem}.
+   * miss — see {@link dispatchRunCardRepository.findOpenLegForWorkItem}. With
+   * `at`, the same holds of the leg open AT THAT INSTANT
+   * ({@link dispatchRunCardRepository.findLegSpanningInstantForWorkItem}), and
+   * the event may then land on a leg that has settled, or a run that has closed:
+   * the finding is the run's even though the model finished after it.
    *
    * The `seq` allocation is the same read-then-write `appendEvents` uses and
    * carries the same caveat: `@@unique([dispatchRunId, seq])` is what makes a
@@ -528,6 +532,14 @@ export const dispatchRunService = {
            */
           findingId: string;
           data: Prisma.InputJsonValue;
+          /**
+           * WHEN the finding's act happened, when that is not now (MOTIR-6279).
+           * A submitted plan is recorded when it reaches `planned`, which on a
+           * real refusal is after the leg settled and often after the run
+           * closed; the leg it belongs to is the one that was open when the plan
+           * was CREATED. Omitted, the leg is the one open right now.
+           */
+          at?: Date;
         }
       | {
           /** The report's TARGET — the work item whose open leg stopped. */
@@ -547,10 +559,16 @@ export const dispatchRunService = {
       return await withWorkspaceContext(
         { userId: ctx.userId, workspaceId: ctx.workspaceId },
         async (tx) => {
-          const leg = await dispatchRunCardRepository.findOpenLegForWorkItem(
-            input.anchorWorkItemId,
-            tx,
-          );
+          // The run-found report is made by the runner while its leg is still
+          // open (MOTIR-6282), so only a bug or plan finding carries `at`.
+          const at = input.kind === 'unbuildable_reported' ? undefined : input.at;
+          const leg = at
+            ? await dispatchRunCardRepository.findLegSpanningInstantForWorkItem(
+                input.anchorWorkItemId,
+                at,
+                tx,
+              )
+            : await dispatchRunCardRepository.findOpenLegForWorkItem(input.anchorWorkItemId, tx);
           if (!leg) return { recorded: false };
 
           const findingId = input.kind === 'unbuildable_reported' ? leg.id : input.findingId;

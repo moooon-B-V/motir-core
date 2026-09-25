@@ -19,6 +19,7 @@ import {
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { QUICK_SEARCH_MIN_QUERY_LENGTH } from '@/lib/workItems/quickSearch';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { LinkedPullRequestDto, PullRequestLinkCandidateDto } from '@/lib/dto/github';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { captureDecisionDocument } from './decisionDocumentCaptureService';
@@ -42,6 +43,19 @@ import { captureDecisionDocument } from './decisionDocumentCaptureService';
 /** Picker candidate cap — a bounded, keystroke-driven read (mirrors the issue
  *  link picker's quick-search window). */
 const PR_CANDIDATE_LIMIT = 10;
+
+/**
+ * THE key every door that writes or removes a `work_item_delivery` row asserts —
+ * the item page's two arms ({@link githubPullRequestService.linkPullRequest} /
+ * `unlinkPullRequest`) and the MCP tools' two (`…ByCoordinates`) alike. Declaring
+ * which card a pull request delivers is editing that card. One constant so the
+ * arms cannot drift apart again: until MOTIR-6318 only the MCP arms asserted it,
+ * and the item page's actions — the door a PERSON uses — asserted nothing, so a
+ * browse-only actor could link or unlink by calling the action directly.
+ * `TOOL_PERMISSIONS` declares the same key for both tools, pinned by
+ * `tests/github/prLinkPermission.test.ts`.
+ */
+export const PULL_REQUEST_LINK_PERMISSION = 'work_item:edit' satisfies PermissionKey;
 
 // ⚠️ `retireDesignGateForOpenPullRequest` STOOD HERE AND IS RETIRED (Story
 // MOTIR-5652 · Subtask MOTIR-5662; `docs/decisions/design-result.md` AMENDMENT 6
@@ -195,6 +209,16 @@ export const githubPullRequestService = {
       const item = await workItemRepository.findById(currentItemId, tx);
       if (!item || item.workspaceId !== ctx.workspaceId)
         throw new WorkItemNotFoundError(currentItemId);
+      // The key the MCP arm asserts, on the project that owns the item. Only
+      // resolvable once the item is read, so it runs here rather than before the
+      // transaction as `linkPullRequestByCoordinates`' does — still ahead of
+      // every write (MOTIR-6318).
+      await projectAccessService.assertPermission(
+        item.projectId,
+        ctx,
+        PULL_REQUEST_LINK_PERMISSION,
+        tx,
+      );
 
       const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
 
@@ -347,7 +371,7 @@ export const githubPullRequestService = {
     // left to the MCP permission gate alone: the gate says what the TOKEN may
     // reach, this says what its owner may do to this project. Runs BEFORE the
     // transaction so a refusal costs no row lock.
-    await projectAccessService.assertPermission(input.projectId, ctx, 'work_item:edit');
+    await projectAccessService.assertPermission(input.projectId, ctx, PULL_REQUEST_LINK_PERMISSION);
 
     return withWorkspaceContext(ctx, async (tx) => {
       const item = await workItemRepository.findById(input.workItemId, tx);
@@ -523,6 +547,14 @@ export const githubPullRequestService = {
       const item = await workItemRepository.findById(workItemId, tx);
       if (!item || item.workspaceId !== ctx.workspaceId)
         throw new WorkItemNotFoundError(workItemId);
+      // The link arm's key, asserted before the delete — and so before the
+      // merge gate this unlink would withdraw (MOTIR-6318).
+      await projectAccessService.assertPermission(
+        item.projectId,
+        ctx,
+        PULL_REQUEST_LINK_PERMISSION,
+        tx,
+      );
 
       const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
 
@@ -600,7 +632,7 @@ export const githubPullRequestService = {
     // asserted here rather than left to the MCP gate alone, for the same reason:
     // the gate says what the TOKEN may reach, this says what its owner may do to
     // this project. Undoing a link is editing the card the link was made against.
-    await projectAccessService.assertPermission(input.projectId, ctx, 'work_item:edit');
+    await projectAccessService.assertPermission(input.projectId, ctx, PULL_REQUEST_LINK_PERMISSION);
 
     return withWorkspaceContext(ctx, async (tx) => {
       const item = await workItemRepository.findById(input.workItemId, tx);
