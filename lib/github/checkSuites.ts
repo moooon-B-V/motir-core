@@ -36,10 +36,34 @@
 // So the workflow identity is reconstructed from what the rows themselves say: a
 // run REPLACES an earlier run when it re-reports a check the earlier one
 // reported. Two runs of `ci.yml` share `TypeScript`, `Next.js build`,
-// `CI complete`; a CI run and a CodeQL run share nothing. The one residue,
+// `CI complete`; a CI run and a CodeQL run share no CHECK. The one residue,
 // stated rather than hidden: a run cancelled so early that NONE of its checks
 // is re-reported by its replacement is not recognised as superseded — it keeps
 // today's behaviour rather than a worse one.
+//
+// ── A SUITE'S OWN ROLL-UP ROW IS NOT A CHECK, AND IT IS NOT EVIDENCE ────────
+// (MOTIR-6274.) "Share no check" used to read "share nothing", and that was
+// false: a GitHub `check_suite` event is recorded as a row named by the App
+// SLUG, and every Actions workflow is the same App — `ci.yml`, `codeql.yml` and
+// `acceptance.yml` all write a `github-actions` row, each under its own suite.
+// Counted as a shared name, it made every Actions suite at a commit a "re-run"
+// of every other, and the newest retired the rest wholesale: on motir-core#3112
+// @ `88508fb2` CodeQL's and the acceptance lane's suites were discarded and the
+// verdict was formed over CI's alone ("4 of 43 checks" where the host held 46).
+// Which workflow survived depended on the order GitHub minted the suite ids.
+//
+// So a row marked `suiteAggregate` (set by the GitHub `check_suite` parse, and
+// by nothing else) is left out of the shared-name test on BOTH sides: it can
+// neither retire a suite nor be the reason one is retired. It still VOTES —
+// it is the suite's own conclusion — and it still goes with its suite when that
+// suite is replaced by a real re-run. A GitLab pipeline row is deliberately NOT
+// one: GitLab has one pipeline per commit per project, so its shared `pipeline`
+// name IS the re-run evidence there. The residue widens by exactly one shape,
+// stated: a suite whose only recorded row is its roll-up (no check of its own
+// ever arrived) is no longer retired by a newer suite of the same App — it
+// cannot be told apart from a different workflow, and "keep its vote" is the
+// failure that can be seen, where "discard a workflow" was the one that could
+// not.
 //
 // ── WHICH RUN IS "LATER" IS THE PROVIDER'S ORDER, NOT OUR DELIVERY ORDER ────
 // Deliberately NOT the row's `createdAt`. That timestamp records when a webhook
@@ -58,6 +82,11 @@ export interface SuiteScopedCheckRow {
    *  nothing and is superseded by nothing unless a real run re-reports one of
    *  their names — i.e. exactly the behaviour those rows had before. */
   checkSuiteId: string;
+  /** A suite's OWN roll-up row rather than a check (MOTIR-6274) — its name is
+   *  the App's, not the workflow's, so it is never evidence that two suites are
+   *  one workflow. Omitted = a check, which is what every pre-column row and
+   *  every caller-built row is. */
+  suiteAggregate?: boolean;
 }
 
 /**
@@ -73,11 +102,17 @@ export interface SuiteScopedCheckRow {
 export function liveCheckRows<T extends SuiteScopedCheckRow>(rows: T[]): T[] {
   if (rows.length === 0) return rows;
 
+  // Every suite at the commit gets an entry — a suite whose only row is its
+  // roll-up included, with an EMPTY name set, so it is ordered and can be read
+  // but shares nothing. The roll-up's own name is never added (MOTIR-6274).
   const names = new Map<string, Set<string>>();
   for (const row of rows) {
-    const known = names.get(row.checkSuiteId);
-    if (known) known.add(row.checkName);
-    else names.set(row.checkSuiteId, new Set([row.checkName]));
+    let known = names.get(row.checkSuiteId);
+    if (!known) {
+      known = new Set<string>();
+      names.set(row.checkSuiteId, known);
+    }
+    if (row.suiteAggregate !== true) known.add(row.checkName);
   }
   if (names.size === 1) return rows;
 

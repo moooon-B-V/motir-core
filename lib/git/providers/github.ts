@@ -1048,6 +1048,12 @@ export const githubProvider: GitProvider = {
     // check_runs into. A not-yet-completed suite is `pending`. The branch + the
     // associated PRs sit directly on `check_suite`; `context` is the App slug so
     // two Apps' suites keep distinct feedback.
+    //
+    // ⚠️ THE SLUG NAMES THE APP, NOT THE WORKFLOW (MOTIR-6274): every GitHub
+    // Actions workflow reports as `github-actions`, so CI's, CodeQL's and the
+    // acceptance lane's roll-ups share this name. `suiteAggregate` marks the row
+    // so `liveCheckRows` never reads that shared name as "a re-run of the same
+    // workflow" — which retired every older Actions suite at the commit.
     const checkSuite = asRecord(payload['check_suite']);
     if (checkSuite) {
       const commitSha = typeof checkSuite['head_sha'] === 'string' ? checkSuite['head_sha'] : null;
@@ -1063,6 +1069,7 @@ export const githubProvider: GitProvider = {
         context: typeof appSlug === 'string' && appSlug.length > 0 ? appSlug : 'check_suite',
         ...readPrLink(checkSuite['pull_requests'], checkSuite),
         suiteId: readSuiteId(checkSuite),
+        suiteAggregate: true,
       };
     }
 
