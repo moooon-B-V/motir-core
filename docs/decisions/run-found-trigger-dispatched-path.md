@@ -29,6 +29,10 @@ through an internal route. The reviewer rejected that and set the direction belo
 >    (sent by the runner) then compose the planning bug, we will debug using those information
 >    later
 
+The reviewer then scoped point 1: the MCP-planner exclusion is the PRODUCT's rule, and
+**motir-meta's runbook is an exception** — its plan and run procedures are not changed by this
+record (below).
+
 Two findings from the first version still hold. They are kept because the direction depends on
 them:
 
@@ -83,6 +87,12 @@ to write: `aiGenerationService` (`lib/services/aiGenerationService.ts`) and `aiP
 the `create_plan` MCP tool (`lib/mcp/tools/authorPlan.ts`). **A plan with `mcp`, or any value
 other than `native`, never fires a bug.** A `null` from before MOTIR-2996 does not fire either.
 This is the strict reading, and the reviewer can relax it to `sourceJobId != null`.
+
+**This precondition is the dispatched (product) path's, and motir-meta is an exception.** The
+runbook `motir run` plans Motir itself through the MCP (`authorSource: 'mcp'`) and keeps filing
+its planning bugs under its own run-found rule (MOTIR-6231, conditional on the same verdict),
+through its own door rather than this endpoint. This record changes nothing in motir-meta's
+plan or run procedures.
 
 **The verdict (recommended, the reviewer can overrule): file only on `unchanged`.** That is the
 story's premise: a target edited after approval (`changed`) or never shaped by a plan
@@ -180,6 +190,8 @@ the filing and the destination are the same with or without the flag.
 
 - **MOTIR-5544**: criterion 3, the dispatched path behaves as this record says. Its body is
   re-planned to this direction.
+- **MOTIR-6231** (the runbook's `run.md` condition, motir-meta): unchanged in scope. The
+  motir-ai-only precondition does not bind the runbook, which is the stated exception above.
 - **New work owed** (to be planned under MOTIR-5544): the endpoint (the MCP tool, the service,
   the leg-keyed filing row and a new `DispatchEventKind` member for the finding); the bug
   composition and allowlist; the `cardIsWrongSteps` prompt change.
@@ -196,9 +208,6 @@ unchanged.
 
 ## What this does NOT decide
 
-- **Whether the motir-ai-only precondition also binds the RUNBOOK path (MOTIR-6231).** The
-  runbook plans through the MCP, so under the precondition it would never fire. This record
-  decides the dispatched path only. That question stays with MOTIR-5544.
 - **The leg-timing bug MOTIR-6279** (Q5's `plan_submitted` read after the leg closes). This
   trigger avoids it by calling early. It does not fix it.
 - **When** a run judges a target unbuildable, and **what counts as a CHANGE**. The existing
