@@ -10,9 +10,17 @@ export type RestingSkipReason =
   /** The plan `remove`d it. An archived row is claimed by nothing, and writing a
    *  status onto it would be a claim about work that is gone. */
   | 'archived'
-  /** A person moved it out of `planning` while the plan was open. That is a
-   *  MANUAL RELEASE, and writing our answer over their move would undo a human
-   *  decision — the same rule `planTargetLockService.releaseOne` already keeps. */
+  /** It is no longer at `planning` — MOVED OUT BY A SYSTEM WRITE OR AFTER AN
+   *  EXPIRED LEASE. The name predates `agent-authored-plans.md` AMENDMENT 21
+   *  (MOTIR-6017), which overturned the "manual release" it was named for: while
+   *  an undecided plan holds a card, no hand move out of `planning` is accepted.
+   *  The arm is KEPT as a defensive one (§7) because it still has occupants — a
+   *  card moved by a system write or the status-delete admin reassign, a card whose
+   *  `generating` lease expired before it was moved, a card moved before the hold
+   *  deployed — and writing a resting status over any of them would put it where
+   *  nobody decided. The identifier is left alone: renaming it would touch every
+   *  call site for a rule change, not a symbol change. `releaseOne` keeps the same
+   *  guard for the same reason. */
   | 'moved_by_hand';
 
 export type RestingDecision =

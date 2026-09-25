@@ -467,6 +467,21 @@ describe('criterionRepoPaths — the repo column, per criterion', () => {
     ]);
   });
 
+  it('reports a path that ENDS a sentence without the full stop (MOTIR-6321)', () => {
+    // `.` is in the token class for extensions, so the sentence's own full stop
+    // is swallowed — the reported path must not carry it.
+    const md = withCriteria(
+      'the mirror changes `motir-ai/src/x.ts`.',
+      'the mirror changes motir-ai/src/x.ts. It asserts nothing else',
+      'the mirror changes motir-ai/src/x.ts...',
+    );
+    expect(criterionRepoPaths(md, REPOS)).toEqual([
+      { path: 'motir-ai/src/x.ts', repo: 'motir-ai', criterionIndex: 1 },
+      { path: 'motir-ai/src/x.ts', repo: 'motir-ai', criterionIndex: 2 },
+      { path: 'motir-ai/src/x.ts', repo: 'motir-ai', criterionIndex: 3 },
+    ]);
+  });
+
   it('yields nothing for an empty body, a body with no AC heading, or no candidates', () => {
     expect(criterionRepoPaths(null, REPOS)).toEqual([]);
     expect(criterionRepoPaths('', REPOS)).toEqual([]);

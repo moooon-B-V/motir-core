@@ -1,4 +1,4 @@
-import { Prisma, type PlanTargetLock } from '@/generated/prisma/client';
+import { Prisma, type Plan, type PlanTargetLock } from '@/generated/prisma/client';
 
 // Single Prisma operations on the `plan_target_lock` table (Story MOTIR-2786 ·
 // MOTIR-2787) — the lease behind the `planning` status lock. No business logic,
@@ -11,6 +11,19 @@ import { Prisma, type PlanTargetLock } from '@/generated/prisma/client';
 // transaction that then re-binds per row. A `tx ?? db` arm would have no caller
 // at all, which is how a repository file loses branch coverage against its 90%
 // gate the moment the last test call site binds.
+/** A plan-held lease with the plan columns the board's plan-hold read needs. */
+export interface PlanHeldLockRow {
+  workItemId: string;
+  planId: string | null;
+  expiresAt: Date;
+  plan: {
+    status: Plan['status'];
+    title: string | null;
+    sessionId: string | null;
+    session: { targetKeys: string[] } | null;
+  } | null;
+}
+
 export const planTargetLockRepository = {
   async create(
     data: Prisma.PlanTargetLockUncheckedCreateInput,
@@ -51,6 +64,72 @@ export const planTargetLockRepository = {
       where: { planId },
       orderBy: { workItemId: 'asc' },
     });
+  },
+
+  /**
+   * The PLAN-held leases on a SET of work items, each joined to the columns of its
+   * plan that `planHoldFor` and a plan's label read (Story MOTIR-6017 · MOTIR-6268)
+   * — the board projection's ONE batched plan-hold read. A SESSION-held lease
+   * (`planId` null) is not returned: it never holds (AMENDMENT 21 §1).
+   */
+  async listPlanHeldByWorkItemIds(
+    workItemIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanHeldLockRow[]> {
+    return tx.planTargetLock.findMany({
+      where: { workItemId: { in: [...workItemIds] }, planId: { not: null } },
+      select: {
+        workItemId: true,
+        planId: true,
+        expiresAt: true,
+        plan: {
+          select: {
+            status: true,
+            title: true,
+            sessionId: true,
+            session: { select: { targetKeys: true } },
+          },
+        },
+      },
+    });
+  },
+
+  /**
+   * How many LIVE items of a project each plan's leases name (MOTIR-6268) — one
+   * grouped count. An item counts when it is not archived and is at
+   * `workItemStatus`; a lease of a plan in `leasedPlanIds` counts only while it
+   * runs past `leaseAfter`, every other plan's lease counts regardless (the
+   * caller decides which plans hold by lease — this layer only filters).
+   */
+  async countByPlanIds(
+    args: {
+      workspaceId: string;
+      projectId: string;
+      workItemStatus: string;
+      planIds: readonly string[];
+      leasedPlanIds: readonly string[];
+      leaseAfter: Date;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, number>> {
+    if (args.planIds.length === 0) return new Map();
+    const leased = new Set(args.leasedPlanIds);
+    const always = args.planIds.filter((id) => !leased.has(id));
+    const rows = await tx.planTargetLock.groupBy({
+      by: ['planId'],
+      where: {
+        workspaceId: args.workspaceId,
+        projectId: args.projectId,
+        workItem: { status: args.workItemStatus, archivedAt: null },
+        OR: [
+          { planId: { in: always } },
+          { planId: { in: [...leased] }, expiresAt: { gt: args.leaseAfter } },
+        ],
+      },
+      _count: { _all: true },
+    });
+    // `planId IN (…)` above: a grouped row's `planId` is never null here.
+    return new Map(rows.map((row) => [row.planId as string, row._count._all]));
   },
 
   async update(

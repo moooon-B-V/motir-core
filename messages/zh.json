@@ -657,7 +657,8 @@
       "MISSING_ARTIFACT_EVIDENCE": "“部署”类型的工作项必须先有评论记录已发布的产物，才能关闭——版本号（1.4.0）、镜像摘要（sha256:…）或完整性哈希（sha512-…）均可。如果该交付确实没有可记录的标识，请添加以“NO ARTIFACT:”开头并写明原因的评论。",
       "CONTAINER_HAS_OPEN_CHILDREN": "该工作项还有子项尚未达到“已实现”，因此无法进入该状态。父项处于该状态，即声明其下的全部工作都已构建完成，其拉取请求也是基于这一声明才打开的。请先完成这些子项、把已不属于本次范围的子项移到别处，或将该工作项移到“已完成”——那是有意地一并关闭它们，而不是作为副作用。",
       "APPROVAL_GATE_PENDING": "该状态无法直接设置——此工作项有一个待处理的审批，批准它才会完成这一移动。其他移动仍然可以进行。",
-      "APPROVAL_GATE_PENDING_MERGE": "该状态无法直接设置——此工作项有未合并的拉取请求，合并它才会完成这一移动。其他移动仍然可以进行。"
+      "APPROVAL_GATE_PENDING_MERGE": "该状态无法直接设置——此工作项有未合并的拉取请求，合并它才会完成这一移动。其他移动仍然可以进行。",
+      "PLAN_TARGET_HELD": "计划未决定前无法更改状态——一个计划正在改写此工作项。请批准或拒绝该计划，或撤回指向此工作项的提议。"
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "只有项目管理员才能编辑工作流。",
@@ -3840,7 +3841,12 @@
     "noActiveSprintTitle": "没有进行中的 Sprint",
     "noActiveSprintDescription": "此看板当前没有进行中的 Sprint。在待办列表中规划并开始一个 Sprint，其事项将在此处的工作流列中显示。",
     "noActiveSprintCta": "前往待办列表",
-    "announcementHeld": "{key} 已退回。{line}"
+    "announcementHeld": "{key} 已退回。{line}",
+    "announcementPlanHeld": "{key} 已退回。它由 {plan} 占用。{line}",
+    "planHold": {
+      "marker": "计划 · {name}",
+      "siblings": "{count, plural, =0 {此面板上没有其他工作项属于该计划。} other {此面板上还有 # 个工作项属于该计划。}}"
+    }
   },
   "ready": {
     "heading": "可开始",
@@ -8783,7 +8789,16 @@
       },
       "reviewAndApprove": "审阅并批准",
       "needsApproval": "需要审批",
-      "movesOnMerge": "合并后变更"
+      "movesOnMerge": "合并后变更",
+      "planHeld": "计划未决定前无法更改状态。",
+      "planState": {
+        "generating": "Motir AI 正在撰写该计划。",
+        "planned": "该计划正在等待审批。",
+        "stale": "该计划需要先处理，然后才能批准。"
+      },
+      "reviewPlan": "审阅计划",
+      "planHeldOption": "计划占用中",
+      "planAndGate": "该工作项还有一项<strong>{decision}</strong>在等待——计划决定后才能处理。"
     },
     "decision": {
       "kindLabel": "决策",

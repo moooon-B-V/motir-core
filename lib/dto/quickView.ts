@@ -1,5 +1,6 @@
 import type { HeldTransitionDTO, PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
   ExecutorDto,
@@ -71,6 +72,13 @@ export interface QuickViewData {
    * move.
    */
   heldTransitions?: HeldTransitionDTO[];
+  /**
+   * The undecided PLAN holding the card at Planning (Story MOTIR-6017 · MOTIR-6267),
+   * read by `planTargetLockService.readPlanHold` — every move locked, said on the
+   * status field with a Review plan door. `null` when none holds it; absent on a
+   * PROPOSAL, which has no status to move.
+   */
+  planHold?: PlanHoldDTO | null;
   /**
    * The work item's INTERNAL id (cuid) — not the `identifier`. Both write paths
    * the editable rail uses are keyed by it: `updateIssueAction` and

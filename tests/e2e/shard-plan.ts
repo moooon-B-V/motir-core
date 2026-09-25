@@ -657,6 +657,12 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'plan-change-planner-turn.spec.ts': 7.6,
   'plan-decision-permission.spec.ts': 4.5,
   'plan-detail-refined.spec.ts': 10.0,
+  // MOTIR-6281 — a brand-new spec, ESTIMATED rather than measured: one
+  // `seedPlanShapes` (the bulk of `plan-shapes.spec.ts`'s 14.0 s), one sign-in and
+  // one plan-page load at two widths. Rounded UP, because under-estimating
+  // unbalances the bin-packer. Re-measure from the first green CI run that
+  // includes it.
+  'plan-detail-narrow.spec.ts': 14.0,
   'plan-proposal-correction.spec.ts': 4.4,
   'plan-shapes.spec.ts': 14.0,
   'plan-timeline.spec.ts': 14.0,

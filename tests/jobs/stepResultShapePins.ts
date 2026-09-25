@@ -432,20 +432,20 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/watcherNotify.ts',
     shape: '{ notifiedUserIds: Array<string> }',
   },
-  '`recompute-parent-v2-${i}`': {
+  '`recompute-parent-v3-${i}`': {
     file: 'lib/jobs/definitions/statusDerivation.ts',
     shape:
-      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
   },
-  'recompute-parent-v2': {
+  'recompute-parent-v3': {
     file: 'lib/jobs/definitions/statusDerivation.ts',
     shape:
-      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
   },
-  'roll-up-parent-v2': {
+  'roll-up-parent-v3': {
     file: 'lib/jobs/definitions/statusDerivation.ts',
     shape:
-      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
   },
 };
 
@@ -491,6 +491,27 @@ export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
     supersededBy: 'reconcile-open-deliveries-v3',
     reason:
       'MOTIR-5838 added `promoted` to the reconcile summary — the sweep now also repairs a card whose recorded CHECK SET is wrong (a `pending` row left behind by a lost completion, which folds the pull request to `running` for ever), and counts that separately because it is a third repair, distinct from a lost merge and a missing gate. A memo written under the old id carries the narrower shape. Every limb of the step is a read or an idempotent repair — `reconcileGatesFor` only raises what is missing, the host check-set read is a read, `settlePending` is guarded on the row still reading `pending` so a second pass matches nothing, and `promoteIfCiAlreadyGreen` moves only a card at `implemented` — so re-executing it under the new id on a resumed run is safe, which is why the answer is a bump rather than a boundary guard on the replayed value.',
+  },
+  '`recompute-parent-v2-${i}`': {
+    shape:
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+    supersededBy: '`recompute-parent-v3-${i}`',
+    reason:
+      'MOTIR-6265 added `plan_held` to the parent rollup’s outcome union (the plan hold: a parent an UNDECIDED plan is rewriting is not the derivation’s to move, `agent-authored-plans.md` AMENDMENT 21 §5(b)). A memo written under the old id carries the narrower shape; the step is an idempotent derivation, so re-executing it under the new id on a resumed run is safe.',
+  },
+  'recompute-parent-v2': {
+    shape:
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+    supersededBy: 'recompute-parent-v3',
+    reason:
+      'MOTIR-6265 added `plan_held` to the parent rollup’s outcome union (the plan hold: a parent an UNDECIDED plan is rewriting is not the derivation’s to move, `agent-authored-plans.md` AMENDMENT 21 §5(b)). A memo written under the old id carries the narrower shape; the step is an idempotent derivation, so re-executing it under the new id on a resumed run is safe.',
+  },
+  'roll-up-parent-v2': {
+    shape:
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+    supersededBy: 'roll-up-parent-v3',
+    reason:
+      'MOTIR-6265 added `plan_held` to the parent rollup’s outcome union (the plan hold: a parent an UNDECIDED plan is rewriting is not the derivation’s to move, `agent-authored-plans.md` AMENDMENT 21 §5(b)). A memo written under the old id carries the narrower shape; the step is an idempotent derivation, so re-executing it under the new id on a resumed run is safe.',
   },
   'roll-up-parent': {
     shape:

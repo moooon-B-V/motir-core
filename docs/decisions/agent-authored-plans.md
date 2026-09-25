@@ -3544,3 +3544,280 @@ append and at `update_plan_proposal`, never at approve: a plan persisted before 
 only the keys the merge already kept, and refusing at approve would put the author's mistake in
 front of a reviewer who cannot fix it. The MCP `patchSchema` stays `.passthrough()`, so the refusal
 is the SERVICE's and every door that appends a patch gets it.
+
+---
+
+## AMENDMENT 21 — an UNDECIDED plan OWNS its parked cards' status: the manual release is overturned (story MOTIR-6017 · MOTIR-6262, 2026-09-25)
+
+**The gap.** AMENDMENT 16 gave a plan the power to PARK every committed target it names, and gave
+the DECISION the power to give each one back. It did not make the park hold. `planning` keeps both
+claim doors shut, but nothing keeps a PERSON out: `workItemsService.applyStatusTransition` never
+reads `plan_target_lock`, so a parked card can be dragged to In Progress on the board, edited on the
+item page, or moved through `transition_status` and the REST v1 transition, at any point while the
+plan that is rewriting it waits for a reviewer.
+
+D8 recorded that as a CHOICE rather than an omission:
+
+> It stays CONDITIONAL on the card still sitting at `planning`: a person who moved it out by hand
+> has released it themselves, and writing a remembered status over their move would undo a human
+> decision.
+
+**That sentence is OVERTURNED, on 2026-09-25, for story MOTIR-6017.** Its warrant was about the
+RELEASE — not writing a status over a move somebody made — and it was right about that. What it did
+not settle is whether the move should have been available at all. It should not: a card an
+undecided plan is rewriting can be moved to In Progress, claimed and BUILT IN ITS OLD SHAPE while
+the new shape waits for approval, and whoever then approves the plan finds the work already done
+wrong. The park is worth exactly as much as the guard behind it, and until now there was none.
+
+D8's release behaviour is otherwise unchanged, and §7 records what becomes of the arm that sentence
+justified.
+
+### §1 — THE HOLD, as one predicate
+
+A work item is **HELD** when all three are true:
+
+1. its status is `planning`;
+2. a `plan_target_lock` row names it with a **non-null `planId`**;
+3. that plan's status is **undecided** — `generating`, `planned` or `stale`.
+
+**`stale` is in the set**, and it is the member most easily left out. `prisma/schema.prisma`'s own
+doc comment on `PlanStatus` settles it: a `stale` plan is _"NOT terminal and NOT decided: the plan is
+live and awaiting action, and its exits are the drift reversing (back to `planned`) or a reviewer
+declining it."_ A plan waiting for a person to act is a plan whose targets are still being rewritten.
+
+Two cases are **excluded by name**, because each looks held and is not:
+
+- **An EXPIRED lease on a `generating` plan does not hold.** The sweep is about to release it (D9),
+  and a lock whose own service has already declared the author dead should not outrank a person.
+- **A SESSION-held lock never holds** — `sessionId` set, `planId` null. This is D8's own session
+  clause and MOTIR-2425's rule, unchanged: a conversation is not a decision about the card. A card
+  parked by a planning conversation that has not produced a plan stays movable by hand.
+
+### §2 — WHAT IS REFUSED, and with what
+
+**Every NON-SYSTEM transition of a held card to any other status, on every door.** Not a selected
+list of doors — the refusal is raised inside `applyStatusTransition`, which is the one authority
+every status write passes through, so a door added later inherits it.
+
+The refusal is one typed error, **`PLAN_TARGET_HELD`**, and it joins
+`STATUS_TRANSITION_REFUSALS` (`lib/workItems/statusTransitionRefusals.ts`) — that module's own
+standing instruction is that _"ADDING A GATE TO `applyStatusTransition` MEANS ADDING ITS ERROR
+HERE"_, and it satisfies that list's membership rule: a human can clear it, by deciding the plan or
+withdrawing the proposal that names the card, and the answer is then different. So it is a REFUSAL
+and never a FAULT, and every background consumer that already tells the two apart inherits the
+right behaviour without an edit.
+
+**Its payload carries enough for a surface to draw the door without a second read:**
+
+| field        | what it is                                                  |
+| ------------ | ----------------------------------------------------------- |
+| `itemKey`    | the held card                                               |
+| `planId`     | the plan holding it                                         |
+| `planStatus` | `generating` · `planned` · `stale` — the second line's copy |
+| `sessionId`  | the plan's session, or null                                 |
+| `anchorKey`  | the plan's first anchor key                                 |
+
+`sessionId` and `anchorKey` are there because the door's destination is computed from them:
+`planRowDestination` (`lib/planning/planDestination.ts`, MOTIR-6043) sends a plan WITH a session to
+the planning surface and a plan WITHOUT one to `/plans/<id>`. A surface that had to fetch the plan
+to know where its own button goes would be making the refusal more expensive than the move.
+
+**Moves INTO `planning` are untouched.** The hold is about leaving.
+
+### §3 — THE EXITS, and there is no manual escape hatch
+
+Every way a held card leaves `planning` is one of the plan's own acts, and each is a
+`{ system: true }` write the hold exempts:
+
+| exit                                 | operation                               |
+| ------------------------------------ | --------------------------------------- |
+| **approve**                          | `materialize`'s resting pass (D6)       |
+| **decline**                          | `releaseForPlan` → `releaseOne` (D8)    |
+| **a withdraw that EMPTIES the plan** | the same release (D8)                   |
+| **a discarded close**                | the same release (D8)                   |
+| **the abandoned-plan sweep**         | `releaseExpired` (D9, as amended by §4) |
+
+**There is no manual escape hatch, and that is the decision rather than an oversight.** The way to
+free a card is to DECIDE the plan, or to withdraw the proposal that names it. A hatch would be a
+door back to exactly the state this amendment exists to close, and a person who wants the card back
+already has two ways to get it that leave the plan in a consistent state.
+
+### §4 — D9 AMENDED: a `stale` plan's lock never expires, like a `planned` one's
+
+`planTargetLockService.releaseExpired` exempts one status, at `if (planStatus === 'planned')` —
+**that is the line that changes**, to exempt `stale` as well.
+
+D9's `planned` clause is argued as _"it is waiting for a PERSON, a review queue has no deadline, and
+its release is the decision itself"_, and every word of that is true of a `stale` plan too. Without
+the change, a plan that went stale while a reviewer had it open would have its targets swept back to
+claimable after 24 hours — _"the exact failure the park exists to prevent"_, in D9's own words,
+reached by the one status D9 forgot to name. A `generating` plan still expires, which is the whole
+point of D9 and is unchanged.
+
+The code change ships in MOTIR-6265.
+
+### §5 — THE NON-SYSTEM CALLERS: a disposition for every file
+
+Status writes reach `workItemsService.applyStatusTransition` directly or through its `updateStatus`
+wrapper. The population is:
+
+```sh
+git grep -ln -E "applyStatusTransition|updateStatus\(" origin/main -- lib app
+```
+
+**49 files** at `origin/main` `7f74fba8e`. The narrower `applyStatusTransition`-only grep returns
+**35** and is deliberately NOT the one used: it misses `automationEngineService`, which reaches the
+door through `updateStatus` and is one of the movers this section has to decide.
+
+Three dispositions, and every file gets exactly one. _"The rest are unaffected"_ is not a row.
+
+#### (a) REFUSED — a person's door. The move is declined and the surface says why.
+
+| file                                               | the door                                            |
+| -------------------------------------------------- | --------------------------------------------------- |
+| `app/(authed)/items/[key]/edit/actions.ts`         | the edit page                                       |
+| `app/api/v1/work-items/[key]/transitions/route.ts` | the REST v1 transition                              |
+| `lib/mcp/tools/transitionStatus.ts`                | MCP `transition_status`                             |
+| `lib/services/boardsService.ts`                    | the board drag                                      |
+| `lib/services/triageService.ts`                    | triage decline / merge-as-duplicate (`→ cancelled`) |
+| `lib/services/scopeClaimService.ts`                | the scope claim's per-member flip                   |
+| `app/api/%5Ftest/work-items/route.ts`              | the test-only transition route                      |
+
+The `/items` inline edit and the quick view reach the product through the same server action as the
+edit page, so they are that row rather than rows of their own. `triageService` and `scopeClaimService`
+are refused for the same reason as the rest and need no copy of their own: `planning` is already in
+the `in_progress` category, so the claim doors refuse a held card before this gate is reached, and
+triage's `→ cancelled` is a person deciding about a card a plan is mid-way through rewriting.
+
+#### (b) REFUSED, RECORDED AS AN OUTCOME — a background derivation. It logs a no-op and does NOT fail its job.
+
+| file                                        | what it derives                           |
+| ------------------------------------------- | ----------------------------------------- |
+| `lib/services/parentStatusRollupService.ts` | a container's status from its children    |
+| `lib/services/ciPromotion.ts`               | Implemented → In Review on green checks   |
+| `lib/services/changeRequestStatusSync.ts`   | the merge-driven flip                     |
+| `lib/services/mergeQueueExitService.ts`     | the queue-exit move                       |
+| `lib/services/repoSetCompletionService.ts`  | the repository-set completion flip        |
+| `lib/services/automationEngineService.ts`   | a project automation rule's status action |
+
+**This is the default for a background mover, and the reason is the hold's own reason:** each of
+these derives a status from the card's OLD shape, which is exactly what the plan is replacing. A
+derivation that cannot run is not an error — it is the system correctly declining to answer a
+question the plan has not finished asking.
+
+**They must RECORD rather than throw.** `PLAN_TARGET_HELD` is in `STATUS_TRANSITION_REFUSALS`
+(§2), so every consumer that already separates refusals from faults gets this for free;
+`changeRequestStatusSync` has an outcome vocabulary for precisely this shape and gains one more
+member. A background job that failed on a held card would turn a deliberate hold into a red job and
+a 500 on a successful delivery — the failure `statusTransitionRefusals.ts` was written to end.
+
+#### (c) NO WORK-ITEM STATUS WRITE — named once, with the reason.
+
+**A different entity's `updateStatus`** (the broad grep's cost, and the reason it is the right grep
+anyway): `lib/repositories/acceptanceEvidenceRepository.ts` · `lib/services/acceptanceEvidenceService.ts`
+(an evidence row) · `lib/repositories/publicAddressRepository.ts` · `lib/services/customDomainService.ts` ·
+`lib/services/publicAddressCertificatesService.ts` (a public address) ·
+`lib/repositories/workflowsRepository.ts` · `app/(authed)/settings/project/workflow/actions.ts`
+(a workflow status DEFINITION).
+
+**The door itself, not a caller of it:** `lib/services/workItemsService.ts` — `applyStatusTransition`
+and its `updateStatus` wrapper are where the gate is ADDED. Its two internal helpers
+(`reconcileChoiceGate`, `reconcileDecisionGate`) walk a card to review when a gate is raised and are
+`{ system: true }` reconciliations, exempt with the handlers in §6.
+
+**Reference only — a comment, a type, a permission map or a constant that names the symbol and
+writes nothing:** `lib/approvalGates/heldMoves.ts` · `lib/approvalGates/registry.ts` ·
+`lib/jobs/definitions/notificationFanIn.ts` · `lib/jobs/types.ts` · `lib/mcp/scopes.ts` ·
+`lib/mcp/toolPermissions.ts` · `lib/repositories/approvalGateRepository.ts` ·
+`lib/repositories/commentRepository.ts` · `lib/services/approvalGatesService.ts` ·
+`lib/services/choiceGateService.ts` · `lib/services/decisionConfirmationGateService.ts` ·
+`lib/services/plansService.ts` · `lib/services/pullRequestMergeabilityService.ts` ·
+`lib/services/workItemRepairService.ts` · `lib/workItems/provenanceBackfill.ts` ·
+`lib/workItems/statusLadder.ts` · `lib/workItems/statusTransitionRefusals.ts` ·
+`lib/workflows/defaultWorkflow.ts` · `lib/workflows/statusIntent.ts`.
+
+Two of those are reference rows that still take an edit, and they are called out so the next reader
+does not mistake "writes no status" for "needs no change":
+**`statusTransitionRefusals.ts`** gains `PlanTargetHeldError` (§2), and **`heldMoves.ts`** is the
+pure helper the gate-held surfaces already share, which the plan-held surface composes rather than
+re-derives.
+
+#### (d) EXEMPT — the plan's own acts and the system writes
+
+`lib/services/planTargetLockService.ts` (the park at `acquireForPlanWithin`, and the two release
+writes `releaseOne` / `restAdoptedTarget` — these ARE §3's exits) ·
+`lib/services/childStatusCascadeService.ts` (the `{ system: true }` downward cascade, which no
+interactive edge allows in the first place) · `lib/services/designEvidenceService.ts` (the publish's
+forward walk to In Review, a system write inside the publish transaction).
+
+#### (e) ⚠️ THE ONE BYPASS, named rather than discovered
+
+`lib/services/workflowsService.ts`'s status-DELETE reassign is, in its own words, **_"the ONE status
+write in the product that does not go through `workItemsService.applyStatusTransition`"_** — it
+reassigns every item off a custom status being deleted, walks no legal edges and runs no close-out
+gate, because deleting a status column is a workflow-ADMIN operation rather than a lifecycle event.
+
+**The hold does not reach it, and that is accepted.** A gate implemented inside
+`applyStatusTransition` cannot see a write that does not go through it, and the alternative —
+refusing an admin's status deletion because some card is parked — would leave the project unable to
+delete a column while any plan is open. It is recorded here because an amendment claiming _"every
+door"_ owes the reader the one door that is not covered, and because the next person to widen the
+hold will look for exactly this paragraph.
+
+### §6 — AN APPROVAL GATE'S DECIDE DOOR ON A HELD CARD IS REFUSED
+
+AMENDMENT 16 D3 decided that the park does NOT withdraw an `awaiting` approval gate: the park and
+the release are system writes, so `withdrawsPendingQuestion` returns false and the gate survives the
+whole park-and-release cycle. That leaves one question D3 did not ask — what happens when somebody
+presses that surviving gate's decide button while the card is held.
+
+**It is REFUSED**, for the gate handlers' status effects:
+`lib/approvalGates/acceptanceResultHandler.ts` · `decisionChoiceHandler.ts` ·
+`decisionConfirmationHandler.ts` · `designResultHandler.ts` · `pullRequestApprovalHandler.ts`.
+
+**The reason is the hold's reason, one level up: the gate's decision is about the shape the plan is
+replacing.** A person approving a design, accepting a decision or approving a pull request against a
+card an undecided plan is rewriting is answering a question whose subject is about to change. D3
+kept the question alive precisely because the plan may be DECLINED, in which case the card comes
+back exactly as it was and the gate is still the right question — so the gate waits for the plan,
+as the card does.
+
+**The decide door must then leave the gate `awaiting` rather than half-applying it.** A gate whose
+decision was recorded but whose status effect was refused is the worst of the three outcomes: it
+consumes the question without moving the work, and nothing afterwards asks it again. Where a handler
+cannot leave the gate untouched — where its record write and its status effect are not in one
+transaction it can abandon — **that is a finding to raise on MOTIR-6265 rather than a thing for its
+run to improvise**, and this sentence is what makes raising it the expected outcome rather than a
+deviation.
+
+### §7 — `restingStatus.ts`'s `moved_by_hand` reason is KEPT, as a defensive arm
+
+`restingStatusFor` (`lib/plans/restingStatus.ts`) returns `{ write: false, reason: 'moved_by_hand' }`
+for any target that is not sitting at `planning`, and its doc comment justifies that by the very
+sentence §1 overturns.
+
+**KEEP the arm; rewrite its PROSE.** After the hold, the name is a claim that is no longer true —
+nobody can move a held card by hand — but the BRANCH still has occupants, and a resting pass that
+met one with no arm for it would write a status over a card it knows nothing about:
+
+- a card moved by one of §5(d)'s **system writes**, or by §5(e)'s **admin reassign**;
+- a card whose **lock expired** on a `generating` plan (§1's first exclusion) and which was then
+  moved perfectly legitimately;
+- a card parked before this amendment deploys, moved out under the old rule, whose plan is decided
+  after it.
+
+So the reason is kept and re-described as **_"moved out by a system write or after an expired
+lease"_**. The identifier is left alone: renaming it would touch every call site and its test
+fixtures for a card that decided a rule, not a symbol.
+
+### What this amendment does NOT decide
+
+- **It does not re-open §11.5b.** `approval-gates.md` §11.5b's decision that a plan gate is never
+  addressed through the approval overlay is CITED, not amended; the Review plan door obeys it.
+- **It does not change which cards a plan parks, or where approve rests them.** D1, D2, D6 and D7
+  stand exactly as written.
+- **It does not decide what the status control DRAWS.** That is MOTIR-6263's design.
+- **It does not decide the runbook's text.** `motir-meta`'s _Park the target_ abandon instruction is
+  MOTIR-6266.
+- **It ships no code.** §2, §4, §5 and §6 are implemented by MOTIR-6265, and this record is what
+  that card builds to.

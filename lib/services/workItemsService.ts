@@ -67,6 +67,8 @@ import { asksTheConfirmQuestion } from '@/lib/approvalGates/decisionConfirmation
 import { handlerFor, isRegisteredGateKind } from '@/lib/approvalGates/registry';
 import { APPROVED_STATUS_KEY, heldMoves } from '@/lib/approvalGates/heldMoves';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { planTargetLockService, readPlanHoldWithin } from '@/lib/services/planTargetLockService';
+import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { pullRequestApprovalMembersService } from '@/lib/services/pullRequestApprovalMembersService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
@@ -119,6 +121,7 @@ import {
   MissingArtifactEvidenceError,
   ContainerHasOpenChildrenError,
   ApprovalGatePendingError,
+  PlanTargetHeldError,
   NoInitialStatusError,
   ReporterNotInWorkspaceError,
   NotEpicError,
@@ -3027,6 +3030,36 @@ export const workItemsService = {
         ctx.workspaceId,
       );
       if (!legal) throw new IllegalTransitionError(fromKey, toStatusKey);
+    }
+
+    // THE PLAN HOLD (Story MOTIR-6017 · MOTIR-6265; `docs/decisions/
+    // agent-authored-plans.md` AMENDMENT 21). A card an UNDECIDED plan has parked
+    // at `planning` is being rewritten by that plan, so no hand move out of
+    // `planning` is the person's to make until the plan is decided — EVERY
+    // target, not one (an approval gate owns one status; an open plan owns them
+    // all). The rule is stated once, in the pure `planHoldFor`, which the status
+    // control's up-front read (`planTargetLockService.readPlanHold`) shares.
+    //
+    //   • `opts.system` is EXEMPT: every exit is one of the plan's own system
+    //     writes — approve's resting pass, the release on decline / an emptying
+    //     withdraw / a discarded close (`releaseOne`, `restAdoptedTarget`) and the
+    //     abandoned-plan sweep (§3). There is no manual escape hatch.
+    //   • Moves INTO `planning` are untouched; only leaving is held.
+    //   • Both reads (`readPlanHoldWithin`) are on `tx`, under the item row lock
+    //     taken above. The plan's release locks the SAME row before it deletes the
+    //     lock row (`releaseOne` → `workItemRepository.lockById`), so a hand move
+    //     racing a decision either runs first and is refused, or runs after the
+    //     release from the rested status as an ordinary move — never a moved card
+    //     with a surviving lock row.
+    //
+    // Cost: paid only by a non-system move OUT of `planning` — one indexed read,
+    // plus the plan read when a plan lock exists.
+    if (!opts.system && fromKey === PLANNING_STATUS_KEY) {
+      const hold = await readPlanHoldWithin(
+        { id: workItemId, identifier: current.identifier, status: fromKey },
+        tx,
+      );
+      if (hold) throw new PlanTargetHeldError({ statusKey: toStatusKey, ...hold });
     }
 
     // THE APPROVAL-GATE GUARD (Story MOTIR-4887 · MOTIR-5526; ADR
@@ -6202,6 +6235,10 @@ export const workItemsService = {
     // The moves an approval HOLDS (Story MOTIR-4887 · MOTIR-5528) — the peek's
     // status field says so the way the detail page's does, from the same read.
     const heldTransitions = await approvalGatesService.listHeldTransitions(detail.item.id, ctx);
+    // The undecided PLAN holding the card at Planning (Story MOTIR-6017 · MOTIR-6267)
+    // — the peek's status field locks every move and says so with its Review plan
+    // door, from the same read the item page makes.
+    const planHold = await planTargetLockService.readPlanHold(detail.item.id, ctx);
     const view = toQuickViewData(
       detail,
       members,
@@ -6219,7 +6256,7 @@ export const workItemsService = {
       folderPath,
       designEvidence,
     );
-    return { ...view, heldTransitions, mergeMembers };
+    return { ...view, heldTransitions, planHold, mergeMembers };
   },
 
   /**

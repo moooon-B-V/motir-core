@@ -1238,6 +1238,20 @@ status **key** (e.g. `"in_progress"`) **or** its display **label** (e.g.
 `ILLEGAL_TRANSITION` error enriched with the **allowed targets** from the item's
 current status, so the agent can self-correct.
 
+Two refusals say the move is **held** rather than illegal — the edge exists, and
+the way out is a decision somebody makes in Motir, not a workflow edit:
+
+- `APPROVAL_GATE_PENDING` — an `awaiting` approval gate owns the target status
+  (MOTIR-5526). The message names whose decision it is; every other move stays
+  open.
+- `PLAN_TARGET_HELD` — the item sits at `planning` under an **undecided plan**
+  (`generating`, `planned` or `stale`), which is rewriting it, so **every** move
+  out of `planning` is refused until the plan is approved or declined, or the
+  proposal naming the item is withdrawn (MOTIR-6265;
+  `docs/decisions/agent-authored-plans.md` AMENDMENT 21). The message names the
+  plan and its state. A card parked by a planning SESSION with no plan is not
+  held.
+
 | Input    | Type   | Required | Notes                                    |
 | -------- | ------ | -------- | ---------------------------------------- |
 | `key`    | string | yes      | Work item identifier.                    |

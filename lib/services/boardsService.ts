@@ -40,6 +40,7 @@ import type {
   BoardColumnStatusDto,
   BoardDto,
   BoardFilterInput,
+  BoardPlanHoldSummaryDto,
   BoardProjectionDto,
   BoardSummaryDto,
   BoardSwimlaneDto,
@@ -53,6 +54,7 @@ import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   ApprovalGatePendingBoardMoveError,
+  PlanTargetHeldBoardMoveError,
   BoardColumnNotFoundError,
   BoardNotFoundError,
   ColumnNotEmptyError,
@@ -73,10 +75,12 @@ import {
   MissingArtifactEvidenceError,
   ContainerHasOpenChildrenError,
   ApprovalGatePendingError,
+  PlanTargetHeldError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
 import { WorkflowStatusNotFoundError } from '@/lib/workflows/errors';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
+import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { readProject } from '@/lib/workspaces/tenantRead';
 
 // Boards service (Story 3.1) — business logic for the board entity. It hosts
@@ -338,6 +342,7 @@ export const boardsService = {
         cap: resolveBoardIssueCap(),
         truncated: false,
         sprint: null,
+        planHolds: {},
       };
     }
 
@@ -393,6 +398,22 @@ export const boardsService = {
       { projectId, workItemIds: allRows.map((r) => r.id) },
       ctx,
     );
+
+    // The PLAN HOLD, up front (Story MOTIR-6017 · MOTIR-6268): which loaded cards an
+    // undecided plan holds at Planning, and per holding plan its label and held
+    // count. ONE batched lease read over the `planning` cards only (no read at all
+    // when the board holds none), through the same `planHoldFor` the move's refusal
+    // applies — the board draws the hold before anyone drags.
+    const planHoldRead = await planTargetLockService.readBoardPlanHolds(projectId, allRows, ctx);
+    const planHolds: Record<string, BoardPlanHoldSummaryDto> = {};
+    for (const [planId, plan] of planHoldRead.plans) {
+      planHolds[planId] = {
+        planId,
+        anchorKey: plan.anchorKey,
+        title: plan.title,
+        heldCount: plan.heldCount,
+      };
+    }
 
     // Swimlanes (Subtask 3.3.4). The union of the board's mapped column statuses
     // IS the board's card population, so lane membership (per loaded card) and
@@ -454,6 +475,7 @@ export const boardsService = {
         toBoardCardDto(r, {
           ready: readyById.get(r.id) ?? true,
           pendingDecision: pendingById.get(r.id) ?? null,
+          planHold: planHoldRead.byItemId.get(r.id) ?? null,
           swimlaneKey: swimlaneKeyByCard.get(r.id),
           statusCategory: categoryByStatusKey.get(r.status) ?? null,
         }),
@@ -476,6 +498,7 @@ export const boardsService = {
       cap,
       truncated: boardTotal > cap,
       sprint,
+      planHolds,
     };
   },
 
@@ -674,6 +697,11 @@ export const boardsService = {
           await approvalGatesService.describePendingRefusal(err, ctx),
         );
       }
+      // A drag of a card an undecided plan holds (MOTIR-6265). Its payload is
+      // already complete, so nothing is read here.
+      if (err instanceof PlanTargetHeldError) {
+        throw new PlanTargetHeldBoardMoveError(err.message, err.payload);
+      }
       throw err;
     }
     const { row, appliedStatus, appliedStatusCategory, transition, columnName, swimlaneGroupBy } =
@@ -716,10 +744,18 @@ export const boardsService = {
       { projectId: row.projectId, workItemIds: [row.id] },
       ctx,
     );
+    // …and its plan hold (MOTIR-6268): a rank change inside Planning is never
+    // refused, and the card must come back still wearing its plan footer.
+    const { byItemId: planHoldById } = await planTargetLockService.readBoardPlanHolds(
+      row.projectId,
+      [row],
+      ctx,
+    );
     return {
       card: toBoardCardDto(row, {
         ready,
         pendingDecision: pendingById.get(row.id) ?? null,
+        planHold: planHoldById.get(row.id) ?? null,
         swimlaneKey: swimlaneKeyByCard.get(row.id),
         statusCategory: appliedStatusCategory,
       }),

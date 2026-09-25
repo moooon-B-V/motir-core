@@ -20,6 +20,7 @@ import { resolveDeliveredWorkItems } from './changeRequestWorkItems';
 import { recomputeWorkItemCiState } from './deliveryVerdict';
 import { workItemsService } from './workItemsService';
 import { reconcileGatesFor } from './gateSetFor';
+import { readPlanHoldWithin } from './planTargetLockService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/errors';
 
@@ -361,6 +362,12 @@ export async function settleUnlandedOutcome(
   tx: Prisma.TransactionClient,
 ): Promise<{ transition: AppliedMove; raised: boolean }> {
   if (landingClass === 'landed') return { transition: null, raised: false };
+  // THE PLAN HOLD (MOTIR-6265; `agent-authored-plans.md` AMENDMENT 21 §5(b)). This
+  // move is a SYSTEM write, so the funnel's refusal cannot see it — and it would
+  // walk a card an undecided plan is rewriting out of `planning` on the strength of
+  // its OLD pull request. Declined here, for every caller at once: nothing moves
+  // and nothing is re-asked until the plan is decided.
+  if (await readPlanHoldWithin(item, tx)) return { transition: null, raised: false };
   const target = landingClass === 'cant_land' ? UNLANDED_STATUS.cantLand : UNLANDED_STATUS.reask;
   let transition: AppliedMove = null;
   if (item.status !== target) {

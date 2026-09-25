@@ -657,7 +657,8 @@
       "MISSING_ARTIFACT_EVIDENCE": "A \"deploy\" work item can't be closed until a comment on it records the artifact it published — a version (1.4.0), a registry digest (sha256:…) or an integrity hash (sha512-…). If this deliverable genuinely has no identifier, add a comment beginning \"NO ARTIFACT:\" with the reason.",
       "CONTAINER_HAS_OPEN_CHILDREN": "This item can't reach that status while children of its own have not been implemented. A parent there claims everything under it is built, and its pull request is opened on that claim. Land the children, re-parent them out if they are no longer in scope, or move the item to Done — which completes them deliberately rather than as a side effect.",
       "APPROVAL_GATE_PENDING": "This status can't be set directly — an approval on this item is waiting, and approving it is what makes this move. Every other move is still open.",
-      "APPROVAL_GATE_PENDING_MERGE": "This status can't be set directly — the item has an open pull request, and merging it is what makes this move. Every other move is still open."
+      "APPROVAL_GATE_PENDING_MERGE": "This status can't be set directly — the item has an open pull request, and merging it is what makes this move. Every other move is still open.",
+      "PLAN_TARGET_HELD": "Status can't be changed while a plan is open — a plan is rewriting this item. Approve or decline the plan, or withdraw the proposal that names this item."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Only a project admin can edit the workflow.",
@@ -3840,7 +3841,12 @@
     "noActiveSprintTitle": "No active sprint",
     "noActiveSprintDescription": "This board has no sprint in progress. Plan and start a sprint from the backlog, and its work items will appear here in workflow columns.",
     "noActiveSprintCta": "Go to Backlog",
-    "announcementHeld": "{key} returned. {line}"
+    "announcementHeld": "{key} returned. {line}",
+    "announcementPlanHeld": "{key} returned. It is held by {plan}. {line}",
+    "planHold": {
+      "marker": "Plan · {name}",
+      "siblings": "{count, plural, =0 {No other item on this board is in this plan.} one {# other item on this board is in this plan.} other {# other items on this board are in this plan.}}"
+    }
   },
   "ready": {
     "heading": "Ready to start",
@@ -8787,7 +8793,16 @@
       },
       "reviewAndApprove": "Review & approve",
       "needsApproval": "needs approval",
-      "movesOnMerge": "moves on merge"
+      "movesOnMerge": "moves on merge",
+      "planHeld": "Status can't be changed while a plan is open.",
+      "planState": {
+        "generating": "Motir AI is still writing this plan.",
+        "planned": "This plan is waiting for approval.",
+        "stale": "This plan needs attention before it can be approved."
+      },
+      "reviewPlan": "Review plan",
+      "planHeldOption": "held by plan",
+      "planAndGate": "A <strong>{decision}</strong> is waiting on this item too — it can be decided once the plan is."
     },
     "decision": {
       "kindLabel": "Decision",

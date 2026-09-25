@@ -362,6 +362,8 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
     ready?.heldTransitions,
     ready?.workflow.statuses ?? [],
     edit.effective?.status ?? ready?.status,
+    // …and the undecided PLAN holding it at Planning (MOTIR-6267).
+    ready?.planHold,
   );
   const labelEdit = useLabelEditing({
     workItemId: ready?.id ?? '',
@@ -994,6 +996,10 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                       if (res.ok) statusHeld.onMoved(toStatusKey);
                       else if (res.code === 'APPROVAL_GATE_PENDING' && res.gate) {
                         statusHeld.onRefused(toStatusKey, res.gate);
+                      } else if (res.code === 'PLAN_TARGET_HELD' && res.plan) {
+                        // The rail reverts the optimistic value; the plan's line
+                        // says why, with its Review plan door (MOTIR-6267).
+                        statusHeld.onPlanHeldRefused(res.plan);
                       }
                       return res;
                     },
@@ -1011,9 +1017,13 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           </EditableRailField>
           {/* The held message under the status field (MOTIR-5528; design panel 13
               of quick-view.mock.html) — visible without opening the picker. */}
-          {statusHeld.lines.length > 0 ? (
+          {statusHeld.lines.length > 0 || statusHeld.plan ? (
             <div className="px-(--spacing-control-x)">
-              <StatusHeldNotice itemKey={view.identifier} lines={statusHeld.lines} />
+              <StatusHeldNotice
+                itemKey={view.identifier}
+                lines={statusHeld.lines}
+                plan={statusHeld.plan}
+              />
             </div>
           ) : null}
 

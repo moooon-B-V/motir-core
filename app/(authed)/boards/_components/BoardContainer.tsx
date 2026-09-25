@@ -48,10 +48,11 @@ import { NoActiveSprintState } from './NoActiveSprintState';
 import { OverCapBanner } from './OverCapBanner';
 import { SprintHeader } from './SprintHeader';
 import { SwimlaneBoard } from './SwimlaneBoard';
-import { BoardHeldRefusalProvider, type BoardHeldRefusal } from './BoardHeldRefusal';
+import { BoardHeldRefusalProvider, planHoldName, type BoardHeldRefusal } from './BoardHeldRefusal';
 import { heldLineFromRefusal, readHeldRefusal } from '@/components/issues/heldRefusal';
 import { heldSentence } from '@/components/issues/StatusHeldNotice';
 import type { ApprovalGatePendingPayloadDTO } from '@/lib/dto/approvalGate';
+import type { PlanHoldDTO } from '@/lib/dto/plans';
 import { UnmappedStatusesTray } from './UnmappedStatusesTray';
 import {
   cardIndex,
@@ -427,6 +428,7 @@ export function BoardContainer({
           assigneeNameById={assigneeNameById}
           canEdit={canEdit}
           columnPoints={columnPoints}
+          projectName={projectName}
         />
       )}
     </div>
@@ -495,6 +497,7 @@ function BoardDnd({
   assigneeNameById,
   canEdit,
   columnPoints,
+  projectName = '',
 }: {
   board: BoardProjectionDto;
   assigneeNameById: Map<string, string>;
@@ -505,6 +508,8 @@ function BoardDnd({
    * "N pts" pill when its entry is present.
    */
   columnPoints: Record<string, number> | null;
+  /** The plan footer's last naming fallback (MOTIR-6268's `{name}` rule). */
+  projectName?: string;
 }) {
   const t = useTranslations('boards');
   const { toast } = useToast();
@@ -524,15 +529,49 @@ function BoardDnd({
   const [held, setHeld] = useState<BoardHeldRefusal | null>(null);
   const [heldAnnouncement, setHeldAnnouncement] = useState('');
   const closeHeld = useCallback(() => setHeld(null), []);
+  // THE PLAN HOLD's sibling highlight (MOTIR-6268): the plan whose items are
+  // outlined — a hovered / focused footer's, else an open plan refusal's. The
+  // card body's own hover never sets it, so a pointer crossing a lane never flashes.
+  const [hoverPlanId, setHoverPlanId] = useState<string | null>(null);
+  const highlightedPlanId = hoverPlanId ?? (held?.kind === 'plan' ? held.plan.planId : null);
   const showHeld = useCallback(
     (card: BoardCardDto, statusLabel: string, gate: ApprovalGatePendingPayloadDTO) => {
       const line = heldLineFromRefusal(statusLabel, statusLabel, gate);
-      setHeld({ workItemId: card.id, itemKey: gate.itemKey, line });
+      setHeld({ kind: 'gate', workItemId: card.id, itemKey: gate.itemKey, line });
       const { key, values } = heldSentence(line, tHeld(`decisionNoun.${line.kind}`));
       const sentence = tHeld.markup(key, { ...values, strong: (chunks: string) => chunks });
       setHeldAnnouncement(t('announcementHeld', { key: card.identifier, line: sentence }));
     },
     [t, tHeld],
+  );
+  // A PLAN refusal (MOTIR-6268): the item returns and the refusal opens in its own
+  // plan footer, naming the plan and how many OTHER items it holds. The count is
+  // the projection's server-side one; a plan the projection did not name (the
+  // board was read before the hold) falls back to the loaded cards.
+  const showPlanHeld = useCallback(
+    (card: BoardCardDto, plan: PlanHoldDTO, loaded: BoardColumnDto[]) => {
+      const summary = board.planHolds[plan.planId];
+      const siblings = summary
+        ? Math.max(summary.heldCount - 1, 0)
+        : loaded
+            .flatMap((col) => col.cards)
+            .filter((c) => c.id !== card.id && c.planHold?.planId === plan.planId).length;
+      setHeld({ kind: 'plan', workItemId: card.id, itemKey: plan.itemKey, plan, siblings });
+      const { name } = planHoldName(plan, board.planHolds, projectName);
+      const line = [
+        tHeld('planHeld'),
+        tHeld(`planState.${plan.planStatus}`),
+        t('planHold.siblings', { count: siblings }),
+      ].join(' ');
+      setHeldAnnouncement(
+        t('announcementPlanHeld', {
+          key: card.identifier,
+          plan: t('planHold.marker', { name }),
+          line,
+        }),
+      );
+    },
+    [board.planHolds, projectName, t, tHeld],
   );
   // Focus lands on Review & approve when the line carries one, else stays on the
   // returned card (design panel 2b, keyboard).
@@ -708,10 +747,12 @@ function BoardDnd({
           return;
         }
         const key = args.card.identifier;
-        const heldGate = await readHeldRefusal(res);
-        if (heldGate) {
+        const heldRefusal = await readHeldRefusal(res);
+        if (heldRefusal) {
           setColumns(args.snapshot);
-          showHeld(args.card, args.toColName, heldGate);
+          if (heldRefusal.code === 'PLAN_TARGET_HELD')
+            showPlanHeld(args.card, heldRefusal.plan, columnsRef.current);
+          else showHeld(args.card, args.toColName, heldRefusal.gate);
           return;
         }
         if (res.status === 409) {
@@ -728,7 +769,7 @@ function BoardDnd({
         snapBack(args.snapshot, t('moveErrorDescription', { key: args.card.identifier }));
       }
     },
-    [board.boardId, snapBack, showHeld, t],
+    [board.boardId, snapBack, showHeld, showPlanHeld, t],
   );
 
   // SWIMLANE transition (column axis) — INDEPENDENT revert: on rejection, move
@@ -777,9 +818,11 @@ function BoardDnd({
         }
         const key = args.card.identifier;
         revert();
-        const heldGate = await readHeldRefusal(res);
-        if (heldGate) {
-          showHeld(args.card, args.toColName, heldGate);
+        const heldRefusal = await readHeldRefusal(res);
+        if (heldRefusal) {
+          if (heldRefusal.code === 'PLAN_TARGET_HELD')
+            showPlanHeld(args.card, heldRefusal.plan, columnsRef.current);
+          else showHeld(args.card, args.toColName, heldRefusal.gate);
           return;
         }
         const description =
@@ -798,7 +841,7 @@ function BoardDnd({
         });
       }
     },
-    [board.boardId, showHeld, t, toast],
+    [board.boardId, showHeld, showPlanHeld, t, toast],
   );
 
   // SWIMLANE reassign (lane axis) — reuses the EXISTING 2.5 field-update action.
@@ -1145,7 +1188,16 @@ function BoardDnd({
   );
 
   return (
-    <BoardHeldRefusalProvider value={{ held, close: closeHeld }}>
+    <BoardHeldRefusalProvider
+      value={{
+        held,
+        close: closeHeld,
+        planHolds: board.planHolds,
+        projectName,
+        highlightedPlanId,
+        onPlanFooterHover: setHoverPlanId,
+      }}
+    >
       {/* The held refusal's announcement (design panel 2b) — beside dnd-kit's own
         live region, which narrates the drag itself. */}
       <div aria-live="polite" className="sr-only" data-testid="board-held-announcement">

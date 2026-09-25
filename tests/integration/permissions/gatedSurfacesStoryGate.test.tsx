@@ -365,7 +365,9 @@ describe('the backlog and the board', () => {
     expect(screen.queryByTestId('backlog-row-check-GAT-1')).toBeNull();
     expect(screen.queryByTestId('backlog-row-actions-GAT-1')).toBeNull();
     expect(screen.queryByTestId('create-sprint')).toBeNull();
-    expect(screen.getByTestId('create-issue-backlog').getAttribute('aria-disabled')).toBe('true');
+    expect((await screen.findByTestId('create-issue-backlog')).getAttribute('aria-disabled')).toBe(
+      'true',
+    );
     expect(screen.queryAllByRole('button', { name: 'Column actions' })).toHaveLength(0);
     const group = screen.getByRole('group', { name: 'Swimlane group by' });
     expect(
@@ -382,7 +384,7 @@ describe('the backlog and the board', () => {
     expect(await screen.findByTestId('backlog-row-actions-GAT-1')).toBeTruthy();
     expect(screen.getByTestId('backlog-row-check-GAT-1')).toBeTruthy();
     expect(screen.getByTestId('create-sprint')).toBeTruthy();
-    expect(screen.getByTestId('create-issue-backlog').tagName).toBe('BUTTON');
+    expect((await screen.findByTestId('create-issue-backlog')).tagName).toBe('BUTTON');
     expect(screen.queryByText(/Read-only access — you can view this board/)).toBeNull();
   });
 });

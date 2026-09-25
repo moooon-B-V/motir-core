@@ -10,7 +10,11 @@ import {
   presentWorkItemDetail,
 } from '@/lib/api/v1/workItems/schema';
 import { readChildDependencyEdges } from '@/lib/api/v1/workItems/childEdges';
-import { ApprovalGatePendingError, IllegalTransitionError } from '@/lib/workItems/errors';
+import {
+  ApprovalGatePendingError,
+  IllegalTransitionError,
+  PlanTargetHeldError,
+} from '@/lib/workItems/errors';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { commentsService } from '@/lib/services/commentsService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -79,6 +83,15 @@ export const POST = withV1Route<{ key: string }>({ permission: 'work_item:edit' 
           error: err.message,
           gate: await approvalGatesService.describePendingRefusal(err, ctx.service),
         },
+        { status: 422 },
+      );
+    }
+    // An undecided plan holds the card at Planning (MOTIR-6265). The same
+    // additive-field treatment: WHICH plan, in which state, and where it lives —
+    // the payload every door carries, complete without a second read.
+    if (err instanceof PlanTargetHeldError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message, plan: err.payload },
         { status: 422 },
       );
     }

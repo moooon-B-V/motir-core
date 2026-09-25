@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import * as plansModule from '@/lib/services/plansService';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import {
   PlanGrammarError,
@@ -72,10 +73,21 @@ async function seedItem(
 }
 
 /** Walk an item to `done` along the legal workflow path (no direct edge). */
+/**
+ * Drive a PARKED target to a terminal status the way it can still get there while
+ * its plan waits — a SYSTEM write (a merge's cascade, a parent's completion). A hand
+ * move out of `planning` is refused while an undecided plan holds the card
+ * (`agent-authored-plans.md` AMENDMENT 21, MOTIR-6265), so the drift this suite
+ * exists for now arrives only through one of these.
+ */
+async function systemSetStatus(fx: WorkItemFixture, id: string, status: string): Promise<void> {
+  await withWorkspaceContext(fx.ctx, (tx) =>
+    workItemsService.applyStatusTransition(id, status, fx.ctx, tx, { system: true }),
+  );
+}
+
 async function markDone(fx: WorkItemFixture, id: string): Promise<void> {
-  await workItemsService.updateStatus(id, 'in_progress', fx.ctx);
-  await workItemsService.updateStatus(id, 'in_review', fx.ctx);
-  await workItemsService.updateStatus(id, 'done', fx.ctx);
+  await systemSetStatus(fx, id, 'done');
 }
 
 /** Create a plan, append the proposals, and mark it `planned`. */
@@ -466,7 +478,7 @@ describe('the confirmation gate — done-work immutability', () => {
     const fx = await makeWorkItemFixture();
     const targetId = await seedItem(fx, 'Dropped work');
     const planId = await plannedPlan(fx, [{ op: 'remove', workItemId: targetId }]);
-    await workItemsService.updateStatus(targetId, 'cancelled', fx.ctx);
+    await systemSetStatus(fx, targetId, 'cancelled');
 
     const err = await expectRejectedWithNoWrite(fx, planId, PlanTargetImmutableError, 'stale');
     expect((err as PlanTargetImmutableError).status).toBe('cancelled');
