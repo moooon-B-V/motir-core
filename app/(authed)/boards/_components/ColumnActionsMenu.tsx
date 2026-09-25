@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Check, CircleGauge, Columns3, MoreHorizontal, X } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { Button } from '@/components/ui/Button';
+import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 
 // ColumnActionsMenu (Subtask 3.3.6) — the column `[⋯]` menu, per
 // `design/boards/swimlanes-wip.mock.html` (panel 5) + the "Swimlanes + WIP"
@@ -48,6 +49,11 @@ export function ColumnActionsMenu({
   const t = useTranslations('boards');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  // MOTIR-6174 — both rows (Set WIP limit, Board settings) are `board:configure`
+  // writes / rooms (`boardsService.setColumnWipLimit`, the settings rail's
+  // `board` entry). An actor without the key gets no menu at all: it is an entry
+  // point, and an empty one is worse than none (the permission-gated UI rule, row 5).
+  const canConfigure = useProjectAccess().can('board:configure');
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +85,8 @@ export function ColumnActionsMenu({
     setOpen(false);
     reset();
   }
+
+  if (!canConfigure) return null;
 
   return (
     <Popover
