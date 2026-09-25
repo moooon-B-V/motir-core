@@ -12,11 +12,11 @@ import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import { MCP_TOOL_NAMES, type McpToolName } from '@/lib/mcp/registry';
 import { decodeFilterEnvelope, FILTER_PARAM_VERSION } from '@/lib/filters/ast';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
-import * as route from '@/app/api/mcp/route';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import { mcpRouteFetch } from '../helpers/mcpRouteFetch';
 
 // Story-CLOSING suite for the Motir MCP server (Story 7.7 · Subtask 7.7.12).
 //
@@ -48,33 +48,10 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 
 const ENDPOINT = 'http://localhost/api/mcp';
 
-/**
- * A `fetch` that dispatches the SDK transport's requests straight into the real
- * route handler (`GET` / `POST` / `DELETE` are the same auth-wrapped function),
- * injecting the bearer the way an MCP client would. This drives the genuine
- * `withMcpAuth` gate + the production resolvers — NOT a hand-built server — so
- * the auth matrix and the per-token scope gate are exercised end to end.
- */
-function routeFetch(token?: string): typeof fetch {
-  return (async (input: unknown, init: RequestInit = {}) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : (input as Request).url;
-    const headers = new Headers(init.headers ?? {});
-    if (token) headers.set('authorization', `Bearer ${token}`);
-    const method = (init.method ?? 'GET').toUpperCase();
-    const handler = method === 'GET' ? route.GET : method === 'DELETE' ? route.DELETE : route.POST;
-    return handler(new Request(url, { ...init, headers }) as never);
-  }) as unknown as typeof fetch;
-}
-
 /** Connect an official MCP client to the real `/api/mcp` route over `token`. */
 async function connect(token?: string): Promise<Client> {
   const transport = new StreamableHTTPClientTransport(new URL(ENDPOINT), {
-    fetch: routeFetch(token),
+    fetch: mcpRouteFetch(token),
   });
   const client = new Client({ name: 'story-roundtrip', version: '0.0.0' });
   await client.connect(transport);
