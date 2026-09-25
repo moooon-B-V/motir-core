@@ -720,7 +720,12 @@ describe('MOTIR-6301 · one review model, drawn identically live and proposed', 
     expect(edgeKeys()).toEqual(edgeKeys(liveModel));
     // The proposed pane does not move — motion is the live pane's alone.
     expect(model().motion).toBe(false);
-    // …and the poll has stopped: no further read is issued.
+    // …and the poll has stopped: no further read is issued. SETTLE first: the
+    // confirm bar's own one-off plan read can still be in flight when the bar
+    // is found, and counting it as a poll tick made this flaky on CI. A poll
+    // that had NOT stopped still adds one read per tick below, so the check
+    // keeps its teeth.
+    await settle();
     const reads = planReads.length;
     await tick();
     await tick();

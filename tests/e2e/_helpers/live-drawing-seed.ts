@@ -14,7 +14,7 @@
 // Everything rides the SHIPPED services — the one sanctioned cross-layer reach for
 // E2E setup — exactly as `plans-review-seed.ts` and `agent-authored-plan-seed.ts`.
 
-import { db } from '@/lib/db';
+import { adminDb } from '@/tests/helpers/adminDb';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -60,7 +60,7 @@ export async function seedLiveDrawing(email: string): Promise<LiveDrawingSeed> {
     actorUserId: owner.id,
   });
   // `/plans` and the planning surface are ACTIVE-PROJECT scoped.
-  await db.workspaceMembership.update({
+  await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },
   });
@@ -111,7 +111,10 @@ export async function seedLiveDrawing(email: string): Promise<LiveDrawingSeed> {
   });
 
   // Past onboarding, so *Plan with AI* opens the planning surface itself.
-  await db.project.update({ where: { id: project.id }, data: { onboardingRanAt: new Date() } });
+  await adminDb.project.update({
+    where: { id: project.id },
+    data: { onboardingRanAt: new Date() },
+  });
 
   return {
     email,

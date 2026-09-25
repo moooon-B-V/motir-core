@@ -223,7 +223,11 @@ describe('ONE KIND_TINT', () => {
   });
 
   it('holds the kind → tint MEMBER VALUES in one file under components/', () => {
-    const member = new RegExp(`\\bepic:\\s*'${KIND_TINT.epic.replace(/[()]/g, '\\$&')}'`);
+    // Escape EVERY regex metacharacter (backslash included), not only the
+    // parentheses a tint class happens to contain today (CodeQL
+    // js/incomplete-sanitization).
+    const escaped = KIND_TINT.epic.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const member = new RegExp(`\\bepic:\\s*'${escaped}'`);
     const hits = tsxFiles(ROOT)
       .filter((f) => member.test(readFileSync(f, 'utf8')))
       .map((f) => relative(ROOT, f));
