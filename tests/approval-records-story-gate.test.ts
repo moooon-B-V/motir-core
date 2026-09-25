@@ -170,9 +170,41 @@ const EVERYTHING = {
   decided: ['changes-a', 'dec-b', 'dec-a-old'],
 };
 
+/**
+ * MOTIR-6328 (DECISION MOTIR-6165 Q2) gives the built-in `member` and `viewer`
+ * `approval:view_any`, so a built-in member now reads the WHOLE project. The
+ * own-records half is still what a reader WITHOUT the key sees, so A and B are
+ * put on a custom role carrying a member's acting keys minus the view key —
+ * the exact shape a team uses to close the room — and keep proving it.
+ */
+async function withoutViewAny(userId: string) {
+  const role = await adminDb.projectRoleDefinition.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      name: `No full view ${userId}`,
+      permissions: ['project:browse', 'work_item:edit', 'comment:add'],
+    },
+  });
+  await adminDb.$transaction((tx) =>
+    projectMembershipRepository.setRoleDefinition(
+      userId,
+      fx.projectId,
+      { roleDefinitionId: role.id, role: CUSTOM_ROLE_TIER },
+      tx,
+    ),
+  );
+}
+
 describe('the built-in roles', () => {
-  it('member A reads only their own records — B’s decision is in the database and absent from the read', async () => {
+  it('a built-in MEMBER reads everything but the superseded row (MOTIR-6328)', async () => {
     await seed();
+    expect(await titlesFor(ids.a)).toEqual(EVERYTHING);
+  });
+
+  it('member A without the key reads only their own records — B’s decision is in the database and absent from the read', async () => {
+    await seed();
+    await withoutViewAny(ids.a);
     expect(await adminDb.approvalGate.count({ where: { decidedById: ids.b } })).toBe(1);
     expect(await titlesFor(ids.a)).toEqual({
       fullView: false,
@@ -181,8 +213,9 @@ describe('the built-in roles', () => {
     });
   });
 
-  it('member B reads only theirs — the fixture is symmetric, so neither view is an accident of seeding', async () => {
+  it('member B without the key reads only theirs — the fixture is symmetric, so neither view is an accident of seeding', async () => {
     await seed();
+    await withoutViewAny(ids.b);
     expect(await titlesFor(ids.b)).toEqual({
       fullView: false,
       awaiting: ['await-b-old', 'await-b-new'],

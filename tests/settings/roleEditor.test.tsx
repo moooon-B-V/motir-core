@@ -6,6 +6,12 @@ import zhMessages from '@/messages/zh.json';
 import { toRoleCatalogDTO } from '@/lib/mappers/permissionMappers';
 import { MAX_CUSTOM_ROLES_PER_PROJECT } from '@/lib/permissions/limits';
 import { ROLE_GATED_PERMISSIONS, BUILTIN_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { isEnforced, type PermissionKey } from '@/lib/permissions/catalog';
+
+/** The editor offers ENFORCED keys only — a `planned` one (MOTIR-6328's Plans /
+ *  Runs view keys, until their reads land) is never a switch. */
+const offered = (keys: Iterable<PermissionKey>): PermissionKey[] =>
+  [...keys].filter((key) => isEnforced(key));
 import { RoleEditor } from '@/app/(authed)/settings/project/roles/_components/RoleEditor';
 import { RoleList } from '@/app/(authed)/settings/project/roles/_components/RoleList';
 import { RoleDetail } from '@/app/(authed)/settings/project/roles/_components/RoleDetail';
@@ -66,7 +72,7 @@ afterEach(() => {
 describe('the grid — one layout for one catalog', () => {
   it('renders every ROLE-GATED permission under the same domain headings, in catalog order', () => {
     render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
-    for (const key of ROLE_GATED_PERMISSIONS) {
+    for (const key of offered(ROLE_GATED_PERMISSIONS)) {
       expect(document.querySelector(`[data-permission="${key}"]`), key).toBeTruthy();
     }
     // …and nothing beyond it: the three level-gated keys are not a role's to hold.
@@ -83,7 +89,7 @@ describe('the grid — one layout for one catalog', () => {
   it('every row is a Checkbox with ONE checked state — held or not held', () => {
     render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
     const boxes = screen.getAllByRole('checkbox');
-    expect(boxes).toHaveLength(ROLE_GATED_PERMISSIONS.length);
+    expect(boxes).toHaveLength(offered(ROLE_GATED_PERMISSIONS).length);
     for (const box of boxes) {
       const name = box.getAttribute('aria-label') ?? '';
       expect(name).toMatch(/, (Held|Not held)$/);
@@ -108,13 +114,13 @@ describe('`Start from` — a SEED, and only on the new route', () => {
     render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
     fireEvent.change(screen.getByLabelText('Start from'), { target: { value: 'member' } });
 
-    const memberSet = BUILTIN_ROLE_PERMISSIONS.member;
+    const memberSet = offered(BUILTIN_ROLE_PERMISSIONS.member);
     const checked = screen
       .getAllByRole('checkbox')
       .filter((b) => b.getAttribute('aria-checked') === 'true');
-    expect(checked).toHaveLength(memberSet.size);
+    expect(checked).toHaveLength(memberSet.length);
     expect(screen.getByTestId('role-editor-count').textContent).toBe(
-      `${memberSet.size} of ${CATALOG.roleGatedPermissionCount} permissions`,
+      `${memberSet.length} of ${CATALOG.roleGatedPermissionCount} permissions`,
     );
   });
 
@@ -124,12 +130,12 @@ describe('`Start from` — a SEED, and only on the new route', () => {
     fireEvent.change(picker, { target: { value: 'admin' } });
     expect(
       screen.getAllByRole('checkbox').filter((b) => b.getAttribute('aria-checked') === 'true'),
-    ).toHaveLength(BUILTIN_ROLE_PERMISSIONS.admin.size);
+    ).toHaveLength(offered(BUILTIN_ROLE_PERMISSIONS.admin).length);
 
     fireEvent.change(picker, { target: { value: 'viewer' } });
     expect(
       screen.getAllByRole('checkbox').filter((b) => b.getAttribute('aria-checked') === 'true'),
-    ).toHaveLength(BUILTIN_ROLE_PERMISSIONS.viewer.size);
+    ).toHaveLength(offered(BUILTIN_ROLE_PERMISSIONS.viewer).length);
   });
 
   it('offers EXACTLY the three built-ins', () => {
@@ -244,7 +250,7 @@ describe('save', () => {
     expect(Object.keys(body).sort()).toEqual(['name', 'permissions']);
     expect(body['name']).toBe('Contractor');
     expect([...(body['permissions'] as string[])].sort()).toEqual(
-      [...BUILTIN_ROLE_PERMISSIONS.viewer].sort(),
+      offered(BUILTIN_ROLE_PERMISSIONS.viewer).sort(),
     );
     // Lands on what was just saved.
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/settings/project/roles/r_new'));

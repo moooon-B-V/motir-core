@@ -81,6 +81,14 @@
 // keys sit in `ROLE_GATED_PERMISSIONS` and in `member`, and in neither `viewer`
 // nor `IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS`. What changes is that a custom
 // role can now withhold one without the other.
+//
+// ⚠️ AND THE VIEW HALF NOW HAS ITS OWN KEY — `plan:view_any` (MOTIR-6328,
+// Story MOTIR-6179). "Every plan READ runs on `project:browse`" above was the
+// state until that story; `plan:view_any` is the key the Plans room's Project
+// tab — every plan of the project — asserts, and every built-in role that
+// browses holds it. `ai:view_plan` is NOT renamed and NOT repurposed: it keeps
+// the AUTHOR meaning described above, so granting a Viewer every plan to READ
+// grants them nothing to WRITE.
 
 // ⚠️ `work_item:archive` AND `work_item:delete` ARE REVERSIBLE AND IRREVERSIBLE,
 // AND THEY WERE ONE KEY (MOTIR-3629, 2026-08-26). The same shape as the split
@@ -131,6 +139,13 @@ export const PERMISSION_DOMAINS = [
   // Approvals room's `approval:view_any` (MOTIR-5305) joins it here. Placed with
   // the other acts on ONE item's belongings (comments, attachments, watchers).
   'approval',
+  // MOTIR-6328 — the Plans and Runs rooms' own domains, immediately after
+  // `approval` so the three rooms' view-any keys render together in the role
+  // grid (Story MOTIR-6179). One domain per room rather than folding plan
+  // viewing into `ai`: the `ai` domain is the planner's AUTHORING and
+  // configuration keys, and "may see every plan" is a read a Viewer holds.
+  'plan',
+  'run',
   'public_request',
   'member',
   'board',
@@ -232,6 +247,14 @@ export const PERMISSIONS = [
   // from their own records to the project's. Named `planned` by MOTIR-5305 and
   // enforced by MOTIR-5301, whose `approvalGatesService.listRecords` consults it.
   'approval:view_any',
+  // MOTIR-6328 — SEEING every plan of the project, and SEEING every agent run of
+  // it: the Plans and Runs rooms' Project tab (Story MOTIR-6179), named after
+  // `approval:view_any` so the three rooms read alike. Each is a VIEW key only —
+  // `plan:view_any` is split from `ai:view_plan`, which keeps its (misnamed)
+  // AUTHOR meaning, and `run:view_any` confers no way to start a run. Placed in
+  // their own domains, contiguously, for the picker-order reason above.
+  'plan:view_any',
+  'run:view_any',
   'public_request:comment',
   'public_request:submit',
   'public_request:upvote',
@@ -345,6 +368,13 @@ const PERMISSION_META: Record<
   'watcher:manage': { domain: 'watcher', enforcement: 'enforced' },
   'approval:decide_any': { domain: 'approval', enforcement: 'enforced' }, // MOTIR-5292
   'approval:view_any': { domain: 'approval', enforcement: 'enforced' }, // MOTIR-5305 · MOTIR-5301
+  // `planned` on arrival, the way `approval:view_any` was for one commit
+  // (MOTIR-5305 → MOTIR-5301): nothing consults either key yet. The plan reads
+  // (MOTIR-6330) and the run reads (MOTIR-6331) flip them to `enforced` in the
+  // change that first asserts them — an `enforced` key no gate consults is the
+  // grid lie this file's header warns about.
+  'plan:view_any': { domain: 'plan', enforcement: 'planned' }, // MOTIR-6328
+  'run:view_any': { domain: 'run', enforcement: 'planned' }, // MOTIR-6328
   'public_request:comment': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:submit': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:upvote': { domain: 'public_request', enforcement: 'enforced' },

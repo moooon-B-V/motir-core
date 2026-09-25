@@ -335,6 +335,8 @@
       "attachment": "Attachments",
       "watcher": "Watchers",
       "approval": "Approvals",
+      "plan": "Plans",
+      "run": "Agent runs",
       "public_request": "Public requests",
       "member": "Members & access",
       "board": "Boards",
@@ -399,6 +401,14 @@
     "approval_view_any": {
       "label": "See every approval",
       "description": "See all of the project's approval records, including other people's. Without it you see the approvals routed to you and the ones you decided."
+    },
+    "plan_view_any": {
+      "label": "See every plan",
+      "description": "See all of the project's AI plans, including other people's. Without it you see the plans you started and the ones routed to you or decided by you."
+    },
+    "run_view_any": {
+      "label": "See every agent run",
+      "description": "See all of the project's agent runs, including other people's. Without it you see the runs you started."
     },
     "public_request_comment": {
       "label": "Comment on requests",

@@ -106,7 +106,18 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   // records routed to them and the ones they decided, which is a RELATIONSHIP to
   // a row and needs no key. MOTIR-5305 named it `planned` while nothing consulted
   // it; MOTIR-5301's records read (`approvalGatesService.listRecords`) enforces it.
+  // ⚠️ SUPERSEDED for `member` and `viewer` by MOTIR-6328 (below): the DECISION
+  // card MOTIR-6165 (Q2, 2026-09-24) gives every built-in role that browses every
+  // view-any key, so the rooms open on the whole project by default.
   'approval:view_any',
+  // MOTIR-6328 — the Plans and Runs rooms' view-any keys, beside the Approvals
+  // room's (Story MOTIR-6179). `admin` holds both through this whole set and a
+  // custom role can be granted or denied them, which is how a team closes a room.
+  // `levelGrants` does not name them, so each resolves exactly like
+  // `project:browse` on all four access levels and both rails —
+  // `tests/permissions/accessParity.test.ts` proves that rather than assuming it.
+  'plan:view_any',
+  'run:view_any',
   // MOTIR-2256 — the twelve per-domain administrative keys that fall out of
   // `project:administer`. Admin holds all twelve, which is what makes the split
   // neutral wherever the umbrella already stood.
@@ -226,8 +237,27 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<ProjectRole, ReadonlySet<Permissio
     // resolved through `ai:view_plan`, so the key lands beside it; `viewer` and
     // the implicit workspace-member grant take neither, exactly as before.
     'ai:decide_plan',
+    // MOTIR-6328 — the three rooms' view-any keys (DECISION MOTIR-6165 Q2,
+    // 2026-09-24): a member sees every plan, approval record and run of the
+    // project, and ALSO gets a Mine tab because they can act in each room.
+    // `approval:view_any` is a widening for them — before, a member saw only the
+    // records routed to them or decided by them.
+    'approval:view_any',
+    'plan:view_any',
+    'run:view_any',
   ]),
-  viewer: new Set<PermissionKey>(['project:browse', 'report:view']),
+  // MOTIR-6328 — the same three view-any keys, and NOTHING that authors, decides
+  // or starts (DECISION MOTIR-6165 Q2). A viewer opens Plans, Approvals and Runs
+  // on the whole project and sees the Project tab alone; `approval:view_any` is
+  // the widening the owner asked for, because a viewer's own-records Approvals
+  // room was empty by construction (nothing is ever routed to a read-only actor).
+  viewer: new Set<PermissionKey>([
+    'project:browse',
+    'report:view',
+    'approval:view_any',
+    'plan:view_any',
+    'run:view_any',
+  ]),
 };
 
 /**
@@ -280,6 +310,14 @@ export const IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS: ReadonlySet<PermissionKey> =
     'comment:add',
     'attachment:create',
     'report:view',
+    // MOTIR-6328 — `plan:view_any` and `run:view_any` ONLY. This actor opens
+    // `/plans` and `/runs` on browse today (both reads assert nothing further), so
+    // the two keys keep that reach once the reads assert them. It has never held
+    // `approval:view_any`, and widening a project stranger's view of the approval
+    // trail is not Story MOTIR-6179's to decide — the workspace roles story
+    // (MOTIR-6168) owns what this grant becomes.
+    'plan:view_any',
+    'run:view_any',
   ]);
 
 /**
@@ -291,6 +329,11 @@ export const IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS: ReadonlySet<PermissionKey> =
  */
 export const PUBLIC_PROJECT_PERMISSIONS: readonly PermissionKey[] = [
   'project:browse',
+  // MOTIR-6328 — a signed-in non-member of a `public` project opens `/plans` and
+  // `/runs` on browse today, so they keep that reach once the reads assert the
+  // rooms' view keys. Not `approval:view_any`, which they have never held.
+  'plan:view_any',
+  'run:view_any',
   'public_request:submit',
   'public_request:upvote',
   'public_request:comment',

@@ -335,6 +335,8 @@
       "attachment": "附件",
       "watcher": "关注者",
       "approval": "审批",
+      "plan": "计划",
+      "run": "智能体运行",
       "public_request": "公开请求",
       "member": "成员与访问",
       "board": "面板",
@@ -399,6 +401,14 @@
     "approval_view_any": {
       "label": "查看所有审批",
       "description": "查看项目的全部审批记录，包括他人的记录。没有此权限时，只能看到分派给你的审批和你作出决定的审批。"
+    },
+    "plan_view_any": {
+      "label": "查看所有计划",
+      "description": "查看项目的全部AI计划，包括他人的计划。没有此权限时，只能看到你发起的计划，以及分派给你或由你作出决定的计划。"
+    },
+    "run_view_any": {
+      "label": "查看所有智能体运行",
+      "description": "查看项目的全部智能体运行，包括他人发起的运行。没有此权限时，只能看到你发起的运行。"
     },
     "public_request_comment": {
       "label": "评论请求",
