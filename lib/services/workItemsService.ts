@@ -230,6 +230,7 @@ import type {
   TreeLevelDto,
   ProjectRoadmapDto,
   WorkItemValidityDto,
+  WorkItemSoftBlockDto,
   WorkItemCoverageAdvisoryDto,
   WorkItemProseAdvisoryDto,
   WorkItemImplementationProvenanceInput,
@@ -5872,6 +5873,11 @@ export const workItemsService = {
    * cross-workspace key). "Done" is the project's terminal set (`category =
    * 'done'`; finding #21), judged against each blocker's OWN project (blocks can
    * be cross-project). Archived/triage members and archived blockers are ignored.
+   *
+   * It also returns `softBlocks` (MOTIR-6354 / MOTIR-6368): the open blockers of
+   * the target's ANCESTORS — blocks that reach the target only through the
+   * readiness cascade (overridable with `--allow-soft-block`). NON-gating: they
+   * never change `valid`, which stays "can this subtree finish".
    */
   async validateWorkItem(
     projectId: string,
@@ -7726,7 +7732,9 @@ async function computeOwnBlockerReadiness(
  * cascade is auto-satisfied) and only `blocked_by` edges can gate. We probe the
  * not-done members' direct blockers (no ancestor walk — finishing the target's
  * subtree does not depend on work ABOVE it), and report each unsatisfied
- * out-of-subtree blocker at the in-subtree member it gates.
+ * out-of-subtree blocker at the in-subtree member it gates. Work above it is
+ * REPORTED, not gated: `softBlocks` lists the ancestors' open blockers
+ * (`computeSoftBlocks`, MOTIR-6368).
  *
  * It ALSO returns the PROSE-vs-GRAPH advisories (MOTIR-1969) for the same
  * not-done members — a SEPARATE, never-blocking channel, computed by
@@ -7754,8 +7762,10 @@ async function computeWorkItemValidity(
     ctx.workspaceId,
   );
   const notDone = members.filter((m) => !terminalForProject.has(m.status));
+  // The NON-gating soft blocks (MOTIR-6368) — read whatever the verdict.
+  const softBlocks = await computeSoftBlocks(root, ctx);
   if (notDone.length === 0) {
-    return { key: root.identifier, valid: true, blockers: [], advisories: [] };
+    return { key: root.identifier, valid: true, blockers: [], advisories: [], softBlocks };
   }
 
   const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -7819,7 +7829,57 @@ async function computeWorkItemValidity(
     valid: blockers.length === 0,
     blockers,
     advisories: [...prose, ...coverage, ...pathReferences],
+    softBlocks,
   };
+}
+
+/**
+ * The target's SOFT blocks (MOTIR-6354 / MOTIR-6368) — every open `blocked_by`
+ * edge owned by an ANCESTOR of `root`. Such a block reaches the target only
+ * through the readiness cascade and is overridable at run time with
+ * `--allow-soft-block`, so it is REPORTED, never gating: `valid` / `blockers`
+ * never read it. The ancestor chain comes from the same batched ancestor read
+ * `getReadinessForItems` does (`findAncestorIdsForItems`); "open" is the
+ * validity notion of not-done — the blocker's status is not in ITS project's
+ * terminal set (a block can be cross-project; finding #21). Archived blockers
+ * are excluded by the edge read, as everywhere. Three reads at most, none past
+ * the first for a root with no parent.
+ */
+async function computeSoftBlocks(
+  root: WorkItemDto,
+  ctx: ServiceContext,
+): Promise<WorkItemSoftBlockDto[]> {
+  const ancestorIds =
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findAncestorIdsForItems([root.id], ctx.workspaceId, tx),
+      )
+    ).get(root.id) ?? [];
+  if (ancestorIds.length === 0) return [];
+  const { ancestors, edges } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+    ancestors: await workItemRepository.findTitlesByIds(ancestorIds, ctx.workspaceId, tx),
+    edges: await workItemLinkRepository.findBlockerEdgesForItems(ancestorIds, ctx.workspaceId, tx),
+  }));
+  if (edges.length === 0) return [];
+  const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+    edges.map((e) => e.blockerProjectId),
+    ctx.workspaceId,
+  );
+  const ancestorById = new Map(ancestors.map((a) => [a.id, a]));
+  const softBlocks: WorkItemSoftBlockDto[] = [];
+  for (const edge of edges) {
+    if (terminalByProject.get(edge.blockerProjectId)?.has(edge.blockerStatus)) continue;
+    const via = ancestorById.get(edge.fromId)!;
+    softBlocks.push({
+      via: { key: via.identifier, title: via.title },
+      blockedBy: { key: edge.blockerKey, title: edge.blockerTitle },
+      blockerStatus: edge.blockerStatus,
+    });
+  }
+  softBlocks.sort(
+    (a, b) => a.via.key.localeCompare(b.via.key) || a.blockedBy.key.localeCompare(b.blockedBy.key),
+  );
+  return softBlocks;
 }
 
 /**

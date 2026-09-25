@@ -161,6 +161,7 @@ describe('POST /api/internal/ai/validate-plan', () => {
         },
       ],
       advisories: [],
+      softBlocks: [],
     });
 
     // A no-op plan over the same target is valid.
@@ -179,6 +180,7 @@ describe('POST /api/internal/ai/validate-plan', () => {
       valid: true,
       blockers: [],
       advisories: [],
+      softBlocks: [],
     });
   });
 });
