@@ -76,7 +76,8 @@ const { DevelopmentSectionBody } = await import('@/components/github/Development
 const { ChoiceSection } = await import('@/app/(authed)/items/[key]/_components/ChoiceSection');
 const { DecisionConfirmSection } =
   await import('@/app/(authed)/items/[key]/_components/DecisionConfirmSection');
-const { asksToReplanAfterPress } = await import('@/components/approvals/RefusalReplan');
+const { asksToReplanAfterPress, RefusalReplanAsk } =
+  await import('@/components/approvals/RefusalReplan');
 const { useOpenRefusalReplan } = await import('@/components/approvals/useOpenRefusalReplan');
 
 const ask = en.approvalGate.replanAsk;
@@ -911,5 +912,27 @@ describe('useOpenRefusalReplan', () => {
     render(<Probe gateId="gate-9" />);
     fireEvent.click(screen.getByRole('button', { name: 'go' }));
     expect(shallowReplace.mock.calls[0]![0]).toMatch(/^\/items\/ACME-42\?/);
+  });
+});
+
+describe('the ask in the frame’s SECTION form (MOTIR-6212)', () => {
+  // The item page draws a decided record as a section of its host card; there the ask
+  // is a hairline band set off from the record above it, not the overlay's flush band.
+  it.each([
+    [true, true],
+    [false, false],
+  ] as const)('sectioned=%s → spaced from the record: %s', (sectioned, spaced) => {
+    render(
+      <RefusalReplanAsk
+        gateId="gate-9"
+        itemKey="ACME-12"
+        sectioned={sectioned}
+        onAnswered={vi.fn()}
+        onNotNow={vi.fn()}
+      />,
+    );
+    const band = screen.getByTestId('refusal-replan-ask');
+    expect(band.classList.contains('mt-3')).toBe(spaced);
+    expect(within(band).getByRole('button', { name: ask.yes })).toBeTruthy();
   });
 });

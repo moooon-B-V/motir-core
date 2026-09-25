@@ -380,6 +380,50 @@ describe('GET /api/approval-gates/[id]/planning-seed · the identical 404', () =
   });
 });
 
+describe('the defensive arms — a refusal the registry cannot compose, and the browse gate’s faults (MOTIR-6212)', () => {
+  it('a kind the predicate accepts but whose composer is unset answers the same 404', async () => {
+    // The next stories widen `isRefusalSeedGate` and the registry case by case; a kind
+    // whose registry slot is present but empty must read exactly as an absent gate.
+    const { REFUSAL_SEED_COMPOSERS, refusalSeedComposerFor } =
+      await import('@/lib/planning/refusalSeed');
+    const kept = REFUSAL_SEED_COMPOSERS.decision_approval;
+    REFUSAL_SEED_COMPOSERS.decision_approval = undefined;
+    try {
+      expect(refusalSeedComposerFor('decision_approval')).toBeNull();
+      const gateId = await gate(card, 'decision_approval', 'changes_requested');
+      signIn(owner());
+      const res = await readSeed(gateId);
+      expect(res.status).toBe(404);
+      const text = await res.text();
+      expect(JSON.parse(text)).toEqual(NOT_FOUND);
+      expect(text).not.toContain('direction');
+    } finally {
+      REFUSAL_SEED_COMPOSERS.decision_approval = kept;
+    }
+  });
+
+  it('a project the browse gate cannot resolve is the same 404; any other fault is not swallowed', async () => {
+    const { workItemsService } = await import('@/lib/services/workItemsService');
+    const { ProjectNotFoundError } = await import('@/lib/projects/errors');
+    const gateId = await gate(card, 'decision_approval', 'changes_requested');
+    signIn(owner());
+
+    const spy = vi.spyOn(workItemsService, 'getWorkItem');
+    try {
+      spy.mockRejectedValueOnce(new ProjectNotFoundError(fx.projectId));
+      const hidden = await readSeed(gateId);
+      expect(hidden.status).toBe(404);
+      expect(JSON.parse(await hidden.text())).toEqual(NOT_FOUND);
+
+      // A real fault is a real fault — never dressed up as "nothing here".
+      spy.mockRejectedValueOnce(new Error('connection reset'));
+      await expect(readSeed(gateId)).rejects.toThrow('connection reset');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
 describe('GET /api/approval-gates/[id]/planning-seed · auth', () => {
   it('no active project → 401', async () => {
     const gateId = await gate(card, 'decision_approval', 'changes_requested');

@@ -315,3 +315,36 @@ describe('every UNSEEDED launch is untouched', () => {
     expect(host.getAttribute('data-resume')).toBe('false');
   });
 });
+
+describe('a CLOSE while the seed read is in flight drops its answer (MOTIR-6212)', () => {
+  for (const [label, outcome] of [
+    ['the seed', 'resolve'],
+    ['the failure', 'reject'],
+  ] as const) {
+    it(`${label} arriving after the close mounts nothing`, async () => {
+      let settle: (v: PlanningSeedDTO) => void = () => {};
+      let fail: (e: Error) => void = () => {};
+      fetchPlanningSeed.mockReturnValue(
+        new Promise<PlanningSeedDTO>((resolve, reject) => {
+          settle = resolve;
+          fail = reject;
+        }),
+      );
+      openAt(SEEDED_ADDRESS);
+      const view = mount();
+      await act(async () => {});
+      const signal = fetchPlanningSeed.mock.calls[0]![1] as AbortSignal;
+
+      openAt('/items/ACME-44');
+      view.rerender(
+        <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={null} />,
+      );
+      await act(async () => {});
+      expect(signal.aborted).toBe(true);
+
+      await act(async () => (outcome === 'resolve' ? settle(SEED) : fail(new Error('500'))));
+      expect(screen.queryByTestId('host')).toBeNull();
+      expect(fetchPlanningAnchor).not.toHaveBeenCalled();
+    });
+  }
+});

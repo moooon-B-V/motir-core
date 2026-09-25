@@ -359,6 +359,22 @@ describe('the rail — the turn in the COMPOSER, unsent', () => {
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
   });
 
+  it('a failed seeded send does NOT overwrite words typed since — and the error clearing changes nothing', () => {
+    const { rerender } = renderWithIntl(rail({}, FIRST_TURN));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    rerender(rail({ phase: 'streaming' }, FIRST_TURN));
+    // The person starts the next thought while the send is in flight…
+    const field = () =>
+      screen.getByRole('textbox', { name: REPLAN_PLACEHOLDER }) as HTMLTextAreaElement;
+    fireEvent.change(field(), { target: { value: 'Actually, keep it smaller.' } });
+    // …and the refusal lands: their newer words stay; the seed is not pasted over them.
+    rerender(rail({ phase: 'idle', errorCode: 'FAILED' }, FIRST_TURN));
+    expect(field().value).toBe('Actually, keep it smaller.');
+    // The error clearing (a retry, a dismiss) is not a failure — nothing moves.
+    rerender(rail({ phase: 'idle', errorCode: null }, FIRST_TURN));
+    expect(field().value).toBe('Actually, keep it smaller.');
+  });
+
   it('a SUCCESSFUL seeded send does not come back into the field', () => {
     const { rerender } = renderWithIntl(rail({}, FIRST_TURN));
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));

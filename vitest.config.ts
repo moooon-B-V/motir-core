@@ -2582,6 +2582,32 @@ export default defineConfig({
         'app/**/boards/_components/UnmappedStatusesTray.tsx',
         'app/**/backlog/_components/SelectionBar.tsx',
         'app/**/backlog/_components/CreateIssueRow.tsx',
+        // ── Story MOTIR-6068 · A REFUSED DECISION OPENS THE PLANNER (Subtask MOTIR-6212) ──
+        // The six files this story CREATED, measured on this branch with the story's
+        // specs (`refusalSeed`, `approval-gate-planning-seed-route`,
+        // `planningSeedClient`, `refusal-replan`, and the seam
+        // `tests/integration/planning/refusalReplanSeam.test.ts`) before being pinned:
+        // every one at 100 / 100 / 100 / 100. The two re-throws of a real fault are
+        // driven, not ignored (`approval-gate-planning-seed-route.test.ts`, the
+        // defensive-arms describe).
+        //
+        // ⚠️ THE EXISTING FILES THE STORY EDITED ARE NOT ADDED HERE. The ones already
+        // gated (`planChangeSessionsService`, its repository, `contextualPlanningService`,
+        // `planSessionMappers`, the launcher, the overlay, the host, the conversation
+        // hook, `ApprovalGateControl`, `ApprovalOverlay`, `DevelopmentGateFrame`) keep
+        // their floors, and each still clears 90 with this story's lines in it. The
+        // ungated ones (`ChoiceGate` 100 · `DecisionConfirmGate` 94.6 branches ·
+        // `SessionRow` 93.7 branches, and `PlanChangeRail` — deliberately ungated, see
+        // the MOTIR-6239 note above) have every line this story wrote covered.
+        //
+        // The route is written with `**`, not `[id]`, for the character-class reason
+        // recorded above.
+        'lib/planning/refusalSeed.ts',
+        'lib/services/planningSeedService.ts',
+        'app/api/approval-gates/**/planning-seed/route.ts',
+        'lib/planning/planningSeedClient.ts',
+        'components/approvals/RefusalReplan.tsx',
+        'components/approvals/useOpenRefusalReplan.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -5505,6 +5531,43 @@ export default defineConfig({
           statements: 90,
         },
         'components/github/CiStateBadge.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ── Story MOTIR-6068 · the refusal seed (Subtask MOTIR-6212) — see `include`. ──
+        'lib/planning/refusalSeed.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/planningSeedService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/approval-gates/**/planning-seed/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/planning/planningSeedClient.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/approvals/RefusalReplan.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/approvals/useOpenRefusalReplan.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
