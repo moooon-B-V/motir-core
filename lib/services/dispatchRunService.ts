@@ -478,7 +478,10 @@ export const dispatchRunService = {
 
   /**
    * RECORD A FINDING — what a run produced that is not code (MOTIR-3981,
-   * `run-findings-protocol.md` Q5): a bug it filed, or a plan it submitted.
+   * `run-findings-protocol.md` Q5): a bug it filed, or a plan it submitted —
+   * or, since MOTIR-6282, what the run-found report concluded on a leg whose
+   * runner stopped on an unbuildable target (`unbuildable_reported`, keyed on
+   * the leg, so at most one per leg).
    *
    * ⚠️ THE SERVER WRITES THESE, AND IT IS THE ONLY THING THAT CAN. Every other
    * `DispatchEventKind` member is emitted by the run's own reporter as it does
@@ -507,24 +510,37 @@ export const dispatchRunService = {
    * failed insert here is swallowed like any other.
    */
   async recordFinding(
-    input: {
-      /**
-       * The work item whose OPEN LEG this finding belongs to — the one the
-       * agent was working, NOT the bug or plan itself. A bug is a brand-new row
-       * that no run ever claimed; what ties it to a run is the work item it
-       * points at.
-       */
-      anchorWorkItemId: string;
-      kind: Extract<DispatchEventKind, 'bug_filed' | 'plan_submitted'>;
-      /**
-       * The identity of the thing found — the bug's id, or the plan's. Used to
-       * make the append IDEMPOTENT: the same finding can be reached twice (a
-       * `relates_to` link created after the bug, a plan whose revision is
-       * re-submitted), and one finding must not become two rows.
-       */
-      findingId: string;
-      data: Prisma.InputJsonValue;
-    },
+    input:
+      | {
+          /**
+           * The work item whose OPEN LEG this finding belongs to — the one the
+           * agent was working, NOT the bug or plan itself. A bug is a brand-new
+           * row that no run ever claimed; what ties it to a run is the work item
+           * it points at.
+           */
+          anchorWorkItemId: string;
+          kind: Extract<DispatchEventKind, 'bug_filed' | 'plan_submitted'>;
+          /**
+           * The identity of the thing found — the bug's id, or the plan's. Used
+           * to make the append IDEMPOTENT: the same finding can be reached twice
+           * (a `relates_to` link created after the bug, a plan whose revision is
+           * re-submitted), and one finding must not become two rows.
+           */
+          findingId: string;
+          data: Prisma.InputJsonValue;
+        }
+      | {
+          /** The report's TARGET — the work item whose open leg stopped. */
+          anchorWorkItemId: string;
+          /**
+           * The run-found report's conclusion (MOTIR-6282). Its identity is the
+           * LEG itself — one report per leg, whatever it concluded — so there is
+           * no `findingId` to pass: the leg this resolves is the key, and its id
+           * is written into `data.dispatchRunCardId` for the dedupe to match.
+           */
+          kind: Extract<DispatchEventKind, 'unbuildable_reported'>;
+          data: Prisma.InputJsonObject;
+        },
     ctx: ServiceContext,
   ): Promise<{ recorded: boolean }> {
     try {
@@ -537,10 +553,16 @@ export const dispatchRunService = {
           );
           if (!leg) return { recorded: false };
 
+          const findingId = input.kind === 'unbuildable_reported' ? leg.id : input.findingId;
+          const data =
+            input.kind === 'unbuildable_reported'
+              ? { ...input.data, dispatchRunCardId: leg.id }
+              : input.data;
+
           const already = await dispatchRunEventRepository.findFindingOnRun(
             leg.dispatchRunId,
             input.kind,
-            input.findingId,
+            findingId,
             tx,
           );
           if (already) return { recorded: false };
@@ -557,7 +579,7 @@ export const dispatchRunService = {
                 dispatchRunCardId: leg.id,
                 seq,
                 kind: input.kind,
-                data: input.data,
+                data,
               },
             ],
             tx,

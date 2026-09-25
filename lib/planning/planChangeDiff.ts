@@ -317,6 +317,8 @@ export const FIELD_KEY: Record<string, string> = {
   title: 'title',
   priority: 'priority',
   type: 'type',
+  // The executor a re-type SEEDS (MOTIR-6259) — derived by the approve, like `status`.
+  executor: 'executor',
   description: 'description',
   explanation: 'explanation',
   links: 'links',

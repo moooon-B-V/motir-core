@@ -24,7 +24,7 @@ import {
   allowedParentKinds,
   type IssueType,
 } from '@/lib/issues/parentRules';
-import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
+import { isTypeableKind, resolveExecutor } from '@/lib/issues/executorDefaults';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { promoteIfCiAlreadyGreen } from './ciPromotion';
 import {
@@ -523,25 +523,6 @@ function assertDifficultyKindConsistent(
   if (difficulty !== null && !isTypeableKind(kind)) {
     throw new DifficultyNotAllowedOnKindError(kind);
   }
-}
-
-/**
- * Resolve the executor a create/update should persist, given the resulting
- * `type`, any explicitly-supplied executor, and the row's CURRENT executor.
- * SEED-IF-ABSENT (the 2.7.2 ADR "executor is seeded when a type is first
- * chosen, and overridable"): an explicit executor always wins; otherwise, when
- * a non-null `type` lands on a row that has no executor yet, seed from
- * `defaultExecutorForType`. An existing executor (a prior override) is never
- * clobbered by a bare type change, and a null type never auto-sets an executor.
- */
-function resolveExecutor(
-  type: WorkItemTypeDto | null,
-  explicit: ExecutorDto | null | undefined,
-  current: ExecutorDto | null,
-): ExecutorDto | null {
-  if (explicit !== undefined) return explicit;
-  if (type !== null && current === null) return defaultExecutorForType(type);
-  return current;
 }
 
 /** Stable, deterministic ordering for summary lists resolved via findByIds. */

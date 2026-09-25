@@ -5,6 +5,7 @@ import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { checkSuitePayload, postSignedWebhook, pullRequestPayload } from './_helpers/github-seed';
 import { linkPr } from './_helpers/pr-link';
+import { closeOverlay, openDevelopmentOverlay } from './_helpers/development-decide';
 import {
   WEB_REPO,
   headShaFor,
@@ -167,9 +168,17 @@ async function deliverGreen(page: Page, card: SeededCard, scenario: Scenario): P
   );
 }
 
-/** Press Approve and merge, confirm, and wait for the action. */
+/**
+ * Press Approve and merge, confirm, and wait for the action — in the approval overlay,
+ * opened from the card's Development band, and then close it.
+ *
+ * ⚠️ AMENDED by MOTIR-6323: the verb moved OFF the item page (the Development section hands
+ * the decision over like every other section). The press and its confirm are unchanged;
+ * only the door moved. The queued outcome is read on the page after the close — a reload
+ * knows it (`persistedRowOutcome`), so it is the server's read, not the press's memory.
+ */
 async function pressApproveAndMerge(page: Page): Promise<void> {
-  const dev = developmentCard(page);
+  const dev = await openDevelopmentOverlay(page);
   await dev.getByRole('button', { name: pra.verb.approveAndMerge, exact: true }).click();
   const action = serverAction(page);
   await dev
@@ -179,6 +188,7 @@ async function pressApproveAndMerge(page: Page): Promise<void> {
     })
     .click();
   expect((await action).status()).toBe(200);
+  await closeOverlay(page);
 }
 
 test.describe('a pull request the merge queue ejects', () => {
@@ -215,8 +225,12 @@ test.describe('a pull request the merge queue ejects', () => {
 
     await chapter('A green pull request: the card asks one question', async () => {
       await open(page, ejected);
+      // ⚠️ AMENDED by MOTIR-6323: the question is asked by the band's ONE control.
       await expect(
-        developmentCard(page).getByRole('button', { name: pra.verb.approveAndMerge }),
+        developmentCard(page).getByRole('link', {
+          name: en.approvalGate.statusHeld.reviewAndApprove,
+          exact: true,
+        }),
       ).toBeVisible();
       await expect(statusCard(page)).toContainText('In Review');
       expect(await awaitingGates(ejected)).toBe(1);

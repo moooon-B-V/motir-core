@@ -12,11 +12,11 @@ import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import { MCP_TOOL_NAMES, type McpToolName } from '@/lib/mcp/registry';
 import { decodeFilterEnvelope, FILTER_PARAM_VERSION } from '@/lib/filters/ast';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
-import * as route from '@/app/api/mcp/route';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import { mcpRouteFetch } from '../helpers/mcpRouteFetch';
 
 // Story-CLOSING suite for the Motir MCP server (Story 7.7 · Subtask 7.7.12).
 //
@@ -48,33 +48,10 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 
 const ENDPOINT = 'http://localhost/api/mcp';
 
-/**
- * A `fetch` that dispatches the SDK transport's requests straight into the real
- * route handler (`GET` / `POST` / `DELETE` are the same auth-wrapped function),
- * injecting the bearer the way an MCP client would. This drives the genuine
- * `withMcpAuth` gate + the production resolvers — NOT a hand-built server — so
- * the auth matrix and the per-token scope gate are exercised end to end.
- */
-function routeFetch(token?: string): typeof fetch {
-  return (async (input: unknown, init: RequestInit = {}) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : (input as Request).url;
-    const headers = new Headers(init.headers ?? {});
-    if (token) headers.set('authorization', `Bearer ${token}`);
-    const method = (init.method ?? 'GET').toUpperCase();
-    const handler = method === 'GET' ? route.GET : method === 'DELETE' ? route.DELETE : route.POST;
-    return handler(new Request(url, { ...init, headers }) as never);
-  }) as unknown as typeof fetch;
-}
-
 /** Connect an official MCP client to the real `/api/mcp` route over `token`. */
 async function connect(token?: string): Promise<Client> {
   const transport = new StreamableHTTPClientTransport(new URL(ENDPOINT), {
-    fetch: routeFetch(token),
+    fetch: mcpRouteFetch(token),
   });
   const client = new Client({ name: 'story-roundtrip', version: '0.0.0' });
   await client.connect(transport);
@@ -296,6 +273,13 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // proposal, so a non-member must be refused on the PLAN. Recording a
         // judgement about a plan is as much a leak as reading one.
         record_plan_revision_reason: { planId: plan.id, branch: 'new_ask', evidenceMd: 'leak?' },
+        // Is A's card still what its plan approved? (MOTIR-6227) — item-keyed, so a
+        // non-member must read the key as not-found rather than learn A's plan
+        // history or a verdict about it.
+        get_approved_shape_verdict: { key: item1 },
+        // The run-found report (MOTIR-6286) — item-keyed within a project, so a
+        // non-member must read A's key as not-found rather than record on A's run.
+        report_unbuildable_target: { projectKey: 'PROD', targetKey: item1, reason: 'leak?' },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'leak?' },
         submit_plan_session: { projectKey: 'PROD' },
@@ -811,6 +795,16 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           planId: plan.id,
           branch: 'new_ask',
           evidenceMd: 'scoped classification',
+        },
+        // MOTIR-6227 — the caller's OWN item. Gated on `ai:view_plan`, so the
+        // read-only-token loop asserts it is REFUSED at the scope gate.
+        get_approved_shape_verdict: { key: item1 },
+        // MOTIR-6286 — the caller's OWN item. Gated on `work_item:edit`, so the
+        // read-only-token loop asserts it is REFUSED at the scope gate.
+        report_unbuildable_target: {
+          projectKey: 'PROD',
+          targetKey: item1,
+          reason: 'scoped report',
         },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'scoped turn' },

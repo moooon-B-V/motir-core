@@ -8,12 +8,7 @@ import { DesignResultSection } from './DesignResultSection';
 import { ChoiceSection } from './ChoiceSection';
 import { DecisionConfirmSection } from './DecisionConfirmSection';
 import { DecidedGateStatusBridge } from './DecidedGateStatusBridge';
-import {
-  approveAndMergeAction,
-  decideApprovalGateAction,
-  queueAgainAutoAction,
-  retryApproveAndMergeMemberAction,
-} from '../approvalGateActions';
+import { queueAgainAutoAction, retryApproveAndMergeMemberAction } from '../approvalGateActions';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { ActivitySection } from './ActivitySection';
 import { DevelopmentSectionBody, hasOpenPullRequest } from '@/components/github/DevelopmentSection';
@@ -457,13 +452,14 @@ export async function LateUpperSections({
                   ? { document: r.decisionGate.document, gate: r.decisionGate.gate }
                   : null
               }
-              // THE FRAME'S VERBS (MOTIR-5484): server actions, handed down as references
-              // so the shared block — also the read-only peek's — imports none of them.
-              gateActions={{
-                decide: decideApprovalGateAction,
-                approveAndMerge: approveAndMergeAction,
-                retryMember: retryApproveAndMergeMemberAction,
-              }}
+              // ⚠️ THE PAGE HANDS THE DECISION OVER (Bug MOTIR-6323; design-notes § *The
+              // item page HANDS THE DECISION OVER*, planning flag 2). An awaiting gate this
+              // reader may decide becomes the block plus *Review & approve* into the approval
+              // overlay, which is the ONE place a `GateDecision` is submitted from — so this
+              // host passes neither `decide` nor `approveAndMerge`. `retryMember` stays: on a
+              // decided gate *Retry merge* / *Queue again* carry out the decision already made.
+              handOver={{ routedToViewer: developmentFrame?.gate.routedToId === currentUserId }}
+              gateActions={{ retryMember: retryApproveAndMergeMemberAction }}
               // An `auto` card's exits (MOTIR-5635): Queue again for a reader who may edit.
               autoQueueExits={{
                 workItemId: itemId,

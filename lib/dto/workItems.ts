@@ -1819,6 +1819,12 @@ export interface WorkItemProseSizingAdvisoryDto extends WorkItemProseShapeAdviso
  * children is gated by its subtree — its design child can be reviewed before its
  * code children run — so it is out of scope by construction, exactly as the
  * estimation gate scopes itself by POSITION rather than by kind.
+ *
+ * ⚠️ **And a `type: design` card is never reported (MOTIR-6245).** It IS the
+ * card the LIFT would create, so the remedy is incoherent for it — and its own
+ * criteria routinely read as building a surface (panels named by number, a
+ * render of the shipped surface before drawing), which the per-criterion asset
+ * exclusion cannot see.
  */
 export interface WorkItemProseSelfBlockingDesignAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
   severity: 'likely-self-blocking-design';

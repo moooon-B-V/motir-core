@@ -746,4 +746,45 @@ export const workItemRevisionRepository = {
       ORDER BY 1
     `;
   },
+
+  /**
+   * The revisions of ONE work item written strictly AFTER `after`, oldest first —
+   * the walk the approved-shape verdict makes past the approving plan's
+   * `decidedAt` (Story MOTIR-5544 · MOTIR-6225). Rides the
+   * `(workItemId, changedAt)` index.
+   *
+   * BOUNDED: at most {@link WORK_ITEM_REVISIONS_AFTER_MAX} rows per call, however
+   * large `take` is. A caller that needs more pages on with `cursor` — the last
+   * row it holds — and the `(changedAt, id)` keyset is what keeps rows written
+   * in ONE transaction (which share a `changedAt`) from being skipped or
+   * repeated across a page boundary.
+   */
+  async findChangedAfter(
+    workItemId: string,
+    after: Date,
+    cursor: { changedAt: Date; id: string } | null,
+    take: number,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItemRevision[]> {
+    const client = tx ?? dbRead;
+    return client.workItemRevision.findMany({
+      where: {
+        workItemId,
+        changedAt: { gt: after },
+        ...(cursor
+          ? {
+              OR: [
+                { changedAt: { gt: cursor.changedAt } },
+                { changedAt: cursor.changedAt, id: { gt: cursor.id } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ changedAt: 'asc' }, { id: 'asc' }],
+      take: Math.max(1, Math.min(WORK_ITEM_REVISIONS_AFTER_MAX, Math.floor(take))),
+    });
+  },
 };
+
+/** The server-side cap on one {@link workItemRevisionRepository.findChangedAfter} page. */
+export const WORK_ITEM_REVISIONS_AFTER_MAX = 200;

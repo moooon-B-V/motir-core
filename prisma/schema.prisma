@@ -9993,7 +9993,10 @@ model DispatchRunCard {
   dispatchRun DispatchRun @relation(fields: [dispatchRunId], references: [id], onDelete: Cascade)
   workItem    WorkItem?   @relation(fields: [workItemId], references: [id], onDelete: SetNull)
 
-  events DispatchRunEvent[]
+  events         DispatchRunEvent[]
+  /// The run-found report made on this leg, when its runner stopped on an
+  /// unbuildable target (MOTIR-6282). At most one — the row is unique on the leg.
+  runFoundReport RunFoundReport?
 
   /// One leg per card per run.
   @@unique([dispatchRunId, workItemId])
@@ -10190,8 +10193,64 @@ enum DispatchEventKind {
   /// person must still decide on, as distinct from the RUN-scoped
   /// `plan_approved` a run decided for itself.
   plan_submitted
+  /// The runner stopped because its target was UNBUILDABLE and reported it
+  /// through `report_unbuildable_target` (MOTIR-5544 · MOTIR-6282,
+  /// `run-found-trigger-dispatched-path.md`). The event records what the report
+  /// concluded on EVERY arm that reaches a leg — the verdict, and the planning
+  /// bug when one was filed.
+  /// ⚠️ SERVER-WRITTEN, like `bug_filed` / `plan_submitted`: the report SERVICE
+  /// appends it, and the CLI reporter NEVER emits it — the v1 ingest refuses it,
+  /// so a client with a run token cannot forge a report the server never made.
+  unbuildable_reported
 
   @@map("dispatch_event_kind")
+}
+
+/// How the run-found report on one leg concluded (MOTIR-6282,
+/// `run-found-trigger-dispatched-path.md`). One member per arm that REACHES a
+/// leg — the no-open-leg arm writes no row, so it has no member here.
+enum RunFoundReportOutcome {
+  /// The target was never shaped by an approved plan.
+  no_plan
+  /// The approving plan was not written by Motir's own planner
+  /// (`Plan.authorSource != native`) — only a motir-ai plan ever fires a bug.
+  not_native
+  /// The target was edited after its approving plan approved it.
+  changed
+  /// A native plan, unchanged since approval — a planning bug was filed.
+  filed
+
+  @@map("run_found_report_outcome")
+}
+
+/// THE RUN-FOUND REPORT's filing row (MOTIR-5544 · MOTIR-6282) — one per
+/// stopped leg, keyed by the `DispatchRunCard` id, inserted and LOCKED before
+/// any planning bug is filed, so a retried report files at most one bug. The
+/// `job_dlq_standing_filing` pattern (MOTIR-5869), mirrored.
+///
+/// ⚠️ SYSTEM-ADMIN ONLY under RLS, deliberately against the tenant-table
+/// default: the row is MOTIR's record of what it filed into its own project,
+/// not the tenant's — it carries a key in Motir's project and nothing a tenant
+/// reads. `workspaceId` records the leg's tenant; it is not a policy arm.
+model RunFoundReport {
+  id                      String                 @id @default(cuid())
+  /// The leg the report was made on — the idempotency key.
+  dispatchRunCardId       String                 @unique @map("dispatch_run_card_id")
+  /// The leg's tenant, recorded. No FK: the row is not the tenant's.
+  workspaceId             String                 @map("workspace_id")
+  /// Null until the report's service decides; set on every arm it reaches.
+  outcome                 RunFoundReportOutcome?
+  /// The planning bug filed into Motir's meta project, on `filed`. NO FK — it
+  /// lives in another workspace, the reason `job_dlq_standing_filing`'s
+  /// identifier is text.
+  filedWorkItemId         String?                @map("filed_work_item_id")
+  filedWorkItemIdentifier String?                @map("filed_work_item_identifier")
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
+
+  dispatchRunCard DispatchRunCard @relation(fields: [dispatchRunCardId], references: [id], onDelete: Cascade)
+
+  @@map("run_found_report")
 }
 
 /// ═══════════════════════════════════════════════════════════════════════════

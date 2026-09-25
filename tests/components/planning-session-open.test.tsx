@@ -66,6 +66,7 @@ import {
 } from '@/lib/planning/launcher';
 import { indexPlanReview } from '@/lib/planning/planChangeDiff';
 import { renderWithIntl } from '../helpers/renderWithIntl';
+import { planReview, planReviewItem } from '../helpers/planReview';
 
 function session(
   bodies: string[],
@@ -234,6 +235,83 @@ describe('opening the overlay — the hook', () => {
 
     await waitFor(() => expect(result.current.state.readOnly).toBe(true));
     expect(result.current.state.planId).toBe('plan_7');
+  });
+
+  // MOTIR-6289 — the surface draws the roadmap canvas whenever `review` is null, so a
+  // named session that still has its pending plan to read must NOT read as opened
+  // (`idle`) in between: that interval is what flashed the roadmap before the plan.
+  it('a named session with a PENDING plan stays `loading` until that plan is read, then opens on it', async () => {
+    getNamed.mockResolvedValue(
+      session(['q'], { id: 's9', viewerCanPlan: true, pendingPlanId: 'plan_7' }),
+    );
+    let releaseReview!: (review: unknown) => void;
+    fetchReview.mockReturnValue(new Promise((resolve) => (releaseReview = resolve)));
+    const { result } = renderHook(() => usePlanChangeConversation({ sessionId: 's9' }));
+
+    await waitFor(() => expect(fetchReview).toHaveBeenCalledWith('plan_7', expect.anything()));
+    // The session is in hand; the plan is not — and nothing says "opened" yet.
+    expect(result.current.state.session?.id).toBe('s9');
+    expect(result.current.state.planId).toBe('plan_7');
+    expect(result.current.state.phase).toBe('loading');
+    expect(result.current.state.review).toBeNull();
+
+    const pending = planReview([planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1' })]);
+    await act(async () => releaseReview(pending));
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.review).toBe(pending);
+  });
+
+  it('a named session whose plan is NOT pending, or cannot be read, still settles `idle`', async () => {
+    getNamed.mockResolvedValue(session(['q'], { id: 's9', pendingPlanId: 'plan_7' }));
+    // Decided since the row was drawn: the read answers, and it is not a proposal.
+    fetchReview.mockResolvedValue(
+      planReview([planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1' })], {
+        status: 'approved',
+      }),
+    );
+    const decided = renderHook(() => usePlanChangeConversation({ sessionId: 's9' }));
+    await waitFor(() => expect(decided.result.current.state.phase).toBe('idle'));
+    expect(decided.result.current.state.review).toBeNull();
+    decided.unmount();
+
+    fetchReview.mockReset().mockRejectedValue(new Error('500'));
+    const failed = renderHook(() => usePlanChangeConversation({ sessionId: 's9' }));
+    await waitFor(() => expect(failed.result.current.state.phase).toBe('idle'));
+    expect(failed.result.current.state.review).toBeNull();
+    expect(failed.result.current.state.errorCode).toBeNull();
+  });
+
+  it('an open torn down while the pending plan is read writes nothing — abort, late answer, late failure', async () => {
+    getNamed.mockResolvedValue(session(['q'], { id: 's9', pendingPlanId: 'plan_7' }));
+
+    // The unmount's abort reaches the read: that answer belongs to nobody.
+    fetchReview.mockImplementation(
+      (_id: string, signal: AbortSignal) =>
+        new Promise((_, reject) =>
+          signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))),
+        ),
+    );
+    const aborted = renderHook(() => usePlanChangeConversation({ sessionId: 's9' }));
+    await waitFor(() => expect(fetchReview).toHaveBeenCalledTimes(1));
+    aborted.unmount();
+    expect(aborted.result.current.state.phase).toBe('loading');
+
+    // An answer, or a failure, that lands after the surface closed is dropped.
+    for (const settle of ['resolve', 'reject'] as const) {
+      let release!: { resolve: (v: unknown) => void; reject: (e: unknown) => void };
+      fetchReview
+        .mockReset()
+        .mockReturnValue(new Promise((resolve, reject) => (release = { resolve, reject })));
+      const late = renderHook(() => usePlanChangeConversation({ sessionId: 's9' }));
+      await waitFor(() => expect(fetchReview).toHaveBeenCalledTimes(1));
+      late.unmount();
+      await act(async () => {
+        if (settle === 'resolve') release.resolve(planReview([planReviewItem()]));
+        else release.reject(new Error('500'));
+      });
+      expect(late.result.current.state.phase).toBe('loading');
+      expect(late.result.current.state.review).toBeNull();
+    }
   });
 
   it('an id that resolves to nothing lands on the shipped SESSION_UNAVAILABLE path', async () => {

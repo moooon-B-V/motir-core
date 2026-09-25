@@ -966,3 +966,41 @@ export class PlanRevisionClassificationInvalidError extends Error {
     this.name = 'PlanRevisionClassificationInvalidError';
   }
 }
+
+/**
+ * The approved-shape verdict (Story MOTIR-5544 · MOTIR-6225) was asked about
+ * more work items than one read answers. → 400: the caller splits the set; a
+ * silently truncated answer would read as "the rest have no plan".
+ */
+export class ApprovedShapeVerdictTooManyIdsError extends Error {
+  readonly code = 'APPROVED_SHAPE_VERDICT_TOO_MANY_IDS' as const;
+  constructor(
+    readonly requested: number,
+    readonly max: number,
+  ) {
+    super(`The approved-shape verdict answers at most ${max} work items; ${requested} were asked.`);
+    this.name = 'ApprovedShapeVerdictTooManyIdsError';
+  }
+}
+
+/**
+ * The approved-shape verdict's MCP door (Story MOTIR-5544 · MOTIR-6227) was
+ * handed a `childKeys` entry that is not a child of the container it named. →
+ * 422: refused BY NAME rather than answered, because an answer about a card the
+ * caller wrongly believes is under the container reads exactly like a verdict on
+ * the container's own child — and an agent cannot tell a silent default from
+ * success.
+ */
+export class ApprovedShapeChildKeyNotAChildError extends Error {
+  readonly code = 'APPROVED_SHAPE_NOT_A_CHILD' as const;
+  constructor(
+    readonly childKey: string,
+    readonly parentKey: string,
+  ) {
+    super(
+      `${childKey} is not a child of ${parentKey}. Pass only the keys of ${parentKey}'s own ` +
+        'children as `childKeys`, or ask about the card on its own with `key`.',
+    );
+    this.name = 'ApprovedShapeChildKeyNotAChildError';
+  }
+}

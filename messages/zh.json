@@ -205,6 +205,7 @@
     "field_title": "标题",
     "field_priority": "优先级",
     "field_type": "类型",
+    "field_executor": "执行者",
     "field_storyPoints": "故事点",
     "field_estimateMinutes": "预估工时",
     "field_difficulty": "难度",
@@ -6616,6 +6617,7 @@
           "title": "标题",
           "priority": "优先级",
           "type": "类型",
+          "executor": "执行者",
           "estimate": "预估工时",
           "description": "描述",
           "explanation": "说明",
@@ -8726,6 +8728,12 @@
       "row": {
         "conflicts": "与 {base} 冲突",
         "conflictsNoBase": "与目标分支冲突"
+      },
+      "cta": {
+        "body": "全屏审阅拉取请求后，再批准并合并，或要求修改。",
+        "bodyDesign": "全屏审阅设计及其拉取请求后，再批准并合并，或要求修改。",
+        "bodyDecision": "全屏审阅决策及其拉取请求后，再批准并合并，或要求修改。",
+        "bodyAcceptance": "全屏观看录像并审阅拉取请求后，再批准并合并，或要求修改。"
       }
     },
     "statusHeld": {

@@ -488,7 +488,7 @@ describe('add_plan_items — the `modify` patch schema (MOTIR-3111)', () => {
     await client.close();
   });
 
-  it('still passes an UNRECOGNISED patch key through — naming the keys narrowed nothing', async () => {
+  it('passes an UNRECOGNISED patch key through to the SERVICE, which refuses it by name (MOTIR-6259)', async () => {
     const fx = await makeWorkItemFixture();
     const target = await createTestWorkItem(fx, {
       kind: 'task',
@@ -498,10 +498,12 @@ describe('add_plan_items — the `modify` patch schema (MOTIR-3111)', () => {
     const planId = await openPlan(client, fx);
 
     // The schema names the keys `PlanItemPatch` declares, but it is a PASSTHROUGH:
-    // a key the service understands and this file has not caught up with must
-    // still arrive. A stripping schema would make THIS module the next place a
-    // field goes missing — the exact defect MOTIR-3111 fixes, one layer up.
-    await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+    // it strips nothing, so it can never be the place a field goes missing
+    // (MOTIR-3111). What it hands on, the SERVICE judges — and since MOTIR-6259 a
+    // key `PLAN_ITEM_PATCH_KEYS` does not list is REFUSED there, by name, instead
+    // of being stored and then never applied. So the refusal must be the
+    // service's `INVALID_PROPOSAL`, not a schema error.
+    const res = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,
       final: true,
       proposals: [
@@ -513,9 +515,10 @@ describe('add_plan_items — the `modify` patch schema (MOTIR-3111)', () => {
       ],
     });
 
-    const read = struct(await call(client, GET_PLAN_TOOL_NAME, { planId }));
-    const patch = read.items.find((i) => i.op === 'modify')!.patch as Record<string, unknown>;
-    expect(patch).toMatchObject({ title: 'Renamed', someFutureField: 'still here' });
+    expect(res.isError).toBe(true);
+    const text = JSON.stringify(res.content);
+    expect(text).toContain('INVALID_PROPOSAL');
+    expect(text).toContain('`someFutureField`');
     await client.close();
   });
 });

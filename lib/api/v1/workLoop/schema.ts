@@ -1928,9 +1928,10 @@ export const dispatchSkipReasonSchema = z.enum([
  * The event kinds a CLIENT may REPORT — deliberately NOT every member of
  * `DispatchEventKind`.
  *
- * ⚠️ `bug_filed` and `plan_submitted` are ABSENT ON PURPOSE (MOTIR-3981,
- * `run-findings-protocol.md` Q5). Those two are written server-side, by the
- * service that files the bug or produces the plan, because the ids exist only
+ * ⚠️ `bug_filed`, `plan_submitted` and `unbuildable_reported` are ABSENT ON
+ * PURPOSE (MOTIR-3981 / MOTIR-6282, `run-findings-protocol.md` Q5). Those are
+ * written server-side, by the service that files the bug, produces the plan or
+ * concludes the run-found report, because the ids and the verdict exist only
  * there. Accepting them here would let any client with a run token FORGE a
  * finding — assert that a run produced a bug it never produced — and the whole
  * value of the record is that it says what actually happened. The schema is the

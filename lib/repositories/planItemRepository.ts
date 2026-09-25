@@ -221,6 +221,47 @@ export const planItemRepository = {
     });
   },
 
+  /**
+   * The proposals of ONE NAMED plan that relate to ONE NAMED work item — the
+   * TARGET (the `add` that created it, or the `modify` / `remove` naming it) and
+   * its CHILDREN (every `add` parented on it) — read by the approved-shape
+   * verdict (Story MOTIR-5544 · MOTIR-6225) to learn which cards the approving
+   * plan put under a container.
+   *
+   * ⚠️ A CHILD ARRIVES THROUGH ONE OF TWO `parentRef` SPELLINGS, and the second is
+   * the whole reason this is not {@link findHistoryByWorkItemId} narrowed to one
+   * plan: a child laid under a story the SAME plan adds carries the intra-plan
+   * temp-ref `planItem:<storyAddId>`, not the story's id (that read's stated
+   * known limitation). The caller passes the target proposal's id as
+   * `targetParentRef` (already `planItem:`-prefixed) so those children are
+   * matched too; `null` when the plan did not create the card.
+   *
+   * `workItemId` rides back so a child `add` names the card it became (materialize
+   * writes it back at approve).
+   */
+  async findByPlanForWorkItem(
+    planId: string,
+    workItemId: string,
+    targetParentRef: string | null,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<Pick<PlanItem, 'id' | 'op' | 'workItemId' | 'parentRef'>>> {
+    const client = tx ?? dbRead;
+    return client.planItem.findMany({
+      where: {
+        planId,
+        workspaceId,
+        OR: [
+          { workItemId },
+          { parentRef: workItemId, op: 'add' },
+          ...(targetParentRef ? [{ parentRef: targetParentRef, op: 'add' as const }] : []),
+        ],
+      },
+      select: { id: true, op: true, workItemId: true, parentRef: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
   async countByPlan(planId: string, tx?: Prisma.TransactionClient): Promise<number> {
     const client = tx ?? dbRead;
     return client.planItem.count({ where: { planId } });

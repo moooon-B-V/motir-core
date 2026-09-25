@@ -302,6 +302,12 @@ to choose, and nothing to invent — which is the whole requirement.
 
 ### Why not the planner-bug home
 
+> **AMENDED 2026-09-25** by [`run-found-trigger-dispatched-path.md`](run-found-trigger-dispatched-path.md)
+> ([MOTIR-6226](motir:cmufwkaue00hmhutxnbeuujv6)): still true of the AGENT, which cannot produce
+> a planning defect through the card-is-wrong branch; no longer true of the RUN — the server
+> files into the home on the runner's `report_unbuildable_target`, only for a native plan's card
+> unchanged since approval.
+
 `lib/ai/plannerBugHome.ts` resolves `PLANNER_BUG_HOME_MARKER`, and
 `aiWorkItemsService.fileBug` files there. (Since MOTIR-5822 the home is a FOLDER
 — the project's planner-bug destination, falling back to its bug destination and
@@ -668,6 +674,10 @@ Three obligations on the prompt, each asserted on the COMPOSED text:
   Composed once, delivered twice.
 
 ### "Run it ONCE" now has two parts
+
+> **AMENDED 2026-09-25** by [`run-found-trigger-dispatched-path.md`](run-found-trigger-dispatched-path.md)
+> ([MOTIR-6226](motir:cmufwkaue00hmhutxnbeuujv6)): it now has THREE — the report (free, safe to
+> repeat), the append (free), and the submit (spends credits, never retried).
 
 Appending costs nothing and starts no job; **submitting is the act that spends the
 token owner's credits.** The prompt says both, in its own voice, because an agent

@@ -14,6 +14,7 @@ import {
   firstRepoStraddleCriterion,
   hasCriterionPathTokens,
   isOrderingCheckExempt,
+  isSelfBlockingDesignCheckExempt,
   isSubsumptionCheckExempt,
   overGateSizing,
   resolvePathRepo,
@@ -22,6 +23,10 @@ import {
   namesDesignDocumentAmendment,
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
+import {
+  MOTIR_6236_DESIGN_CARD_CRITERIA,
+  MOTIR_6241_DESIGN_CARD_CRITERIA,
+} from '../fixtures/designCardCriteria';
 
 // The PURE half of the prose-vs-graph advisory (MOTIR-1969) — reference
 // extraction + the acceptance-criteria section heuristic that promotes a
@@ -584,6 +589,65 @@ describe('firstRepoStraddleCriterion — gate 1, as a CONTRADICTION', () => {
         '(and mirrored into `SHARED_PLANNING_RULES` — a planning RULE has two homes)',
     );
     expect(firstRepoStraddleCriterion(md, ['motir-core'], REPOS)).toBeNull();
+  });
+
+  describe('MOTIR-6288 — a top-level DIRECTORY that shares a repo name is not that repo', () => {
+    // The gateway keeps its Motir-specific code under a top-level `motir/`
+    // directory, and the domain also holds a repository named `motir`. A bare
+    // `motir/…` path on a card carrying `motir-gateway` is the carried repo's
+    // own namespace directory, not a criterion discharged in the other repo.
+    const WITH_MOTIR: RepoCandidate[] = [
+      { name: 'motir', repoRef: 'moooon-B-V/motir' },
+      { name: 'motir-gateway', repoRef: 'moooon-B-V/motir-gateway' },
+      ...REPOS.filter((r) => r.name !== 'motir-gateway'),
+    ];
+
+    it('a card pinned to motir-gateway naming `motir/catalog/catalog.go` is NOT a contradiction', () => {
+      const md = withCriteria(
+        '`motir/catalog/provider-models/deepseek.json` drops the retired model',
+        'the catalog test in `motir/catalog/catalog.go` covers the successor',
+      );
+      // The path still RESOLVES — the resolver is unchanged — which is exactly
+      // why the straddle arm, not the resolver, has to decline it.
+      expect(criterionRepoPaths(md, WITH_MOTIR).map((p) => p.repo)).toEqual(['motir', 'motir']);
+      expect(firstRepoStraddleCriterion(md, ['motir-gateway'], WITH_MOTIR)).toBeNull();
+    });
+
+    it('still fires when the namespace-named repo is written OWNER-QUALIFIED', () => {
+      // The `owner/name` form is unambiguous — no carried repo holds a
+      // top-level `moooon-B-V/` directory — so it remains a real contradiction.
+      const md = withCriteria('`moooon-B-V/motir/catalog/catalog.go` changes');
+      expect(firstRepoStraddleCriterion(md, ['motir-gateway'], WITH_MOTIR)).toEqual({
+        path: 'moooon-B-V/motir/catalog/catalog.go',
+        repo: 'motir',
+        criterionIndex: 1,
+        reason: 'contradiction',
+      });
+    });
+
+    it('does not excuse a SIBLING repo: pinned motir-core, `motir-ai/src/x.ts` still contradicts', () => {
+      // `motir-ai` is not the namespace of `motir-core` — they only share one.
+      const md = withCriteria('`motir-ai/src/x.ts` changes');
+      expect(firstRepoStraddleCriterion(md, ['motir-core'], WITH_MOTIR)).toEqual({
+        path: 'motir-ai/src/x.ts',
+        repo: 'motir-ai',
+        criterionIndex: 1,
+        reason: 'contradiction',
+      });
+    });
+
+    it('does not excuse a later offender behind a declined namespace path', () => {
+      const md = withCriteria(
+        '`motir/catalog/catalog.go` changes',
+        '`motir-ai/src/x.ts` consumes it',
+      );
+      expect(firstRepoStraddleCriterion(md, ['motir-gateway'], WITH_MOTIR)).toEqual({
+        path: 'motir-ai/src/x.ts',
+        repo: 'motir-ai',
+        criterionIndex: 2,
+        reason: 'contradiction',
+      });
+    });
   });
 
   it('emits nothing with no candidates, no AC heading, or an empty body', () => {
@@ -1212,5 +1276,33 @@ describe('an AMENDMENT to an existing design document is a design criterion (MOT
       '2. The design notes are extended with the copy table for every string that moves.',
     ].join('\n');
     expect(selfBlockingDesignCriteria(designOnly)).toBeNull();
+  });
+});
+
+describe('isSelfBlockingDesignCheckExempt — the TYPE scope test (MOTIR-6245)', () => {
+  it('exempts a `type: design` card, and nothing else', () => {
+    expect(isSelfBlockingDesignCheckExempt('design')).toBe(true);
+    for (const type of ['code', 'test', 'content', 'chore', 'decision', 'deploy']) {
+      expect(isSelfBlockingDesignCheckExempt(type)).toBe(false);
+    }
+    // Untyped is a real answer and is NOT exempt — the check still asks the prose.
+    expect(isSelfBlockingDesignCheckExempt(null)).toBe(false);
+    expect(isSelfBlockingDesignCheckExempt(undefined)).toBe(false);
+  });
+
+  it('is what silences a design card — the PROSE half still fires on both sub-shapes', () => {
+    // Pinned so the scope test cannot be retired on the belief that the prose
+    // predicate now handles these: it does not, and the exclusion is not to be
+    // widened to make it (see `selfBlockingDesignCriteria`'s own note).
+    // Criterion 2 names its panel by number, and no asset.
+    expect(selfBlockingDesignCriteria(MOTIR_6236_DESIGN_CARD_CRITERIA)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 2,
+    });
+    // Criterion 2 obliges the card to RENDER the shipped surface before drawing.
+    expect(selfBlockingDesignCriteria(MOTIR_6241_DESIGN_CARD_CRITERIA)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 2,
+    });
   });
 });

@@ -396,6 +396,13 @@ const proposedFieldsSchema = z
  * below is typed no more narrowly than the boundary the service already enforces
  * (`validateStoryPoints` / `validateEstimateMinutes` reject a non-number today),
  * so nothing that used to reach `applyModify` is turned away here.
+ *
+ * ⚠️ PASSED THROUGH IS NOT ACCEPTED (bug MOTIR-6259). The service REFUSES a key
+ * `PLAN_ITEM_PATCH_KEYS` does not list, naming it (`assertKnownPatchKeys`, at the
+ * append and at a correction). Until then it was accepted here, dropped at the
+ * merge and never applied — `patch.executor` came back as a success and the
+ * approved card had no executor. The refusal lives in the SERVICE rather than as
+ * a `.strict()` here so every door that appends a patch gets it, not only this one.
  */
 const patchSchema = z
   .object({

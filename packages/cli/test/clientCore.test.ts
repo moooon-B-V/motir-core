@@ -1,6 +1,8 @@
+import { createServer, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { MotirClient, type SearchFilterEnvelope } from '../src/client.js';
-import { AuthError, CliError } from '../src/errors.js';
+import { AuthError, CliError, PermissionError } from '../src/errors.js';
 import {
   startTestServer,
   v1CloseOut,
@@ -76,6 +78,65 @@ describe('the client is a URL and a bearer — no session to open', () => {
     const client = new MotirClient({ serverUrl: server.url, token: 'revoked' });
     await expect(client.whoami()).rejects.toBeInstanceOf(AuthError);
     await expect(client.whoami()).rejects.toMatchObject({ hint: expect.stringMatching(/login/) });
+  });
+
+  // MOTIR-6278. `whoami` is TWO reads, and when one is refused the other is
+  // still on the wire. Rejecting on the first refusal returns control to the
+  // caller while the second request is still being served — and a caller that
+  // hosts the server in-process (`tests/api/v1/cli-transport-seams.test.ts`)
+  // then starts its next reset against a request holding a transaction open,
+  // which is the `40P01` deadlock this card traced. The call must not settle
+  // until both reads have.
+  it('does not reject whoami until BOTH of its reads have settled', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let meServed!: () => void;
+    const meDone = new Promise<void>((resolve) => {
+      meServed = resolve;
+    });
+    let workspacesAnswered = false;
+    const refuse = (res: ServerResponse): void => {
+      res.writeHead(403, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ code: 'PERMISSION_DENIED', error: 'forbidden' }));
+    };
+    const http = createServer((req, res) => {
+      if (req.url?.startsWith('/api/v1/me')) {
+        res.on('finish', meServed);
+        refuse(res);
+        return;
+      }
+      void held.then(() => {
+        workspacesAnswered = true;
+        refuse(res);
+      });
+    });
+    await new Promise<void>((resolve) => http.listen(0, '127.0.0.1', resolve));
+    try {
+      const { port } = http.address() as AddressInfo;
+      const client = new MotirClient({ serverUrl: `http://127.0.0.1:${port}`, token: 'x' });
+
+      let settled = false;
+      const call = client.whoami().catch((err: unknown) => {
+        settled = true;
+        return err;
+      });
+      await meDone;
+      // Long enough for the refused `/me` to have reached the client and been
+      // mapped — which, with a `Promise.all`, rejected the whole call.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(settled, 'whoami rejected while /workspaces was still in flight').toBe(false);
+
+      release();
+      const failure = await call;
+      expect(workspacesAnswered).toBe(true);
+      expect(failure).toBeInstanceOf(PermissionError);
+    } finally {
+      release();
+      http.closeAllConnections();
+      await new Promise<void>((resolve) => http.close(() => resolve()));
+    }
   });
 
   it('maps an unreachable server to a CliError naming the URL', async () => {

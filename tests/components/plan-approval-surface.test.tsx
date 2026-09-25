@@ -520,6 +520,54 @@ describe('REOPENED FROM TO APPROVE — the row’s `planVia=approvals` (§20.2, 
   });
 });
 
+// MOTIR-6289 — the row lands on the PLAN, never on the roadmap first. The pane drew
+// `PlanChangeCanvas` for every null `review`, including the interval in which a named
+// session's pending plan was still being read, so the roadmap flashed and then jumped.
+describe('OPENING A NAMED SESSION — the pane waits for the plan instead of drawing the roadmap', () => {
+  const approvals = 'plan=project&planFrom=project&planSession=s_41&planVia=approvals';
+
+  it('while the conversation is still opening, the pane is the skeleton — no roadmap, no plan', () => {
+    conversation.state = stateWith({ phase: 'loading', review: null });
+    renderHost(approvals);
+    expect(screen.getByTestId('planning-pane-opening')).toBeTruthy();
+    expect(screen.queryByTestId('canvas-stub')).toBeNull();
+    expect(screen.queryByTestId('plan-proposal-views')).toBeNull();
+  });
+
+  it('the first pane after the skeleton is the plan’s List | Canvas', () => {
+    conversation.state = stateWith({ phase: 'loading', review: null });
+    const { view } = renderHost(approvals);
+    conversation.state = stateWith({ phase: 'review', review: review() });
+    view.rerender(
+      <PlanningWorkspaceHost
+        projectKey="ACME"
+        projectName="Acme"
+        launch={parsePlanningOverlay(new URLSearchParams(approvals))!}
+        anchorId={null}
+        onClose={vi.fn()}
+        closeGuardRef={{ current: null }}
+      />,
+    );
+    expect(screen.getByTestId('plan-proposal-views')).toBeTruthy();
+    expect(screen.queryByTestId('planning-pane-opening')).toBeNull();
+    expect(screen.queryByTestId('canvas-stub')).toBeNull();
+  });
+
+  it('a named session that settles with no pending plan draws the roadmap', () => {
+    conversation.state = stateWith({ phase: 'idle', review: null, planId: null });
+    renderHost(approvals);
+    expect(screen.getByTestId('canvas-stub')).toBeTruthy();
+    expect(screen.queryByTestId('planning-pane-opening')).toBeNull();
+  });
+
+  it('a launch with NO session is unchanged: the roadmap draws while the thread opens', () => {
+    conversation.state = stateWith({ phase: 'loading', review: null, planId: null });
+    renderHost();
+    expect(screen.getByTestId('canvas-stub')).toBeTruthy();
+    expect(screen.queryByTestId('planning-pane-opening')).toBeNull();
+  });
+});
+
 describe('planGateView — the one derivation both places read', () => {
   it('is ungated for no review, no gate, or a gate no longer awaiting', () => {
     expect(planGateView({ review: null, rewriting: false })).toEqual({ kind: 'ungated' });

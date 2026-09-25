@@ -688,9 +688,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // clears nothing (measured at about one post-deploy criterion in nine).
     // Summary UNCHANGED: the correction is on the advisory channel, and this line
     // describes the verdict.
+    //
+    // Re-pinned for MOTIR-6245: `likely-self-blocking-design` now names its
+    // scope — a childless card that is not itself `type: design`. Summary
+    // UNCHANGED: it narrows an advisory, and this line describes the verdict.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: '26751030f342',
+    descriptionFingerprint: 'fd4073e85a9f',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
@@ -734,6 +738,24 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     summary:
       'A plan with the proposals it bundles: what the planner actually proposed, not just how much.',
     descriptionFingerprint: 'ec35160c0f7b',
+  },
+  get_approved_shape_verdict: {
+    // The line has to carry the one thing a reader choosing between this and
+    // `get_plan` needs: this answers a question ABOUT A CARD (is it still what a
+    // plan approved?), where `get_plan` answers one about a plan.
+    summary:
+      'Is this card still what its last approved plan approved? Its plan history and the verdict.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '034119b2ee54',
+  },
+  report_unbuildable_target: {
+    // The line has to say who calls it and that nothing comes back: a reader
+    // choosing between this and `add_comment` needs to know this one is the
+    // dispatched runner's report to the server, not a note on the card.
+    summary:
+      'A dispatched runner reports the card it stopped on as unbuildable — acknowledged, nothing to act on.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: 'bf12bf352e1e',
   },
   create_plan: {
     summary:

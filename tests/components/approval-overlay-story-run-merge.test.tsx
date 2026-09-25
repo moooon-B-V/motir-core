@@ -41,7 +41,11 @@ vi.mock('@/app/(authed)/items/[key]/approvalGateActions', () => ({
   approveAndMergeAction,
   retryApproveAndMergeMemberAction,
 }));
-vi.mock('@/lib/approvals/decidedGates', () => ({ announceGateDecided: vi.fn() }));
+vi.mock('@/lib/approvals/decidedGates', () => ({
+  announceGateDecided: vi.fn(),
+  // Read only by the item page's hand-over (MOTIR-6323); no announcement reaches it here.
+  useDecidedGate: () => null,
+}));
 
 const { ApprovalOverlay } = await import('@/components/approvals/ApprovalOverlay');
 

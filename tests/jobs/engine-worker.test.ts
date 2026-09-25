@@ -159,9 +159,14 @@ describe('the claim — two workers, one queue', () => {
         order.push(run.id);
       },
     });
-    await w.tick();
-    await w.tick();
-    await w.tick();
+    // `tick()` CLAIMS and dispatches; the run executes and records its outcome
+    // after it returns. Settle each one, as the concurrency case above does, or
+    // the last run's completion write is still in a transaction when this test
+    // ends — which the suite-wide in-flight check refuses (MOTIR-6278).
+    for (let i = 0; i < 3; i++) {
+      await w.tick();
+      await w.settled();
+    }
 
     expect(order).toEqual([first, second, third]);
   });
@@ -842,6 +847,10 @@ describe('graceful shutdown', () => {
 
     release();
     await ticking;
+    // The released run now finishes and records its outcome AFTER `tick()` has
+    // returned; wait for that write, or it is still in a transaction when the
+    // next case's reset runs (MOTIR-6278).
+    await w.settled();
   });
 
   it('a drained worker CLAIMS NOTHING MORE', async () => {
@@ -883,6 +892,8 @@ describe('the SCHEDULER rides this loop (MOTIR-3471)', () => {
     });
 
     const claimed = await w.tick();
+    // The claimed run records its outcome after `tick()` returns (MOTIR-6278).
+    await w.settled();
     expect(claimed).toBe(1);
     expect(executed).toEqual(['system.attachment-gc']);
   });
@@ -906,6 +917,8 @@ describe('the SCHEDULER rides this loop (MOTIR-3471)', () => {
     });
 
     await expect(w.tick()).resolves.toBe(1);
+    // The claimed run records its outcome after `tick()` returns (MOTIR-6278).
+    await w.settled();
     expect(executed).toHaveLength(1);
   });
 
