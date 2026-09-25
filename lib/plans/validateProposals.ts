@@ -35,6 +35,7 @@ import { isWorkItemType, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
 import { isDifficultyRefusedOnKind } from '@/lib/plans/validateProposedDifficulty';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
+import { edgeLevel, isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
 import {
   FOLDER_REF_PREFIX,
   folderRefId,
@@ -1207,6 +1208,89 @@ function assertBlockedByGraphAcyclic(
   }
 }
 
+// ── THE LEVEL OF A `blocked_by` EDGE (Story MOTIR-6015 · MOTIR-6367) ─────────
+//
+// A `blocked_by` joins two work items on the SAME LEVEL — epic, story or leaf
+// (`lib/workItems/edgeLevel.ts`). It may cross parents: a subtask waiting on a
+// subtask in another story, a story on a story in another epic, are both legal
+// and nothing below compares PARENTS. What it may not do is join two levels.
+//
+// The kind of each end is read from the PROJECTION the plan would leave: an
+// `add` by its proposed kind (as corrected — a correction or a deepen can change
+// it after the append, and the gate reads the row as it stands), a `modify` by
+// its live target's kind (a patch carries no `kind`), a committed ref by its
+// live row. `blockedByRemove` is never judged, so a plan can always take a bad
+// edge away.
+//
+// An end whose kind is not known here is SKIPPED rather than guessed: an
+// unresolvable ref is `assertRefsResolvable`'s refusal, an out-of-enum proposed
+// kind is `unknown_kind`'s, and at the APPEND a committed row the caller did not
+// read is left to the close, which reads every one.
+
+/** The kind of the node a `blocked_by` ref names, or null when unknown here. */
+function kindOfRef(
+  ref: string,
+  addsById: ReadonlyMap<string, ProposalNode>,
+  liveById: ReadonlyMap<string, Pick<LiveWorkItemState, 'kind'>>,
+): string | null {
+  if (isFolderRef(ref)) return null;
+  if (isTempRef(ref)) {
+    const add = addsById.get(tempRefId(ref));
+    return add ? proposedKindOf(add) : null;
+  }
+  return liveById.get(ref)?.kind ?? null;
+}
+
+/**
+ * Refuse the first `blocked_by` the plan would WRITE between two different
+ * levels, as `INVALID_PLAN_REF_GRAPH` / `cross_level`.
+ *
+ * `subjectIds`, when given, narrows WHICH proposals' edges are judged — the
+ * append judges only what the batch writes, so a plan closed before this rule
+ * existed is not locked out of an unrelated append. The refs still resolve
+ * against every `add` in `items`.
+ */
+export function assertBlockedByLevels(
+  items: readonly ProposalNode[],
+  liveById: ValidatePlanProposalsInput['liveById'],
+  subjectIds?: ReadonlySet<string>,
+): void {
+  const addsById = new Map(items.filter((i) => i.op === 'add').map((a) => [a.id, a]));
+  for (const item of items) {
+    if (subjectIds && !subjectIds.has(item.id)) continue;
+    let subjectKind: string | null;
+    let refs: readonly string[];
+    if (item.op === 'add') {
+      subjectKind = proposedKindOf(item);
+      refs = item.blockedByRefs;
+    } else if (item.op === 'modify' && item.workItemId) {
+      subjectKind = liveById.get(item.workItemId)?.kind ?? null;
+      refs = item.patch?.blockedByAdd ?? [];
+    } else {
+      continue;
+    }
+    if (subjectKind === null || !isIssueType(subjectKind)) continue;
+    for (const ref of refs) {
+      const blockerKind = kindOfRef(ref, addsById, liveById);
+      if (blockerKind === null || !isIssueType(blockerKind)) continue;
+      if (!isCrossLevelEdge(subjectKind, blockerKind)) continue;
+      const subject =
+        item.op === 'add'
+          ? `Proposal ${item.id} (${describeProposal(item)})`
+          : describeSubject(item, liveById);
+      const where = item.op === 'add' ? 'blockedByRefs' : 'patch.blockedByAdd';
+      throw new PlanRefGraphError(
+        'cross_level',
+        item.id,
+        `cross_level: ${subject} is a ${subjectKind} (level: ${edgeLevel(subjectKind)}), and its ${where} "${ref}" names ` +
+          `${describeNode(edgeNodeOf(ref), items, liveById)}, a ${blockerKind} (level: ${edgeLevel(blockerKind)}). ` +
+          `A blocked_by joins two work items on the SAME level — epic, story or leaf (a task, a bug and a subtask are all leaves). ` +
+          `It may cross parents; it may not cross levels. Wire it to the ${edgeLevel(subjectKind)}-level item it really waits on.`,
+      );
+    }
+  }
+}
+
 /**
  * THE GATE. Re-validate an approved proposal set independently, before it
  * becomes rows. Throws the first violation as a typed error — `PlanRefGraphError`
@@ -1256,6 +1340,12 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   //     where the specific reason is a dangling ref, and BEFORE the grammar,
   //     because a plan that cannot be wired is not a plan whose placements are
   //     worth discussing.
+  // 2a. Every edge the plan WRITES joins two items on the SAME LEVEL (Story
+  //     MOTIR-6015 · MOTIR-6367). After resolution, so a dangling ref is reported
+  //     as dangling; before the cycle walk, because an edge that may not exist
+  //     at all is the more specific reason than a ring it happens to close.
+  assertBlockedByLevels(items, liveById);
+
   assertBlockedByGraphAcyclic(items, liveById, existingBlockedByEdges);
 
   // 3. The kind-parent grammar — asked of `lib/issues/parentRules.ts`, the same

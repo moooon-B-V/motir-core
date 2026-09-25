@@ -3065,6 +3065,20 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
   `PLAN_GRAMMAR_VIOLATION` (`illegal_parent`), and a `folder:` ref in
   `blockedByRefs` / `patch.blockedByAdd` / `patch.blockedByRemove` as
   `INVALID_PLAN_REF_GRAPH` — a folder is a placement and blocks nothing.
+- **A `blocked_by` joins two items on the SAME LEVEL** (Story MOTIR-6015 ·
+  MOTIR-6367). The levels are **epic**, **story** and **leaf** — a task, a bug
+  and a subtask are all leaves. An edge **may cross parents** (a subtask
+  `blocked_by` a subtask in another story, a story `blocked_by` a story in
+  another epic, a bug `blocked_by` a subtask) and **may not cross levels** (a
+  subtask `blocked_by` a story, an epic `blocked_by` a subtask). A cross-level
+  edge in `blockedByRefs` or `patch.blockedByAdd` is refused as
+  `INVALID_PLAN_REF_GRAPH` with reason **`cross_level`**, naming both items and
+  both levels — at the append for what the batch writes, and again at the close,
+  on a correction (`update_plan_proposal` — so re-kinding an `add` under an edge
+  it already carries is refused too), in `validate_plan`'s `rejections` and at
+  approve. A `modify`'s level is its target's live kind (a patch carries no
+  `kind`). `patch.blockedByRemove` is never refused, so a bad committed edge can
+  always be taken away.
 
 **Output** — `structuredContent`: the plan and its `items[]`, plus
 **`planItemIds`** — the ids of the proposals **this call** created, **in the order
@@ -3515,6 +3529,13 @@ validate_plan({ planId })
 // "the invoice-email card I proposed is gated by ACME-14, which is neither in
 //  this plan nor done" — fixable now, in the plan, before anybody reads it.
 ```
+
+An approve refusal arrives in **`rejections`** (at most one, the gate is
+fail-fast), each `{ code, reason, item, message }` — among them
+`INVALID_PLAN_REF_GRAPH` / **`cross_level`** for a `blocked_by` between two
+different levels (the same-level rule under `add_plan_items` above). A plan
+appended before that rule shipped is reported here rather than silently
+approvable.
 
 > **⚠️ What `valid: true` means, exactly.** The containing set is the whole
 > projected forest of the plan's PROJECT — so a not-done item in the same project

@@ -73,10 +73,12 @@ import {
   folderRefId,
   isFolderRef,
   isTempRef,
+  isWorkItemRef,
   tempRefsOf,
   type ProposalRefCarrier,
 } from '@/lib/plans/refs';
 import {
+  assertBlockedByLevels,
   assertFolderPlacementsLegal,
   assertProposalSetSelfConsistent,
   assertReparentLegal,
@@ -3413,6 +3415,61 @@ async function assertModifyDifficultiesLegalAtAppend(
 }
 
 /**
+ * Judge the LEVEL of every `blocked_by` the batch writes, at the APPEND (Story
+ * MOTIR-6015 · MOTIR-6367) — the same `assertBlockedByLevels` the persist gate
+ * runs at the close, correction, `validate_plan` and approve, asked here so the
+ * author hears it where the edge is written.
+ *
+ * Only the batch's own proposals are judged (`subjectIds`): the incoming
+ * inserts and the existing rows an incoming `modify` merged into. A plan closed
+ * before this rule shipped is not refused an unrelated append — its edge is
+ * reported by `validate_plan` and refused at approve instead. The committed
+ * kinds cost one batched read, and only when the batch writes an edge.
+ *
+ * Suspended project narrowing, for the reason `runPersistGate` states: a
+ * cross-project `blocked_by` is legal, and a narrowed read would not see it.
+ */
+async function assertBlockedByLevelsAtAppend(
+  nodes: readonly ProposalNode[],
+  subjectIds: ReadonlySet<string>,
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const subjects = nodes.filter((n) => subjectIds.has(n.id));
+  const refs = subjects.flatMap((n) =>
+    n.op === 'add' ? n.blockedByRefs : n.op === 'modify' ? (n.patch?.blockedByAdd ?? []) : [],
+  );
+  if (refs.length === 0) return;
+  const realIds = [
+    ...new Set([
+      ...refs.filter((r) => isWorkItemRef(r)),
+      ...subjects.filter((n) => n.op === 'modify' && n.workItemId).map((n) => n.workItemId!),
+    ]),
+  ];
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const rows =
+      realIds.length === 0
+        ? []
+        : await workItemRepository.findByIdsInWorkspace(realIds, ctx.workspaceId, tx);
+    const liveById = new Map<string, LiveWorkItemState>(
+      rows.map((r) => [
+        r.id,
+        {
+          id: r.id,
+          key: r.identifier,
+          title: r.title,
+          kind: r.kind,
+          status: r.status,
+          projectId: r.projectId,
+        },
+      ]),
+    );
+    assertBlockedByLevels(nodes, liveById, subjectIds);
+  });
+}
+
+/**
  * Judge every `folder:` placement at the APPEND (MOTIR-5414): the folder exists
  * and belongs to the plan's project.
  *
@@ -4177,6 +4234,25 @@ export const plansService = {
           // anything that is not a Prisma error — so the caller is told its
           // proposals ARE at fault, which `PlanPersistenceError` would deny.
           assertProposalSetSelfConsistent(effectiveNodes);
+
+          // The LEVEL of every edge this batch writes (Story MOTIR-6015 ·
+          // MOTIR-6367) — refused here, where the edge is written, rather than
+          // left for the reviewer to meet at approve. Judged over the batch's own
+          // inserts and the existing rows it merged into.
+          await assertBlockedByLevelsAtAppend(
+            effectiveNodes,
+            new Set([
+              ...fold.mergedExisting.keys(),
+              ...proposals.flatMap((_, index) =>
+                fold.dispositions[index]!.kind === 'insert'
+                  ? [`${INCOMING_PROPOSAL_ID_PREFIX}${index}`]
+                  : [],
+              ),
+            ]),
+            ctx,
+            fresh.projectId,
+            tx,
+          );
 
           // The container half of a `modify`'s DIFFICULTY (MOTIR-6133), which
           // `validateProposal` could not judge without the target's kind. Costs

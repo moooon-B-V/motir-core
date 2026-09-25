@@ -706,7 +706,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // pin exists to catch rather than an explanatory edit it can ride out.
     summary:
       'Would approve TAKE this plan, and is it finishable? Both, before `final: true` — nobody else will ask.',
-    descriptionFingerprint: 'e4886b97d214',
+    // Re-pinned for MOTIR-6367, summary UNCHANGED: the description gained one
+    // more approve refusal (`cross_level`) inside the list the summary already
+    // covers as "would approve take it".
+    descriptionFingerprint: 'b42519eef8dc',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool

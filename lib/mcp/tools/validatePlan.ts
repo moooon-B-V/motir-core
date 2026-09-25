@@ -134,7 +134,9 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
         '`planned` plan’s proposals are frozen and the only repair left is a new plan. It ' +
         'answers TWO questions over the project’s live tree ⊕ this plan’s proposals, and ' +
         'VALID means BOTH pass. (1) APPROVABLE — would the approve button take it? A dangling ' +
-        'ref, a duplicated blocker, a ref cycle, an illegal kind-parent placement, or a ' +
+        'ref, a duplicated blocker, a ref cycle, a blocked_by between two different LEVELS ' +
+        '(epic · story · leaf — `cross_level`; an edge across parents on ONE level is fine), ' +
+        'an illegal kind-parent placement, or a ' +
         '`modify`/`remove` of already-completed work each make it refuse; these arrive in ' +
         '`rejections`, at most one at a time because the check stops at the first, so re-run ' +
         'after fixing one. (2) FINISHABLE — every not-done item in the projected forest has ' +
