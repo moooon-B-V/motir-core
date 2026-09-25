@@ -3195,6 +3195,7 @@
         "ranAgo": "{time}运行",
         "failedAgo": "失败 · {time}",
         "noActionsAgo": "无操作 · {time}",
+        "planHeldAgo": "计划占用 · {time}",
         "autoDisabled": "已自动停用 · {count}次失败",
         "actionsAria": "{name}的操作",
         "reEnable": "重新启用"
@@ -3302,9 +3303,11 @@
         "status": {
           "success": "成功",
           "failure": "失败",
-          "no_actions": "无操作"
+          "no_actions": "无操作",
+          "plan_held": "计划占用"
         },
         "conditionNotMet": "条件未满足",
+        "planHeldNote": "计划正在重写此工作项",
         "durationMs": "{ms} 毫秒",
         "viewItemAria": "打开 {key}",
         "tombstone": "触发工作项已删除",

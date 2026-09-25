@@ -174,6 +174,23 @@ describe('AutomationRuleList — states', () => {
     expect(sw.querySelector('span')!.className).toContain('bg-(--el-switch-knob-off)');
   });
 
+  it('renders the last run for every execution status, a plan-held run as a no-op (MOTIR-6340)', () => {
+    const at = new Date(Date.now() - 5 * 60_000).toISOString();
+    renderSettings([
+      rule({ id: 'ok', name: 'Ok', lastRun: { status: 'success', at } }),
+      rule({ id: 'bad', name: 'Bad', lastRun: { status: 'failure', at } }),
+      rule({ id: 'gated', name: 'Gated', lastRun: { status: 'no_actions', at } }),
+      rule({ id: 'held', name: 'Held', lastRun: { status: 'plan_held', at } }),
+    ]);
+    expect(screen.getByText(/^Ran /)).toBeTruthy();
+    expect(screen.getByText(/^Failed · /)).toBeTruthy();
+    expect(screen.getByText(/^No actions · /)).toBeTruthy();
+    const held = screen.getByText(/^Held by a plan · /);
+    // A held run is not a failure, so it takes the muted no-op line, never the danger one.
+    expect(held.className).toContain('text-(--el-text-muted)');
+    expect(held.className).not.toContain('--el-danger');
+  });
+
   it('disables Create at the 100-rule cap', () => {
     const many = Array.from({ length: 100 }, (_, i) => rule({ id: `r${i}`, name: `Rule ${i}` }));
     renderSettings(many);

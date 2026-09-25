@@ -156,8 +156,8 @@ export function AutomationRuleAuditLog({
 function StatusPill({ status }: { status: AutomationExecutionStatusDto }) {
   const t = useTranslations('settings.automation.log');
   const label = t(`status.${status}`);
-  // Success → mint, Failure → rose (both via Pill `severity`); No actions → the
-  // neutral chip (Pill `tone`). The hue lives in the tint background with
+  // Success → mint, Failure → rose (both via Pill `severity`); No actions and
+  // Held by a plan → the neutral chip (Pill `tone`) — neither is a failure. The hue lives in the tint background with
   // `--el-text-strong` text (AA, finding #35) — Pill's contract.
   if (status === 'success') {
     return (
@@ -216,6 +216,9 @@ function ExecutionRow({ execution }: { execution: AutomationExecutionDto }) {
 
         {execution.status === 'no_actions' ? (
           <span className="font-sans text-xs text-(--el-text-muted)">{t('conditionNotMet')}</span>
+        ) : null}
+        {execution.status === 'plan_held' ? (
+          <span className="font-sans text-xs text-(--el-text-muted)">{t('planHeldNote')}</span>
         ) : null}
 
         <span className="ml-auto flex items-center gap-3">

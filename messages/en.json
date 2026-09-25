@@ -3195,6 +3195,7 @@
         "ranAgo": "Ran {time}",
         "failedAgo": "Failed · {time}",
         "noActionsAgo": "No actions · {time}",
+        "planHeldAgo": "Held by a plan · {time}",
         "autoDisabled": "Auto-disabled · {count} failures",
         "actionsAria": "Actions for {name}",
         "reEnable": "Re-enable"
@@ -3302,9 +3303,11 @@
         "status": {
           "success": "Success",
           "failure": "Failure",
-          "no_actions": "No actions"
+          "no_actions": "No actions",
+          "plan_held": "Held by a plan"
         },
         "conditionNotMet": "Condition not met",
+        "planHeldNote": "A plan is rewriting this item",
         "durationMs": "{ms} ms",
         "viewItemAria": "Open {key}",
         "tombstone": "Triggering item since deleted",

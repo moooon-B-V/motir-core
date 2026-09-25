@@ -362,10 +362,17 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/ciActionsGateSweep.ts',
     shape: '{ organizations: number; synced: number }',
   },
+  // MOTIR-6340 added the OPTIONAL `planHeld` member and KEPT the id, on purpose.
+  // `run-rules` has external effects — it runs each rule's actions (a transition,
+  // a field write, a comment) — so bumping it would re-apply them on every run
+  // resumed across the deploy. The replay is safe as it stands: a memo written
+  // before the change has no `planHeld`, and absent reads as 0, which is exactly
+  // what that run recorded (a held card was then counted in `failed`). Nothing
+  // branches on the summary; it is surfaced on `job_run.output` only.
   'run-rules': {
     file: 'lib/jobs/definitions/automationEngine.ts',
     shape:
-      '{ deduped: number; failed: number; matched: number; noActions: number; skipped: boolean; succeeded: number }',
+      '{ deduped: number; failed: number; matched: number; noActions: number; planHeld?: number | undefined; skipped: boolean; succeeded: number }',
   },
   'schedule-health': {
     file: 'lib/jobs/definitions/dailyHealthCheck.ts',

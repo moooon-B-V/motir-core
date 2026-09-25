@@ -63,7 +63,7 @@ import { STATUS_TRANSITION_REFUSALS } from '@/lib/workItems/statusTransitionRefu
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../../helpers/db';
-import { JobTestEngine, spyOnJobDispatch } from '../../helpers/jobs';
+import { JobTestEngine, dispatchedEvents, spyOnJobDispatch } from '../../helpers/jobs';
 import { linkWorkspaceReposToProject } from '../../helpers/projectRepoLink';
 
 const T = { timeout: 60_000 };
@@ -476,6 +476,7 @@ describe('the background movers — one per disposition class (§5)', () => {
     async () => {
       const card = await seedCard();
       await plannedModify(card.id);
+      const dispatch = spyOnJobDispatch();
       const rule = await automationRulesService.create(
         fx.project.identifier,
         {
@@ -496,11 +497,23 @@ describe('the background movers — one per disposition class (§5)', () => {
         eventId: 'evt-plan-held',
       });
 
-      expect(summary).toMatchObject({ matched: 1, failed: 1 });
+      // A held card is not the rule's to move, so the run is neither a success nor a
+      // failure: it records `plan_held` naming the refusal, leaves the failure streak
+      // alone and emails nobody (MOTIR-6340; AMENDMENT 21 §5(b)).
+      expect(summary).toMatchObject({ matched: 1, failed: 0, succeeded: 0, planHeld: 1 });
       const rows = await adminDb.automationRuleExecution.findMany({ where: { ruleId: rule.id } });
       expect(rows).toHaveLength(1);
-      expect(rows[0]!.status).toBe('failure');
-      expect(rows[0]!.error).toMatch(/plan/i);
+      expect(rows[0]!.status).toBe('plan_held');
+      expect(rows[0]!.error).toMatch(/^PLAN_TARGET_HELD: /);
+      const after = await adminDb.automationRule.findUniqueOrThrow({ where: { id: rule.id } });
+      expect(after).toMatchObject({ consecutiveFailureCount: 0, enabled: true });
+      expect(
+        dispatchedEvents(dispatch).filter(
+          (e) =>
+            e.name === 'email.send' &&
+            (e.data as { template?: string }).template === 'automation-rule-failed',
+        ),
+      ).toEqual([]);
       expect(await statusOf(card.id)).toBe(PLANNING_STATUS_KEY);
     },
   );
