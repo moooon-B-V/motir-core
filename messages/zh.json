@@ -8781,6 +8781,12 @@
       "row": {
         "conflicts": "与 {base} 冲突",
         "conflictsNoBase": "与目标分支冲突"
+      },
+      "cta": {
+        "body": "全屏审阅拉取请求后，再批准并合并，或要求修改。",
+        "bodyDesign": "全屏审阅设计及其拉取请求后，再批准并合并，或要求修改。",
+        "bodyDecision": "全屏审阅决策及其拉取请求后，再批准并合并，或要求修改。",
+        "bodyAcceptance": "全屏观看录像并审阅拉取请求后，再批准并合并，或要求修改。"
       }
     },
     "statusHeld": {

@@ -6,7 +6,6 @@ import { NextRequest } from 'next/server';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { db } from '@/lib/db';
-import * as mcpRoute from '@/app/api/mcp/route';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import {
   currentTestInstructionsSchema,
@@ -33,6 +32,7 @@ import {
   storyPublishArgs,
   type StoryRunScenario,
 } from './storyGateScenario';
+import { mcpRouteFetch } from '../helpers/mcpRouteFetch';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE STORY GATE — HOW TO TEST per RUN (Story MOTIR-4906 · Subtask MOTIR-5337)
@@ -60,28 +60,11 @@ const V1 = 'http://localhost:3000/api/v1';
 
 const flat = (text: string) => text.replace(/\s*\n\s*/g, ' ');
 
-function mcpFetch(token: string): typeof fetch {
-  return (async (input: unknown, init: RequestInit = {}) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : (input as Request).url;
-    const headers = new Headers(init.headers ?? {});
-    headers.set('authorization', `Bearer ${token}`);
-    const method = (init.method ?? 'GET').toUpperCase();
-    const handler =
-      method === 'GET' ? mcpRoute.GET : method === 'DELETE' ? mcpRoute.DELETE : mcpRoute.POST;
-    return handler(new Request(url, { ...init, headers }) as never);
-  }) as unknown as typeof fetch;
-}
-
 /** Call `publish_test_instructions` over the shipped transport, as the agent does. */
 async function publishOverMcp(token: string, args: Record<string, unknown>) {
   const client = new Client({ name: 'how-to-test-story-gate', version: '0.0.0' });
   await client.connect(
-    new StreamableHTTPClientTransport(new URL(MCP_ENDPOINT), { fetch: mcpFetch(token) }),
+    new StreamableHTTPClientTransport(new URL(MCP_ENDPOINT), { fetch: mcpRouteFetch(token) }),
   );
   try {
     return await client.callTool({ name: HOW_TO_TEST_TOOL_NAME, arguments: args });

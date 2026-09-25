@@ -8785,6 +8785,12 @@
       "row": {
         "conflicts": "Conflicts with {base}",
         "conflictsNoBase": "Conflicts with its base branch"
+      },
+      "cta": {
+        "body": "Review the pull requests full screen, then approve and merge them or request changes.",
+        "bodyDesign": "Review the design and its pull requests full screen, then approve and merge or request changes.",
+        "bodyDecision": "Review the decision and its pull requests full screen, then approve and merge or request changes.",
+        "bodyAcceptance": "Watch the recording and review the pull requests full screen, then approve and merge or request changes."
       }
     },
     "statusHeld": {

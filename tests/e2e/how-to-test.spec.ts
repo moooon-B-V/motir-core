@@ -141,17 +141,20 @@ test.describe('a story is tested from one Development block', () => {
 
       const card = developmentCard(page);
       await expect(card).toHaveCount(1, { timeout: 60_000 });
-      // ONE frame, whose port holds both rows AND How to test.
-      const port = card.getByRole('group', { name: 'The subject being decided', exact: true });
-      await expect(port).toHaveCount(1);
-      await expect(
-        port.getByText('Rate-limit the public API — web', { exact: true }),
-      ).toBeVisible();
-      await expect(
-        port.getByText('Rate-limit the public API — api', { exact: true }),
-      ).toBeVisible();
-      await expect(port.getByRole('group', { name: 'How to test', exact: true })).toHaveCount(1);
+      // ⚠️ AMENDED BY MOTIR-6323: the card HANDS THE DECISION OVER. It keeps both rows and
+      // How to test, asks the question with ONE control — Review & approve — and draws no
+      // frame and no verb; the frame is the approval overlay's.
       await expect(card.getByText('Awaiting you', { exact: true })).toBeVisible();
+      await expect(card.getByRole('group', { name: 'How to test', exact: true })).toHaveCount(1);
+      await expect(
+        card.getByRole('group', { name: 'The subject being decided', exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        card.getByText('Rate-limit the public API — web', { exact: true }),
+      ).toBeVisible();
+      await expect(
+        card.getByText('Rate-limit the public API — api', { exact: true }),
+      ).toBeVisible();
 
       // ⚠️ AMENDED BY MOTIR-5455, which is the change and not a drift. This
       // step used to assert that How to test carries NO control of its own —
@@ -174,16 +177,34 @@ test.describe('a story is tested from one Development block', () => {
       // this part with it (§24, decision 8b).
       await expect(part.getByRole('combobox')).toHaveCount(0);
       // The decision verbs belong to the FRAME, once each, for the person it is
-      // routed to (MOTIR-4909 registered the kind). Until then this read "no
-      // decision verb exists anywhere in the card"; that is the one assertion
-      // the promotion changed.
+      // routed to (MOTIR-4909 registered the kind) — and the frame is the overlay's
+      // (MOTIR-6323): none on the card, one door into the overlay.
       await expect(
         card.getByRole('button', { name: 'Approve and merge', exact: true }),
-      ).toHaveCount(1);
+      ).toHaveCount(0);
       await expect(card.getByRole('button', { name: 'Request changes', exact: true })).toHaveCount(
-        1,
+        0,
       );
-      // No overlay is opened.
+      await card.getByRole('link', { name: 'Review & approve', exact: true }).click();
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toBeVisible({ timeout: 60_000 });
+      // ONE frame, whose port holds both rows AND How to test.
+      const port = dialog.getByRole('group', { name: 'The subject being decided', exact: true });
+      await expect(port).toHaveCount(1);
+      await expect(
+        port.getByText('Rate-limit the public API — web', { exact: true }),
+      ).toBeVisible();
+      await expect(
+        port.getByText('Rate-limit the public API — api', { exact: true }),
+      ).toBeVisible();
+      await expect(port.getByRole('group', { name: 'How to test', exact: true })).toHaveCount(1);
+      await expect(
+        dialog.getByRole('button', { name: 'Approve and merge', exact: true }),
+      ).toHaveCount(1);
+      await expect(
+        dialog.getByRole('button', { name: 'Request changes', exact: true }),
+      ).toHaveCount(1);
+      await page.keyboard.press('Escape');
       await expect(page.getByRole('dialog')).toHaveCount(0);
     });
 

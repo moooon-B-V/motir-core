@@ -23,6 +23,18 @@ import type { McpToolName } from '../registry';
  * column fails the run rather than being skipped.
  */
 export const EXEMPT_TOOLS = {
+  report_unbuildable_target:
+    'Returns an ACKNOWLEDGEMENT of a server-side finding — `{ acknowledged: true, ' +
+    'recordedOnRun }` — and deliberately nothing else: the verdict, the approving plan and any ' +
+    'bug filed stay on the server. It represents no resource, and there is no `/api/v1` ' +
+    'operation by decision — nothing but the dispatched runner calls it ' +
+    '(`docs/decisions/run-found-trigger-dispatched-path.md`, MOTIR-6286).',
+  get_approved_shape_verdict:
+    'Returns a VERDICT — is this card still what the last approved plan approved ' +
+    '(`unchanged` / `changed` / `no_plan`), with the diverging revision and the child-set ' +
+    'comparison — beside the card’s plan-history page. A judgement computed over the revision ' +
+    'log, not a representation of a resource, and no `/api/v1` operation returns either half: ' +
+    'the plan history is read by the cookie-authed item page only (MOTIR-6227).',
   record_plan_revision_reason:
     'Returns the recorded EVENT — `{ kind, revisionId, planId, branch, planningBugKey, at }` ' +
     '— and the whole point of the card it ships with is that this event has NO tenant-facing ' +

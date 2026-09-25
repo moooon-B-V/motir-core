@@ -1063,6 +1063,41 @@ export default defineConfig({
         // (`tests/plans/validateProposedDifficulty`, `proposedDifficulty`,
         // `planDifficultyStoryGate`): 100 stmts · 100 branch · 100 fn · 100 lines.
         'lib/plans/validateProposedDifficulty.ts',
+        // Story MOTIR-5544 · MOTIR-6283 — the run-found planning bug's COMPOSER,
+        // the one place a customer's text could cross into Motir's own project.
+        // Pure; gated from its own spec (`tests/plans/runFoundPlanningBug`).
+        'lib/plans/runFoundPlanningBug.ts',
+        // Story MOTIR-5544 · MOTIR-6285 — the run-found report SERVICE: a
+        // read-derived write under a lock, a cross-workspace create as the system
+        // principal, and an acknowledgement that must leak nothing. Gated from
+        // its own spec (`tests/runFoundReportService`).
+        'lib/services/runFoundReportService.ts',
+        // Story MOTIR-5544 · MOTIR-6232 — the STORY GATE adds the rest of the
+        // story's NEW files: the change predicate (MOTIR-6225), the verdict tool
+        // (MOTIR-6227), the report's filing-row repository (MOTIR-6282) and the
+        // report tool (MOTIR-6286). Measured first on this branch against the
+        // story's specs (`approvedShapeChange`, `approvedShapeVerdict`,
+        // `approvedShapeForReport`, `get-approved-shape-verdict`,
+        // `report-unbuildable-target`, `runFoundReportRepository`,
+        // `runFoundReportService`, `runFoundStoryGate`, `runFoundStoryGuards`),
+        // stmts / branch / fn / lines:
+        //   approvedShapeChange        92.59 /  93.75 / 100 / 100
+        //   getApprovedShapeVerdict   100    /  96.15 / 100 / 100
+        //   runFoundReportRepository  100    / 100    / 100 / 100
+        //   reportUnbuildableTarget   100    / 100    / 100 / 100
+        // ⚠️ The story's SHARED files are deliberately NOT here, by the rule the
+        // MOTIR-5548 entry below states: `plansService` (the verdict's service
+        // methods — measured 42.58 / 34.07 / 49.42 / 45.07 file-wide, but 97.8 /
+        // 91.8 / 100 / 97.7 over the story's own functions), `promptTemplate`
+        // (92.04 / 85.20 / 86.20 / 92.39 from its own spec), `planItemRepository`,
+        // `lib/plans/errors`, `lib/dispatchRuns/errors` and `lib/runs/timeline`.
+        // Already-gated files the story touched keep their existing entries
+        // (`dispatchRunService`, `workItemRevisionRepository`, the MCP
+        // registry / scopes / permissions / exemptions).
+        'lib/plans/approvedShapeChange.ts',
+        'lib/mcp/tools/getApprovedShapeVerdict.ts',
+        'lib/repositories/runFoundReportRepository.ts',
+        'lib/mcp/tools/reportUnbuildableTarget.ts',
         // Story 7.12 · Subtask 7.12.6 (MOTIR-912) — the REVIEW-AND-CONFIRM seam
         // the story's rail runs on (MOTIR-1746/1747). `planReview.ts` answers the
         // three questions every AI-planning entrance asks of a run (is a proposal
@@ -4468,6 +4503,45 @@ export default defineConfig({
         'lib/plans/validateProposals.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-6095 · MOTIR-6141 — the plan path's difficulty bar.
         'lib/plans/validateProposedDifficulty.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
+        // Story MOTIR-5544 · MOTIR-6283 — the run-found planning bug's composer.
+        'lib/plans/runFoundPlanningBug.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
+        // Story MOTIR-5544 · MOTIR-6285 — the run-found report service.
+        'lib/services/runFoundReportService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
+        // Story MOTIR-5544 · MOTIR-6232 — the story gate's four (measured above).
+        'lib/plans/approvedShapeChange.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
+        'lib/mcp/tools/getApprovedShapeVerdict.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
+        'lib/repositories/runFoundReportRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
+        'lib/mcp/tools/reportUnbuildableTarget.ts': {
           branches: 90,
           functions: 90,
           lines: 90,
