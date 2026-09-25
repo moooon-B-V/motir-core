@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@/generated/prisma/client';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
+import { GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER } from '@/lib/tokens/grant';
 
 // Better-Auth's rate limiter buckets /sign-in|/sign-up per IP (window 10s, max 3),
 // and every test here signs in to obtain the real session cookie the plugin's
@@ -304,7 +305,10 @@ describe('approve → poll — the mint', () => {
     const tokens = await adminDb.apiToken.findMany();
     expect(tokens).toHaveLength(1);
     expect(tokens[0]!.label).toBe('CLI · workbox');
-    expect([...tokens[0]!.scopes].sort()).toEqual([...CLI_TOKEN_GRANT].sort());
+    // The stored grant is CLI_TOKEN_GRANT beside the mint path's marker (MOTIR-6329).
+    expect([...tokens[0]!.scopes].sort()).toEqual(
+      [...CLI_TOKEN_GRANT, GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER].sort(),
+    );
     expect(tokens[0]!.workspaceId).toBe(workspace.id);
     expect(tokens[0]!.userId).toBe(owner.id);
     const daysOut = (tokens[0]!.expiresAt!.getTime() - Date.now()) / DAY_MS;

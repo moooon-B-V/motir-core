@@ -247,38 +247,45 @@ export const ROOM_VIEW_FORWARD_KEYS: readonly PermissionKey[] = ['plan:view_any'
 
 /**
  * THE CUTOVER MARKER for {@link ROOM_VIEW_FORWARD_KEYS} (MOTIR-6329;
- * `docs/decisions/token-permissions.md` AMENDMENT 2).
+ * `docs/decisions/token-permissions.md` AMENDMENT 2) — a value WRITTEN INTO
+ * every grant minted from this change on, never a date.
  *
- * A CHOSEN grant (a token bound to a project, its keys picked in the token
- * picker) created BEFORE this instant is read forward; one created at or after
- * it is taken exactly as stored — so a person who deliberately leaves a room's
- * key out of a NEW token keeps it out. Before this story's deploy the picker
- * could not offer either key (neither was grantable), so no grant stored before
- * it can have withheld one on purpose.
+ * A CHOSEN grant (bound to a project, its keys picked in the token picker)
+ * stored WITHOUT this marker was minted by a mint path that could not offer the
+ * room view keys (neither was grantable), so it cannot have withheld one on
+ * purpose, and it is read forward. A grant stored WITH it was minted by a path
+ * that offered them, so it is taken exactly as stored: a person who deliberately
+ * leaves a room's key out of a NEW token keeps it out.
  *
- * ⚠️ IT MUST NOT PRECEDE THE DEPLOY THAT MAKES THE KEYS GRANTABLE. A chosen
- * grant minted between the marker and that deploy lacks the keys and is not read
- * forward, so it loses the rooms. The marker is set after the story's expected
- * merge; if the merge slips past it, move it — the PR body says so.
+ * ⚠️ A MARKER AND NOT A CLOCK, deliberately. A cutover DATE is right only if it
+ * equals the deploy that makes the keys grantable, which nobody knows when the
+ * code is written: set early, a grant minted in between loses the rooms; set
+ * late, a deliberate narrowing minted in between is widened — and every test
+ * that mints a token reads differently depending on the day it runs. The marker
+ * is exact by construction: the code that writes it IS the code that offers the
+ * keys. It is not a permission and not a legacy scope; `expandStoredGrant` reads
+ * it and drops it, so no surface ever displays it.
  *
  * A FIXED grant (no project: the device credential, `CLI_TOKEN_GRANT`) is read
- * forward whatever its date — nobody chose it, so there is no narrowing to honour.
+ * forward whether or not it carries the marker — nobody chose it, so there is no
+ * narrowing to honour.
  */
-export const ROOM_VIEW_KEYS_CUTOVER = new Date('2026-10-01T00:00:00.000Z');
+export const GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER = '#room-view-keys-offered';
 
 /** Where a stored grant came from — what the read-time forward mapping needs to know. */
 export interface StoredGrantProvenance {
-  /** When the token was minted (`api_token.created_at`). */
-  createdAt: Date;
   /** The project it is bound to; `null` is the FIXED device-credential shape. */
   projectId: string | null;
 }
 
 /** Whether a stored grant is read forward into {@link ROOM_VIEW_FORWARD_KEYS}. */
-function readsRoomViewKeysForward(provenance: StoredGrantProvenance | undefined): boolean {
+function readsRoomViewKeysForward(
+  stored: readonly string[],
+  provenance: StoredGrantProvenance | undefined,
+): boolean {
   if (provenance === undefined) return false;
   if (provenance.projectId === null) return true;
-  return provenance.createdAt.getTime() < ROOM_VIEW_KEYS_CUTOVER.getTime();
+  return !stored.includes(GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER);
 }
 
 /** One unrecognised stored value, as {@link expandStoredGrant} reports it. */
@@ -305,6 +312,8 @@ export function expandStoredGrant(
   const grant = new Set<PermissionKey>();
   const unrecognised: UnrecognisedGrantValue[] = [];
   for (const value of stored) {
+    // The mint path's marker (MOTIR-6329) — read below, never a permission.
+    if (value === GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER) continue;
     // The room view keys pass through as stored even while no token-reachable
     // operation asserts them yet: `CLI_TOKEN_GRANT` carries them (MOTIR-6329),
     // and a key the product itself wrote is not an unrecognised value.
@@ -319,14 +328,14 @@ export function expandStoredGrant(
     }
     for (const key of expanded) grant.add(key);
   }
-  // The ROOM VIEW KEYS, read forward (MOTIR-6329): a grant stored before the
-  // cutover — or any fixed device grant — that could BROWSE also holds the Plans
+  // The ROOM VIEW KEYS, read forward (MOTIR-6329): a chosen grant stored
+  // without the mint marker — or any fixed device grant — that could BROWSE also holds the Plans
   // and Runs rooms' view keys, so the rooms asserting them (MOTIR-6330 /
   // MOTIR-6331) take nothing from a token that reached them on browse. Applied
   // AFTER the legacy expansion, so a legacy `read` scope (which maps to browse)
   // is carried too. On READ, like everything else here — no credential row is
   // rewritten.
-  if (grant.has('project:browse') && readsRoomViewKeysForward(provenance)) {
+  if (grant.has('project:browse') && readsRoomViewKeysForward(stored, provenance)) {
     for (const key of ROOM_VIEW_FORWARD_KEYS) grant.add(key);
   }
   // The IMPLICATIONS, applied to the whole grant rather than per stored value

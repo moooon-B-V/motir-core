@@ -688,15 +688,21 @@ reads land. The carry follows §5's rule for a stored value, not a migration:
   both keys** (`ROOM_VIEW_FORWARD_KEYS`, `lib/tokens/grant.ts`). On READ, beside the
   legacy-scope expansion; **no migration touches `api_token`**, for the reason the
   column's own comment gives — nothing rewrites a live credential's row.
-- **The cutover marker is the token's `created_at` against
-  `ROOM_VIEW_KEYS_CUTOVER`** (2026-10-01T00:00Z). A CHOSEN grant (project-bound)
-  created before it is read forward; one created at or after it is taken as stored,
-  so a person who deliberately leaves a room's key out of a new token keeps it out.
-  Before this story deploys, the picker cannot offer either key (neither is
-  grantable), so no earlier grant can have withheld one on purpose.
-  **The marker must not precede that deploy**: a chosen grant minted in between
-  lacks the keys and would lose the rooms. If the story's merge slips past the
-  marker, the marker moves with it.
+- **The cutover is a MARKER written into every grant minted from this change on,
+  not a date** (`GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER`, stored beside the keys in
+  `api_token.scopes` by `apiTokensService.create`). A CHOSEN grant (project-bound)
+  stored WITHOUT it was minted by a path that could not offer either key — neither
+  was grantable — so it is read forward; one stored WITH it was chosen from an offer
+  that held them, so it is taken exactly as stored, and a person who deliberately
+  leaves a room's key out of a new token keeps it out. `expandStoredGrant` reads the
+  marker and drops it; no surface displays it.
+  **Why not a date:** a cutover date is right only if it equals the deploy that makes
+  the keys grantable, which is unknown when the code is written — set early, a grant
+  minted in between loses the rooms; set late, a deliberate narrowing minted in
+  between is widened; and every test that mints a token reads differently depending
+  on the day it runs. The marker is exact by construction: the code that writes it is
+  the code that offers the keys. (The first cut of MOTIR-6329 used `created_at`
+  against a constant, and CI on its own head showed the third failure.)
 - **A FIXED grant (the device credential, `project_id` NULL) is read forward
   whatever its date** — nobody chose it, so there is no narrowing to honour — and
   `CLI_TOKEN_GRANT` itself now carries both keys, in catalog order, for the reads

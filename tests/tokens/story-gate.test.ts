@@ -19,7 +19,6 @@ import {
   GRANTABLE_PERMISSIONS,
   RECORD_VIEW_PERMISSIONS,
   ROOM_VIEW_FORWARD_KEYS,
-  ROOM_VIEW_KEYS_CUTOVER,
   isGrantable,
 } from '@/lib/tokens/grant';
 import { LEGACY_SCOPE_PERMISSIONS, LEGACY_TOKEN_SCOPES } from '@/lib/mcp/scopes';
@@ -202,16 +201,10 @@ describe('SEAM 3 — the DTO read BACK through its consumer', () => {
     // A renamed field passes the service test and breaks the surface; reading
     // back through `listForUser` is what catches it.
     const fx = await makeWorkItemFixture();
-    const { dto } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+    await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'dto',
       permissions: ['project:browse', 'work_item:edit'],
       projectId: fx.projectId,
-    });
-    // Minted AT the room-view cutover (MOTIR-6329), so the chosen grant is read
-    // exactly as stored — independent of the date the suite happens to run on.
-    await adminDb.apiToken.update({
-      where: { id: dto.id },
-      data: { createdAt: ROOM_VIEW_KEYS_CUTOVER },
     });
     const [row] = await apiTokensService.listForUser(fx.ownerId);
     expect(row!.permissions).toEqual(['project:browse', 'work_item:edit']);

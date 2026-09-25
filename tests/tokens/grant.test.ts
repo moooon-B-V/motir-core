@@ -12,7 +12,7 @@ import {
   grantsIrreversible,
   isGrantable,
   ROOM_VIEW_FORWARD_KEYS,
-  ROOM_VIEW_KEYS_CUTOVER,
+  GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER,
 } from '@/lib/tokens/grant';
 import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { PERMISSIONS, isPermissionKey, type PermissionKey } from '@/lib/permissions/catalog';
@@ -343,57 +343,56 @@ describe('expandStoredGrant — reading a row written before this story', () => 
 });
 
 describe('expandStoredGrant — the room view keys read FORWARD (MOTIR-6329)', () => {
-  const BEFORE = new Date(ROOM_VIEW_KEYS_CUTOVER.getTime() - 1);
-  const AFTER = ROOM_VIEW_KEYS_CUTOVER;
+  const CHOSEN = { projectId: 'p1' };
+  const MARK = GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER;
 
-  it('a CHOSEN grant stored before the cutover that browses gains both keys', () => {
-    const { grant } = expandStoredGrant(['project:browse', 'work_item:edit'], {
-      createdAt: BEFORE,
-      projectId: 'p1',
-    });
+  it('a CHOSEN grant stored WITHOUT the mint marker that browses gains both keys', () => {
+    const { grant } = expandStoredGrant(['project:browse', 'work_item:edit'], CHOSEN);
     expect(grant).toContain('plan:view_any');
     expect(grant).toContain('run:view_any');
   });
 
-  it('a CHOSEN grant minted at or after the cutover without them stays without — a deliberate narrowing holds', () => {
-    const { grant } = expandStoredGrant(['project:browse', 'work_item:edit'], {
-      createdAt: AFTER,
-      projectId: 'p1',
-    });
-    expect(grant).not.toContain('plan:view_any');
-    expect(grant).not.toContain('run:view_any');
-  });
-
-  it('a post-cutover grant that CHOSE a key keeps exactly what it chose', () => {
-    const { grant, unrecognised } = expandStoredGrant(['project:browse', 'plan:view_any'], {
-      createdAt: AFTER,
-      projectId: 'p1',
-    });
+  it('a CHOSEN grant minted WITH the marker and without the keys stays without — a deliberate narrowing holds', () => {
+    const { grant, unrecognised } = expandStoredGrant(
+      ['project:browse', 'work_item:edit', MARK],
+      CHOSEN,
+    );
     expect(unrecognised).toEqual([]);
+    expect(grant).toEqual(['project:browse', 'work_item:edit']);
+  });
+
+  it('a marked grant that CHOSE one key keeps exactly what it chose', () => {
+    const { grant } = expandStoredGrant(['project:browse', 'plan:view_any', MARK], CHOSEN);
     expect(grant).toContain('plan:view_any');
     expect(grant).not.toContain('run:view_any');
   });
 
-  it('a FIXED device grant (no project) is read forward whatever its date', () => {
-    const { grant } = expandStoredGrant(['project:browse'], { createdAt: AFTER, projectId: null });
-    expect(grant).toContain('plan:view_any');
-    expect(grant).toContain('run:view_any');
+  it('the marker is never a permission — it is dropped, not displayed and not unrecognised', () => {
+    const { grant, unrecognised } = expandStoredGrant([MARK], CHOSEN);
+    expect(grant).toEqual([]);
+    expect(unrecognised).toEqual([]);
+  });
+
+  it('a FIXED device grant (no project) is read forward, marker or not', () => {
+    for (const stored of [['project:browse'], ['project:browse', MARK]]) {
+      const { grant } = expandStoredGrant(stored, { projectId: null });
+      expect(grant).toContain('plan:view_any');
+      expect(grant).toContain('run:view_any');
+    }
   });
 
   it('a grant that cannot browse gains nothing', () => {
-    const { grant } = expandStoredGrant(['comment:add'], { createdAt: BEFORE, projectId: 'p1' });
-    expect(grant).toEqual(['comment:add']);
+    expect(expandStoredGrant(['comment:add'], CHOSEN).grant).toEqual(['comment:add']);
   });
 
   it('a legacy `read` scope maps to browse and is carried forward with it', () => {
-    const { grant } = expandStoredGrant(['read'], { createdAt: BEFORE, projectId: 'p1' });
+    const { grant } = expandStoredGrant(['read'], CHOSEN);
     expect(grant).toContain('project:browse');
     expect(grant).toContain('plan:view_any');
     expect(grant).toContain('run:view_any');
   });
 
   it('legacy scopes map EXACTLY as before when no provenance is given', () => {
-    expect(expandStoredGrant(['read']).grant).toEqual(expandStoredGrant(['read']).grant);
     expect(expandStoredGrant(['read']).grant).not.toContain('plan:view_any');
   });
 
