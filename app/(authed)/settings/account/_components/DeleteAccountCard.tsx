@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { Building2, TriangleAlert } from 'lucide-react';
+import { ArrowRightLeft, Building2, TriangleAlert } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { buttonVariants } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
@@ -109,8 +109,11 @@ export async function DeleteAccountCard({
             </SettingsCallout>
 
             {/* The way OUT, drawn on the pane: the organization named, its size
-                shown, and a control that goes where the owner role is handed
-                over. The reader is never left to work out where to look. */}
+                shown, and a control that opens the Transfer ownership dialog on
+                THAT organization's settings (MOTIR-6314, design MOTIR-6303 panel
+                6) — the blocking org, which need not be the active one, so the
+                link names it (`?org=`). Ownership moves only by transfer since
+                MOTIR-6307; there is no "another owner" to add. */}
             <div className="mt-3 flex items-center gap-2.5 rounded-(--radius-input) border border-(--el-border) p-3">
               <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)">
                 <Building2 aria-hidden className="h-[15px] w-[15px]" />
@@ -124,10 +127,11 @@ export async function DeleteAccountCard({
                 </span>
               </span>
               <Link
-                href="/settings/organization/members"
+                href={transferOwnershipHref(block.id)}
                 className={buttonVariants({ variant: 'secondary', size: 'sm' })}
               >
-                {t('blocked.manageMembers')}
+                <ArrowRightLeft aria-hidden className="h-4 w-4" />
+                {t('blocked.transfer')}
               </Link>
             </div>
           </>
@@ -151,4 +155,14 @@ export async function DeleteAccountCard({
       </div>
     </Card>
   );
+}
+
+/**
+ * Where the blocked pane's action lands: the BLOCKING organization's settings
+ * with the Transfer ownership dialog open (MOTIR-6313's deep link). The org is
+ * named in the URL because it need not be the reader's active one.
+ */
+export function transferOwnershipHref(organizationId: string): string {
+  const params = new URLSearchParams({ org: organizationId, dialog: 'transfer-ownership' });
+  return `/settings/organization?${params.toString()}`;
 }

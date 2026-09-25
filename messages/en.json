@@ -2740,10 +2740,10 @@
           "blocked": {
             "pill": "Action needed",
             "title": "One thing has to be handed over first. Motir will not quietly leave an organization without an owner, and it will not delete one out from under the people in it.",
-            "body": "<b>You are the only owner of an organization that other people belong to.</b> Give someone else the owner role and this page unblocks itself — you do not need to ask anyone at Motir.",
-            "orgRow": "{count, plural, one {# member} other {# members}} · you are the only owner",
-            "manageMembers": "Organization › Members",
-            "disabledReason": "Available once every organization you own has another owner.",
+            "body": "<b>You own an organization that other people belong to.</b> Transfer ownership to one of them and this page unblocks itself — you do not need to ask anyone at Motir.",
+            "orgRow": "{count, plural, one {# member} other {# members}} · you are the owner",
+            "transfer": "Transfer ownership",
+            "disabledReason": "Available once you have transferred every organization you own.",
             "workspaces": "Workspaces are <b>not</b> a block. {count, plural, one {You are the only member of one of them, so it cannot be left behind — it is deleted with your account, and the confirmation lists it.} other {You are the only member of # of them, so they cannot be left behind — they are deleted with your account, and the confirmation lists them.}} To keep one, invite somebody to it first."
           },
           "confirm": {
@@ -2755,7 +2755,7 @@
             "cancel": "Cancel",
             "schedule": "<b>Nothing is erased today.</b> Your account closes now and is erased on <b>{date}</b>. Signing back in does not cancel it — until then you can stop the erasure from the banner on every page, or here on Data & privacy.",
             "error": "We couldn't schedule the deletion. Try again in a moment.",
-            "blockedError": "One organization you own still needs another owner before your account can be deleted."
+            "blockedError": "You still own an organization other people belong to. Transfer it before deleting your account."
           },
           "ledger": {
             "deleted": "Deleted",

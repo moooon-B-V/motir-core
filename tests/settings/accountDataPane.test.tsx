@@ -258,18 +258,49 @@ describe('⚠️ the BLOCKED state — read at rest, never raised at submit', ()
     });
   });
 
-  it('names the organization, shows its member count, and links to its Members page', async () => {
+  it('names the organization, shows its member count, and says to TRANSFER it (MOTIR-6314)', async () => {
     const html = await renderPane();
     expect(html).toContain('moooon');
     expect(html).toContain('6 members');
-    expect(html).toContain('you are the only owner');
-    expect(html).toContain('/settings/organization/members');
+    expect(html).toContain('you are the owner');
+    expect(html).toContain('Transfer ownership to one of them');
     expect(html).toContain('Action needed');
+    // Ownership moves only by transfer (MOTIR-6307): nothing on the pane may ask
+    // for "another owner" or send the reader to the roster's role picker.
+    expect(html).not.toContain('another owner');
+    expect(html).not.toContain('owner role');
+    expect(html).not.toContain('/settings/organization/members');
+  });
+
+  it('links to the BLOCKING organization’s settings with the Transfer ownership dialog open', async () => {
+    const html = await renderPane();
+    expect(html).toContain(
+      `href="/settings/organization?org=${ORG.id}&amp;dialog=transfer-ownership"`,
+    );
+    expect(html).toMatch(/>\s*(?:<[^>]+>\s*)*Transfer ownership\s*</);
+  });
+
+  it('follows the block to the SECOND organization when that is the one it names', async () => {
+    // The reader owns two organizations; the preview names the second. The link
+    // must open THAT org's settings — never the reader's active one, which the
+    // settings page would otherwise resolve.
+    const second = { id: 'org_second', name: 'Second Co', memberCount: 3 };
+    previewAccountErasure.mockResolvedValue({
+      ...emptyPreview(),
+      blocked: true,
+      blockingOrganization: second,
+    });
+    const html = await renderPane();
+    expect(html).toContain('Second Co');
+    expect(html).toContain(
+      'href="/settings/organization?org=org_second&amp;dialog=transfer-ownership"',
+    );
+    expect(html).not.toContain(`org=${ORG.id}`);
   });
 
   it('renders the Delete control DISABLED, with the reason beside it', async () => {
     const html = await renderPane();
-    expect(html).toContain('Available once every organization you own has another owner.');
+    expect(html).toContain('Available once you have transferred every organization you own.');
     // The shipped Button renders `disabled` on the element itself.
     expect(/<button[^>]*disabled[^>]*>(?:(?!<\/button>)[\s\S])*Delete account/.test(html)).toBe(
       true,
