@@ -136,6 +136,33 @@ describe('the org Owner, in a workspace they never joined', () => {
     expect(active?.id).toBe(project.id);
     expect(await readMembership(owner.id, sales.id)).toBeNull();
   });
+
+  // The follow-on the walk named: SWITCHING project there. The pointer the
+  // switch writes is the membership row's, which the Owner does not have, so
+  // their choice rides `User.lastActiveProjectId` instead — and still no row.
+  it('switches project there: the choice is honoured, and still no roster row', async () => {
+    const { owner, admin, sales, project } = await orgWithForeignWorkspace();
+    const second = await createTestProject({
+      workspaceId: sales.id,
+      actorUserId: admin.id,
+      identifier: 'SECND',
+    });
+    await projectsService.setActiveProject({
+      userId: owner.id,
+      workspaceId: sales.id,
+      projectId: second.id,
+    });
+    expect((await projectsService.getActiveProject(owner.id, sales.id))?.id).toBe(second.id);
+    expect(await readMembership(owner.id, sales.id)).toBeNull();
+
+    // Back again — the pointer is overwritten, not appended.
+    await projectsService.setActiveProject({
+      userId: owner.id,
+      workspaceId: sales.id,
+      projectId: project.id,
+    });
+    expect((await projectsService.getActiveProject(owner.id, sales.id))?.id).toBe(project.id);
+  });
 });
 
 describe('an org Admin reaches a workspace through membership', () => {

@@ -13,6 +13,7 @@ import {
 } from '@/lib/workspaces/context';
 import { readReachRole } from '@/lib/workspaces/membershipGate';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { readProjectForService } from '@/lib/workspaces/tenantRead';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import {
@@ -384,13 +385,23 @@ async function resolveActiveProjectInContext(
         // bounced a signed-in reader back to `/workbench` — a redirect loop, found
         // by the story's acceptance walk (MOTIR-6316). So the Owner resolves to
         // the workspace's first non-archived project, read-only: nothing is
-        // PERSISTED, because there is no row to hold the pointer and reaching a
-        // workspace must not put the Owner on its roster. Anyone else without a
+        // PERSISTED here, because there is no row to hold the pointer and reaching
+        // a workspace must not put the Owner on its roster. Anyone else without a
         // membership is still refused (null), exactly as before.
+        //
+        // The Owner's CHOICE of project there is remembered on the one pointer
+        // they do own, `User.lastActiveProjectId` — `setActiveProject` writes it
+        // for them instead of the membership row — so it is honoured first when
+        // it names a project of THIS workspace.
         if (
           !(await organizationMembershipRepository.isOwnerOfWorkspaceOrg(userId, workspaceId, tx))
         ) {
           return null;
+        }
+        const user = await userRepository.findById(userId, tx);
+        if (user?.lastActiveProjectId) {
+          const chosen = await projectRepository.findById(user.lastActiveProjectId, tx);
+          if (chosen && chosen.workspaceId === workspaceId) return toProjectDTO(chosen);
         }
         const [first] = await projectRepository.findByWorkspace(workspaceId, tx);
         return first ? toProjectDTO(first) : null;
@@ -811,6 +822,17 @@ export const projectsService = {
             tx,
           );
         }
+        // The org Owner may act in a workspace they never joined (MOTIR-6308),
+        // and there is then no membership row to hold the pointer. Their choice
+        // is carried by `User.lastActiveProjectId` alone — written below — which
+        // `resolveActiveProjectInContext` reads for them. Writing a membership
+        // row instead would put the Owner on the workspace's roster.
+        const membership = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+          input.userId,
+          input.workspaceId,
+          tx,
+        );
+        if (!membership) return null;
         return workspaceMembershipRepository.setActiveProject(
           input.userId,
           input.workspaceId,
