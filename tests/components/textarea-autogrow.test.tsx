@@ -310,7 +310,15 @@ describe('Textarea — autoGrow', () => {
   it('forwards a CALLBACK ref too, and clears it on unmount', () => {
     const seen: (HTMLTextAreaElement | null)[] = [];
     const { unmount } = render(
-      <Textarea ref={(node) => seen.push(node)} label="Message" autoGrow rows={1} maxRows={8} />,
+      <Textarea
+        ref={(node) => {
+          seen.push(node);
+        }}
+        label="Message"
+        autoGrow
+        rows={1}
+        maxRows={8}
+      />,
     );
     expect(seen[0]).toBe(screen.getByLabelText('Message'));
     unmount();
