@@ -1,19 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import {
-  changedFields,
-  indexPlanReview,
-  isProposedNodeId,
-  proposalForItem,
-  proposedAddsForLevel,
-  touchedByProposal,
-} from '@/lib/planning/planChangeDiff';
+import { indexPlanReview } from '@/lib/planning/planChangeDiff';
 import { planReview, planReviewItem } from '../helpers/planReview';
 
 // The placement rules behind the IN-CANVAS diff (Subtask MOTIR-1730, re-pointed
-// at the PLAN by MOTIR-1746). The canvas renders one level at a time, so the whole
-// question this module answers is "which of the run's proposals belong on the
-// level in focus, and what state does each existing item take?". Pure input →
-// output, no React.
+// at the PLAN by MOTIR-1746): where each of the run's proposals is PARENTED on the
+// canvas, and the counts the confirm bar reads. Pure input → output, no React.
+//
+// MOTIR-6342 deleted the per-level helpers this file used to pin
+// (`proposedAddsForLevel`, `proposalForItem`, `changedFields`, `touchedByProposal`,
+// `isProposedNodeId`) with the second level builder that called them (MOTIR-6299).
+// The placement they read is the `parentNodeId` / `nodeId` each `add` carries,
+// asserted directly below; the level builder that consumes it is `mergePlanLevel`,
+// held by `plan-level-op-treatments.test.tsx`.
 
 describe('indexPlanReview', () => {
   it('is empty for no plan / a plan with no proposals (both are valid no-ops)', () => {
@@ -48,9 +46,8 @@ describe('indexPlanReview', () => {
     expect(index.counts).toEqual({ added: 2, changed: 1, removed: 1 });
     expect(index.changesById.get('wi_21')?.title).toBe('Email reminders');
     expect(index.removalsById.get('wi_24')?.identifier).toBe('PAY-24');
-    // A proposed node is PREFIXED, so it can never collide with a work-item id —
-    // which is what lets the canvas tell "drill a proposal" from "drill an item".
-    expect(index.adds.every((a) => isProposedNodeId(a.nodeId))).toBe(true);
+    // A proposed node is PREFIXED, so it can never collide with a work-item id.
+    expect(index.adds.map((a) => a.nodeId)).toEqual(['proposed:pi_a', 'proposed:pi_b']);
   });
 
   it('re-prefixes a parent that is ANOTHER proposal, and flags that parent drillable', () => {
@@ -79,138 +76,29 @@ describe('indexPlanReview', () => {
 
     expect(index.adds[0]!.parentNodeId).toBe('wi_3');
   });
-});
 
-describe('proposedAddsForLevel', () => {
-  const index = indexPlanReview(
-    planReview([
-      planReviewItem({
-        planItemId: 'pi_r',
-        nodeId: 'pi_r',
-        parentNodeId: 'wi_3',
-        title: 'Recurring',
-      }),
-      planReviewItem({
-        planItemId: 'pi_m',
-        nodeId: 'pi_m',
-        parentNodeId: 'pi_r',
-        title: 'Monthly',
-      }),
-      planReviewItem({ planItemId: 'pi_top', nodeId: 'pi_top', title: 'Reporting' }),
-    ]),
-  );
+  it('parents a parentless proposal on the TOP level', () => {
+    const index = indexPlanReview(
+      planReview([planReviewItem({ planItemId: 'pi_t', nodeId: 'pi_t' })]),
+    );
 
-  it('puts a parentless proposal on the TOP level', () => {
-    expect(proposedAddsForLevel(index, null).map((a) => a.item.title)).toEqual(['Reporting']);
+    expect(index.adds[0]!.parentNodeId).toBeNull();
   });
 
-  it('puts a proposal on the level of the EXISTING item it is parented on', () => {
-    expect(proposedAddsForLevel(index, 'wi_3').map((a) => a.item.title)).toEqual(['Recurring']);
-  });
+  it('keys a MATERIALIZED add by the work item it became, and parents its children on that id', () => {
+    // A decided add IS the committed card (MOTIR-3160): prefixing it would draw a
+    // second, keyless copy beside it (MOTIR-3206), and a child pointing at the
+    // prefixed id would hang off a node that is not on the canvas.
+    const index = indexPlanReview(
+      planReview([
+        planReviewItem({ planItemId: 'pi_d', nodeId: 'wi_new', identifier: 'PAY-30' }),
+        planReviewItem({ planItemId: 'pi_k', nodeId: 'pi_k', parentNodeId: 'wi_new' }),
+      ]),
+    );
 
-  it('puts a proposal under its PROPOSED parent when that node is the focus', () => {
-    const parent = index.adds[0]!;
-    expect(proposedAddsForLevel(index, parent.nodeId).map((a) => a.item.title)).toEqual([
-      'Monthly',
-    ]);
-  });
-
-  it('shows nothing on a level nothing is proposed under', () => {
-    expect(proposedAddsForLevel(index, 'wi_9')).toEqual([]);
-  });
-});
-
-// The per-item diff-STATE helper is DELETED (MOTIR-6299) with the level builder
-// that was its only caller (`planChangeLevel.tsx`). Its unconditional terminal lock — every `done` card on a level
-// drawn `locked` whenever any plan was pending — is the rule Part XXIII §23.4
-// retired: `locked` is now `PlanItemNode`'s `isLockedProposal`, a modify / remove
-// over a finished target, and `plan-item-node-shell.test.tsx` holds it (with
-// `plan-level-op-treatments.test.tsx` holding it through `mergePlanLevel`).
-describe('proposalForItem', () => {
-  const index = indexPlanReview(
-    planReview([
-      planReviewItem({
-        planItemId: 'pi_m',
-        op: 'modify',
-        nodeId: 'wi_21',
-        changes: [{ field: 'priority', from: 'medium', to: 'high' }],
-      }),
-      planReviewItem({ planItemId: 'pi_r', op: 'remove', nodeId: 'wi_24' }),
-    ]),
-  );
-
-  it('hands back the proposal that touches an item, so a caller can name what changed', () => {
-    expect(proposalForItem(index, 'wi_21')?.op).toBe('modify');
-    expect(proposalForItem(index, 'wi_24')?.op).toBe('remove');
-    expect(proposalForItem(index, 'wi_99')).toBeUndefined();
-  });
-});
-
-describe('changedFields', () => {
-  it('names every field the modify touches, mapping the wire name to the copy key', () => {
-    expect(
-      changedFields(
-        planReviewItem({
-          op: 'modify',
-          changes: [
-            { field: 'title', from: 'a', to: 'b' },
-            { field: 'type', from: 'code', to: null },
-            { field: 'description', from: null, to: 'updated' },
-            // The second body (MOTIR-3111) — a `modify` can rewrite the WHY, so
-            // the whitelist has to name it or the canvas silently drops the one
-            // change a reviewer most needs to see.
-            { field: 'explanation', from: null, to: 'updated' },
-            { field: 'estimateMinutes', from: '20', to: '30' },
-            { field: 'storyPoints', from: '2', to: '3' },
-            { field: 'links', from: null, to: '+1' },
-          ],
-        }),
-      ),
-    ).toEqual(['title', 'type', 'description', 'explanation', 'estimate', 'points', 'links']);
-  });
-
-  it('DROPS a field it has no copy for, rather than rendering a missing key', () => {
-    // The whitelist is the point: a diffable field added server-side must not be
-    // able to crash the canvas on a translation that has not landed yet.
-    expect(
-      changedFields(
-        planReviewItem({ op: 'modify', changes: [{ field: 'sprint', from: null, to: 'S3' }] }),
-      ),
-    ).toEqual([]);
-  });
-
-  it('is empty for a modify that carries no diff', () => {
-    expect(changedFields(planReviewItem({ op: 'modify' }))).toEqual([]);
-  });
-});
-
-// MOTIR-6301 (the live-drawing gate's coverage top-up). `touchedByProposal` lost
-// its only caller when MOTIR-6299 deleted `PlanChangeCanvas`'s grouping exclusion,
-// and with it every spec that reached it — which left this file under the 90%
-// floor `vitest.config.ts` gates it at. Its rule is pinned here, directly, for as
-// long as it is exported; deleting it (the cleanup MOTIR-6299 deferred) should
-// delete this block with it.
-describe('touchedByProposal — membership in the proposal, never a row status', () => {
-  const index = indexPlanReview(
-    planReview([
-      planReviewItem({ planItemId: 'pi_m', op: 'modify', nodeId: 'wi_21' }),
-      planReviewItem({ planItemId: 'pi_r', op: 'remove', nodeId: 'wi_24' }),
-      // A pending add touches its PARENT through `parentNodeId` alone.
-      planReviewItem({ planItemId: 'pi_a', nodeId: 'pi_a', parentNodeId: 'wi_story' }),
-      // A MATERIALIZED add is keyed by the work item it became.
-      planReviewItem({ planItemId: 'pi_d', nodeId: 'wi_new', identifier: 'PAY-30' }),
-    ]),
-  );
-
-  it('is true for a modify target, a remove target, an add parent and a materialized add', () => {
-    expect(touchedByProposal(index, 'wi_21')).toBe(true);
-    expect(touchedByProposal(index, 'wi_24')).toBe(true);
-    expect(touchedByProposal(index, 'wi_story')).toBe(true);
-    expect(touchedByProposal(index, 'wi_new')).toBe(true);
-  });
-
-  it('is false for a row the plan does not name, and for everything under an empty plan', () => {
-    expect(touchedByProposal(index, 'wi_99')).toBe(false);
-    expect(touchedByProposal(indexPlanReview(planReview([])), 'wi_21')).toBe(false);
+    const [decided, child] = index.adds;
+    expect(decided!.nodeId).toBe('wi_new');
+    expect(child!.parentNodeId).toBe('wi_new');
+    expect(decided!.hasChildren).toBe(true);
   });
 });

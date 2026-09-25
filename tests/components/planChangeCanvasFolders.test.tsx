@@ -6,7 +6,7 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { PlanChangeCanvas } from '@/components/planning/PlanChangeCanvas';
 import { mergePlanLevel } from '@/components/planning/planLevel';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
-import { indexPlanReview, proposedAddsForLevel } from '@/lib/planning/planChangeDiff';
+import { indexPlanReview } from '@/lib/planning/planChangeDiff';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
 import { planReview, planReviewItem } from '../helpers/planReview';
@@ -132,23 +132,27 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('indexPlanReview — where a proposal SITS (decisions 2, 4, 6)', () => {
+/** Each add's canvas parent — the level it is drawn on — by its plan item id. */
+const levels = (index: ReturnType<typeof indexPlanReview>) =>
+  Object.fromEntries(index.adds.map((a) => [a.item.planItemId, a.parentNodeId]));
+
+// The folder MOVE (decision 4) is not indexed here any more: MOTIR-6342 removed the
+// `relocations` list nothing read. It is drawn once, at its destination, by
+// `mergePlanLevel` (the block below) and taken off its source by
+// `PlanReviewCanvas` (`planReviewCanvasFolders.test.tsx`).
+describe('indexPlanReview — where a proposal SITS (decisions 2, 6)', () => {
   it('keys a filed add on its folder LEVEL, and leaves an unfiled root add at the root', () => {
     const plain = planReviewItem({ planItemId: 'pi_plain', nodeId: 'pi_plain', title: 'Plain' });
     const index = indexPlanReview(planReview([filedAdd(), plain]));
 
-    expect(proposedAddsForLevel(index, 'folder:f2').map((a) => a.item.planItemId)).toEqual([
-      'pi_filed',
-    ]);
-    expect(proposedAddsForLevel(index, null).map((a) => a.item.planItemId)).toEqual(['pi_plain']);
+    expect(levels(index)).toEqual({ pi_filed: 'folder:f2', pi_plain: null });
   });
 
   it('keeps a proposal whose folder was DELETED at the root — there is no level to put it on', () => {
     const stale = filedAdd({ folderPath: null, folderMissing: true, folderTrail: [] });
     const index = indexPlanReview(planReview([stale]));
 
-    expect(proposedAddsForLevel(index, null)).toHaveLength(1);
-    expect(proposedAddsForLevel(index, 'folder:f2')).toHaveLength(0);
+    expect(levels(index)).toEqual({ pi_filed: null });
     expect(index.folderChanges.size).toBe(0);
   });
 
@@ -157,33 +161,6 @@ describe('indexPlanReview — where a proposal SITS (decisions 2, 4, 6)', () => 
 
     expect(index.folderChanges.get(PARKED.id)).toBe(2);
     expect(index.folderChanges.get(Y2025.id)).toBe(1);
-  });
-
-  it('records a move INTO a folder as a relocation, root → folder level', () => {
-    const index = indexPlanReview(planReview([moveIntoParked()]));
-
-    expect(index.relocations).toHaveLength(1);
-    expect(index.relocations[0]).toMatchObject({ fromLevel: null, toLevel: 'folder:f1' });
-  });
-
-  it('does not record a move between two WORK ITEMS — the overlay draws those as it always has', () => {
-    const reparent = moveIntoParked({
-      folderId: null,
-      folderPath: null,
-      folderTrail: [],
-      changes: [
-        {
-          field: 'parent',
-          from: 'MOTIR-1',
-          to: 'MOTIR-2',
-          placement: {
-            from: { kind: 'workItem', id: 'wi_1', identifier: 'MOTIR-1' },
-            to: { kind: 'workItem', id: 'wi_2', identifier: 'MOTIR-2' },
-          },
-        },
-      ],
-    });
-    expect(indexPlanReview(planReview([reparent])).relocations).toHaveLength(0);
   });
 
   it('tolerates a payload with no trail (an older server) — no folder, no throw', () => {
