@@ -217,8 +217,8 @@ export function PlanReviewRail({
   // yet something to revise.
   const canRevise = Boolean(onRevise) && planned;
 
-  // ── THE PLAN GATE, on its own page (Story MOTIR-6012 · MOTIR-6037; design Part XX
-  // §20.4, §20.5, Panel 8). The existing CTA IS the gate's Approve and the ghost
+  // ── THE PLAN GATE, on its own page (Story MOTIR-6012 · MOTIR-6037; design Part XXII
+  // §22.4, §22.5, Panel 8). The existing CTA IS the gate's Approve and the ghost
   // Decline IS the gate's Decline — nothing is moved. What an ASKED plan adds: Decline
   // confirms once, in the approve language's band with an OPTIONAL reason, and a plan
   // with no conversation to return to says why it opened here.
@@ -450,7 +450,7 @@ export function PlanReviewRail({
           one. */}
       <div className="flex shrink-0 flex-col gap-2 border-t border-(--el-border) bg-(--el-surface) px-5 pt-4 pb-[calc(var(--spacing-control-y)+var(--shell-bottom-clearance,1.5rem))]">
         {errorCode === 'APPROVAL_GATE_STALE_SUBJECT' ? (
-          // REFUSED AS STALE (MOTIR-6037; design Part XX §20.5): the plan moved under the
+          // REFUSED AS STALE (MOTIR-6037; design Part XXII §22.5): the plan moved under the
           // reader, nothing was decided, and the re-read plan is what the verbs below
           // now decide. The design's words, on the *changed under you* yellow.
           <PlanStaleBand place="rail" />
@@ -777,7 +777,7 @@ function HistoryRow({ ev, t }: { ev: PlanHistoryEventDto; t: ReturnType<typeof u
  */
 /**
  * A PLAN WITH NO SESSION opened on its own page, and says why (MOTIR-6037; design
- * Part XX §20.5 Panel 8, narrowed by Part XXI §21.6) — the reopened line's shape with a
+ * Part XXII §22.5 Panel 8, narrowed by Part XXI §21.6) — the reopened line's shape with a
  * `message-square-text` glyph. The page HAS a composer (Part XII), so it never says there
  * is nothing to talk to; only that there is no conversation to return to.
  *

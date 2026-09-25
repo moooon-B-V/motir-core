@@ -385,6 +385,7 @@ function TodoRow({
   onMove,
 }: TodoRowProps) {
   const t = useTranslations('workItemTodos');
+  const tpa = useTranslations('projectAccess');
   const notesId = useId();
 
   if (isEditing) {
@@ -407,14 +408,31 @@ function TodoRow({
       {/* The tick. `stateLabels` is what keeps a screen reader from announcing a
           STEP as "Held" — the primitive's default vocabulary is set-membership,
           which is right for the role editor and wrong here. */}
-      <Checkbox
-        checked={row.done}
-        onChange={onToggle}
-        label={row.text}
-        disabled={!canEdit || pending}
-        stateLabels={{ checked: t('done'), unchecked: t('notDone') }}
-        className="mt-0.5"
-      />
+      {canEdit ? (
+        <Checkbox
+          checked={row.done}
+          onChange={onToggle}
+          label={row.text}
+          disabled={pending}
+          stateLabels={{ checked: t('done'), unchecked: t('notDone') }}
+          className="mt-0.5"
+        />
+      ) : (
+        // MOTIR-6173 — the permission-gated UI rule's part 2: an in-place control
+        // a read-only actor can SEE stays, disabled, and says why. A disabled
+        // input swallows pointer events, so the reason hangs off a wrapper.
+        <Tooltip content={tpa('readOnlyHint')}>
+          <span data-testid="todo-checkbox-read-only" className="mt-0.5 inline-flex">
+            <Checkbox
+              checked={row.done}
+              onChange={onToggle}
+              label={row.text}
+              disabled
+              stateLabels={{ checked: t('done'), unchecked: t('notDone') }}
+            />
+          </span>
+        </Tooltip>
+      )}
 
       <div className="min-w-0">
         {isConfirming ? (

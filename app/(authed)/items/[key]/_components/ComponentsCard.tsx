@@ -33,16 +33,20 @@ export function ComponentsCard({
   workItemId,
   initialComponents,
   projectComponents,
-  canManageProject,
+  canManageComponents,
 }: {
   workItemId: string;
   initialComponents: ComponentDto[];
   /** The project taxonomy (name-ordered) — the picker's option source. */
   projectComponents: ComponentDto[];
-  /** Gates the empty-project "Manage components" link (admins only). */
-  canManageProject: boolean;
+  /** Gates the empty-project "Manage components" link: `component:manage`, the key
+   *  its destination room (`/settings/project/components`) asks for (MOTIR-6173 —
+   *  it used to key on `project:administer` and point at the Details room). */
+  canManageComponents: boolean;
 }) {
   const t = useTranslations('issueViews');
+  // MOTIR-6173 — a read-only actor keeps the DISABLED chevron and its reason.
+  const tpa = useTranslations('projectAccess');
   // MOTIR-2473 — the key this control's own write asserts:
   // `projectAccessService.assertCanEdit` resolves `work_item:edit`.
   const { can } = useProjectAccess();
@@ -61,7 +65,7 @@ export function ComponentsCard({
   return (
     <FieldCard
       label={t('componentsField')}
-      editable={canEdit}
+      readOnlyReason={canEdit ? undefined : tpa('readOnlyHint')}
       editing={editing}
       onToggle={() => {
         setEditing((cur) => !cur);
@@ -82,11 +86,11 @@ export function ComponentsCard({
           removeLabel={(label) => t('componentsRemove', { label })}
           emptyText={t('componentsNoneDefined')}
           hint={
-            emptyTaxonomy && canManageProject ? (
-              // The quiet admin line (panel 3) — the settings hub carries the
-              // Components card; 5.4.10 may deepen the target to its own page.
+            emptyTaxonomy && canManageComponents ? (
+              // The quiet admin line (panel 3) — the Components room, which
+              // `component:manage` opens (lib/settings/projectSettingsNav.ts).
               <Link
-                href="/settings/project"
+                href="/settings/project/components"
                 className="text-(--el-link) hover:text-(--el-link-pressed) hover:underline"
               >
                 {t('componentsManageLink')}

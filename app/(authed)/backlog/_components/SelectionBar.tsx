@@ -6,6 +6,7 @@ import { ArrowRight, ChevronRight, LayoutList, X } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { useBacklogDnd } from './BacklogDndProvider';
 import { SprintMenuList } from './SprintMenuList';
+import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 
 // The multi-select bulk-action bar (Story 4.2 · Subtask 4.2.5), per
 // design/backlog/backlog.mock.html panel 4. Appears above the stack the moment
@@ -29,6 +30,9 @@ import { SprintMenuList } from './SprintMenuList';
 // rather than hide one on a guess.
 
 export function SelectionBar() {
+  // MOTIR-6174 — both bulk moves assert `sprint:manage`; an actor without it has
+  // no selection to act on (the rows draw no checkbox) and no bar (HIDE).
+  const { can } = useProjectAccess();
   const t = useTranslations('backlog');
   const {
     selectedIds,
@@ -41,7 +45,9 @@ export function SelectionBar() {
   const [sprintMenuOpen, setSprintMenuOpen] = useState(false);
 
   const count = selectedIds.size;
-  if (count === 0) return null;
+  // A row click can still select (shift / ⌘), so the bar is gated on the key
+  // itself, not only on the missing checkbox.
+  if (count === 0 || !can('sprint:manage')) return null;
   const ids = [...selectedIds];
 
   // Each selected item's current home: a sprint id, null (backlog), or undefined

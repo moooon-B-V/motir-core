@@ -19,7 +19,7 @@ import type { PlanGateView } from '@/lib/planning/planGateView';
 // with the proposal, and the rail keeps the thread.
 //
 // ⚠️ FOR AN ASKED PLAN IT IS THE PLAN GATE'S DECISION (Story MOTIR-6012 · MOTIR-6037;
-// `design/ai-planning/design-notes.md` Part XX §20.4–§20.5, `plan-review--decide.mock.html`
+// `design/ai-planning/design-notes.md` Part XXII §22.4–§22.5, `plan-review--decide.mock.html`
 // Panels 2–5, 7). A plan waiting in To approve is decided HERE, through the one decide
 // door (MOTIR-6038), and the bar's two controls become the gate's two verbs:
 // **Decline** (ghost, left) and **Approve** (primary, check, right), with the

@@ -28,6 +28,7 @@ import {
   planningSprints,
   type SprintListResponse,
 } from './backlogShared';
+import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 
 // The backlog client container (Story 4.2 · Subtask 4.2.3, read render). A pure
 // consumer of the Story-4.1 reads: it fetches the sprint list (`GET /api/sprints`,
@@ -83,6 +84,8 @@ export function BacklogContainer({
   /** Whether Motir AI is wired at all. NOT wired ⇒ no AI door and no hint. */
   aiAvailable?: boolean;
 }) {
+  // MOTIR-6174 — the key every sprint write asserts (see the strip below).
+  const canManageSprints = useProjectAccess().can('sprint:manage');
   const t = useTranslations('backlog');
   const { toast } = useToast();
   const statusByKey = useMemo(() => buildStatusByKey(workflow.statuses), [workflow.statuses]);
@@ -277,14 +280,20 @@ export function BacklogContainer({
 
         {/* The dock REPLACES the strip in place while a run is live, so the user
             stays on the backlog — the surface the result lands in. */}
+        {/* MOTIR-6174 — creating a sprint, by hand or by planning one with AI,
+            asserts `sprint:manage`; the strip is an entry point, so an actor
+            without the key sees none of it (HIDE). A LIVE run's dock still
+            renders: it was started by someone who could. */}
         {planState.phase === 'idle' ? (
-          <CreateSprintStrip
-            onCreated={refetchSprints}
-            aiEnabled={aiSprintPlanningEnabled}
-            aiAvailable={aiAvailable}
-            onPlanSprints={() => void startPlanning()}
-            planning={false}
-          />
+          canManageSprints ? (
+            <CreateSprintStrip
+              onCreated={refetchSprints}
+              aiEnabled={aiSprintPlanningEnabled}
+              aiAvailable={aiAvailable}
+              onPlanSprints={() => void startPlanning()}
+              planning={false}
+            />
+          ) : null
         ) : (
           <SprintPlanDock
             state={planState}

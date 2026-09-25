@@ -484,6 +484,19 @@ CARD-scoped, on the leg open for that work item — the same lookup shape the sh
 `endedAt IS NULL` on the newest leg for that item; the write is attributed to the
 run that was in flight when it happened, and to no other.
 
+> **Amended 2026-09-25 (MOTIR-6279): for a PLAN, "when it happened" is when the
+> plan was CREATED, not when it reached `planned`.** A dispatched agent's
+> `submit_plan_session` opens the plan `generating` and returns at once; the agent
+> exits, the CLI settles the leg `replanned` and usually closes the run, and only
+> then does the model finish. Resolving the leg open at `planned` therefore found
+> nothing on every real refusal, reproduced in `tests/dispatchRunFindings.test.ts`.
+> The plan finding now resolves the leg that SPANS the plan's `createdAt` —
+> `startedAt <= createdAt`, and `endedAt >= createdAt` or still open on a running
+> run — so the event can land on a settled leg of a closed run. The same reading
+> keeps a person's plan, opened before a run picked the card up, off that run's
+> leg when it happens to close mid-leg. A bug is unchanged: it is recorded at the
+> moment it is filed, so "open now" is still the right question for it.
+
 **No open leg means no event, and that is not an error.** A person filing a bug in
 the app, `motir log-bug` from a terminal, a plan submitted from the project-wide
 panel — none of them belong to a run, and the lookup returning nothing is the

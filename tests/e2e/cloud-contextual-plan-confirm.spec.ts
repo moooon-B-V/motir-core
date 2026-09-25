@@ -816,7 +816,7 @@ test('Discard declines the plan and leaves the tree untouched', async ({
     (r) => r.url().includes(`/api/plans/${planId}/decline`) && r.request().method() === 'POST',
   );
   // An ASKED plan's Discard is the gate's Decline, which confirms once in an inline
-  // band with an OPTIONAL reason (MOTIR-6037; design Part XX §20.4).
+  // band with an OPTIONAL reason (MOTIR-6037; design Part XXII §22.4).
   await confirmBar(page).getByRole('button', { name: 'Decline', exact: true }).click();
   await page
     .getByTestId('plan-decline-confirm')

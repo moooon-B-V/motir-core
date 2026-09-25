@@ -32,6 +32,7 @@ import {
   sortBoards,
   upsertBoard,
 } from './multiBoardState';
+import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 
 // BoardSwitcher (Subtask 3.7.4) — the multi-board switcher + create / rename /
 // set-default / delete UI on `/boards`, per `design/boards/multi-board.mock.html`
@@ -63,19 +64,20 @@ import {
 // switcher is a `role="menu"` with `menuitemradio` rows, no nested buttons (a
 // row is a div holding the pick + manage buttons as siblings).
 //
-// Permissions: board CRUD is a project-config write. Roles are Epic 6.4, so the
-// affordances are membership-gated NOW (any member) with `canManage` defaulting
-// true; `TODO(6.4)`: pass the project-admin flag so a non-admin sees the switcher
-// (to switch) with New / manage hidden, and the server re-gates every write 403.
+// Permissions (MOTIR-6174): board CRUD asserts `board:configure` (`boardsService`,
+// the key the `/settings/project/board` room also asks for). An actor without it
+// sees the switcher to SWITCH, with New and the per-board manage menu — rename,
+// set default, Board settings, delete — HIDDEN: they are entry points (the
+// permission-gated UI rule, rows 1 and 5). The server re-gates every write.
 
 type BoardType = 'kanban' | 'scrum';
 
 const NAME_MAX = 80;
 
 export function BoardSwitcher({
-  // TODO(6.4): wire to the project-admin role (matching 2.2.5 / 3.3 / 3.6). Today
-  // board CRUD is membership-gated — any project member manages boards.
-  canManage = true,
+  // Defaults to the actor's own `board:configure` (the layout's one permission
+  // resolution); a caller may still pass it explicitly.
+  canManage: canManageProp,
   // `variant` (Subtask 3.7.8) — `'board'` (default, on `/boards`): the full
   // switcher with New / manage [⋯] (rename / set-default / Board settings /
   // delete). `'settings'` (on `/settings/project/board`): a SWITCH-ONLY switcher
@@ -93,6 +95,8 @@ export function BoardSwitcher({
   // In the settings variant the switcher only SWITCHES which board is configured
   // — no New, no per-row manage menu (those live on `/boards`).
   const isSettings = variant === 'settings';
+  const { can } = useProjectAccess();
+  const canManage = canManageProp ?? can('board:configure');
   const showManage = canManage && !isSettings;
   const { toast } = useToast();
   const router = useRouter();

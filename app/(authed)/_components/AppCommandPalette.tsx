@@ -35,6 +35,7 @@ import {
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import {
   AI_PLANNING_REQUIREMENT,
+  CREATE_WORK_ITEM_REQUIREMENT,
   canOfferNavDestination,
   satisfiesRequirement,
 } from '@/lib/settings/projectNavAccess';
@@ -50,6 +51,7 @@ import { useCreateIssue } from './CreateIssueProvider';
 import { useOnboardingResume } from './OnboardingResumeProvider';
 import { isWorkspaceTierRevealed } from '@/lib/workspaces/tierDisclosure';
 import type { PlanningLaunchContext } from '@/lib/planning/launcher';
+import { visibleOrganizationSettingsNav } from '@/lib/settings/organizationSettingsNav';
 
 /** ⌘K plans the PROJECT — the palette is global and knows no item. */
 const PLANNING_CONTEXT: PlanningLaunchContext = { kind: 'project' };
@@ -99,6 +101,12 @@ export interface AppCommandPaletteProps {
    * failure, one surface over. Defaults CLOSED.
    */
   publicProjectsAvailable?: boolean;
+  /**
+   * `isOrgAdminRole(activeOrg.role)` (MOTIR-6175) — the org-settings deep links
+   * are offered through `visibleOrganizationSettingsNav`, the registry the org
+   * rail and the org menu read. Defaults CLOSED, like the two props above.
+   */
+  isOrgAdmin?: boolean;
 }
 
 export function AppCommandPalette({
@@ -109,6 +117,7 @@ export function AppCommandPalette({
   settingsPermissions,
   aiPlanningConfigured = false,
   publicProjectsAvailable = false,
+  isOrgAdmin = false,
 }: AppCommandPaletteProps) {
   const t = useTranslations('shell');
   const ts = useTranslations('settings');
@@ -234,7 +243,13 @@ export function AppCommandPalette({
 
   // Create — the create-issue entry point (one of three: also the top-nav "+"
   // and the "C" shortcut). Only with an active project to create into.
-  if (canCreate) {
+  //
+  // MOTIR-6175 — and only for an actor who may create (`CREATE_WORK_ITEM_REQUIREMENT`, the
+  // key `createWorkItem` asserts). The modal is not even mounted for anyone else
+  // (`CreateIssueProvider`), so the row opened nothing. A palette row is an entry
+  // point with no disabled form (rule row 3): the top-bar `+` stays, drawn
+  // disabled with its reason, as the one control that teaches the action exists.
+  if (canCreate && satisfiesRequirement(CREATE_WORK_ITEM_REQUIREMENT, held)) {
     groups.push({
       heading: t('commandPalette.createHeading'),
       actions: [
@@ -369,12 +384,17 @@ export function AppCommandPalette({
   // onto it.
   // Not gated on the workspace-tier reveal either — an organization exists at
   // every count, unlike the workspace settings home above.
-  navActions.push({
-    id: 'nav-org-security',
-    label: t('commandPalette.goToOrgSecurity'),
-    icon: <ShieldCheck />,
-    onSelect: () => go('/settings/organization/security'),
-  });
+  //
+  // MOTIR-6175 — offered only when the org registry offers the room: the pane is
+  // owner/admin only, and it answered everyone else with the forbidden panel.
+  if (visibleOrganizationSettingsNav({ isOrgAdmin }).some((entry) => entry.id === 'security')) {
+    navActions.push({
+      id: 'nav-org-security',
+      label: t('commandPalette.goToOrgSecurity'),
+      icon: <ShieldCheck />,
+      onSelect: () => go('/settings/organization/security'),
+    });
+  }
   // The WORKSPACE half (MOTIR-3647), under the same condition the route itself
   // applies: below the tier-reveal threshold `/settings/workspace/security`
   // 404s, so an entry here would offer a dead address. The control is still

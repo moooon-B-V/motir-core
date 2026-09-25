@@ -363,7 +363,8 @@ describe('CustomFieldsSection — inline editors (mock panel 2)', () => {
 });
 
 describe('CustomFieldsSection — viewer read-only (mock panel 4)', () => {
-  it('drops every chevron but keeps values and the disclosure row', () => {
+  // MOTIR-6173 — every field keeps a DISABLED chevron that says why, instead of none.
+  it('keeps values and the disclosure row, and every chevron is DISABLED with its reason', () => {
     renderSection(
       [
         selectField(),
@@ -380,6 +381,12 @@ describe('CustomFieldsSection — viewer read-only (mock panel 4)', () => {
 
     expect(screen.getByText('High')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Edit Severity' })).toBeNull();
+    const chevron = screen.getByRole('button', {
+      name: 'Severity — You have read-only access to this project',
+    });
+    expect(chevron.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(chevron);
+    expect(screen.queryByRole('listbox')).toBeNull();
     expect(screen.getByRole('button', { name: 'Show more fields (1)' })).toBeTruthy();
   });
 });
