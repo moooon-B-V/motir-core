@@ -1522,13 +1522,37 @@ export interface WorkItemDeletePreviewDto {
  * {@link ValidityCondition}). Reuses {@link SprintBlockerDto} for each blocker:
  * `item` is the in-subtree item gated by out-of-subtree work `blockedBy`.
  */
+/**
+ * ONE cross-parent `blocked_by` the parents do not carry (Story MOTIR-6015 ·
+ * MOTIR-6370): `item` waits on `blockedBy`, the two sit on the same level under
+ * DIFFERENT parents, and `itemParent` is not directly `blocked_by`
+ * `blockerParent`. The remedy is to wire that parent edge (and, one level up,
+ * the same question of it) — `lib/workItems/crossParentCoverage.ts` is the rule.
+ */
+export interface InvalidEdgeDto {
+  item: string;
+  blockedBy: string;
+  itemParent: string;
+  blockerParent: string;
+}
+
 export interface WorkItemValidityDto {
   /** The validated work item's identifier (e.g. "MOTIR-1337"). */
   key: string;
-  /** True ⟺ every in-subtree item's blocked_by closure is satisfied. */
+  /**
+   * True ⟺ every in-subtree item's blocked_by closure is satisfied AND no
+   * cross-parent edge is uncovered (`invalidEdges` empty, MOTIR-6370). A gate
+   * that asks only "can this be finished?" reads `blockers`, never this.
+   */
   valid: boolean;
   /** The in-subtree items gated by out-of-subtree, unsatisfied work; empty when valid. */
   blockers: SprintBlockerDto[];
+  /**
+   * Every same-level `blocked_by` FROM a not-done subtree member whose two ends
+   * sit under different parents that carry no matching edge (MOTIR-6370).
+   * Empty when every cross-parent edge is covered.
+   */
+  invalidEdges: InvalidEdgeDto[];
   /**
    * PROSE-vs-GRAPH advisories (MOTIR-1969) plus the CONTAINER-COVERAGE family
    * (MOTIR-5362) — a SEPARATE channel from `blockers`, and **never** a blocker.

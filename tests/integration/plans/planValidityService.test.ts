@@ -405,7 +405,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
   // CROSS-ROOT blocked_by edge. Iterating the single-subtree rule per root
   // false-positives it (the gate sits in a sibling subtree); the forest rule,
   // whose containing set is the whole projection, does not.
-  it('a CROSS-ROOT blocked_by (story under epic B gated by a story under epic A) is VALID over the forest', async () => {
+  it('a CROSS-ROOT blocked_by (story under epic B gated by a story under epic A) is FINISHABLE over the forest — and VALID only when the epics carry the edge', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await freshPlan(fx);
     // Two new root "epics" (adds with no parentRef), each with one "story" child.
@@ -434,8 +434,64 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
     const storyBId = itemIdByTitle(pStoryB, 'Story B');
     await plansService.markPlanned(planId, fx.ctx);
 
+    // FINISHABLE — the forest holds both roots, so the edge's gate is in S — but
+    // not VALID (MOTIR-6370): the two stories sit under different parents that
+    // carry no edge of their own.
     const forest = await planValidityService.validateProjectedPlan(planId, fx.ctx);
-    expect(forest).toEqual({ planId, valid: true, blockers: [], rejections: [] });
+    expect(forest).toEqual({
+      planId,
+      valid: false,
+      blockers: [],
+      rejections: [],
+      invalidEdges: [
+        {
+          item: `planItem:${storyBId}`,
+          blockedBy: `planItem:${storyAId}`,
+          itemParent: `planItem:${epicBId}`,
+          blockerParent: `planItem:${epicAId}`,
+        },
+      ],
+    });
+
+    // The OTHER half: the same forest with epic B blocked_by epic A is VALID.
+    const coveredPlanId = await freshPlan(fx);
+    const cA = itemIdByTitle(
+      await addProposal(fx, coveredPlanId, {
+        op: 'add',
+        proposedFields: { title: 'Epic A', kind: 'story' },
+      }),
+      'Epic A',
+    );
+    const cB = itemIdByTitle(
+      await addProposal(fx, coveredPlanId, {
+        op: 'add',
+        proposedFields: { title: 'Epic B', kind: 'story' },
+        blockedByRefs: [`planItem:${cA}`],
+      }),
+      'Epic B',
+    );
+    const cStoryA = itemIdByTitle(
+      await addProposal(fx, coveredPlanId, {
+        op: 'add',
+        proposedFields: { title: 'Story A', kind: 'subtask' },
+        parentRef: `planItem:${cA}`,
+      }),
+      'Story A',
+    );
+    await addProposal(fx, coveredPlanId, {
+      op: 'add',
+      proposedFields: { title: 'Story B', kind: 'subtask' },
+      parentRef: `planItem:${cB}`,
+      blockedByRefs: [`planItem:${cStoryA}`],
+    });
+    await plansService.markPlanned(coveredPlanId, fx.ctx);
+    expect(await planValidityService.validateProjectedPlan(coveredPlanId, fx.ctx)).toEqual({
+      planId: coveredPlanId,
+      valid: true,
+      blockers: [],
+      rejections: [],
+      invalidEdges: [],
+    });
 
     // Proof of the defect the forest rule fixes: iterating the SINGLE-subtree
     // rule per root false-positives the cross-root edge — validating epic B's
@@ -540,7 +596,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
     await plansService.markPlanned(planId, fx.ctx);
 
     const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
-    expect(res).toEqual({ planId, valid: true, blockers: [], rejections: [] });
+    expect(res).toEqual({ planId, valid: true, blockers: [], rejections: [], invalidEdges: [] });
   });
 
   it('an EMPTY plan (no items, no live tree) is vacuously valid', async () => {
@@ -549,7 +605,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
     await plansService.markPlanned(planId, fx.ctx);
 
     const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
-    expect(res).toEqual({ planId, valid: true, blockers: [], rejections: [] });
+    expect(res).toEqual({ planId, valid: true, blockers: [], rejections: [], invalidEdges: [] });
   });
 
   // NOTE: a SAME-project blocker can never make the forest invalid — every
@@ -582,7 +638,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
     await plansService.markPlanned(planId, fx.ctx);
 
     const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
-    expect(res).toEqual({ planId, valid: true, blockers: [], rejections: [] });
+    expect(res).toEqual({ planId, valid: true, blockers: [], rejections: [], invalidEdges: [] });
   });
 
   it('an unknown planId throws PlanNotFoundError', async () => {
@@ -883,7 +939,7 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
     // `PlanValidityDto` is deliberately unchanged: the forest has no single
     // subject to attribute a body-vs-edges gap to. Per-card coverage is the
     // `validateProjectedWorkItem` call, asserted above.
-    expect(forest).toEqual({ planId, valid: true, blockers: [], rejections: [] });
+    expect(forest).toEqual({ planId, valid: true, blockers: [], rejections: [], invalidEdges: [] });
   });
 });
 
@@ -1017,7 +1073,13 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
       story.identifier,
       fx.ctx,
     );
-    expect(empty).toEqual({ key: story.identifier, valid: true, blockers: [], advisories: [] });
+    expect(empty).toEqual({
+      key: story.identifier,
+      valid: true,
+      blockers: [],
+      invalidEdges: [],
+      advisories: [],
+    });
   });
 
   it('a target the plan REMOVES projects to an EMPTY subtree — vacuously valid, nothing walked and nothing scanned', async () => {
@@ -1041,7 +1103,13 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
       story.identifier,
       fx.ctx,
     );
-    expect(res).toEqual({ key: story.identifier, valid: true, blockers: [], advisories: [] });
+    expect(res).toEqual({
+      key: story.identifier,
+      valid: true,
+      blockers: [],
+      invalidEdges: [],
+      advisories: [],
+    });
   });
 
   it('a CROSS-PROJECT blocker carried into the projection is not a LOCAL reference for the advisory pass', async () => {
@@ -1153,7 +1221,19 @@ describe('planValidityService.validateProjectedSprint — the sprint rule’s qu
     const blockerTwo = await mk(fx, 'Blocker two', 'task'); // PROD-5 — backlog, not done
     await putInSprint(childA.id, sprintId);
     await putInSprint(childB.id, sprintId);
-    await link(fx, story.id, blockerOne.id); // the ANCESTOR's edge — cascades to A and B
+    // The ANCESTOR's edge — cascades to A and B. A story blocked_by a task is
+    // CROSS-LEVEL, which every door now refuses (MOTIR-6369); it is seeded below
+    // them because this case is about the sprint walk's dedupe over an edge the
+    // tree can still carry from before the rule, not about how it got there.
+    await adminDb.workItemLink.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        fromId: story.id,
+        toId: blockerOne.id,
+        kind: 'is_blocked_by',
+        createdById: fx.ctx.userId,
+      },
+    });
     await link(fx, childA.id, blockerOne.id); // A's OWN edge to the SAME blocker
     await link(fx, childA.id, blockerTwo.id); // A's second blocker
 

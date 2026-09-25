@@ -693,10 +693,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // scope — a childless card that is not itself `type: design`. Summary
     // UNCHANGED: it narrows an advisory, and this line describes the verdict.
     summary:
-      'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    // Re-pinned for MOTIR-6369, summary UNCHANGED: one more advisory severity
-    // (`cross-level-edge`) in the family the summary already names.
-    descriptionFingerprint: '6c8ee1c15f86',
+      'Is this epic, story, task or bug finishable, and do its cross-parent edges have their parent edges? Names what is missing.',
+    // SUMMARY REWRITTEN for MOTIR-6370: `valid` now also requires every
+    // cross-parent edge to be carried by its parents (`invalidEdges`), so a line
+    // asking only "finishable?" described half the verdict. (MOTIR-6369 had
+    // re-pinned it unchanged for the `cross-level-edge` advisory.)
+    descriptionFingerprint: '5c8ddc1cf04f',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
@@ -707,11 +709,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // reading that made a malformed plan safe to close, so this is the drift the
     // pin exists to catch rather than an explanatory edit it can ride out.
     summary:
-      'Would approve TAKE this plan, and is it finishable? Both, before `final: true` — nobody else will ask.',
-    // Re-pinned for MOTIR-6367, summary UNCHANGED: the description gained one
-    // more approve refusal (`cross_level`) inside the list the summary already
-    // covers as "would approve take it".
-    descriptionFingerprint: 'b42519eef8dc',
+      'Would approve TAKE this plan, is it finishable, and do its cross-parent edges have their parent edges? All three, before `final: true` — nobody else will ask.',
+    // SUMMARY REWRITTEN for MOTIR-6370: "Both" became false when `valid` gained a
+    // THIRD question (`invalidEdges`). MOTIR-6367 had re-pinned it unchanged for
+    // the `cross_level` refusal, which sits inside "would approve take it".
+    descriptionFingerprint: '94a8e654607d',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool

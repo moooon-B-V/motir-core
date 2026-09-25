@@ -200,8 +200,13 @@ describe('validate_plan — the FOREST verdict a PAT can now reach', () => {
 
     const client = await connectClient(fx.ctx);
 
+    // FINISHABLE over the forest (no blocker) — but not VALID since MOTIR-6370:
+    // Story B1 and Story A1 sit under different epics that carry no edge.
     const forest = await call(client, 'validate_plan', { planId });
-    expect(struct(forest)).toMatchObject({ valid: true, blockers: [] });
+    expect(struct(forest)).toMatchObject({ valid: false, blockers: [] });
+    expect(struct(forest).invalidEdges).toEqual([
+      expect.objectContaining({ blockedBy: storyA1, itemParent: epicB, blockerParent: epicA }),
+    ]);
 
     // The same plan, asked per-root: epic B's subtree does not contain Story A1,
     // so the subtree rule correctly reports it. Both answers are right for their

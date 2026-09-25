@@ -2393,6 +2393,7 @@ export const workItemRepository = {
       parentId: string | null;
       sprintId: string | null;
       projectId: string;
+      kind: string;
     }>
   > {
     const client = tx ?? dbRead;
@@ -2405,6 +2406,7 @@ export const workItemRepository = {
         parentId: true,
         sprintId: true,
         projectId: true,
+        kind: true,
       },
     });
   },

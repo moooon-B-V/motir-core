@@ -2477,10 +2477,25 @@ kind — epic / story / task / bug (a `subtask` is the leaf). Read-only.
 | `condition` | `loose`\|`tight` | no       | Default `loose` — a `done` dependency outside the subtree counts as satisfied. `tight` requires every dependency to be IN the subtree, else it gates. |
 
 **Output** — `structuredContent`: a `WorkItemValidityDto` —
-`{ key, valid, blockers, advisories }`. When `valid` is `false`, `blockers` lists
-each gated in-subtree item as `{ item, blockedBy, blockerStatus, blockerSprintId }`
-(the out-of-subtree, unsatisfied work gating it). An unknown / cross-workspace key
+`{ key, valid, blockers, invalidEdges, advisories }`. `blockers` lists each gated
+in-subtree item as `{ item, blockedBy, blockerStatus, blockerSprintId }` (the
+out-of-subtree, unsatisfied work gating it). An unknown / cross-workspace key
 returns a `WORK_ITEM_NOT_FOUND` tool error.
+
+**A cross-parent edge is VALID only when the parents carry it** (Story MOTIR-6015 ·
+MOTIR-6370). A `blocked_by` joins two items on the same level and may cross
+parents, but then the blocked item's parent must itself be directly `blocked_by`
+the blocker's parent — and that parent edge is asked the same question one level
+up, so a subtask edge across epics owes the story edge AND the epic edge.
+`invalidEdges` lists every same-level `blocked_by` FROM a not-done subtree member
+that fails it, as `{ item, blockedBy, itemParent, blockerParent }`. Two items
+under one parent are never listed, and an end with no work-item parent (a root,
+or an item filed in a folder) is exempt. **`valid` is `true` only when `blockers`
+AND `invalidEdges` are both empty.** A caller asking only _"can this be
+finished?"_ reads `blockers` — the scope claim (`motir run <story>`) does, so a
+story with an uncovered edge is still claimable and its pull request is where the
+parent edge gets added. The predicate is `lib/workItems/crossParentCoverage.ts`,
+the one the roadmap's "blocked elsewhere" signal reads too.
 
 `advisories` is the **prose-vs-graph** channel (MOTIR-1969) and is **never a
 blocker**. It carries the same two families the dispatch surfaces return (see
@@ -3553,9 +3568,16 @@ Motir-generated plan arrives coherent.
 | `planId`    | string | yes      | The id `create_plan` returned.                                                                                                    |
 | `condition` | enum   | no       | `loose` (default) — a done dependency outside the plan counts as satisfied. `tight` — every dependency must be IN the projection. |
 
-**Output** — `structuredContent`: `{ planId, valid, blockers }`. Each blocker is
-`{ item, blockedBy, blockerStatus, blockerSprintId }`; an `item` or `blockedBy`
-of the form `planItem:<id>` names a **proposal in this plan**, not a work item.
+**Output** — `structuredContent`: `{ planId, valid, blockers, rejections,
+invalidEdges }`. Each blocker is `{ item, blockedBy, blockerStatus,
+blockerSprintId }`; an `item` or `blockedBy` of the form `planItem:<id>` names a
+**proposal in this plan**, not a work item. `invalidEdges` is the cross-parent
+rule under `validate_work_item` above, asked of the PROJECTION — proposed parents,
+proposed kinds, an `add`'s `blockedByRefs`, and a `modify`'s `blockedByAdd` /
+`blockedByRemove` on a child or on a parent. A **verdict only**: neither the
+append nor approve refuses an uncovered edge, because a titles-first pass appends
+children before it may have drawn every parent edge. `valid` is `true` only when
+all three lists are empty.
 
 ```jsonc
 validate_plan({ planId })
@@ -3583,7 +3605,10 @@ approvable.
 **This is the WHOLE-plan verdict and takes no target.** Do not approximate it by
 looping `validate_work_item` per root: a `blocked_by` edge between two sibling
 roots — a story under proposed epic B gated by one under proposed epic A — is
-VALID here, because both materialize together, and a false positive per-root.
+FINISHABLE here, because both materialize together, and a false-positive BLOCKER
+per-root. It is not automatically VALID any more (MOTIR-6370): the two stories sit
+under different parents, so the edge is valid only when epic B is `blocked_by`
+epic A, and without that edge it is reported in `invalidEdges` here AND per-root.
 For ONE subtree, pass `planId` to `validate_work_item` instead.
 
 Requires **`project:browse`** — the key `plansService.getPlan` asserts, the same

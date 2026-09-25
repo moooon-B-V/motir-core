@@ -7,6 +7,7 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PlanItemDto, PlanItemPatch, PlanItemProposedFields } from '@/lib/dto/plans';
+import { DEFAULT_PROPOSED_KIND } from '@/lib/plans/validateProposals';
 import type { WorkItem } from '@/generated/prisma/client';
 
 // ── The PROJECTION, lifted (Story MOTIR-3093 · Subtask MOTIR-3096) ───────────
@@ -88,6 +89,12 @@ export interface ProjectedNode {
   parentId: string | null;
   /** Sprint membership; an `add` lands in the backlog → null. */
   sprintId: string | null;
+  /**
+   * The node's kind — an `add`'s proposed kind (defaulted as `materialize`
+   * defaults it), a live row's stored kind. Read by the cross-parent coverage
+   * check (MOTIR-6370), which judges SAME-level edges only.
+   */
+  kind: string;
 }
 
 /** The assembled projection: nodes + projected `blocked_by` adjacency. */
@@ -185,6 +192,7 @@ export async function buildProjection(planId: string, ctx: ServiceContext): Prom
       projectId: it.projectId,
       parentId: it.parentId,
       sprintId: it.sprintId,
+      kind: it.kind,
     });
   }
 
@@ -208,6 +216,7 @@ export async function buildProjection(planId: string, ctx: ServiceContext): Prom
         projectId: e.blockerProjectId,
         parentId: null,
         sprintId: e.blockerSprintId,
+        kind: e.blockerKind,
       });
     }
     addEdge(blockedBy, e.fromId, e.blockerId);
@@ -243,6 +252,7 @@ export async function buildProjection(planId: string, ctx: ServiceContext): Prom
       projectId,
       parentId: item.parentRef ? resolveRef(item.parentRef) : null,
       sprintId: null,
+      kind: item.proposedFields?.kind ?? DEFAULT_PROPOSED_KIND,
     });
   }
 
@@ -270,6 +280,7 @@ export async function buildProjection(planId: string, ctx: ServiceContext): Prom
         projectId: row.projectId,
         parentId: row.parentId,
         sprintId: row.sprintId,
+        kind: row.kind,
       });
     }
   }

@@ -3,6 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { planValidityService } from '@/lib/services/planValidityService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PlanValidityDto } from '@/lib/dto/plans';
+import { invalidEdgeLines } from '@/lib/mcp/tools/validateWorkItem';
 import type { ValidityCondition } from '@/lib/dto/sprints';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -98,6 +99,8 @@ function summarize(result: PlanValidityDto): string {
     );
   }
 
+  lines.push(...invalidEdgeLines(result.invalidEdges));
+
   return lines.join('\n');
 }
 
@@ -143,8 +146,12 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
         'each blocked_by dependency either inside the projection (it materializes with the ' +
         'plan) or already done; these arrive in `blockers`, each naming the gated item and the ' +
         'work gating it. The two need OPPOSITE repairs: a rejection means the plan is ' +
-        'malformed, a blocker means it reaches outside itself. Returns ' +
-        '`{ planId, valid, rejections: [...], blockers: [...] }`; an item named ' +
+        'malformed, a blocker means it reaches outside itself. (3) COVERED — every same-level ' +
+        'blocked_by between items under DIFFERENT parents is carried by their parents too ' +
+        '(the parents directly blocked_by each other); an uncovered one arrives in ' +
+        '`invalidEdges` as `{ item, blockedBy, itemParent, blockerParent }` — a verdict only, ' +
+        'the append and approve do not refuse it. Returns ' +
+        '`{ planId, valid, rejections: [...], blockers: [...], invalidEdges: [...] }`; an item named ' +
         '`planItem:<id>` is a PROPOSAL in this plan, not a work item. ' +
         '`condition` defaults to `loose` (a done dependency outside the plan counts as ' +
         'satisfied); `tight` requires every dependency to be IN the projection. This is the ' +

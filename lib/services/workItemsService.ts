@@ -134,6 +134,10 @@ import {
 } from '@/lib/workItems/errors';
 import { WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
 import { assertLinkSameLevel, edgeLevel, isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
+import {
+  uncoveredCrossParentEdges,
+  type CoverageNodeInfo,
+} from '@/lib/workItems/crossParentCoverage';
 import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/components/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
@@ -235,6 +239,7 @@ import type {
   WorkItemCoverageAdvisoryDto,
   WorkItemProseAdvisoryDto,
   WorkItemProseCrossLevelEdgeAdvisoryDto,
+  InvalidEdgeDto,
   WorkItemImplementationProvenanceInput,
   WorkItemRepositoryDto,
   WorkItemPlacementDto,
@@ -7746,7 +7751,7 @@ async function computeWorkItemValidity(
   );
   const notDone = members.filter((m) => !terminalForProject.has(m.status));
   if (notDone.length === 0) {
-    return { key: root.identifier, valid: true, blockers: [], advisories: [] };
+    return { key: root.identifier, valid: true, blockers: [], invalidEdges: [], advisories: [] };
   }
 
   const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -7792,6 +7797,7 @@ async function computeWorkItemValidity(
     ctx,
   );
   const crossLevel = crossLevelEdgeAdvisories(edges, membersById);
+  const invalidEdges = await computeInvalidEdges(edges, membersById, ctx);
   const coverage = await computeSubtreeCoverageAdvisories(notDone, members, ctx);
   // The PATH-REFERENCE family (MOTIR-5424), off the SAME scanned bodies the prose
   // family read — `subjects` is `notDone` mapped in order, so the two zip.
@@ -7808,10 +7814,105 @@ async function computeWorkItemValidity(
   );
   return {
     key: root.identifier,
-    valid: blockers.length === 0,
+    // Finishable AND every cross-parent edge covered (MOTIR-6370). A gate that
+    // asks only "can this be finished?" reads `blockers` (the scope claim does).
+    valid: blockers.length === 0 && invalidEdges.length === 0,
     blockers,
+    invalidEdges,
     advisories: [...prose, ...crossLevel, ...coverage, ...pathReferences],
   };
+}
+
+/**
+ * The UNCOVERED CROSS-PARENT edges of a validated subtree (Story MOTIR-6015 ·
+ * MOTIR-6370) — every same-level `blocked_by` FROM a not-done member whose two
+ * ends sit under different parents that carry no matching edge. The rule is
+ * `lib/workItems/crossParentCoverage.ts`; this gathers its rows.
+ *
+ * Two reads at most, and none for a subtree whose edges all stay under one
+ * parent: the parent-pair edges (ONE batched `findBlockedByAmong`), then the
+ * identifiers of the parents a finding names that the subtree walk did not
+ * already carry. An edge whose parent row is not readable here (an out-of-subtree
+ * blocker whose parent is in another project the caller cannot see) still has
+ * its parent id from the edge read, so it is judged; only its NAME falls back to
+ * the id.
+ */
+async function computeInvalidEdges(
+  edges: ReadonlyArray<{
+    fromId: string;
+    blockerId: string;
+    blockerKey: string;
+    blockerKind: string;
+    blockerParentId: string | null;
+  }>,
+  membersById: ReadonlyMap<
+    string,
+    { id: string; identifier: string; parentId: string | null; kind: string }
+  >,
+  ctx: ServiceContext,
+): Promise<InvalidEdgeDto[]> {
+  const info = new Map<string, CoverageNodeInfo>();
+  for (const m of membersById.values()) info.set(m.id, { kind: m.kind, parentId: m.parentId });
+  for (const e of edges) {
+    if (!info.has(e.blockerId)) {
+      info.set(e.blockerId, { kind: e.blockerKind, parentId: e.blockerParentId });
+    }
+  }
+  const coverage = edges.map((e) => ({ blockedId: e.fromId, blockerId: e.blockerId }));
+  // The parent pairs a cross-parent edge could need — read once, then answered.
+  const pairs = coverage.flatMap((e) => {
+    const from = info.get(e.blockedId)?.parentId;
+    const to = info.get(e.blockerId)?.parentId;
+    return from && to && from !== to ? [[from, to] as const] : [];
+  });
+  if (pairs.length === 0) return [];
+  const carried = new Set(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemLinkRepository.findBlockedByAmong(
+          [...new Set(pairs.map(([from]) => from))],
+          [...new Set(pairs.map(([, to]) => to))],
+          ctx.workspaceId,
+          tx,
+        ),
+      )
+    ).map((l) => `${l.fromId}\u0000${l.toId}`),
+  );
+  const uncovered = uncoveredCrossParentEdges(
+    coverage,
+    (id) => info.get(id),
+    (from, to) => carried.has(`${from}\u0000${to}`),
+  );
+  if (uncovered.length === 0) return [];
+
+  // Name every parent a finding cites: from the subtree walk where it can, one
+  // read for the rest.
+  const keyOf = new Map<string, string>();
+  for (const m of membersById.values()) keyOf.set(m.id, m.identifier);
+  for (const e of edges) keyOf.set(e.blockerId, e.blockerKey);
+  const unnamed = [
+    ...new Set(
+      uncovered.flatMap((e) => [
+        info.get(e.blockedId)!.parentId!,
+        info.get(e.blockerId)!.parentId!,
+      ]),
+    ),
+  ].filter((id) => !keyOf.has(id));
+  if (unnamed.length > 0) {
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdsInWorkspace(unnamed, ctx.workspaceId, tx),
+    );
+    for (const r of rows) keyOf.set(r.id, r.identifier);
+  }
+  const name = (id: string): string => keyOf.get(id) ?? id;
+  return uncovered
+    .map((e) => ({
+      item: name(e.blockedId),
+      blockedBy: name(e.blockerId),
+      itemParent: name(info.get(e.blockedId)!.parentId!),
+      blockerParent: name(info.get(e.blockerId)!.parentId!),
+    }))
+    .sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));
 }
 
 /**

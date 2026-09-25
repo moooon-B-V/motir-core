@@ -79,7 +79,9 @@ describe('SEAM — the ancestor facet ↔ the parent-ready cascade', () => {
     //               └── reachable
     const fx = await makeWorkItemFixture();
     const epic = await make(fx, { title: 'Epic', kind: 'epic' });
-    const gate = await make(fx, { title: 'Unfinished', kind: 'task' });
+    // A root STORY, so the story edge below is same-level (MOTIR-6369 refuses a
+    // story blocked_by a task). A root has no parent, so the edge needs none.
+    const gate = await make(fx, { title: 'Unfinished', kind: 'story' });
     const gatedStory = await make(fx, { title: 'Gated', kind: 'story', parentId: epic.id });
     await block(fx, gatedStory.id, gate.id);
     const buried = await make(fx, { title: 'Buried', parentId: gatedStory.id });

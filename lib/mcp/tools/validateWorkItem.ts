@@ -330,6 +330,34 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   return lines;
 }
 
+/**
+ * The UNCOVERED CROSS-PARENT lines (MOTIR-6370) — shared wording for both
+ * validators' text blocks. Empty when there are none.
+ */
+export function invalidEdgeLines(
+  invalidEdges: ReadonlyArray<{
+    item: string;
+    blockedBy: string;
+    itemParent: string;
+    blockerParent: string;
+  }>,
+): string[] {
+  if (invalidEdges.length === 0) return [];
+  return [
+    '',
+    `${invalidEdges.length} cross-parent edge(s) are not carried by their parents — a ` +
+      'blocked_by between items under DIFFERENT parents is valid only when the parents carry ' +
+      'the same edge:',
+    ...invalidEdges.map(
+      (e) =>
+        `  ${e.item} is blocked by ${e.blockedBy}, but ${e.itemParent} is not blocked_by ` +
+        `${e.blockerParent}`,
+    ),
+    'Wire each missing parent edge (and ask the same of it one level up), or drop the ' +
+      'dependency if it is not real.',
+  ];
+}
+
 /** Human-readable summary for the dual-content text block.
  *
  * `planId` is present ⟺ the verdict was computed over the PROJECTION, and the
@@ -347,6 +375,15 @@ function summarize(result: WorkItemValidityDto, planId?: string): string {
       ...advisoryLines(result),
     ].join('\n');
   }
+  if (result.blockers.length === 0) {
+    // INVALID on the parent rule alone (MOTIR-6370) — finishable, but a
+    // cross-parent edge its parents do not carry.
+    return [
+      `Work item ${result.key} is INVALID${over} — its subtree can be finished, but:`,
+      ...invalidEdgeLines(result.invalidEdges),
+      ...advisoryLines(result),
+    ].join('\n');
+  }
   return [
     `Work item ${result.key} is INVALID${over} — ${result.blockers.length} item(s) in its ` +
       'subtree are gated by out-of-subtree, unsatisfied work:',
@@ -356,6 +393,7 @@ function summarize(result: WorkItemValidityDto, planId?: string): string {
         `${b.blockerSprintId ? `sprint ${b.blockerSprintId}` : 'backlog'})`,
     ),
     'Pull these into the subtree (or finish them), or drop the dependency.',
+    ...invalidEdgeLines(result.invalidEdges),
     ...advisoryLines(result),
   ].join('\n');
 }
@@ -415,8 +453,13 @@ export function registerValidateWorkItem(
         'never gates; only out-of-subtree work can. `condition` defaults to `loose` (a done ' +
         'dependency outside the subtree counts as satisfied); pass `tight` to require every ' +
         'dependency to be IN the subtree (a done item outside it is then reported as a blocker). ' +
-        'Returns `{ key, valid, blockers: [...], advisories: [...] }` — `blockers` naming each ' +
-        'in-subtree item and the out-of-subtree, unsatisfied work gating it. `advisories` is a ' +
+        'Returns `{ key, valid, blockers: [...], invalidEdges: [...], advisories: [...] }` — ' +
+        '`blockers` naming each in-subtree item and the out-of-subtree, unsatisfied work gating ' +
+        'it; `invalidEdges` naming each same-level blocked_by between items under DIFFERENT ' +
+        'parents whose parents carry no matching edge (`{ item, blockedBy, itemParent, ' +
+        'blockerParent }` — a cross-parent edge is valid only when the parents carry it; an ' +
+        'end with no work-item parent is exempt). `valid` is true only when BOTH are empty. ' +
+        '`advisories` is a ' +
         'SEPARATE, NEVER-BLOCKING channel with two families: a `reference` advisory names an ' +
         'in-subtree card whose DESCRIPTION names a not-done work item it has no blocked_by edge ' +
         "to (severity `likely-missing-edge` when the reference sits in the card's own acceptance " +

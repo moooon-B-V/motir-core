@@ -73,7 +73,13 @@ describe('workItemsService.validateWorkItem — the subtree finishability rule',
     const fx = await makeWorkItemFixture();
     const task = await mk(fx, 'Lonely task', 'task');
     const result = await workItemsService.validateWorkItem(fx.projectId, task.identifier, fx.ctx);
-    expect(result).toEqual({ key: task.identifier, valid: true, blockers: [], advisories: [] });
+    expect(result).toEqual({
+      key: task.identifier,
+      valid: true,
+      blockers: [],
+      invalidEdges: [],
+      advisories: [],
+    });
   });
 
   it('a target whose blockers are all IN its SUBTREE is VALID', async () => {
