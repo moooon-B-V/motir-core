@@ -586,6 +586,65 @@ describe('firstRepoStraddleCriterion — gate 1, as a CONTRADICTION', () => {
     expect(firstRepoStraddleCriterion(md, ['motir-core'], REPOS)).toBeNull();
   });
 
+  describe('MOTIR-6288 — a top-level DIRECTORY that shares a repo name is not that repo', () => {
+    // The gateway keeps its Motir-specific code under a top-level `motir/`
+    // directory, and the domain also holds a repository named `motir`. A bare
+    // `motir/…` path on a card carrying `motir-gateway` is the carried repo's
+    // own namespace directory, not a criterion discharged in the other repo.
+    const WITH_MOTIR: RepoCandidate[] = [
+      { name: 'motir', repoRef: 'moooon-B-V/motir' },
+      { name: 'motir-gateway', repoRef: 'moooon-B-V/motir-gateway' },
+      ...REPOS.filter((r) => r.name !== 'motir-gateway'),
+    ];
+
+    it('a card pinned to motir-gateway naming `motir/catalog/catalog.go` is NOT a contradiction', () => {
+      const md = withCriteria(
+        '`motir/catalog/provider-models/deepseek.json` drops the retired model',
+        'the catalog test in `motir/catalog/catalog.go` covers the successor',
+      );
+      // The path still RESOLVES — the resolver is unchanged — which is exactly
+      // why the straddle arm, not the resolver, has to decline it.
+      expect(criterionRepoPaths(md, WITH_MOTIR).map((p) => p.repo)).toEqual(['motir', 'motir']);
+      expect(firstRepoStraddleCriterion(md, ['motir-gateway'], WITH_MOTIR)).toBeNull();
+    });
+
+    it('still fires when the namespace-named repo is written OWNER-QUALIFIED', () => {
+      // The `owner/name` form is unambiguous — no carried repo holds a
+      // top-level `moooon-B-V/` directory — so it remains a real contradiction.
+      const md = withCriteria('`moooon-B-V/motir/catalog/catalog.go` changes');
+      expect(firstRepoStraddleCriterion(md, ['motir-gateway'], WITH_MOTIR)).toEqual({
+        path: 'moooon-B-V/motir/catalog/catalog.go',
+        repo: 'motir',
+        criterionIndex: 1,
+        reason: 'contradiction',
+      });
+    });
+
+    it('does not excuse a SIBLING repo: pinned motir-core, `motir-ai/src/x.ts` still contradicts', () => {
+      // `motir-ai` is not the namespace of `motir-core` — they only share one.
+      const md = withCriteria('`motir-ai/src/x.ts` changes');
+      expect(firstRepoStraddleCriterion(md, ['motir-core'], WITH_MOTIR)).toEqual({
+        path: 'motir-ai/src/x.ts',
+        repo: 'motir-ai',
+        criterionIndex: 1,
+        reason: 'contradiction',
+      });
+    });
+
+    it('does not excuse a later offender behind a declined namespace path', () => {
+      const md = withCriteria(
+        '`motir/catalog/catalog.go` changes',
+        '`motir-ai/src/x.ts` consumes it',
+      );
+      expect(firstRepoStraddleCriterion(md, ['motir-gateway'], WITH_MOTIR)).toEqual({
+        path: 'motir-ai/src/x.ts',
+        repo: 'motir-ai',
+        criterionIndex: 2,
+        reason: 'contradiction',
+      });
+    });
+  });
+
   it('emits nothing with no candidates, no AC heading, or an empty body', () => {
     const md = withCriteria('`motir-ai/src/x.ts` changes');
     expect(firstRepoStraddleCriterion(md, ['motir-core'], [])).toBeNull();

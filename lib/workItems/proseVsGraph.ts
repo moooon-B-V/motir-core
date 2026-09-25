@@ -424,6 +424,20 @@ export function isOrderingCheckExempt(
 //      the FIRST check to withdraw if advisory fatigue shows — its precision is
 //      lower than the ordering check's, and the prose still covers its family.
 //
+// ⚠️ ONE SHAPE IT USED TO MISREAD, NOW DECLINED (MOTIR-6288): **a top-level
+// DIRECTORY that shares a repository's name.** `motir-gateway` keeps its
+// Motir-specific code under `motir/`, and the domain also holds a repository
+// named `motir`, so the bare-name form attributed every `motir/catalog/…`
+// criterion on a gateway card to the other repo — a false `contradiction` on
+// most of that repo's surface. The contradiction arm now declines a path that
+// resolved by its BARE first segment when that segment is the NAME-NAMESPACE of
+// a repo the card carries (a carried repo is named `<segment>-…`, `<segment>_…`
+// or `<segment>.…`) — see {@link isCarriedNamespaceDirectory}. A narrowing, not
+// a guess: it needs no tree, only the card's own set. The residual blind spot
+// it buys is a bare `motir/…` path that really IS in the `motir` repo on a card
+// carrying `motir-*`; writing it `owner/motir/…` is unambiguous and still fires.
+// The `unpinnable` arm is untouched — with no set there is no namespace to read.
+//
 // Deliberately NO exemption predicate (contrast {@link isOrderingCheckExempt}).
 // The ordering check's exemption is the RULE'S OWN REMEDY read back — a `deploy`
 // / `human` card is DEFINED by needing the merge. Gate 1 has no such shape;
@@ -486,13 +500,55 @@ export function resolvePathRepo(
   token: string,
   candidates: readonly RepoCandidate[],
 ): string | null {
+  return resolvePathRepoForm(token, candidates)?.name ?? null;
+}
+
+/**
+ * {@link resolvePathRepo}, plus WHICH prefix form matched — the straddle arm
+ * needs to know, because only the bare-name form can collide with a directory.
+ */
+function resolvePathRepoForm(
+  token: string,
+  candidates: readonly RepoCandidate[],
+): { name: string; form: 'owner' | 'bare' } | null {
   const segments = token.split('/').filter((s) => s.length > 0);
   if (segments.length < 2) return null;
   const ownerName = `${segments[0]}/${segments[1]}`.toLowerCase();
   const byRef = candidates.find((c) => c.repoRef.toLowerCase() === ownerName);
-  if (byRef) return byRef.name;
+  if (byRef) return { name: byRef.name, form: 'owner' };
   const bare = (segments[0] as string).toLowerCase();
-  return candidates.find((c) => c.name.toLowerCase() === bare)?.name ?? null;
+  const byName = candidates.find((c) => c.name.toLowerCase() === bare);
+  return byName ? { name: byName.name, form: 'bare' } : null;
+}
+
+/**
+ * Whether a resolved path is more plausibly a top-level DIRECTORY of a carried
+ * repo than a path in the repo it resolved to (MOTIR-6288).
+ *
+ * True only when the path resolved by the BARE-name form AND that name is the
+ * name-namespace of a carried repo: `motir/catalog/x.go` on a card carrying
+ * `motir-gateway`. A sibling that merely shares a namespace (`motir-ai` beside
+ * `motir-core`) is NOT one — neither name is the other's prefix — so the
+ * straddle this check exists for still fires.
+ */
+export function isCarriedNamespaceDirectory(
+  path: string,
+  carried: ReadonlySet<string>,
+  candidates: readonly RepoCandidate[],
+): boolean {
+  const resolved = resolvePathRepoForm(path, candidates);
+  if (!resolved || resolved.form !== 'bare') return false;
+  const ns = resolved.name.toLowerCase();
+  for (const repo of carried) {
+    if (
+      repo.length > ns.length &&
+      repo.startsWith(ns) &&
+      '-_.'.includes(repo[ns.length] as string)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** A resolvable repo-qualified path, and which criterion wrote it. */
@@ -590,6 +646,12 @@ export interface RepoStraddleCriterion extends CriterionRepoPath {
  * it does NOT carry is still exactly the defect this was built to find, and a
  * two-element set does not excuse a path in a third repo.
  *
+ * A bare-name path whose first segment is the namespace of a carried repo is
+ * DECLINED rather than reported ({@link isCarriedNamespaceDirectory},
+ * MOTIR-6288): it names that repo's own top-level directory as often as it
+ * names the other repo, and the `owner/name` form stays available for the
+ * genuine cross-repo reference.
+ *
  * **Card carrying nothing — the UNPINNABLE arm.** With nothing to
  * contradict, one repo across the criteria is a card that simply has not been
  * pinned yet, and nothing is emitted. TWO OR MORE distinct repos is the finding:
@@ -626,7 +688,11 @@ export function firstRepoStraddleCriterion(
 
   if (targetRepos.length > 0) {
     const carried = new Set(targetRepos.map((r) => r.toLowerCase()));
-    const offender = paths.find((p) => !carried.has(p.repo.toLowerCase()));
+    const offender = paths.find(
+      (p) =>
+        !carried.has(p.repo.toLowerCase()) &&
+        !isCarriedNamespaceDirectory(p.path, carried, candidates),
+    );
     return offender ? { ...offender, reason: 'contradiction' } : null;
   }
 
