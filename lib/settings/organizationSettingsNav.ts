@@ -83,7 +83,7 @@ export const ORGANIZATION_SETTINGS_NAV_GROUP_ORDER: OrganizationSettingsNavGroup
  * use case.
  */
 export interface OrganizationSettingsNavActor {
-  /** `isOrgAdminRole(role)` — owner or admin. */
+  /** `orgCan(role, 'manageOrgSettings')` — owner or admin (`lib/organizations/capabilities.ts`). */
   isOrgAdmin: boolean;
 }
 

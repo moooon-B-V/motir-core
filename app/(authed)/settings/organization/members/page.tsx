@@ -7,7 +7,7 @@ import { getSession } from '@/lib/auth';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { billingService } from '@/lib/services/billingService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
-import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
+import { orgCan } from '@/lib/organizations/capabilities';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
 import { OrgMembersClient } from './_components/OrgMembersClient';
@@ -40,8 +40,7 @@ export default async function OrganizationMembersPage() {
   }
 
   const org = current.organization;
-  const isAdmin =
-    current.role === ORGANIZATION_ROLE.owner || current.role === ORGANIZATION_ROLE.admin;
+  const isAdmin = orgCan(current.role, 'manageOrgMembers');
 
   if (!isAdmin) {
     return (

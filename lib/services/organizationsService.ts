@@ -16,6 +16,7 @@ import {
   withWorkspaceContext,
 } from '@/lib/workspaces/context';
 import { isOrgAdminRole, ORGANIZATION_ROLE } from '@/lib/organizations/roles';
+import { orgCan } from '@/lib/organizations/capabilities';
 import {
   AlreadyOrgMemberError,
   LastOrgOwnerError,
@@ -166,6 +167,10 @@ export const organizationsService = {
         workspaceId,
         t,
       );
+      // Still the owner-OR-admin ceiling raise of `organization-tier.md` §4. The
+      // role model narrows it (an Admin's reach comes from membership, the Owner
+      // alone reaches every workspace — `role-model.md` §1 reading R1), and that
+      // change is MOTIR-6308's, deliberately not the capability table's.
       const isOrgAdmin = isOrgAdminRole(orgMembership.role);
 
       // A plain org member reaches only workspaces they're explicitly added to.
@@ -200,7 +205,7 @@ export const organizationsService = {
   ): Promise<{ role: OrganizationRole; isOrgAdmin: boolean }> {
     return withOrgContext({ userId, organizationId }, async (tx) => {
       const role = await assertOrgMember(userId, organizationId, tx);
-      return { role, isOrgAdmin: isOrgAdminRole(role) };
+      return { role, isOrgAdmin: orgCan(role, 'manageOrgSettings') };
     });
   },
 

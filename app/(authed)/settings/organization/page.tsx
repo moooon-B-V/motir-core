@@ -13,7 +13,7 @@ import {
 } from '@/lib/workspaces/tierDisclosure';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
-import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
+import { orgCan } from '@/lib/organizations/capabilities';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
@@ -84,8 +84,7 @@ export default async function OrganizationSettingsPage({
   }
 
   const org = current.organization;
-  const isAdmin =
-    current.role === ORGANIZATION_ROLE.owner || current.role === ORGANIZATION_ROLE.admin;
+  const isAdmin = orgCan(current.role, 'manageOrgSettings');
 
   // ⚠️ GATED PER SECTION, NOT PER PAGE (MOTIR-3519 · organization-tier.md §6d).
   //

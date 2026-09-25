@@ -1,5 +1,5 @@
 import { withOrgContext } from '@/lib/organizations/context';
-import { isOrgAdminRole } from '@/lib/organizations/roles';
+import { orgCan } from '@/lib/organizations/capabilities';
 import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
 import { isWorkspaceManager } from '@/lib/projects/roles';
 import {
@@ -133,7 +133,7 @@ export const twoFactorPolicyService = {
         // Not a member ⇒ 404, not 403: the org must stay indistinguishable from
         // one that does not exist (`lib/organizations/errors.ts`).
         if (!membership) throw new OrganizationNotFoundError(input.organizationId);
-        if (!isOrgAdminRole(membership.role)) {
+        if (!orgCan(membership.role, 'manageOrgSettings')) {
           throw new OrgForbiddenError(input.actorUserId, input.organizationId);
         }
         return organizationRepository.update(
