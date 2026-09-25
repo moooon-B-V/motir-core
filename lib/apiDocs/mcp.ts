@@ -688,9 +688,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // clears nothing (measured at about one post-deploy criterion in nine).
     // Summary UNCHANGED: the correction is on the advisory channel, and this line
     // describes the verdict.
+    //
+    // Re-pinned for MOTIR-6245: `likely-self-blocking-design` now names its
+    // scope — a childless card that is not itself `type: design`. Summary
+    // UNCHANGED: it narrows an advisory, and this line describes the verdict.
     summary:
       'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: '26751030f342',
+    descriptionFingerprint: 'fd4073e85a9f',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —

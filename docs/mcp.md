@@ -464,9 +464,11 @@ is a LIFT rather than a cut: the design criterion becomes its own `type: design`
 card and what is left is `blocked_by` it, so somebody sees the drawing before the
 files written to match it (Principle #13). It fires only for a **childless** card
 — a container's design child can be reviewed before its code children run, which
-is exactly the shape the finding asks for — and a criterion whose own deliverable
-is a design asset is never also read as the rendered surface, so a `design` card
-describing what its own mock shows stays quiet. Read literally the planning-time
+is exactly the shape the finding asks for — that is **not itself `type: design`**:
+a design card IS the card the lift would create, so it is never reported, whatever
+its criteria say (MOTIR-6245). A criterion whose own deliverable is a design asset
+is also never read as the rendered surface, which keeps a code card's own mock
+criterion out of the surface arm. Read literally the planning-time
 design gate is SATISFIED on such a card, because the `type: design` subtask a UI
 card must be linked to is the card itself; that degenerate reading is what this
 member exists to say out loud.
