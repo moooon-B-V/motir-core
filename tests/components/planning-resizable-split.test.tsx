@@ -353,6 +353,17 @@ describe('the NARROW viewport', () => {
     expect(screen.queryByTestId('planning-split-divider')).toBeNull();
   });
 
+  it('gives the STACK an explicit row template, and hands the split back its own rows at `md`', () => {
+    // jsdom does no layout, so the geometry — the canvas keeping a real height under
+    // a full transcript — is proven in `tests/e2e/planning-anchor-level.spec.ts`
+    // (MOTIR-6276). This pins the two halves of the class that makes it true: the
+    // `fr` rows below the breakpoint, and their reset above it.
+    renderSplit();
+    const frame = screen.getByTestId('planning-resizable-frame');
+    expect(frame.className).toContain('grid-rows-[minmax(0,3fr)_minmax(12rem,2fr)]');
+    expect(frame.className).toContain('md:grid-rows-none');
+  });
+
   it('brings it back, and leaves a stored width untouched across the boundary', () => {
     renderSplit();
     resizeTo(1440);
