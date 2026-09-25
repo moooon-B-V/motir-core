@@ -47,7 +47,10 @@ test('below the split breakpoint the plan page stacks and its canvas keeps a rea
 
   // Shape two opens on the canvas, at the level holding the story it modifies.
   await page.goto(`/plans/${seed.two.planId}`);
-  const viewport = page.getByTestId('planning-canvas');
+  // Scoped to the LIVE page body: a page-rooted strict locator can also match a
+  // streamed-out or SSR-staged copy of the same node (MOTIR-5037's guard).
+  const main = page.getByRole('main');
+  const viewport = main.getByTestId('planning-canvas');
   const arrivalNode = nodeBox(page, seed.two.modified.id);
   await expect(arrivalNode).toBeAttached();
 
@@ -67,7 +70,7 @@ test('below the split breakpoint the plan page stacks and its canvas keeps a rea
   expect(midY).toBeLessThanOrEqual(canvasBox.y + canvasBox.height);
 
   // ── Still the design's stack: canvas first, the rail below, both full width ─
-  const frame = page.getByTestId('planning-workspace-frame');
+  const frame = main.getByTestId('planning-workspace-frame');
   const stacked = await frame.evaluate((el) => {
     const f = el.getBoundingClientRect();
     const c = el.children[0]!.getBoundingClientRect();
