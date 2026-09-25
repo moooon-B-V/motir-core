@@ -223,4 +223,42 @@ describe('useStatusHeld', () => {
     rerender({ plan: null });
     expect(result.current.plan).toBeNull();
   });
+
+  // ── The story gate's top-up (Story MOTIR-6017 · MOTIR-6269's coverage floor) ──
+
+  it('a plan with NO session and NO anchor is still a distinct read — the null fields sign too', () => {
+    const { result, rerender } = renderHook(
+      ({ plan }) => useStatusHeld(undefined, withPlanning, 'planning', plan),
+      { initialProps: { plan: hold() } },
+    );
+    expect(result.current.plan).toMatchObject({ sessionId: 'pcs_1' });
+    // Only the session and the anchor change: a new read all the same.
+    rerender({ plan: hold({ sessionId: null, anchorKey: null }) });
+    expect(result.current.plan).toMatchObject({ sessionId: null, anchorKey: null });
+  });
+
+  it('a gate read with no gate row and no routed-to label signs as its own read', () => {
+    const bare = held({ gateId: null, routedToLabel: null });
+    const { result, rerender } = renderHook(({ read }) => useStatusHeld(read, statuses), {
+      initialProps: { read: [bare] },
+    });
+    act(() => result.current.onMoved('done'));
+    expect(result.current.lines).toEqual([]);
+    // Same CONTENT, fresh identity → nothing resets.
+    rerender({ read: [{ ...bare }] });
+    expect(result.current.lines).toEqual([]);
+  });
+
+  it('a refusal with no current status stands until a move; a move INTO Planning keeps the plan', () => {
+    const { result } = renderHook(() => useStatusHeld(undefined, withPlanning));
+    act(() => result.current.onPlanHeldRefused(hold()));
+    expect(result.current.plan).toMatchObject({ planId: 'pln_1' });
+
+    // Arriving at Planning is not leaving it — the hold is about leaving.
+    act(() => result.current.onMoved('planning'));
+    expect(result.current.plan).toMatchObject({ planId: 'pln_1' });
+
+    act(() => result.current.onMoved('in_review'));
+    expect(result.current.plan).toBeNull();
+  });
 });
