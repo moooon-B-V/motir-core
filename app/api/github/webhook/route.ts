@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { CLIENT_CLOSED_REQUEST_STATUS, readRawBodyUnlessAborted } from '@/lib/api/clientAbort';
 import { verifyGithubWebhookSignature } from '@/lib/github/webhookSignature';
 import { GithubWebhookNotConfiguredError, GithubWebhookSignatureError } from '@/lib/github/errors';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
@@ -13,12 +14,29 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 // event type from `X-GitHub-Event`, parse the body, and hand both to the
 // service. We return a fast 2xx on success (a slow handler makes GitHub retry)
 // and never leak internals: a bad/missing signature → 401, an unconfigured
-// secret → 500, a malformed JSON body → 400.
+// secret → 500, a malformed JSON body → 400, a sender that hung up before the
+// body was read → 499 and a warning, never a thrown `Error: aborted`.
 
 export async function POST(req: NextRequest): Promise<Response> {
   // Read the EXACT bytes GitHub signed — before any JSON parse (a re-serialized
   // body would not match the HMAC).
-  const rawBody = await req.text();
+  const rawBody = await readRawBodyUnlessAborted(req);
+  if (rawBody === null) {
+    // The connection closed before the body was read (MOTIR-6256) — GitHub gave
+    // up on the delivery, typically its ten-second timeout. Nothing arrived that
+    // could be verified or processed, so this is a LOST delivery, not a server
+    // fault: GitHub records it as failed and does not retry it, and a lost close
+    // or check verdict is replayed from the host by `system.pull-request-reconcile`.
+    // Name it, so it can be found in the App's delivery log and redelivered by hand.
+    console.warn(
+      `[github-webhook] delivery ${req.headers.get('x-github-delivery') ?? '(no id)'} ` +
+        `(${req.headers.get('x-github-event') ?? 'unknown event'}) lost: the client closed the connection before the body was read`,
+    );
+    return NextResponse.json(
+      { code: 'CLIENT_CLOSED_REQUEST' },
+      { status: CLIENT_CLOSED_REQUEST_STATUS },
+    );
+  }
 
   try {
     verifyGithubWebhookSignature(rawBody, req.headers.get('x-hub-signature-256'));
