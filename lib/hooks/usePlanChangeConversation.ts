@@ -555,7 +555,11 @@ export function usePlanChangeConversation({
         if (!mountedRef.current) return;
         setState((s) => ({
           ...s,
-          phase: 'idle',
+          // ⚠️ STILL `loading` while a pending plan is left to read (bug MOTIR-6289).
+          // The surface draws the roadmap for every null `review`, so an `idle` here
+          // flashed the roadmap and then jumped to the plan the reader came to decide.
+          // The read below settles it either way — `review`, or `idle` with nothing.
+          phase: planId ? 'loading' : 'idle',
           session,
           planId: planId ?? null,
           earlier: opened.earlier,
@@ -570,10 +574,15 @@ export function usePlanChangeConversation({
         if (!planId) return;
         try {
           const pending = await readPendingProposal(planId, controller.signal);
-          if (!mountedRef.current || !pending) return;
-          setState((s) => ({ ...s, phase: 'review', review: pending }));
-        } catch {
-          /* nothing pending we can show — the conversation still works */
+          if (!mountedRef.current) return;
+          setState((s) =>
+            pending ? { ...s, phase: 'review', review: pending } : { ...s, phase: 'idle' },
+          );
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') return;
+          if (!mountedRef.current) return;
+          // Nothing pending we can show — the conversation still works.
+          setState((s) => ({ ...s, phase: 'idle' }));
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
