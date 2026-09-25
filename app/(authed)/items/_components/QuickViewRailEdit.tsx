@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Check, CircleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Tooltip } from '@/components/ui/Tooltip';
+import { QuickViewReadOnlyChevron } from '@/components/workItems/QuickViewSurface';
 import type { QuickViewData } from '@/lib/dto/quickView';
 import {
   updateIssueAction,
@@ -327,18 +327,7 @@ export function EditableRailField({
             />
           </button>
         ) : edit.readOnlyReason && control != null ? (
-          <Tooltip content={edit.readOnlyReason}>
-            <button
-              type="button"
-              aria-disabled="true"
-              aria-label={`${label} — ${edit.readOnlyReason}`}
-              data-read-only-field=""
-              onClick={(e) => e.preventDefault()}
-              className="ml-auto inline-flex cursor-not-allowed rounded-(--radius-control) p-0.5 text-(--el-text-faint) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-            >
-              <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-            </button>
-          </Tooltip>
+          <QuickViewReadOnlyChevron label={label} reason={edit.readOnlyReason} />
         ) : null}
       </dt>
       <dd

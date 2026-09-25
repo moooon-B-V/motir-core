@@ -266,9 +266,20 @@ describe('the work item page', () => {
 });
 
 describe('the backlog and the board', () => {
-  function stubCollections(itemId: string) {
+  // The backlog and the board are two independent client islands, each settling
+  // on its own fetch. `holdSprints` keeps the backlog's `/api/sprints` read
+  // pending until `releaseSprints()`, so a case can pin the order CI hit
+  // (MOTIR-6341): board rendered, backlog still a skeleton.
+  let releaseSprints: () => void = () => {};
+
+  function stubCollections(itemId: string, { holdSprints = false } = {}) {
     const ok = (body: unknown) =>
       Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+    const sprintsGate = holdSprints
+      ? new Promise<void>((resolve) => {
+          releaseSprints = () => resolve();
+        })
+      : Promise.resolve();
     const row = {
       id: itemId,
       key: 1,
@@ -289,7 +300,7 @@ describe('the backlog and the board', () => {
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
         if (url.includes('/points')) return ok({ committed: 0, completed: 0, remaining: 0 });
-        if (url.startsWith('/api/sprints')) return ok({ sprints: [] });
+        if (url.startsWith('/api/sprints')) return sprintsGate.then(() => ok({ sprints: [] }));
         if (url.startsWith('/api/backlog'))
           return ok({ items: [row], nextCursor: null, totalCount: 1 });
         if (url.startsWith('/api/board'))
@@ -331,9 +342,9 @@ describe('the backlog and the board', () => {
     );
   }
 
-  async function renderCollections(who: Persona) {
+  async function renderCollections(who: Persona, opts?: { holdSprints?: boolean }) {
     const item = await adminDb.workItem.findFirstOrThrow({ where: { projectId: s.fx.projectId } });
-    stubCollections(item.id);
+    stubCollections(item.id, opts);
     const workflow = await workflowsService.getWorkflow(s.fx.projectId, s.fx.workspaceId);
     return render(
       <ProjectAccessProvider permissions={s.actors[who].permissions}>
@@ -345,12 +356,12 @@ describe('the backlog and the board', () => {
   }
 
   it('as a VIEWER: no drag, no enabled create, no bulk selection, no writing row or column menu', async () => {
-    await renderCollections('viewer');
+    await renderCollections('viewer', { holdSprints: true });
     await screen.findByTestId('board');
-    // The backlog section renders after the board: wait for it, or every
-    // `queryBy… toBeNull()` below passes against a section that is not there yet
-    // (MOTIR-6347).
-    await screen.findByTestId('create-issue-backlog');
+    releaseSprints();
+    // The absence checks below prove nothing against a skeleton — wait for the
+    // backlog to render its row first.
+    await screen.findByTestId('backlog-row-GAT-1');
     expect(screen.queryByTestId('backlog-row-check-GAT-1')).toBeNull();
     expect(screen.queryByTestId('backlog-row-actions-GAT-1')).toBeNull();
     expect(screen.queryByTestId('create-sprint')).toBeNull();

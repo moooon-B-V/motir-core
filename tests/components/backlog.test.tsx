@@ -106,6 +106,9 @@ interface MockData {
    *  #69); defaults to the unestimated `{ 0, 0, 0 }`. */
   sprintPoints?: SprintPointsDto;
   sprintsOk?: boolean;
+  /** Hold the `/api/backlog` read back by this many ms, so the sprint read
+   *  settles first — the order that races a test awaiting only the sprints. */
+  backlogDelayMs?: number;
 }
 
 function mockFetch(data: MockData) {
@@ -126,7 +129,14 @@ function mockFetch(data: MockData) {
       }
       return ok({ sprints: data.sprints });
     }
-    if (url.startsWith('/api/backlog')) return ok(data.backlog);
+    if (url.startsWith('/api/backlog')) {
+      if (data.backlogDelayMs) {
+        return new Promise<Response>((resolve) =>
+          setTimeout(() => resolve(ok(data.backlog)), data.backlogDelayMs),
+        );
+      }
+      return ok(data.backlog);
+    }
     return ok({});
   }) as unknown as typeof fetch;
 }
@@ -494,8 +504,9 @@ describe('the backlog’s permission-gated controls (MOTIR-6174)', () => {
   const EDITOR_ONLY = ['project:browse', 'work_item:edit'] as const;
   const MEMBER = ['project:browse', 'work_item:edit', 'sprint:manage', 'report:view'] as const;
 
-  function renderAs(permissions: readonly string[]) {
+  function renderAs(permissions: readonly string[], opts: { backlogDelayMs?: number } = {}) {
     mockFetch({
+      ...opts,
       sprints: [
         sprint({ id: 'active1', name: 'Sprint 24', state: 'active', sequence: 1, issueCount: 1 }),
         sprint({ id: 'planned1', name: 'Sprint 25', state: 'planned', sequence: 2, issueCount: 1 }),
@@ -532,9 +543,14 @@ describe('the backlog’s permission-gated controls (MOTIR-6174)', () => {
   });
 
   it('an actor who may edit but not groom creates, and still cannot move or plan sprints', async () => {
-    renderAs(EDITOR_ONLY);
+    // The sprints and the backlog are two independent reads (MOTIR-6343). Hold
+    // the backlog back so it always settles second, then wait for its row: the
+    // absence checks below must run against a backlog that has rendered, or an
+    // editor offered a row ⋯ menu would still pass.
+    renderAs(EDITOR_ONLY, { backlogDelayMs: 30 });
     expect(await screen.findByText('Sprint 24')).toBeTruthy();
-    expect((await screen.findByTestId('create-issue-backlog')).tagName).toBe('BUTTON');
+    expect(await screen.findByText('Item 150')).toBeTruthy();
+    expect(screen.getByTestId('create-issue-backlog').tagName).toBe('BUTTON');
     expect(screen.queryByTestId('create-sprint')).toBeNull();
     expect(screen.queryByTestId('complete-sprint-active1')).toBeNull();
     expect(screen.queryByTestId('backlog-row-actions-PROD-150')).toBeNull();

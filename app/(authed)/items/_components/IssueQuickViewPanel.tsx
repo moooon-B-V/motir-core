@@ -1444,8 +1444,16 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               affordance for one field. Editing routes through the badge's own
               `PATCH /api/work-items/[id]/estimate` and the project's configured
               scale deck — never a free-text number, which could hold a value the
-              scale does not contain. */}
-          <QuickViewRailField label={t('storyPoints')} marker={markFor('storyPoints')}>
+              scale does not contain.
+              A read-only actor gets the permission-gated reason instead
+              (MOTIR-6338, treatment-table row 6): the badge falls to its static
+              chip, and without the disabled chevron the row would read as a
+              field nobody edits rather than one this actor may not. */}
+          <QuickViewRailField
+            label={t('storyPoints')}
+            marker={markFor('storyPoints')}
+            readOnlyReason={edit.readOnlyReason}
+          >
             <EstimateBadge
               itemId={view.id}
               storyPoints={view.storyPoints}
