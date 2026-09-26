@@ -80,7 +80,11 @@ describe('toBuiltinRoleDTO carries the headcount alongside the set', () => {
     expect(dto.builtIn).toBe(true);
     expect(dto.labelKey).toBe('settings.roles.viewer.name');
     expect(dto.descriptionKey).toBe('settings.roles.viewer.description');
-    expect([...dto.permissions].sort()).toEqual([...BUILTIN_ROLE_PERMISSIONS.viewer].sort());
+    // The DTO draws the ENFORCED keys only (a `planned` one — MOTIR-6328's two
+    // room view keys until their reads land — is held but never drawn).
+    expect([...dto.permissions].sort()).toEqual(
+      [...BUILTIN_ROLE_PERMISSIONS.viewer].filter((key) => isEnforced(key)).sort(),
+    );
   });
 });
 

@@ -437,8 +437,18 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
     // plan whose id must never appear either. Created through the service
     // directly — no motir-ai involved, because a Plan row exists independently
     // of the job that fills it.
-    const myPlan = await plansService.createPlan(mine.fixture.projectId, {}, mine.ctx);
-    const theirPlan = await plansService.createPlan(theirs.fixture.projectId, {}, theirs.ctx);
+    // Each plan is ASKED FOR by its caller — a token without `plan:view_any` reads
+    // the plans that are its owner's (MOTIR-6330).
+    const myPlan = await plansService.createPlan(
+      mine.fixture.projectId,
+      { createdById: mine.ctx.userId },
+      mine.ctx,
+    );
+    const theirPlan = await plansService.createPlan(
+      theirs.fixture.projectId,
+      { createdById: theirs.ctx.userId },
+      theirs.ctx,
+    );
 
     // MOTIR-5357's run-addressed read needs an `[id]` naming a SCOPED run the
     // caller owns (an unscoped run answers 422), and a foreign run whose id must
@@ -451,6 +461,8 @@ describe('gate — cross-tenant isolation across the whole v1 tree', () => {
           command: 'run_scope',
           status: 'running',
           scopeWorkItemId: item.id,
+          // The caller STARTED it — a run it "owns" is one it opened (MOTIR-6331).
+          createdById: caller.user.id,
         },
       });
     const myRun = await scopedRun(mine, myItem);

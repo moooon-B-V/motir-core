@@ -16,6 +16,8 @@
 
 /** The narrowing: a work-item KEY whose scoped runs the index lists. */
 export const RUNS_SCOPE_PARAM = 'scope';
+/** WHOSE runs: `mine` or `project` (Story MOTIR-6179 · MOTIR-6335). */
+export const RUNS_VIEW_PARAM = 'view';
 /** The open run: the modal over the index (MOTIR-3895). */
 export const RUNS_RUN_PARAM = 'run';
 
@@ -47,10 +49,14 @@ export function parseRunsScope(raw: string | string[] | null | undefined): strin
  * what an existing link looks like.
  */
 export function runsHref({
+  view,
   scope,
   run,
-}: { scope?: string | null; run?: string | null } = {}): string {
+}: { view?: 'mine' | 'project' | null; scope?: string | null; run?: string | null } = {}): string {
   const parts: string[] = [];
+  // WHOSE runs (MOTIR-6335) — carried whenever the reader has the switch, so
+  // leaving a narrowing keeps the view and opening a run keeps it too.
+  if (view) parts.push(`${RUNS_VIEW_PARAM}=${view}`);
   if (scope) parts.push(`${RUNS_SCOPE_PARAM}=${encodeURIComponent(scope)}`);
   if (run) parts.push(`${RUNS_RUN_PARAM}=${encodeURIComponent(run)}`);
   return parts.length === 0 ? '/runs' : `/runs?${parts.join('&')}`;

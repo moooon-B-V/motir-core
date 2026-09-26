@@ -1274,9 +1274,14 @@ describe('the anonymous public actor holds exactly the Story 6.12 grant', () => 
     projectRole: null,
   };
 
-  it('resolves to project:browse plus the three public-request keys, and nothing else', () => {
+  it('resolves to project:browse, the Plans and Runs view keys and the three public-request keys, and nothing else', () => {
+    // MOTIR-6328 — `plan:view_any` / `run:view_any` join the level-gated layer:
+    // a public project's reader opens `/plans` and `/runs` on browse today, and
+    // keeps that reach once the reads assert the rooms' keys (Story MOTIR-6179).
     expect([...resolvePermissions(anonymous)].sort()).toEqual(
       [
+        'plan:view_any',
+        'run:view_any',
         'project:browse',
         'public_request:comment',
         'public_request:submit',
@@ -2540,13 +2545,17 @@ describe('the eight member-facing keys resolve to exactly the actors the decisio
     }
   });
 
-  it('the implicit workspace-member grant grew by exactly report:view', () => {
+  it('the implicit workspace-member grant grew by exactly report:view (and, later, the two room view keys)', () => {
     // The set the decision's §2 is about. Asserted as an exact set rather than a
     // per-key loop, so a key added here later fails loudly instead of widening
-    // what a workspace membership means by itself.
+    // what a workspace membership means by itself. MOTIR-6328 (AMENDMENT 1) is
+    // the one later addition: `plan:view_any` and `run:view_any`, which keep the
+    // `/plans` and `/runs` reach this actor has on browse today.
     expect([...IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS].sort()).toEqual(
       [
         'attachment:create',
+        'plan:view_any',
+        'run:view_any',
         'comment:add',
         'project:browse',
         'report:view',
@@ -2720,6 +2729,66 @@ describe('saved_filter:manage_any resolves to exactly the actors the role read d
       expect(as(['project:browse', 'saved_filter:manage']), `without it / ${accessLevel}`).toBe(
         false,
       );
+    }
+  });
+});
+
+describe('the Plans and Runs view keys resolve to exactly the actors project:browse does (MOTIR-6328)', () => {
+  // The neutrality proof Story MOTIR-6179 rests on. Every actor who opens
+  // `/plans` and `/runs` today does so on `project:browse` alone, and the two
+  // new keys must keep EVERY one of them in once the reads assert them. So each
+  // key must resolve identically to browse over all 64 rows and both rails —
+  // which holds only while `levelGrants` gives them the default arm and every
+  // base set that holds browse also holds them.
+  it('covers every combination and agrees with project:browse on each', () => {
+    expect(TABLE).toHaveLength(64);
+    for (const row of TABLE) {
+      const inputs: ProjectAccessInputs = {
+        accessLevel: row.accessLevel,
+        workspaceRole: row.workspaceRole,
+        projectRole: row.projectRole,
+      };
+      const browse = hasPermission(inputs, 'project:browse');
+      for (const key of ['plan:view_any', 'run:view_any'] as const) {
+        expect(
+          hasPermission(inputs, key),
+          `${key} diverges from project:browse on { ${row.accessLevel}, ws=${row.workspaceRole}, proj=${row.projectRole} } (expected ${browse})`,
+        ).toBe(browse);
+      }
+    }
+  });
+
+  it('agrees for the anonymous public actor too — the level-gated layer carries both', () => {
+    const anonymous: ProjectAccessInputs = {
+      accessLevel: 'public',
+      workspaceRole: null,
+      projectRole: null,
+    };
+    expect(hasPermission(anonymous, 'plan:view_any')).toBe(true);
+    expect(hasPermission(anonymous, 'run:view_any')).toBe(true);
+    for (const accessLevel of ['open', 'limited', 'private'] as const) {
+      const outsider = { accessLevel, workspaceRole: null, projectRole: null };
+      expect(hasPermission(outsider, 'plan:view_any')).toBe(false);
+      expect(hasPermission(outsider, 'run:view_any')).toBe(false);
+    }
+  });
+
+  it('a CUSTOM role holds each exactly when it lists it — which is how a team closes a room', () => {
+    for (const accessLevel of ['open', 'limited', 'private'] as const) {
+      for (const key of ['plan:view_any', 'run:view_any'] as const) {
+        const as = (customRolePermissions: string[]) =>
+          hasPermission(
+            {
+              accessLevel,
+              workspaceRole: 'member',
+              projectRole: CUSTOM_ROLE_TIER,
+              customRolePermissions,
+            },
+            key,
+          );
+        expect(as(['project:browse', key]), `${key} listed / ${accessLevel}`).toBe(true);
+        expect(as(['project:browse']), `${key} withheld / ${accessLevel}`).toBe(false);
+      }
     }
   });
 });

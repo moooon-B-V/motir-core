@@ -38,10 +38,15 @@ const MEMBER = BUILTIN_ROLE_PERMISSIONS.member;
 const VIEWER = BUILTIN_ROLE_PERMISSIONS.viewer;
 
 describe('the nav-permission map', () => {
-  it('names only real catalog keys, or the explicit browse-only marker', () => {
+  it('names only real catalog keys, the explicit browse-only marker, or an any-of over real keys', () => {
     for (const entry of PROJECT_NAV_ACCESS) {
-      const ok = entry.requires === 'browse-only' || isPermissionKey(entry.requires);
-      expect(ok, `${entry.href}: ${entry.requires}`).toBe(true);
+      const r = entry.requires;
+      const ok =
+        r === 'browse-only' ||
+        (typeof r === 'object'
+          ? r.anyOf.length > 0 && r.anyOf.every((k) => isPermissionKey(k))
+          : isPermissionKey(r));
+      expect(ok, `${entry.href}: ${JSON.stringify(r)}`).toBe(true);
     }
     expect(satisfiesRequirement(AI_PLANNING_REQUIREMENT, ADMIN)).toBe(true);
   });
@@ -172,14 +177,15 @@ describe('what each built-in role is offered', () => {
     expect(gone).toEqual([]);
   });
 
-  it('a VIEWER loses exactly the TWO destinations that refuse them outright', () => {
+  it('a VIEWER loses exactly the ONE destination that refuses them outright', () => {
     // Three became two for the same reason as above: `/code` is browse-reachable,
     // so a viewer is offered the room and meets Health's own admin-only state
-    // inside it rather than being denied the door.
+    // inside it rather than being denied the door. Two became ONE with MOTIR-6332:
+    // `/plans` opens on `plan:view_any`, which a viewer holds (MOTIR-6328).
     const gone = PROJECT_NAV_ACCESS.map((e) => e.href).filter(
       (href) => !offered(VIEWER as never).includes(href),
     );
-    expect(gone.sort()).toEqual(['/plans', '/triage']);
+    expect(gone.sort()).toEqual(['/triage']);
   });
 
   it('a viewer keeps every READ surface', () => {
@@ -218,5 +224,54 @@ describe('the DISABLE family is untouched (treatment-table rows 6–8)', () => {
     expect(PALETTE, 'Create was routed through the nav gate — it should not be').not.toContain(
       "offerNav('/create'",
     );
+  });
+});
+
+// ── THE ROOM DOORS (Story MOTIR-6179 · MOTIR-6332) — view-any key OR a way to act ──
+describe('the Plans, Approvals and Runs doors open on the view key OR a way to act', () => {
+  const held = (...keys: string[]) => new Set(['project:browse', ...keys]) as never;
+  const ROOMS = [
+    { href: '/plans', view: 'plan:view_any', acts: ['ai:plan', 'ai:decide_plan'] },
+    {
+      href: '/approvals',
+      view: 'approval:view_any',
+      acts: ['work_item:edit', 'approval:decide_any', 'ai:decide_plan'],
+    },
+    { href: '/runs', view: 'run:view_any', acts: ['work_item:edit'] },
+  ] as const;
+
+  it.each(ROOMS)(
+    '$href — view key only, each act key only, both: offered; neither: not',
+    (room) => {
+      expect(canOfferNavDestination(room.href, held(room.view))).toBe(true);
+      for (const act of room.acts) {
+        expect(canOfferNavDestination(room.href, held(act)), act).toBe(true);
+      }
+      expect(canOfferNavDestination(room.href, held(room.view, room.acts[0]))).toBe(true);
+      expect(canOfferNavDestination(room.href, held())).toBe(false);
+    },
+  );
+
+  it('a built-in Viewer and Member are offered all three doors', () => {
+    for (const room of ROOMS) {
+      expect(canOfferNavDestination(room.href, VIEWER), `viewer ${room.href}`).toBe(true);
+      expect(canOfferNavDestination(room.href, MEMBER), `member ${room.href}`).toBe(true);
+    }
+  });
+
+  it('a custom role holding `project:browse` alone is offered none of the three', () => {
+    for (const room of ROOMS) expect(canOfferNavDestination(room.href, held())).toBe(false);
+  });
+
+  it('the story’s Verification reader — no run key, no work_item:edit — has no Runs door', () => {
+    const verification = held('plan:view_any', 'approval:view_any');
+    expect(canOfferNavDestination('/runs', verification)).toBe(false);
+    expect(canOfferNavDestination('/plans', verification)).toBe(true);
+    expect(canOfferNavDestination('/approvals', verification)).toBe(true);
+  });
+
+  it('the /approvals door reads the ONE exported act-key set', () => {
+    const src = readFileSync(join(process.cwd(), 'lib/settings/projectNavAccess.ts'), 'utf8');
+    expect(src).toContain("from '@/lib/approvalGates/actPermissions'");
   });
 });

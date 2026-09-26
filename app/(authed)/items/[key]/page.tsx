@@ -141,14 +141,16 @@ export default async function IssueDetailPage({
   const canArchive = held.has('work_item:archive');
   const canDelete = held.has('work_item:delete');
   const canManageProject = held.has('project:administer');
-  // `canViewPlans` (`ai:view_plan`) — whether the PENDING-PLAN indicator may
-  // render at all (bug MOTIR-4197 AC 4). It is the same key the shell uses to
-  // decide whether to OFFER `/plans` (`lib/settings/projectNavAccess.ts`), so
-  // the indicator can never point at a destination the navigation does not
-  // offer. An actor without it gets no indicator AND no read: an indicator
-  // naming a plan the viewer cannot open is worse than none, and skipping the
-  // query keeps its cost off the actor least able to benefit from it.
-  const canViewPlans = held.has('ai:view_plan');
+  // `canViewPlans` (`plan:view_any`) — whether the PENDING-PLAN indicator may
+  // render at all (bug MOTIR-4197 AC 4). It is a READ, so it takes the Plans
+  // room's VIEW key (MOTIR-6328), not `ai:view_plan`, which gates plan
+  // AUTHORING. The Plans nav door opens on this key too (MOTIR-6332 re-keys
+  // that row in `lib/settings/projectNavAccess.ts`), so the indicator never
+  // points at a room the navigation does not offer. An actor without it gets no
+  // indicator AND no read: an indicator naming a plan the viewer cannot open is
+  // worse than none, and skipping the query keeps its cost off the actor least
+  // able to benefit from it.
+  const canViewPlans = held.has('plan:view_any');
 
   // The Activity tab (Story 5.5 · 5.5.4): URL-driven via `?activity=`
   // (default Comments — the Jira default); the server fetches ONLY the
@@ -313,7 +315,7 @@ export default async function IssueDetailPage({
     // with the plan's id / title / status on the same row — its own read, not
     // MOTIR-4106's project-scoped boundary seam, which cannot answer *which
     // plans name THIS card*. CONDITIONAL, like the roll-up: skipped outright
-    // for an actor without `ai:view_plan`.
+    // for an actor without `plan:view_any`.
     canViewPlans
       ? plansService.listPendingProposalsForWorkItem(ctx.projectId, item.id, {
           userId: ctx.userId,
@@ -327,7 +329,7 @@ export default async function IssueDetailPage({
     // read would re-run on every activity-tab switch (the lower boundary is keyed
     // on it). One page of at most 5 plans over the two `plan_item` indexes; a card
     // with no related plan pays the index probe only. CONDITIONAL on
-    // `ai:view_plan`, exactly as the pending read above. The CATCH is the page's
+    // `plan:view_any`, exactly as the pending read above. The CATCH is the page's
     // own rule: a section whose read fails degrades to its own error and retry,
     // it does not reject the group.
     canViewPlans
@@ -567,7 +569,7 @@ export default async function IssueDetailPage({
               future: what this card IS, then what a plan proposes it BECOME).
               Nothing renders — no reserved box — when no undecided plan names
               this card, which is nearly every card, or when the actor lacks
-              `ai:view_plan` (then `pendingPlans` is null: the read was skipped). */}
+              `plan:view_any` (then `pendingPlans` is null: the read was skipped). */}
                   {pendingPlans && pendingPlans.length > 0 ? (
                     <PendingPlanNotice identifier={item.identifier} proposals={pendingPlans} />
                   ) : null}
@@ -668,7 +670,7 @@ export default async function IssueDetailPage({
                   {/* MOTIR-5547: the plan history — after Children (a plan that added
               work items under this card reads right under them), before the late
               stack's lower half. Renders nothing for an actor without
-              `ai:view_plan` (then `planHistory` is null: the read was skipped)
+              `plan:view_any` (then `planHistory` is null: the read was skipped)
               and nothing for a card no plan ever touched. */}
                   {planHistory ? (
                     <PlanHistorySection

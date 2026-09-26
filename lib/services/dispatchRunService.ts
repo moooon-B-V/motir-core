@@ -20,13 +20,15 @@ import {
 } from '@/lib/dispatchRuns/errors';
 import type {
   ActiveDispatchRunDto,
+  ActiveDispatchRunsDto,
+  DispatchRunListPageDto,
+  DispatchRunView,
   DispatchRunAppendedDto,
   DispatchRunCardDto,
   DispatchRunCloseOutPromptDto,
   DispatchRunDetailDto,
   DispatchRunDto,
   DispatchRunEventDto,
-  DispatchRunListItemDto,
   DispatchRunOpenedDto,
   DispatchRunScopeDto,
 } from '@/lib/dto/dispatchRuns';
@@ -45,10 +47,13 @@ import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventR
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { projectAccessService } from '@/lib/services/projectAccessService';
+import { holdsRecordView, projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { PermissionKey } from '@/lib/permissions/catalog';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { availableRoomViews, holdsAnyOf, RUN_ACT_PERMISSIONS } from '@/lib/rooms/roomView';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // THE DISPATCH RUN SERVICE (Story MOTIR-1789 · MOTIR-1792) — the WRITE half of
@@ -221,6 +226,53 @@ function statusForStopReason(
  */
 function settledDisposition(current: DispatchCardDisposition): DispatchCardDisposition {
   return current === 'running' ? 'failed' : 'not_reached';
+}
+
+/**
+ * The Runs room's SERVED scope (Story MOTIR-6179 · MOTIR-6331), resolved once per
+ * read inside its transaction — the plan reads' shape (`planSessionsService`) and
+ * the Approvals room's (`approvalGatesService.listRecords`). An omitted `view`
+ * asks for `project`, which is what every reader saw before the scope existed.
+ * `createdById` is the `mine` narrowing the repository applies, or undefined.
+ */
+async function resolveRunScope(
+  projectId: string,
+  ctx: ServiceContext,
+  requested: DispatchRunView | undefined,
+  tx: Prisma.TransactionClient,
+): Promise<{ scope: DispatchRunView; createdById: string | undefined }> {
+  const held = await projectAccessService.getPermissions(projectId, ctx, tx);
+  if ((requested ?? 'project') === 'project' && holdsRecordView(held, ctx, 'run:view_any')) {
+    return { scope: 'project', createdById: undefined };
+  }
+  return { scope: 'mine', createdById: ctx.userId };
+}
+
+/**
+ * The record-level admit for ONE run (MOTIR-6331): the reader browses the run's
+ * project AND either holds `run:view_any` (role ∩ grant) or STARTED the run.
+ * Otherwise the SAME `DispatchRunNotFoundError` an unknown id throws, so a run
+ * link confirms nothing about a run the reader may not see. Called inside the
+ * read's transaction.
+ */
+async function assertMayReadRun(
+  run: { id: string; projectId: string; createdById: string | null },
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  let held: ReadonlySet<PermissionKey>;
+  try {
+    held = await projectAccessService.getPermissions(run.projectId, ctx, tx);
+  } catch (err) {
+    // A project the actor may not address (another tenant, a token bound to a
+    // different project) is the run's not-found too — never a second error shape.
+    if (err instanceof ProjectNotFoundError) throw new DispatchRunNotFoundError(run.id);
+    throw err;
+  }
+  if (!held.has('project:browse')) throw new DispatchRunNotFoundError(run.id);
+  if (holdsRecordView(held, ctx, 'run:view_any')) return;
+  if (run.createdById !== null && run.createdById === ctx.userId) return;
+  throw new DispatchRunNotFoundError(run.id);
 }
 
 export const dispatchRunService = {
@@ -686,6 +738,7 @@ export const dispatchRunService = {
       async (tx) => {
         const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
         if (!run) throw new DispatchRunNotFoundError(runId);
+        await assertMayReadRun(run, ctx, tx);
         const seq = (await dispatchRunEventRepository.maxSeq(runId, tx)) ?? 0;
         return toDispatchRunDto(run, seq);
       },
@@ -713,7 +766,9 @@ export const dispatchRunService = {
       dispatchRunRepository.findByIdWithCards(runId, tx),
     );
     if (!run) throw new DispatchRunNotFoundError(runId);
-    await projectAccessService.assertPermission(run.projectId, ctx, 'project:browse');
+    // The Runs room's record-level admit (MOTIR-6331): browse, and the room's
+    // view key or the reader's own run — else the unknown-id not-found.
+    await withWorkspaceContext(binding, (tx) => assertMayReadRun(run, ctx, tx));
     if (!run.scopeWorkItemId) throw new DispatchRunNoTargetError(runId);
 
     const landed = run.cards.filter(
@@ -786,6 +841,7 @@ export const dispatchRunService = {
       async (tx) => {
         const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
         if (!run) throw new DispatchRunNotFoundError(runId);
+        await assertMayReadRun(run, ctx, tx);
         const seq = (await dispatchRunEventRepository.maxSeq(runId, tx)) ?? 0;
 
         const workItemIds = run.cards
@@ -835,7 +891,7 @@ export const dispatchRunService = {
    */
   async listRunsForWorkItemKey(
     key: string,
-    page: { take: number; cursor?: string | undefined },
+    page: { take: number; cursor?: string | undefined; view?: DispatchRunView | undefined },
     ctx: ServiceContext,
   ): Promise<DispatchRunDto[]> {
     const identifier = key.trim().toUpperCase();
@@ -847,7 +903,13 @@ export const dispatchRunService = {
       async (tx) => {
         const item = await workItemRepository.findByIdentifier(project.id, identifier, tx);
         if (!item) throw new WorkItemNotFoundError(identifier);
-        const runs = await dispatchRunRepository.listByWorkItem(item.id, page, tx);
+        // The Runs room's scope, on the card's run history too (MOTIR-6331).
+        const { createdById } = await resolveRunScope(project.id, ctx, page.view, tx);
+        const runs = await dispatchRunRepository.listByWorkItem(
+          item.id,
+          { take: page.take, cursor: page.cursor, createdById },
+          tx,
+        );
         // The `seq` on a HISTORY row is not worth a read per run — the page
         // renders a list, and a client that opens one asks for its detail.
         return runs.map((run) => toDispatchRunDto(run, 0));
@@ -888,19 +950,30 @@ export const dispatchRunService = {
       cursor?: string | undefined;
       statuses?: DispatchRunStatus[] | undefined;
       scopeWorkItemKey?: string | undefined;
+      /** WHOSE runs — asked for; the service serves (MOTIR-6331). */
+      view?: DispatchRunView | undefined;
     },
     ctx: ServiceContext,
-  ): Promise<DispatchRunListItemDto[]> {
+  ): Promise<DispatchRunListPageDto> {
     const project = await projectsService.getByKey(projectKey, ctx);
     await projectAccessService.assertCanBrowse(project.id, ctx);
 
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
       async (tx) => {
+        // WHOSE runs (`view`) and WHICH work item's (`scopeWorkItemKey`) are two
+        // axes, and both narrow the QUERY.
+        const { scope: served, createdById } = await resolveRunScope(
+          project.id,
+          ctx,
+          page.view,
+          tx,
+        );
         const bounded = {
           take: Math.min(Math.max(page.take, 1), DISPATCH_RUN_LIST_MAX_TAKE),
           ...(page.cursor ? { cursor: page.cursor } : {}),
           ...(page.statuses && page.statuses.length > 0 ? { statuses: page.statuses } : {}),
+          ...(createdById ? { createdById } : {}),
         };
 
         // A SCOPE narrowing resolves its key inside the same transaction, so the
@@ -919,9 +992,32 @@ export const dispatchRunService = {
           return dispatchRunRepository.listByScope(scope.id, bounded, tx);
         })();
 
-        return runs.map(toDispatchRunListItemDto);
+        return { runs: runs.map(toDispatchRunListItemDto), scope: served };
       },
     );
+  },
+
+  /**
+   * The Runs ROOM's views for this reader (Story MOTIR-6179 · MOTIR-6335):
+   * `project` on `run:view_any` (role ∩ token grant), `mine` on a way to act —
+   * starting a run (`RUN_ACT_PERMISSIONS`, what {@link open} asserts). Empty ⇒ the
+   * room is closed to them. `canRun` also picks the Project-empty copy.
+   */
+  async roomAccess(
+    projectKey: string,
+    ctx: ServiceContext,
+  ): Promise<{ views: DispatchRunView[]; canRun: boolean }> {
+    const project = await projectsService.getByKey(projectKey, ctx);
+    const held = await projectAccessService.getPermissions(project.id, ctx);
+    if (!held.has('project:browse')) return { views: [], canRun: false };
+    const canRun = holdsAnyOf(held, RUN_ACT_PERMISSIONS);
+    return {
+      views: availableRoomViews({
+        hasViewKey: holdsRecordView(held, ctx, 'run:view_any'),
+        canAct: canRun,
+      }),
+      canRun,
+    };
   },
 
   /**
@@ -974,15 +1070,17 @@ export const dispatchRunService = {
   async listActiveRunsForProject(
     projectKey: string,
     ctx: ServiceContext,
-  ): Promise<ActiveDispatchRunDto[]> {
+    opts: { view?: DispatchRunView | undefined } = {},
+  ): Promise<ActiveDispatchRunsDto> {
     const project = await projectsService.getByKey(projectKey, ctx);
     await projectAccessService.assertCanBrowse(project.id, ctx);
 
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
       async (tx) => {
-        const runs = await dispatchRunRepository.listActiveByProject(project.id, tx);
-        return runs.map((run) => ({
+        const { scope, createdById } = await resolveRunScope(project.id, ctx, opts.view, tx);
+        const runs = await dispatchRunRepository.listActiveByProject(project.id, tx, createdById);
+        const rows: ActiveDispatchRunDto[] = runs.map((run) => ({
           id: run.id,
           command: run.command,
           origin: run.origin,
@@ -993,6 +1091,7 @@ export const dispatchRunService = {
             disposition: card.disposition,
           })),
         }));
+        return { runs: rows, scope };
       },
     );
   },
@@ -1016,6 +1115,7 @@ export const dispatchRunService = {
       async (tx) => {
         const run = await dispatchRunRepository.findById(runId, tx);
         if (!run) throw new DispatchRunNotFoundError(runId);
+        await assertMayReadRun(run, ctx, tx);
         const events = await dispatchRunEventRepository.listSince(runId, sinceSeq, take, tx);
         // ⚠️ THE EVENTS ARE READ AFTER THE STATUS, INSIDE ONE TRANSACTION. Read
         // the other way round, an event appended between the two reads would be

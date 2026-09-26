@@ -31,6 +31,9 @@ export type ApiTokenAuthResult =
       /** The token's project binding, or null (MOTIR-2607). The wrapper puts it
        *  on the ServiceContext, where `projectAccessService` enforces it. */
       projectId: string | null;
+      /** The token's resolved grant — carried onto the ServiceContext as
+       *  `tokenGrant` for the record-view reads (MOTIR-6330). */
+      grant: PermissionKey[];
     }
   | { ok: false; reason: 'unauthenticated' | 'forbidden' };
 
@@ -67,5 +70,5 @@ export async function authenticateApiToken(
   }
 
   if (!grantAllows(grant, requiredPermission)) return { ok: false, reason: 'forbidden' };
-  return { ok: true, userId: user.id, workspaceId, projectId };
+  return { ok: true, userId: user.id, workspaceId, projectId, grant };
 }

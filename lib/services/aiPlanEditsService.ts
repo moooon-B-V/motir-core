@@ -367,7 +367,9 @@ export const aiPlanEditsService = {
       if (!resolved) throw new NoPlanForJobError(ref.jobId);
       planId = resolved;
     }
-    const plan = await plansService.getPlan(planId, ctx);
+    // A READ for an actor — `get_plan_status` and `GET /api/v1/plans/{id}/status`
+    // — so it admits by the Plans room's scope (MOTIR-6330).
+    const plan = await plansService.getPlanForReader(planId, ctx);
     const job =
       plan.status === 'generating' && plan.sourceJobId
         ? await resolveJobState(plan.sourceJobId, plan.projectId)

@@ -198,7 +198,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       // aims at. `planned`, so reading it never reaches out to motir-ai.
       const plan = await plansService.createPlan(
         a.projectId,
-        { title: null, summary: null, sourceJobId: 'job_parity_a' },
+        { title: null, summary: null, sourceJobId: 'job_parity_a', createdById: a.ctx.userId },
         a.ctx,
       );
       await plansService.markPlanned(plan.id, a.ctx);
@@ -737,12 +737,13 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         { name: 'Scope sprint' },
         fx.ctx,
       );
-      // A `planned` expansion plan in the caller's OWN project, so the read-only
-      // token's `get_plan_status` call actually EXECUTES (the loop asserts every
+      // A `planned` expansion plan the caller ASKED FOR, in their own project, so
+      // the read-only token's `get_plan_status` call actually EXECUTES — a token
+      // without `plan:view_any` reads the plans that are its owner's (MOTIR-6330) (the loop asserts every
       // read-scoped tool succeeds) and never reaches out to motir-ai for a job.
       const plan = await plansService.createPlan(
         fx.projectId,
-        { title: null, summary: null, sourceJobId: 'job_scope_own' },
+        { title: null, summary: null, sourceJobId: 'job_scope_own', createdById: fx.ctx.userId },
         fx.ctx,
       );
       await plansService.markPlanned(plan.id, fx.ctx);

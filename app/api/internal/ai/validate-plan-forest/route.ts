@@ -80,6 +80,9 @@ export async function POST(req: Request): Promise<Response> {
       planId,
       auth.ctx,
       condition as ValidityCondition | undefined,
+      // A SYSTEM caller (MOTIR-6330): motir-ai validating a plan its own job
+      // wrote, so the Plans room's reader scope does not apply — browse only.
+      { caller: 'system' },
     );
     return NextResponse.json(result);
   } catch (err) {

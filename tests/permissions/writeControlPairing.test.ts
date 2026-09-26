@@ -23,6 +23,9 @@ describe('3 · every navigation door names the key that opens its room', () => {
     if (entry.requires === 'browse-only') {
       // `browse-only` is a DECISION, so it carries the reading that supports it.
       expect(entry.evidence.trim().length, 'browse-only needs its evidence').toBeGreaterThan(20);
+    } else if (typeof entry.requires === 'object') {
+      // A ROOM door (MOTIR-6332): the view key OR a way to act — every key real.
+      for (const key of entry.requires.anyOf) expect(PERMISSION_CATALOG[key], key).toBeDefined();
     } else {
       expect(PERMISSION_CATALOG[entry.requires]).toBeDefined();
     }

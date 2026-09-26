@@ -263,6 +263,8 @@ export const planChangeSessionRepository = {
       after: { lastActivityAt: Date; id: string } | null;
       state: PlanSessionListState | null;
       sessionId?: string;
+      /** The reader's OWN sessions only (`mine`), or null for every session. */
+      mine?: PlanSessionMineScope | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<PlanSessionListRow[]> {
@@ -297,7 +299,7 @@ export const planChangeSessionRepository = {
         SELECT count(*)::int AS "n" FROM "plan" p WHERE p."session_id" = s."id"
       ) pc ON true
       WHERE s."project_id" = ${args.projectId} AND s."workspace_id" = ${args.workspaceId}
-        ${stateFilter(args.state)} ${after} ${only}
+        ${stateFilter(args.state)} ${mineFilter(args.mine ?? null)} ${after} ${only}
       ORDER BY s."last_activity_at" DESC, s."id" DESC
       LIMIT ${args.limit}
     `;
@@ -313,12 +315,14 @@ export const planChangeSessionRepository = {
     projectId: string,
     workspaceId: string,
     tx: Prisma.TransactionClient,
+    mine: PlanSessionMineScope | null = null,
   ): Promise<Array<{ state: string; count: number }>> {
     return tx.$queryRaw<Array<{ state: string; count: number }>>`
       SELECT COALESCE(lp."status"::text, 'none') AS "state", count(*)::int AS "count"
       FROM "plan_change_session" s
       ${latestPlanJoin}
       WHERE s."project_id" = ${projectId} AND s."workspace_id" = ${workspaceId}
+        ${mineFilter(mine)}
       GROUP BY 1
     `;
   },
@@ -359,6 +363,39 @@ const latestPlanJoin = Prisma.sql`
     WHERE p."session_id" = s."id"
     ORDER BY p."created_at" DESC, p."id" DESC LIMIT 1
   ) lp ON true`;
+
+/**
+ * The Plans room's `mine` scope (Story MOTIR-6179 · MOTIR-6330): WHO is reading,
+ * and the ids of the plans whose approval gate is routed to them — resolved ONCE
+ * per read by the service through `approvalGateRepository.findAwaitingRoutedPlanIds`,
+ * so this filter adds no per-row query.
+ */
+export interface PlanSessionMineScope {
+  userId: string;
+  routedPlanIds: string[];
+}
+
+/**
+ * A session is the reader's when they STARTED it, or when one of its plans was
+ * asked for by them, DECIDED by them, or is awaiting their decision. Written
+ * ONCE, and read by the list and the counts alike, so a count and its list
+ * cannot disagree about which sessions are mine.
+ */
+function mineFilter(mine: PlanSessionMineScope | null): Prisma.Sql {
+  if (mine === null) return Prisma.empty;
+  const routed =
+    mine.routedPlanIds.length > 0
+      ? Prisma.sql`OR p."id" IN (${Prisma.join(mine.routedPlanIds)})`
+      : Prisma.empty;
+  return Prisma.sql`AND (
+    s."created_by_id" = ${mine.userId}
+    OR EXISTS (
+      SELECT 1 FROM "plan" p
+      WHERE p."session_id" = s."id"
+        AND (p."created_by_id" = ${mine.userId} OR p."decided_by_id" = ${mine.userId} ${routed})
+    )
+  )`;
+}
 
 function stateFilter(state: PlanSessionListState | null): Prisma.Sql {
   if (state === null) return Prisma.empty;

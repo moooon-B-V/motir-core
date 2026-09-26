@@ -97,7 +97,11 @@ describe('verifyMcpToken', () => {
 
     const info = await verifyMcpToken(reqWithBearer(), token);
     const grant = (info?.extra as { grant?: string[] }).grant ?? [];
-    expect([...grant].sort()).toEqual(['project:browse', 'sprint:manage'].sort());
+    // …and a FIXED grant that browses reads forward into the rooms' view keys
+    // (MOTIR-6329, `token-permissions.md` AMENDMENT 2).
+    expect([...grant].sort()).toEqual(
+      ['project:browse', 'sprint:manage', 'plan:view_any', 'run:view_any'].sort(),
+    );
     expect(grant).not.toContain('read');
   });
 

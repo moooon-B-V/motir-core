@@ -357,7 +357,9 @@ export async function runGetPlan(
   args: { planId: string },
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
-  const plan = await plansService.getPlan(args.planId, ctx);
+  // The READER's door (MOTIR-6330): a plan outside the Plans room's scope for
+  // this caller — role AND token grant — is not-found, like an unknown id.
+  const plan = await plansService.getPlanForReader(args.planId, ctx);
   const placements = await resolvePlacements(args.planId, ctx);
   // The folders the proposals NAME (MOTIR-5415), for the structured payload —
   // the same reading `/api/v1` presents beside `parentRef`.

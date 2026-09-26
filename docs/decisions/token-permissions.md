@@ -676,6 +676,45 @@ The two candidate resolutions, neither chosen here:
 The device flow is unaffected either way: a fixed grant binds to no project
 (A.3), so `motir login` works in a workspace with nothing in it.
 
+## AMENDMENT 2 — the room view keys are read FORWARD, never written (MOTIR-6329, 2026-09-25)
+
+Story MOTIR-6179 splits two VIEW keys out of `project:browse`'s reach —
+`plan:view_any` (the Plans room) and `run:view_any` (the Runs room) — and the
+rooms' reads start asserting them (MOTIR-6330 / MOTIR-6331). Every token that can
+browse opens both rooms today, so without a carry each would lose them the day the
+reads land. The carry follows §5's rule for a stored value, not a migration:
+
+- **`expandStoredGrant` reads a stored grant holding `project:browse` forward into
+  both keys** (`ROOM_VIEW_FORWARD_KEYS`, `lib/tokens/grant.ts`). On READ, beside the
+  legacy-scope expansion; **no migration touches `api_token`**, for the reason the
+  column's own comment gives — nothing rewrites a live credential's row.
+- **The cutover is a MARKER written into every grant minted from this change on,
+  not a date** (`GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER`, stored beside the keys in
+  `api_token.scopes` by `apiTokensService.create`). A CHOSEN grant (project-bound)
+  stored WITHOUT it was minted by a path that could not offer either key — neither
+  was grantable — so it is read forward; one stored WITH it was chosen from an offer
+  that held them, so it is taken exactly as stored, and a person who deliberately
+  leaves a room's key out of a new token keeps it out. `expandStoredGrant` reads the
+  marker and drops it; no surface displays it.
+  **Why not a date:** a cutover date is right only if it equals the deploy that makes
+  the keys grantable, which is unknown when the code is written — set early, a grant
+  minted in between loses the rooms; set late, a deliberate narrowing minted in
+  between is widened; and every test that mints a token reads differently depending
+  on the day it runs. The marker is exact by construction: the code that writes it is
+  the code that offers the keys. (The first cut of MOTIR-6329 used `created_at`
+  against a constant, and CI on its own head showed the third failure.)
+- **A FIXED grant (the device credential, `project_id` NULL) follows the SAME
+  rule.** One minted before this change holds neither key and no marker, and is
+  read forward; one minted after stores `CLI_TOKEN_GRANT` — which now carries both
+  keys, in catalog order, for the reads the CLI already performs — and the marker.
+- **No `PERMISSION_IMPLICATIONS` edge `project:browse ⇒ *:view_any`.** An
+  implication would make the view keys impossible to withhold anywhere, and the
+  DECISION card (MOTIR-6165 Q2) says a custom role and a token must be able to
+  close a room.
+- **Custom project roles are configuration, not credentials**, so they ARE
+  migrated: `20260925170000_room_view_keys_for_custom_roles` appends both keys to
+  every `project_role_definition` row holding `project:browse`, idempotently.
+
 ## Consequences
 
 - The picker offers six switches today and grows when an operation's permission

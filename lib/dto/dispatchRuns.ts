@@ -254,3 +254,28 @@ export interface DispatchRunCloseOutPromptDto {
   /** The cards the run landed (integrated or implemented), in run order. */
   landedKeys: string[];
 }
+
+/**
+ * WHOSE runs a Runs-room read covers (Story MOTIR-6179 · MOTIR-6331) — a
+ * different axis from `?scope=<KEY>`, which narrows WHICH work item's runs.
+ *
+ *   * `project` — every run; served only to a reader holding `run:view_any`
+ *     (on a bearer token: in its grant too).
+ *   * `mine` — the runs the reader STARTED; served to anyone who browses.
+ *
+ * The caller ASKS; the service serves, and says which on the DTO — a `project`
+ * request from a reader without the key is served `mine`, never refused.
+ */
+export type DispatchRunView = 'mine' | 'project';
+
+/** A page of a project's runs, with the scope the service SERVED. */
+export interface DispatchRunListPageDto {
+  runs: DispatchRunListItemDto[];
+  scope: DispatchRunView;
+}
+
+/** A project's live runs, with the scope the service SERVED. */
+export interface ActiveDispatchRunsDto {
+  runs: ActiveDispatchRunDto[];
+  scope: DispatchRunView;
+}

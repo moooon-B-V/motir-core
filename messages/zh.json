@@ -340,6 +340,8 @@
       "attachment": "附件",
       "watcher": "关注者",
       "approval": "审批",
+      "plan": "计划",
+      "run": "智能体运行",
       "public_request": "公开请求",
       "member": "成员与访问",
       "board": "面板",
@@ -404,6 +406,14 @@
     "approval_view_any": {
       "label": "查看所有审批",
       "description": "查看项目的全部审批记录，包括他人的记录。没有此权限时，只能看到分派给你的审批和你作出决定的审批。"
+    },
+    "plan_view_any": {
+      "label": "查看所有计划",
+      "description": "查看项目的全部AI计划，包括他人的计划。没有此权限时，只能看到你发起的计划，以及分派给你或由你作出决定的计划。"
+    },
+    "run_view_any": {
+      "label": "查看所有智能体运行",
+      "description": "查看项目的全部智能体运行，包括他人发起的运行。没有此权限时，只能看到你发起的运行。"
     },
     "public_request_comment": {
       "label": "评论请求",
@@ -6599,6 +6609,14 @@
       "filteredEmptyDescription": "本项目的其他对话在“全部”下。",
       "loadMoreError": "无法加载更多对话。",
       "loadMoreRetry": "重试",
+      "viewAria": "显示你的对话或整个项目的对话",
+      "subtitleMine": "你在 {project} 中发起的规划对话，以及请你决定的计划",
+      "emptyMineTitle": "还没有你的规划对话",
+      "emptyMineDescription": "你与 Motir AI 发起的对话，以及请你决定的计划，都会列在这里。",
+      "emptyDescriptionRead": "当本项目中有人与 Motir AI 发起规划对话时，它会列在这里——无论是否已有计划。",
+      "filteredEmptyDescriptionMine": "你的其他对话在“全部”下。",
+      "readFailedTitle": "无法加载这些对话",
+      "readFailedBody": "请重新加载后重试。",
       "seed": {
         "label": "<mono>{key}</mono> 的重新规划",
         "verb": {
@@ -7700,7 +7718,10 @@
       "decidedFull": "本项目中还没有已决定的审批。",
       "decidedOwn": "你在本项目中还没有决定过审批。"
     },
-    "decidedByOnGithub": "{label} · 在 GitHub 上"
+    "decidedByOnGithub": "{label} · 在 GitHub 上",
+    "viewAria": "显示你的审批或整个项目的审批",
+    "readFailedTitle": "无法加载这些审批",
+    "readFailedBody": "请重新加载后重试。"
   },
   "platformAdmin": {
     "shell": {
@@ -8374,8 +8395,16 @@
       "emptyTitle": "{key} 尚未作为范围运行过",
       "emptyBody": "用 motir run {key} 运行整个工作项。单独处理其某个子项的运行，会显示在该子项的页面上。",
       "notFoundTitle": "此项目中没有工作项 {key}",
-      "notFoundBody": "它可能已被删除，或你没有访问权限。已删除工作项的运行仍在“全部运行”中，按其标签列出。"
-    }
+      "notFoundBody": "它可能已被删除，或你没有访问权限。已删除工作项的运行仍在“全部运行”中，按其标签列出。",
+      "emptyMineTitle": "你还没有将 {key} 作为范围运行过"
+    },
+    "viewAria": "显示你的运行或整个项目的运行",
+    "indexSubtitleMine": "你在 {project} 中发起的运行——正在进行的和已完成的。",
+    "indexEmptyMineTitle": "你还没有发起过运行",
+    "indexEmptyMineBody": "当你用 motir next、motir run 或 motir batch 派发工作时，你的每一次运行都会出现在这里——正在进行的，以及此前的每一次。",
+    "indexEmptyBodyRead": "当本项目的工作通过 motir next、motir run 或 motir batch 派发时，每一次运行都会出现在这里——正在进行的，以及此前的每一次。",
+    "noneRunningMine": "当前没有你发起的正在运行的任务。",
+    "nonePastMine": "你发起的运行还没有已完成的。"
   },
   "repositoryPicker": {
     "add": "添加仓库",
@@ -9438,5 +9467,9 @@
     "plan": "打开计划",
     "noConversation": "无对话",
     "noConversationWhy": "此计划没有对话记录。"
+  },
+  "roomView": {
+    "mine": "我的",
+    "project": "整个项目"
   }
 }
