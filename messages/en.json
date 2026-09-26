@@ -642,7 +642,7 @@
       "selfLink": "A work item can't link to itself.",
       "duplicate": "That link already exists.",
       "cycle": "That would create a dependency cycle.",
-      "crossLevel": "A dependency joins two items on the same level — the same depth below the item they both sit under.",
+      "crossLevel": "A dependency joins two items on the same level: an epic only with another epic, and anything else at the same depth below the item they both sit under.",
       "crossWorkspace": "That work item is in another workspace.",
       "linkNotFound": "That link no longer exists.",
       "couldNotUpdate": "Could not update the link."
