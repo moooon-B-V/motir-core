@@ -278,6 +278,20 @@ export const organizationDeletionService = {
   },
 
   /**
+   * The name of the closing organization that owns `workspaceId`, or null when
+   * it is open — the page header's read-only note (MOTIR-6403, design MOTIR-6390
+   * panel 6). A workspace member is always an org member, so the caller has
+   * already been admitted to the workspace; the read is SYSTEM-scoped like
+   * `isWorkspaceOrgClosing`, and returns nothing but a name the member's own
+   * closing bar already shows.
+   */
+  async getClosingOrganizationName(workspaceId: string): Promise<string | null> {
+    return withSystemContext((tx) =>
+      organizationRepository.findClosingNameByWorkspaceId(workspaceId, tx),
+    );
+  },
+
+  /**
    * What deleting the organization would take — the dialog's step 1 (MOTIR-6402,
    * design MOTIR-6390 panel 2). Owner-only, like the act it describes: a
    * non-member 404, an Admin or Member 403.

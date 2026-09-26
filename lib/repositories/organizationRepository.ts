@@ -84,6 +84,27 @@ export const organizationRepository = {
   },
 
   /**
+   * The NAME of the closing organization that owns `workspaceId`, or null when it
+   * is open (Story MOTIR-6306 · MOTIR-6403) — the read-only note a page header
+   * shows while the org closes.
+   */
+  async findClosingNameByWorkspaceId(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const rows = await tx.$queryRaw<Array<{ name: string }>>`
+      SELECT o."name" AS "name"
+      FROM "workspace" w
+      JOIN "organization" o ON o."id" = w."organizationId"
+      WHERE w."id" = ${workspaceId}
+        AND o."closing_since" IS NOT NULL
+        AND o."erased_at" IS NULL
+      LIMIT 1
+    `;
+    return rows[0]?.name ?? null;
+  },
+
+  /**
    * When the organization that owns `workspaceId` started CLOSING, or null when it
    * is not closing (Story MOTIR-6306 · MOTIR-6396) — the one read the permission
    * resolution adds, so that every actor in every workspace of a closing org

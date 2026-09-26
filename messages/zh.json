@@ -9529,5 +9529,14 @@
     "plan": "打开计划",
     "noConversation": "无对话",
     "noConversationWhy": "此计划没有对话记录。"
+  },
+  "orgClosing": {
+    "banner": {
+      "owner": "{org} 已安排于 {date} 删除。在此之前它是只读的。",
+      "member": "{name} 已安排于 {date} 删除 {org}。该组织现为只读。",
+      "someone": "某位成员",
+      "export": "下载你的数据"
+    },
+    "readOnlyNote": "{org} 关闭期间只读"
   }
 }

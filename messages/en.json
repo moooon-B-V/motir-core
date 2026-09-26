@@ -9533,5 +9533,14 @@
     "plan": "Opens the plan",
     "noConversation": "no conversation",
     "noConversationWhy": "There is no conversation on record for this plan."
+  },
+  "orgClosing": {
+    "banner": {
+      "owner": "{org} is scheduled for deletion on {date}. It is read-only until then.",
+      "member": "{name} scheduled {org} for deletion on {date}. The organization is read-only.",
+      "someone": "Someone",
+      "export": "Download your data"
+    },
+    "readOnlyNote": "Read-only while {org} closes"
   }
 }
