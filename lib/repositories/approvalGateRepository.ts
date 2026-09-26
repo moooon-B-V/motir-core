@@ -441,6 +441,9 @@ export const approvalGateRepository = {
     /** The design verdict (MOTIR-6421) — read by the seed guard, which accepts a
      *  design refusal only with `re_plan` (MOTIR-6424). Never written from. */
     refusalVerdict: ApprovalGateRefusalVerdict | null;
+    /** THROUGH WHICH SURFACE it was decided — read by the seed guard, which refuses a
+     *  GitHub-synced acceptance refusal (MOTIR-6504). Never written from. */
+    decisionSource: ApprovalGateDecisionSource | null;
   } | null> {
     const rows = await tx.$queryRaw<
       Array<{
@@ -457,6 +460,7 @@ export const approvalGateRepository = {
         subjectVersion: string | null;
         supersededCause: ApprovalGateSupersedeCause | null;
         refusalVerdict: ApprovalGateRefusalVerdict | null;
+        decisionSource: ApprovalGateDecisionSource | null;
       }>
     >`
       SELECT "id",
@@ -472,6 +476,9 @@ export const approvalGateRepository = {
              -- READ for the seed guard (MOTIR-6424): a design refusal seeds a
              -- re-plan only with the re_plan verdict.
              "refusal_verdict" AS "refusalVerdict",
+             -- READ for the seed guard (MOTIR-6504): a GitHub-synced acceptance
+             -- refusal seeds nothing.
+             "decision_source" AS "decisionSource",
              -- READ for the stale check (MOTIR-5234): what the question was asked
              -- about, compared with the stamp the reader pressed with.
              "subject_version" AS "subjectVersion",

@@ -881,7 +881,9 @@ describe('who asks — `asksToReplanAfterPress`', () => {
     ['decision_confirmation', 'approved', 'ui', false],
     ['pull_request_approval', 'changes_requested', 'ui', false],
     ['design_result', 'changes_requested', 'ui', false],
-    ['acceptance_result', 'changes_requested', 'ui', false],
+    // MOTIR-6504 — a finished story's refusal (no verdict) asks for a remedy.
+    ['acceptance_result', 'changes_requested', 'ui', true],
+    ['acceptance_result', 'changes_requested', 'github', false],
     ['plan_approval', 'declined', 'ui', false],
   ] as const)('%s · %s · %s → %s', (kind, state, decisionSource, expected) => {
     expect(asksToReplanAfterPress({ kind, state, decisionSource, refusalVerdict: null })).toBe(
@@ -904,6 +906,27 @@ describe('who asks — `asksToReplanAfterPress`', () => {
       expect(
         asksToReplanAfterPress({
           kind: 'design_result',
+          state: 'changes_requested',
+          decisionSource,
+          refusalVerdict,
+        }),
+      ).toBe(expected);
+    },
+  );
+
+  // MOTIR-6504 — an acceptance asks after a Re-plan or a finished story's refusal, never
+  // after a Re-run (that is `motir fix`'s) and never from GitHub.
+  it.each([
+    ['re_plan', 'ui', true],
+    [null, 'ui', true],
+    ['revise', 'ui', false],
+    ['re_plan', 'github', false],
+  ] as const)(
+    'acceptance_result · changes_requested · verdict %s · %s → %s',
+    (refusalVerdict, decisionSource, expected) => {
+      expect(
+        asksToReplanAfterPress({
+          kind: 'acceptance_result',
           state: 'changes_requested',
           decisionSource,
           refusalVerdict,

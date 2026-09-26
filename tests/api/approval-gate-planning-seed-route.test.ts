@@ -437,6 +437,78 @@ describe('a design Re-plan seed', () => {
   });
 });
 
+describe('an acceptance seed (MOTIR-6504) — anchored on the STORY', () => {
+  it('a story-run RE-PLAN: the turn quotes the reason and says every subtask may be re-planned (en + zh)', async () => {
+    const gateId = await gate(card, 'acceptance_result', 'changes_requested', REASON, 're_plan');
+    signIn(owner());
+
+    const res = await readSeed(gateId);
+    expect(res.status).toBe(200);
+    const { seed } = await res.json();
+    expect(seed).toMatchObject({
+      gateId,
+      gateKind: 'acceptance_result',
+      anchorKey: card.identifier,
+    });
+    expect(seed.firstTurn).toContain(REASON);
+    expect(seed.firstTurn).toContain(en.planningWorkspace.refusalSeed.verb.acceptanceReplan);
+    expect(seed.firstTurn).toContain(`Re-plan ${card.identifier} from that reason.`);
+
+    requestLocale.current = 'zh';
+    const zhSeed = (await (await readSeed(gateId)).json()).seed;
+    expect(zhSeed.firstTurn).toContain(zh.planningWorkspace.refusalSeed.verb.acceptanceReplan);
+  });
+
+  it('a FINISHED story (no verdict): the turn asks for a remedy under the story', async () => {
+    const gateId = await gate(card, 'acceptance_result', 'changes_requested', REASON, null);
+    signIn(owner());
+
+    const { seed } = await (await readSeed(gateId)).json();
+    expect(seed.anchorKey).toBe(card.identifier);
+    expect(seed.firstTurn).toContain(en.planningWorkspace.refusalSeed.verb.acceptanceRemedy);
+    expect(seed.firstTurn).toContain(`Plan a remedy under ${card.identifier} from that reason`);
+  });
+
+  it('a session seeded from it is stamped on the story’s scope, and refused on a parent’s', async () => {
+    const { PlanSeedNotApplicableError } = await import('@/lib/planChange/errors');
+    const gateId = await gate(card, 'acceptance_result', 'changes_requested', REASON, 're_plan');
+    const me = pctxFor(owner());
+
+    const onStory = await planChangeSessionsService.startSeededWithFirstTurn(
+      me,
+      buildScope([card.identifier]),
+      'Re-plan it',
+      gateId,
+    );
+    expect(
+      (await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: onStory.id } })).seedGateId,
+    ).toBe(gateId);
+
+    const unrelated = await createTestWorkItem(fx, { kind: 'story', title: 'Unrelated' });
+    await expect(
+      planChangeSessionsService.startSeededWithFirstTurn(
+        me,
+        buildScope([unrelated.identifier]),
+        'Re-plan it',
+        gateId,
+      ),
+    ).rejects.toBeInstanceOf(PlanSeedNotApplicableError);
+  });
+
+  it('a Re-run cannot seed a session either — the stamp refuses what the read refuses', async () => {
+    const { PlanSeedNotApplicableError } = await import('@/lib/planChange/errors');
+    const gateId = await gate(card, 'acceptance_result', 'changes_requested', REASON, 'revise');
+    await expect(
+      planChangeSessionsService.startSeededWithFirstTurn(
+        pctxFor(owner()),
+        buildScope([card.identifier]),
+        'Re-plan it',
+        gateId,
+      ),
+    ).rejects.toBeInstanceOf(PlanSeedNotApplicableError);
+  });
+});
+
 describe('seededSessionId — the viewer’s own recent seeded session', () => {
   it('is the viewer’s session seeded by this gate, then null once past the window', async () => {
     const gateId = await gate(card, 'decision_approval', 'changes_requested');
@@ -557,8 +629,19 @@ describe('GET /api/approval-gates/[id]/planning-seed · the identical 404', () =
     await expectNotFound(gateId);
   });
 
-  it('a refused gate of a kind with NO composer (acceptance_result changes_requested)', async () => {
-    const gateId = await gate(card, 'acceptance_result', 'changes_requested');
+  // MOTIR-6504 — an acceptance seeds a Re-plan or a remedy, never a Re-run or GitHub.
+  it('an acceptance sent back with RE-RUN, and a GitHub-synced acceptance refusal', async () => {
+    signIn(owner());
+    await expectNotFound(
+      await gate(card, 'acceptance_result', 'changes_requested', REASON, 'revise'),
+    );
+    await expectNotFound(
+      await gate(card, 'acceptance_result', 'changes_requested', REASON, null, 'github'),
+    );
+  });
+
+  it('a refused gate of a kind with NO composer (pull_request_approval changes_requested)', async () => {
+    const gateId = await gate(card, 'pull_request_approval', 'changes_requested');
     signIn(owner());
     await expectNotFound(gateId);
   });
@@ -691,6 +774,10 @@ describe('the catalogues and the route’s shape', () => {
         'verb.designResult',
         'blockedBy',
         'askDesign',
+        'verb.acceptanceReplan',
+        'verb.acceptanceRemedy',
+        'askAcceptanceReplan',
+        'askAcceptanceRemedy',
       ].sort(),
     );
   });

@@ -28,6 +28,10 @@ const SEEDS = new Set([
   'decision_choice:changes_requested:*',
   'decision_confirmation:overturned:*',
   'design_result:changes_requested:re_plan',
+  // An acceptance sent back IN MOTIR seeds unless it is a Re-run (MOTIR-6504): a story
+  // run's Re-plan, or a finished story's verdict-less refusal (a remedy).
+  'acceptance_result:changes_requested:re_plan',
+  'acceptance_result:changes_requested:null',
 ]);
 
 describe('isRefusalSeedGate', () => {
@@ -48,7 +52,9 @@ describe('isRefusalSeedGate', () => {
         const expected =
           SEEDS.has(`${kind}:${state}:*`) || SEEDS.has(`${kind}:${state}:${refusalVerdict}`);
         it(`${kind} in ${state} (verdict ${refusalVerdict}) → ${expected}`, () => {
-          expect(isRefusalSeedGate({ kind, state, refusalVerdict })).toBe(expected);
+          expect(isRefusalSeedGate({ kind, state, refusalVerdict, decisionSource: 'ui' })).toBe(
+            expected,
+          );
         });
       }
     }
@@ -56,7 +62,7 @@ describe('isRefusalSeedGate', () => {
 
   it('a design refusal: only Re-plan seeds — Revise, a GitHub-synced (verdict-less) refusal, approved and awaiting do not', () => {
     const design = (state: ApprovalGateState, refusalVerdict: ApprovalGateRefusalVerdict | null) =>
-      isRefusalSeedGate({ kind: 'design_result', state, refusalVerdict });
+      isRefusalSeedGate({ kind: 'design_result', state, refusalVerdict, decisionSource: 'ui' });
     expect(design('changes_requested', 're_plan')).toBe(true);
     expect(design('changes_requested', 'revise')).toBe(false);
     expect(design('changes_requested', null)).toBe(false);
@@ -70,6 +76,33 @@ describe('isRefusalSeedGate', () => {
         kind: 'not_a_kind' as ApprovalGateKind,
         state: 'changes_requested',
         refusalVerdict: 're_plan',
+        decisionSource: 'ui',
+      }),
+    ).toBe(false);
+  });
+
+  it('an acceptance refusal: a Re-plan or a finished story’s remedy seeds; a Re-run and anything from GitHub do not (MOTIR-6504)', () => {
+    const acceptance = (
+      refusalVerdict: ApprovalGateRefusalVerdict | null,
+      decisionSource: 'ui' | 'api' | 'mcp' | 'github' | null = 'ui',
+    ) =>
+      isRefusalSeedGate({
+        kind: 'acceptance_result',
+        state: 'changes_requested',
+        refusalVerdict,
+        decisionSource,
+      });
+    expect(acceptance('re_plan')).toBe(true);
+    expect(acceptance(null)).toBe(true);
+    expect(acceptance('re_plan', 'api')).toBe(true);
+    expect(acceptance('revise')).toBe(false);
+    expect(acceptance(null, 'github')).toBe(false);
+    expect(
+      isRefusalSeedGate({
+        kind: 'acceptance_result',
+        state: 'approved',
+        refusalVerdict: null,
+        decisionSource: 'ui',
       }),
     ).toBe(false);
   });
@@ -105,7 +138,7 @@ function input(
 ): SeedComposerInput {
   return {
     card: { key: 'PROD-7', title: 'Pick the queue' },
-    gate: { kind, state, noteMd },
+    gate: { kind, state, noteMd, refusalVerdict: null },
     supersedesKeys,
     anchorKey,
     waitingKeys,
@@ -113,8 +146,9 @@ function input(
 }
 
 describe('REFUSAL_SEED_COMPOSERS', () => {
-  it('holds exactly the three decision refusals and the design Re-plan', () => {
+  it('holds exactly the three decision refusals, the design Re-plan and the acceptance refusal', () => {
     expect(Object.keys(REFUSAL_SEED_COMPOSERS).sort()).toEqual([
+      'acceptance_result',
       'decision_approval',
       'decision_choice',
       'decision_confirmation',
@@ -123,7 +157,7 @@ describe('REFUSAL_SEED_COMPOSERS', () => {
   });
 
   it('refusalSeedComposerFor answers null for a kind with no entry (and for a prototype name)', () => {
-    expect(refusalSeedComposerFor('acceptance_result')).toBeNull();
+    expect(refusalSeedComposerFor('pull_request_approval')).toBeNull();
     expect(refusalSeedComposerFor('toString' as ApprovalGateKind)).toBeNull();
     expect(refusalSeedComposerFor('decision_approval')).toBe(
       REFUSAL_SEED_COMPOSERS.decision_approval,
@@ -271,5 +305,65 @@ describe('the design Re-plan composer', () => {
     expect(REFUSAL_SEED_COMPOSERS.design_result!(design([], null), t('en'))).toBe(
       'PROD-7 · Pick the queue\n\nChanges were requested on this design.\n\nRe-plan PROD-3 from that reason: this design and the work waiting on it.',
     );
+  });
+});
+
+describe('the acceptance composer (MOTIR-6504) — anchored on the STORY', () => {
+  const acceptance = (
+    refusalVerdict: 're_plan' | null,
+    noteMd: string | null = REASON,
+  ): SeedComposerInput => ({
+    card: { key: 'PROD-60', title: 'Exports list' },
+    gate: { kind: 'acceptance_result', state: 'changes_requested', noteMd, refusalVerdict },
+    supersedesKeys: [],
+    anchorKey: 'PROD-60',
+    waitingKeys: [],
+  });
+
+  it('a story-run Re-plan quotes the reason and says every subtask may be re-planned (en)', () => {
+    expect(REFUSAL_SEED_COMPOSERS.acceptance_result!(acceptance('re_plan'), t('en'))).toBe(
+      [
+        'PROD-60 · Exports list',
+        "This story's acceptance video was sent back to be re-planned. The story was run as a whole, so none of its subtasks is done yet.",
+        `The reason given:\n“${REASON}”`,
+        'Re-plan PROD-60 from that reason. Any of its subtasks may be re-planned.',
+      ].join('\n\n'),
+    );
+  });
+
+  it('a finished story asks for a REMEDY and promises no re-run (en)', () => {
+    const turn = REFUSAL_SEED_COMPOSERS.acceptance_result!(acceptance(null), t('en'));
+    expect(turn).toBe(
+      [
+        'PROD-60 · Exports list',
+        "This story's acceptance video was sent back. Every subtask has already merged, so there is nothing left to re-run.",
+        `The reason given:\n“${REASON}”`,
+        'Plan a remedy under PROD-60 from that reason: new work that fixes what the video showed.',
+      ].join('\n\n'),
+    );
+  });
+
+  it('renders both turns in zh from the zh catalogue', () => {
+    expect(REFUSAL_SEED_COMPOSERS.acceptance_result!(acceptance('re_plan'), t('zh'))).toBe(
+      [
+        'PROD-60 · Exports list',
+        '这个故事的验收视频被退回重新规划。这个故事是整体运行的，所以它的子任务都还没有完成。',
+        `给出的理由：\n“${REASON}”`,
+        '请根据这个理由重新规划 PROD-60。它的任何子任务都可以重新规划。',
+      ].join('\n\n'),
+    );
+    expect(REFUSAL_SEED_COMPOSERS.acceptance_result!(acceptance(null), t('zh'))).toContain(
+      '请根据这个理由在 PROD-60 下规划补救',
+    );
+  });
+
+  it('a refusal with no reason omits the reason line', () => {
+    expect(
+      REFUSAL_SEED_COMPOSERS.acceptance_result!(acceptance(null, null), t('en')),
+    ).not.toContain('The reason given');
+  });
+
+  it('never anchors on the parent — the story is the work item re-planned', () => {
+    expect(refusalSeedAnchorsOnParent('acceptance_result')).toBe(false);
   });
 });

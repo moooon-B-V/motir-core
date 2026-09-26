@@ -6720,7 +6720,8 @@
           "decisionApproval": "要求修改",
           "decisionConfirmation": "推翻",
           "decisionChoice": "都不合适",
-          "designResult": "要求修改"
+          "designResult": "要求修改",
+          "acceptanceResult": "要求修改"
         },
         "aria": "打开 {key}，即此对话重新规划的工作项"
       }
@@ -6733,14 +6734,18 @@
         "decisionApproval": "这个决策被要求修改。",
         "decisionConfirmation": "这个决策已被推翻。",
         "decisionChoice": "这个选择的选项都没有被选中。",
-        "designResult": "这个设计被要求修改。"
+        "designResult": "这个设计被要求修改。",
+        "acceptanceReplan": "这个故事的验收视频被退回重新规划。这个故事是整体运行的，所以它的子任务都还没有完成。",
+        "acceptanceRemedy": "这个故事的验收视频被退回。所有子任务都已合并，没有可以重新运行的内容。"
       },
       "reason": "给出的理由：\n“{reason}”",
       "supersedes": "它曾取代的工作项：{keys}",
       "keySeparator": "、",
       "ask": "请根据这个理由重新规划这个工作项。",
       "blockedBy": "等待这个设计的工作项：{keys}",
-      "askDesign": "请根据这个理由重新规划 {parent}：这个设计以及等待它的工作。"
+      "askDesign": "请根据这个理由重新规划 {parent}：这个设计以及等待它的工作。",
+      "askAcceptanceReplan": "请根据这个理由重新规划 {key}。它的任何子任务都可以重新规划。",
+      "askAcceptanceRemedy": "请根据这个理由在 {key} 下规划补救：修复视频中所示问题的新工作。"
     },
     "noProjectTitle": "未选择项目",
     "noProjectDescription": "从切换器中选择或创建一个项目，即可用 Motir AI 规划。",

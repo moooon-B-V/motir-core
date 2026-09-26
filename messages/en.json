@@ -6724,7 +6724,8 @@
           "decisionApproval": "Request changes",
           "decisionConfirmation": "Overturn",
           "decisionChoice": "None of these",
-          "designResult": "Request changes"
+          "designResult": "Request changes",
+          "acceptanceResult": "Request changes"
         },
         "aria": "Open {key}, the work item this conversation re-plans"
       }
@@ -6737,14 +6738,18 @@
         "decisionApproval": "Changes were requested on this decision.",
         "decisionConfirmation": "This decision was overturned.",
         "decisionChoice": "None of the options on this choice was picked.",
-        "designResult": "Changes were requested on this design."
+        "designResult": "Changes were requested on this design.",
+        "acceptanceReplan": "This story's acceptance video was sent back to be re-planned. The story was run as a whole, so none of its subtasks is done yet.",
+        "acceptanceRemedy": "This story's acceptance video was sent back. Every subtask has already merged, so there is nothing left to re-run."
       },
       "reason": "The reason given:\n“{reason}”",
       "supersedes": "The work items it superseded: {keys}",
       "keySeparator": ", ",
       "ask": "Re-plan this work item from that reason.",
       "blockedBy": "The work items waiting on this design: {keys}",
-      "askDesign": "Re-plan {parent} from that reason: this design and the work waiting on it."
+      "askDesign": "Re-plan {parent} from that reason: this design and the work waiting on it.",
+      "askAcceptanceReplan": "Re-plan {key} from that reason. Any of its subtasks may be re-planned.",
+      "askAcceptanceRemedy": "Plan a remedy under {key} from that reason: new work that fixes what the video showed."
     },
     "noProjectTitle": "No project selected",
     "noProjectDescription": "Pick or create a project from the switcher to plan with Motir AI.",

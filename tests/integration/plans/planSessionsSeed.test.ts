@@ -170,6 +170,17 @@ describe('a seeded session’s row carries its seed', () => {
     );
   });
 
+  it('an ACCEPTANCE refusal stamps its session and names its kind (MOTIR-6504)', async () => {
+    const accepted = await seededSession('acceptance_result', 'changes_requested', 1);
+
+    const row = await planSessionsService.getSessionRow(fx.projectId, accepted.sessionId, fx.ctx);
+
+    expect(row!.seed).toEqual({
+      cardKey: accepted.card.identifier,
+      gateKind: 'acceptance_result',
+    });
+  });
+
   it('an unseeded session’s seed is null and its row is otherwise unchanged', async () => {
     const id = await plainSession('Split invoicing out of billing', 1);
 
@@ -233,10 +244,10 @@ describe('an unresolvable seed resolves to null', () => {
 
   it('a gate kind outside the allowlist: no seed, the title untouched', async () => {
     const { sessionId, card } = await seededSession('decision_approval', 'changes_requested', 1);
-    // A seed the stamp never writes today — the union is the three decision refusals
-    // and the design Re-plan, and widening it further is MOTIR-6071's. The mapper
-    // still answers null.
-    const other = await refusedGate(card, 'acceptance_result', 'changes_requested');
+    // A seed the stamp never writes — the union is the three decision refusals, the
+    // design Re-plan and the acceptance refusal (MOTIR-6504). The mapper still answers
+    // null for any other kind.
+    const other = await refusedGate(card, 'pull_request_approval', 'changes_requested');
     await adminDb.planChangeSession.update({
       where: { id: sessionId },
       data: { seedGateId: other },
