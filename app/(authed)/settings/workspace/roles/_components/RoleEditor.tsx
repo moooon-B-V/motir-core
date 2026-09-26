@@ -11,7 +11,8 @@ import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import type { PermissionDomainDTO, RoleCatalogDTO } from '@/lib/dto/permissions';
 import type { PermissionKey } from '@/lib/permissions/catalog';
-import { PROJECT_ASSIGNABLE_ROLES, type ProjectRole } from '@/lib/projects/roles';
+import type { WorkspaceRole } from '@/generated/prisma/client';
+import { WORKSPACE_ROLES } from '@/lib/workspaces/roles';
 
 // The role EDITOR (Story MOTIR-2257 · Subtask MOTIR-2483) — ONE component behind
 // two routes, built to `design/projects/roles-permissions.mock.html` panel 3.
@@ -40,16 +41,17 @@ import { PROJECT_ASSIGNABLE_ROLES, type ProjectRole } from '@/lib/projects/roles
 // rather than by reading the class.
 
 export interface RoleEditorProps {
-  projectKey: string;
+  /** The workspace whose role this is — the writes go to its roles routes (MOTIR-6466). */
+  workspaceId: string;
   /** The role-gated rows, grouped exactly as the detail screen groups them. */
   domains: PermissionDomainDTO[];
-  /** Every role in the project — the built-ins are what `Start from` offers. */
+  /** Every role in the workspace — the built-ins are what `Start from` offers. */
   catalog: RoleCatalogDTO;
   /** Present on the EDIT route; absent on `new`. */
   role?: { id: string; name: string; permissions: PermissionKey[] };
 }
 
-export function RoleEditor({ projectKey, domains, catalog, role }: RoleEditorProps) {
+export function RoleEditor({ workspaceId, domains, catalog, role }: RoleEditorProps) {
   const t = useTranslations('settings.rolesPage');
   const tCatalog = useTranslations();
   const tc = useTranslations('common');
@@ -63,12 +65,15 @@ export function RoleEditor({ projectKey, domains, catalog, role }: RoleEditorPro
     () => new Set(role?.permissions ?? []),
   );
   const [formError, setFormError] = useState<string | null>(null);
+  // The built-in the author started from. It seeds the grid and travels as the
+  // create's `basedOn` (which the workspace route requires); it is not stored.
+  const [base, setBase] = useState<WorkspaceRole>('member');
 
   // The built-ins' sets, for the `Start from` seed. Read off the catalog the
   // server already sent — this component imports no role constant of its own,
   // so the day a built-in's set changes there is nothing here to update.
   const builtInSets = useMemo(() => {
-    const map = new Map<ProjectRole, PermissionKey[]>();
+    const map = new Map<WorkspaceRole, PermissionKey[]>();
     for (const candidate of catalog.roles) {
       if (candidate.builtInRole) map.set(candidate.builtInRole, candidate.permissions);
     }
@@ -77,11 +82,12 @@ export function RoleEditor({ projectKey, domains, catalog, role }: RoleEditorPro
 
   const total = catalog.roleGatedPermissionCount;
 
-  function seedFrom(base: ProjectRole) {
+  function seedFrom(next: WorkspaceRole) {
     // Replaces the pre-ticked set. Deliberately a REPLACE and not a merge: the
     // picker's promise is "start from this role", and a merge would make a
     // second pick mean something the label does not say.
-    setHeld(new Set(builtInSets.get(base) ?? []));
+    setBase(next);
+    setHeld(new Set(builtInSets.get(next) ?? []));
   }
 
   function toggle(key: PermissionKey, next: boolean) {
@@ -99,16 +105,17 @@ export function RoleEditor({ projectKey, domains, catalog, role }: RoleEditorPro
       const permissions = [...held];
       const res = await fetch(
         isEdit
-          ? `/api/projects/${projectKey}/roles/${role.id}`
-          : `/api/projects/${projectKey}/roles`,
+          ? `/api/workspaces/${workspaceId}/roles/${role.id}`
+          : `/api/workspaces/${workspaceId}/roles`,
         {
           method: isEdit ? 'PATCH' : 'POST',
           headers: { 'Content-Type': 'application/json' },
-          // ⚠️ THE SAME BODY EITHER WAY, and deliberately so: a role IS its name
-          // and its set, so create and edit carry the identical shape. NO
-          // `basedOn` — the `Start from` pick is an authoring convenience and is
-          // not part of the role (Yue, 2026-08-09).
-          body: JSON.stringify({ name, permissions }),
+          // A role IS its name and its set. The create also names the built-in
+          // it started from, which the workspace route validates and does NOT
+          // store (Yue, 2026-08-09) — the set sent is the one the author composed.
+          body: JSON.stringify(
+            isEdit ? { name, permissions } : { name, basedOn: base, permissions },
+          ),
         },
       );
 
@@ -116,7 +123,7 @@ export function RoleEditor({ projectKey, domains, catalog, role }: RoleEditorPro
         const body = (await res.json()) as { role: { id: string } };
         toast({ variant: 'success', title: isEdit ? t('toast.saved') : t('toast.created') });
         // Land on the role that was just saved, showing what was saved.
-        router.push(`/settings/project/roles/${body.role.id}`);
+        router.push(`/settings/workspace/roles/${body.role.id}`);
         router.refresh();
         return;
       }
@@ -125,7 +132,8 @@ export function RoleEditor({ projectKey, domains, catalog, role }: RoleEditorPro
       // and a cap reached belong ON the form, with the author's input intact; a
       // lost permission is not a form problem, so it goes to the page.
       const body = (await res.json().catch(() => ({}))) as { code?: string; limit?: number };
-      if (body.code === 'ROLE_NAME_TAKEN') setFormError(t('error.nameTaken', { name }));
+      if (body.code === 'WORKSPACE_ROLE_NAME_TAKEN' || body.code === 'ROLE_NAME_TAKEN')
+        setFormError(t('error.nameTaken', { name }));
       else if (body.code === 'ROLE_LIMIT_REACHED')
         setFormError(t('error.capReached', { limit: body.limit ?? 0 }));
       else if (body.code === 'INVALID_ROLE_NAME') setFormError(t('error.invalidName'));
@@ -145,7 +153,7 @@ export function RoleEditor({ projectKey, domains, catalog, role }: RoleEditorPro
       </p>
 
       <Link
-        href="/settings/project/roles"
+        href="/settings/workspace/roles"
         className="text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) mb-3 inline-flex w-fit items-center gap-1.5 rounded-(--radius-control) font-sans text-[12.5px] font-medium focus-visible:ring-2"
       >
         <ArrowLeft aria-hidden="true" className="h-3.5 w-3.5" />
@@ -187,17 +195,17 @@ export function RoleEditor({ projectKey, domains, catalog, role }: RoleEditorPro
               disabled={isPending}
               aria-label={t('startFrom')}
               onChange={(e) => {
-                const base = PROJECT_ASSIGNABLE_ROLES.find((r) => r === e.target.value);
-                if (base) seedFrom(base);
+                const picked = WORKSPACE_ROLES.find((r) => r === e.target.value);
+                if (picked) seedFrom(picked);
               }}
               className="border-(--el-input-border) bg-(--el-card) text-(--el-text) h-(--height-input) rounded-(--radius-input) border px-(--spacing-input-x) font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             >
               <option value="" disabled>
                 {t('startFromPlaceholder')}
               </option>
-              {PROJECT_ASSIGNABLE_ROLES.map((base) => (
-                <option key={base} value={base}>
-                  {tCatalog(`settings.roles.${base}.name`)}
+              {WORKSPACE_ROLES.map((option) => (
+                <option key={option} value={option}>
+                  {tCatalog(`settings.roles.${option}.name`)}
                 </option>
               ))}
             </select>
@@ -270,7 +278,7 @@ export function RoleEditor({ projectKey, domains, catalog, role }: RoleEditorPro
         <span className="flex items-center gap-2.5">
           <Button
             variant="ghost"
-            onClick={() => router.push('/settings/project/roles')}
+            onClick={() => router.push('/settings/workspace/roles')}
             disabled={isPending}
           >
             {tc('cancel')}

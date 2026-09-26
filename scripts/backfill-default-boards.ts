@@ -21,15 +21,19 @@
 import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
 import { db } from '@/lib/db';
 import { boardsService } from '@/lib/services/boardsService';
-import { WORKSPACE_ROLE } from '@/lib/workspaces/roles';
 
 async function resolveActorUserId(workspaceId: string): Promise<string | null> {
+  // The workspace's stand-in MANAGER — the rule
+  // `workspaceMembershipRepository.findStandInManagerByWorkspace` applies (MOTIR-6462).
   const owner = await db.workspaceMembership.findFirst({
-    where: { workspaceId, role: WORKSPACE_ROLE.owner },
-    orderBy: { createdAt: 'asc' },
+    where: {
+      workspaceId,
+      OR: [{ workspaceRole: 'manager' }, { workspaceRole: null, role: { in: ['owner', 'admin'] } }],
+    },
+    orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
   });
   if (owner) return owner.userId;
-  // No owner row (older workspaces predating the owner tier) — any member can
+  // No Manager (older workspaces predating the owner tier) — any member can
   // bind the GUC; the board writes gate on workspace_id, not user_id.
   const member = await db.workspaceMembership.findFirst({
     where: { workspaceId },

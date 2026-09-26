@@ -31,7 +31,10 @@ async function actorFor(
   item: WorkItem,
   tx: Prisma.TransactionClient,
 ): Promise<{ userId: string; workspaceId: string }> {
-  const owner = await workspaceMembershipRepository.findOwnerByWorkspace(item.workspaceId, tx);
+  const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(
+    item.workspaceId,
+    tx,
+  );
   if (!owner) throw new Error(`workspace ${item.workspaceId} has no owner to write as`);
   return { userId: owner.userId, workspaceId: item.workspaceId };
 }

@@ -621,7 +621,7 @@ export default defineConfig({
         // branch: the same four files enter it under `app/**/…` and are absent
         // under `app/(authed)/…`. See MOTIR-2449 — four component thresholds
         // already in this file are keyed the literal way and are therefore inert.
-        'app/**/settings/project/roles/_components/*.tsx',
+        'app/**/settings/workspace/roles/_components/*.tsx',
 
         // Story MOTIR-2257 · Subtask MOTIR-2486 (the story gate) — the custom-role
         // WRITE surface. `lib/permissions/**` above already reported the policy
@@ -634,10 +634,32 @@ export default defineConfig({
         // literal `app/api/projects/[key]/roles/route.ts` names a directory
         // called `k`. `tests/coverage-gate-globs.test.ts` fails the build on
         // either mistake rather than passing vacuously.
-        'lib/services/projectRoleDefinitionService.ts',
-        'lib/repositories/projectRoleDefinitionRepository.ts',
+        // (The project-role-definition service and repository were retired by
+        // Story MOTIR-6168 · MOTIR-6466 — the grantable-key rule they carried
+        // now lives in `lib/permissions/grantable.ts`, gated by the glob above.)
         'app/api/projects/**/roles/route.ts',
         'app/api/projects/**/roles/**/route.ts',
+
+        // Story MOTIR-6168 · Subtask MOTIR-6467 (the story gate) — the files the
+        // workspace-roles story ADDED: the workspace custom-role service, its
+        // repository and mapper, the migration report's service and repository,
+        // the role error mapping, the three workspace role routes, the Members
+        // page's migration notice and the org fold-in's Roles door. (The moved
+        // Roles screens are the `settings/workspace/roles/_components` glob
+        // above; the grantable-key rule and the room keys are under
+        // `lib/permissions/**`.) All `app/**` and `**` for the two reasons the
+        // notes above give. Pinned below.
+        'lib/services/workspaceRoleDefinitionService.ts',
+        'lib/services/roleMigrationReportService.ts',
+        'lib/repositories/workspaceRoleDefinitionRepository.ts',
+        'lib/repositories/roleMigrationReportRepository.ts',
+        'lib/mappers/workspaceRoleMappers.ts',
+        'lib/workspaces/roleErrorResponse.ts',
+        'app/api/workspaces/**/roles/route.ts',
+        'app/api/workspaces/**/roles/**/route.ts',
+        'app/api/workspaces/**/members/**/route.ts',
+        'app/**/settings/workspace/_components/RoleMigrationNotice.tsx',
+        'app/**/settings/organization/_components/RolesDoorCard.tsx',
 
         // Story 5.7 (in-app notifications) · Subtask 5.7.6 — the per-user
         // notification-preference layer (the channel gate) lands gated.
@@ -3755,7 +3777,54 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
-        'app/**/settings/project/roles/_components/*.tsx': {
+        'app/**/settings/workspace/roles/_components/*.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // Story MOTIR-6168 · Subtask MOTIR-6467 — the story gate PINS what the
+        // workspace-roles story added. MEASURED FIRST over the story's own specs
+        // (the roles routes, the member-role route, the Roles screens, the
+        // migration notice, the story gate): the services 97–100 / 92–100 / 100,
+        // the routes ≥ 95 / ≥ 89 / 100 before the edge cases in
+        // `tests/workspaces/workspaceRoleSurfaceEdges.test.ts` (401, the two-
+        // factor hold, the rethrow, a partial PATCH) took each past 90.
+        //
+        // ⚠️ NOT pinned here: the ~40 pre-existing files the story TOUCHED (the
+        // caller sweep's one-line `findStandInManagerByWorkspace` renames across
+        // the job and PR services, `workspacesService`, `projectAccessService`,
+        // `organizationsService`, …). Measured over this story's specs alone they
+        // read low because those specs do not exercise the rest of each file;
+        // their honest number is the whole suite's, and the pin belongs to each
+        // surface's owner — the same stance the `lib/mappers/permissionMappers.ts`
+        // note above takes.
+        'lib/services/workspaceRoleDefinitionService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/services/roleMigrationReportService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/workspaceRoleDefinitionRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/repositories/roleMigrationReportRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/mappers/workspaceRoleMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/workspaces/roleErrorResponse.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/workspaces/**/roles/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/workspaces/**/roles/**/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/workspaces/**/members/**/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/**/settings/workspace/_components/RoleMigrationNotice.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/settings/organization/_components/RolesDoorCard.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
@@ -3777,16 +3846,6 @@ export default defineConfig({
         // pinning them individually would gate code no card here wrote. The four
         // files the epic added or rewrote carry the aggregate on their own.
         'lib/permissions/**': { branches: 90, functions: 90, lines: 90 },
-        'lib/services/projectRoleDefinitionService.ts': {
-          branches: 90,
-          functions: 90,
-          lines: 90,
-        },
-        'lib/repositories/projectRoleDefinitionRepository.ts': {
-          branches: 90,
-          functions: 90,
-          lines: 90,
-        },
         'app/api/projects/**/roles/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/projects/**/roles/**/route.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 11.1 · Subtask 11.1.5 — the public `/api/v1` envelope.

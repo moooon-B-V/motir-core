@@ -10,6 +10,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { createTestPerson } from './testPerson';
+import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
 import { servePrivateObjectStore } from './object-store';
 
 // THE DESIGN-APPROVAL seed (Story MOTIR-4778 · Subtask MOTIR-4797).
@@ -158,6 +159,8 @@ export async function seedDesignApproval(slug: string): Promise<DesignApprovalSe
     await adminDb.projectMembership.create({
       data: { userId: user.id, projectId: project.id, workspaceId: workspace.id, role },
     });
+    // Roles live on the workspace since MOTIR-6168.
+    await setWorkspaceRoleFor(user.id, workspace.id, role);
     await pin(user.id);
     return user.id;
   }

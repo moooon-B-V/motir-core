@@ -15,7 +15,8 @@
   MOTIR-2358 / MOTIR-2359 (`ai:plan`, in four parts), MOTIR-2362 (the
   coding-convention four), MOTIR-2363 (`ai:view_plan`), MOTIR-2356 (the model
   fully enforced), MOTIR-2367 / MOTIR-2368 (the story's test gates); AMENDMENT 1:
-  MOTIR-6328 – MOTIR-6337 (Story MOTIR-6179, the rooms' view-any keys).
+  MOTIR-6328 – MOTIR-6337 (Story MOTIR-6179, the rooms' view-any keys); AMENDMENT 2:
+  MOTIR-6459 (Story MOTIR-6168, roles move to the workspace).
 
 > Structured **Context → Decision → Consequences → References**, the convention
 > the repo's ADRs set. No application behaviour ships in this subtask. What it
@@ -301,6 +302,45 @@ typed there:
   `work_item:edit`.
 - **Persisted grants** — custom roles and API tokens stored before this amendment — are carried
   forward by MOTIR-6329, so nobody loses a room they have today.
+
+## AMENDMENT 2 (2026-09-26) — the roles are WORKSPACE roles, and the implicit set retires (MOTIR-6459, Story MOTIR-6168)
+
+**Source:** the DECISION `docs/decisions/role-model.md` (MOTIR-6165, approved 2026-09-25 with no
+note), §2–§3 and its _What this amends elsewhere_, which names this record: _`admin` / `member` /
+`viewer` stop being PROJECT role grants and become the Manager, Member and Viewer WORKSPACE roles._
+This amendment records what that does to the assignment above. Every §1 row and every AMENDMENT 1
+row stands as a statement about a SET; what changes is who holds the set, and one set disappears.
+
+- **The three sets carry over unchanged, as workspace roles.** `admin` → **Manager**, `member` →
+  **Member**, `viewer` → **Viewer** (`WORKSPACE_ROLE_PERMISSIONS`, `lib/permissions/builtinRoles.ts`).
+  Every key §1 and AMENDMENT 1 put in a role set is in the same-named workspace role. A person's
+  workspace role is their role in EVERY project of the workspace; no project role and no project
+  custom role enters the resolution (`lib/permissions/resolve.ts`). A custom role is authored at the
+  workspace, from a Manager, Member or Viewer base (`role-model.md` Q2).
+- **§2's implicit workspace-member set RETIRES.** `IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS` is
+  deleted: there is no longer a "workspace member with no role", because every member holds a
+  workspace role. §2's principle — that a stranger to a project takes no act of ownership there — is
+  REPLACED by the model's own rule, _"a person has the same role in every project they can enter"_.
+- **What a person who was never ADDED to a project gains there: their role's normal keys.** A Member
+  never added to an `open` project used to hold the implicit set (browse, edit, comment, attach,
+  `report:view`, `plan:view_any`, `run:view_any`); they now hold the whole Member set — the planner,
+  sprints, saved filters, triage, archive, and `approval:view_any` among it. That is the ONE widening
+  the model decides, and the role migration's never-wider check (MOTIR-6461) allows exactly it.
+- **What they lose: a Viewer's old implicit EDIT.** A workspace `viewer` with no project membership
+  used to fall to the implicit set too, which held `work_item:edit`, `comment:add` and
+  `attachment:create`. A Viewer now holds the Viewer set in every project, and none of those three.
+- **The access LEVEL still subtracts, keyed on whether the person was ADDED — never on a role.**
+  `limited` withholds `work_item:edit` from someone not added; `private` withholds everything from
+  someone not added and nothing from someone who was. `private`'s old edit / comment / attachment
+  split by PROJECT role retires with project roles — the one place a level changed meaning, and a
+  no-op for every built-in (a Viewer holds none of the three anyway). The project access story
+  (MOTIR-6169) replaces the levels with the access modes.
+- **§3 stands.** `levelGrants` still names one key only (now `work_item:edit`), and every key this
+  record assigns resolves like `project:browse` on every level.
+
+The truth table that proves the new shape is `tests/permissions/accessParity.test.ts`, rewritten by
+MOTIR-6459: 4 levels × { no membership, Manager, Member, Viewer, a custom role } × { added, not
+added }, each row's set written out.
 
 ---
 

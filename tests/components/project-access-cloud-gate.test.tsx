@@ -5,7 +5,6 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ProjectMembersSettings } from '@/app/(authed)/settings/project/members/_components/ProjectMembersSettings';
 import type { ProjectMemberDTO } from '@/lib/dto/projectMembers';
-import type { RoleDTO } from '@/lib/dto/permissions';
 
 // MOTIR-4035 — the UI half of the publish gate: with `MOTIR_CLOUD` unset the
 // access control does not OFFER `public`.
@@ -22,21 +21,7 @@ import type { RoleDTO } from '@/lib/dto/permissions';
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const SELF = 'u-self';
-const members: ProjectMemberDTO[] = [
-  { userId: SELF, name: 'Zhu Yue', email: 'zhuyue@motir.co', role: 'admin', roleDefinition: null },
-];
-const roles: RoleDTO[] = (['admin', 'member', 'viewer'] as const).map((role) => ({
-  key: role,
-  builtInRole: role,
-  labelKey: `settings.roles.${role}.name`,
-  descriptionKey: `settings.roles.${role}.description`,
-  name: null,
-  description: null,
-  builtIn: true,
-  permissions: [],
-  memberCount: 0,
-}));
-
+const members: ProjectMemberDTO[] = [{ userId: SELF, name: 'Zhu Yue', email: 'zhuyue@motir.co' }];
 function render(
   overrides: Partial<React.ComponentProps<typeof ProjectMembersSettings>> = {},
 ): void {
@@ -48,7 +33,6 @@ function render(
         workspaceName="moooon"
         accessLevel="private"
         members={members}
-        roles={roles}
         workspaceMembers={[]}
         currentUserId={SELF}
         canManage

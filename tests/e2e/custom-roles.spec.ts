@@ -45,13 +45,15 @@ const ROLE_NAME = 'Contributor';
  */
 const REMOVED = ['Edit work items', 'Manage sprints'] as const;
 
-const railEntry = (page: Page) => page.getByRole('link', { name: 'Roles & permissions' });
-const membersRailEntry = (page: Page) => page.getByRole('link', { name: 'Members & access' });
+// Story MOTIR-6168 (MOTIR-6466): roles live on the WORKSPACE. With one workspace
+// the Roles room's door is the organisation page's "Open roles" card, and a
+// person's role is set on the workspace Members card hosted on that same page.
+const rolesDoor = (page: Page) => page.getByRole('link', { name: 'Open roles' });
 const roleRow = (page: Page, key: string) => page.locator(`[data-role-row="${key}"]`);
 /** The one custom row — matched by NOT being one of the three built-in keys. */
 const customRow = (page: Page) =>
   page
-    .locator('[data-role-row]:not([data-role-row="admin"]):not([data-role-row="member"])')
+    .locator('[data-role-row]:not([data-role-row="manager"]):not([data-role-row="member"])')
     .and(page.locator('[data-role-row]:not([data-role-row="viewer"])'));
 
 /**
@@ -77,25 +79,20 @@ async function signInAndSettle(page: Page, email: string, password: string): Pro
   });
 }
 
-/** Open project settings → Roles & permissions BY CLICKING — a page nobody can
+/** Open the workspace Roles room BY CLICKING its door — a page nobody can
  *  reach passes every test that navigates to it directly. */
 async function openRolesList(page: Page): Promise<void> {
-  await page.goto('/settings/project');
-  await expect(railEntry(page)).toBeVisible();
-  await railEntry(page).click();
-  await page.waitForURL('**/settings/project/roles');
-  await expect(page.getByRole('heading', { name: 'Roles & permissions' })).toBeVisible();
+  await page.goto('/settings/organization');
+  await expect(rolesDoor(page)).toBeVisible();
+  await rolesDoor(page).click();
+  await page.waitForURL('**/settings/workspace/roles');
+  await expect(page.getByRole('heading', { name: 'Roles & permissions', level: 1 })).toBeVisible();
 }
 
+/** The workspace Members card, folded into the organisation page at one workspace. */
 async function openMembers(page: Page): Promise<void> {
-  await page.goto('/settings/project');
-  await expect(membersRailEntry(page)).toBeVisible();
-  await membersRailEntry(page).click();
-  await page.waitForURL('**/settings/project/members');
-  // ⚠️ THE RAIL SAYS "Members & access"; THE PAGE'S OWN H1 SAYS "Access & members".
-  // Asserting the rail's wording here would fail on a page that had loaded
-  // perfectly — the landmark has to be the heading the page actually draws.
-  await expect(page.getByRole('heading', { name: 'Access & members', level: 1 })).toBeVisible();
+  await page.goto('/settings/organization');
+  await expect(page.getByRole('heading', { name: 'Members', level: 2 }).last()).toBeVisible();
 }
 
 /** `"10 of 28 permissions"` → `[10, 28]`, failing loudly when the row has none. */
@@ -128,13 +125,13 @@ test('an admin authors a role, assigns it, watches it bite, and deletes it with 
 
   // ── 1 · AUTHOR ────────────────────────────────────────────────────────────
   let total = 0;
-  await chapter('The project has no roles of its own — and a door to make one', async () => {
+  await chapter('The workspace has no roles of its own — and a door to make one', async () => {
     await openRolesList(page);
 
     // THE ZERO-CUSTOM-ROLES STATE. Three built-in rows and nothing else, which
     // is the shape the list has to hold before it can be said to GROW.
     await expect(page.locator('[data-role-row]')).toHaveCount(3);
-    for (const key of ['admin', 'member', 'viewer']) {
+    for (const key of ['manager', 'member', 'viewer']) {
       await expect(roleRow(page, key)).toContainText('Built-in');
     }
     [, total] = parseCount(
@@ -143,7 +140,7 @@ test('an admin authors a role, assigns it, watches it bite, and deletes it with 
     await beat();
 
     await page.getByTestId('create-role').click();
-    await page.waitForURL('**/settings/project/roles/new');
+    await page.waitForURL('**/settings/workspace/roles/new');
     await expect(page.getByRole('heading', { name: 'Create a role' })).toBeVisible();
     await beat();
   });
@@ -220,7 +217,7 @@ test('an admin authors a role, assigns it, watches it bite, and deletes it with 
       await beat();
 
       await page.getByRole('link', { name: 'All roles' }).click();
-      await page.waitForURL('**/settings/project/roles');
+      await page.waitForURL('**/settings/workspace/roles');
       await expect(page.locator('[data-role-row]')).toHaveCount(4);
 
       const row = customRow(page);
@@ -249,12 +246,17 @@ test('an admin authors a role, assigns it, watches it bite, and deletes it with 
     await expect(page.getByText('Custom roles', { exact: true })).toBeVisible();
     await beat();
 
-    const assigned = page.waitForResponse(
-      (res) =>
-        /\/members\/[^/]+$/.test(new URL(res.url()).pathname) && res.request().method() === 'PATCH',
-    );
+    // The change goes through a Server Action; its success toast is rendered
+    // from the action's own result, so it IS the authoritative signal.
     await page.getByRole('option', { name: ROLE_NAME }).click();
-    expect((await assigned).status()).toBe(200);
+    await expect(
+      page
+        .getByRole('status')
+        .filter({
+          hasText: new RegExp(`${seed.teammateName} is now a ${ROLE_NAME} in every project`),
+        })
+        .first(),
+    ).toBeVisible();
     await expect(picker).toContainText(ROLE_NAME);
     await beat();
 
@@ -313,9 +315,9 @@ test('an admin authors a role, assigns it, watches it bite, and deletes it with 
     await signInAndSettle(page, seed.adminEmail, seed.password);
     await openRolesList(page);
 
-    await roleRow(page, 'admin').click();
-    await page.waitForURL('**/settings/project/roles/admin');
-    await expect(page.getByRole('heading', { name: 'Admin', level: 1 })).toBeVisible();
+    await roleRow(page, 'manager').click();
+    await page.waitForURL('**/settings/workspace/roles/manager');
+    await expect(page.getByRole('heading', { name: 'Manager', level: 1 })).toBeVisible();
     // Not disabled — ABSENT. A built-in reproduces the shipped behaviour by
     // definition, so editing one is not a thing that exists.
     await expect(page.getByTestId('edit-role')).toHaveCount(0);
@@ -327,7 +329,7 @@ test('an admin authors a role, assigns it, watches it bite, and deletes it with 
   // ── 6 · DELETE WITH A REASSIGN ────────────────────────────────────────────
   await chapter(`Deleting ${ROLE_NAME} asks where its one member goes`, async () => {
     await page.getByRole('link', { name: 'All roles' }).click();
-    await page.waitForURL('**/settings/project/roles');
+    await page.waitForURL('**/settings/workspace/roles');
     await customRow(page).click();
     await expect(page.getByRole('heading', { name: ROLE_NAME, level: 1 })).toBeVisible();
     await beat();
@@ -351,7 +353,7 @@ test('an admin authors a role, assigns it, watches it bite, and deletes it with 
     );
     await confirm.click();
     expect((await deleted).status()).toBe(204);
-    await page.waitForURL('**/settings/project/roles');
+    await page.waitForURL('**/settings/workspace/roles');
     await expect(page.locator('[data-role-row]')).toHaveCount(3);
     await expect(page.locator('body')).not.toContainText(ROLE_NAME);
     await beat();
@@ -379,7 +381,7 @@ test('the editor refuses an empty name and a duplicate one', async ({ page }) =>
   await signInAndSettle(page, seed.adminEmail, seed.password);
   await openRolesList(page);
   await page.getByTestId('create-role').click();
-  await page.waitForURL('**/settings/project/roles/new');
+  await page.waitForURL('**/settings/workspace/roles/new');
 
   // EMPTY: the submit is disabled rather than the form failing after a round
   // trip — the refusal is visible before it is earned.
@@ -400,7 +402,7 @@ test('the editor refuses an empty name and a duplicate one', async ({ page }) =>
   // author's input intact, not as a toast that takes the work with it.
   await openRolesList(page);
   await page.getByTestId('create-role').click();
-  await page.waitForURL('**/settings/project/roles/new');
+  await page.waitForURL('**/settings/workspace/roles/new');
   await page.getByRole('textbox', { name: 'Name' }).fill(ROLE_NAME);
   const refused = page.waitForResponse(
     (res) => /\/roles$/.test(new URL(res.url()).pathname) && res.request().method() === 'POST',

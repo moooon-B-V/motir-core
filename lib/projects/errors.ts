@@ -310,25 +310,6 @@ export class NotAProjectMemberError extends Error {
   }
 }
 
-export class LastProjectAdminError extends Error {
-  readonly code = 'LAST_PROJECT_ADMIN' as const;
-  constructor(projectId: string) {
-    super(
-      `Cannot remove or demote the last admin of project ${projectId}: ` +
-        `promote another member to admin first.`,
-    );
-    this.name = 'LastProjectAdminError';
-  }
-}
-
-export class InvalidProjectRoleError extends Error {
-  readonly code = 'INVALID_PROJECT_ROLE' as const;
-  constructor(role: string) {
-    super(`"${role}" is not an assignable project role (use admin, member, or viewer).`);
-    this.name = 'InvalidProjectRoleError';
-  }
-}
-
 export class PublicAccessUnavailableError extends Error {
   readonly code = 'PUBLIC_ACCESS_UNAVAILABLE' as const;
   constructor() {

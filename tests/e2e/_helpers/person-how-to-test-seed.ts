@@ -2,11 +2,10 @@ import { adminDb } from '@/tests/helpers/adminDb';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { CUSTOM_ROLE_TIER } from '@/lib/permissions/builtinRoles';
 import { createTestPerson } from './testPerson';
+import { addToProjectAs, setProjectRoleDefinitionFor } from '../../helpers/workspaceRoleFixtures';
 
 // THE SEED FOR *A PERSON WRITES HOW TO TEST* (Story MOTIR-5450 · Subtask
 // MOTIR-5457) — the acceptance receipt's world, and deliberately a SMALL one.
@@ -142,23 +141,22 @@ export async function seedPersonHowToTest(slug: string): Promise<PersonHowToTest
     where: { userId_workspaceId: { userId: viewer.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: project.identifier,
     actorUserId: owner.id,
     ctx,
     targetUserId: viewer.id,
     role: 'member',
   });
-  const role = await adminDb.projectRoleDefinition.create({
+  const role = await adminDb.workspaceRoleDefinition.create({
     data: {
       workspaceId: workspace.id,
-      projectId: project.id,
       name: 'Reader',
       permissions: ['project:browse', 'comment:add'],
     },
   });
   await adminDb.$transaction((tx) =>
-    projectMembershipRepository.setRoleDefinition(
+    setProjectRoleDefinitionFor(
       viewer.id,
       project.id,
       { roleDefinitionId: role.id, role: CUSTOM_ROLE_TIER },

@@ -21,6 +21,12 @@ export interface DangerZoneCardProps {
   /** Where the card is mounted: `/settings/workspace`, or the org page's
    *  one-workspace fold-in — the hint names a different place from each. */
   placement: 'workspace' | 'foldIn';
+  /**
+   * Set when the viewer is the org's Owner or an Admin: a Manager of every
+   * workspace by their org role, so Leave is disabled and the row says why
+   * (Story MOTIR-6168 · MOTIR-6456 panel 6a). Null for everyone else.
+   */
+  leaveLockedByOrg?: { organizationName: string; workspaceName: string } | null;
 }
 
 // The WORKSPACE-tier danger zone after the move (MOTIR-6312 ·
@@ -37,6 +43,7 @@ export function DangerZoneCard({
   isLastMember,
   canRemoveWorkspace,
   placement,
+  leaveLockedByOrg = null,
 }: DangerZoneCardProps) {
   const t = useTranslations('settings');
   const { toast } = useToast();
@@ -54,7 +61,12 @@ export function DangerZoneCard({
   }
 
   const leaveButton = (
-    <Button variant="danger" onClick={handleLeave} loading={isPending} disabled={isLastMember}>
+    <Button
+      variant="danger"
+      onClick={handleLeave}
+      loading={isPending}
+      disabled={isLastMember || leaveLockedByOrg !== null}
+    >
       {t('danger.leave')}
     </Button>
   );
@@ -73,8 +85,13 @@ export function DangerZoneCard({
           <p className="font-sans text-sm font-medium text-(--el-text)">
             {t('danger.leaveWorkspace')}
           </p>
-          <p className="text-(--el-text-muted) font-sans text-xs">
-            {t('danger.leaveWorkspaceDesc')}
+          <p className="text-(--el-text-secondary) font-sans text-xs">
+            {leaveLockedByOrg
+              ? t('danger.orgAdminLeave', {
+                  org: leaveLockedByOrg.organizationName,
+                  workspace: leaveLockedByOrg.workspaceName,
+                })
+              : t('danger.leaveWorkspaceDesc')}
           </p>
         </div>
         {isLastMember ? (

@@ -945,7 +945,7 @@ export const planTargetLockService = {
       // the lease), so there is nothing a mid-block bind would buy, and a bound
       // wrapper is the shape every other tenant write in this codebase has.
       const actorId = await withWorkspaceServiceContext(lock.workspaceId, async (tx) => {
-        const owner = await workspaceMembershipRepository.findOwnerByWorkspace(
+        const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(
           lock.workspaceId,
           tx,
         );

@@ -16,13 +16,13 @@ import { GET_APPROVED_SHAPE_VERDICT_TOOL_NAME } from '@/lib/mcp/tools/getApprove
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import type { WorkItemApprovedShapeVerdictDto, WorkItemPlanHistoryPageDto } from '@/lib/dto/plans';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // `get_approved_shape_verdict` (Story MOTIR-5544 · Subtask MOTIR-6227) — the
 // RUNBOOK's door onto the approved-shape verdict, over a real Postgres and the
@@ -140,7 +140,7 @@ async function planBornStory(fx: WorkItemFixture) {
 async function viewerOf(fx: WorkItemFixture): Promise<ServiceContext> {
   const user = await createTestUser({ name: 'Viewer' });
   await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

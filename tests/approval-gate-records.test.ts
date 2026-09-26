@@ -4,16 +4,24 @@ import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { CUSTOM_ROLE_TIER, ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import {
+  CUSTOM_ROLE_TIER,
+  ROLE_GATED_PERMISSIONS,
+  WORKSPACE_ROLE_PERMISSIONS,
+} from '@/lib/permissions/builtinRoles';
 import type { HomeActorContext } from '@/lib/services/homeService';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import {
+  addToProjectAs,
+  setProjectRoleDefinitionFor,
+  setWorkspaceRoleFor,
+} from './helpers/workspaceRoleFixtures';
 
 // THE APPROVALS ROOM's READ (Story MOTIR-5299 · MOTIR-5301), against a REAL
 // Postgres.
@@ -32,7 +40,7 @@ import { truncateAuthTables } from './helpers/db';
 let fx: WorkItemFixture;
 /** Holds `approval:view_any` — the workspace owner, through the always-pass rail. */
 let ownerCtx: HomeActorContext;
-/** A plain workspace member on the open project — no key. */
+/** A workspace member on the open project, on a custom role WITHOUT the key. */
 let memberCtx: HomeActorContext;
 let memberId: string;
 /** A second plain member, whose records the first must never see. */
@@ -51,6 +59,19 @@ beforeEach(async () => {
   const other = await createTestUser({ email: 'other@ex.com', name: 'Otto Other' });
   await workspacesService.addMember({ userId: other.id, workspaceId: fx.workspaceId });
   otherId = other.id;
+  // "No key": every BUILT-IN workspace role holds `approval:view_any` since
+  // DECISION MOTIR-6165 Q2, so a reader without it is a workspace CUSTOM role —
+  // the Member's set minus that one key (Story MOTIR-6168).
+  const noFullView = await adminDb.workspaceRoleDefinition.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      name: 'Member without the full view',
+      permissions: [...WORKSPACE_ROLE_PERMISSIONS.member].filter((k) => k !== 'approval:view_any'),
+    },
+  });
+  for (const id of [member.id, other.id]) {
+    await setWorkspaceRoleFor(id, fx.workspaceId, noFullView.id);
+  }
   const story = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'story', title: 'The Approvals room' },
     fx.ctx,
@@ -240,18 +261,18 @@ describe('a reader HOLDING `approval:view_any` — every record of the project',
 
 describe('the view follows the PERMISSION, never a role name', () => {
   async function putOnCustomRole(userId: string, name: string, permissions: string[]) {
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
       targetUserId: userId,
       role: 'member',
     });
-    const definition = await adminDb.projectRoleDefinition.create({
-      data: { workspaceId: fx.workspaceId, projectId: fx.projectId, name, permissions },
+    const definition = await adminDb.workspaceRoleDefinition.create({
+      data: { workspaceId: fx.workspaceId, name, permissions },
     });
     await adminDb.$transaction((tx) =>
-      projectMembershipRepository.setRoleDefinition(
+      setProjectRoleDefinitionFor(
         userId,
         fx.projectId,
         { roleDefinitionId: definition.id, role: CUSTOM_ROLE_TIER },

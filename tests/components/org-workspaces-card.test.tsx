@@ -13,10 +13,13 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 // stubbed per test. After a mutation it refetches ITS page and `router.refresh()`es
 // the server-rendered rest (the page-state contract's two halves).
 const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
-const { reconcileActiveWorkspaceAction, createWorkspaceAction } = vi.hoisted(() => ({
-  reconcileActiveWorkspaceAction: vi.fn(async () => ({ changed: true })),
-  createWorkspaceAction: vi.fn(async () => ({ ok: true })),
-}));
+const { reconcileActiveWorkspaceAction, createWorkspaceAction, switchWorkspaceAction } = vi.hoisted(
+  () => ({
+    reconcileActiveWorkspaceAction: vi.fn(async () => ({ changed: true })),
+    createWorkspaceAction: vi.fn(async () => ({ ok: true })),
+    switchWorkspaceAction: vi.fn(async () => {}),
+  }),
+);
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, refresh }),
   usePathname: () => '/settings/organization',
@@ -24,7 +27,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/app/(authed)/settings/organization/actions', () => ({
   reconcileActiveWorkspaceAction,
 }));
-vi.mock('@/app/(authed)/_actions', () => ({ createWorkspaceAction }));
+vi.mock('@/app/(authed)/_actions', () => ({ createWorkspaceAction, switchWorkspaceAction }));
 
 import { OrgWorkspacesCard } from '@/app/(authed)/settings/organization/_components/OrgWorkspacesCard';
 
@@ -35,6 +38,7 @@ const row = (id: string, name: string, members = 2, projects = 1): OrgWorkspaceR
   memberCount: members,
   projectCount: projects,
   createdAt: '2026-09-25T00:00:00.000Z',
+  viewerIsMember: true,
 });
 
 const page = (rows: OrgWorkspaceRowDTO[], total = rows.length, nextCursor: string | null = null) =>
@@ -238,5 +242,21 @@ describe('New workspace', () => {
     await waitFor(() => expect(createWorkspaceAction).toHaveBeenCalledWith('Beacon'));
     await screen.findByText('Beacon');
     expect(refresh).toHaveBeenCalled();
+  });
+});
+
+describe('every workspace opens for an org Owner / Admin (MOTIR-6456 panel 6b)', () => {
+  it('a workspace the viewer is not on the roster of says “Manager · via organization”', () => {
+    renderCard(
+      page([row('ws_a', 'Sales'), { ...row('ws_b', 'Development'), viewerIsMember: false }]),
+    );
+    expect(screen.getAllByText('Manager · via organization')).toHaveLength(1);
+  });
+
+  it('Open switches to the workspace and lands on its settings, writing nothing to its roster', async () => {
+    renderCard(page([{ ...row('ws_b', 'Development'), viewerIsMember: false }]));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Development' }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/settings/workspace'));
+    expect(switchWorkspaceAction).toHaveBeenCalledWith('ws_b');
   });
 });

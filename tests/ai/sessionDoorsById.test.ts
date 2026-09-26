@@ -3,11 +3,11 @@ import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { buildScope, PROJECT_SCOPE } from '@/lib/planChange/scope';
 import { usersService } from '@/lib/services/usersService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // MOTIR-6023 — the IN-APP doors address a session by id (story MOTIR-6011;
 // `agent-authored-plans.md` AMENDMENT 17 §1–§3). The ask door and item-anchored
@@ -129,7 +129,7 @@ describe('ITEM-ANCHORED planning', () => {
     await adminDb.workspaceMembership.create({
       data: { userId: viewer.id, workspaceId: fx.workspaceId, role: 'member' },
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.project.identifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

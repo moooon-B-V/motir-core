@@ -3,7 +3,6 @@ import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { PLAN_STATUS_DTO_VALUES } from '@/lib/dto/plans';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
@@ -19,6 +18,7 @@ import {
 } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // The work-item page's PLAN HISTORY read (Story MOTIR-5542 · MOTIR-5546) over
 // real Postgres — `planItemRepository.findHistoryByWorkItemId`,
@@ -149,7 +149,7 @@ const brief = (page: Awaited<ReturnType<typeof history>>) =>
 async function viewerOf(fx: WorkItemFixture): Promise<WorkspaceContext> {
   const user = await createTestUser({ name: 'Viewer' });
   await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

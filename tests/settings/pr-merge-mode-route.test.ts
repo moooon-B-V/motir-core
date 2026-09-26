@@ -1,12 +1,12 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // `PATCH /api/projects/[key]/pr-merge-mode` — the merge-mode card's write door
 // (Story MOTIR-4880 · Subtask MOTIR-5181), over the REAL stack.
@@ -60,7 +60,7 @@ async function seed(slug: string) {
 
   const memberUser = await user(`member-${slug}@ex.com`, 'Member');
   await workspacesService.addMember({ userId: memberUser.id, workspaceId: workspace.id });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: project.identifier,
     actorUserId: owner.id,
     ctx: ownerCtx,

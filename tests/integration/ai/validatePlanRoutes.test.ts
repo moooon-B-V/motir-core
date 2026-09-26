@@ -172,6 +172,7 @@ describe('POST /api/internal/ai/validate-plan', () => {
           blockerParent: elsewhere.identifier,
         },
       ],
+      crossLevelEdges: [],
       advisories: [],
       softBlocks: [],
     });
@@ -193,6 +194,7 @@ describe('POST /api/internal/ai/validate-plan', () => {
       blockers: [],
       // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
       invalidEdges: [],
+      crossLevelEdges: [],
       advisories: [],
       softBlocks: [],
     });
@@ -332,6 +334,7 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       rejections: [],
       // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
       invalidEdges: [],
+      crossLevelEdges: [],
     });
 
     // Invalid: a new root add gated by a not-done cross-project item.
@@ -385,6 +388,7 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       ],
       // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
       invalidEdges: [],
+      crossLevelEdges: [],
     });
   });
 });

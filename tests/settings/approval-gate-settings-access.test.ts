@@ -9,6 +9,7 @@ import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/erro
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // Task MOTIR-5394 — the Approvals room is MANAGE-ONLY: its READ and its WRITE both
 // take `workflow:manage`, proven over the REAL stack.
@@ -95,7 +96,7 @@ async function seed(slug: string): Promise<Seeded> {
   async function projectActor(role: 'admin' | 'member') {
     const u = await user(`${role}-${slug}@ex.com`, role);
     await workspacesService.addMember({ userId: u.id, workspaceId: workspace.id });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,

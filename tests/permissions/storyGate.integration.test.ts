@@ -17,6 +17,7 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
 
 // THE STORY TEST GATE for MOTIR-2256 (Subtask MOTIR-2302) — the SEAM half, against
 // real Postgres.
@@ -89,6 +90,9 @@ async function scenario(slug: string): Promise<Scenario> {
     });
     await workspacesService.addMember({ userId: u.id, workspaceId: workspace.id });
     if (projectRole) {
+      // The tier is the WORKSPACE role since Story MOTIR-6168: a project admin is
+      // a Manager; the row below only adds them to this private project.
+      await setWorkspaceRoleFor(u.id, workspace.id, projectRole);
       await adminDb.projectMembership.create({
         data: {
           userId: u.id,
@@ -147,7 +151,6 @@ const DOMAIN_WRITES: {
         actorUserId: ctx.userId,
         ctx,
         targetUserId: target.id,
-        role: 'member',
       });
     },
   },
