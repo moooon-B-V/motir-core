@@ -14,7 +14,12 @@ import {
   TypePicker,
 } from '@/components/theme/AppearancePickers';
 import { DEFAULT_STYLE_ID, STYLE_REGISTRY, type StyleId } from '@/lib/theme/styles';
-import { DEFAULT_PALETTE_ID, PALETTE_REGISTRY, type PaletteId } from '@/lib/theme/palettes';
+import {
+  DEFAULT_PROJECT_PALETTE_ID,
+  PALETTE_REGISTRY,
+  isPaletteId,
+  type PaletteId,
+} from '@/lib/theme/palettes';
 import { DEFAULT_TYPE_ID, TYPE_REGISTRY, type TypeId } from '@/lib/theme/typography';
 import type { ThemePattern } from '@/lib/theme/types';
 import type { DesignChoiceDTO } from '@/lib/dto/aiPreplan';
@@ -55,11 +60,18 @@ export function DesignStep({ onBack, onUseDesign, initialChoice }: DesignStepPro
   const t = useTranslations('onboarding.design');
 
   // The PROJECT's design — local to this step, NOT the global Motir theme. Seeded
-  // from the saved choice when re-entering (7.3.81), else the default product look.
+  // from the saved choice when re-entering (7.3.81), else the default PROJECT look —
+  // `DEFAULT_PROJECT_PALETTE_ID`, the warm Amethyst, which is not Motir's own
+  // default (MOTIR-6471).
   // Theme defaults to light (a preview mode, never persisted).
   const [pattern, setPattern] = useState<ThemePattern>('light');
   const [styleId, setStyleId] = useState<StyleId>(initialChoice?.styleId ?? DEFAULT_STYLE_ID);
-  const [palette, setPalette] = useState<PaletteId>(initialChoice?.paletteId ?? DEFAULT_PALETTE_ID);
+  // A saved choice is restored only when its id is still registered: a choice
+  // stored before a palette rename (MOTIR-6471's retired `graphite`) falls back
+  // to the project default rather than stamping a dead `data-palette`.
+  const [palette, setPalette] = useState<PaletteId>(
+    isPaletteId(initialChoice?.paletteId) ? initialChoice.paletteId : DEFAULT_PROJECT_PALETTE_ID,
+  );
   const [type, setType] = useState<TypeId>(initialChoice?.typeId ?? DEFAULT_TYPE_ID);
 
   const themeLabels: Record<ThemePattern, string> = {
@@ -71,7 +83,7 @@ export function DesignStep({ onBack, onUseDesign, initialChoice }: DesignStepPro
   function resetToDefault() {
     setPattern('light');
     setStyleId(DEFAULT_STYLE_ID);
-    setPalette(DEFAULT_PALETTE_ID);
+    setPalette(DEFAULT_PROJECT_PALETTE_ID);
     setType(DEFAULT_TYPE_ID);
   }
 

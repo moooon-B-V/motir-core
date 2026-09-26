@@ -46,20 +46,40 @@ export function TransferOwnershipControl({
   orgId,
   orgName,
   initialOpen,
+  disabledReason = null,
 }: {
   orgId: string;
   orgName: string;
   initialOpen: boolean;
+  /** Set while the organization is closing (MOTIR-6402, design MOTIR-6390 panel
+   *  4): the button renders DISABLED with this reason beneath it — disabled, not
+   *  hidden, because the Owner can transfer again once they cancel (MOTIR-2462). */
+  disabledReason?: string | null;
 }) {
   const t = useTranslations('orgAdmin');
-  const [explicitOpen, setExplicitOpen] = useState(initialOpen);
+  const [explicitOpen, setExplicitOpen] = useState(initialOpen && !disabledReason);
   // The roster's Owner-row link lands on `#transfer-ownership` (MOTIR-6311): the
   // hash opens the dialog exactly as the `?dialog=transfer-ownership` param does.
   // The server never sees a fragment, so it is read from the browser — as an
   // external store, which renders '' on the server and during hydration.
   const hash = useSyncExternalStore(subscribeToHash, readHash, () => '');
   const [hashDismissed, setHashDismissed] = useState(false);
-  const open = explicitOpen || (hash === TRANSFER_OWNERSHIP_HASH && !hashDismissed);
+  const open =
+    !disabledReason && (explicitOpen || (hash === TRANSFER_OWNERSHIP_HASH && !hashDismissed));
+  if (disabledReason) {
+    return (
+      <div className="flex flex-col items-start gap-1 sm:items-end">
+        <Button
+          variant="danger"
+          disabled
+          leftIcon={<ArrowRightLeft className="h-4 w-4" aria-hidden />}
+        >
+          {t('settings.transferCta')}
+        </Button>
+        <span className="font-sans text-xs text-(--el-text-secondary)">{disabledReason}</span>
+      </div>
+    );
+  }
   return (
     <>
       <Button

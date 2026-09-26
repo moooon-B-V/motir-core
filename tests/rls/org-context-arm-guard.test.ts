@@ -269,6 +269,29 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'the arm that admits it — without which the picker returns a SUBSET and looks like a ' +
       'short list rather than a bug.',
   },
+  'lib/services/organizationDeletionNotifier.ts#orgSnapshot': {
+    tables: ['organization', 'organization_membership'],
+    source: 'scan',
+    why:
+      'MOTIR-6395 — the deletion notices resolve the org and its roster at send time, with no ' +
+      'actor: the org by id (organization_active) and every membership with its user ' +
+      '(org_membership_visible_active_or_own), both admitted by the bound app.organization_id',
+  },
+  'lib/services/organizationErasureSweepService.ts#writeTombstone': {
+    tables: ['organization', 'organization_deletion_request', 'organization_membership'],
+    source: 'scan',
+    why:
+      'MOTIR-6400 — the erasure tombstone, with no actor: it reads the org and its roster (the ' +
+      'erased notice captures the Owner and Admins first), deletes every membership, scrubs the ' +
+      'org and marks the request erased, all under the bound app.organization_id',
+  },
+  'lib/services/organizationRetentionPurgeService.ts#runDue': {
+    tables: ['organization', 'organization_deletion_request'],
+    source: 'scan',
+    why:
+      'MOTIR-6401 — the seven-year purge, with no actor: it deletes the erased org’s deletion ' +
+      'requests and then the tombstone row itself, both admitted by the bound app.organization_id',
+  },
   'lib/services/workspacesService.ts#addMember': {
     tables: ['organization_membership'],
     source: 'hand',
@@ -277,6 +300,13 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       '— a SERVICE call the walk cannot follow, so the scan reports no in-window model here. ' +
       'org_membership_insert_active_or_bootstrap admits the write; the read arm asserted below ' +
       'is org_membership_visible_active_or_own.',
+  },
+  'lib/services/workspacesService.ts#guard': {
+    tables: ['organization_deletion_request'],
+    source: 'scan',
+    why:
+      'MOTIR-6400 — deleteWorkspaceForOrganizationErasure’s guard binds the org read from the ' +
+      'workspace row itself, then locks that org’s open deletion request to assert it is erasing',
   },
   'lib/services/workspacesService.ts#listUserWorkspaces': {
     tables: ['workspace'],

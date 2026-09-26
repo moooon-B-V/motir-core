@@ -68,7 +68,31 @@ export interface ProjectPermissionInputs {
    * falling back to its base's set.
    */
   customRolePermissions?: readonly string[] | null;
+  /**
+   * Whether the project's ORGANIZATION is closing — scheduled for deletion and
+   * inside its 30-day window (Story MOTIR-6306 · MOTIR-6396;
+   * `docs/decisions/organization-deletion.md` §3). When true the resolved set is
+   * narrowed to {@link CLOSING_READ_SET}: every actor, the Owner included, reads
+   * and does nothing else.
+   *
+   * Optional for the reason `customRolePermissions` is: absent is identical to
+   * false, so every existing caller and every truth-table row is untouched.
+   * `projectAccessService`'s resolution is the one place that reads the org and
+   * sets it.
+   */
+  organizationClosing?: boolean;
 }
+
+/**
+ * What a closing organization leaves ANY actor: the built-in `viewer` set — the
+ * product's own definition of read-only (`builtinRoles.ts`: *"READ-ONLY
+ * EVERYWHERE"*). Derived, not hand-listed, so a write key added to the catalog
+ * later is closed during the window by default rather than by somebody
+ * remembering to add it here.
+ */
+export const CLOSING_READ_SET: ReadonlySet<PermissionKey> = new Set<PermissionKey>(
+  BUILTIN_ROLE_PERMISSIONS.viewer,
+);
 
 /**
  * `ROLE_GATED_PERMISSIONS` as a Set, built once — the membership test
@@ -115,6 +139,20 @@ function customRoleBase(
  *                 read, it does not strip its own members' rights).
  */
 export function resolvePermissions(i: ProjectPermissionInputs): ReadonlySet<PermissionKey> {
+  const held = resolveOpen(i);
+  if (!i.organizationClosing) return held;
+  // ⚠️ AN INTERSECTION, NEVER A REPLACEMENT (MOTIR-6396). A closing org takes
+  // away; it never hands out. Replacing the set with the viewer set would GRANT
+  // `project:browse` to an actor who could not see a private project, which is
+  // the one direction this must not move. Nothing is written either: cancel
+  // clears `closingSince` and the next request resolves exactly as before.
+  const narrowed = new Set<PermissionKey>();
+  for (const key of held) if (CLOSING_READ_SET.has(key)) narrowed.add(key);
+  return narrowed;
+}
+
+/** The actor's set with the organization open — the whole policy described above. */
+function resolveOpen(i: ProjectPermissionInputs): ReadonlySet<PermissionKey> {
   const held = new Set<PermissionKey>();
 
   // 1 · Level-gated grants — every actor, anonymous included.

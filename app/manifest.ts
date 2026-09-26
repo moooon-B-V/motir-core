@@ -9,8 +9,9 @@ import { BRAND_ACCENT_HEX, BRAND_PAGE_BG_HEX } from '@/components/brand/waveBand
 // ⚠️ A manifest is static JSON: it cannot read a CSS variable, so `theme_color`
 // and `background_color` are hex LITERALS. They come from the shared brand
 // module, which records that they are the light-theme values of `--el-accent`
-// and `--el-page-bg` — that provenance is the thing to keep in sync when the
-// palette moves.
+// and `--el-page-bg` in the Motir palette — the ink `#1a1d21` and white since
+// MOTIR-6474 (design-notes.md §10) — and that provenance is the thing to keep
+// in sync when the palette moves.
 //
 // ⚠️ THE MASKABLE PAIR IS DELIBERATELY THE SEPARATE `icon-192/512.png`, not
 // `app/icon.svg`. A maskable icon is cropped to an arbitrary OS shape, so it is

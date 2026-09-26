@@ -518,6 +518,49 @@ export const githubRepoRepository = {
     });
   },
 
+  /**
+   * Every repository row of `organizationId` WITH its parent installation — the
+   * organization Git offboarding's work set (MOTIR-6306 · MOTIR-6397). The
+   * installation rides along because a Motir-hosted repository's delete is minted
+   * from ITS installation id, and a GitLab row's fate depends on whose connection
+   * it hangs off. System context in practice (the org is being erased and no
+   * member acts); ordered so a resumed run walks the same sequence.
+   */
+  async listByOrganizationWithInstallation(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<(GithubRepo & { installation: GithubInstallation })[]> {
+    return tx.githubRepo.findMany({
+      where: { organizationId },
+      include: { installation: true },
+      orderBy: [{ owner: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /** Another organization with repository rows under installation
+   *  `installationFk` (the internal `GithubInstallation.id`), or null when every row
+   *  under it is `organizationId`'s — the offboarding's "is this installation
+   *  shared?" test, answered with WHO it is shared with. */
+  async findOtherOrganizationId(
+    installationFk: string,
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const row = await tx.githubRepo.findFirst({
+      where: { installationId: installationFk, organizationId: { not: organizationId } },
+      select: { organizationId: true },
+      orderBy: { id: 'asc' },
+    });
+    return row?.organizationId ?? null;
+  },
+
+  /** Remove ONE repository row by id. `deleteMany`, so a re-run after the row is
+   *  gone is a no-op (count 0). Its pull-request rows cascade with it. */
+  async deleteById(id: string, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.githubRepo.deleteMany({ where: { id } });
+    return result.count;
+  },
+
   /** Every connected repo WITH its parent installation, optionally narrowed to one
    *  workspace (MOTIR-1961) — the operator first-index sweep's one read. The
    *  installation is included because the enqueue payload needs the PROVIDER's
