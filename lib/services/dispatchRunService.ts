@@ -808,6 +808,8 @@ export const dispatchRunService = {
     runId: string,
     ctx: ServiceContext,
   ): Promise<DispatchRunCloseOutPromptDto> {
+    // A hosted run's own credential reads only ITS run's close-out (MOTIR-6557).
+    assertRunTokenScope(runId, ctx);
     const binding = { userId: ctx.userId, workspaceId: ctx.workspaceId };
     const run = await withWorkspaceContext(binding, (tx) =>
       dispatchRunRepository.findByIdWithCards(runId, tx),

@@ -147,10 +147,13 @@ describe('a hosted run credential at the /api/v1 doors (MOTIR-688)', () => {
       expect((await dispatchPrompt(runHeaders, own.key)).status).toBe(200);
     });
 
-    it('gets 404 for another card — the same answer as a card it cannot see', async () => {
+    it('is refused 403 on another run’s card; a key that does not exist is 404', async () => {
+      // MOTIR-6557: a run token reaches its run's cards and answers the run-scope
+      // 403 for any other. Existence is no secret from it — its dispatcher can
+      // browse the project, and so can it (the project reads the CLI makes).
       const res = await dispatchPrompt(runHeaders, other.key);
-      expect(res.status).toBe(404);
-      expect(await codeOf(res)).toBe('WORK_ITEM_NOT_FOUND');
+      expect(res.status).toBe(403);
+      expect(await codeOf(res)).toBe('DISPATCH_RUN_TOKEN_OUT_OF_SCOPE');
 
       const missing = await dispatchPrompt(runHeaders, `${caller.projectKey}-9999`);
       expect(missing.status).toBe(404);
@@ -174,8 +177,10 @@ describe('a hosted run credential at the /api/v1 doors (MOTIR-688)', () => {
     });
 
     it('a read its `project:browse` would otherwise admit → 403', async () => {
-      const { GET } = await import('@/app/api/v1/me/route');
-      const res = await GET(new Request(`${BASE}/me`, { headers: runHeaders }));
+      // `/me` is in the run-token table since MOTIR-6557 (the CLI's whoami);
+      // `/workspaces` is not — it lists the dispatcher's OTHER workspaces.
+      const { GET } = await import('@/app/api/v1/workspaces/route');
+      const res = await GET(new Request(`${BASE}/workspaces`, { headers: runHeaders }));
       expect(res.status).toBe(403);
       expect(await codeOf(res)).toBe('RUN_TOKEN_NOT_ALLOWED');
     });

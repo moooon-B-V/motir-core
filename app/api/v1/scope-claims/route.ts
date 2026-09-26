@@ -32,20 +32,25 @@ import { scopeClaimService } from '@/lib/services/scopeClaimService';
 // story needs re-shaping would be reading a diagnosis out of a failure. Real
 // failures keep their statuses: 404 for an unknown or cross-workspace key or
 // project, 409 for a project with no active sprint, 422 for a malformed one.
-export const POST = withV1Route({ permission: 'work_item:edit' }, async (ctx) => {
-  const body = await parseV1Body(ctx.req, scopeClaimBodySchema);
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-6557) may call this,
+// bound as `lib/hostedRuns/runTokenRoutes.ts` says; the service enforces it.
+export const POST = withV1Route(
+  { permission: 'work_item:edit', acceptsRunToken: true },
+  async (ctx) => {
+    const body = await parseV1Body(ctx.req, scopeClaimBodySchema);
 
-  // Both arms resolve through the SAME services every other keyed read uses, so
-  // a key in another workspace is refused here exactly as `get_work_item`
-  // refuses it — 404, indistinguishable from one that never existed.
-  const input =
-    body.kind === 'work_item'
-      ? { kind: 'work_item' as const, ...(await resolveWorkItemKey(body.key, ctx.service)) }
-      : {
-          kind: 'sprint' as const,
-          projectId: (await projectsService.getByKey(body.projectKey, ctx.service)).id,
-        };
+    // Both arms resolve through the SAME services every other keyed read uses, so
+    // a key in another workspace is refused here exactly as `get_work_item`
+    // refuses it — 404, indistinguishable from one that never existed.
+    const input =
+      body.kind === 'work_item'
+        ? { kind: 'work_item' as const, ...(await resolveWorkItemKey(body.key, ctx.service)) }
+        : {
+            kind: 'sprint' as const,
+            projectId: (await projectsService.getByKey(body.projectKey, ctx.service)).id,
+          };
 
-  const claim = await scopeClaimService.claimScope(input, ctx.service);
-  return NextResponse.json(presentScopeClaim(claim));
-});
+    const claim = await scopeClaimService.claimScope(input, ctx.service);
+    return NextResponse.json(presentScopeClaim(claim));
+  },
+);

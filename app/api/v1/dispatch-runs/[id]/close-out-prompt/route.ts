@@ -15,7 +15,12 @@ import { dispatchRunService } from '@/lib/services/dispatchRunService';
 // `project:browse` at the gate, like every v1 GET: the key
 // `dispatchRunService.getCloseOutPrompt` asserts on the run's project. The
 // agent that PUBLISHES from this prompt is gated separately, on the tool.
-export const GET = withV1Route<{ id: string }>({ permission: 'project:browse' }, async (ctx) => {
-  const dto = await dispatchRunService.getCloseOutPrompt(ctx.params.id, ctx.service);
-  return NextResponse.json(presentDispatchRunCloseOutPrompt(dto));
-});
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-6557) may call this,
+// bound as `lib/hostedRuns/runTokenRoutes.ts` says; the service enforces it.
+export const GET = withV1Route<{ id: string }>(
+  { permission: 'project:browse', acceptsRunToken: true },
+  async (ctx) => {
+    const dto = await dispatchRunService.getCloseOutPrompt(ctx.params.id, ctx.service);
+    return NextResponse.json(presentDispatchRunCloseOutPrompt(dto));
+  },
+);

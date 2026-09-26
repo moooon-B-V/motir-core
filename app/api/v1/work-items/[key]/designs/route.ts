@@ -25,10 +25,15 @@ import { designAccessService } from '@/lib/services/designAccessService';
 // `available` asset of an `approved` verdict gets a short-lived URL, because a
 // caller reading a single item's designs is about to fetch them. The project
 // LIST deliberately does not — see that route.
-export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async (ctx) => {
-  const verdicts = await designAccessService.designsForWorkItem(ctx.params.key, ctx.service);
-  const designs = await Promise.all(
-    verdicts.map((verdict) => presentDesignVerdict(verdict, ctx.service)),
-  );
-  return NextResponse.json({ designs });
-});
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-6557) may call this,
+// bound as `lib/hostedRuns/runTokenRoutes.ts` says; the service enforces it.
+export const GET = withV1Route<{ key: string }>(
+  { permission: 'project:browse', acceptsRunToken: true },
+  async (ctx) => {
+    const verdicts = await designAccessService.designsForWorkItem(ctx.params.key, ctx.service);
+    const designs = await Promise.all(
+      verdicts.map((verdict) => presentDesignVerdict(verdict, ctx.service)),
+    );
+    return NextResponse.json({ designs });
+  },
+);

@@ -41,19 +41,24 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // a resource, and "nothing was recorded on it" is a true answer to the question
 // asked. The service returns exactly that without opening a transaction.
 
-export const POST = withV1Route({ permission: 'work_item:edit' }, async (ctx) => {
-  const body = await parseV1Body(ctx.req, sessionCloseOutBodySchema);
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-6557) may call this,
+// bound as `lib/hostedRuns/runTokenRoutes.ts` says; the service enforces it.
+export const POST = withV1Route(
+  { permission: 'work_item:edit', acceptsRunToken: true },
+  async (ctx) => {
+    const body = await parseV1Body(ctx.req, sessionCloseOutBodySchema);
 
-  const provenance = toProvenanceInput(body);
+    const provenance = toProvenanceInput(body);
 
-  // Workspace-scoped by the service: it finds the items on the branch across the
-  // caller's accessible projects in THIS workspace, so a branch name shared with
-  // another tenant closes nothing of theirs.
-  const result = await workItemsService.completeSession(
-    body.sessionBranch,
-    ctx.service,
-    provenance,
-  );
+    // Workspace-scoped by the service: it finds the items on the branch across the
+    // caller's accessible projects in THIS workspace, so a branch name shared with
+    // another tenant closes nothing of theirs.
+    const result = await workItemsService.completeSession(
+      body.sessionBranch,
+      ctx.service,
+      provenance,
+    );
 
-  return NextResponse.json(presentSessionCloseOut(result));
-});
+    return NextResponse.json(presentSessionCloseOut(result));
+  },
+);

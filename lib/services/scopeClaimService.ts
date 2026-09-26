@@ -1,4 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
+import { runTokenScopeService } from '@/lib/services/runTokenScopeService';
+import { DispatchRunTokenOutOfScopeError } from '@/lib/dispatchRuns/errors';
 import type { ClaimActorDto } from '@/lib/dto/claim';
 import type {
   ScopeClaimDto,
@@ -157,12 +159,19 @@ export const scopeClaimService = {
    * lock and a worktree pre-flight answer different questions.
    */
   async claimScope(input: ScopeClaimInput, ctx: ServiceContext): Promise<ScopeClaimDto> {
+    // A hosted run's own credential claims only its own run's scope (MOTIR-6557):
+    // never a sprint, and never a member that is not a leg of its run. The
+    // container resolves through `getWorkItemByIdentifier`, which checks it too.
+    if (ctx.tokenDispatchRunId !== undefined && input.kind !== 'work_item') {
+      throw new DispatchRunTokenOutOfScopeError();
+    }
     const resolved =
       input.kind === 'work_item'
         ? await resolveWorkItemScope(input.projectId, input.identifier, ctx)
         : await resolveSprintScope(input.projectId, ctx);
 
     if (!resolved.ok) return presentEarlyRefusal(resolved.scope, resolved.refusal);
+    await runTokenScopeService.assertReachesWorkItems(resolved.memberIds, ctx);
 
     // The CI-credit gate (MOTIR-1901 · `ci-minutes-allowance.md` §6.2–6.3). This
     // is the FIFTH dispatch entry point, and the rule `getNextReady` states holds

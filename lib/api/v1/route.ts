@@ -122,10 +122,10 @@ export interface V1RouteOptions {
    * Admit a hosted run's own credential (MOTIR-688,
    * `docs/decisions/hosted-agent-run.md` §3). Default false: a RUN token is
    * refused with `RUN_TOKEN_NOT_ALLOWED` (403) everywhere else, whatever its
-   * grant holds. Exactly three routes set it — the run's event append and close,
-   * and the card's dispatch prompt — and each hands `ctx.service` (which then
-   * carries `tokenDispatchRunId`) to a service that checks the binding against
-   * the run or card the request names.
+   * grant holds. Only the routes in `lib/hostedRuns/runTokenRoutes.ts` set it —
+   * what the CLI's `motir run` calls (MOTIR-6557) — and each hands `ctx.service`
+   * (which then carries `tokenDispatchRunId`) to a service that checks the
+   * binding against the run or the cards the request names.
    */
   acceptsRunToken?: boolean;
 }

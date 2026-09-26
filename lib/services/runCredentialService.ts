@@ -22,9 +22,9 @@ import {
 //   * acts AS THE DISPATCHER — its row is theirs, so every write it makes is
 //     attributed to the person who pressed Run hosted;
 //   * is BOUND to the run (`ApiToken.dispatchRunId`) — every bearer door refuses
-//     it (`authenticateApiToken`, `verifyMcpToken`) except the run's own ingest
-//     and its card's prompt, and those check the binding against the `{id}` /
-//     key they are asked for;
+//     it (`authenticateApiToken`, `verifyMcpToken`) except the routes the CLI's
+//     `motir run` calls (`lib/hostedRuns/runTokenRoutes.ts`, MOTIR-6557), and
+//     those check the binding against the run and the cards they are asked for;
 //   * carries `HOSTED_RUN_TOKEN_GRANT` and is bound to the run's PROJECT, so even
 //     the doors that admit it narrow it to that project;
 //   * EXPIRES no later than the run's timeout plus the settle margin, and is
