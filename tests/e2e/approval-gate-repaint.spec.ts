@@ -216,10 +216,11 @@ test.describe('deciding an approval gate repaints the item page in place', () =>
     const dialog = await openTheOverlay(page, seed);
     await dialog.getByRole('button', { name: 'Request changes' }).click();
     await dialog.getByLabel('What needs to change?').fill('The fold is wrong.');
-    await dialog
-      .getByRole('radiogroup', { name: 'Is it a revise or a re-plan?' })
-      .getByRole('radio', { name: /^Revise/ })
-      .check();
+    // The radio is `sr-only` inside its tile's <label>, which receives the pointer, so the
+    // tile is what is pressed — the way a reader picks it.
+    const verdicts = dialog.getByRole('radiogroup', { name: 'Is it a revise or a re-plan?' });
+    await verdicts.locator('label[data-verdict="revise"]').click();
+    await expect(verdicts.getByRole('radio', { name: /^Revise/ })).toBeChecked();
     await dialog.getByRole('button', { name: 'Yes, request changes' }).click();
     // THE AUTHORITATIVE SIGNAL — the frame's decided state, from the action's response.
     await expect(dialog.getByText('Changes requested', { exact: true })).toBeVisible();

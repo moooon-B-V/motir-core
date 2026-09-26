@@ -118,10 +118,12 @@ test.describe('A refusal says why', () => {
         // A DESIGN sent back also names its VERDICT (MOTIR-6070 · MOTIR-6427): the door
         // refuses a design refusal without one. Revise asks nothing afterwards, so the
         // record below is the whole answer, as it was when this receipt was recorded.
-        await designDialog
-          .getByRole('radiogroup', { name: r.verdict.legend })
-          .getByRole('radio', { name: new RegExp(`^${r.verdict.revise.label}`) })
-          .check();
+        // The radio is `sr-only` inside its tile's <label>, which receives the pointer.
+        const verdicts = designDialog.getByRole('radiogroup', { name: r.verdict.legend });
+        await verdicts.locator('label[data-verdict="revise"]').click();
+        await expect(
+          verdicts.getByRole('radio', { name: new RegExp(`^${r.verdict.revise.label}`) }),
+        ).toBeChecked();
         // ONE injected failure on the decide call — the server action's POST.
         let failed = false;
         await page.route('**/workbench**', async (route) => {
