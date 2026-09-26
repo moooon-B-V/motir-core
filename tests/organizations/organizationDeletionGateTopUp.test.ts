@@ -58,7 +58,6 @@ const { organizationDeletionReminders } =
   await import('@/lib/jobs/definitions/organizationDeletionReminders');
 const route = await import('@/app/api/organizations/[orgId]/deletion/route');
 const { assertWorkspaceOrgNotClosing } = await import('@/lib/organizations/closingGuard');
-const { withSystemContext } = await import('@/lib/workspaces/context');
 const { OrganizationClosingError } = await import('@/lib/organizations/errors');
 
 const HOST = 'motir-projects';
@@ -304,11 +303,11 @@ describe('the service reads', () => {
 
   it('the workspace closing guard passes an open org and refuses a closing one', async () => {
     await expect(
-      withSystemContext((tx) => assertWorkspaceOrgNotClosing(org.workspaceId, tx)),
+      adminDb.$transaction((tx) => assertWorkspaceOrgNotClosing(org.workspaceId, tx)),
     ).resolves.toBeUndefined();
     await schedule(org);
     await expect(
-      withSystemContext((tx) => assertWorkspaceOrgNotClosing(org.workspaceId, tx)),
+      adminDb.$transaction((tx) => assertWorkspaceOrgNotClosing(org.workspaceId, tx)),
     ).rejects.toBeInstanceOf(OrganizationClosingError);
   });
 

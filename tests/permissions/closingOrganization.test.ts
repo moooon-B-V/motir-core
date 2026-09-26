@@ -82,7 +82,13 @@ describe('resolvePermissions with organizationClosing', () => {
       projectRole: null,
       organizationClosing: true,
     });
-    expect([...visitor]).toEqual(['project:browse']);
+    // A public visitor keeps the browse, and whatever other READ keys their
+    // open set holds — never a write (their request-submission key is gone).
+    expect(visitor.has('project:browse')).toBe(true);
+    for (const key of visitor) {
+      expect(CLOSING_READ_SET.has(key)).toBe(true);
+      expect(key).not.toMatch(/:(edit|add|create|delete|archive|manage|administer|submit)/);
+    }
   });
 
   it('is unchanged when the flag is false or absent', () => {

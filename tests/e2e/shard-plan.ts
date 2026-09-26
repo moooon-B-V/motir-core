@@ -651,6 +651,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'onboarding-ran-gate.spec.ts': 14.1,
   'pages-stream.spec.ts': 12.0,
   'org-admin.spec.ts': 8.6,
+  // MOTIR-6405 — measured LOCALLY in one run (47.0 s wall, which includes the
+  // server's first compile of the routes it opens), so an upper bound:
+  // re-measure from its first green CI leg.
+  'org-deletion.spec.ts': 47.0,
   'per-domain-admin-permissions.spec.ts': 12.4,
   'permission-gated-surfaces.spec.ts': 18.0,
   'permission-gated-ui.spec.ts': 14.0,
