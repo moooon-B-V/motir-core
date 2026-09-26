@@ -75,7 +75,7 @@ Two collisions, both a consequence of transcribing Mirotone faithfully
   depth**: the action blue, **blue-650** `#243797` in light and **blue-200**
   `#d9dffc` in dark (blue-650 sits at 1.7:1 on the near-black dark surface and
   would fail the icon bar). `in_progress` rides **blue-500** `#3859ff`, so this
-  is one hue family at two depths — the Graphite idiom — **ΔE 17.0 / 18.4**
+  is one hue family at two depths — the Motir (ex-Graphite) idiom — **ΔE 17.0 / 18.4**
   apart. Contrast **9.2:1 / 13.1:1** on `--el-surface`. `blocked` stays on the
   warning gold, where its semantics belong.
 - **`todo` vs `cancelled` (light).** **gray-450** `#7f8497` vs **gray-500**

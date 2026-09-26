@@ -31,7 +31,7 @@ const ACCENT_CLASS = `text-(${ACCENT_INK})`;
 const ACCENT_TINT = '--el-tint-lavender';
 
 /** The base palette, which ships no `[data-palette]` block of its own. */
-const BASE_PALETTE = 'motir';
+const BASE_PALETTE = 'amethyst';
 
 // MOTIR-2475 / MOTIR-2477 — the repo-wide INK-CONTRAST guard, pointed at the
 // tree by the two sweeps that made it passable: the faint arm below is
@@ -549,7 +549,7 @@ describe('ink-contrast lint — --el-danger-on-surface is AA in all 20 palette �
       failures.join('\n'),
       `\`${DANGER_INK}\` must clear ${AA}:1 on every surface in every palette and theme — that ` +
         'is the whole reason it exists rather than `--el-danger`, which is 4.25 / 4.11 / 4.24:1 ' +
-        'on the DARK page in the base, cobalt and graphite palettes. If a palette moved its ' +
+        'on the DARK page in the base, cobalt and motir (formerly graphite) palettes. If a palette moved its ' +
         'danger hue or its page, re-measure the PAIR before changing either side; if the mix ' +
         'ratio in `theme.css` needs to move, move it there — never darken a hue at a call site.',
     ).toBe('');

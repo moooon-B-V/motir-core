@@ -3,8 +3,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import manifest from '@/app/manifest';
 import {
+  BRAND_ACCENT_DARK_HEX,
   BRAND_ACCENT_HEX,
+  BRAND_ACCENT_INK_DARK_HEX,
   BRAND_ACCENT_INK_HEX,
+  BRAND_GLYPH_HEX,
   BRAND_PAGE_BG_HEX,
   WAVE_BAND_PATH,
 } from '@/components/brand/waveBand';
@@ -103,6 +106,21 @@ describe('the tiled form paints the glyph out of an opaque accent field', () => 
 });
 
 describe('the committed files still match the generator', () => {
+  it('app/icon.svg carries the dark-scheme tile, with the light tile as its attribute fallback', () => {
+    // design-notes.md §10: the ink tile vanishes on dark browser chrome, so the
+    // one icon that can follow the scheme does. The fill ATTRIBUTES stay light —
+    // a client ignoring the embedded style still draws the ink tile.
+    const svg = iconSvgFile();
+    expect(svg).toMatch(
+      new RegExp(
+        `@media \\(prefers-color-scheme: dark\\) \\{ \\.tile \\{ fill: ${BRAND_ACCENT_DARK_HEX}; \\} \\.glyph \\{ fill: ${BRAND_ACCENT_INK_DARK_HEX}; \\} \\}`,
+      ),
+    );
+    expect(svg).toContain(`class="tile" width="32" height="32" rx="7" fill="${BRAND_ACCENT_HEX}"`);
+    expect(svg).toContain(`class="glyph" d="${WAVE_BAND_PATH}" fill="${BRAND_ACCENT_INK_HEX}"`);
+    expect(svg).not.toContain('#5645d4');
+  });
+
   it('app/icon.svg is byte-identical to what the script emits', () => {
     expect(readFileSync(join(REPO, 'app/icon.svg'), 'utf8')).toBe(iconSvgFile());
   });
@@ -149,10 +167,14 @@ describe('the email mark is generated here too, and is NOT one of the icons', ()
   // is a member of PNG_ICONS: those are opaque accent TILES sized against the
   // maskable safe circle, and neither the tile nor either scale means anything
   // for a 20px glyph sitting beside grey text on a white email body.
-  it('emits the bare glyph in the accent colour, with no tile behind it', () => {
+  it('emits the bare glyph in the GLYPH colour, with no tile behind it', () => {
+    // It sits on the white email body, so it is a glyph-on-a-surface
+    // (`--el-accent-on-surface`), not a tile fill — the two split under the
+    // Motir palette (design-notes.md §10).
     const svg = emailMarkSvg();
     expect(svg).toContain(`d="${WAVE_BAND_PATH}"`);
-    expect(svg).toContain(`fill="${BRAND_ACCENT_HEX}"`);
+    expect(svg).toContain(`fill="${BRAND_GLYPH_HEX}"`);
+    expect(svg).not.toContain(BRAND_ACCENT_HEX);
     // The tiled form opens with a full-canvas <rect>; this one must not.
     expect(svg).not.toContain('<rect');
     expect(svg).not.toContain(BRAND_ACCENT_INK_HEX);

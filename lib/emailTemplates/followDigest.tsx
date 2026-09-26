@@ -6,6 +6,7 @@ import { PrimaryButton } from './_components/PrimaryButton';
 import { getMessagesFor } from '@/lib/i18n/messages';
 import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 import type { RenderedEmail } from './types';
+import { EMAIL_LINK } from './_components/emailColors';
 
 // The weekly follower DIGEST (Story 8.9 · Subtask 8.9.7 ·
 // `docs/decisions/public-follow-and-changelog.md` §4).
@@ -73,7 +74,7 @@ function FollowDigestEmail({
 const lede = { fontSize: '16px', margin: '0 0 20px' };
 const list = { margin: '0 0 24px' };
 const row = { fontSize: '15px', margin: '0 0 10px' };
-const rowLink = { color: '#2563eb', textDecoration: 'none' };
+const rowLink = { color: EMAIL_LINK, textDecoration: 'none' };
 const cta = { margin: '0 0 24px' };
 const unsubRow = { fontSize: '13px', color: '#6b7280', margin: '0' };
 const unsubLink = { color: '#6b7280' };

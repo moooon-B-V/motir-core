@@ -6,6 +6,7 @@ import { PrimaryButton } from './_components/PrimaryButton';
 import { getMessagesFor } from '@/lib/i18n/messages';
 import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 import type { RenderedEmail } from './types';
+import { EMAIL_LINK } from './_components/emailColors';
 
 // Password-reset email. Wired into Better-Auth's
 // emailAndPassword.sendResetPassword in lib/auth/index.ts. The 1-hour expiry
@@ -50,7 +51,7 @@ const fallbackLinkRow = {
   fontSize: '13px',
   margin: '0 0 24px',
 };
-const fallbackLink = { color: '#2563eb', wordBreak: 'break-all' as const };
+const fallbackLink = { color: EMAIL_LINK, wordBreak: 'break-all' as const };
 
 export async function passwordResetEmail(props: PasswordResetEmailProps): Promise<RenderedEmail> {
   const locale = props.locale ?? defaultLocale;

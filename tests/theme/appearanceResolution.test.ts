@@ -105,7 +105,7 @@ describe('resolveAppliedAppearance — server vs. localStorage precedence', () =
     const local: LocalAppearanceSnapshot = {
       pattern: 'light',
       style: 'swiss-minimal-flat',
-      palette: 'graphite',
+      palette: 'amethyst',
       type: 'grotesk',
     };
     expect(resolveAppliedAppearance(server, local)).toEqual(server);
@@ -119,13 +119,13 @@ describe('resolveAppliedAppearance — server vs. localStorage precedence', () =
     const local: LocalAppearanceSnapshot = {
       pattern: 'light',
       style: 'swiss-minimal-flat',
-      palette: 'graphite',
+      palette: 'amethyst',
       type: null, // unpinned → follows the style default (motir-sans)
     };
     expect(resolveAppliedAppearance(null, local)).toEqual<AppliedAppearanceDto>({
       pattern: 'light',
       styleId: 'swiss-minimal-flat',
-      paletteId: 'graphite',
+      paletteId: 'amethyst',
       typeId: 'motir-sans',
       typePinned: false,
     });

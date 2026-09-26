@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
+import { BASE_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
 import { loadTokenLayer, declaredIn, resolveValue, type ThemeContext } from './paletteCascade';
 
 // MOTIR-3207 — the floating orb's glyph-on-gradient contrast
@@ -319,7 +319,7 @@ describe('the floating orb’s glyph (MOTIR-3207)', () => {
     // Re-deriving the OLD value's failures pins the regression this card fixed:
     // if a later change made 32% pass, the defect's cause moved and the number
     // chosen here is no longer the thing keeping the orb legible.
-    const declarations = declaredIn(rules, { palette: DEFAULT_PALETTE_ID, theme: 'dark' });
+    const declarations = declaredIn(rules, { palette: BASE_PALETTE_ID, theme: 'dark' });
     const raised = { ...declarations, [MIX_TOKEN]: '32%' };
     const gradient = resolveValue(shippedGradient(), raised).value;
     const [, firstStop] = gradientArgs(gradient);
@@ -364,8 +364,8 @@ describe('the floating orb’s glyph (MOTIR-3207)', () => {
     // record the orb's numbers, and a recorded number that no longer describes
     // the app is the drift this pins. Derived here, grepped there — never the
     // other way round.
-    const light = firstStopRatio(`${DEFAULT_PALETTE_ID}/light`);
-    const dark = firstStopRatio(`${DEFAULT_PALETTE_ID}/dark`);
+    const light = firstStopRatio(`${BASE_PALETTE_ID}/light`);
+    const dark = firstStopRatio(`${BASE_PALETTE_ID}/dark`);
     expect(light).toBeCloseTo(3.77, 2);
     expect(dark).toBeCloseTo(3.09, 2);
 

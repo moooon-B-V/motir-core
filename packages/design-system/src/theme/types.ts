@@ -53,7 +53,43 @@ export const THEME_STORAGE_KEYS = {
   style: 'motir.theme.style',
   palette: 'motir.theme.palette',
   type: 'motir.theme.type',
+  /**
+   * The version marker of the STORED palette id's meaning. Absent (or anything
+   * but {@link PALETTE_IDS_VERSION}) means the stored `palette` was written
+   * before MOTIR-6471 swapped the palette identities, so it is read through
+   * {@link PALETTE_ID_MIGRATION} once and the marker is then written.
+   */
+  paletteIds: 'motir.theme.paletteIds',
 } as const;
+
+/** The current meaning of a stored palette id — see `THEME_STORAGE_KEYS.paletteIds`. */
+export const PALETTE_IDS_VERSION = '2';
+
+/**
+ * What a palette id stored BEFORE MOTIR-6471 means today. The two palettes
+ * swapped identities: the warm scheme called `motir` is now `amethyst`, and the
+ * monochrome scheme called `graphite` is now `motir`. A value absent from this
+ * map meant the same palette before and after. Applied ONCE per store — a
+ * second pass would map a migrated `motir` on to `amethyst`, so it is keyed on
+ * a version marker, never on the value.
+ */
+export const PALETTE_ID_MIGRATION: Readonly<Partial<Record<string, string>>> = {
+  motir: 'amethyst',
+  graphite: 'motir',
+};
+
+/**
+ * Read a stored palette id through the rename. `marker` is the stored
+ * `THEME_STORAGE_KEYS.paletteIds` value: at {@link PALETTE_IDS_VERSION} the
+ * value is already current and is returned untouched; otherwise a value the
+ * rename changed is mapped. `null` (nothing stored) stays `null`.
+ */
+export function migrateStoredPaletteId(value: string | null, marker: string | null): string | null {
+  if (value === null || marker === PALETTE_IDS_VERSION) return value;
+  // Own properties only — a stored `constructor` must not reach Object.prototype.
+  if (!Object.prototype.hasOwnProperty.call(PALETTE_ID_MIGRATION, value)) return value;
+  return PALETTE_ID_MIGRATION[value] ?? value;
+}
 
 /**
  * Sensible defaults if localStorage is empty. Note `type` is the GLOBAL fallback

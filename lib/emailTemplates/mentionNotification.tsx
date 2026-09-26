@@ -6,6 +6,7 @@ import { PrimaryButton } from './_components/PrimaryButton';
 import { getMessagesFor } from '@/lib/i18n/messages';
 import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 import type { RenderedEmail } from './types';
+import { EMAIL_LINK } from './_components/emailColors';
 
 // Mention notification email (Story 5.1 · Subtask 5.1.6). Sent by the
 // `email.send` job when someone @-mentions a user in a comment or in a work
@@ -79,7 +80,7 @@ const fallbackLinkRow = {
   fontSize: '13px',
   margin: '0 0 24px',
 };
-const fallbackLink = { color: '#2563eb', wordBreak: 'break-all' as const };
+const fallbackLink = { color: EMAIL_LINK, wordBreak: 'break-all' as const };
 
 export async function mentionNotificationEmail(
   props: MentionNotificationEmailProps,

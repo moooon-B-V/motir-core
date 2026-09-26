@@ -50,7 +50,7 @@ const { rules, css } = loadTokenLayer();
 
 /** Every palette in the token layer, plus the base, which ships no block. */
 const PALETTES = [
-  'motir',
+  'amethyst',
   ...new Set([...css.matchAll(/\[data-palette=['"]([a-z0-9-]+)['"]\]/g)].map((m) => m[1]!)),
 ].filter((palette, index, all) => all.indexOf(palette) === index);
 

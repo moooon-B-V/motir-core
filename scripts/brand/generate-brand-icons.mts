@@ -42,13 +42,20 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from '@playwright/test';
 import {
+  BRAND_ACCENT_DARK_HEX,
   BRAND_ACCENT_HEX,
+  BRAND_ACCENT_INK_DARK_HEX,
   BRAND_ACCENT_INK_HEX,
+  BRAND_GLYPH_HEX,
   EMAIL_MARK_CANVAS_PX,
   EMAIL_MARK_FILE,
   WAVE_BAND_PATH,
   waveBandSvg,
-} from '../../components/brand/waveBand.js';
+  // Imported from the PACKAGE, not the `components/brand/waveBand` shim: under
+  // `tsx` that `.ts` shim loads as CommonJS and `require()`s `@motir/brand`,
+  // whose `exports` carry only an `import` condition — so `pnpm tsx` of this
+  // script has failed since MOTIR-1456 moved the constants into the package.
+} from '@motir/brand';
 
 /** Glyph box as a fraction of the canvas, by whether the OS will crop it. */
 export const NON_MASKABLE_SCALE = 0.605;
@@ -99,9 +106,13 @@ export const EMAIL_MARK_PNG = {
   canvas: EMAIL_MARK_CANVAS_PX,
 } as const;
 
-/** The email mark's source: the bare glyph, accent-filled, on transparency. */
+/**
+ * The email mark's source: the bare glyph on transparency. It sits on the
+ * email's white body, so it takes the GLYPH-on-a-surface colour, not the tile
+ * fill (design-notes.md §10 — the two split under the Motir palette).
+ */
 export function emailMarkSvg(): string {
-  return waveBandSvg({ size: EMAIL_MARK_CANVAS_PX, fill: BRAND_ACCENT_HEX });
+  return waveBandSvg({ size: EMAIL_MARK_CANVAS_PX, fill: BRAND_GLYPH_HEX });
 }
 
 /** The two sizes packed into the legacy `app/favicon.ico`. */
@@ -129,7 +140,15 @@ export function tiledIconSvg({ canvas, scale, radius }: Omit<IconSpec, 'out'>): 
   );
 }
 
-/** `app/icon.svg` — resolution-free, so it ships as source rather than a raster. */
+/**
+ * `app/icon.svg` — resolution-free, so it ships as source rather than a raster.
+ *
+ * It is the ONE icon that can follow the browser's scheme, and it must: the ink
+ * tile vanishes against dark chrome (1.01–1.40:1), so a
+ * `prefers-color-scheme: dark` rule swaps to the dark theme's accent pair
+ * (design-notes.md §10, the dark tab strip). The fill ATTRIBUTES stay the light
+ * values — a client that ignores the embedded style still draws the ink tile.
+ */
 export function iconSvgFile(): string {
   const canvas = 32;
   const box = canvas * NON_MASKABLE_SCALE;
@@ -140,9 +159,10 @@ export function iconSvgFile(): string {
   // (design-notes.md section 2). Provenance lives in components/brand/waveBand.ts.
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas}" height="${canvas}" viewBox="0 0 ${canvas} ${canvas}" role="img" aria-label="Motir">`,
-    `  <rect width="${canvas}" height="${canvas}" rx="${Math.round(canvas * TILE_RADIUS_RATIO)}" fill="${BRAND_ACCENT_HEX}"/>`,
+    `  <style>@media (prefers-color-scheme: dark) { .tile { fill: ${BRAND_ACCENT_DARK_HEX}; } .glyph { fill: ${BRAND_ACCENT_INK_DARK_HEX}; } }</style>`,
+    `  <rect class="tile" width="${canvas}" height="${canvas}" rx="${Math.round(canvas * TILE_RADIUS_RATIO)}" fill="${BRAND_ACCENT_HEX}"/>`,
     `  <g transform="translate(${offset} ${offset}) scale(${unit})">`,
-    `    <path d="${WAVE_BAND_PATH}" fill="${BRAND_ACCENT_INK_HEX}"/>`,
+    `    <path class="glyph" d="${WAVE_BAND_PATH}" fill="${BRAND_ACCENT_INK_HEX}"/>`,
     `  </g>`,
     `</svg>`,
     '',

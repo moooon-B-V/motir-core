@@ -2,8 +2,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  BRAND_ACCENT_DARK_HEX,
   BRAND_ACCENT_HEX,
+  BRAND_ACCENT_INK_DARK_HEX,
   BRAND_ACCENT_INK_HEX,
+  BRAND_GLYPH_HEX,
+  BRAND_LINK_HEX,
   BRAND_PAGE_BG_HEX,
   WAVE_BAND_PATH,
   WAVE_BAND_VIEW_BOX,
@@ -104,9 +108,30 @@ describe('the baked-colour exports (design-notes.md §2, §5, §6)', () => {
     // These four surfaces — favicon, app icon, next/og, email — sit outside the
     // CSS tree, where `currentColor` resolves to BLACK. The literals are the
     // documented exception; their provenance is what has to stay in sync.
-    expect(BRAND_ACCENT_HEX).toBe('#5645d4'); // --el-accent / --color-primary
-    expect(BRAND_ACCENT_INK_HEX).toBe('#ffffff'); // --el-accent-text
-    expect(BRAND_PAGE_BG_HEX).toBe('#ffffff'); // --el-page-bg
+    // The Motir palette's values since MOTIR-6474 (design-notes.md §10 — the
+    // approved static-brand-colours table, rows 1–7).
+    expect(BRAND_ACCENT_HEX).toBe('#1a1d21'); // --el-accent, light — the tile / fill
+    expect(BRAND_ACCENT_INK_HEX).toBe('#ffffff'); // --el-accent-text, light
+    expect(BRAND_PAGE_BG_HEX).toBe('#ffffff'); // --el-page-bg, light
+    expect(BRAND_GLYPH_HEX).toBe('#155bc4'); // --el-accent-on-surface, light
+    expect(BRAND_ACCENT_DARK_HEX).toBe('#edeef0'); // --el-accent, dark
+    expect(BRAND_ACCENT_INK_DARK_HEX).toBe('#0c0d0f'); // --el-accent-text, dark
+    expect(BRAND_LINK_HEX).toBe('#155bc4'); // --el-link, light
+  });
+
+  // Each colour against the GROUND it sits on — 3:1 for a graphical mark (WCAG
+  // 1.4.11), 4.5:1 for text or a button label (1.4.3). A future re-tune that
+  // keeps the table's words but breaks a pair fails here, by pair.
+  it.each([
+    ['tile glyph on the light tile', BRAND_ACCENT_INK_HEX, BRAND_ACCENT_HEX, 3],
+    ['tile glyph on the dark-scheme tile', BRAND_ACCENT_INK_DARK_HEX, BRAND_ACCENT_DARK_HEX, 3],
+    ['bare glyph on the white page (email mark)', BRAND_GLYPH_HEX, BRAND_PAGE_BG_HEX, 3],
+    ['dark-scheme tile against dark chrome (#35363a)', BRAND_ACCENT_DARK_HEX, '#35363a', 3],
+    ['email button label on its fill', BRAND_ACCENT_INK_HEX, BRAND_ACCENT_HEX, 4.5],
+    ['email / Stripe link on white', BRAND_LINK_HEX, BRAND_PAGE_BG_HEX, 4.5],
+    ['Stripe pay-button label on the accent', BRAND_ACCENT_INK_HEX, BRAND_LINK_HEX, 4.5],
+  ] as const)('%s clears its bar', (_name, fg, bg, bar) => {
+    expect(contrastRatio(fg, bg)).toBeGreaterThanOrEqual(bar);
   });
 
   it('bakes the requested colour in and never emits currentColor', () => {
@@ -250,3 +275,16 @@ describe('the brand mock draws the approved mark (MOTIR-3508)', () => {
     expect(symbol![0]).toContain(LATTICE_OUTER);
   });
 });
+
+/** WCAG 2.x contrast ratio between two `#rrggbb` colours. */
+function contrastRatio(a: string, b: string): number {
+  const luminance = (hex: string) => {
+    const channels = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const [r, g, bl] = channels.map((c) =>
+      c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4,
+    );
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * bl!;
+  };
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi! + 0.05) / (lo! + 0.05);
+}

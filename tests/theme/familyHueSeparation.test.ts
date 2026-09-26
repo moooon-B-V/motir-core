@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
+import { BASE_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
 import { PRIORITY_OPTIONS } from '@/lib/issues/priority';
 import { LABEL_TINTS } from '@/lib/labels/labelTint';
 import { isMeasuredStep, loadTokenLayer, resolveToken, type ThemeContext } from './paletteCascade';
@@ -150,7 +150,7 @@ const MIN_DELTA_E_CHIP_NEUTRAL = 1;
  * So the bar is calibrated above the worst of those three rather than invented:
  * 5.5 clears graphite's 4.64 with margin. Tightest surviving pair: garnet/light
  * **6.04**, then sienna/light 6.12. Each palette that fails it takes its own
- * amber step (see `docs/palettes/{cobalt,graphite,spectrum}.md`) — neither
+ * amber step (see `docs/palettes/{cobalt,motir,spectrum}.md`) — neither
  * semantic moves.
  */
 const MIN_DELTA_E_CHIP_ESCALATION = 5.5;
@@ -176,8 +176,8 @@ const UI_BACKDROPS = ['--el-card', '--el-surface', '--el-page-bg'] as const;
  * entries and buys the ONE palette a default install renders.
  */
 const KNOWN_SUB_BAR: Record<string, string> = {
-  'motir/light --el-priority-lowest': 'rides --color-stone, the documented decorative step',
-  'motir/dark --el-priority-lowest': 'rides --color-stone, the documented decorative step',
+  'amethyst/light --el-priority-lowest': 'rides --color-stone, the documented decorative step',
+  'amethyst/dark --el-priority-lowest': 'rides --color-stone, the documented decorative step',
 };
 
 /** WCAG AA for normal text — what a chip's own label must clear on its tint. */
@@ -470,9 +470,9 @@ describe('the priority ramp is a GLYPH ramp', () => {
     let baseChecked = 0;
     for (const ctx of CONTEXTS) {
       for (const token of PRIORITY_TOKENS) {
-        if (!isMeasuredStep(paletteBlock, DEFAULT_PALETTE_ID, ctx, token)) continue;
+        if (!isMeasuredStep(paletteBlock, BASE_PALETTE_ID, ctx, token)) continue;
         checked += 1;
-        if (ctx.palette === DEFAULT_PALETTE_ID) baseChecked += 1;
+        if (ctx.palette === BASE_PALETTE_ID) baseChecked += 1;
         const hue = hueOf(ctx, token);
         for (const backdrop of UI_BACKDROPS) {
           const ratio = contrast(hue, hueOf(ctx, backdrop));
@@ -495,7 +495,7 @@ describe('the priority ramp is a GLYPH ramp', () => {
     // Guards the guard, against a FIXED count: the base contributes its whole
     // ramp in both themes.
     expect(baseChecked).toBe(THEMES.length * PRIORITY_TOKENS.length);
-    // Cobalt's + graphite's `high`, each in both themes (MOTIR-2085, MOTIR-2094).
+    // Cobalt's + motir's (formerly graphite's) `high`, each in both themes (MOTIR-2085, MOTIR-2094).
     expect(checked - baseChecked).toBeGreaterThanOrEqual(4);
   });
 
@@ -512,14 +512,14 @@ describe('the priority ramp is a GLYPH ramp', () => {
     // exists to buy real margin, so the test asks for margin; a "fix" that lands
     // at 10.1 is not one.
     //
-    // Which THEME carries the step is pinned per palette: cobalt and graphite
+    // Which THEME carries the step is pinned per palette: cobalt and motir (ex-graphite)
     // needed only light (their dark hues were already 25.8 apart) and re-assert
     // the warning source in dark for the cascade pairing; spectrum's dark
     // rendered 4.77 too (MOTIR-2107), so it carries an amber in both.
     const HEADROOM = MIN_DELTA_E_GLYPH * 2;
     const AMBER_STEP_PALETTES: Record<string, { light: RegExp; dark: RegExp | string }> = {
       cobalt: { light: /^#/, dark: 'var(--color-warning)' },
-      graphite: { light: /^#/, dark: 'var(--color-warning)' },
+      motir: { light: /^#/, dark: 'var(--color-warning)' },
       spectrum: { light: /^#/, dark: /^#/ },
     };
     // Derived, not just listed: any OTHER palette that starts overriding this
@@ -582,7 +582,7 @@ describe('the priority CHIP — measured on what the shipped Pill renders', () =
     expect(CHIP.percent).toBeGreaterThan(0);
     expect(CHIP.percent).toBeLessThan(100);
     expect(CHIP.base).toMatch(/^--el-/);
-    expect(hueOf({ palette: DEFAULT_PALETTE_ID, theme: 'light' }, CHIP.base)).toMatch(/^#/);
+    expect(hueOf({ palette: BASE_PALETTE_ID, theme: 'light' }, CHIP.base)).toMatch(/^#/);
     // What it is TODAY, so a change to the shipped wash shows up as a diff here
     // (and re-runs the numbers in every docstring above) rather than passing
     // unremarked.
@@ -654,7 +654,7 @@ describe('the cascade trap — every override declared in BOTH themes', () => {
     // and in the cascade model for the status ramp; the priority ramp this card
     // touches has exactly the same exposure.
     const unpaired: string[] = [];
-    for (const palette of PALETTE_IDS.filter((id) => id !== DEFAULT_PALETTE_ID)) {
+    for (const palette of PALETTE_IDS.filter((id) => id !== BASE_PALETTE_ID)) {
       const [light, dark] = THEMES.map((theme) => paletteBlock(palette, theme));
       for (const token of PRIORITY_TOKENS) {
         const inLight = token in (light ?? {});
@@ -673,7 +673,7 @@ describe('the cascade trap — every override declared in BOTH themes', () => {
     // so a palette that re-tints six washes in light and five in dark leaks the
     // sixth LIGHT pastel onto its dark canvas.
     const unpaired: string[] = [];
-    for (const palette of PALETTE_IDS.filter((id) => id !== DEFAULT_PALETTE_ID)) {
+    for (const palette of PALETTE_IDS.filter((id) => id !== BASE_PALETTE_ID)) {
       const [light, dark] = THEMES.map((theme) => paletteBlock(palette, theme));
       for (const tint of LABEL_TINTS) {
         const source = `--color-tint-${tint}`;
