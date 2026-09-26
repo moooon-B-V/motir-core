@@ -1,14 +1,14 @@
 import { Button } from '@react-email/components';
+import { EMAIL_BUTTON_BG, EMAIL_BUTTON_INK } from './emailColors';
 
-// Indigo CTA button. Match the design-system primary action color
-// (currently #4f46e5 — indigo-600). When the design system gets a
-// proper "email primary" token, swap the hard-coded hex here.
+// The primary CTA: the Motir palette's ink fill with its white label — the app's
+// own primary button, baked for email (design/brand/design-notes.md §10).
 
 const button = {
   display: 'block',
   width: '100%',
-  backgroundColor: '#4f46e5',
-  color: '#ffffff',
+  backgroundColor: EMAIL_BUTTON_BG,
+  color: EMAIL_BUTTON_INK,
   fontWeight: 600,
   fontSize: '16px',
   textDecoration: 'none',

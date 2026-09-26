@@ -1,0 +1,3665 @@
+<!doctype html>
+<html lang="en" data-palette="motir">
+  <head>
+    <meta charset="utf-8" />
+    <title>Brand mark — the monochrome Motir palette (MOTIR-6473)</title>
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --width-rail-chrome: 20px;
+        --spacing-rail-inset: 0px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      [data-theme='light'] {
+        color-scheme: light;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+      }
+      [data-style='warm-editorial'] {
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-rail-inset: 0px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+      }
+      [data-style='soft-playful'] {
+        --radius-btn: 9999px;
+        --radius-input: 24px;
+        --radius-card: 24px;
+        --radius-modal: 32px;
+        --radius-badge: 9999px;
+        --radius-control: 12px;
+        --radius-kbd: 8px;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
+        --spacing-btn-x: 20px;
+        --spacing-btn-y: 12px;
+        --spacing-input-x: 18px;
+        --spacing-input-y: 14px;
+        --spacing-card-padding: 28px;
+        --spacing-control-x: 14px;
+        --spacing-control-y: 8px;
+        --spacing-icon-btn: 8px;
+        --spacing-chip-x: 14px;
+        --spacing-chip-y: 4px;
+        --spacing-kbd-x: 8px;
+        --spacing-kbd-y: 3px;
+        --spacing-tooltip-x: 12px;
+        --spacing-tooltip-y: 6px;
+        --height-control: 40px;
+        --transition-duration: 200ms;
+        --active-scale: 0.97;
+      }
+      [data-style='swiss-minimal-flat'] {
+        --radius-xs: 1px;
+        --radius-sm: 2px;
+        --radius-md: 2px;
+        --radius-lg: 2px;
+        --radius-xl: 3px;
+        --radius-btn: 2px;
+        --radius-input: 2px;
+        --radius-card: 2px;
+        --radius-modal: 2px;
+        --radius-badge: 2px;
+        --radius-control: 2px;
+        --radius-kbd: 2px;
+        --shadow-subtle: none;
+        --shadow-card: none;
+        --shadow-elevated: none;
+        --shadow-modal: none;
+        --shadow-hero-mockup: none;
+        --spacing-btn-x: 16px;
+        --spacing-btn-y: 9px;
+        --spacing-input-x: 14px;
+        --spacing-input-y: 11px;
+        --spacing-card-padding: 28px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --height-control: 34px;
+        --height-input: 42px;
+        --transition-duration: 100ms;
+        --transition-fast: 80ms;
+        --transition-slow: 160ms;
+        --hover-scale: 1;
+        --active-scale: 1;
+      }
+      [data-style='glassmorphism'] {
+        --radius-xs: 6px;
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --radius-xl: 22px;
+        --radius-btn: 12px;
+        --radius-input: 12px;
+        --radius-card: 18px;
+        --radius-modal: 22px;
+        --radius-badge: 9999px;
+        --radius-control: 10px;
+        --radius-kbd: 6px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.05);
+        --shadow-card: 0 8px 32px -8px rgba(15, 15, 15, 0.18);
+        --shadow-elevated: 0 16px 48px -12px rgba(15, 15, 15, 0.24);
+        --shadow-modal: 0 28px 70px -16px rgba(15, 15, 15, 0.34);
+        --shadow-hero-mockup: 0 32px 80px -16px rgba(15, 15, 15, 0.38);
+        --spacing-btn-x: 20px;
+        --spacing-btn-y: 11px;
+        --spacing-card-padding: 26px;
+        --spacing-control-x: 12px;
+        --spacing-control-y: 7px;
+        --height-control: 38px;
+        --transition-duration: 220ms;
+        --transition-slow: 320ms;
+        --active-scale: 0.98;
+        --glass-blur: 18px;
+        --glass-blur-strong: 30px;
+        --glass-surface-alpha: 50%;
+        --glass-modal-alpha: 56%;
+        --glass-chrome-alpha: 52%;
+        --glass-input-alpha: 44%;
+        --glass-border-alpha: 72%;
+        --glass-wash: 42%;
+        --glass-saturate: 180%;
+        --glass-sheen: rgba(255, 255, 255, 0.22);
+        --glass-rim: rgba(255, 255, 255, 0.55);
+      }
+      @scope ([data-style='glassmorphism']) to ([data-style]) {
+        body,
+        [data-app-shell] {
+          background-image:
+            radial-gradient(
+              85% 80% at 6% -12%,
+              color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
+              transparent 62%
+            ),
+            radial-gradient(
+              80% 75% at 110% 4%,
+              color-mix(in srgb, var(--el-highlight) var(--glass-wash), transparent),
+              transparent 60%
+            ),
+            radial-gradient(
+              95% 90% at 50% 120%,
+              color-mix(in srgb, var(--el-link) var(--glass-wash), transparent),
+              transparent 62%
+            ),
+            radial-gradient(
+              60% 60% at 85% 95%,
+              color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
+              transparent 60%
+            );
+          background-attachment: fixed;
+        }
+      }
+      @scope ([data-style='glassmorphism']) to ([data-style]) {
+        [data-surface='card'],
+        [data-surface='popover'] {
+          background-color: color-mix(
+            in srgb,
+            var(--el-page-bg) var(--glass-surface-alpha),
+            transparent
+          );
+          background-image: linear-gradient(150deg, var(--glass-sheen), transparent 55%);
+          border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
+          box-shadow:
+            inset 0 1px 0 0 var(--glass-rim),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+            0 8px 32px -8px rgba(15, 15, 15, 0.18);
+          -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+          backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+        }
+      }
+      @scope ([data-style='glassmorphism']) to ([data-style]) {
+        [data-surface='modal'] {
+          background-color: color-mix(
+            in srgb,
+            var(--el-page-bg) var(--glass-modal-alpha),
+            transparent
+          );
+          background-image: linear-gradient(150deg, var(--glass-sheen), transparent 55%);
+          border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
+          box-shadow:
+            inset 0 1px 0 0 var(--glass-rim),
+            0 28px 70px -16px rgba(15, 15, 15, 0.34);
+          -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+          backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+        }
+      }
+      @scope ([data-style='glassmorphism']) to ([data-style]) {
+        [data-surface='sidebar'] {
+          background-color: color-mix(
+            in srgb,
+            var(--el-sidebar-bg) var(--glass-chrome-alpha),
+            transparent
+          );
+          -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+          backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+        }
+      }
+      @scope ([data-style='glassmorphism']) to ([data-style]) {
+        [data-surface='input'] {
+          background-color: color-mix(
+            in srgb,
+            var(--el-page-bg) var(--glass-input-alpha),
+            transparent
+          );
+          -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+          backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+        }
+      }
+      @scope ([data-style='glassmorphism']) to ([data-style]) {
+        [data-surface='overlay'] {
+          background-color: color-mix(in srgb, var(--el-page-bg) 24%, transparent);
+          -webkit-backdrop-filter: blur(8px) saturate(var(--glass-saturate));
+          backdrop-filter: blur(8px) saturate(var(--glass-saturate));
+        }
+      }
+      [data-style='neo-brutalism'] {
+        --radius-xs: 0;
+        --radius-sm: 0;
+        --radius-md: 0;
+        --radius-lg: 0;
+        --radius-xl: 0;
+        --radius-btn: 0;
+        --radius-input: 0;
+        --radius-card: 0;
+        --radius-modal: 0;
+        --radius-badge: 0;
+        --radius-control: 0;
+        --radius-kbd: 0;
+        --shadow-subtle: 2px 2px 0 0 rgba(15, 15, 15, 1);
+        --shadow-card: 4px 4px 0 0 rgba(15, 15, 15, 1);
+        --shadow-elevated: 6px 6px 0 0 rgba(15, 15, 15, 1);
+        --shadow-modal: 8px 8px 0 0 rgba(15, 15, 15, 1);
+        --shadow-hero-mockup: 12px 12px 0 0 rgba(15, 15, 15, 1);
+        --spacing-btn-x: 16px;
+        --spacing-btn-y: 10px;
+        --spacing-input-x: 14px;
+        --spacing-input-y: 11px;
+        --spacing-card-padding: 20px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --height-control: 36px;
+        --height-input: 44px;
+        --transition-duration: 60ms;
+        --transition-fast: 40ms;
+        --transition-slow: 100ms;
+        --hover-scale: 1;
+        --active-scale: 1;
+      }
+      @scope ([data-style='neo-brutalism']) to ([data-style]) {
+        .border {
+          border-width: 2px;
+        }
+      }
+      [data-style='cybercore-y2k'] {
+        --radius-xs: 1px;
+        --radius-sm: 2px;
+        --radius-md: 3px;
+        --radius-lg: 4px;
+        --radius-xl: 4px;
+        --radius-btn: 3px;
+        --radius-input: 3px;
+        --radius-card: 4px;
+        --radius-modal: 4px;
+        --radius-badge: 2px;
+        --radius-control: 2px;
+        --radius-kbd: 2px;
+        --shadow-subtle: 0 0 0 1px color-mix(in srgb, currentColor 9%, transparent);
+        --shadow-card:
+          0 0 0 1px color-mix(in srgb, currentColor 12%, transparent),
+          0 0 14px -3px color-mix(in srgb, currentColor 24%, transparent);
+        --shadow-elevated:
+          0 0 0 1px color-mix(in srgb, currentColor 16%, transparent),
+          0 0 22px -4px color-mix(in srgb, currentColor 32%, transparent);
+        --shadow-modal:
+          0 0 0 1px color-mix(in srgb, currentColor 20%, transparent),
+          0 0 40px -6px color-mix(in srgb, currentColor 40%, transparent);
+        --shadow-hero-mockup:
+          0 0 0 1px color-mix(in srgb, currentColor 22%, transparent),
+          0 0 56px -8px color-mix(in srgb, currentColor 45%, transparent);
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 9px;
+        --spacing-input-x: 14px;
+        --spacing-input-y: 11px;
+        --spacing-card-padding: 20px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --height-control: 34px;
+        --height-input: 42px;
+        --transition-duration: 90ms;
+        --transition-fast: 60ms;
+        --transition-slow: 140ms;
+        --hover-scale: 1;
+        --active-scale: 0.97;
+      }
+      @scope ([data-style='cybercore-y2k']) to ([data-style]) {
+        body,
+        [data-app-shell] {
+          background-image:
+            linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
+            linear-gradient(
+              90deg,
+              color-mix(in srgb, currentColor 6%, transparent) 1px,
+              transparent 1px
+            );
+          background-size: 32px 32px;
+          background-position: center top;
+        }
+      }
+      [data-style='aurora'] {
+        --radius-xs: 7px;
+        --radius-sm: 10px;
+        --radius-md: 14px;
+        --radius-lg: 18px;
+        --radius-xl: 24px;
+        --radius-btn: 14px;
+        --radius-input: 14px;
+        --radius-card: 20px;
+        --radius-modal: 26px;
+        --radius-badge: 9999px;
+        --radius-control: 12px;
+        --radius-kbd: 7px;
+        --shadow-subtle: 0 1px 2px rgba(20, 20, 45, 0.05);
+        --shadow-card: 0 8px 30px -12px rgba(20, 20, 45, 0.16);
+        --shadow-elevated: 0 16px 44px -14px rgba(20, 20, 45, 0.22);
+        --shadow-modal: 0 26px 64px -18px rgba(20, 20, 45, 0.3);
+        --shadow-hero-mockup: 0 32px 78px -18px rgba(20, 20, 45, 0.34);
+        --spacing-btn-x: 20px;
+        --spacing-btn-y: 11px;
+        --spacing-card-padding: 26px;
+        --spacing-control-x: 12px;
+        --spacing-control-y: 7px;
+        --height-control: 38px;
+        --transition-duration: 260ms;
+        --transition-slow: 380ms;
+        --active-scale: 0.985;
+        --aurora-wash: 22%;
+        --aurora-wash-soft: 15%;
+        --aurora-sheen: 7%;
+        --aurora-glow: 22%;
+        --aurora-glow-strong: 30%;
+        --aurora-drift-duration: 28s;
+      }
+      @scope ([data-style='aurora']) to ([data-style]) {
+        body,
+        [data-app-shell] {
+          background-image:
+            radial-gradient(
+              58% 75% at 12% 0%,
+              color-mix(in srgb, var(--el-accent) var(--aurora-wash), transparent),
+              transparent 60%
+            ),
+            radial-gradient(
+              54% 70% at 92% 8%,
+              color-mix(in srgb, var(--el-highlight) var(--aurora-wash), transparent),
+              transparent 58%
+            ),
+            radial-gradient(
+              68% 82% at 62% 104%,
+              color-mix(in srgb, var(--el-link) var(--aurora-wash), transparent),
+              transparent 62%
+            ),
+            radial-gradient(
+              48% 64% at 34% 58%,
+              color-mix(in srgb, var(--el-info) var(--aurora-wash-soft), transparent),
+              transparent 55%
+            );
+          background-size: 180% 180%;
+          background-attachment: fixed;
+          animation: aurora-drift var(--aurora-drift-duration) ease-in-out infinite alternate;
+        }
+      }
+      @keyframes aurora-drift {
+        from {
+          background-position:
+            0% 0%,
+            100% 0%,
+            50% 100%,
+            0% 60%;
+        }
+        to {
+          background-position:
+            100% 40%,
+            0% 60%,
+            40% 0%,
+            100% 100%;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        @scope ([data-style='aurora']) to ([data-style]) {
+          body,
+          [data-app-shell] {
+            animation: none;
+          }
+        }
+      }
+      @scope ([data-style='aurora']) to ([data-style]) {
+        [data-surface='card'],
+        [data-surface='popover'] {
+          background-color: var(--el-surface);
+          background-image: linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--el-highlight) var(--aurora-sheen), transparent),
+            transparent 42%
+          );
+          box-shadow:
+            var(--shadow-card),
+            0 0 26px -8px color-mix(in srgb, var(--el-accent) var(--aurora-glow), transparent),
+            0 0 40px -14px color-mix(in srgb, var(--el-link) var(--aurora-glow), transparent);
+        }
+      }
+      @scope ([data-style='aurora']) to ([data-style]) {
+        [data-surface='modal'] {
+          background-color: var(--el-surface);
+          background-image: linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--el-highlight) var(--aurora-sheen), transparent),
+            transparent 38%
+          );
+          box-shadow:
+            var(--shadow-modal),
+            0 0 60px -16px
+              color-mix(in srgb, var(--el-accent) var(--aurora-glow-strong), transparent);
+        }
+      }
+      @scope ([data-style='aurora']) to ([data-style]) {
+        [data-surface='sidebar'] {
+          background-color: var(--el-sidebar-bg);
+          background-image: linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--el-accent) var(--aurora-sheen), transparent),
+            transparent 30%
+          );
+        }
+      }
+      [data-style='3d-immersive'] {
+        --radius-xs: 6px;
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 18px;
+        --radius-xl: 24px;
+        --radius-btn: 14px;
+        --radius-input: 14px;
+        --radius-card: 20px;
+        --radius-modal: 28px;
+        --radius-badge: 9999px;
+        --radius-control: 12px;
+        --radius-kbd: 8px;
+        --shadow-subtle:
+          inset 0 1px 0 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(15, 15, 15, 0.06),
+          0 5px 12px -2px rgba(15, 15, 15, 0.13);
+        --shadow-card:
+          inset 0 1px 0 0 rgba(255, 255, 255, 0.6), 0 2px 4px rgba(15, 15, 15, 0.05),
+          0 12px 24px -6px rgba(15, 15, 15, 0.16), 0 28px 56px -12px rgba(15, 15, 15, 0.3);
+        --shadow-elevated:
+          inset 0 1px 0 0 rgba(255, 255, 255, 0.65), 0 4px 8px rgba(15, 15, 15, 0.06),
+          0 20px 40px -8px rgba(15, 15, 15, 0.22), 0 44px 80px -16px rgba(15, 15, 15, 0.38);
+        --shadow-modal:
+          inset 0 1px 0 0 rgba(255, 255, 255, 0.7), 0 8px 16px rgba(15, 15, 15, 0.08),
+          0 32px 64px -12px rgba(15, 15, 15, 0.28), 0 72px 120px -24px rgba(15, 15, 15, 0.46);
+        --shadow-hero-mockup:
+          inset 0 1px 0 0 rgba(255, 255, 255, 0.7), 0 16px 32px rgba(15, 15, 15, 0.1),
+          0 96px 160px -32px rgba(15, 15, 15, 0.5);
+        --spacing-btn-x: 22px;
+        --spacing-btn-y: 12px;
+        --spacing-input-x: 18px;
+        --spacing-input-y: 13px;
+        --spacing-card-padding: 28px;
+        --spacing-control-x: 14px;
+        --spacing-control-y: 8px;
+        --height-control: 40px;
+        --height-input: 46px;
+        --spacing-rail-inset: 10px;
+        --transition-duration: 260ms;
+        --transition-fast: 180ms;
+        --transition-slow: 360ms;
+        --active-scale: 0.98;
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        body,
+        [data-app-shell] {
+          background-image:
+            radial-gradient(
+              130% 85% at 50% -15%,
+              color-mix(in srgb, var(--el-accent) 9%, transparent),
+              transparent 60%
+            ),
+            radial-gradient(
+              95% 75% at 108% 112%,
+              color-mix(in srgb, var(--el-link) 8%, transparent),
+              transparent 55%
+            ),
+            radial-gradient(
+              150% 130% at 50% 42%,
+              transparent 52%,
+              color-mix(in srgb, var(--el-text) 8%, transparent)
+            );
+          background-attachment: fixed;
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        .rounded-\(--radius-card\) {
+          box-shadow:
+            var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+            var(--tw-ring-shadow, 0 0 #0000), var(--shadow-card);
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        .rounded-\(--radius-modal\) {
+          box-shadow:
+            var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+            var(--tw-ring-shadow, 0 0 #0000), var(--shadow-modal);
+        }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        @scope ([data-style='3d-immersive']) to ([data-style]) {
+          [data-tilt] {
+            transition:
+              transform 400ms cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 260ms ease-out;
+          }
+        }
+        @scope ([data-style='3d-immersive']) to ([data-style]) {
+          [data-tilt][data-tilt-active='1'] {
+            transform: perspective(var(--tilt-perspective, 900px)) rotateX(var(--tilt-rx, 0deg))
+              rotateY(var(--tilt-ry, 0deg));
+            transform-style: preserve-3d;
+            transition:
+              transform 80ms linear,
+              box-shadow 260ms ease-out;
+            box-shadow:
+              var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+              var(--tw-ring-shadow, 0 0 #0000), var(--shadow-elevated);
+          }
+        }
+        @scope ([data-style='3d-immersive']) to ([data-style]) {
+          [data-tilt][data-tilt-active='1'] [data-tilt-layer='front'] {
+            transform: translateZ(42px);
+            transition: transform 80ms linear;
+          }
+        }
+        @scope ([data-style='3d-immersive']) to ([data-style]) {
+          [data-tilt][data-tilt-active='1'] [data-tilt-layer='back'] {
+            transform: translateZ(14px);
+            transition: transform 80ms linear;
+          }
+        }
+        @scope ([data-style='3d-immersive']) to ([data-style]) {
+          [data-tilt]::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: radial-gradient(
+              circle at var(--tilt-glare-x, 50%) var(--tilt-glare-y, 50%),
+              color-mix(in srgb, var(--el-page-bg) 65%, transparent),
+              transparent 55%
+            );
+            opacity: 0;
+            transition: opacity 200ms ease-out;
+            pointer-events: none;
+          }
+        }
+        @scope ([data-style='3d-immersive']) to ([data-style]) {
+          [data-tilt][data-tilt-active='1']::after {
+            opacity: 0.45;
+            transform: translateZ(2px);
+          }
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        [data-tilt] {
+          position: relative;
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        [data-board-col-panel] {
+          box-shadow:
+            inset 0 1px 0 0 rgba(255, 255, 255, 0.55),
+            0 1px 3px rgba(15, 15, 15, 0.08),
+            0 8px 18px -8px rgba(15, 15, 15, 0.22);
+          height: calc(100dvh - 13rem - var(--shell-bottom-clearance, 1.5rem));
+          overflow: hidden;
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        [data-board-scroll] {
+          gap: 1.5rem;
+          padding-bottom: 2.25rem;
+          padding-top: 0.25rem;
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        :where(
+          .rounded-\(--radius-btn\),
+          button.rounded-\(--radius-input\),
+          :is(button, a).rounded-\(--radius-control\).justify-center,
+          [data-depth='key']
+        ):not(
+          :where(
+            [role='switch'],
+            [role='radio'],
+            [role='checkbox'],
+            [role='menuitem'],
+            [role='option'],
+            [data-depth='flat']
+          )
+        ) {
+          box-shadow:
+            var(--tw-inset-ring-shadow, 0 0 #0000),
+            var(--tw-ring-offset-shadow, 0 0 #0000),
+            var(--tw-ring-shadow, 0 0 #0000),
+            0 3px 0 0 var(--el-border-strong),
+            0 5px 10px -3px rgba(15, 15, 15, 0.18);
+          transition:
+            transform 90ms ease-out,
+            box-shadow 90ms ease-out,
+            background-color var(--transition-duration);
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        [data-variant='primary'] {
+          box-shadow:
+            var(--tw-inset-ring-shadow, 0 0 #0000),
+            var(--tw-ring-offset-shadow, 0 0 #0000),
+            var(--tw-ring-shadow, 0 0 #0000),
+            0 4px 0 0 var(--el-accent-pressed),
+            0 7px 12px -3px rgba(15, 15, 15, 0.32);
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        [data-variant='danger'] {
+          box-shadow:
+            var(--tw-inset-ring-shadow, 0 0 #0000),
+            var(--tw-ring-offset-shadow, 0 0 #0000),
+            var(--tw-ring-shadow, 0 0 #0000),
+            0 4px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
+            0 7px 12px -3px rgba(15, 15, 15, 0.32);
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        [data-variant='ghost'] {
+          box-shadow:
+            var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+            var(--tw-ring-shadow, 0 0 #0000);
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        :is(
+          [role='menuitem'],
+          [role='option'],
+          [role='menuitemcheckbox'],
+          [role='menuitemradio'],
+          [role='switch'],
+          [data-depth='flat']
+        ),
+        :is([data-surface='popover'], [data-menu-surface])
+          :is(button, a).rounded-\(--radius-control\),
+        :is(button, a).w-full.rounded-\(--radius-control\) {
+          box-shadow:
+            var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+            var(--tw-ring-shadow, 0 0 #0000);
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        :where(
+            .rounded-\(--radius-btn\),
+            button.rounded-\(--radius-input\),
+            :is(button, a).rounded-\(--radius-control\).justify-center,
+            [data-depth='key']
+          ):active:not(:disabled) {
+          transform: translateY(3px);
+          box-shadow:
+            var(--tw-inset-ring-shadow, 0 0 #0000),
+            var(--tw-ring-offset-shadow, 0 0 #0000),
+            var(--tw-ring-shadow, 0 0 #0000),
+            0 1px 0 0 var(--el-border-strong),
+            0 2px 4px rgba(15, 15, 15, 0.14);
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        [data-variant='primary']:active:not(:disabled) {
+          box-shadow:
+            var(--tw-inset-ring-shadow, 0 0 #0000),
+            var(--tw-ring-offset-shadow, 0 0 #0000),
+            var(--tw-ring-shadow, 0 0 #0000),
+            0 1px 0 0 var(--el-accent-pressed),
+            0 2px 5px rgba(15, 15, 15, 0.22);
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        [data-variant='danger']:active:not(:disabled) {
+          box-shadow:
+            var(--tw-inset-ring-shadow, 0 0 #0000),
+            var(--tw-ring-offset-shadow, 0 0 #0000),
+            var(--tw-ring-shadow, 0 0 #0000),
+            0 1px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
+            0 2px 5px rgba(15, 15, 15, 0.22);
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        [data-variant='ghost']:active:not(:disabled) {
+          box-shadow:
+            var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+            var(--tw-ring-shadow, 0 0 #0000);
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        :where(:is(button, a).rounded-\(--radius-control\), [data-variant='ghost']):active:not(
+            :disabled
+          ) {
+          transform: translateY(1px);
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        :where(
+          [data-surface='input'],
+          input:not([type='checkbox'], [type='radio'], [type='range'], [type='color']),
+          textarea,
+          select
+        ) {
+          box-shadow:
+            var(--tw-inset-ring-shadow, 0 0 #0000),
+            var(--tw-ring-offset-shadow, 0 0 #0000),
+            var(--tw-ring-shadow, 0 0 #0000),
+            inset 0 2px 6px -2px rgba(15, 15, 15, 0.26),
+            inset 0 1px 2px 0 rgba(15, 15, 15, 0.05);
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        body {
+          --plan-hero-shadow:
+            0 4px 0 0 var(--el-accent-pressed),
+            inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+            inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),
+            0 9px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+            0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
+          --plan-orb-shadow:
+            0 5px 0 0 var(--el-accent-pressed),
+            inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent),
+            0 12px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent),
+            0 0 28px -2px color-mix(in srgb, var(--el-highlight) 55%, transparent);
+        }
+      }
+      @keyframes immersive-menu-open {
+        from {
+          opacity: 0;
+          transform: perspective(900px) rotateX(-26deg) translateY(-6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        .shadow-\(--shadow-elevated\) {
+          box-shadow:
+            var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+            var(--tw-ring-shadow, 0 0 #0000), var(--shadow-elevated);
+        }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        @scope ([data-style='3d-immersive']) to ([data-style]) {
+          [data-surface='popover'],
+          [data-menu-surface] {
+            transform-origin: top center;
+            animation: immersive-menu-open 200ms cubic-bezier(0.22, 1, 0.36, 1);
+          }
+        }
+        @scope ([data-style='3d-immersive']) to ([data-style]) {
+          [data-surface='popover'][data-side='top'] {
+            transform-origin: bottom center;
+          }
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        [data-surface='sidebar'] {
+          margin: var(--spacing-rail-inset);
+          height: calc(100% - 2 * var(--spacing-rail-inset));
+          border-radius: var(--radius-card);
+          border-right-color: transparent;
+          box-shadow: var(--shadow-card);
+        }
+      }
+      @scope ([data-style='3d-immersive']) to ([data-style]) {
+        [data-surface='header'] {
+          background-color: transparent;
+          border-bottom-color: transparent;
+          box-shadow: var(--shadow-subtle);
+        }
+      }
+      @media (prefers-contrast: more) {
+        @scope ([data-style='3d-immersive']) to ([data-style]) {
+          [data-surface='sidebar'] {
+            outline: 1px solid var(--el-border-strong);
+            outline-offset: -1px;
+          }
+          [data-surface='header'] {
+            border-bottom-color: var(--el-border-strong);
+          }
+        }
+      }
+      @media (forced-colors: active) {
+        @scope ([data-style='3d-immersive']) to ([data-style]) {
+          [data-surface='sidebar'] {
+            outline: 1px solid var(--el-border-strong);
+            outline-offset: -1px;
+            box-shadow: none;
+          }
+          [data-surface='header'] {
+            border-bottom-color: var(--el-border-strong);
+            box-shadow: none;
+          }
+        }
+      }
+      [data-style='hand-drawn-indie'] {
+        --radius-xs: 6px;
+        --radius-sm: 9px;
+        --radius-md: 13px;
+        --radius-lg: 18px;
+        --radius-xl: 24px;
+        --radius-btn: 14px 40px 12px 36px / 36px 14px 38px 16px;
+        --radius-input: 16px 48px 14px 42px / 42px 16px 46px 18px;
+        --radius-card: 18px 58px 22px 48px / 48px 20px 54px 24px;
+        --radius-modal: 22px 66px 20px 56px / 56px 22px 60px 26px;
+        --radius-badge: 9px 26px 11px 22px / 22px 11px 24px 9px;
+        --radius-control: 10px 26px 12px 22px / 22px 12px 24px 10px;
+        --radius-kbd: 6px 18px 8px 15px / 15px 8px 16px 6px;
+        --shadow-subtle: 1px 2px 4px -1px rgba(38, 30, 22, 0.1);
+        --shadow-card: 2px 4px 9px -3px rgba(38, 30, 22, 0.14);
+        --shadow-elevated: 3px 6px 16px -4px rgba(38, 30, 22, 0.17);
+        --shadow-modal: 5px 9px 30px -8px rgba(38, 30, 22, 0.22);
+        --shadow-hero-mockup: 6px 12px 40px -10px rgba(38, 30, 22, 0.22);
+        --spacing-btn-x: 20px;
+        --spacing-btn-y: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 26px;
+        --spacing-control-x: 12px;
+        --spacing-control-y: 8px;
+        --height-control: 38px;
+        --height-input: 44px;
+        --transition-duration: 200ms;
+        --transition-fast: 130ms;
+        --transition-slow: 320ms;
+        --hover-scale: 1.02;
+        --active-scale: 0.97;
+      }
+      @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+        .border {
+          border-width: 2px;
+        }
+      }
+      @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+        .border:not(.fixed):not(.absolute):not(.sticky) {
+          position: relative;
+        }
+      }
+      @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+        .border::after {
+          content: '';
+          position: absolute;
+          inset: -1px;
+          pointer-events: none;
+          border: 2px solid var(--el-border-strong);
+          border-radius: inherit;
+          filter: url(#hd-rough);
+        }
+      }
+      @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+        [data-surface]
+          :is(.border-b, .border-t):not(.border):not(.fixed):not(.absolute):not(.sticky) {
+          position: relative;
+        }
+      }
+      @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+        [data-surface] .border-b:not(.border)::after {
+          content: '';
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: -1px;
+          height: 0;
+          pointer-events: none;
+          border-bottom: 2px solid var(--el-border-strong);
+          filter: url(#hd-rough);
+        }
+      }
+      @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+        [data-surface] .border-t:not(.border)::after {
+          content: '';
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: -1px;
+          height: 0;
+          pointer-events: none;
+          border-top: 2px solid var(--el-border-strong);
+          filter: url(#hd-rough);
+        }
+      }
+      @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+        [data-surface] .last\:border-b-0:last-child::after {
+          content: none;
+        }
+      }
+      @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+        :is([data-surface='sidebar'], [data-surface='header']):not(.fixed):not(.absolute):not(
+            .sticky
+          ) {
+          position: relative;
+        }
+      }
+      @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+        [data-surface='sidebar']::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          right: -1px;
+          width: 0;
+          pointer-events: none;
+          border-right: 2px solid var(--el-border-strong);
+          filter: url(#hd-rough);
+        }
+      }
+      @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+        [data-surface='header']::after {
+          content: '';
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: -1px;
+          height: 0;
+          pointer-events: none;
+          border-bottom: 2px solid var(--el-border-strong);
+          filter: url(#hd-rough);
+        }
+      }
+      [data-style='neumorphism'] {
+        --radius-xs: 6px;
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --radius-xl: 20px;
+        --radius-btn: 12px;
+        --radius-input: 12px;
+        --radius-card: 18px;
+        --radius-modal: 22px;
+        --radius-badge: 9999px;
+        --radius-control: 10px;
+        --radius-kbd: 6px;
+        --shadow-subtle: 0 1px 2px rgba(20, 20, 30, 0.05);
+        --shadow-card: 0 6px 18px -10px rgba(20, 20, 30, 0.14);
+        --shadow-elevated: 0 12px 30px -14px rgba(20, 20, 30, 0.18);
+        --shadow-modal: 0 22px 50px -18px rgba(20, 20, 30, 0.24);
+        --shadow-hero-mockup: 0 26px 60px -18px rgba(20, 20, 30, 0.28);
+        --spacing-btn-x: 20px;
+        --spacing-btn-y: 11px;
+        --spacing-card-padding: 26px;
+        --spacing-control-x: 12px;
+        --spacing-control-y: 7px;
+        --height-control: 38px;
+        --transition-duration: 200ms;
+        --transition-slow: 300ms;
+        --active-scale: 0.98;
+        --neu-distance: 6px;
+        --neu-blur: 16px;
+        --neu-distance-sm: 3px;
+        --neu-blur-sm: 8px;
+        --neu-light: rgba(255, 255, 255, 0.6);
+        --neu-shadow: rgba(20, 20, 30, 0.16);
+      }
+      [data-style='neumorphism'][data-theme='dark'] {
+        --neu-light: rgba(255, 255, 255, 0.05);
+        --neu-shadow: rgba(0, 0, 0, 0.44);
+      }
+      @scope ([data-style='neumorphism']) to ([data-style]) {
+        body,
+        [data-app-shell] {
+          background-color: var(--el-surface);
+        }
+      }
+      @scope ([data-style='neumorphism']) to ([data-style]) {
+        [data-surface='card'],
+        [data-surface='popover'] {
+          background-color: var(--el-surface);
+          border-color: color-mix(in srgb, var(--el-border) 45%, transparent);
+          box-shadow:
+            var(--neu-distance) var(--neu-distance) var(--neu-blur) var(--neu-shadow),
+            calc(-1 * var(--neu-distance)) calc(-1 * var(--neu-distance)) var(--neu-blur)
+              var(--neu-light);
+        }
+      }
+      @scope ([data-style='neumorphism']) to ([data-style]) {
+        [data-surface='modal'] {
+          background-color: var(--el-surface);
+          border-color: color-mix(in srgb, var(--el-border) 45%, transparent);
+          box-shadow:
+            calc(var(--neu-distance) + 2px) calc(var(--neu-distance) + 2px)
+              calc(var(--neu-blur) + 8px) var(--neu-shadow),
+            calc(-1 * var(--neu-distance)) calc(-1 * var(--neu-distance))
+              calc(var(--neu-blur) + 4px) var(--neu-light);
+        }
+      }
+      @scope ([data-style='neumorphism']) to ([data-style]) {
+        [data-surface='sidebar'] {
+          background-color: var(--el-surface);
+          box-shadow:
+            var(--neu-distance) 0 var(--neu-blur) var(--neu-shadow),
+            calc(-1 * var(--neu-distance)) 0 var(--neu-blur) var(--neu-light);
+        }
+      }
+      @scope ([data-style='neumorphism']) to ([data-style]) {
+        [data-surface='input'] {
+          background-color: var(--el-surface);
+          border-color: color-mix(in srgb, var(--el-border) 45%, transparent);
+          box-shadow:
+            inset var(--neu-distance-sm) var(--neu-distance-sm) var(--neu-blur-sm) var(--neu-shadow),
+            inset calc(-1 * var(--neu-distance-sm)) calc(-1 * var(--neu-distance-sm))
+              var(--neu-blur-sm) var(--neu-light);
+        }
+      }
+      @media (prefers-contrast: more) {
+        @scope ([data-style='neumorphism']) to ([data-style]) {
+          [data-surface='card'],
+          [data-surface='popover'],
+          [data-surface='modal'],
+          [data-surface='input'],
+          [data-surface='sidebar'] {
+            border-color: var(--el-border-strong);
+            box-shadow: var(--shadow-card);
+          }
+        }
+      }
+      @media (forced-colors: active) {
+        @scope ([data-style='neumorphism']) to ([data-style]) {
+          [data-surface='card'],
+          [data-surface='popover'],
+          [data-surface='modal'],
+          [data-surface='input'],
+          [data-surface='sidebar'] {
+            border-color: var(--el-border-strong);
+            box-shadow: none;
+          }
+        }
+      }
+      [data-style='retrofuturism'] {
+        --radius-xs: 6px;
+        --radius-sm: 9px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --radius-xl: 22px;
+        --radius-btn: 9999px;
+        --radius-input: 12px;
+        --radius-card: 16px;
+        --radius-modal: 22px;
+        --radius-badge: 9999px;
+        --radius-control: 10px;
+        --radius-kbd: 6px;
+        --shadow-subtle: 0 1px 2px rgba(10, 12, 30, 0.06);
+        --shadow-card: 0 10px 26px -12px rgba(10, 12, 30, 0.22);
+        --shadow-elevated: 0 18px 40px -14px rgba(10, 12, 30, 0.28);
+        --shadow-modal: 0 28px 60px -18px rgba(10, 12, 30, 0.34);
+        --shadow-hero-mockup: 0 34px 74px -18px rgba(10, 12, 30, 0.4);
+        --spacing-btn-x: 22px;
+        --spacing-btn-y: 11px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 12px;
+        --spacing-control-y: 7px;
+        --height-control: 38px;
+        --transition-duration: 200ms;
+        --transition-slow: 320ms;
+        --active-scale: 0.97;
+        --retro-sky: 24%;
+        --retro-horizon: 72%;
+        --retro-ground: 26%;
+        --retro-grid: 52%;
+        --retro-grid-size: 60px;
+        --retro-spec: 44%;
+        --retro-bevel-light: 44%;
+        --retro-bevel-shade: 28%;
+        --retro-sheen: 18%;
+        --retro-glow: 32%;
+        --retro-glow-strong: 44%;
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        body,
+        [data-app-shell] {
+          background-image:
+            linear-gradient(
+              180deg,
+              transparent 54%,
+              color-mix(in srgb, var(--el-highlight) var(--retro-horizon), transparent) 60.5%,
+              color-mix(in srgb, var(--el-accent) var(--retro-horizon), transparent) 62.5%,
+              transparent 69%
+            ),
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, var(--el-link) var(--retro-sky), transparent),
+              transparent 46%
+            ),
+            linear-gradient(
+              0deg,
+              color-mix(in srgb, var(--el-accent) var(--retro-ground), transparent),
+              transparent 42%
+            );
+          background-size: 100% 100%;
+          background-attachment: fixed;
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        [data-app-shell] {
+          isolation: isolate;
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        body::after,
+        [data-app-shell]::after {
+          content: '';
+          position: fixed;
+          left: -30%;
+          right: -30%;
+          bottom: 0;
+          height: 42vh;
+          background-image:
+            repeating-linear-gradient(
+              0deg,
+              color-mix(in srgb, var(--el-highlight) var(--retro-grid), transparent) 0 2px,
+              transparent 2px var(--retro-grid-size)
+            ),
+            repeating-linear-gradient(
+              90deg,
+              color-mix(in srgb, var(--el-accent) var(--retro-grid), transparent) 0 2px,
+              transparent 2px var(--retro-grid-size)
+            );
+          background-size: var(--retro-grid-size) var(--retro-grid-size);
+          transform: perspective(300px) rotateX(75deg);
+          transform-origin: bottom center;
+          -webkit-mask-image: linear-gradient(to top, black 2%, transparent 80%);
+          mask-image: linear-gradient(to top, black 2%, transparent 80%);
+          pointer-events: none;
+          z-index: -1;
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        [data-surface='card'],
+        [data-surface='popover'],
+        .rounded-\(--radius-card\) {
+          background-color: var(--el-surface);
+          background-image:
+            linear-gradient(
+              158deg,
+              transparent 36%,
+              color-mix(in srgb, white var(--retro-spec), transparent) 49%,
+              transparent 62%
+            ),
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
+              transparent 16%,
+              transparent 78%,
+              color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+            );
+          box-shadow:
+            var(--shadow-card),
+            inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+            inset 0 -1px 0 color-mix(in srgb, black 24%, transparent),
+            0 0 28px -8px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        [data-surface='modal'] {
+          background-color: var(--el-surface);
+          background-image:
+            linear-gradient(
+              158deg,
+              transparent 34%,
+              color-mix(in srgb, white var(--retro-spec), transparent) 49%,
+              transparent 64%
+            ),
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
+              transparent 14%,
+              transparent 80%,
+              color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+            );
+          box-shadow:
+            var(--shadow-modal),
+            inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+            0 0 56px -14px
+              color-mix(in srgb, var(--el-highlight) var(--retro-glow-strong), transparent);
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        [data-surface='sidebar'] {
+          background-color: var(--el-sidebar-bg);
+          background-image:
+            linear-gradient(
+              158deg,
+              transparent 40%,
+              color-mix(in srgb, white var(--retro-sheen), transparent) 50%,
+              transparent 60%
+            ),
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, white var(--retro-sheen), transparent),
+              transparent 24%,
+              color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+            );
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        [data-surface='input'] {
+          background-color: var(--el-page-bg);
+          background-image: linear-gradient(
+            180deg,
+            color-mix(in srgb, black var(--retro-sheen), transparent) 0%,
+            transparent 34%
+          );
+          box-shadow: inset 0 1px 3px color-mix(in srgb, black var(--retro-glow), transparent);
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        .rounded-\(--radius-btn\).bg-\(--el-accent\) {
+          background-image:
+            linear-gradient(
+              158deg,
+              transparent 38%,
+              color-mix(in srgb, white var(--retro-spec), transparent) 50%,
+              transparent 62%
+            ),
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, white var(--retro-spec), var(--el-accent)) 0%,
+              var(--el-accent) 46%,
+              color-mix(in srgb, black var(--retro-bevel-shade), var(--el-accent)) 100%
+            );
+          box-shadow:
+            var(--shadow-subtle),
+            inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+            0 0 22px -6px color-mix(in srgb, var(--el-accent) var(--retro-glow-strong), transparent);
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        .rounded-\(--radius-btn\).bg-\(--el-danger\) {
+          background-image:
+            linear-gradient(
+              158deg,
+              transparent 38%,
+              color-mix(in srgb, white var(--retro-spec), transparent) 50%,
+              transparent 62%
+            ),
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, white var(--retro-spec), var(--el-danger)) 0%,
+              var(--el-danger) 46%,
+              color-mix(in srgb, black var(--retro-bevel-shade), var(--el-danger)) 100%
+            );
+          box-shadow:
+            var(--shadow-subtle),
+            inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+            0 0 22px -6px color-mix(in srgb, var(--el-danger) var(--retro-glow-strong), transparent);
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        .rounded-\(--radius-btn\).border:not([role='group']),
+        button.rounded-\(--radius-input\) {
+          background-color: color-mix(in srgb, black 24%, var(--el-surface));
+          background-image:
+            linear-gradient(
+              158deg,
+              transparent 36%,
+              color-mix(in srgb, white var(--retro-spec), transparent) 50%,
+              transparent 64%
+            ),
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
+              transparent 42%,
+              transparent 60%,
+              color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+            );
+          box-shadow:
+            var(--shadow-subtle),
+            inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+            inset 0 -1px 0 color-mix(in srgb, black 24%, transparent),
+            0 0 18px -8px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        [role='group'].rounded-\(--radius-btn\) {
+          background-color: color-mix(in srgb, black 15%, var(--el-surface));
+          box-shadow: inset 0 1px 3px color-mix(in srgb, black var(--retro-glow), transparent);
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        [role='group'] [aria-pressed='true'] {
+          background-color: color-mix(in srgb, black 24%, var(--el-surface));
+          background-image:
+            linear-gradient(
+              158deg,
+              transparent 36%,
+              color-mix(in srgb, white var(--retro-spec), transparent) 50%,
+              transparent 64%
+            ),
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
+              transparent 42%,
+              transparent 60%,
+              color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+            );
+          box-shadow:
+            var(--shadow-subtle),
+            inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+            inset 0 -1px 0 color-mix(in srgb, black 24%, transparent);
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        .rounded-\(--radius-btn\).border:not([role='group']):hover:not(:disabled),
+        button.rounded-\(--radius-input\):hover:not(:disabled),
+        [role='group'] [aria-pressed='false']:hover:not(:disabled) {
+          background-color: color-mix(in srgb, black 14%, var(--el-surface));
+        }
+      }
+      @scope ([data-style='soft-playful']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          font-weight: 800;
+          --plan-hero-shadow:
+            0 7px 0 -1px color-mix(in srgb, var(--el-accent) 22%, var(--el-page-bg)),
+            0 14px 22px -6px color-mix(in srgb, var(--el-accent) 55%, transparent);
+          --plan-orb-shadow:
+            0 7px 0 -1px color-mix(in srgb, var(--el-accent) 22%, var(--el-page-bg)),
+            0 14px 22px -6px color-mix(in srgb, var(--el-accent) 55%, transparent);
+        }
+      }
+      @scope ([data-style='swiss-minimal-flat']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          --plan-hero-shadow: none;
+          --plan-orb-shadow: none;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.07em;
+        }
+      }
+      @scope ([data-style='swiss-minimal-flat']) to ([data-style]) {
+        [data-surface='ai-cta'][data-ai-cta='pill'] {
+          --plan-hero-fill: none;
+          background-color: var(--el-accent);
+        }
+      }
+      @scope ([data-style='glassmorphism']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          border: 1px solid var(--glass-rim);
+          -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+          backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+          --plan-hero-shadow:
+            inset 0 1px 0 var(--glass-rim),
+            0 8px 22px -6px color-mix(in srgb, var(--el-accent) 45%, transparent);
+          --plan-orb-shadow:
+            inset 0 1px 0 var(--glass-rim),
+            0 8px 22px -6px color-mix(in srgb, var(--el-accent) 45%, transparent);
+        }
+      }
+      @scope ([data-style='glassmorphism']) to ([data-style]) {
+        [data-surface='ai-cta'][data-ai-cta='pill'] {
+          --plan-hero-fill: none;
+          background-color: color-mix(in srgb, var(--el-accent) 86%, transparent);
+        }
+      }
+      @scope ([data-style='glassmorphism']) to ([data-style]) {
+        [data-surface='ai-cta'][data-ai-cta='orb'] {
+          background-size:
+            100% 20%,
+            100% 100%;
+          background-position:
+            top left,
+            top left;
+          background-repeat: no-repeat;
+          --plan-orb-fill:
+            linear-gradient(160deg, var(--glass-sheen), transparent 90%),
+            radial-gradient(
+              circle at 33% 27%,
+              color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+              var(--el-accent) 56%,
+              color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+            );
+        }
+      }
+      @scope ([data-style='neo-brutalism']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          border: 2px solid var(--el-text);
+          --plan-hero-shadow: 4px 4px 0 0 var(--el-text);
+          --plan-orb-shadow: 4px 4px 0 0 var(--el-text);
+          font-weight: 800;
+          text-transform: uppercase;
+        }
+      }
+      @scope ([data-style='neo-brutalism']) to ([data-style]) {
+        [data-surface='ai-cta'][data-ai-cta='pill'] {
+          --plan-hero-fill: none;
+          background-color: var(--el-accent);
+        }
+      }
+      @scope ([data-style='cybercore-y2k']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          border: 1px solid color-mix(in srgb, var(--el-highlight) 70%, transparent);
+          --plan-hero-shadow:
+            0 0 10px color-mix(in srgb, var(--el-highlight) 60%, transparent),
+            0 0 26px -4px color-mix(in srgb, var(--el-accent) 70%, transparent);
+          --plan-orb-shadow:
+            0 0 10px color-mix(in srgb, var(--el-highlight) 60%, transparent),
+            0 0 26px -4px color-mix(in srgb, var(--el-accent) 70%, transparent);
+          font-family: var(--font-mono);
+          letter-spacing: 0.04em;
+        }
+      }
+      @scope ([data-style='cybercore-y2k']) to ([data-style]) {
+        [data-surface='ai-cta'][data-ai-cta='pill'] {
+          --plan-hero-fill: linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--el-accent) 88%, black),
+            color-mix(
+              in srgb,
+              color-mix(in srgb, var(--el-accent) 70%, var(--el-highlight)) 78%,
+              black
+            )
+          );
+        }
+      }
+      @scope ([data-style='cybercore-y2k']) to ([data-style]) {
+        [data-surface='ai-cta'][data-ai-cta='orb'] {
+          --plan-orb-fill:
+            linear-gradient(
+              160deg,
+              color-mix(in srgb, var(--el-highlight) 22%, transparent),
+              transparent 55%
+            ),
+            radial-gradient(
+              circle at 33% 27%,
+              color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+              var(--el-accent) 56%,
+              color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+            );
+        }
+      }
+      @scope ([data-style='aurora']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          --plan-hero-shadow:
+            inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) var(--aurora-sheen), transparent),
+            0 0 26px -2px color-mix(in srgb, var(--el-accent) var(--aurora-glow), transparent),
+            0 0 40px -6px color-mix(in srgb, var(--el-highlight) var(--aurora-glow), transparent);
+          --plan-orb-shadow:
+            inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) var(--aurora-sheen), transparent),
+            0 0 26px -2px color-mix(in srgb, var(--el-accent) var(--aurora-glow), transparent),
+            0 0 40px -6px color-mix(in srgb, var(--el-highlight) var(--aurora-glow), transparent);
+        }
+      }
+      @scope ([data-style='aurora']) to ([data-style]) {
+        [data-surface='ai-cta'][data-ai-cta='pill'] {
+          background-size:
+            100% 28%,
+            100% 100%;
+          background-position:
+            top left,
+            top left;
+          background-repeat: no-repeat;
+          --plan-hero-fill:
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, var(--el-accent-text) var(--aurora-sheen), transparent),
+              transparent 90%
+            ),
+            linear-gradient(
+              135deg,
+              var(--el-accent),
+              color-mix(in srgb, var(--el-accent) 86%, var(--el-highlight))
+            );
+        }
+      }
+      @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+        [data-surface='ai-cta']:not(.fixed):not(.absolute):not(.sticky) {
+          position: relative;
+        }
+      }
+      @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          font-weight: 700;
+          --plan-hero-shadow: 3px 4px 0 -1px
+            color-mix(in srgb, var(--el-border-strong) 55%, transparent);
+          --plan-orb-shadow: 3px 4px 0 -1px
+            color-mix(in srgb, var(--el-border-strong) 55%, transparent);
+        }
+      }
+      @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+        [data-surface='ai-cta']::after {
+          content: '';
+          position: absolute;
+          inset: -1px;
+          pointer-events: none;
+          border: 2px solid var(--el-border-strong);
+          border-radius: inherit;
+          filter: url(#hd-rough);
+        }
+      }
+      @scope ([data-style='neumorphism']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          border: 1px solid color-mix(in srgb, var(--el-accent) 70%, var(--el-text));
+          --plan-hero-shadow:
+            var(--neu-distance) var(--neu-distance) var(--neu-blur) var(--neu-shadow),
+            calc(var(--neu-distance) * -1) calc(var(--neu-distance) * -1) var(--neu-blur)
+              var(--neu-light);
+          --plan-orb-shadow:
+            var(--neu-distance) var(--neu-distance) var(--neu-blur) var(--neu-shadow),
+            calc(var(--neu-distance) * -1) calc(var(--neu-distance) * -1) var(--neu-blur)
+              var(--neu-light);
+        }
+      }
+      @scope ([data-style='neumorphism']) to ([data-style]) {
+        [data-surface='ai-cta'][data-ai-cta='pill'] {
+          --plan-hero-fill: none;
+          background-color: var(--el-accent);
+        }
+      }
+      @scope ([data-style='neumorphism']) to ([data-style]) {
+        [data-surface='ai-cta'][data-ai-cta='orb'] {
+          --plan-orb-fill: none;
+          background-color: var(--el-accent);
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          border: 1px solid color-mix(in srgb, var(--el-accent-text) 30%, transparent);
+          --plan-hero-shadow:
+            inset 0 1px 0
+              color-mix(in srgb, var(--el-accent-text) var(--retro-bevel-light), transparent),
+            0 0 24px -4px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+          --plan-orb-shadow:
+            inset 0 1px 0
+              color-mix(in srgb, var(--el-accent-text) var(--retro-bevel-light), transparent),
+            0 0 24px -4px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        [data-surface='ai-cta'][data-ai-cta='pill'] {
+          background-size:
+            100% 28%,
+            100% 100%;
+          background-position:
+            top left,
+            top left;
+          background-repeat: no-repeat;
+          --plan-hero-fill:
+            linear-gradient(
+              104deg,
+              transparent 30%,
+              color-mix(in srgb, var(--el-accent-text) var(--retro-spec), transparent) 46%,
+              transparent 62%
+            ),
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, var(--el-accent) 82%, white) 0%,
+              var(--el-accent) 20%,
+              color-mix(in srgb, var(--el-accent) 84%, black) 100%
+            );
+        }
+      }
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        [data-surface='ai-cta'][data-ai-cta='orb'] {
+          background-size:
+            100% 26%,
+            100% 100%;
+          background-position:
+            top left,
+            top left;
+          background-repeat: no-repeat;
+          --plan-orb-fill:
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, var(--el-accent-text) var(--retro-bevel-light), transparent),
+              transparent 90%
+            ),
+            radial-gradient(
+              circle at 33% 27%,
+              color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+              var(--el-accent) 56%,
+              color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+            );
+        }
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-tint-sage: color-mix(in srgb, var(--color-success) 26%, var(--color-surface));
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
+        --el-status-in-review: var(--color-primary);
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-done: color-mix(in srgb, var(--color-success) 85%, var(--color-charcoal));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-notif-access-refused: var(--color-warning);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-on-border: var(--color-primary);
+        --el-switch-off-border: var(--color-muted-foreground);
+        --el-switch-knob: var(--color-primary-foreground);
+        --el-switch-knob-off: var(--color-muted-foreground);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+        --el-type-choice: var(--color-charcoal);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+        --el-overlay-scrim: #000000a6;
+      }
+      :root {
+        --orb-lit-mix: 26%;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .animate-spin {
+          animation: none;
+        }
+      }
+      [data-appearance-scope][data-palette='amethyst'] {
+        --color-accent: #ff64c8;
+        --color-accent-green: #1aae39;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-background: #ffffff;
+        --color-border: #e5e3df;
+        --color-canvas: #ecebe7;
+        --color-charcoal: #37352f;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-info: #0075de;
+        --color-ink: #1a1a1a;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-primary: #5645d4;
+        --color-primary-fill: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-success: #1aae39;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-warning: #dd5b00;
+        --el-priority-high: var(--color-warning);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-status-approved: color-mix(in srgb, var(--color-success) 30%, var(--color-ink));
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
+        --el-status-in-review: var(--color-primary);
+        --el-status-planning: var(--color-accent-teal);
+      }
+      [data-theme='dark'] [data-appearance-scope][data-palette='amethyst']:not([data-theme]),
+      [data-appearance-scope][data-palette='amethyst'][data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-border: #2a2a2a;
+        --color-canvas: #0e0e0e;
+        --color-charcoal: #e5e5e5;
+        --color-foreground: #f3f4f6;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-ink: #f3f4f6;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-primary: #7b6ce5;
+        --color-primary-fill: #6c5cdd;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-tint-lavender: #2a253a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+      [data-appearance-scope][data-type='motir'] {
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+      }
+      [data-palette='cobalt'] {
+        --color-primary: #3a57cf;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #2b44ad;
+        --color-primary-fill: #3650c2;
+        --color-background: #ffffff;
+        --color-foreground: #0f1b2e;
+        --color-surface: #eef2f8;
+        --color-surface-soft: #f7f9fc;
+        --color-canvas: #e3e9f2;
+        --color-ink: #0f1b2e;
+        --color-charcoal: #1e2c40;
+        --color-slate: #46556b;
+        --color-steel: #586a82;
+        --color-stone: #8493a6;
+        --color-muted: #eef2f8;
+        --color-muted-foreground: #5b6a7e;
+        --color-hairline: #d8e0ea;
+        --color-hairline-soft: #e6ebf2;
+        --color-hairline-strong: #bcc7d6;
+        --color-border: #d8e0ea;
+        --color-accent: #0e93a8;
+        --color-accent-orange: #c2410c;
+        --color-accent-teal: #0e8f86;
+        --color-accent-green: #18874c;
+        --color-tint-peach: #fde7d4;
+        --color-tint-rose: #fbe0ea;
+        --color-tint-mint: #d6f0e2;
+        --color-tint-lavender: #e4e8fb;
+        --color-tint-sky: #dbeafb;
+        --color-tint-yellow: #fbf2d2;
+        --color-success: #18874c;
+        --color-warning: #c2410c;
+        --color-destructive: #d3322f;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0d63b8;
+        --color-link: #0d63b8;
+        --color-link-pressed: #0a4f95;
+        --el-sidebar-item-bg-hover: #e4e9f1;
+        --el-status-in-review: #1f2d5c;
+        --el-priority-high: #ab6400;
+      }
+      [data-theme='dark'] [data-palette='cobalt']:not([data-theme]),
+      [data-palette='cobalt'][data-theme='dark'] {
+        --color-background: #0b111d;
+        --color-foreground: #e7edf6;
+        --color-surface: #131d2c;
+        --color-surface-soft: #0f1825;
+        --color-canvas: #070c16;
+        --color-ink: #e7edf6;
+        --color-charcoal: #d3deec;
+        --color-slate: #a0b1c6;
+        --color-steel: #7e90a6;
+        --color-stone: #5f6f84;
+        --color-muted: #131d2c;
+        --color-muted-foreground: #94a4ba;
+        --color-hairline: #243245;
+        --color-hairline-soft: #1a2433;
+        --color-hairline-strong: #324258;
+        --color-border: #243245;
+        --color-primary: #7e98f2;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #3a51b8;
+        --color-primary-fill: #4a63cf;
+        --color-tint-peach: #2f2317;
+        --color-tint-rose: #301a25;
+        --color-tint-mint: #15281f;
+        --color-tint-lavender: #1c2238;
+        --color-tint-sky: #13243a;
+        --color-tint-yellow: #2b2814;
+        --color-accent: #2ec3d6;
+        --color-accent-orange: #f08a4b;
+        --color-accent-teal: #2db6a8;
+        --color-accent-green: #34c578;
+        --color-success: #34c578;
+        --color-warning: #f08a4b;
+        --color-destructive: #d83847;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #6fb3ff;
+        --color-link: #6fb3ff;
+        --color-link-pressed: #93c5ff;
+        --el-sidebar-item-bg-hover: #1c2840;
+        --el-status-in-review: var(--color-primary);
+        --el-priority-high: var(--color-warning);
+      }
+      [data-palette='motir'] {
+        --color-primary: #155bc4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #2b2f35;
+        --color-primary-fill: #1a1d21;
+        --color-background: #ffffff;
+        --color-foreground: #16191d;
+        --color-surface: #eef0f3;
+        --color-surface-soft: #f8f9fa;
+        --color-canvas: #e6e8ed;
+        --color-ink: #16191d;
+        --color-charcoal: #20242a;
+        --color-slate: #565c64;
+        --color-steel: #6b7079;
+        --color-stone: #8a8f98;
+        --color-muted: #eef0f3;
+        --color-muted-foreground: #5d636b;
+        --color-hairline: #e2e4e9;
+        --color-hairline-soft: #ebedf0;
+        --color-hairline-strong: #c8ccd3;
+        --color-border: #e2e4e9;
+        --color-accent: #2563c9;
+        --color-accent-orange: #c2410c;
+        --color-accent-teal: #0e8f86;
+        --color-accent-green: #18804a;
+        --color-tint-peach: #f7e6d6;
+        --color-tint-rose: #f6dfe8;
+        --color-tint-mint: #d9efe1;
+        --color-tint-lavender: #e4e6f3;
+        --color-tint-sky: #dde9f6;
+        --color-tint-yellow: #f6f1d6;
+        --color-success: #18804a;
+        --color-warning: #c2410c;
+        --color-destructive: #c92a2a;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #155bc4;
+        --color-link: #155bc4;
+        --color-link-pressed: #114a9e;
+        --el-sidebar-item-bg-hover: #e6e8ec;
+        --el-status-in-review: #113264;
+        --el-priority-high: #ab6400;
+        --el-status-implemented: var(--color-charcoal);
+      }
+      [data-theme='dark'] [data-palette='motir']:not([data-theme]),
+      [data-palette='motir'][data-theme='dark'] {
+        --color-background: #0c0d0f;
+        --color-foreground: #edeef0;
+        --color-surface: #18191c;
+        --color-surface-soft: #141517;
+        --color-canvas: #08090b;
+        --color-ink: #edeef0;
+        --color-charcoal: #d7d9dd;
+        --color-slate: #a9adb5;
+        --color-steel: #888d96;
+        --color-stone: #696e77;
+        --color-muted: #18191c;
+        --color-muted-foreground: #a0a4ac;
+        --color-hairline: #282a2e;
+        --color-hairline-soft: #1d1f22;
+        --color-hairline-strong: #3a3d42;
+        --color-border: #282a2e;
+        --color-primary: #7db1ff;
+        --color-primary-foreground: #0c0d0f;
+        --color-primary-pressed: #d3d5d9;
+        --color-primary-fill: #edeef0;
+        --color-tint-peach: #2e2418;
+        --color-tint-rose: #2f1c26;
+        --color-tint-mint: #15271e;
+        --color-tint-lavender: #1f2236;
+        --color-tint-sky: #15233a;
+        --color-tint-yellow: #2a2716;
+        --color-accent: #5b9dff;
+        --color-accent-orange: #f08a4b;
+        --color-accent-teal: #2db6a8;
+        --color-accent-green: #34b86e;
+        --color-success: #34b86e;
+        --color-warning: #f08a4b;
+        --color-destructive: #d83847;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #7db1ff;
+        --color-link: #7db1ff;
+        --color-link-pressed: #a3c8ff;
+        --el-sidebar-item-bg-hover: #202226;
+        --el-status-in-review: #c2e6ff;
+        --el-priority-high: var(--color-warning);
+        --el-status-implemented: var(--color-charcoal);
+      }
+      [data-palette='evergreen'] {
+        --color-primary: #0b714c;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #095f40;
+        --color-primary-fill: #0c7a52;
+        --color-background: #ffffff;
+        --color-foreground: #14201b;
+        --color-surface: #eef3f0;
+        --color-surface-soft: #f6faf8;
+        --color-canvas: #e4ebe7;
+        --color-ink: #14201b;
+        --color-charcoal: #1d2c25;
+        --color-slate: #42534a;
+        --color-steel: #5e6f66;
+        --color-stone: #8f9f96;
+        --color-muted: #eef2f0;
+        --color-muted-foreground: #5e6f66;
+        --color-hairline: #d9e2dc;
+        --color-hairline-soft: #e6ece9;
+        --color-hairline-strong: #c2d0c8;
+        --color-border: #d9e2dc;
+        --color-accent: #8257e6;
+        --color-accent-orange: #c2410c;
+        --color-accent-teal: #0d8a86;
+        --color-accent-green: #157f3a;
+        --color-tint-peach: #ffe9d6;
+        --color-tint-rose: #f6dced;
+        --color-tint-mint: #d5f1e1;
+        --color-tint-lavender: #e7e0fa;
+        --color-tint-sky: #d8ecf6;
+        --color-tint-yellow: #fbf3d2;
+        --color-success: #127c3e;
+        --color-warning: #b45309;
+        --color-destructive: #d63d3d;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #1366c4;
+        --color-link: #0a6ebd;
+        --color-link-pressed: #08537f;
+        --el-sidebar-item-bg-hover: #e4ebe7;
+        --el-status-in-review: #1d3b31;
+        --el-status-approved: color-mix(in srgb, var(--color-accent) 40%, var(--color-ink));
+        --el-status-cancelled: var(--color-steel);
+      }
+      [data-theme='dark'] [data-palette='evergreen']:not([data-theme]),
+      [data-palette='evergreen'][data-theme='dark'] {
+        --color-primary: #3ddc97;
+        --color-primary-foreground: #06140d;
+        --color-primary-pressed: #2bbd7f;
+        --color-primary-fill: #3ddc97;
+        --color-background: #0c130f;
+        --color-foreground: #e8efe9;
+        --color-surface: #141d18;
+        --color-surface-soft: #101713;
+        --color-canvas: #080d0a;
+        --color-ink: #e8efe9;
+        --color-charcoal: #d6e0d9;
+        --color-slate: #9aaaa1;
+        --color-steel: #6f8077;
+        --color-stone: #5a6b62;
+        --color-muted: #141d18;
+        --color-muted-foreground: #9aaaa1;
+        --color-hairline: #25322b;
+        --color-hairline-soft: #1b251f;
+        --color-hairline-strong: #35453c;
+        --color-border: #25322b;
+        --color-accent: #a78bfa;
+        --color-accent-orange: #fb923c;
+        --color-accent-teal: #2dd4bf;
+        --color-accent-green: #34d27a;
+        --color-tint-peach: #2f2114;
+        --color-tint-rose: #2e1822;
+        --color-tint-mint: #11271c;
+        --color-tint-lavender: #211b33;
+        --color-tint-sky: #122430;
+        --color-tint-yellow: #2b2712;
+        --color-success: #34d27a;
+        --color-warning: #fb923c;
+        --color-destructive: #f87171;
+        --color-destructive-foreground: #06140d;
+        --color-info: #5aa8f5;
+        --color-link: #56b6f5;
+        --color-link-pressed: #7cc7f8;
+        --el-sidebar-item-bg-hover: #1e2a23;
+        --el-status-in-review: #adf0d4;
+        --el-status-approved: color-mix(in srgb, var(--color-accent) 40%, var(--color-ink));
+        --el-status-cancelled: #9aaaa1;
+      }
+      [data-type='motir-sans'] {
+        --font-serif:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+      }
+      [data-type='motir-mono'] {
+        --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-sans: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+      }
+      [data-palette='spectrum'] {
+        --color-primary: #6440d6;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5331b8;
+        --color-primary-fill: #5a37c9;
+        --color-background: #ffffff;
+        --color-foreground: #1a1626;
+        --color-surface: #f4f2fb;
+        --color-surface-soft: #faf9fe;
+        --color-canvas: #ece8f7;
+        --color-ink: #1a1626;
+        --color-charcoal: #2a2440;
+        --color-slate: #524d66;
+        --color-steel: #6b6680;
+        --color-stone: #938da6;
+        --color-muted: #f4f2fb;
+        --color-muted-foreground: #5e5975;
+        --color-hairline: #e6e2f3;
+        --color-hairline-soft: #efecf8;
+        --color-hairline-strong: #cfc8e6;
+        --color-border: #e6e2f3;
+        --color-accent: #e23d97;
+        --color-accent-orange: #ea580c;
+        --color-accent-teal: #0d9488;
+        --color-accent-green: #16a34a;
+        --color-tint-peach: #ffe1c2;
+        --color-tint-rose: #ffd9e8;
+        --color-tint-mint: #c7f5d9;
+        --color-tint-lavender: #e6ddff;
+        --color-tint-sky: #d2e7ff;
+        --color-tint-yellow: #fff0b8;
+        --color-success: #16a34a;
+        --color-warning: #ea580c;
+        --color-destructive: #d92e2b;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #2563eb;
+        --color-link: #2563eb;
+        --color-link-pressed: #1d4ed8;
+        --el-sidebar-item-bg-hover: #ece8f8;
+        --el-priority-high: #ab6400;
+      }
+      [data-theme='dark'] [data-palette='spectrum']:not([data-theme]),
+      [data-palette='spectrum'][data-theme='dark'] {
+        --color-background: #14111f;
+        --color-foreground: #ece9f6;
+        --color-surface: #1d1830;
+        --color-surface-soft: #181426;
+        --color-canvas: #0f0c18;
+        --color-ink: #ece9f6;
+        --color-charcoal: #ddd8ee;
+        --color-slate: #aaa3c2;
+        --color-steel: #8a82a3;
+        --color-stone: #6b6485;
+        --color-muted: #1d1830;
+        --color-muted-foreground: #a39bbd;
+        --color-hairline: #2b2440;
+        --color-hairline-soft: #211b33;
+        --color-hairline-strong: #3a3257;
+        --color-border: #2b2440;
+        --color-primary: #a78bfa;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5331b8;
+        --color-primary-fill: #6d4fd6;
+        --color-tint-peach: #34261a;
+        --color-tint-rose: #351c28;
+        --color-tint-mint: #16301f;
+        --color-tint-lavender: #251f3c;
+        --color-tint-sky: #16263f;
+        --color-tint-yellow: #322c16;
+        --color-accent: #ff5fb0;
+        --color-accent-orange: #fb8b4c;
+        --color-accent-teal: #2dc4b8;
+        --color-accent-green: #36c977;
+        --color-success: #36c977;
+        --color-warning: #fb8b4c;
+        --color-destructive: #f0555f;
+        --color-destructive-foreground: #14111f;
+        --color-info: #6fa8ff;
+        --color-link: #8fb8ff;
+        --color-link-pressed: #b3d0ff;
+        --el-sidebar-item-bg-hover: #261f3d;
+        --el-priority-high: #fbab4c;
+      }
+      [data-palette='amber'] {
+        --color-primary: #7d6000;
+        --color-primary-foreground: #181a20;
+        --color-primary-pressed: #d4a30a;
+        --color-primary-fill: #f0b90b;
+        --color-background: #ffffff;
+        --color-foreground: #181a20;
+        --color-surface: #f4f5f7;
+        --color-surface-soft: #fafbfc;
+        --color-canvas: #eaecf0;
+        --color-ink: #181a20;
+        --color-charcoal: #1e2329;
+        --color-slate: #4a5159;
+        --color-steel: #5e6673;
+        --color-stone: #848e9c;
+        --color-muted: #f4f5f7;
+        --color-muted-foreground: #5e6673;
+        --color-hairline: #e6e8eb;
+        --color-hairline-soft: #eef0f2;
+        --color-hairline-strong: #c9ced4;
+        --color-border: #e6e8eb;
+        --color-accent: #97751a;
+        --color-accent-orange: #c2410c;
+        --color-accent-teal: #0e8f86;
+        --color-accent-green: #0a8f57;
+        --color-tint-peach: #fbdfc0;
+        --color-tint-rose: #f7dde2;
+        --color-tint-mint: #d6ecdf;
+        --color-tint-lavender: #e2e4ee;
+        --color-tint-sky: #dbe7f5;
+        --color-tint-yellow: #fbeec0;
+        --color-success: #0a8f57;
+        --color-warning: #b45309;
+        --color-destructive: #d4283f;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #1366c4;
+        --color-link: #1366c4;
+        --color-link-pressed: #0f4f9c;
+        --el-sidebar-item-bg-hover: #eceef1;
+        --el-status-implemented: var(--color-destructive);
+      }
+      [data-theme='dark'] [data-palette='amber']:not([data-theme]),
+      [data-palette='amber'][data-theme='dark'] {
+        --color-background: #0b0e11;
+        --color-foreground: #eaecef;
+        --color-surface: #1e2329;
+        --color-surface-soft: #181a20;
+        --color-canvas: #07090c;
+        --color-ink: #eaecef;
+        --color-charcoal: #d1d6dd;
+        --color-slate: #b7bdc6;
+        --color-steel: #848e9c;
+        --color-stone: #5e6673;
+        --color-muted: #1e2329;
+        --color-muted-foreground: #8a94a0;
+        --color-hairline: #2b3139;
+        --color-hairline-soft: #1e2329;
+        --color-hairline-strong: #474d57;
+        --color-border: #2b3139;
+        --color-primary: #fcd535;
+        --color-primary-foreground: #0b0e11;
+        --color-primary-pressed: #d4a30a;
+        --color-primary-fill: #fcd535;
+        --color-tint-peach: #331f10;
+        --color-tint-rose: #2f1a22;
+        --color-tint-mint: #102a1e;
+        --color-tint-lavender: #1c2030;
+        --color-tint-sky: #122436;
+        --color-tint-yellow: #2e2810;
+        --color-accent: #f0b90b;
+        --color-accent-orange: #fb923c;
+        --color-accent-teal: #2dd4bf;
+        --color-accent-green: #0ecb81;
+        --color-success: #0ecb81;
+        --color-warning: #fbab4c;
+        --color-destructive: #f6465d;
+        --color-destructive-foreground: #0b0e11;
+        --color-info: #6fb3ff;
+        --color-link: #6fb3ff;
+        --color-link-pressed: #a3ccff;
+        --el-sidebar-item-bg-hover: #262d35;
+        --el-status-implemented: var(--color-destructive);
+      }
+      [data-palette='sienna'] {
+        --color-primary: #b53b09;
+        --color-primary-foreground: #2a1205;
+        --color-primary-pressed: #cc3a05;
+        --color-primary-fill: #fa520f;
+        --color-background: #fffaeb;
+        --color-foreground: #1f1f1f;
+        --color-surface: #fbf1d3;
+        --color-surface-soft: #fdf6e0;
+        --color-canvas: #f5e9cb;
+        --color-ink: #1f1f1f;
+        --color-charcoal: #2c2c2c;
+        --color-slate: #4a4a4a;
+        --color-steel: #6a6a6a;
+        --color-stone: #8a8a8a;
+        --color-muted: #fbf1d3;
+        --color-muted-foreground: #5f5f5f;
+        --color-hairline: #ece0c4;
+        --color-hairline-soft: #f3ebd6;
+        --color-hairline-strong: #ddcca6;
+        --color-border: #ece0c4;
+        --color-accent: #b5660a;
+        --color-accent-orange: #c2410c;
+        --color-accent-teal: #0e8f86;
+        --color-accent-green: #18874c;
+        --color-tint-peach: #ffe0c6;
+        --color-tint-rose: #fbdfd2;
+        --color-tint-mint: #e3ead0;
+        --color-tint-lavender: #ece6d6;
+        --color-tint-sky: #d9e8e4;
+        --color-tint-yellow: #ffe295;
+        --color-success: #18804a;
+        --color-warning: #b45309;
+        --color-destructive: #c92a2a;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #1366c4;
+        --color-link: #c4400a;
+        --color-link-pressed: #a8350a;
+        --el-sidebar-item-bg-hover: #f5e9c4;
+        --el-status-blocked: var(--color-accent);
+        --el-status-implemented: var(--color-charcoal);
+      }
+      [data-theme='dark'] [data-palette='sienna']:not([data-theme]),
+      [data-palette='sienna'][data-theme='dark'] {
+        --color-background: #15120d;
+        --color-foreground: #f5efe2;
+        --color-surface: #1f1d17;
+        --color-surface-soft: #1a1712;
+        --color-canvas: #100d08;
+        --color-ink: #f5efe2;
+        --color-charcoal: #e6ddcb;
+        --color-slate: #b3a892;
+        --color-steel: #8a8069;
+        --color-stone: #6b6250;
+        --color-muted: #1f1d17;
+        --color-muted-foreground: #a89d86;
+        --color-hairline: #322c1d;
+        --color-hairline-soft: #241f15;
+        --color-hairline-strong: #4a4129;
+        --color-border: #322c1d;
+        --color-primary: #ff8a4c;
+        --color-primary-foreground: #2a1205;
+        --color-primary-pressed: #d2530a;
+        --color-primary-fill: #ff7a38;
+        --color-tint-peach: #33240f;
+        --color-tint-rose: #321c16;
+        --color-tint-mint: #23271a;
+        --color-tint-lavender: #272318;
+        --color-tint-sky: #1b2622;
+        --color-tint-yellow: #332b12;
+        --color-accent: #ffa110;
+        --color-accent-orange: #fb923c;
+        --color-accent-teal: #2dd4bf;
+        --color-accent-green: #34d27a;
+        --color-success: #34d27a;
+        --color-warning: #fbab4c;
+        --color-destructive: #e0586a;
+        --color-destructive-foreground: #15120d;
+        --color-info: #6fb3ff;
+        --color-link: #ff9a5c;
+        --color-link-pressed: #ffb37e;
+        --el-sidebar-item-bg-hover: #292619;
+        --el-status-blocked: var(--color-warning);
+        --el-status-implemented: var(--color-charcoal);
+      }
+      [data-palette='garnet'] {
+        --color-primary: #c30021;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #9e0419;
+        --color-primary-fill: #c30021;
+        --color-background: #ffffff;
+        --color-foreground: #111111;
+        --color-surface: #efefef;
+        --color-surface-soft: #f7f7f7;
+        --color-canvas: #e7e7e7;
+        --color-ink: #111111;
+        --color-charcoal: #1a1a1a;
+        --color-slate: #444444;
+        --color-steel: #5f5f5f;
+        --color-stone: #767676;
+        --color-muted: #efefef;
+        --color-muted-foreground: #5f5f5f;
+        --color-hairline: #e0e0e0;
+        --color-hairline-soft: #ececec;
+        --color-hairline-strong: #cdcdcd;
+        --color-border: #e0e0e0;
+        --color-accent: #9c2d7f;
+        --color-accent-orange: #c2410c;
+        --color-accent-teal: #0e8f86;
+        --color-accent-green: #0a7d4f;
+        --color-tint-peach: #ffe2d4;
+        --color-tint-rose: #ffe0e4;
+        --color-tint-mint: #d9efe1;
+        --color-tint-lavender: #ece0f2;
+        --color-tint-sky: #d8e8fb;
+        --color-tint-yellow: #faedc8;
+        --color-success: #0a7d4f;
+        --color-warning: #b45309;
+        --color-destructive: #e0300f;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0a66c2;
+        --color-link: #0a66c2;
+        --color-link-pressed: #084e95;
+        --el-sidebar-item-bg-hover: #e6e6e6;
+        --el-status-cancelled: #444444;
+      }
+      [data-theme='dark'] [data-palette='garnet']:not([data-theme]),
+      [data-palette='garnet'][data-theme='dark'] {
+        --color-background: #0e0e0e;
+        --color-foreground: #efefef;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #090909;
+        --color-ink: #efefef;
+        --color-charcoal: #e0e0e0;
+        --color-slate: #b5b5b5;
+        --color-steel: #8c8c8c;
+        --color-stone: #6e6e6e;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #9a9a9a;
+        --color-hairline: #2e2e2e;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #444444;
+        --color-border: #2e2e2e;
+        --color-primary: #ff5a76;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #9e0419;
+        --color-primary-fill: #c30021;
+        --color-tint-peach: #33231a;
+        --color-tint-rose: #33161a;
+        --color-tint-mint: #15281e;
+        --color-tint-lavender: #271d33;
+        --color-tint-sky: #14233a;
+        --color-tint-yellow: #2e2613;
+        --color-accent: #e35bb8;
+        --color-accent-orange: #fb923c;
+        --color-accent-teal: #2dd4bf;
+        --color-accent-green: #34d27a;
+        --color-success: #2ec27e;
+        --color-warning: #fbab4c;
+        --color-destructive: #ff6b6b;
+        --color-destructive-foreground: #0e0e0e;
+        --color-info: #5aa0ff;
+        --color-link: #5aa0ff;
+        --color-link-pressed: #8cc0ff;
+        --el-sidebar-item-bg-hover: #232323;
+        --el-status-cancelled: var(--color-steel);
+      }
+      [data-palette='citrine'] {
+        --color-primary: #746019;
+        --color-primary-foreground: #050038;
+        --color-primary-pressed: #d7b029;
+        --color-primary-fill: #ffd02f;
+        --color-background: #ffffff;
+        --color-foreground: #050038;
+        --color-surface: #f3f4f6;
+        --color-surface-soft: #f6f7f9;
+        --color-canvas: #ebecf0;
+        --color-ink: #050038;
+        --color-charcoal: #1a1b1e;
+        --color-slate: #4a4e5e;
+        --color-steel: #656b81;
+        --color-stone: #7f8497;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #575c6f;
+        --color-hairline: #e0e1e6;
+        --color-hairline-soft: #ebecf0;
+        --color-hairline-strong: #c1c3cd;
+        --color-border: #e0e1e6;
+        --color-accent: #3859ff;
+        --color-accent-orange: #91771e;
+        --color-accent-teal: #243797;
+        --color-accent-green: #1c8f00;
+        --color-tint-peach: #ffefb9;
+        --color-tint-rose: #fbe6e8;
+        --color-tint-mint: #dff1da;
+        --color-tint-lavender: #d9dffc;
+        --color-tint-sky: #f2f4fc;
+        --color-tint-yellow: #fff7d9;
+        --color-success: #1c8f00;
+        --color-warning: #91771e;
+        --color-destructive: #d8182c;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #3859ff;
+        --color-link: #3859ff;
+        --color-link-pressed: #314cd9;
+        --el-sidebar-item-bg-hover: #ebecf0;
+        --el-status-in-review: #243797;
+        --el-status-planning: #d8182c;
+        --el-status-cancelled: #4a4e5e;
+        --el-status-implemented: var(--color-charcoal);
+      }
+      [data-theme='dark'] [data-palette='citrine']:not([data-theme]),
+      [data-palette='citrine'][data-theme='dark'] {
+        --color-background: #090909;
+        --color-foreground: #f6f7f9;
+        --color-surface: #1a1b1e;
+        --color-surface-soft: #18191c;
+        --color-canvas: #040404;
+        --color-ink: #f6f7f9;
+        --color-charcoal: #ebecf0;
+        --color-slate: #c1c3cd;
+        --color-steel: #979cab;
+        --color-stone: #656b81;
+        --color-muted: #1a1b1e;
+        --color-muted-foreground: #adb1bd;
+        --color-hairline: #2b2e35;
+        --color-hairline-soft: #24262c;
+        --color-hairline-strong: #3f424f;
+        --color-border: #2b2e35;
+        --color-primary: #ffd02f;
+        --color-primary-foreground: #050038;
+        --color-primary-pressed: #d7b029;
+        --color-primary-fill: #ffd02f;
+        --color-tint-peach: #342c0f;
+        --color-tint-rose: #2f1719;
+        --color-tint-mint: #11260c;
+        --color-tint-lavender: #12193e;
+        --color-tint-sky: #101633;
+        --color-tint-yellow: #28220d;
+        --color-accent: #5b76fe;
+        --color-accent-orange: #b39223;
+        --color-accent-teal: #7a90fe;
+        --color-accent-green: #65b452;
+        --color-success: #65b452;
+        --color-warning: #ffd850;
+        --color-destructive: #e56673;
+        --color-destructive-foreground: #090909;
+        --color-info: #7a90fe;
+        --color-link: #7a90fe;
+        --color-link-pressed: #97a8fe;
+        --el-sidebar-item-bg-hover: #24262c;
+        --el-status-in-review: #d9dffc;
+        --el-status-planning: #ff6b78;
+        --el-status-cancelled: var(--color-steel);
+        --el-status-implemented: var(--color-charcoal);
+      }
+      [data-palette='candy'] {
+        --color-primary: #b72682;
+        --color-primary-foreground: #651249;
+        --color-primary-pressed: #e7acd0;
+        --color-primary-fill: #efbfdd;
+        --color-background: #fffcfe;
+        --color-foreground: #211f26;
+        --color-surface: #fee9f5;
+        --color-surface-soft: #fef7fb;
+        --color-canvas: #fbdcef;
+        --color-ink: #211f26;
+        --color-charcoal: #651249;
+        --color-slate: #65636d;
+        --color-steel: #65636d;
+        --color-stone: #8e8c99;
+        --color-muted: #fee9f5;
+        --color-muted-foreground: #65636d;
+        --color-hairline: #f6cee7;
+        --color-hairline-soft: #fbdcef;
+        --color-hairline-strong: #efbfdd;
+        --color-border: #f6cee7;
+        --color-accent: #ab4aba;
+        --color-accent-orange: #ab6400;
+        --color-accent-teal: #208368;
+        --color-accent-green: #2a7e3b;
+        --color-tint-peach: #fbdcef;
+        --color-tint-rose: #fedce7;
+        --color-tint-mint: #d6f1e3;
+        --color-tint-lavender: #ebe4ff;
+        --color-tint-sky: #d1f0fa;
+        --color-tint-yellow: #ffee9c;
+        --color-success: #2a7e3b;
+        --color-warning: #ab6400;
+        --color-destructive: #cb1d63;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #00749e;
+        --el-status-planning: #ab4aba;
+        --color-link: #00749e;
+        --color-link-pressed: #1d3e56;
+        --el-sidebar-item-bg-hover: #fbdcef;
+        --el-status-implemented: var(--color-charcoal);
+      }
+      [data-theme='dark'] [data-palette='candy']:not([data-theme]),
+      [data-palette='candy'][data-theme='dark'] {
+        --color-background: #191117;
+        --color-foreground: #eeeef0;
+        --color-surface: #37172f;
+        --color-surface-soft: #21121d;
+        --color-canvas: #120c11;
+        --color-ink: #eeeef0;
+        --color-charcoal: #fdd1ea;
+        --color-slate: #b5b2bc;
+        --color-steel: #b5b2bc;
+        --color-stone: #6f6d78;
+        --color-muted: #37172f;
+        --color-muted-foreground: #b5b2bc;
+        --color-hairline: #692955;
+        --color-hairline-soft: #591c47;
+        --color-hairline-strong: #833869;
+        --color-border: #692955;
+        --color-primary: #ff8dcc;
+        --color-primary-foreground: #21121d;
+        --color-primary-pressed: #de51a8;
+        --color-primary-fill: #ff8dcc;
+        --color-tint-peach: #4b143d;
+        --color-tint-rose: #4d122f;
+        --color-tint-mint: #0b3b2c;
+        --color-tint-lavender: #33255b;
+        --color-tint-sky: #113555;
+        --color-tint-yellow: #3f2700;
+        --color-accent: #e796f3;
+        --color-accent-orange: #ffca16;
+        --color-accent-teal: #1fd8a4;
+        --color-accent-green: #71d083;
+        --color-success: #71d083;
+        --color-warning: #ffca16;
+        --color-destructive: #ff92ad;
+        --color-destructive-foreground: #191114;
+        --color-info: #75c7f0;
+        --el-status-planning: #ab4aba;
+        --color-link: #75c7f0;
+        --color-link-pressed: #c2f3ff;
+        --el-sidebar-item-bg-hover: #4b143d;
+        --el-status-implemented: var(--color-charcoal);
+      }
+      [data-type='grotesk'] {
+        --font-serif: var(--font-grotesk-source), ui-sans-serif, system-ui, sans-serif;
+        --font-sans: var(--font-grotesk-source), ui-sans-serif, system-ui, sans-serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+      }
+      [data-type='editorial'] {
+        --font-serif: var(--font-editorial-source), 'Fraunces', Georgia, serif;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+      }
+      [data-type='mono-technical'] {
+        --font-serif: var(--font-mono-technical-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-mono: var(--font-mono-technical-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-sans: var(--font-mono-technical-source, ui-monospace), 'SF Mono', Menlo, monospace;
+      }
+    </style>
+    <style>
+      body {
+        margin: 0;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans, system-ui, sans-serif);
+      }
+      .board {
+        padding: 40px;
+        display: flex;
+        flex-direction: column;
+        gap: 40px;
+        max-width: 1320px;
+      }
+      .board h1 {
+        font-size: 24px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .board > p,
+      .panelNote {
+        color: var(--el-text-secondary);
+        font-size: 14px;
+        line-height: 1.5;
+        margin: 0;
+        max-width: 900px;
+      }
+      .panel {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        background: var(--el-card);
+      }
+      .panel h2 {
+        margin: 0;
+        font-size: 16px;
+        color: var(--el-text);
+      }
+      .row {
+        display: flex;
+        gap: 24px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+      }
+      .cap {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 6px;
+      }
+      .scope-inline {
+        display: inline-flex;
+        background: transparent;
+      }
+      .cell {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .strip {
+        display: flex;
+        gap: 2px;
+        padding: 8px 8px 0;
+        border-radius: var(--radius-control);
+        width: 520px;
+      }
+      /* Third-party browser chrome — the representative GROUND the tile is measured against.
+   Non-semantic: these are another product's colours, never Motir's. */
+      .strip-light {
+        background: #dee1e6;
+      }
+      .strip-dark {
+        background: #202124;
+      }
+      .tab {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 8px 8px 0 0;
+        font-size: 12px;
+        width: 220px;
+      }
+      .tab-light {
+        background: #ffffff;
+      }
+      .tab-dark {
+        background: #35363a;
+      }
+      .tab-light .tab-title {
+        color: #202124;
+      }
+      .tab-dark .tab-title {
+        color: #e8eaed;
+      }
+      .tab-dim {
+        background: transparent;
+      }
+      .og {
+        width: 1200px;
+        height: 630px;
+        box-sizing: border-box;
+        padding: 80px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        background: linear-gradient(135deg, var(--el-tint-lavender) 0%, var(--el-tint-sky) 100%);
+        font-family: Inter, var(--font-sans), sans-serif;
+      }
+      .og-brand {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+      }
+      .og-word {
+        font-size: 30px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .og-word-s {
+        font-size: 22px;
+      }
+      .og-head {
+        font-size: 60px;
+        font-weight: 800;
+        line-height: 1.1;
+        color: var(--el-text);
+      }
+      .og-lede {
+        font-size: 28px;
+        color: var(--el-text-secondary);
+        max-width: 920px;
+        margin-top: 16px;
+      }
+      .og-proj {
+        display: flex;
+        gap: 40px;
+        align-items: center;
+      }
+      .og-ptile {
+        width: 160px;
+        height: 160px;
+        border-radius: 32px;
+        background: var(--el-avatar-lavender, var(--el-tint-lavender));
+        color: var(--el-text);
+        font-size: 80px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .og-footer {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .mail {
+        width: 560px;
+        background: var(--el-page-bg);
+        padding: 24px;
+        border: 1px solid var(--el-border);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      }
+      .mail-brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--el-text-secondary);
+        font-size: 14px;
+        margin-bottom: 24px;
+      }
+      .mail p {
+        margin: 0 0 16px;
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .mail .muted {
+        color: var(--el-text-secondary);
+        font-size: 14px;
+      }
+      .mail-btn {
+        display: inline-block;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        padding: 12px 20px;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 15px;
+        text-decoration: none;
+        margin: 8px 0 24px;
+      }
+      .mail a.link {
+        color: var(--el-link);
+        word-break: break-all;
+      }
+      .stripe {
+        display: flex;
+        width: 900px;
+        height: 420px;
+        border: 1px solid var(--el-border);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      }
+      .stripe-brand {
+        width: 45%;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        padding: 40px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .stripe-brand .price {
+        font-size: 36px;
+        font-weight: 700;
+      }
+      .stripe-form {
+        flex: 1;
+        background: var(--el-page-bg);
+        padding: 40px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .stripe-field {
+        height: 40px;
+        border: 1px solid var(--el-border-strong);
+        border-radius: 6px;
+      }
+      .stripe-label {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .stripe-pay {
+        height: 44px;
+        border-radius: 6px;
+        background: var(--el-link);
+        color: var(--el-accent-text);
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .stripe-form a {
+        color: var(--el-link);
+        font-size: 13px;
+      }
+      .status {
+        width: 360px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        box-sizing: border-box;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .splash {
+        width: 360px;
+        height: 200px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      table.t {
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      table.t td,
+      table.t th {
+        border: 1px solid var(--el-border);
+        padding: 6px 10px;
+        text-align: left;
+        color: var(--el-text);
+      }
+      table.t th {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+      .sw {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        vertical-align: middle;
+        border: 1px solid var(--el-border);
+        margin-right: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="mark-a" viewBox="0 0 24 24">
+          <path
+            d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+          />
+        </symbol>
+      </defs>
+    </svg>
+    <main class="board">
+      <h1>
+        Brand mark — the monochrome Motir palette · delta of brand-mark.mock.html (MOTIR-6473)
+      </h1>
+      <p>
+        Only the colours change. The shape, geometry and scales are §1–§5 of
+        <code>design/brand/design-notes.md</code>, unchanged. The rule (§10): every carrier keeps
+        the token it already names. Tiles and fills take <code>--el-accent</code> (ink), a glyph on
+        a surface takes <code>--el-accent-on-surface</code> (the cool blue), and links take
+        <code>--el-link</code>. Every Motir colour below is painted through those tokens, from the
+        shipped <code>theme.css</code> token layer inlined above (comments and the StyleVignette
+        canvas rules removed; no value retyped).
+      </p>
+
+      <section class="panel" aria-labelledby="p10a">
+        <h2 id="p10a">10a · Browser tab — light and dark chrome, real 16 px</h2>
+        <div class="row">
+          <div class="cell">
+            <div class="strip strip-light">
+              <div class="tab tab-light">
+                <span data-palette="motir" data-appearance-scope class="scope-inline"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    role="img"
+                    aria-label="Motir icon, 16 px"
+                  >
+                    <rect width="16" height="16" rx="3.52" fill="var(--el-accent)" />
+                    <g transform="translate(3.160 3.160) scale(0.4033)">
+                      <use href="#mark-a" width="24" height="24" fill="var(--el-accent-text)" />
+                    </g></svg></span
+                ><span class="tab-title">Board · Motir</span>
+              </div>
+              <div class="tab tab-dim">
+                <span class="tab-title" style="color: #202124">Inbox</span>
+              </div>
+            </div>
+            <div class="cap">
+              Light chrome, ink tile <code>--el-accent</code> #1a1d21 · 12.90:1 on the strip,
+              16.91:1 on the tab
+            </div>
+          </div>
+          <div class="cell">
+            <div class="strip strip-dark">
+              <div class="tab tab-dark">
+                <span
+                  data-theme="dark"
+                  data-palette="motir"
+                  data-appearance-scope
+                  class="scope-inline"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    role="img"
+                    aria-label="Motir icon, 16 px"
+                  >
+                    <rect width="16" height="16" rx="3.52" fill="var(--el-accent)" />
+                    <g transform="translate(3.160 3.160) scale(0.4033)">
+                      <use href="#mark-a" width="24" height="24" fill="var(--el-accent-text)" />
+                    </g></svg></span
+                ><span class="tab-title">Board · Motir</span>
+              </div>
+              <div class="tab tab-dim">
+                <span class="tab-title" style="color: #e8eaed">Inbox</span>
+              </div>
+            </div>
+            <div class="cap">
+              Dark chrome, the <code>prefers-color-scheme: dark</code> variant — dark theme
+              <code>--el-accent</code> #edeef0 tile, #0c0d0f glyph · 10.40:1 on the tab, 13.87:1 on
+              the strip
+            </div>
+          </div>
+          <div class="cell">
+            <div class="strip strip-dark">
+              <div class="tab tab-dark">
+                <span data-palette="motir" data-appearance-scope class="scope-inline"
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    role="img"
+                    aria-label="Motir icon, 16 px"
+                  >
+                    <rect width="16" height="16" rx="3.52" fill="var(--el-accent)" />
+                    <g transform="translate(3.160 3.160) scale(0.4033)">
+                      <use href="#mark-a" width="24" height="24" fill="var(--el-accent-text)" />
+                    </g></svg></span
+                ><span class="tab-title">Board · Motir</span>
+              </div>
+            </div>
+            <div class="cap">
+              Fallback — a browser that ignores the media query shows the ink tile: its edge is lost
+              (1.40:1), the glyph still reads (16.91:1)
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="cell">
+            <span data-palette="motir" data-appearance-scope class="scope-inline"
+              ><svg
+                width="32"
+                height="32"
+                viewBox="0 0 32 32"
+                role="img"
+                aria-label="Motir icon, 32 px"
+              >
+                <rect width="32" height="32" rx="7.04" fill="var(--el-accent)" />
+                <g transform="translate(6.320 6.320) scale(0.8067)">
+                  <use href="#mark-a" width="24" height="24" fill="var(--el-accent-text)" />
+                </g></svg
+            ></span>
+            <div class="cap">icon.svg · 32 · light</div>
+          </div>
+          <div class="cell">
+            <span data-theme="dark" data-palette="motir" data-appearance-scope class="scope-inline"
+              ><svg
+                width="32"
+                height="32"
+                viewBox="0 0 32 32"
+                role="img"
+                aria-label="Motir icon, 32 px"
+              >
+                <rect width="32" height="32" rx="7.04" fill="var(--el-accent)" />
+                <g transform="translate(6.320 6.320) scale(0.8067)">
+                  <use href="#mark-a" width="24" height="24" fill="var(--el-accent-text)" />
+                </g></svg
+            ></span>
+            <div class="cap">icon.svg · 32 · dark variant</div>
+          </div>
+          <div class="cell">
+            <span data-palette="motir" data-appearance-scope class="scope-inline"
+              ><svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                role="img"
+                aria-label="Motir icon, 16 px"
+              >
+                <rect width="16" height="16" rx="3.52" fill="var(--el-accent)" />
+                <g transform="translate(3.160 3.160) scale(0.4033)">
+                  <use href="#mark-a" width="24" height="24" fill="var(--el-accent-text)" />
+                </g></svg
+            ></span>
+            <div class="cap">favicon.ico · 16</div>
+          </div>
+          <div class="cell">
+            <span data-palette="motir" data-appearance-scope class="scope-inline"
+              ><svg
+                width="32"
+                height="32"
+                viewBox="0 0 32 32"
+                role="img"
+                aria-label="Motir icon, 32 px"
+              >
+                <rect width="32" height="32" rx="7.04" fill="var(--el-accent)" />
+                <g transform="translate(6.320 6.320) scale(0.8067)">
+                  <use href="#mark-a" width="24" height="24" fill="var(--el-accent-text)" />
+                </g></svg
+            ></span>
+            <div class="cap">favicon.ico · 32 (raster: light only)</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="p10b">
+        <h2 id="p10b">10b · Install icons — iOS 180, Android maskable 192 / 512 (real size)</h2>
+        <div class="row">
+          <div class="cell">
+            <span data-palette="motir" data-appearance-scope class="scope-inline"
+              ><svg
+                width="180"
+                height="180"
+                viewBox="0 0 180 180"
+                role="img"
+                aria-label="Motir icon, 180 px"
+              >
+                <rect width="180" height="180" rx="39.6" fill="var(--el-accent)" />
+                <g transform="translate(35.550 35.550) scale(4.5375)">
+                  <use href="#mark-a" width="24" height="24" fill="var(--el-accent-text)" />
+                </g></svg
+            ></span>
+            <div class="cap">apple-icon.png · 180 · rx 40 · opaque ink tile</div>
+          </div>
+          <div class="cell">
+            <span data-palette="motir" data-appearance-scope class="scope-inline"
+              ><svg
+                width="192"
+                height="192"
+                viewBox="0 0 192 192"
+                role="img"
+                aria-label="Motir icon, 192 px"
+              >
+                <rect width="192" height="192" rx="0" fill="var(--el-accent)" />
+                <g transform="translate(43.200 43.200) scale(4.4000)">
+                  <use href="#mark-a" width="24" height="24" fill="var(--el-accent-text)" />
+                </g>
+                <circle
+                  cx="96.0"
+                  cy="96.0"
+                  r="76.80000000000001"
+                  fill="none"
+                  stroke="var(--el-link)"
+                  stroke-width="1"
+                  stroke-dasharray="4.0 3.0"
+                /></svg
+            ></span>
+            <div class="cap">icon-192.png · maskable · glyph 0.55 · dashed = 0.8 safe circle</div>
+          </div>
+          <div class="cell">
+            <span data-palette="motir" data-appearance-scope class="scope-inline"
+              ><svg
+                width="512"
+                height="512"
+                viewBox="0 0 512 512"
+                role="img"
+                aria-label="Motir icon, 512 px"
+              >
+                <rect width="512" height="512" rx="0" fill="var(--el-accent)" />
+                <g transform="translate(115.200 115.200) scale(11.7333)">
+                  <use href="#mark-a" width="24" height="24" fill="var(--el-accent-text)" />
+                </g>
+                <circle
+                  cx="256.0"
+                  cy="256.0"
+                  r="204.8"
+                  fill="none"
+                  stroke="var(--el-link)"
+                  stroke-width="2.6666666666666665"
+                  stroke-dasharray="10.666666666666666 8.0"
+                /></svg
+            ></span>
+            <div class="cap">icon-512.png · maskable</div>
+          </div>
+        </div>
+        <p class="panelNote">
+          No dark variant: a PNG has one appearance, and an OS sets icons on a wallpaper, not on
+          browser chrome. White glyph on the ink tile is 16.91:1.
+        </p>
+      </section>
+
+      <section class="panel" aria-labelledby="p10c">
+        <h2 id="p10c">10c · Web manifest</h2>
+        <div class="row" data-palette="motir" data-appearance-scope>
+          <div class="cell">
+            <div class="status"><span>9:41</span><span>Motir</span></div>
+            <div class="cap">
+              <code>theme_color</code> #1a1d21 (<code>--el-accent</code>) · white system text
+              16.91:1
+            </div>
+          </div>
+          <div class="cell">
+            <div class="splash">
+              <svg
+                width="96"
+                height="96"
+                viewBox="0 0 96 96"
+                role="img"
+                aria-label="Motir icon, 96 px"
+              >
+                <rect width="96" height="96" rx="21.12" fill="var(--el-accent)" />
+                <g transform="translate(18.960 18.960) scale(2.4200)">
+                  <use href="#mark-a" width="24" height="24" fill="var(--el-accent-text)" />
+                </g>
+              </svg>
+            </div>
+            <div class="cap">
+              <code>background_color</code> #ffffff (<code>--el-page-bg</code>) · launch splash
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="p10d">
+        <h2 id="p10d">10d · Link-preview (OG) cards · 1200 × 630, both layouts</h2>
+        <p class="panelNote">
+          Section card (explore): brand lockup top-left, headline and lede anchoring the bottom.
+          Glyph <code>--el-accent-on-surface</code> #155bc4 (5.09 / 5.13:1 on the wash), wordmark
+          and headline <code>--el-text</code> #16191d (14.20 / 14.33:1), lede
+          <code>--el-text-secondary</code> #565c64 (5.44 / 5.48:1), wash
+          <code>--color-tint-lavender</code> → <code>--color-tint-sky</code>.
+        </p>
+        <div class="og" data-palette="motir" data-appearance-scope>
+          <div class="og-brand">
+            <svg width="72" height="72" viewBox="0 0 24 24" role="img" aria-label="Motir">
+              <use href="#mark-a" width="24" height="24" fill="var(--el-accent-on-surface)" /></svg
+            ><span class="og-word">Motir</span>
+          </div>
+          <div class="og-foot">
+            <div class="og-head">Plan it. Track it. Ship it.</div>
+            <div class="og-lede">
+              An AI-native project tool — planning on the way in, coding on the way out.
+            </div>
+          </div>
+        </div>
+        <p class="panelNote">
+          Project card (p/[identifier]): the project stays the subject; the brand moves to the
+          footer lockup.
+        </p>
+        <div class="og" data-palette="motir" data-appearance-scope>
+          <div class="og-proj">
+            <div class="og-ptile" aria-hidden="true">A</div>
+            <div>
+              <div class="og-head">Atlas</div>
+              <div class="og-lede">
+                A public project on Motir — its roadmap, its board and what shipped.
+              </div>
+            </div>
+          </div>
+          <div class="og-footer">
+            <svg width="40" height="40" viewBox="0 0 24 24" role="img" aria-label="Motir">
+              <use href="#mark-a" width="24" height="24" fill="var(--el-accent-on-surface)" /></svg
+            ><span class="og-word og-word-s">Motir</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="p10e">
+        <h2 id="p10e">10e · Transactional email — header mark, primary button, body link</h2>
+        <div class="row">
+          <div class="mail" data-palette="motir" data-appearance-scope>
+            <div class="mail-brand">
+              <svg width="20" height="20" viewBox="0 0 24 24" role="img" aria-label="Motir">
+                <use
+                  href="#mark-a"
+                  width="24"
+                  height="24"
+                  fill="var(--el-accent-on-surface)"
+                /></svg
+              ><span>Motir</span>
+            </div>
+            <p>Hi Sam,</p>
+            <p>
+              Someone asked to reset the password for your Motir account. Choose a new one below.
+            </p>
+            <a class="mail-btn" href="#">Reset password</a>
+            <p class="muted">Or paste this link into your browser:</p>
+            <p><a class="link" href="#">https://app.motir.co/reset-password?token=9f3c1e</a></p>
+            <p class="muted">If you didn't ask for this, you can ignore this email.</p>
+          </div>
+          <div class="cell">
+            <table class="t">
+              <tr>
+                <th>Element</th>
+                <th>New</th>
+                <th>Token</th>
+                <th>Ratio</th>
+              </tr>
+              <tr>
+                <td>header mark (40 px PNG)</td>
+                <td>
+                  <span
+                    class="sw"
+                    data-palette="motir"
+                    data-appearance-scope
+                    style="background: var(--el-accent-on-surface)"
+                  ></span
+                  >#155bc4
+                </td>
+                <td>--el-accent-on-surface</td>
+                <td>6.31:1 on white</td>
+              </tr>
+              <tr>
+                <td>button fill</td>
+                <td>
+                  <span
+                    class="sw"
+                    data-palette="motir"
+                    data-appearance-scope
+                    style="background: var(--el-accent)"
+                  ></span
+                  >#1a1d21
+                </td>
+                <td>--el-accent</td>
+                <td>16.91:1 vs body</td>
+              </tr>
+              <tr>
+                <td>button label</td>
+                <td>#ffffff</td>
+                <td>--el-accent-text</td>
+                <td>16.91:1</td>
+              </tr>
+              <tr>
+                <td>body link</td>
+                <td>
+                  <span
+                    class="sw"
+                    data-palette="motir"
+                    data-appearance-scope
+                    style="background: var(--el-link)"
+                  ></span
+                  >#155bc4
+                </td>
+                <td>--el-link</td>
+                <td>6.31:1</td>
+              </tr>
+            </table>
+            <div class="cap">
+              One colour per role: email has no dark-mode signal. The button is found by its filled
+              shape, not by hue — the app's own ink CTA idiom.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="p10f">
+        <h2 id="p10f">10f · Stripe — Checkout (brand colour + accent colour)</h2>
+        <div class="stripe" data-palette="motir" data-appearance-scope>
+          <div class="stripe-brand">
+            <div style="display: flex; align-items: center; gap: 10px">
+              <svg width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="Motir">
+                <use href="#mark-a" width="24" height="24" fill="var(--el-accent-text)" /></svg
+              ><strong>Motir</strong>
+            </div>
+            <div>Subscribe to Motir Team</div>
+            <div class="price">€12.00</div>
+            <div>per member / month</div>
+          </div>
+          <div class="stripe-form">
+            <div class="stripe-label">Email</div>
+            <div class="stripe-field"></div>
+            <div class="stripe-label">Card information</div>
+            <div class="stripe-field"></div>
+            <div class="stripe-pay">Subscribe</div>
+            <a href="#">Terms of service</a>
+          </div>
+        </div>
+        <div class="cap">
+          Brand colour #1a1d21 (<code>--el-accent</code>) · white text 16.91:1. Accent colour
+          #155bc4 (<code>--el-link</code>) · pay-button label 6.31:1. Invoice and receipt emails
+          carry the brand colour as their band.
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

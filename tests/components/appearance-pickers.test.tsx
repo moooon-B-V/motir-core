@@ -46,6 +46,21 @@ describe('PalettePicker', () => {
     fireEvent.click(screen.getByRole('radio', { name: PALETTE_REGISTRY['cobalt'].name }));
     expect(onChange).toHaveBeenCalledWith('cobalt');
   });
+
+  it('lists Motir first with the ink swatch and Amethyst second with the purple (MOTIR-6471)', () => {
+    render(<PalettePicker value="motir" onChange={vi.fn()} label="Palette" />);
+
+    const radios = screen.getAllByRole('radio');
+    expect(radios.map((radio) => radio.textContent?.trim()).slice(0, 2)).toEqual([
+      'Motir',
+      'Amethyst',
+    ]);
+    expect(radios.map((radio) => radio.textContent)).not.toContain('Graphite');
+    const swatch = (radio: HTMLElement) =>
+      (radio.querySelector('span[aria-hidden]') as HTMLElement | null)?.style.background;
+    expect(swatch(radios[0]!)).toMatch(/#1a1d21|rgb\(26, 29, 33\)/i);
+    expect(swatch(radios[1]!)).toMatch(/#5645d4|rgb\(86, 69, 212\)/i);
+  });
 });
 
 describe('TypePicker', () => {

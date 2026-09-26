@@ -12,6 +12,8 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  migrateStoredPaletteId,
+  PALETTE_IDS_VERSION,
   THEME_DEFAULTS,
   THEME_STORAGE_KEYS,
   type ResolvedThemePattern,
@@ -164,8 +166,13 @@ export function ThemeProvider({
         ? initialPreference.paletteId
         : DEFAULT_PALETTE_ID;
     }
-    // A stale / unknown stored value resolves to the default, never a dead id.
-    const stored = readStorage<string>(THEME_STORAGE_KEYS.palette, THEME_DEFAULTS.palette);
+    // A value stored before MOTIR-6471's rename is read through the migration
+    // (a no-op once the init script has run and written the marker), and a
+    // stale / unknown one resolves to the default, never a dead id.
+    const stored = migrateStoredPaletteId(
+      readStorage<string>(THEME_STORAGE_KEYS.palette, '') || null,
+      readStorage<string>(THEME_STORAGE_KEYS.paletteIds, '') || null,
+    );
     return isPaletteId(stored) ? stored : DEFAULT_PALETTE_ID;
   });
   // The user's PINNED type choice, or `null` = "follow the active style's
@@ -328,6 +335,9 @@ export function ThemeProvider({
       setPaletteState(next);
       try {
         window.localStorage.setItem(THEME_STORAGE_KEYS.palette, next);
+        // A value written now is already in today's id space — stamp it, or a
+        // load that never ran the init script would re-migrate a fresh `motir`.
+        window.localStorage.setItem(THEME_STORAGE_KEYS.paletteIds, PALETTE_IDS_VERSION);
       } catch {
         // localStorage unavailable — accept that the choice won't persist.
       }
