@@ -88,6 +88,21 @@ describe('findMalformedIntraPlanRefs', () => {
   });
 });
 
+describe('findMalformedIntraPlanRefs — linear on hostile input (CodeQL js/polynomial-redos)', () => {
+  it('scans a body repeating an unclosed `[](motir-ref:` opener in linear time and finds no link', () => {
+    const hostile = '[](motir-ref:'.repeat(200_000);
+    const started = performance.now();
+    expect(findMalformedIntraPlanRefs(hostile)).toEqual([]);
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
+  it('reads a link whose destination runs over a later opener as one link, as a regex would', () => {
+    expect(findMalformedIntraPlanRefs('[a](motir-ref:x [b](motir-ref:y)')).toEqual([
+      '[a](motir-ref:x [b](motir-ref:y)',
+    ]);
+  });
+});
+
 describe('validateProposedBodyRefs', () => {
   it('refuses on either body with INVALID_PROPOSAL, naming the field, the token and the canonical form', () => {
     for (const field of ['descriptionMd', 'explanationMd'] as const) {

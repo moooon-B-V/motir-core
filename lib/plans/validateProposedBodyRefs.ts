@@ -28,8 +28,8 @@
 
 import { InvalidProposalError } from '@/lib/plans/errors';
 
-/** Any Markdown link whose destination starts `motir-ref:` — canonical or not. */
-const ANY_MOTIR_REF_LINK_RE = /\[[^\]\[]*\]\(motir-ref:[^)\n]*\)/g;
+/** Where a link's label ends and a `motir-ref:` destination begins. */
+const MOTIR_REF_LINK_JOIN = '](motir-ref:';
 
 /** The canonical token, anchored — `INTRA_PLAN_REF_TOKEN_RE`'s shape. */
 const CANONICAL_MOTIR_REF_LINK_RE = /^\[[^\]\[]*\]\(motir-ref:planItem:[A-Za-z0-9_-]+\)$/;
@@ -91,11 +91,45 @@ function withoutCode(text: string): string {
  */
 export function findMalformedIntraPlanRefs(text: string): string[] {
   const found: string[] = [];
-  for (const match of withoutCode(text).matchAll(ANY_MOTIR_REF_LINK_RE)) {
-    const token = match[0];
+  for (const token of motirRefLinks(withoutCode(text))) {
     if (!CANONICAL_MOTIR_REF_LINK_RE.test(token) && !found.includes(token)) found.push(token);
   }
   return found;
+}
+
+/**
+ * Every `[label](motir-ref:…)` link in `text` — a label holding no bracket, a
+ * destination running to the first `)` on its line — canonical or not.
+ *
+ * A single left-to-right pass rather than a regex: an unanchored pattern with a
+ * free-running destination re-scans the rest of the line from every
+ * `](motir-ref:` it meets, which is quadratic on a body that repeats the
+ * opener without ever closing it (CodeQL `js/polynomial-redos`). Here every
+ * character is visited once: a destination with no `)` before its line ends
+ * is not a link, and nothing inside it can start one that closes.
+ */
+function motirRefLinks(text: string): string[] {
+  const links: string[] = [];
+  let open = -1; // the last `[` with no bracket after it — a label's start
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '[') {
+      open = i;
+    } else if (ch === ']') {
+      if (open !== -1 && text.startsWith(MOTIR_REF_LINK_JOIN, i)) {
+        let end = i + MOTIR_REF_LINK_JOIN.length;
+        while (end < text.length && text[end] !== ')' && text[end] !== '\n') end += 1;
+        if (text[end] === ')') links.push(text.slice(open, end + 1));
+        open = -1;
+        i = end + 1;
+        continue;
+      }
+      open = -1;
+    }
+    i += 1;
+  }
+  return links;
 }
 
 /** The body fields a proposal can carry, as any door hands them over. */
