@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
-import type { MemberRole, ProjectAccessLevel } from '@/generated/prisma/client';
+import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
 import { resolvePermissions } from '@/lib/permissions/resolve';
 import type { ProjectPermissionInputs } from '@/lib/permissions/resolve';
 import { canViewLessons, canManageLessons, canManageProject } from '@/lib/projects/access';
 import {
-  BUILTIN_ROLE_PERMISSIONS,
-  IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS,
   PUBLIC_PROJECT_PERMISSIONS,
   ROLE_GATED_PERMISSIONS,
+  WORKSPACE_ROLE_PERMISSIONS,
 } from '@/lib/permissions/builtinRoles';
 import {
   ENFORCED_PERMISSIONS,
@@ -43,10 +42,10 @@ const VIEW_KEY: PermissionKey = 'lesson:view';
 const MANAGE_KEY: PermissionKey = 'lesson:manage';
 
 const LEVELS: ProjectAccessLevel[] = ['open', 'limited', 'private', 'public'];
-const ROLES: (MemberRole | null)[] = [null, 'viewer', 'member', 'admin'];
+const ROLES: (WorkspaceRole | null)[] = [null, 'viewer', 'member', 'manager'];
 
 function inputs(over: Partial<ProjectPermissionInputs>): ProjectPermissionInputs {
-  return { accessLevel: 'private', workspaceRole: 'member', projectRole: 'admin', ...over };
+  return { accessLevel: 'private', workspaceRole: 'manager', addedToProject: true, ...over };
 }
 
 describe('the catalog carries both keys, enforced, in the project domain', () => {
@@ -114,17 +113,16 @@ describe('the catalog carries both keys, enforced, in the project domain', () =>
   });
 });
 
-describe('the built-in roles — admin gains both, nobody else gains either', () => {
-  it('grants both to admin', () => {
-    expect(BUILTIN_ROLE_PERMISSIONS.admin.has(VIEW_KEY)).toBe(true);
-    expect(BUILTIN_ROLE_PERMISSIONS.admin.has(MANAGE_KEY)).toBe(true);
+describe('the built-in roles — the Manager gains both, nobody else gains either', () => {
+  it('grants both to the Manager', () => {
+    expect(WORKSPACE_ROLE_PERMISSIONS.manager.has(VIEW_KEY)).toBe(true);
+    expect(WORKSPACE_ROLE_PERMISSIONS.manager.has(MANAGE_KEY)).toBe(true);
   });
 
-  it('grants NEITHER to member, viewer, or the implicit workspace-member set', () => {
+  it('grants NEITHER to Member or Viewer', () => {
     for (const key of [VIEW_KEY, MANAGE_KEY]) {
-      expect(BUILTIN_ROLE_PERMISSIONS.member.has(key), `member must not hold ${key}`).toBe(false);
-      expect(BUILTIN_ROLE_PERMISSIONS.viewer.has(key), `viewer must not hold ${key}`).toBe(false);
-      expect(IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS.has(key)).toBe(false);
+      expect(WORKSPACE_ROLE_PERMISSIONS.member.has(key), `member must not hold ${key}`).toBe(false);
+      expect(WORKSPACE_ROLE_PERMISSIONS.viewer.has(key), `viewer must not hold ${key}`).toBe(false);
     }
   });
 
@@ -134,30 +132,27 @@ describe('the built-in roles — admin gains both, nobody else gains either', ()
       expect(PUBLIC_PROJECT_PERMISSIONS).not.toContain(key);
     }
     // The case that would actually leak: an anonymous reader of a public project.
-    const anonymous = inputs({ accessLevel: 'public', workspaceRole: null, projectRole: null });
+    const anonymous = inputs({ accessLevel: 'public', workspaceRole: null, addedToProject: false });
     expect(canViewLessons(anonymous)).toBe(false);
     expect(canManageLessons(anonymous)).toBe(false);
   });
 
-  it('reaches nobody a role did not put there, across every level × role combination', () => {
+  it('reaches nobody a role did not put there, across every level × role × added combination', () => {
     for (const accessLevel of LEVELS) {
       for (const workspaceRole of ROLES) {
-        for (const projectRole of ROLES) {
-          const i = inputs({ accessLevel, workspaceRole, projectRole });
+        for (const addedToProject of [false, true]) {
+          const i = inputs({ accessLevel, workspaceRole, addedToProject });
           const held = resolvePermissions(i);
-          // The two rails: a workspace owner/admin always passes; a
-          // non-workspace-member never does. Between them, only a project
-          // `admin` holds these keys.
-          const expected =
-            workspaceRole !== null &&
-            (workspaceRole === 'owner' || workspaceRole === 'admin' || projectRole === 'admin');
+          // The two rails: a Manager always passes; a non-workspace-member never
+          // does. Between them, no built-in role holds these keys.
+          const expected = workspaceRole === 'manager';
           expect(
             held.has(VIEW_KEY),
-            `${accessLevel}/${workspaceRole}/${projectRole} lesson:view`,
+            `${accessLevel}/${workspaceRole}/${addedToProject} lesson:view`,
           ).toBe(expected);
           expect(
             held.has(MANAGE_KEY),
-            `${accessLevel}/${workspaceRole}/${projectRole} lesson:manage`,
+            `${accessLevel}/${workspaceRole}/${addedToProject} lesson:manage`,
           ).toBe(expected);
         }
       }
@@ -171,7 +166,6 @@ describe('the split earns its keep — read WITHOUT change is expressible', () =
     // possible. With one key this test could not be written.
     const readOnly = inputs({
       workspaceRole: 'member',
-      projectRole: 'member',
       customRolePermissions: ['project:browse', VIEW_KEY],
     });
     expect(canViewLessons(readOnly)).toBe(true);
@@ -183,7 +177,6 @@ describe('the split earns its keep — read WITHOUT change is expressible', () =
     // the lesson keys are independent, so withholding one withholds nothing else.
     const admin = inputs({
       workspaceRole: 'member',
-      projectRole: 'member',
       customRolePermissions: ['project:browse', 'project:administer'],
     });
     expect(canManageProject(admin)).toBe(true);

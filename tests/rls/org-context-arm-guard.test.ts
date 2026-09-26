@@ -320,6 +320,27 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'the first bind (the actor’s workspace memberships and owner rows) run under the user ' +
       'context alone and are not org-context reads.',
   },
+  'lib/services/workspacesService.ts#isOrgManagerTarget': {
+    tables: ['organization_membership', 'workspace'],
+    source: 'scan',
+    why:
+      'MOTIR-6463 — a role change refuses a TARGET who is the org Owner or an Admin (a Manager of ' +
+      "every workspace by their org role). The target's organization_membership row is another " +
+      "person's, admitted only by org_membership_visible_active_or_own's active-org arm, so the " +
+      "workspace's own organization (read off the workspace row, never request input) is bound " +
+      "first inside the caller's withWorkspaceContext. `workspace` is admitted by workspace_active " +
+      '(the workspace GUC is still bound) and by workspace_org_member_read (the actor is a ' +
+      'Manager, so a member of the org in every case the check is reached).',
+  },
+  'lib/services/workspacesService.ts#orgManagersOf': {
+    tables: ['organization', 'organization_membership'],
+    source: 'scan',
+    why:
+      "MOTIR-6465 — the Members page draws the org's Owner and Admins locked at Manager (design " +
+      "panel 6a) and names the org in their reason. Both reads are of the workspace's OWN " +
+      "organization, bound off the workspace row inside the caller's withWorkspaceContext: " +
+      'organization_active admits the org row, org_membership_visible_active_or_own the members.',
+  },
   'lib/services/workspacesService.ts#assertMayRemoveWorkspace': {
     tables: ['organization_membership'],
     source: 'hand',
@@ -560,9 +581,12 @@ describe('the guard has been SEEN to fail', () => {
       'lib/services/entitlementsService.ts#assertWithinStorageCap :: workspace -> "workspace" ' +
         'has RLS and NO app.organization_id read arm ' +
         '(reached via attachmentRepository.sumSizeByOrganization)',
+      'lib/services/workspacesService.ts#isOrgManagerTarget :: workspace -> "workspace" ' +
+        'has RLS and NO app.organization_id read arm ' +
+        '(reached via organizationMembershipRepository.isOrgManagerOfWorkspaceOrg)',
       'lib/services/workspacesService.ts#listUserWorkspaces :: workspace -> "workspace" ' +
         'has RLS and NO app.organization_id read arm ' +
-        '(reached via organizationMembershipRepository.findOwnedOrganizationsByUser, ' +
+        '(reached via organizationMembershipRepository.findManagedOrganizationsByUser, ' +
         'workspaceMembershipRepository.findWorkspacesByUser, workspaceRepository.listByOrganization)',
     ]);
   });

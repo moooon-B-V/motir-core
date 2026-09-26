@@ -379,7 +379,8 @@ async function resolveActiveProjectInContext(
         tx,
       );
       if (!membership) {
-        // THE ORG OWNER REACHES A WORKSPACE THEY NEVER JOINED (MOTIR-6308), and
+        // THE ORG OWNER — AND, SINCE MOTIR-6168, AN ORG ADMIN — REACHES A WORKSPACE
+        // THEY NEVER JOINED (MOTIR-6308), and
         // the active-project POINTER lives on a membership row they do not have.
         // Returning null here sent every project-scoped page to `/sign-in`, which
         // bounced a signed-in reader back to `/workbench` — a redirect loop, found
@@ -394,7 +395,11 @@ async function resolveActiveProjectInContext(
         // for them instead of the membership row — so it is honoured first when
         // it names a project of THIS workspace.
         if (
-          !(await organizationMembershipRepository.isOwnerOfWorkspaceOrg(userId, workspaceId, tx))
+          !(await organizationMembershipRepository.isOrgManagerOfWorkspaceOrg(
+            userId,
+            workspaceId,
+            tx,
+          ))
         ) {
           return null;
         }

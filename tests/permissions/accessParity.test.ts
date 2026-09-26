@@ -1,4 +1,6 @@
-import type { MemberRole, ProjectAccessLevel } from '@/generated/prisma/client';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
 import { describe, expect, it } from 'vitest';
 import {
   canBrowse,
@@ -16,2779 +18,383 @@ import {
 } from '@/lib/projects/access';
 import { hasPermission, resolvePermissions } from '@/lib/permissions/resolve';
 import {
-  BUILTIN_ROLE_PERMISSIONS,
-  CUSTOM_ROLE_TIER,
-  IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS,
+  PUBLIC_PROJECT_PERMISSIONS,
   ROLE_GATED_PERMISSIONS,
+  WORKSPACE_ROLE_PERMISSIONS,
 } from '@/lib/permissions/builtinRoles';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 
-// The PARITY TRUTH TABLE (Story MOTIR-2255 · Subtask MOTIR-2261). MOTIR-2261
-// moved the decision that guards every read and every write in the product onto
-// a new mechanism — the permission catalog and `resolvePermissions`. Nothing an
-// actor can do is supposed to change, and that is not something a reviewer can
-// establish by reading a diff of decision tables.
+// THE TRUTH TABLE for the project access policy — REWRITTEN by Story MOTIR-6168 ·
+// MOTIR-6459, when roles moved to the WORKSPACE (`docs/decisions/role-model.md`
+// §2–§3). The old table was 64 rows of access level × workspace role × PROJECT
+// role; a project carries no role any more, so its input space is now:
 //
-// So: all 64 combinations of accessLevel (4) × workspaceRole (4) × projectRole
-// (4), through all eleven predicates.
+//   4 access levels × { no membership, Manager, Member, Viewer, a custom role }
+//                   × { added to the project, not added }   =   40 rows
 //
-// ⚠️ THE EXPECTATIONS BELOW ARE LITERAL BOOLEANS TRANSCRIBED FROM THE PRE-CHANGE
-// POLICY — produced by running `origin/main`'s `lib/projects/access.ts` decision
-// tables over the same 64 inputs and writing the answers down. They are NOT
-// computed from the new code. A computed table would only prove the new code
-// agrees with itself, which is exactly the thing that needed proving.
+// ⚠️ EACH ROW'S EXPECTED SET IS WRITTEN OUT, from the LITERAL key lists below —
+// never computed from the code under test. A table computed from `resolve.ts`
+// would only prove the code agrees with itself. The literals are the built-in
+// sets transcribed by hand; a separate assertion pins that they still equal
+// `WORKSPACE_ROLE_PERMISSIONS`, so a change to a role is a deliberate edit HERE.
 //
-// If a future card intends a behaviour CHANGE, the row it changes must be edited
-// here by hand, deliberately — that friction is the point.
+// If a future card intends a behaviour change, the row it changes must be edited
+// by hand, deliberately — that friction is the point.
 
-type Row = {
-  accessLevel: ProjectAccessLevel;
-  workspaceRole: MemberRole | null;
-  projectRole: MemberRole | null;
-  expected: Record<string, boolean>;
-};
+// ── The literal sets ─────────────────────────────────────────────────────────
 
-const PREDICATES: Record<string, (i: ProjectAccessInputs) => boolean> = {
-  canBrowse,
-  canEdit,
-  canComment,
-  canModerateComments,
-  canCreateAttachments,
-  canDeleteAllAttachments,
-  canManageWatchers,
-  canManageProject,
-  canSubmitToTriage,
-  canUpvotePublicRequest,
-  canCommentPublicRequest,
-};
-
-/**
- * The twelve per-domain administrative keys MOTIR-2256 splits out of
- * `project:administer`. Spelled out LITERALLY rather than derived from
- * `ROLE_GATED_PERMISSIONS` — deriving it would let a key silently join or leave
- * the split and still pass, which is precisely the drift the parity table below
- * exists to catch.
- */
-const ADMINISTRATIVE_KEYS: readonly PermissionKey[] = [
-  'member:manage',
-  'project:manage_access',
-  'board:configure',
-  'workflow:manage',
+/** A Manager: the whole role-gated catalog (the old project `admin` set). */
+const MANAGER: readonly PermissionKey[] = [
+  'ai:configure',
+  'ai:decide_plan',
+  'ai:plan',
+  'ai:view_plan',
+  'approval:decide_any',
+  'approval:view_any',
+  'attachment:create',
+  'attachment:delete_any',
   'automation:manage',
-  'field:manage',
+  'board:configure',
+  'comment:add',
+  'comment:moderate',
   'component:manage',
-  'label:manage',
   'estimation:manage',
+  'field:manage',
+  'import:run',
+  'integration:manage',
+  'label:manage',
+  'lesson:manage',
+  'lesson:reinforce',
+  'lesson:view',
+  'member:manage',
+  'plan:view_any',
+  'project:administer',
+  'project:browse',
+  'project:manage_access',
+  'report:view',
   'repository:manage',
   'repository:manage_access',
-  'ai:configure',
+  'run:view_any',
+  'saved_filter:manage',
+  'saved_filter:manage_any',
+  'sprint:manage',
+  'watcher:manage',
+  'work_item:archive',
+  'work_item:delete',
+  'work_item:edit',
+  'work_item:triage',
+  'workflow:manage',
 ];
+
+/** A Member: the everyday work. */
+const MEMBER: readonly PermissionKey[] = [
+  'ai:decide_plan',
+  'ai:plan',
+  'ai:view_plan',
+  'approval:view_any',
+  'attachment:create',
+  'comment:add',
+  'plan:view_any',
+  'project:browse',
+  'report:view',
+  'run:view_any',
+  'saved_filter:manage',
+  'sprint:manage',
+  'work_item:archive',
+  'work_item:edit',
+  'work_item:triage',
+];
+
+/** A Viewer: reads, including every room's view-any key. */
+const VIEWER: readonly PermissionKey[] = [
+  'approval:view_any',
+  'plan:view_any',
+  'project:browse',
+  'report:view',
+  'run:view_any',
+];
+
+/**
+ * A workspace CUSTOM role — "Reviewer", the story's verification role: a Viewer
+ * base plus commenting, WITHOUT the runs view key. Resolved exactly as listed.
+ */
+const CUSTOM: readonly PermissionKey[] = [
+  'approval:view_any',
+  'comment:add',
+  'plan:view_any',
+  'project:browse',
+  'report:view',
+];
+
+/** What a `public` project grants every actor, anonymous included. */
+const PUBLIC: readonly PermissionKey[] = [
+  'plan:view_any',
+  'project:browse',
+  'public_request:comment',
+  'public_request:submit',
+  'public_request:upvote',
+  'run:view_any',
+];
+
+const NONE: readonly PermissionKey[] = [];
+
+const union = (...sets: (readonly PermissionKey[])[]): PermissionKey[] =>
+  [...new Set(sets.flat())].sort();
+const without = (set: readonly PermissionKey[], key: PermissionKey): PermissionKey[] =>
+  set.filter((k) => k !== key).sort();
+
+// ── The rows ─────────────────────────────────────────────────────────────────
+
+type Actor = 'none' | 'manager' | 'member' | 'viewer' | 'custom';
+
+interface Row {
+  accessLevel: ProjectAccessLevel;
+  actor: Actor;
+  addedToProject: boolean;
+  expected: PermissionKey[];
+}
 
 const TABLE: Row[] = [
+  // ── open — every workspace member holds their role's keys, added or not ──
+  { accessLevel: 'open', actor: 'none', addedToProject: false, expected: union(NONE) },
+  { accessLevel: 'open', actor: 'none', addedToProject: true, expected: union(NONE) },
+  { accessLevel: 'open', actor: 'manager', addedToProject: false, expected: union(MANAGER) },
+  { accessLevel: 'open', actor: 'manager', addedToProject: true, expected: union(MANAGER) },
+  { accessLevel: 'open', actor: 'member', addedToProject: false, expected: union(MEMBER) },
+  { accessLevel: 'open', actor: 'member', addedToProject: true, expected: union(MEMBER) },
+  { accessLevel: 'open', actor: 'viewer', addedToProject: false, expected: union(VIEWER) },
+  { accessLevel: 'open', actor: 'viewer', addedToProject: true, expected: union(VIEWER) },
+  { accessLevel: 'open', actor: 'custom', addedToProject: false, expected: union(CUSTOM) },
+  { accessLevel: 'open', actor: 'custom', addedToProject: true, expected: union(CUSTOM) },
+
+  // ── limited — everything but EDIT for someone not added ──
+  { accessLevel: 'limited', actor: 'none', addedToProject: false, expected: union(NONE) },
+  { accessLevel: 'limited', actor: 'none', addedToProject: true, expected: union(NONE) },
+  { accessLevel: 'limited', actor: 'manager', addedToProject: false, expected: union(MANAGER) },
+  { accessLevel: 'limited', actor: 'manager', addedToProject: true, expected: union(MANAGER) },
   {
-    accessLevel: 'public',
-    workspaceRole: 'owner',
-    projectRole: 'admin',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
+    accessLevel: 'limited',
+    actor: 'member',
+    addedToProject: false,
+    expected: without(MEMBER, 'work_item:edit'),
   },
+  { accessLevel: 'limited', actor: 'member', addedToProject: true, expected: union(MEMBER) },
+  { accessLevel: 'limited', actor: 'viewer', addedToProject: false, expected: union(VIEWER) },
+  { accessLevel: 'limited', actor: 'viewer', addedToProject: true, expected: union(VIEWER) },
+  { accessLevel: 'limited', actor: 'custom', addedToProject: false, expected: union(CUSTOM) },
+  { accessLevel: 'limited', actor: 'custom', addedToProject: true, expected: union(CUSTOM) },
+
+  // ── private — nothing for someone not added (a Manager excepted) ──
+  { accessLevel: 'private', actor: 'none', addedToProject: false, expected: union(NONE) },
+  { accessLevel: 'private', actor: 'none', addedToProject: true, expected: union(NONE) },
+  { accessLevel: 'private', actor: 'manager', addedToProject: false, expected: union(MANAGER) },
+  { accessLevel: 'private', actor: 'manager', addedToProject: true, expected: union(MANAGER) },
+  { accessLevel: 'private', actor: 'member', addedToProject: false, expected: union(NONE) },
+  { accessLevel: 'private', actor: 'member', addedToProject: true, expected: union(MEMBER) },
+  { accessLevel: 'private', actor: 'viewer', addedToProject: false, expected: union(NONE) },
+  { accessLevel: 'private', actor: 'viewer', addedToProject: true, expected: union(VIEWER) },
+  { accessLevel: 'private', actor: 'custom', addedToProject: false, expected: union(NONE) },
+  { accessLevel: 'private', actor: 'custom', addedToProject: true, expected: union(CUSTOM) },
+
+  // ── public — like open for members, plus the public grant for everyone ──
+  { accessLevel: 'public', actor: 'none', addedToProject: false, expected: union(PUBLIC) },
+  { accessLevel: 'public', actor: 'none', addedToProject: true, expected: union(PUBLIC) },
   {
     accessLevel: 'public',
-    workspaceRole: 'owner',
-    projectRole: 'member',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'owner',
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
+    actor: 'manager',
+    addedToProject: false,
+    expected: union(MANAGER, PUBLIC),
   },
   {
     accessLevel: 'public',
-    workspaceRole: 'owner',
-    projectRole: null,
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
+    actor: 'manager',
+    addedToProject: true,
+    expected: union(MANAGER, PUBLIC),
   },
   {
     accessLevel: 'public',
-    workspaceRole: 'admin',
-    projectRole: 'admin',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
+    actor: 'member',
+    addedToProject: false,
+    expected: union(MEMBER, PUBLIC),
   },
+  { accessLevel: 'public', actor: 'member', addedToProject: true, expected: union(MEMBER, PUBLIC) },
   {
     accessLevel: 'public',
-    workspaceRole: 'admin',
-    projectRole: 'member',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
+    actor: 'viewer',
+    addedToProject: false,
+    expected: union(VIEWER, PUBLIC),
   },
+  { accessLevel: 'public', actor: 'viewer', addedToProject: true, expected: union(VIEWER, PUBLIC) },
   {
     accessLevel: 'public',
-    workspaceRole: 'admin',
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
+    actor: 'custom',
+    addedToProject: false,
+    expected: union(CUSTOM, PUBLIC),
   },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'admin',
-    projectRole: null,
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'member',
-    projectRole: 'admin',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'member',
-    projectRole: 'member',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: false,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'member',
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: true,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'member',
-    projectRole: null,
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: false,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: null,
-    projectRole: 'admin',
-    expected: {
-      canBrowse: true,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: null,
-    projectRole: 'member',
-    expected: {
-      canBrowse: true,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: null,
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: true,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: null,
-    projectRole: null,
-    expected: {
-      canBrowse: true,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: true,
-      canUpvotePublicRequest: true,
-      canCommentPublicRequest: true,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'owner',
-    projectRole: 'admin',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'owner',
-    projectRole: 'member',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'owner',
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'owner',
-    projectRole: null,
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'admin',
-    projectRole: 'admin',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'admin',
-    projectRole: 'member',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'admin',
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'admin',
-    projectRole: null,
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'member',
-    projectRole: 'admin',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'member',
-    projectRole: 'member',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: false,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'member',
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: true,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'member',
-    projectRole: null,
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: false,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: null,
-    projectRole: 'admin',
-    expected: {
-      canBrowse: false,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: null,
-    projectRole: 'member',
-    expected: {
-      canBrowse: false,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: null,
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: false,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: null,
-    projectRole: null,
-    expected: {
-      canBrowse: false,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'owner',
-    projectRole: 'admin',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'owner',
-    projectRole: 'member',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'owner',
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'owner',
-    projectRole: null,
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'admin',
-    projectRole: 'admin',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'admin',
-    projectRole: 'member',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'admin',
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'admin',
-    projectRole: null,
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'member',
-    projectRole: 'admin',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'member',
-    projectRole: 'member',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: false,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'member',
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: true,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'member',
-    projectRole: null,
-    expected: {
-      canBrowse: true,
-      canEdit: false,
-      canComment: true,
-      canModerateComments: false,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: null,
-    projectRole: 'admin',
-    expected: {
-      canBrowse: false,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: null,
-    projectRole: 'member',
-    expected: {
-      canBrowse: false,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: null,
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: false,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: null,
-    projectRole: null,
-    expected: {
-      canBrowse: false,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'owner',
-    projectRole: 'admin',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'owner',
-    projectRole: 'member',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'owner',
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'owner',
-    projectRole: null,
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'admin',
-    projectRole: 'admin',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'admin',
-    projectRole: 'member',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'admin',
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'admin',
-    projectRole: null,
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'member',
-    projectRole: 'admin',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: true,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: true,
-      canManageWatchers: true,
-      canManageProject: true,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'member',
-    projectRole: 'member',
-    expected: {
-      canBrowse: true,
-      canEdit: true,
-      canComment: true,
-      canModerateComments: false,
-      canCreateAttachments: true,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'member',
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: true,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'member',
-    projectRole: null,
-    expected: {
-      canBrowse: false,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: null,
-    projectRole: 'admin',
-    expected: {
-      canBrowse: false,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: null,
-    projectRole: 'member',
-    expected: {
-      canBrowse: false,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: null,
-    projectRole: 'viewer',
-    expected: {
-      canBrowse: false,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: null,
-    projectRole: null,
-    expected: {
-      canBrowse: false,
-      canEdit: false,
-      canComment: false,
-      canModerateComments: false,
-      canCreateAttachments: false,
-      canDeleteAllAttachments: false,
-      canManageWatchers: false,
-      canManageProject: false,
-      canSubmitToTriage: false,
-      canUpvotePublicRequest: false,
-      canCommentPublicRequest: false,
-    },
-  },
+  { accessLevel: 'public', actor: 'custom', addedToProject: true, expected: union(CUSTOM, PUBLIC) },
 ];
 
-describe('the permission model is behaviour-neutral over the shipped policy', () => {
-  it('covers every combination exactly once (4 levels × 4 workspace roles × 4 project roles)', () => {
-    expect(TABLE).toHaveLength(64);
-    const seen = new Set(TABLE.map((r) => `${r.accessLevel}|${r.workspaceRole}|${r.projectRole}`));
-    expect(seen.size).toBe(64);
+function inputsFor(
+  row: Pick<Row, 'accessLevel' | 'actor' | 'addedToProject'>,
+): ProjectAccessInputs {
+  const workspaceRole: WorkspaceRole | null =
+    row.actor === 'none' ? null : row.actor === 'custom' ? 'member' : row.actor;
+  return {
+    accessLevel: row.accessLevel,
+    workspaceRole,
+    addedToProject: row.addedToProject,
+    customRolePermissions: row.actor === 'custom' ? [...CUSTOM] : null,
+  };
+}
+
+/** Each named predicate and the one key it is a membership test for. */
+const PREDICATES: [string, (i: ProjectAccessInputs) => boolean, PermissionKey][] = [
+  ['canBrowse', canBrowse, 'project:browse'],
+  ['canEdit', canEdit, 'work_item:edit'],
+  ['canComment', canComment, 'comment:add'],
+  ['canModerateComments', canModerateComments, 'comment:moderate'],
+  ['canCreateAttachments', canCreateAttachments, 'attachment:create'],
+  ['canDeleteAllAttachments', canDeleteAllAttachments, 'attachment:delete_any'],
+  ['canManageWatchers', canManageWatchers, 'watcher:manage'],
+  ['canManageProject', canManageProject, 'project:administer'],
+  ['canSubmitToTriage', canSubmitToTriage, 'public_request:submit'],
+  ['canUpvotePublicRequest', canUpvotePublicRequest, 'public_request:upvote'],
+  ['canCommentPublicRequest', canCommentPublicRequest, 'public_request:comment'],
+];
+
+describe('the literal sets are the built-in roles, transcribed', () => {
+  it('Manager, Member and Viewer equal WORKSPACE_ROLE_PERMISSIONS', () => {
+    expect(union(MANAGER)).toEqual([...WORKSPACE_ROLE_PERMISSIONS.manager].sort());
+    expect(union(MEMBER)).toEqual([...WORKSPACE_ROLE_PERMISSIONS.member].sort());
+    expect(union(VIEWER)).toEqual([...WORKSPACE_ROLE_PERMISSIONS.viewer].sort());
   });
 
-  it('asserts all eleven predicates on every row', () => {
-    for (const row of TABLE) {
-      expect(Object.keys(row.expected).sort()).toEqual(Object.keys(PREDICATES).sort());
+  it('the Manager set IS the role-gated catalog, and the public literal the level grant', () => {
+    expect(union(MANAGER)).toEqual([...ROLE_GATED_PERMISSIONS].sort());
+    expect(union(PUBLIC)).toEqual([...PUBLIC_PROJECT_PERMISSIONS].sort());
+  });
+
+  it('every built-in set carries all three view-any keys (DECISION MOTIR-6165 Q2)', () => {
+    for (const set of [MANAGER, MEMBER, VIEWER]) {
+      for (const key of ['plan:view_any', 'approval:view_any', 'run:view_any'] as const) {
+        expect(set).toContain(key);
+      }
     }
-    expect(Object.keys(PREDICATES)).toHaveLength(11);
+  });
+});
+
+describe('the truth table — 4 levels × 5 actors × added or not', () => {
+  it('covers every combination exactly once', () => {
+    expect(TABLE).toHaveLength(40);
+    const seen = new Set(TABLE.map((r) => `${r.accessLevel}/${r.actor}/${r.addedToProject}`));
+    expect(seen.size).toBe(40);
   });
 
   it.each(TABLE)(
-    'accessLevel=$accessLevel workspaceRole=$workspaceRole projectRole=$projectRole',
-    ({ accessLevel, workspaceRole, projectRole, expected }) => {
-      const inputs: ProjectAccessInputs = { accessLevel, workspaceRole, projectRole };
-      for (const [name, predicate] of Object.entries(PREDICATES)) {
-        expect(
-          predicate(inputs),
-          `${name}({ ${accessLevel}, ws=${workspaceRole}, proj=${projectRole} })`,
-        ).toBe(expected[name]);
+    '$accessLevel · $actor · added=$addedToProject — resolves to exactly its written-out set',
+    (row) => {
+      const inputs = inputsFor(row);
+      expect([...resolvePermissions(inputs)].sort()).toEqual(row.expected);
+      // …and every named predicate answers as a membership test of that set.
+      for (const [name, predicate, key] of PREDICATES) {
+        expect(predicate(inputs), `${name}`).toBe(row.expected.includes(key));
       }
     },
   );
 });
 
-describe('the anonymous public actor holds exactly the Story 6.12 grant', () => {
-  const anonymous: ProjectAccessInputs = {
-    accessLevel: 'public',
-    workspaceRole: null,
-    projectRole: null,
-  };
-
-  it('resolves to project:browse, the Plans and Runs view keys and the three public-request keys, and nothing else', () => {
-    // MOTIR-6328 — `plan:view_any` / `run:view_any` join the level-gated layer:
-    // a public project's reader opens `/plans` and `/runs` on browse today, and
-    // keeps that reach once the reads assert the rooms' keys (Story MOTIR-6179).
-    expect([...resolvePermissions(anonymous)].sort()).toEqual(
+describe('the properties the story asserts', () => {
+  it('open: a Member not added holds exactly the Member set; a Viewer exactly the Viewer set, no edit', () => {
+    expect(
       [
-        'plan:view_any',
-        'run:view_any',
-        'project:browse',
-        'public_request:comment',
-        'public_request:submit',
-        'public_request:upvote',
+        ...resolvePermissions(
+          inputsFor({ accessLevel: 'open', actor: 'member', addedToProject: false }),
+        ),
       ].sort(),
+    ).toEqual([...WORKSPACE_ROLE_PERMISSIONS.member].sort());
+    const viewer = resolvePermissions(
+      inputsFor({ accessLevel: 'open', actor: 'viewer', addedToProject: true }),
     );
+    expect([...viewer].sort()).toEqual([...WORKSPACE_ROLE_PERMISSIONS.viewer].sort());
+    expect(viewer.has('work_item:edit')).toBe(false);
   });
 
-  it('holds no normal write — edit, comment, moderation and administration are all denied', () => {
-    expect(canEdit(anonymous)).toBe(false);
-    expect(canComment(anonymous)).toBe(false);
-    expect(canCreateAttachments(anonymous)).toBe(false);
-    expect(canModerateComments(anonymous)).toBe(false);
-    expect(canDeleteAllAttachments(anonymous)).toBe(false);
-    expect(canManageWatchers(anonymous)).toBe(false);
-    expect(canManageProject(anonymous)).toBe(false);
+  it('a custom role holds exactly its stored keys — and closing Runs is leaving its key out', () => {
+    const held = resolvePermissions(
+      inputsFor({ accessLevel: 'open', actor: 'custom', addedToProject: true }),
+    );
+    expect([...held].sort()).toEqual(union(CUSTOM));
+    expect(held.has('run:view_any')).toBe(false);
+    expect(held.has('comment:add')).toBe(true);
   });
 
-  it('holds nothing at all on a non-public project', () => {
-    for (const accessLevel of ['open', 'limited', 'private'] as const) {
-      expect([...resolvePermissions({ ...anonymous, accessLevel })]).toEqual([]);
-    }
-  });
-});
-
-describe('the two rails resolve INSIDE the set, not around it', () => {
-  it('a workspace manager holds the whole ROLE-GATED catalog on every level', () => {
-    for (const accessLevel of ['public', 'open', 'limited', 'private'] as const) {
-      for (const workspaceRole of ['owner', 'admin'] as const) {
-        const held = resolvePermissions({ accessLevel, workspaceRole, projectRole: null });
-        // ROLE_GATED_PERMISSIONS, not every catalog key: the catalog also holds
-        // the level-gated public-request grants (never role-held) and the
-        // `planned` keys MOTIR-2256 has yet to wire to a gate.
-        for (const key of ROLE_GATED_PERMISSIONS) {
-          expect(held.has(key), `${workspaceRole} on ${accessLevel} lacks ${key}`).toBe(true);
-        }
+  it('a Manager holds every role-gated key on every level, added or not', () => {
+    for (const accessLevel of ['open', 'limited', 'private', 'public'] as ProjectAccessLevel[]) {
+      for (const addedToProject of [false, true]) {
+        const held = resolvePermissions(
+          inputsFor({ accessLevel, actor: 'manager', addedToProject }),
+        );
+        for (const key of ROLE_GATED_PERMISSIONS) expect(held.has(key)).toBe(true);
       }
     }
   });
 
-  it('does NOT widen the level-gated public-request grants for a workspace manager', () => {
-    // The shipped canSubmitToTriage is `accessLevel === 'public'` for EVERYONE.
-    // A naive "manager gets the full catalog" rail would silently grant these on
-    // a private project — this is the row that catches it.
-    const owner = resolvePermissions({
-      accessLevel: 'private',
-      workspaceRole: 'owner',
-      projectRole: 'admin',
-    });
-    expect(owner.has('public_request:submit')).toBe(false);
-    expect(owner.has('public_request:upvote')).toBe(false);
-    expect(owner.has('public_request:comment')).toBe(false);
-  });
-
-  it('a project viewer is read-only on every access level', () => {
-    for (const accessLevel of ['public', 'open', 'limited', 'private'] as const) {
-      const held = resolvePermissions({
-        accessLevel,
-        workspaceRole: 'member',
-        projectRole: 'viewer',
-      });
-      expect(held.has('project:browse')).toBe(true);
-      expect(held.has('work_item:edit')).toBe(false);
-      expect(held.has('comment:add')).toBe(false);
-      expect(held.has('attachment:create')).toBe(false);
-      expect(held.has('project:administer')).toBe(false);
+  it('the Manager rail does NOT widen the level-gated public-request grants', () => {
+    for (const accessLevel of ['open', 'limited', 'private'] as ProjectAccessLevel[]) {
+      const held = resolvePermissions(
+        inputsFor({ accessLevel, actor: 'manager', addedToProject: true }),
+      );
+      expect(held.has('public_request:submit')).toBe(false);
     }
   });
 
   it('the twelve administrative keys are held by exactly the actors project:administer is', () => {
-    // The NEUTRALITY PROOF for MOTIR-2256. The story splits one umbrella
-    // permission into twelve per-domain ones and claims nobody's access changes.
-    // That claim is only true if each of the twelve resolves identically to
-    // `project:administer` for EVERY actor the system can describe — not for the
-    // handful anybody would think to try. This walks all 64 rows and both rails.
-    //
-    // A divergence here means one of two things, and both are real findings:
-    // the key was added to the wrong role set, or `levelGrants` grew a branch
-    // naming it (see the ⚠️ on `levelGrants` — it must not).
+    const ADMINISTRATIVE_KEYS: readonly PermissionKey[] = [
+      'member:manage',
+      'project:manage_access',
+      'board:configure',
+      'workflow:manage',
+      'automation:manage',
+      'field:manage',
+      'component:manage',
+      'label:manage',
+      'estimation:manage',
+      'repository:manage',
+      'repository:manage_access',
+      'ai:configure',
+    ];
     for (const row of TABLE) {
-      const inputs: ProjectAccessInputs = {
-        accessLevel: row.accessLevel,
-        workspaceRole: row.workspaceRole,
-        projectRole: row.projectRole,
-      };
-      const umbrella = hasPermission(inputs, 'project:administer');
+      const inputs = inputsFor(row);
+      const administers = hasPermission(inputs, 'project:administer');
       for (const key of ADMINISTRATIVE_KEYS) {
-        expect(
-          hasPermission(inputs, key),
-          `${key} diverges from project:administer on { ${row.accessLevel}, ws=${row.workspaceRole}, proj=${row.projectRole} } (expected ${umbrella})`,
-        ).toBe(umbrella);
-      }
-    }
-  });
-
-  it('the twelve are held by admin and by NO other built-in role', () => {
-    // The other half of neutrality: the split must not GRANT anything. A member
-    // or viewer picking up an administrative key would satisfy the parity test
-    // above only if `project:administer` moved too — but stating it directly is
-    // what makes a mistaken paste into the wrong set fail loudly.
-    for (const key of ADMINISTRATIVE_KEYS) {
-      expect(BUILTIN_ROLE_PERMISSIONS.admin.has(key), `admin lacks ${key}`).toBe(true);
-      expect(BUILTIN_ROLE_PERMISSIONS.member.has(key), `member holds ${key}`).toBe(false);
-      expect(BUILTIN_ROLE_PERMISSIONS.viewer.has(key), `viewer holds ${key}`).toBe(false);
-      expect(
-        IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS.has(key),
-        `the implicit workspace-member grant holds ${key}`,
-      ).toBe(false);
-    }
-  });
-
-  it('the access level SUBTRACTS: a workspace member without a project membership', () => {
-    const base = { workspaceRole: 'member' as const, projectRole: null };
-    // open — the role's base set survives intact
-    const open = resolvePermissions({ ...base, accessLevel: 'open' });
-    expect(open.has('work_item:edit')).toBe(true);
-    expect(open.has('comment:add')).toBe(true);
-    // limited — view + comment, but EDIT is taken away
-    const limited = resolvePermissions({ ...base, accessLevel: 'limited' });
-    expect(limited.has('project:browse')).toBe(true);
-    expect(limited.has('comment:add')).toBe(true);
-    expect(limited.has('work_item:edit')).toBe(false);
-    // private — invisible without a project membership
-    expect([...resolvePermissions({ ...base, accessLevel: 'private' })]).toEqual([]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// THE MEMBER-FACING TABLE (Story MOTIR-2291 · Subtask MOTIR-2349).
-//
-// The eleven-predicate table above proves NEUTRALITY: MOTIR-2255 moved the
-// decision onto a new mechanism and nothing an actor could do changed, so not one
-// of its 64 rows moves here either — this card touches no shipped predicate, and
-// that unchanged table is the assertion.
-//
-// This second table proves the opposite kind of thing, and it is this card's
-// deliverable rather than a chore. MOTIR-2291's eight keys are in NO role set on
-// `origin/main`, so today every cell below would be `false` for every actor: a
-// key nobody holds resolves to nobody. Each `true` here is therefore a grant
-// arriving — and, read the other way round, each `false` on a row whose actor can
-// reach the operation TODAY is the capability that actor loses when that key's
-// wiring card lands. The rows worth reading twice:
-//
-//   * `projectRole: 'viewer'` — holds `report:view` and NOTHING else of the
-//     eight. A viewer who today starts a sprint, re-ranks the backlog, runs the
-//     planner or accepts a triage submission stops being able to.
-//   * `projectRole: null` with a workspace role — the implicit workspace member.
-//     Same single key. This is the actor §2 of the decision is about: they may
-//     read the charts of a project nobody put them on, and nothing else.
-//   * `projectRole: 'member'` — holds six, and NOT `import:run` /
-//     `work_item:delete`. A project member loses running an import and deleting a
-//     subtree; both mirrors put those at admin.
-//   * `workspaceRole: 'owner' | 'admin'` — all eight on every access level, via
-//     the always-pass rail. Nothing decided here can lock a workspace owner out.
-//   * `accessLevel: 'private'` with `projectRole: null` — nothing at all, because
-//     the level denies a non-member before any key is consulted.
-//
-// ⚠️ TRANSCRIBED FROM `docs/decisions/member-facing-permissions.md`, NOT computed
-// from `resolvePermissions`. The role assignment is §1's table, the implicit
-// workspace-member row is §2, and the per-level behaviour is §3's decision to add
-// no `levelGrants` branch — so each of the eight behaves per level exactly as
-// `project:administer` does. Deriving these cells from the code under test would
-// only prove the code agrees with itself.
-const MEMBER_FACING_KEYS: readonly PermissionKey[] = [
-  'sprint:manage',
-  'report:view',
-  'saved_filter:manage',
-  'import:run',
-  'work_item:delete',
-  'work_item:triage',
-  'ai:plan',
-  'ai:view_plan',
-];
-
-type MemberFacingRow = {
-  accessLevel: ProjectAccessLevel;
-  workspaceRole: MemberRole | null;
-  projectRole: MemberRole | null;
-  held: Record<string, boolean>;
-};
-
-const MEMBER_FACING_TABLE: MemberFacingRow[] = [
-  {
-    accessLevel: 'public',
-    workspaceRole: 'owner',
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'owner',
-    projectRole: 'member',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'owner',
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'owner',
-    projectRole: null,
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'admin',
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'admin',
-    projectRole: 'member',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'admin',
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'admin',
-    projectRole: null,
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'member',
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'member',
-    projectRole: 'member',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'member',
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': false,
-      'report:view': true,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: 'member',
-    projectRole: null,
-    held: {
-      'sprint:manage': false,
-      'report:view': true,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: null,
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: null,
-    projectRole: 'member',
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: null,
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'public',
-    workspaceRole: null,
-    projectRole: null,
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'owner',
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'owner',
-    projectRole: 'member',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'owner',
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'owner',
-    projectRole: null,
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'admin',
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'admin',
-    projectRole: 'member',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'admin',
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'admin',
-    projectRole: null,
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'member',
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'member',
-    projectRole: 'member',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'member',
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': false,
-      'report:view': true,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: 'member',
-    projectRole: null,
-    held: {
-      'sprint:manage': false,
-      'report:view': true,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: null,
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: null,
-    projectRole: 'member',
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: null,
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'open',
-    workspaceRole: null,
-    projectRole: null,
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'owner',
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'owner',
-    projectRole: 'member',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'owner',
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'owner',
-    projectRole: null,
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'admin',
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'admin',
-    projectRole: 'member',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'admin',
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'admin',
-    projectRole: null,
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'member',
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'member',
-    projectRole: 'member',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'member',
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': false,
-      'report:view': true,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: 'member',
-    projectRole: null,
-    held: {
-      'sprint:manage': false,
-      'report:view': true,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: null,
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: null,
-    projectRole: 'member',
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: null,
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'limited',
-    workspaceRole: null,
-    projectRole: null,
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'owner',
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'owner',
-    projectRole: 'member',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'owner',
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'owner',
-    projectRole: null,
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'admin',
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'admin',
-    projectRole: 'member',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'admin',
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'admin',
-    projectRole: null,
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'member',
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': true,
-      'work_item:delete': true,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'member',
-    projectRole: 'member',
-    held: {
-      'sprint:manage': true,
-      'report:view': true,
-      'saved_filter:manage': true,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': true,
-      'ai:plan': true,
-      'ai:view_plan': true,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'member',
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': false,
-      'report:view': true,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: 'member',
-    projectRole: null,
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: null,
-    projectRole: 'admin',
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: null,
-    projectRole: 'member',
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: null,
-    projectRole: 'viewer',
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-  {
-    accessLevel: 'private',
-    workspaceRole: null,
-    projectRole: null,
-    held: {
-      'sprint:manage': false,
-      'report:view': false,
-      'saved_filter:manage': false,
-      'import:run': false,
-      'work_item:delete': false,
-      'work_item:triage': false,
-      'ai:plan': false,
-      'ai:view_plan': false,
-    },
-  },
-];
-
-describe('the eight member-facing keys resolve to exactly the actors the decision names', () => {
-  it('covers every combination exactly once, and asserts all eight keys on every row', () => {
-    expect(MEMBER_FACING_TABLE).toHaveLength(64);
-    const seen = new Set(
-      MEMBER_FACING_TABLE.map((r) => `${r.accessLevel}|${r.workspaceRole}|${r.projectRole}`),
-    );
-    expect(seen.size).toBe(64);
-    for (const row of MEMBER_FACING_TABLE) {
-      expect(Object.keys(row.held).sort()).toEqual([...MEMBER_FACING_KEYS].sort());
-    }
-  });
-
-  it.each(MEMBER_FACING_TABLE)(
-    'accessLevel=$accessLevel workspaceRole=$workspaceRole projectRole=$projectRole',
-    ({ accessLevel, workspaceRole, projectRole, held }) => {
-      const inputs: ProjectAccessInputs = { accessLevel, workspaceRole, projectRole };
-      for (const key of MEMBER_FACING_KEYS) {
-        expect(
-          hasPermission(inputs, key),
-          `${key}({ ${accessLevel}, ws=${workspaceRole}, proj=${projectRole} })`,
-        ).toBe(held[key]);
-      }
-    },
-  );
-
-  it('all eight are role-holdable — the workspace-manager rail resolves to the whole array', () => {
-    // The rail returns ROLE_GATED_PERMISSIONS verbatim, so this is really the
-    // assertion that the eight JOINED that array. Stated directly rather than
-    // trusted: a key left out of it is not holdable by anybody, and the wiring
-    // card that calls assertPermission for it would refuse the project admin.
-    for (const key of MEMBER_FACING_KEYS) {
-      expect(ROLE_GATED_PERMISSIONS.includes(key), `${key} is not role-gated`).toBe(true);
-    }
-    for (const accessLevel of ['public', 'open', 'limited', 'private'] as const) {
-      for (const workspaceRole of ['owner', 'admin'] as const) {
-        const held = resolvePermissions({ accessLevel, workspaceRole, projectRole: null });
-        for (const key of MEMBER_FACING_KEYS) {
-          expect(held.has(key), `${workspaceRole} on ${accessLevel} lacks ${key}`).toBe(true);
-        }
-      }
-    }
-  });
-
-  it('a project VIEWER holds report:view and none of the other seven', () => {
-    for (const key of MEMBER_FACING_KEYS) {
-      expect(BUILTIN_ROLE_PERMISSIONS.viewer.has(key), `viewer / ${key}`).toBe(
-        key === 'report:view',
-      );
-    }
-  });
-
-  it('a project MEMBER holds six — not import:run, not work_item:delete', () => {
-    for (const key of MEMBER_FACING_KEYS) {
-      expect(BUILTIN_ROLE_PERMISSIONS.member.has(key), `member / ${key}`).toBe(
-        key !== 'import:run' && key !== 'work_item:delete',
-      );
-    }
-  });
-
-  // ── MOTIR-3629 — the ROLE half of the back-compatibility decision ─────────
-  // The token half lives in `tests/tokens/grant.test.ts`; this is the same rule
-  // reaching the other stored carrier, `project_role_definition.permissions`,
-  // through `customRoleBase`. Neither is migrated — §5's posture — so the
-  // implication is what keeps every actor who could archive able to.
-
-  it('a CUSTOM ROLE authored before the split still archives — resolution confers it', () => {
-    const held = resolvePermissions({
-      accessLevel: 'open',
-      workspaceRole: 'member',
-      projectRole: 'member',
-      customRolePermissions: ['project:browse', 'work_item:edit', 'work_item:delete'],
-    });
-    expect(held.has('work_item:archive')).toBe(true);
-    expect(held.has('work_item:delete')).toBe(true);
-  });
-
-  it('…and a role that lists ONLY archive does not gain the destroy', () => {
-    const held = resolvePermissions({
-      accessLevel: 'open',
-      workspaceRole: 'member',
-      projectRole: 'member',
-      customRolePermissions: ['project:browse', 'work_item:archive'],
-    });
-    expect(held.has('work_item:archive')).toBe(true);
-    expect(held.has('work_item:delete')).toBe(false);
-  });
-
-  it('a project MEMBER archives and does not delete, on every access level', () => {
-    // The assignment MOTIR-3629 decided, over the levels rather than at one
-    // point: `levelGrants` names neither key, so both take the default arm and
-    // the answer must be the same on all four.
-    for (const accessLevel of ['public', 'open', 'limited', 'private'] as const) {
-      const held = resolvePermissions({
-        accessLevel,
-        workspaceRole: 'member',
-        projectRole: 'member',
-      });
-      expect(held.has('work_item:archive'), `member / ${accessLevel} / archive`).toBe(true);
-      expect(held.has('work_item:delete'), `member / ${accessLevel} / delete`).toBe(false);
-    }
-  });
-
-  it('a project VIEWER archives on no level, and neither does an implicit workspace member', () => {
-    for (const accessLevel of ['public', 'open', 'limited', 'private'] as const) {
-      expect(
-        resolvePermissions({ accessLevel, workspaceRole: 'member', projectRole: 'viewer' }).has(
-          'work_item:archive',
-        ),
-        `viewer / ${accessLevel}`,
-      ).toBe(false);
-      expect(
-        resolvePermissions({ accessLevel, workspaceRole: 'member', projectRole: null }).has(
-          'work_item:archive',
-        ),
-        `implicit workspace member / ${accessLevel}`,
-      ).toBe(false);
-    }
-  });
-
-  it('the implicit workspace-member grant grew by exactly report:view (and, later, the two room view keys)', () => {
-    // The set the decision's §2 is about. Asserted as an exact set rather than a
-    // per-key loop, so a key added here later fails loudly instead of widening
-    // what a workspace membership means by itself. MOTIR-6328 (AMENDMENT 1) is
-    // the one later addition: `plan:view_any` and `run:view_any`, which keep the
-    // `/plans` and `/runs` reach this actor has on browse today.
-    expect([...IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS].sort()).toEqual(
-      [
-        'attachment:create',
-        'plan:view_any',
-        'run:view_any',
-        'comment:add',
-        'project:browse',
-        'report:view',
-        'work_item:edit',
-      ].sort(),
-    );
-  });
-
-  it('none of the eight is named by levelGrants — each behaves exactly as project:administer per level', () => {
-    // §3's decision, proved rather than asserted in prose: the umbrella takes the
-    // default arm of every level, so a key that also takes it must agree with the
-    // umbrella wherever both are HELD by the actor's role. Restricting to rows
-    // where the role holds the key is what separates "the level treats them the
-    // same" (this) from "the same roles hold them" (the tests above) — the two
-    // failures a levelGrants branch would produce look identical otherwise.
-    for (const row of MEMBER_FACING_TABLE) {
-      const inputs: ProjectAccessInputs = {
-        accessLevel: row.accessLevel,
-        workspaceRole: row.workspaceRole,
-        projectRole: row.projectRole,
-      };
-      const umbrella = hasPermission(inputs, 'project:administer');
-      if (!umbrella) continue;
-      for (const key of MEMBER_FACING_KEYS) {
-        expect(
-          hasPermission(inputs, key),
-          `${key} diverges from project:administer on { ${row.accessLevel}, ws=${row.workspaceRole}, proj=${row.projectRole} }`,
-        ).toBe(true);
-      }
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// THE SAVED-FILTER MANAGE-ANY TIER (MOTIR-5293).
-//
-// `lib/savedFilters/access.ts` answered "may this actor see other people's
-// private filters, and manage and reassign the shared ones?" with a ROLE read:
-//
-//   isWorkspaceManager(workspaceRole) || (workspaceRole != null && projectRole === 'admin')
-//
-// which is why no custom role could hold it. It now reads
-// `saved_filter:manage_any`, and the claim is that no built-in actor's answer
-// moves. So, as for the tables above: all 64 inputs, and expectations that are
-// that role read evaluated over them and written down as LITERALS — not computed
-// from `resolvePermissions`, which would only prove the new code agrees with
-// itself.
-//
-// ⚠️ Read the access-level column. The role read ignored it, so a project
-// `admin` held the tier on `private` and `limited` as much as on `open` — and the
-// key does too, only because `levelGrants` names nothing but the three edit-ish
-// keys. A branch there naming this key would turn rows in the `private` block red.
-//
-// [accessLevel, workspaceRole, projectRole, holds saved_filter:manage_any]
-const SAVED_FILTER_ANY_TABLE: readonly [
-  ProjectAccessLevel,
-  MemberRole | null,
-  MemberRole | null,
-  boolean,
-][] = [
-  ['public', 'owner', 'admin', true],
-  ['public', 'owner', 'member', true],
-  ['public', 'owner', 'viewer', true],
-  ['public', 'owner', null, true],
-  ['public', 'admin', 'admin', true],
-  ['public', 'admin', 'member', true],
-  ['public', 'admin', 'viewer', true],
-  ['public', 'admin', null, true],
-  ['public', 'member', 'admin', true],
-  ['public', 'member', 'member', false],
-  ['public', 'member', 'viewer', false],
-  ['public', 'member', null, false],
-  ['public', null, 'admin', false],
-  ['public', null, 'member', false],
-  ['public', null, 'viewer', false],
-  ['public', null, null, false],
-  ['open', 'owner', 'admin', true],
-  ['open', 'owner', 'member', true],
-  ['open', 'owner', 'viewer', true],
-  ['open', 'owner', null, true],
-  ['open', 'admin', 'admin', true],
-  ['open', 'admin', 'member', true],
-  ['open', 'admin', 'viewer', true],
-  ['open', 'admin', null, true],
-  ['open', 'member', 'admin', true],
-  ['open', 'member', 'member', false],
-  ['open', 'member', 'viewer', false],
-  ['open', 'member', null, false],
-  ['open', null, 'admin', false],
-  ['open', null, 'member', false],
-  ['open', null, 'viewer', false],
-  ['open', null, null, false],
-  ['limited', 'owner', 'admin', true],
-  ['limited', 'owner', 'member', true],
-  ['limited', 'owner', 'viewer', true],
-  ['limited', 'owner', null, true],
-  ['limited', 'admin', 'admin', true],
-  ['limited', 'admin', 'member', true],
-  ['limited', 'admin', 'viewer', true],
-  ['limited', 'admin', null, true],
-  ['limited', 'member', 'admin', true],
-  ['limited', 'member', 'member', false],
-  ['limited', 'member', 'viewer', false],
-  ['limited', 'member', null, false],
-  ['limited', null, 'admin', false],
-  ['limited', null, 'member', false],
-  ['limited', null, 'viewer', false],
-  ['limited', null, null, false],
-  ['private', 'owner', 'admin', true],
-  ['private', 'owner', 'member', true],
-  ['private', 'owner', 'viewer', true],
-  ['private', 'owner', null, true],
-  ['private', 'admin', 'admin', true],
-  ['private', 'admin', 'member', true],
-  ['private', 'admin', 'viewer', true],
-  ['private', 'admin', null, true],
-  ['private', 'member', 'admin', true],
-  ['private', 'member', 'member', false],
-  ['private', 'member', 'viewer', false],
-  ['private', 'member', null, false],
-  ['private', null, 'admin', false],
-  ['private', null, 'member', false],
-  ['private', null, 'viewer', false],
-  ['private', null, null, false],
-];
-
-describe('saved_filter:manage_any resolves to exactly the actors the role read did (MOTIR-5293)', () => {
-  it('covers every combination exactly once', () => {
-    expect(SAVED_FILTER_ANY_TABLE).toHaveLength(64);
-    expect(new Set(SAVED_FILTER_ANY_TABLE.map(([l, w, p]) => `${l}|${w}|${p}`)).size).toBe(64);
-  });
-
-  it.each(SAVED_FILTER_ANY_TABLE)(
-    'accessLevel=%s workspaceRole=%s projectRole=%s → %s',
-    (accessLevel, workspaceRole, projectRole, expected) => {
-      expect(
-        hasPermission({ accessLevel, workspaceRole, projectRole }, 'saved_filter:manage_any'),
-      ).toBe(expected);
-    },
-  );
-
-  it('is held by the built-in admin set and by NO other built-in role or the implicit grant', () => {
-    // The half a truth table can hide: a paste into `member` would move sixteen
-    // cells at once, and saying it directly is what makes the cause legible.
-    expect(ROLE_GATED_PERMISSIONS).toContain('saved_filter:manage_any');
-    expect(BUILTIN_ROLE_PERMISSIONS.admin.has('saved_filter:manage_any')).toBe(true);
-    expect(BUILTIN_ROLE_PERMISSIONS.member.has('saved_filter:manage_any')).toBe(false);
-    expect(BUILTIN_ROLE_PERMISSIONS.viewer.has('saved_filter:manage_any')).toBe(false);
-    expect(IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS.has('saved_filter:manage_any')).toBe(false);
-  });
-
-  it('a CUSTOM role holds it exactly when it lists it, on every access level', () => {
-    // The whole point of the card: before it, no permission you could put on a
-    // role changed this answer. `saved_filter:manage` alone — which Member holds —
-    // must NOT confer it, or every member would read every private filter.
-    for (const accessLevel of ['public', 'open', 'limited', 'private'] as const) {
-      const as = (customRolePermissions: string[]) =>
-        hasPermission(
-          {
-            accessLevel,
-            workspaceRole: 'member',
-            projectRole: CUSTOM_ROLE_TIER,
-            customRolePermissions,
-          },
-          'saved_filter:manage_any',
+        expect(hasPermission(inputs, key), `${row.accessLevel}/${row.actor} · ${key}`).toBe(
+          administers,
         );
-      expect(
-        as(['project:browse', 'saved_filter:manage', 'saved_filter:manage_any']),
-        `with the key / ${accessLevel}`,
-      ).toBe(true);
-      expect(as(['project:browse', 'saved_filter:manage']), `without it / ${accessLevel}`).toBe(
-        false,
-      );
+      }
     }
+  });
+
+  it('an empty custom role grants nothing — it does not fall back to its tier', () => {
+    const held = resolvePermissions({
+      accessLevel: 'open',
+      workspaceRole: 'member',
+      addedToProject: true,
+      customRolePermissions: [],
+    });
+    expect(held.size).toBe(0);
   });
 });
 
-describe('the Plans and Runs view keys resolve to exactly the actors project:browse does (MOTIR-6328)', () => {
-  // The neutrality proof Story MOTIR-6179 rests on. Every actor who opens
-  // `/plans` and `/runs` today does so on `project:browse` alone, and the two
-  // new keys must keep EVERY one of them in once the reads assert them. So each
-  // key must resolve identically to browse over all 64 rows and both rails —
-  // which holds only while `levelGrants` gives them the default arm and every
-  // base set that holds browse also holds them.
-  it('covers every combination and agrees with project:browse on each', () => {
-    expect(TABLE).toHaveLength(64);
-    for (const row of TABLE) {
-      const inputs: ProjectAccessInputs = {
-        accessLevel: row.accessLevel,
-        workspaceRole: row.workspaceRole,
-        projectRole: row.projectRole,
-      };
-      const browse = hasPermission(inputs, 'project:browse');
-      for (const key of ['plan:view_any', 'run:view_any'] as const) {
-        expect(
-          hasPermission(inputs, key),
-          `${key} diverges from project:browse on { ${row.accessLevel}, ws=${row.workspaceRole}, proj=${row.projectRole} } (expected ${browse})`,
-        ).toBe(browse);
-      }
-    }
-  });
-
-  it('agrees for the anonymous public actor too — the level-gated layer carries both', () => {
-    const anonymous: ProjectAccessInputs = {
-      accessLevel: 'public',
-      workspaceRole: null,
-      projectRole: null,
-    };
-    expect(hasPermission(anonymous, 'plan:view_any')).toBe(true);
-    expect(hasPermission(anonymous, 'run:view_any')).toBe(true);
-    for (const accessLevel of ['open', 'limited', 'private'] as const) {
-      const outsider = { accessLevel, workspaceRole: null, projectRole: null };
-      expect(hasPermission(outsider, 'plan:view_any')).toBe(false);
-      expect(hasPermission(outsider, 'run:view_any')).toBe(false);
-    }
-  });
-
-  it('a CUSTOM role holds each exactly when it lists it — which is how a team closes a room', () => {
-    for (const accessLevel of ['open', 'limited', 'private'] as const) {
-      for (const key of ['plan:view_any', 'run:view_any'] as const) {
-        const as = (customRolePermissions: string[]) =>
-          hasPermission(
-            {
-              accessLevel,
-              workspaceRole: 'member',
-              projectRole: CUSTOM_ROLE_TIER,
-              customRolePermissions,
-            },
-            key,
-          );
-        expect(as(['project:browse', key]), `${key} listed / ${accessLevel}`).toBe(true);
-        expect(as(['project:browse']), `${key} withheld / ${accessLevel}`).toBe(false);
-      }
-    }
+describe('no project role reaches the calculation', () => {
+  it('resolve.ts reads no project membership role and no project custom role', () => {
+    const source = readFileSync(join(process.cwd(), 'lib/permissions/resolve.ts'), 'utf8');
+    const code = source
+      .split('\n')
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .join('\n');
+    expect(code).not.toMatch(/projectRole/);
+    expect(code).not.toMatch(/ProjectRoleDefinition/);
+    expect(code).not.toMatch(/projectMembership/);
+    expect(code).not.toMatch(/IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS/);
   });
 });

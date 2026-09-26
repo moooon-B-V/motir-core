@@ -650,7 +650,11 @@ describe('permissions', () => {
     const { todo } = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
 
     const viewer = await createTestUser({ email: 'viewer@ex.com', name: 'Viewer' });
-    await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
+    await workspacesService.addMember({
+      userId: viewer.id,
+      workspaceId: fx.workspaceId,
+      role: 'viewer',
+    });
     await withWorkspaceContext(fx.ctx, (tx) =>
       projectMembershipRepository.create(
         { workspaceId: fx.workspaceId, projectId: fx.projectId, userId: viewer.id, role: 'viewer' },
@@ -685,7 +689,11 @@ describe('permissions', () => {
     await workItemTodosService.setTodoDone(todo.id, true, fx.ctx);
 
     const viewer = await createTestUser({ email: 'reader@ex.com', name: 'Reader' });
-    await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
+    await workspacesService.addMember({
+      userId: viewer.id,
+      workspaceId: fx.workspaceId,
+      role: 'viewer',
+    });
     await withWorkspaceContext(fx.ctx, (tx) =>
       projectMembershipRepository.create(
         { workspaceId: fx.workspaceId, projectId: fx.projectId, userId: viewer.id, role: 'viewer' },

@@ -32,8 +32,8 @@ import {
   finishSessionPlan,
   latestPlanningSession,
 } from './_helpers/planChangeConversation';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { usersService } from '@/lib/services/usersService';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -293,7 +293,7 @@ test('the Plans page states: no conversations, a filter with none, and a browse-
       activeProjectId: project.id,
     },
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: seed.projectKey,
     actorUserId: session.createdById,
     ctx: { userId: session.createdById, workspaceId: session.workspaceId },

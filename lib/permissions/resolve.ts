@@ -1,16 +1,22 @@
-import type { MemberRole, ProjectAccessLevel } from '@/generated/prisma/client';
-import { isWorkspaceManager } from '@/lib/projects/roles';
+import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
 import { withImpliedPermissions, type PermissionKey } from '@/lib/permissions/catalog';
 import {
-  BUILTIN_ROLE_PERMISSIONS,
-  IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS,
   PUBLIC_PROJECT_PERMISSIONS,
   ROLE_GATED_PERMISSIONS,
+  WORKSPACE_ROLE_PERMISSIONS,
 } from '@/lib/permissions/builtinRoles';
 
 // The permission RESOLUTION (Story MOTIR-2255 · Subtask MOTIR-2261) — the whole
-// project access policy, expressed ONCE, as a function from the three resolved
-// facts to the actor's effective permission SET. `lib/projects/access.ts` keeps
+// project access policy, expressed ONCE, as a function from the resolved facts to
+// the actor's effective permission SET.
+//
+// ⚠️ THE ROLE IS THE WORKSPACE'S (Story MOTIR-6168 · MOTIR-6459;
+// `docs/decisions/role-model.md` §2–§3). A person's keys in a project are decided
+// by their WORKSPACE role — Manager, Member, Viewer or a workspace custom role —
+// and by nothing the project stores about them except whether they were ADDED to
+// it, which is what the access level reads. No project role and no project custom
+// role enters the calculation: changing someone's workspace role changes what they
+// can do in every project of the workspace at once. `lib/projects/access.ts` keeps
 // its eleven named predicates as the public API and answers each of them with a
 // membership test against this set.
 //
@@ -30,13 +36,13 @@ import {
 //      including an anonymous, cross-org one. A `public` project grants
 //      `project:browse` plus the three `public_request:*` keys (Story 6.12).
 //      These are not in any role set: a role can neither hold nor withhold them.
-//   2. The always-pass RAIL — a workspace owner/admin holds the entire
-//      ROLE-GATED catalog, on every access level.
+//   2. The always-pass RAIL — a workspace MANAGER holds the entire ROLE-GATED
+//      catalog, on every access level, added to the project or not.
 //   3. The null-deny RAIL — an actor with no workspace membership holds nothing
 //      beyond layer 1. The project gate sits BENEATH the workspace gate.
 //
-//   …and between the rails, the actor's project ROLE supplies a base set which
-//   the ACCESS LEVEL then subtracts from.
+//   …and between the rails, the actor's WORKSPACE ROLE supplies a base set which
+//   the ACCESS LEVEL then subtracts from, keyed on whether they were added.
 //
 // ⚠️ Layer 2 grants the role-gated catalog, NOT every key. A workspace owner on a
 // `private` project does NOT hold `public_request:submit` — the shipped
@@ -48,26 +54,31 @@ import {
 export interface ProjectPermissionInputs {
   /** The project's `accessLevel` (open / limited / private / public). */
   accessLevel: ProjectAccessLevel;
-  /** The actor's WORKSPACE membership role, or null if they're not a member. */
-  workspaceRole: MemberRole | null;
-  /** The actor's PROJECT membership role, or null if they hold no project membership. */
-  projectRole: MemberRole | null;
   /**
-   * The permission array stored on the CUSTOM role this membership holds, or
-   * null / absent when the membership names a built-in (Story MOTIR-2257 ·
-   * Subtask MOTIR-2470). This is the raw stored array, NOT a validated set —
-   * see {@link customRoleBase} for why the filtering happens here.
-   *
-   * Optional so that every existing caller and every existing truth-table row
-   * is untouched: absent is identical to null is identical to "no custom role",
-   * which is what keeps `tests/permissions/accessParity.test.ts` green with no
-   * edit at all.
+   * The actor's WORKSPACE ROLE, or null if they are not a member of the project's
+   * workspace. Read through `resolveWorkspaceRole` (`lib/workspaces/roles.ts`), so
+   * a membership the old build wrote during the deploy window resolves by the
+   * legacy mapping; the org Owner arrives here as `manager` (MOTIR-6308).
+   */
+  workspaceRole: WorkspaceRole | null;
+  /**
+   * The permission array stored on the WORKSPACE custom role the membership
+   * holds, or null / absent when it holds a built-in. This is the raw stored
+   * array, NOT a validated set — see {@link customRoleBase} for why the filtering
+   * happens here.
    *
    * ⚠️ An EMPTY array is not the same as null. A custom role that grants
    * nothing is a legitimate role, and it must resolve to nothing rather than
-   * falling back to its base's set.
+   * falling back to its tier's set.
    */
   customRolePermissions?: readonly string[] | null;
+  /**
+   * Whether the actor was ADDED to the project — a `project_membership` row
+   * exists. This is the ONE fact a project still holds about a person: it grants
+   * nothing by itself, it is what `limited` and `private` read (MOTIR-6169
+   * replaces those levels with the access modes).
+   */
+  addedToProject: boolean;
   /**
    * Whether the project's ORGANIZATION is closing — scheduled for deletion and
    * inside its 30-day window (Story MOTIR-6306 · MOTIR-6396;
@@ -84,14 +95,14 @@ export interface ProjectPermissionInputs {
 }
 
 /**
- * What a closing organization leaves ANY actor: the built-in `viewer` set — the
+ * What a closing organization leaves ANY actor: the `viewer` role's set — the
  * product's own definition of read-only (`builtinRoles.ts`: *"READ-ONLY
  * EVERYWHERE"*). Derived, not hand-listed, so a write key added to the catalog
  * later is closed during the window by default rather than by somebody
  * remembering to add it here.
  */
 export const CLOSING_READ_SET: ReadonlySet<PermissionKey> = new Set<PermissionKey>(
-  BUILTIN_ROLE_PERMISSIONS.viewer,
+  WORKSPACE_ROLE_PERMISSIONS.viewer,
 );
 
 /**
@@ -127,16 +138,20 @@ function customRoleBase(
 /**
  * The actor's effective permission set for the project.
  *
- * The access-level table this reproduces, unchanged from Story 6.4 / 6.12:
- *   * `open`    — any workspace member views + edits.
- *   * `limited` — any workspace member views + comments; only project members
- *                 (member/admin) edit.
- *   * `private` — only project members can see it at all; a `viewer` sees but
- *                 never edits or comments.
- *   * `public`  — anyone on the web reads, no sign-in, ACROSS orgs; internal
- *                 workspace members keep their normal capabilities (it behaves
- *                 like `open` for them — making a project public ADDS external
- *                 read, it does not strip its own members' rights).
+ * The access-level table, keyed on the workspace role and on whether the actor
+ * was ADDED to the project (MOTIR-6459):
+ *   * `open`    — every workspace member holds their role's keys.
+ *   * `limited` — every workspace member holds their role's keys, except
+ *                 `work_item:edit`, which needs them to have been added.
+ *   * `private` — nobody not added sees it at all; someone added holds their
+ *                 role's keys. (A Viewer holds none of the write keys anyway, so
+ *                 the old per-project-role split of edit / comment / attachment
+ *                 on `private` retired with project roles — the one place a level
+ *                 changed meaning.)
+ *   * `public`  — anyone on the web reads, no sign-in, ACROSS orgs; workspace
+ *                 members keep their role's keys (it behaves like `open` for them
+ *                 — making a project public ADDS external read, it does not strip
+ *                 its own members' rights).
  */
 export function resolvePermissions(i: ProjectPermissionInputs): ReadonlySet<PermissionKey> {
   const held = resolveOpen(i);
@@ -160,45 +175,32 @@ function resolveOpen(i: ProjectPermissionInputs): ReadonlySet<PermissionKey> {
     for (const key of PUBLIC_PROJECT_PERMISSIONS) held.add(key);
   }
 
-  // 2 · The always-pass rail — the "site admin sees + manages every project" tier.
-  if (isWorkspaceManager(i.workspaceRole)) {
+  // 3 · The null-deny rail — outside the workspace, nothing beyond layer 1.
+  if (i.workspaceRole == null) return withImpliedPermissions(held);
+
+  // 2 · The always-pass rail — a Manager holds every role-gated key in every
+  // project of their workspace, whatever its level and whether or not they were
+  // added. A custom role is never a Manager (it sits at the member tier), so no
+  // role somebody authored can narrow a Manager — they cannot lock themselves out.
+  if (i.workspaceRole === 'manager') {
     for (const key of ROLE_GATED_PERMISSIONS) held.add(key);
     return withImpliedPermissions(held);
   }
 
-  // 3 · The null-deny rail — outside the workspace, nothing beyond layer 1.
-  if (i.workspaceRole == null) return withImpliedPermissions(held);
-
-  // Between the rails: the project role's base set, minus what the level takes.
+  // Between the rails: the workspace role's base set, minus what the level takes.
   //
-  // ⚠️ A CUSTOM ROLE REPLACES THE BASE SET AND NOTHING ELSE (MOTIR-2470). It is
-  // the only line in this function that moved, and everything above and below it
-  // is load-bearing: the level-gated layer above means no role can hold or
-  // withhold a `public_request:*` key; the two rails above mean a workspace
-  // owner/admin can never be narrowed by a role somebody authored (so an admin
-  // cannot lock themselves out) and a project role is never a way INTO a
-  // workspace; and `levelGrants` below is not touched at all.
-  //
-  // `levelGrants` needs no custom-role branch because `projectRole` already
-  // carries `CUSTOM_ROLE_TIER` (`member`) — the paired-column invariant the
-  // repository enforces (MOTIR-2467). At that tier the level's subtraction takes
-  // NOTHING away, so A CUSTOM ROLE GRANTS EXACTLY WHAT IT LISTS, on every access
-  // level. That is the point: the tier subtraction narrows the COARSE built-in
-  // roles, and a set an admin enumerated by hand is not coarse — a role that
-  // lists `work_item:edit` and silently does not have it would be the bug.
-  // (`private` still requires a membership to see the project at all, and both
-  // rails above are untouched.) ADDING a branch here would re-introduce exactly
-  // the second-guessing this removes. Don't.
-  const projectRole = i.projectRole;
+  // ⚠️ A CUSTOM ROLE REPLACES THE BASE SET AND NOTHING ELSE. The level-gated layer
+  // above means no role can hold or withhold a `public_request:*` key; the rails
+  // mean a Manager is never narrowed and a role is never a way INTO a workspace;
+  // and `levelGrants` below reads only whether the actor was added — never the
+  // role — so A CUSTOM ROLE GRANTS EXACTLY WHAT IT LISTS on every level it can
+  // reach. A role that lists `work_item:edit` and silently does not have it would
+  // be the bug.
   const base =
-    customRoleBase(i.customRolePermissions) ??
-    (projectRole === 'admin' || projectRole === 'member' || projectRole === 'viewer'
-      ? BUILTIN_ROLE_PERMISSIONS[projectRole]
-      : IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS);
-  const isProjectMember = projectRole === 'admin' || projectRole === 'member';
+    customRoleBase(i.customRolePermissions) ?? WORKSPACE_ROLE_PERMISSIONS[i.workspaceRole];
 
   for (const key of base) {
-    if (!levelGrants(i.accessLevel, key, projectRole != null, isProjectMember)) continue;
+    if (!levelGrants(i.accessLevel, key, i.addedToProject)) continue;
     held.add(key);
   }
 
@@ -207,8 +209,8 @@ function resolveOpen(i: ProjectPermissionInputs): ReadonlySet<PermissionKey> {
   // hiding one row reversibly, so an actor who holds the first and not the second
   // is expressing nothing anyone could have meant. Applying it AFTER the level
   // filter is deliberate and is also a no-op today — `levelGrants` names only
-  // `work_item:edit` / `comment:add` / `attachment:create`, so both keys take the
-  // same default arm on every level — but the order states which wins if a future
+  // `work_item:edit`, so both keys take the same default arm on every level — but
+  // the order states which wins if a future
   // branch ever separates them: the level SUBTRACTS from a role, and an
   // implication describes the operations rather than the actor, so it must not
   // hand back a key a level took away. It cannot: `work_item:delete` is subtracted
@@ -218,7 +220,7 @@ function resolveOpen(i: ProjectPermissionInputs): ReadonlySet<PermissionKey> {
   // ⚠️ It reaches a stored CUSTOM ROLE too, via `customRoleBase` above — which is
   // the back-compatibility half: a role authored before the split holds only
   // `work_item:delete`, and its members keep archiving with no migration over
-  // `project_role_definition.permissions`. The EDITOR still shows what the role
+  // the stored custom-role permissions. The EDITOR still shows what the role
   // LISTS; this is what it CONFERS, the same relationship a legacy token scope
   // has to its expansion (`docs/decisions/token-permissions.md` §5, §10).
   //
@@ -233,45 +235,33 @@ function resolveOpen(i: ProjectPermissionInputs): ReadonlySet<PermissionKey> {
 
 /**
  * Whether the project's ACCESS LEVEL lets a workspace member keep `key` from
- * their role's base set. This is the "subtracts from it" half of the model —
- * every branch transcribed from the shipped per-level tables in
- * `lib/projects/access.ts`.
+ * their role's base set — the "subtracts from it" half of the model. It reads ONE
+ * fact about the actor, whether they were ADDED to the project, and never their
+ * role (MOTIR-6459): the role already chose the base set.
  *
- * ⚠️ DELIBERATELY UNCHANGED BY MOTIR-2256, and that is what makes the split
- * behaviour-neutral. Only three keys are ever named here — `work_item:edit`,
- * `comment:add`, `attachment:create`. Every other key takes the default arm of
- * its level's branch, so the twelve new administrative keys are subtracted by
- * `limited` and `private` in EXACTLY the way `project:administer` already was:
- * kept on `open` / `public`, kept on `limited` (the `work_item:edit` test does
- * not match them), and on `private` gated on `hasProjectMembership` alone. Since
- * `BUILTIN_ROLE_PERMISSIONS` grants the twelve to precisely the role that already
- * held `project:administer` (admin), the resolved answer is identical for all 64
- * actors — proved in `tests/permissions/accessParity.test.ts`. Adding a branch
- * for one of the twelve here would BREAK that equivalence, so don't; a domain
- * that genuinely needs a different per-level rule is a policy change and belongs
- * in a card that argues for it.
+ * ⚠️ Only `work_item:edit` is ever named here. Every other key takes the default
+ * arm of its level's branch, so the administrative keys are subtracted by
+ * `limited` and `private` exactly as `project:administer` is — proved over the
+ * whole input space in `tests/permissions/accessParity.test.ts`. A domain that
+ * genuinely needs a different per-level rule is a policy change, and MOTIR-6169
+ * replaces this table with the project access modes.
  */
 function levelGrants(
   accessLevel: ProjectAccessLevel,
   key: PermissionKey,
-  hasProjectMembership: boolean,
-  isProjectMember: boolean,
+  addedToProject: boolean,
 ): boolean {
   switch (accessLevel) {
     // The most-open rungs: the role's base set survives intact.
     case 'open':
     case 'public':
       return true;
-    // View + comment for any workspace member; only project members EDIT.
+    // Every workspace member keeps their role's keys; only someone added EDITS.
     case 'limited':
-      return key === 'work_item:edit' ? isProjectMember : true;
-    // Invisible without a project membership; a `viewer` browses but no more
-    // (their base set is `project:browse` alone, so nothing else can survive).
+      return key === 'work_item:edit' ? addedToProject : true;
+    // Invisible to anyone not added; someone added keeps their role's keys.
     case 'private':
-      if (!hasProjectMembership) return false;
-      return key === 'work_item:edit' || key === 'comment:add' || key === 'attachment:create'
-        ? isProjectMember
-        : true;
+      return addedToProject;
   }
 }
 

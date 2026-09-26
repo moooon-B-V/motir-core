@@ -16,6 +16,7 @@ import {
   GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER,
   ROOM_VIEW_FORWARD_KEYS,
 } from '@/lib/tokens/grant';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 /**
  * The stored GRANT, less the mint path's marker (MOTIR-6329) — which every row
@@ -32,7 +33,6 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
@@ -692,7 +692,7 @@ describe('the PROJECT binding and what a caller may confer (MOTIR-2606)', () => 
       name: 'Viewer',
     });
     await workspacesService.addMember({ userId: u.id, workspaceId: fx.workspaceId });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: { userId: fx.ownerId, workspaceId: fx.workspaceId },

@@ -10,11 +10,10 @@ import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs, setProjectRoleDefinitionFor } from '../../helpers/workspaceRoleFixtures';
 
 // Story MOTIR-6179 · MOTIR-6331 — the run reads take a SCOPE. `project` for a
 // reader holding `run:view_any` (on a token: in its grant too); `mine` — the
@@ -32,7 +31,7 @@ async function seat(role: 'member' | 'viewer'): Promise<ServiceContext> {
     name: `Reader ${role}`,
   });
   await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,
@@ -44,16 +43,15 @@ async function seat(role: 'member' | 'viewer'): Promise<ServiceContext> {
 
 async function seatCustom(permissions: PermissionKey[]): Promise<ServiceContext> {
   const ctx = await seat('member');
-  const role = await adminDb.projectRoleDefinition.create({
+  const role = await adminDb.workspaceRoleDefinition.create({
     data: {
       workspaceId: fx.workspaceId,
-      projectId: fx.projectId,
       name: `Custom ${seq++}`,
       permissions,
     },
   });
   await adminDb.$transaction((tx) =>
-    projectMembershipRepository.setRoleDefinition(
+    setProjectRoleDefinitionFor(
       ctx.userId,
       fx.projectId,
       { roleDefinitionId: role.id, role: CUSTOM_ROLE_TIER },

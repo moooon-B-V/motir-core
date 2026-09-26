@@ -41,20 +41,26 @@ describe('workspaceSettingsNav — totality (route ↔ entry, mistake #29)', () 
     // `/settings/workspace` is a real page (Name / Members / Danger zone), not a
     // redirect to a first pane the way `/settings/account` is.
     const fsRoutes = collectFsRoutes(SETTINGS_DIR, WORKSPACE_SETTINGS_ROOT).sort();
-    const registryRoutes = WORKSPACE_SETTINGS_ROUTES.map((e) => e.href).sort();
+    // A drill-down's routes (the Roles room's detail / edit / new, MOTIR-6466)
+    // are registered on its row, the way the project registry does.
+    const registryRoutes = WORKSPACE_SETTINGS_ROUTES.flatMap((e) => [
+      e.href,
+      ...(e.nestedRoutes ?? []),
+    ]).sort();
 
     // No drift in either direction: a new page without an entry, or an entry
     // without a page, both fail.
     expect(registryRoutes).toEqual(fsRoutes);
-    expect(fsRoutes).toHaveLength(3);
+    expect(fsRoutes).toHaveLength(7);
   });
 });
 
 describe('workspaceSettingsNav — the ONE filter axis, and it defaults closed', () => {
-  it('returns ALL THREE rows when the tier is revealed', () => {
+  it('returns EVERY row when the tier is revealed — Roles & permissions under Access (MOTIR-6466)', () => {
     expect(visibleWorkspaceSettingsNav(true).map((e) => e.id)).toEqual([
       'workspace',
       'security',
+      'roles',
       'jobs',
     ]);
   });
@@ -82,7 +88,10 @@ describe('workspaceSettingsNav — the ONE filter axis, and it defaults closed',
     // session and a workspace context and no role at all, so a role flag here
     // would take a shipped capability away silently.
     for (const entry of WORKSPACE_SETTINGS_NAV) {
-      expect(Object.keys(entry).sort()).toEqual(
+      // A drill-down's `nestedRoutes` (the Roles room, MOTIR-6466) is routing,
+      // not a gate.
+      const keys = Object.keys(entry).filter((k) => k !== 'nestedRoutes');
+      expect(keys.sort()).toEqual(
         entry.exact
           ? ['exact', 'group', 'href', 'icon', 'id', 'labelKey']
           : ['group', 'href', 'icon', 'id', 'labelKey'],

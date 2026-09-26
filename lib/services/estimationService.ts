@@ -399,7 +399,7 @@ async function resolveStatistic(
  *
  * ⚠️ A DELIBERATE WIDENING, and the odd one out among the four vocabularies.
  * Custom fields, components and labels were already gated at project-admin level;
- * this one asked `isOwnerRole(membership?.role)` — the workspace OWNER alone — for
+ * this one asked `isLegacyOwnerRole(membership?.role)` — the workspace OWNER alone — for
  * no reason anyone recorded, the same accident that reached for the nearest
  * available check in the board and workflow editors. So a project admin could
  * define a custom field but not change what the story-point scale is, which is not

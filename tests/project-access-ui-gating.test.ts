@@ -8,6 +8,7 @@ import { assignableMembersService } from '@/lib/services/assignableMembersServic
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { addToProjectAs } from './helpers/workspaceRoleFixtures';
 
 // Service-layer tests for the Story 6.4 · Subtask 6.4.6 UI-gating BACKING
 // behaviour — the two server-side decisions the UI renders:
@@ -103,7 +104,7 @@ describe('listProjects — browsable-only filter (6.4.6)', () => {
 
     expect(await projectsService.listProjects(workspace.id, member.id)).toEqual([]);
 
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,

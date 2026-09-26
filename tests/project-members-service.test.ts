@@ -2,27 +2,23 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectAccessService } from '@/lib/services/projectAccessService';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import {
   AlreadyProjectMemberError,
   InvalidAccessLevelError,
-  InvalidProjectRoleError,
-  LastProjectAdminError,
   NotAProjectMemberError,
   PermissionDeniedError,
   ProjectNotFoundError,
   TargetNotWorkspaceMemberError,
 } from '@/lib/projects/errors';
-import { RoleDefinitionNotFoundError } from '@/lib/permissions/errors';
 import { PublicAccessUnavailableError } from '@/lib/projects/errors';
 import { projectMemberErrorResponse } from '@/lib/projects/memberErrorResponse';
 import { runAsCloudBuild } from './helpers/cloudBuild';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
+import { setWorkspaceRoleFor } from './helpers/workspaceRoleFixtures';
 import { truncateAuthTables } from './helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
@@ -31,18 +27,17 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 // mocks, the truncate helper resets between tests (it CASCADEs workspace →
 // project → project_membership). Typed-error assertions use the real classes.
 //
-// Authorization model under test:
-//   * workspace owner/admin ALWAYS manage (no project membership needed);
-//   * a project `admin` manages;
-//   * a project `member`/`viewer` (or a plain workspace member with no project
-//     row) cannot → PermissionDeniedError naming the key (MOTIR-2295; it was
-//     NotProjectAdminError while this service ran its own private admin check);
+// Authorization model under test (roles live on the WORKSPACE since Story
+// MOTIR-6168 — a project membership only says "added to this project"):
+//   * a workspace Manager ALWAYS manages (no project membership needed);
+//   * a workspace Member / Viewer cannot, on the project or not →
+//     PermissionDeniedError naming the key (MOTIR-2295);
 //   * an actor who cannot BROWSE the project → ProjectNotFoundError (404), on
 //     the reads as well as the writes.
 //
-// Coverage: add (happy + role validation + target-must-be-workspace-member +
-// duplicate), the authorization matrix, set-role (+ last-admin guard +
-// not-a-member), remove (+ last-admin guard + idempotent-404), set-access-level
+// Coverage: add (happy, no role + target-must-be-workspace-member + duplicate),
+// the authorization matrix, remove (no last-admin guard + idempotent-404),
+// set-access-level
 // (open/limited/private + go-private member seeding + invalid level), list, and
 // the no-existence-leak 404 on an unknown key.
 
@@ -91,7 +86,7 @@ function ctxFor(userId: string, workspaceId: string): WorkspaceContext {
 }
 
 describe('addMember', () => {
-  it('a workspace owner adds a workspace member with a project role and gets a DTO', async () => {
+  it('a workspace owner adds a workspace member and gets a DTO — with no role in it', async () => {
     const { workspace, key, owner, ownerCtx, project } = await makeFixture('add');
     const alice = await addWorkspaceMember(workspace.id, 'alice-add@example.com', 'Alice');
 
@@ -100,44 +95,23 @@ describe('addMember', () => {
       actorUserId: owner.id,
       ctx: ownerCtx,
       targetUserId: alice.id,
-      role: 'viewer',
     });
 
-    // DTO shape: userId / name / email / role / roleDefinition ONLY — never a
-    // raw Prisma row. `roleDefinition` joined MOTIR-2485: it is what the member
-    // row's chip reads, and `null` here IS the "built-in" answer.
-    expect(Object.keys(member).sort()).toEqual([
-      'email',
-      'name',
-      'role',
-      'roleDefinition',
-      'userId',
-    ]);
+    // DTO shape: userId / name / email ONLY — never a raw Prisma row, and no
+    // role: a project membership carries none since roles moved to the
+    // workspace (Story MOTIR-6168 · MOTIR-6464).
+    expect(Object.keys(member).sort()).toEqual(['email', 'name', 'userId']);
     expect(member.userId).toBe(alice.id);
     expect(member.name).toBe('Alice');
     expect(member.email).toBe('alice-add@example.com');
-    expect(member.role).toBe('viewer');
-    expect(member.roleDefinition).toBeNull();
 
     const persisted = await withWorkspaceServiceContext(workspace.id, (tx) =>
       projectMembershipRepository.findByUserAndProject(alice.id, project.id, tx),
     );
-    expect(persisted?.role).toBe('viewer');
+    // The legacy column is still NOT NULL, so it is written — and always `member`.
+    expect(persisted?.role).toBe('member');
+    expect(persisted?.roleDefinitionId).toBeNull();
     expect(persisted?.workspaceId).toBe(workspace.id);
-  });
-
-  it('rejects an invalid role with InvalidProjectRoleError (owner is not project-assignable)', async () => {
-    const { workspace, key, owner, ownerCtx } = await makeFixture('role');
-    const bob = await addWorkspaceMember(workspace.id, 'bob-role@example.com');
-    await expect(
-      projectMembersService.addMember({
-        key,
-        actorUserId: owner.id,
-        ctx: ownerCtx,
-        targetUserId: bob.id,
-        role: 'owner',
-      }),
-    ).rejects.toBeInstanceOf(InvalidProjectRoleError);
   });
 
   it('rejects a target who is not a workspace member', async () => {
@@ -149,7 +123,6 @@ describe('addMember', () => {
         actorUserId: owner.id,
         ctx: ownerCtx,
         targetUserId: outsider.id,
-        role: 'member',
       }),
     ).rejects.toBeInstanceOf(TargetNotWorkspaceMemberError);
   });
@@ -162,7 +135,6 @@ describe('addMember', () => {
       actorUserId: owner.id,
       ctx: ownerCtx,
       targetUserId: carol.id,
-      role: 'member',
     });
     await expect(
       projectMembersService.addMember({
@@ -170,7 +142,6 @@ describe('addMember', () => {
         actorUserId: owner.id,
         ctx: ownerCtx,
         targetUserId: carol.id,
-        role: 'admin',
       }),
     ).rejects.toBeInstanceOf(AlreadyProjectMemberError);
   });
@@ -184,48 +155,30 @@ describe('addMember', () => {
         actorUserId: owner.id,
         ctx: ownerCtx,
         targetUserId: dave.id,
-        role: 'member',
       }),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 });
 
 describe('authorization — who may manage', () => {
-  it('a project admin can manage; a project member/viewer cannot', async () => {
-    const { workspace, key, owner, ownerCtx } = await makeFixture('authz');
-    const admin = await addWorkspaceMember(workspace.id, 'admin-authz@example.com', 'Adminy');
+  it('a workspace Manager can manage; a Member cannot, on the project or not', async () => {
+    const { workspace, key } = await makeFixture('authz');
+    const manager = await addWorkspaceMember(workspace.id, 'admin-authz@example.com', 'Adminy');
     const plain = await addWorkspaceMember(workspace.id, 'plain-authz@example.com', 'Plain');
     const target = await addWorkspaceMember(workspace.id, 'target-authz@example.com', 'Target');
 
-    // Owner promotes `admin` to project admin.
-    await projectMembersService.addMember({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: admin.id,
-      role: 'admin',
-    });
+    // The role that manages is the WORKSPACE's — a Manager, in every project.
+    await setWorkspaceRoleFor(manager.id, workspace.id, 'manager');
 
-    // The project admin can add a member.
     const added = await projectMembersService.addMember({
       key,
-      actorUserId: admin.id,
-      ctx: ctxFor(admin.id, workspace.id),
+      actorUserId: manager.id,
+      ctx: ctxFor(manager.id, workspace.id),
       targetUserId: target.id,
-      role: 'member',
     });
-    expect(added.role).toBe('member');
+    expect(added.userId).toBe(target.id);
 
-    // A plain workspace member (no project admin row) cannot manage.
-    //
-    // ⚠️ The refusal is now PermissionDeniedError, not NotProjectAdminError
-    // (MOTIR-2295). The gate moved from this file's module-private admin check
-    // to `projectAccessService.assertPermission`, which names the KEY it asked
-    // for. Same HTTP status (403, via `projectMemberErrorResponse`); the `code`
-    // goes from `NOT_PROJECT_ADMIN` to `PERMISSION_DENIED`, which no consumer of
-    // these routes reads — `ProjectMembersSettings` special-cases only
-    // `LAST_PROJECT_ADMIN`. The three places that DO read `NOT_PROJECT_ADMIN`
-    // are on `project:administer`, which still throws it.
+    // A workspace Member cannot manage — the refusal names the key (MOTIR-2295).
     const fresh = await addWorkspaceMember(workspace.id, 'fresh-authz@example.com');
     const refused = await projectMembersService
       .addMember({
@@ -233,15 +186,14 @@ describe('authorization — who may manage', () => {
         actorUserId: plain.id,
         ctx: ctxFor(plain.id, workspace.id),
         targetUserId: fresh.id,
-        role: 'member',
       })
       .catch((e: unknown) => e);
     expect(refused).toBeInstanceOf(PermissionDeniedError);
     expect((refused as PermissionDeniedError).permission).toBe('member:manage');
 
-    // A project `member` (target, added above) also cannot manage — and the key
-    // it is refused is `project:manage_access`, not `member:manage`: who is IN
-    // the project and how open the project is are separate decisions.
+    // Being ADDED to the project grants nothing of its own: `target` is on it and
+    // still cannot change how open it is — refused `project:manage_access`, not
+    // `member:manage`: who is IN the project and how open it is are separate.
     const refusedAccess = await projectMembersService
       .setAccessLevel({
         key,
@@ -254,7 +206,7 @@ describe('authorization — who may manage', () => {
     expect((refusedAccess as PermissionDeniedError).permission).toBe('project:manage_access');
   });
 
-  it('setRole and removeMember are refused on member:manage too', async () => {
+  it('removeMember is refused on member:manage too', async () => {
     const { workspace, key, owner, ownerCtx } = await makeFixture('authz-keys');
     const target = await addWorkspaceMember(workspace.id, 'target-keys@example.com', 'Target');
     const plain = await addWorkspaceMember(workspace.id, 'plain-keys@example.com', 'Plain');
@@ -263,31 +215,17 @@ describe('authorization — who may manage', () => {
       actorUserId: owner.id,
       ctx: ownerCtx,
       targetUserId: target.id,
-      role: 'member',
     });
-    const plainCtx = ctxFor(plain.id, workspace.id);
-
-    for (const call of [
-      () =>
-        projectMembersService.setRole({
-          key,
-          actorUserId: plain.id,
-          ctx: plainCtx,
-          targetUserId: target.id,
-          role: 'admin',
-        }),
-      () =>
-        projectMembersService.removeMember({
-          key,
-          actorUserId: plain.id,
-          ctx: plainCtx,
-          targetUserId: target.id,
-        }),
-    ]) {
-      const err = await call().catch((e: unknown) => e);
-      expect(err).toBeInstanceOf(PermissionDeniedError);
-      expect((err as PermissionDeniedError).permission).toBe('member:manage');
-    }
+    const err = await projectMembersService
+      .removeMember({
+        key,
+        actorUserId: plain.id,
+        ctx: ctxFor(plain.id, workspace.id),
+        targetUserId: target.id,
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PermissionDeniedError);
+    expect((err as PermissionDeniedError).permission).toBe('member:manage');
   });
 
   it('the workspace owner still passes on EVERY access level — the always-pass rail survives', async () => {
@@ -305,9 +243,8 @@ describe('authorization — who may manage', () => {
         actorUserId: owner.id,
         ctx: ownerCtx,
         targetUserId: someone.id,
-        role: 'member',
       });
-      expect(added.role, `owner blocked on a ${level} project`).toBe('member');
+      expect(added.userId, `owner blocked on a ${level} project`).toBe(someone.id);
       // …and the reads, which this card gated on `project:browse`.
       expect(
         (await projectMembersService.listMembers({ key, actorUserId: owner.id, ctx: ownerCtx }))
@@ -341,7 +278,6 @@ describe('authorization — who may manage', () => {
         actorUserId: outsider.id,
         ctx: outsiderCtx,
         targetUserId: target.id,
-        role: 'member',
       }),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
 
@@ -357,354 +293,6 @@ describe('authorization — who may manage', () => {
   });
 });
 
-describe('setRole', () => {
-  it('changes a role and returns the updated DTO', async () => {
-    const { workspace, key, owner, ownerCtx } = await makeFixture('setrole');
-    const eve = await addWorkspaceMember(workspace.id, 'eve-setrole@example.com', 'Eve');
-    await projectMembersService.addMember({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: eve.id,
-      role: 'viewer',
-    });
-    const updated = await projectMembersService.setRole({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: eve.id,
-      role: 'member',
-    });
-    expect(updated.role).toBe('member');
-  });
-
-  it('404s (NotAProjectMember) when the target has no membership', async () => {
-    const { workspace, key, owner, ownerCtx } = await makeFixture('setrole-miss');
-    const ghost = await addWorkspaceMember(workspace.id, 'ghost-setrole@example.com');
-    await expect(
-      projectMembersService.setRole({
-        key,
-        actorUserId: owner.id,
-        ctx: ownerCtx,
-        targetUserId: ghost.id,
-        role: 'admin',
-      }),
-    ).rejects.toBeInstanceOf(NotAProjectMemberError);
-  });
-
-  it('blocks demoting the last admin (LastProjectAdminError) but allows it once a second admin exists', async () => {
-    const { workspace, key, owner, ownerCtx } = await makeFixture('lastadmin');
-    const a = await addWorkspaceMember(workspace.id, 'a-lastadmin@example.com');
-    const b = await addWorkspaceMember(workspace.id, 'b-lastadmin@example.com');
-    await projectMembersService.addMember({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: a.id,
-      role: 'admin',
-    });
-
-    // `a` is the only project admin → demoting blocked.
-    await expect(
-      projectMembersService.setRole({
-        key,
-        actorUserId: owner.id,
-        ctx: ownerCtx,
-        targetUserId: a.id,
-        role: 'member',
-      }),
-    ).rejects.toBeInstanceOf(LastProjectAdminError);
-
-    // Add a second admin, then the demotion is allowed.
-    await projectMembersService.addMember({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: b.id,
-      role: 'admin',
-    });
-    const demoted = await projectMembersService.setRole({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: a.id,
-      role: 'member',
-    });
-    expect(demoted.role).toBe('member');
-  });
-});
-
-// ── Assigning a CUSTOM role (Story MOTIR-2257 · Subtask MOTIR-2485) ─────────
-//
-// `setRole` is the ONE single-member assignment path, and after this card it
-// takes a `RoleDTO.key`: a built-in's enum value, or a role definition's id. What
-// these tests are really guarding is the PAIRED-COLUMN invariant — `role` is a
-// tier and `role_definition_id` is the pointer, and a membership that carries one
-// without the other is a member whose screens and whose permissions disagree.
-describe('setRole — custom roles', () => {
-  it('assigns a custom role: the DTO names it, and the pointer + tier are written TOGETHER', async () => {
-    const { workspace, key, owner, ownerCtx, project } = await makeFixture('custom-assign');
-    const dana = await addWorkspaceMember(workspace.id, 'dana-assign@example.com', 'Dana');
-    await projectMembersService.addMember({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: dana.id,
-      role: 'viewer',
-    });
-    const role = await projectRoleDefinitionService.create({
-      projectId: project.id,
-      ctx: ownerCtx,
-      name: 'Contractor',
-      permissions: ['work_item:edit'],
-    });
-
-    const updated = await projectMembersService.setRole({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: dana.id,
-      role: role.id,
-    });
-
-    expect(updated.roleDefinition).toEqual({ id: role.id, name: 'Contractor' });
-    // The tier moved to CUSTOM_ROLE_TIER in the SAME write — a membership left on
-    // `viewer` with a pointer would resolve one way and read another.
-    expect(updated.role).toBe('member');
-
-    // ⚠️ SURVIVES A RELOAD, READ BACK THROUGH THE DTO — not through the database.
-    // The row is what the members screen renders, so the screen's own read is the
-    // one that has to carry the role's name.
-    const listed = await projectMembersService.listMembers({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-    });
-    expect(listed.find((m) => m.userId === dana.id)?.roleDefinition).toEqual({
-      id: role.id,
-      name: 'Contractor',
-    });
-  });
-
-  it('assigning a BUILT-IN to a custom-role holder CLEARS the pointer and sets the tier', async () => {
-    const { workspace, key, owner, ownerCtx, project } = await makeFixture('custom-clear');
-    const eli = await addWorkspaceMember(workspace.id, 'eli-clear@example.com', 'Eli');
-    await projectMembersService.addMember({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: eli.id,
-      role: 'member',
-    });
-    const role = await projectRoleDefinitionService.create({
-      projectId: project.id,
-      ctx: ownerCtx,
-      name: 'Contractor',
-      permissions: ['work_item:edit'],
-    });
-    await projectMembersService.setRole({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: eli.id,
-      role: role.id,
-    });
-
-    const back = await projectMembersService.setRole({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: eli.id,
-      role: 'viewer',
-    });
-
-    expect(back.role).toBe('viewer');
-    expect(back.roleDefinition).toBeNull();
-    // No membership is ever left pointing at a role it does not hold.
-    const persisted = await withWorkspaceServiceContext(workspace.id, (tx) =>
-      projectMembershipRepository.findByUserAndProject(eli.id, project.id, tx),
-    );
-    expect(persisted?.roleDefinitionId).toBeNull();
-    expect(persisted?.role).toBe('viewer');
-  });
-
-  it('THE ASSIGNMENT BITES: a role that withholds sprint:manage resolves without it', async () => {
-    const { workspace, key, owner, ownerCtx, project } = await makeFixture('custom-bites');
-    const fay = await addWorkspaceMember(workspace.id, 'fay-bites@example.com', 'Fay');
-    await projectMembersService.addMember({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: fay.id,
-      // A `member` HOLDS sprint:manage — so the absence below is the role's
-      // doing, not the tier's.
-      role: 'member',
-    });
-    const before = await projectAccessService.getPermissions(
-      project.id,
-      ctxFor(fay.id, workspace.id),
-    );
-    expect(before.has('sprint:manage')).toBe(true);
-
-    const role = await projectRoleDefinitionService.create({
-      projectId: project.id,
-      ctx: ownerCtx,
-      name: 'No sprints',
-      permissions: ['work_item:edit', 'project:browse'],
-    });
-    await projectMembersService.setRole({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: fay.id,
-      role: role.id,
-    });
-
-    // The read-back through the RESOLUTION is what proves the seam: the write
-    // reached the column the policy reads, not merely a column.
-    const after = await projectAccessService.getPermissions(
-      project.id,
-      ctxFor(fay.id, workspace.id),
-    );
-    expect(after.has('sprint:manage')).toBe(false);
-    expect(after.has('work_item:edit')).toBe(true);
-  });
-
-  it('a role definition from ANOTHER project in the same workspace is refused with 404, before any write', async () => {
-    const { workspace, key, owner, ownerCtx } = await makeFixture('custom-sibling');
-    const other = await projectsService.createProject({
-      workspaceId: workspace.id,
-      actorUserId: owner.id,
-      name: 'Other project',
-    });
-    const foreign = await projectRoleDefinitionService.create({
-      projectId: other.id,
-      ctx: ownerCtx,
-      name: 'Contractor',
-      permissions: ['work_item:edit'],
-    });
-    const gus = await addWorkspaceMember(workspace.id, 'gus-sibling@example.com', 'Gus');
-    await projectMembersService.addMember({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: gus.id,
-      role: 'viewer',
-    });
-
-    await expect(
-      projectMembersService.setRole({
-        key,
-        actorUserId: owner.id,
-        ctx: ownerCtx,
-        targetUserId: gus.id,
-        role: foreign.id,
-      }),
-    ).rejects.toBeInstanceOf(RoleDefinitionNotFoundError);
-
-    // BEFORE any write — the membership is untouched, tier and pointer both.
-    const listed = await projectMembersService.listMembers({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-    });
-    const row = listed.find((m) => m.userId === gus.id);
-    expect(row?.role).toBe('viewer');
-    expect(row?.roleDefinition).toBeNull();
-  });
-
-  it('a role definition from ANOTHER WORKSPACE is refused with the same 404 — no existence leak', async () => {
-    const mine = await makeFixture('custom-mine');
-    const theirs = await makeFixture('custom-theirs');
-    const foreign = await projectRoleDefinitionService.create({
-      projectId: theirs.project.id,
-      ctx: theirs.ownerCtx,
-      name: 'Contractor',
-      permissions: ['work_item:edit'],
-    });
-    const hal = await addWorkspaceMember(mine.workspace.id, 'hal-foreign@example.com', 'Hal');
-    await projectMembersService.addMember({
-      key: mine.key,
-      actorUserId: mine.owner.id,
-      ctx: mine.ownerCtx,
-      targetUserId: hal.id,
-      role: 'viewer',
-    });
-
-    // Driven under MY workspace context, naming THEIR role. The refusal must be
-    // indistinguishable from an id that never existed.
-    await expect(
-      projectMembersService.setRole({
-        key: mine.key,
-        actorUserId: mine.owner.id,
-        ctx: mine.ownerCtx,
-        targetUserId: hal.id,
-        role: foreign.id,
-      }),
-    ).rejects.toBeInstanceOf(RoleDefinitionNotFoundError);
-    await expect(
-      projectMembersService.setRole({
-        key: mine.key,
-        actorUserId: mine.owner.id,
-        ctx: mine.ownerCtx,
-        targetUserId: hal.id,
-        role: 'role-that-never-existed',
-      }),
-    ).rejects.toBeInstanceOf(RoleDefinitionNotFoundError);
-  });
-
-  it('`owner` stays a 400, not a 404 — a misused enum member is not a missing object', async () => {
-    const { workspace, key, owner, ownerCtx } = await makeFixture('custom-owner');
-    const ivy = await addWorkspaceMember(workspace.id, 'ivy-owner@example.com', 'Ivy');
-    await projectMembersService.addMember({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: ivy.id,
-      role: 'viewer',
-    });
-    await expect(
-      projectMembersService.setRole({
-        key,
-        actorUserId: owner.id,
-        ctx: ownerCtx,
-        targetUserId: ivy.id,
-        role: 'owner',
-      }),
-    ).rejects.toBeInstanceOf(InvalidProjectRoleError);
-  });
-
-  it('the LAST-ADMIN guard trips when the only admin is moved onto a custom role', async () => {
-    const { workspace, key, owner, ownerCtx, project } = await makeFixture('custom-lastadmin');
-    const jo = await addWorkspaceMember(workspace.id, 'jo-lastadmin@example.com', 'Jo');
-    await projectMembersService.addMember({
-      key,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: jo.id,
-      role: 'admin',
-    });
-    const role = await projectRoleDefinitionService.create({
-      projectId: project.id,
-      ctx: ownerCtx,
-      name: 'Contractor',
-      permissions: ['work_item:edit'],
-    });
-
-    // A custom role sits at CUSTOM_ROLE_TIER, so this IS a demotion — the guard
-    // reads the resolved tier, not the requested key.
-    await expect(
-      projectMembersService.setRole({
-        key,
-        actorUserId: owner.id,
-        ctx: ownerCtx,
-        targetUserId: jo.id,
-        role: role.id,
-      }),
-    ).rejects.toBeInstanceOf(LastProjectAdminError);
-  });
-});
-
 describe('removeMember', () => {
   it('removes a member and returns the removed DTO', async () => {
     const { workspace, key, owner, ownerCtx, project } = await makeFixture('remove');
@@ -714,7 +302,6 @@ describe('removeMember', () => {
       actorUserId: owner.id,
       ctx: ownerCtx,
       targetUserId: frank.id,
-      role: 'member',
     });
     const removed = await projectMembersService.removeMember({
       key,
@@ -742,24 +329,22 @@ describe('removeMember', () => {
     ).rejects.toBeInstanceOf(NotAProjectMemberError);
   });
 
-  it('blocks removing the last admin', async () => {
-    const { workspace, key, owner, ownerCtx } = await makeFixture('remove-lastadmin');
+  it('removes the last person who was a project admin — there is no last-admin guard', async () => {
+    // The project admin retired with the project roles (MOTIR-6464): a legacy
+    // `admin` row is only "added to this project" now, so nothing is stranded.
+    const { workspace, key, owner, ownerCtx, project } = await makeFixture('remove-lastadmin');
     const sole = await addWorkspaceMember(workspace.id, 'sole-remove@example.com');
-    await projectMembersService.addMember({
+    await adminDb.projectMembership.create({
+      data: { workspaceId: workspace.id, projectId: project.id, userId: sole.id, role: 'admin' },
+    });
+    const removed = await projectMembersService.removeMember({
       key,
       actorUserId: owner.id,
       ctx: ownerCtx,
       targetUserId: sole.id,
-      role: 'admin',
     });
-    await expect(
-      projectMembersService.removeMember({
-        key,
-        actorUserId: owner.id,
-        ctx: ownerCtx,
-        targetUserId: sole.id,
-      }),
-    ).rejects.toBeInstanceOf(LastProjectAdminError);
+    expect(removed.userId).toBe(sole.id);
+    expect(await adminDb.projectMembership.count({ where: { projectId: project.id } })).toBe(0);
   });
 });
 
@@ -850,17 +435,15 @@ describe('setAccessLevel', () => {
     ).rejects.toBeInstanceOf(InvalidAccessLevelError);
   });
 
-  it('going private seeds every current workspace member as a project member, preserving existing roles', async () => {
+  it('going private adds every current workspace member to the project, skipping anyone already on it', async () => {
     const { workspace, key, owner, ownerCtx, project } = await makeFixture('access-private');
     const m1 = await addWorkspaceMember(workspace.id, 'm1-private@example.com');
     const m2 = await addWorkspaceMember(workspace.id, 'm2-private@example.com');
-    // Pre-add m1 as an admin — go-private must NOT downgrade them.
     await projectMembersService.addMember({
       key,
       actorUserId: owner.id,
       ctx: ownerCtx,
       targetUserId: m1.id,
-      role: 'admin',
     });
 
     const res = await projectMembersService.setAccessLevel({
@@ -874,13 +457,9 @@ describe('setAccessLevel', () => {
     const persistedProject = await adminDb.project.findUnique({ where: { id: project.id } });
     expect(persistedProject?.accessLevel).toBe('private');
 
-    // Workspace has owner + m1 + m2 = 3 members → 3 project memberships.
+    // Workspace has owner + m1 + m2 = 3 members → 3 project memberships, one each.
     const rows = await adminDb.projectMembership.findMany({ where: { projectId: project.id } });
-    expect(rows).toHaveLength(3);
-    const byUser = new Map(rows.map((r) => [r.userId, r.role]));
-    expect(byUser.get(owner.id)).toBe('member'); // seeded
-    expect(byUser.get(m1.id)).toBe('admin'); // preserved, NOT downgraded
-    expect(byUser.get(m2.id)).toBe('member'); // seeded
+    expect(rows.map((r) => r.userId).sort()).toEqual([owner.id, m1.id, m2.id].sort());
   });
 });
 
@@ -947,14 +526,12 @@ describe('listMembers', () => {
       actorUserId: owner.id,
       ctx: ownerCtx,
       targetUserId: first.id,
-      role: 'member',
     });
     await projectMembersService.addMember({
       key,
       actorUserId: owner.id,
       ctx: ownerCtx,
       targetUserId: second.id,
-      role: 'viewer',
     });
     const members = await projectMembersService.listMembers({
       key,
@@ -962,6 +539,5 @@ describe('listMembers', () => {
       ctx: ownerCtx,
     });
     expect(members.map((m) => m.userId)).toEqual([first.id, second.id]);
-    expect(members.map((m) => m.role)).toEqual(['member', 'viewer']);
   });
 });

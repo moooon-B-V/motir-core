@@ -403,10 +403,10 @@ async function reconcileGatesForDeliveredCards(candidate: ReconcileCandidate): P
  * answer to drift from the first. The latch is a no-op for a card that is not
  * at `implemented`, so no filter of its own is owed here.
  *
- * The ACTOR is the workspace owner, which is what the CI-feedback path already
- * resolves for a promotion nobody is standing behind
- * (`workspaceMembershipRepository.findOwnerByWorkspace`). A workspace with no
- * owner promotes nothing rather than guessing at an identity.
+ * The ACTOR is the workspace's stand-in Manager, which is what the CI-feedback
+ * path already resolves for a promotion nobody is standing behind
+ * (`workspaceMembershipRepository.findStandInManagerByWorkspace`). A workspace
+ * with no Manager promotes nothing rather than guessing at an identity.
  *
  * ⚠️ A PER-CARD FAILURE IS COUNTED, NEVER THROWN — the same rule the gate sweep
  * beside it follows, for the same reason: one card must not cost the other
@@ -425,7 +425,7 @@ async function promoteDeliveredCardsAfterReRead(
   for (const [workspaceId, workItemIds] of byWorkspace) {
     const owner = await withSystemContext(async (tx) => {
       await bindWorkspaceContext(tx, workspaceId);
-      return workspaceMembershipRepository.findOwnerByWorkspace(workspaceId, tx);
+      return workspaceMembershipRepository.findStandInManagerByWorkspace(workspaceId, tx);
     });
     if (!owner) continue;
 

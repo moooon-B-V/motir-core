@@ -59,8 +59,20 @@ beforeEach(async () => {
   await workspacesService.addMember({ userId: other.id, workspaceId: fx.workspaceId });
   otherId = other.id;
   members = [
-    { userId: fx.ownerId, name: 'Owner', email: 'owner@ex.com', role: 'owner' },
-    { userId: otherId, name: 'Ana Ruiz', email: 'ana@ex.com', role: 'member' },
+    {
+      userId: fx.ownerId,
+      name: 'Owner',
+      email: 'owner@ex.com',
+      workspaceRole: 'manager',
+      customRole: null,
+    },
+    {
+      userId: otherId,
+      name: 'Ana Ruiz',
+      email: 'ana@ex.com',
+      workspaceRole: 'member',
+      customRole: null,
+    },
   ];
   session.current = { user: { id: fx.ownerId } };
   activeCtx.current = { projectId: fx.projectId, userId: fx.ownerId, workspaceId: fx.workspaceId };

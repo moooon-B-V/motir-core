@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import enMessages from '@/messages/en.json';
+import { setProjectRoleDefinitionFor } from './helpers/workspaceRoleFixtures';
 
 // Action-wiring tests for the work item page's To-do list Server Actions
 // (Story MOTIR-3808 · MOTIR-3814). They prove the TRANSPORT layer —
@@ -445,10 +446,9 @@ describe('every action re-checks the permission', () => {
     // only `work_item:delete -> work_item:archive`).
     const archivist = await createTestUser({ email: 'archivist@ex.com', name: 'Archivist' });
     await workspacesService.addMember({ userId: archivist.id, workspaceId: fx.workspaceId });
-    const definition = await adminDb.projectRoleDefinition.create({
+    const definition = await adminDb.workspaceRoleDefinition.create({
       data: {
         workspaceId: fx.workspaceId,
-        projectId: fx.projectId,
         name: 'Archivist',
         permissions: ['project:browse', 'work_item:archive'],
       },
@@ -465,7 +465,7 @@ describe('every action re-checks the permission', () => {
         },
         tx,
       );
-      await projectMembershipRepository.setRoleDefinition(
+      await setProjectRoleDefinitionFor(
         archivist.id,
         fx.projectId,
         { roleDefinitionId: definition.id, role: CUSTOM_ROLE_TIER },

@@ -2,14 +2,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import en from '@/messages/en.json';
-import type { MemberRole, ProjectAccessLevel } from '@/generated/prisma/client';
+import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
 import { hasPermission, resolvePermissions } from '@/lib/permissions/resolve';
 import type { ProjectPermissionInputs } from '@/lib/permissions/resolve';
-import {
-  BUILTIN_ROLE_PERMISSIONS,
-  IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS,
-  ROLE_GATED_PERMISSIONS,
-} from '@/lib/permissions/builtinRoles';
+import { ROLE_GATED_PERMISSIONS, WORKSPACE_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import {
   PERMISSIONS,
   PERMISSION_CATALOG,
@@ -100,18 +96,19 @@ describe('the catalog carries `ai:decide_plan` as an enforced `ai` key', () => {
 // ── AC5 · the parity table ────────────────────────────────────────────────────
 
 /**
- * The four actor kinds AC5 names, as `resolvePermissions` inputs.
+ * The four actor kinds AC5 names, as `resolvePermissions` inputs — WORKSPACE
+ * roles since MOTIR-6459 (the old project `admin` / `member` / `viewer` are the
+ * Manager / Member / Viewer workspace roles, carried over with their sets).
  *
- * `implicitWorkspaceMember` is the one that is not a role: a workspace member
- * holding NO project membership, whose base set is
- * `IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS`. It is in the table because it is the
- * actor a widening would reach first and the one no role screen would show.
+ * `memberNotAdded` is the actor this table used to call the implicit workspace
+ * member: a Member never added to the project. It is in the table because it is
+ * the actor a widening would reach first and the one no role screen would show.
  */
 const ACTORS: Record<string, Omit<ProjectPermissionInputs, 'accessLevel'>> = {
-  admin: { workspaceRole: 'member' as MemberRole, projectRole: 'admin' as MemberRole },
-  member: { workspaceRole: 'member' as MemberRole, projectRole: 'member' as MemberRole },
-  viewer: { workspaceRole: 'member' as MemberRole, projectRole: 'viewer' as MemberRole },
-  implicitWorkspaceMember: { workspaceRole: 'member' as MemberRole, projectRole: null },
+  admin: { workspaceRole: 'manager', addedToProject: true },
+  member: { workspaceRole: 'member', addedToProject: true },
+  viewer: { workspaceRole: 'viewer', addedToProject: true },
+  memberNotAdded: { workspaceRole: 'member', addedToProject: false },
 };
 
 /** The four operations, and the key each is gated on AFTER the split. */
@@ -129,7 +126,13 @@ const OPERATIONS = {
 type OperationName = keyof typeof OPERATIONS;
 
 /**
- * The verdicts BEFORE the split, transcribed.
+ * The verdicts BEFORE the split, transcribed — with ONE row since changed on the
+ * record: `memberNotAdded` (MOTIR-6459). It used to be the implicit
+ * workspace-member set, which held neither plan key; under workspace roles a
+ * person holds their role's normal keys in every project they can enter
+ * (`role-model.md`, "a person has the same role in every project they can
+ * enter"), so a Member never added now authors and decides wherever they browse.
+ * That is the ONE widening the model decides, and the only row that moved.
  *
  * Read `approve` / `decline` as *"what `hasPermission(inputs, 'ai:view_plan')`
  * answered on `origin/main` at `a1f8aaad`"*, because that is the key both
@@ -145,26 +148,26 @@ const BEFORE: Record<ProjectAccessLevel, Record<string, Record<OperationName, bo
     admin: { read: true, author: true, approve: true, decline: true },
     member: { read: true, author: true, approve: true, decline: true },
     viewer: { read: true, author: false, approve: false, decline: false },
-    implicitWorkspaceMember: { read: true, author: false, approve: false, decline: false },
+    memberNotAdded: { read: true, author: true, approve: true, decline: true },
   },
   limited: {
     admin: { read: true, author: true, approve: true, decline: true },
     member: { read: true, author: true, approve: true, decline: true },
     viewer: { read: true, author: false, approve: false, decline: false },
-    implicitWorkspaceMember: { read: true, author: false, approve: false, decline: false },
+    memberNotAdded: { read: true, author: true, approve: true, decline: true },
   },
   private: {
     admin: { read: true, author: true, approve: true, decline: true },
     member: { read: true, author: true, approve: true, decline: true },
     viewer: { read: true, author: false, approve: false, decline: false },
-    // No project membership on a private project: invisible before any key is read.
-    implicitWorkspaceMember: { read: false, author: false, approve: false, decline: false },
+    // Not added to a private project: invisible before any key is read.
+    memberNotAdded: { read: false, author: false, approve: false, decline: false },
   },
   public: {
     admin: { read: true, author: true, approve: true, decline: true },
     member: { read: true, author: true, approve: true, decline: true },
     viewer: { read: true, author: false, approve: false, decline: false },
-    implicitWorkspaceMember: { read: true, author: false, approve: false, decline: false },
+    memberNotAdded: { read: true, author: true, approve: true, decline: true },
   },
 };
 
@@ -190,19 +193,19 @@ describe('AC5 — built-in behaviour is unchanged: the same verdicts before and 
     }
   });
 
-  it('the two keys are INDISTINGUISHABLE under every built-in input — 4 levels × 4 ws roles × 4 project roles', () => {
+  it('the two keys are INDISTINGUISHABLE under every built-in input — 4 levels × 4 ws roles × added or not', () => {
     // The strongest statement of neutrality available: approve used to resolve
     // through the author key and now resolves through the decide key, so if the
     // two agree on every input a built-in role can produce, nobody's access
     // moved. A single divergent cell here IS the behaviour change.
-    const ROLES: (MemberRole | null)[] = ['owner', 'admin', 'member', 'viewer'];
+    const ROLES: (WorkspaceRole | null)[] = ['manager', 'member', 'viewer', null];
     for (const accessLevel of ['open', 'limited', 'private', 'public'] as ProjectAccessLevel[]) {
-      for (const workspaceRole of [...ROLES, null]) {
-        for (const projectRole of [...ROLES, null]) {
-          const inputs: ProjectPermissionInputs = { accessLevel, workspaceRole, projectRole };
+      for (const workspaceRole of ROLES) {
+        for (const addedToProject of [false, true]) {
+          const inputs: ProjectPermissionInputs = { accessLevel, workspaceRole, addedToProject };
           expect(
             hasPermission(inputs, DECIDE_KEY),
-            `${DECIDE_KEY} diverges from ${AUTHOR_KEY} on { ${accessLevel}, ws=${workspaceRole}, proj=${projectRole} }`,
+            `${DECIDE_KEY} diverges from ${AUTHOR_KEY} on { ${accessLevel}, ws=${workspaceRole}, added=${addedToProject} }`,
           ).toBe(hasPermission(inputs, AUTHOR_KEY));
         }
       }
@@ -216,7 +219,7 @@ describe('AC5 — built-in behaviour is unchanged: the same verdicts before and 
     const inputs = (permissions: PermissionKey[]): ProjectPermissionInputs => ({
       accessLevel: 'open',
       workspaceRole: 'member',
-      projectRole: 'member',
+      addedToProject: true,
       customRolePermissions: permissions,
     });
     const authorOnly = inputs(['project:browse', AUTHOR_KEY]);
@@ -230,34 +233,19 @@ describe('AC5 — built-in behaviour is unchanged: the same verdicts before and 
 
   it('the role SETS place the key exactly where the author key already sat', () => {
     expect(ROLE_GATED_PERMISSIONS.includes(DECIDE_KEY)).toBe(true);
-    expect(BUILTIN_ROLE_PERMISSIONS.admin.has(DECIDE_KEY)).toBe(true);
-    expect(BUILTIN_ROLE_PERMISSIONS.member.has(DECIDE_KEY)).toBe(true);
-    expect(BUILTIN_ROLE_PERMISSIONS.viewer.has(DECIDE_KEY)).toBe(false);
-    expect(IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS.has(DECIDE_KEY)).toBe(false);
-    // Stated as an exact SET rather than four booleans, so a key added to the
-    // implicit grant later fails loudly instead of widening what a bare
-    // workspace membership means.
-    expect([...IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS].sort()).toEqual(
-      [
-        'attachment:create',
-        'comment:add',
-        'project:browse',
-        'report:view',
-        'work_item:edit',
-        // MOTIR-6328 — the Plans and Runs rooms' view keys.
-        'plan:view_any',
-        'run:view_any',
-      ].sort(),
-    );
+    expect(WORKSPACE_ROLE_PERMISSIONS.manager.has(DECIDE_KEY)).toBe(true);
+    expect(WORKSPACE_ROLE_PERMISSIONS.member.has(DECIDE_KEY)).toBe(true);
+    expect(WORKSPACE_ROLE_PERMISSIONS.viewer.has(DECIDE_KEY)).toBe(false);
   });
 
-  it('the workspace-manager rail resolves to it on every access level', () => {
+  it('the Manager rail resolves to it on every access level, added or not', () => {
     for (const accessLevel of ['public', 'open', 'limited', 'private'] as ProjectAccessLevel[]) {
-      for (const workspaceRole of ['owner', 'admin'] as MemberRole[]) {
-        const held = resolvePermissions({ accessLevel, workspaceRole, projectRole: null });
-        expect(held.has(DECIDE_KEY), `${workspaceRole} on ${accessLevel} lacks ${DECIDE_KEY}`).toBe(
-          true,
-        );
+      for (const addedToProject of [false, true]) {
+        const held = resolvePermissions({ accessLevel, workspaceRole: 'manager', addedToProject });
+        expect(
+          held.has(DECIDE_KEY),
+          `manager (added=${addedToProject}) on ${accessLevel} lacks ${DECIDE_KEY}`,
+        ).toBe(true);
       }
     }
   });

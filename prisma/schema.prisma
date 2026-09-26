@@ -135,6 +135,7 @@ model User {
   // emailChangeRequests / sessions).
   deviceCodes                      DeviceCode[]
   workspaceMemberships             WorkspaceMembership[]
+  roleMigrationReports             RoleMigrationReport[]
   // Back-relation for OrganizationMembership (Story 6.10). A user belongs to
   // many organizations (the root tenancy tier) — Cascade on the FK: deleting a
   // user removes their org-membership rows, mirroring workspaceMemberships.
@@ -1132,6 +1133,8 @@ model Workspace {
   // workspace holds the custom roles of all its projects; Cascade with the
   // workspace, matching projectMemberships.
   projectRoleDefinitions      ProjectRoleDefinition[]
+  workspaceRoleDefinitions    WorkspaceRoleDefinition[]
+  roleMigrationReports        RoleMigrationReport[]
   // Retired project keys (Story 6.8) — workspace-scoped reservation rows.
   // Cascade with the workspace (a deleted workspace frees its keys).
   projectKeyAliases           ProjectKeyAlias[]
@@ -1767,27 +1770,112 @@ model Project {
 /// the `owner` row is the workspace founder, who always has access to every
 /// project regardless of project membership.
 model WorkspaceMembership {
-  id              String     @id @default(cuid())
-  userId          String
-  workspaceId     String
-  role            MemberRole @default(member)
+  id               String         @id @default(cuid())
+  userId           String
+  workspaceId      String
+  role             MemberRole     @default(member)
   /// The member's currently-active project within this workspace. Clears
   /// to NULL (onDelete: SetNull) — not cascades — when that project is
   /// archived/deleted, so losing a project never removes the membership.
   /// Resolution (getActiveProject) + RLS land in Subtask 1.3.2.
-  activeProjectId String?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  activeProjectId  String?
+  /// The person's ONE workspace role (Story MOTIR-6168 · MOTIR-6457) — Manager,
+  /// Member or Viewer, the same in every project of the workspace
+  /// (`docs/decisions/role-model.md` §2). Added BESIDE the legacy `role`: NULL
+  /// means "not migrated yet — derive it from `role`", which is what keeps a row
+  /// the still-serving old build writes during the deploy window correct. It
+  /// has NO default on purpose: a default would silently hand `member` to a row
+  /// the old build creates as `owner`. The follow-up contract story makes it
+  /// NOT NULL once no NULL remains.
+  ///
+  /// ⚠️ This column and `roleDefinitionId` MOVE TOGETHER, and
+  /// `workspaceMembershipRepository.setWorkspaceRole` is their only writer. A
+  /// membership on a workspace custom role carries `workspaceRole =
+  /// CUSTOM_WORKSPACE_ROLE_TIER` (`member`, `lib/workspaces/roles.ts`).
+  workspaceRole    WorkspaceRole? @map("workspace_role")
+  /// The workspace CUSTOM role this membership holds, or NULL for a built-in.
+  /// `onDelete: Restrict` for the reason `ProjectMembership.roleDefinitionId`
+  /// gives: Cascade would drop the member, SetNull would silently re-grant, so
+  /// the DATABASE refuses and the only route to deleting a held role is the
+  /// service's reassign-then-delete path.
+  roleDefinitionId String?        @map("role_definition_id")
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  activeProject Project?  @relation("ActiveProject", fields: [activeProjectId], references: [id], onDelete: SetNull)
+  user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace      Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  activeProject  Project?                 @relation("ActiveProject", fields: [activeProjectId], references: [id], onDelete: SetNull)
+  roleDefinition WorkspaceRoleDefinition? @relation(fields: [roleDefinitionId], references: [id], onDelete: Restrict)
 
   @@unique([userId, workspaceId])
   @@index([userId])
   @@index([workspaceId])
   @@index([activeProjectId])
+  @@index([roleDefinitionId])
   @@map("workspace_membership")
+}
+
+/// A workspace's OWN role — a custom role a Manager authored (Story MOTIR-6168 ·
+/// MOTIR-6457). The workspace-tier successor of `ProjectRoleDefinition`: the three
+/// BUILT-IN roles (Manager · Member · Viewer) are not rows, they live in code; a
+/// custom role is a NAME + a chosen SET over the code-owned catalog, and it
+/// applies in every project of its workspace (`role-model.md` Q2).
+///
+/// `permissions` is a `String[]` for the reasons `ProjectRoleDefinition` records,
+/// and there is no `based_on` column for the reason it records too: provenance
+/// that never re-flowed. The editor's "Start from" seeds the grid and is not
+/// stored.
+///
+/// RLS: its own `workspace_id` column and ONE `FOR ALL` policy on
+/// `app.workspace_id`, the shape every workspace-bearing table takes.
+model WorkspaceRoleDefinition {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  name        String
+  permissions String[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace       Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  memberships     WorkspaceMembership[]
+  migrationReport RoleMigrationReport[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("workspace_role_definition")
+}
+
+/// One row per person per reason the move to workspace roles chose their role by
+/// anything other than the plain mapping (Story MOTIR-6168 · MOTIR-6457). Written
+/// by the role migration (MOTIR-6458) and its never-wider check (MOTIR-6461),
+/// read by the workspace Members page's migration notice (MOTIR-6465), and read
+/// by the project access story's migration (MOTIR-6169) to turn a narrowing
+/// project role into a Limited scope.
+///
+/// A RECORD, not a live pointer: `beforeJson` is the legacy workspace role and
+/// every project role / custom role the person held, as it stood at the move.
+/// `afterRoleDefinitionId` is `SetNull` because a report row outliving the custom
+/// role it names is correct — the report says what happened, and the role's later
+/// deletion does not un-happen it.
+model RoleMigrationReport {
+  id                    String              @id @default(cuid())
+  workspaceId           String              @map("workspace_id")
+  userId                String              @map("user_id")
+  beforeJson            Json                @map("before_json")
+  afterRole             WorkspaceRole       @map("after_role")
+  afterRoleDefinitionId String?             @map("after_role_definition_id")
+  reason                RoleMigrationReason
+  createdAt             DateTime            @default(now()) @map("created_at")
+  dismissedAt           DateTime?           @map("dismissed_at")
+
+  workspace           Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user                User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  afterRoleDefinition WorkspaceRoleDefinition? @relation(fields: [afterRoleDefinitionId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([afterRoleDefinitionId])
+  @@map("role_migration_report")
 }
 
 /// Per-project membership + role (Story 6.4) — the project-scoped sibling of
@@ -1990,6 +2078,31 @@ enum MemberRole {
   viewer
 
   @@map("member_role")
+}
+
+/// A person's ONE role in a workspace (Story MOTIR-6168 · `role-model.md` §2).
+/// A workspace custom role is held at the `member` tier plus a pointer
+/// (`WorkspaceMembership.roleDefinitionId`), so it needs no value of its own.
+enum WorkspaceRole {
+  manager
+  member
+  viewer
+
+  @@map("workspace_role")
+}
+
+/// Why the move to workspace roles chose a person's role by anything other than
+/// the plain mapping (MOTIR-6457). `mapped_narrower` is written by the never-wider
+/// check (MOTIR-6461); every other value by the mapping (MOTIR-6458).
+enum RoleMigrationReason {
+  narrowest_kept
+  project_role_dropped
+  custom_role_recreated
+  custom_role_merged
+  mapped_narrower
+  org_admin_granted
+
+  @@map("role_migration_reason")
 }
 
 /// A project's browse-access level (`project.accessLevel`, Story 6.4),

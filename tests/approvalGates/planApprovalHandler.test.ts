@@ -26,7 +26,6 @@ import { approvalGateRepository } from '@/lib/repositories/approvalGateRepositor
 import { planRepository } from '@/lib/repositories/planRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { APPROVE_TX_BUDGET, plansService } from '@/lib/services/plansService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -34,6 +33,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // THE `plan_approval` HANDLER AND ITS REGISTRATION (Story MOTIR-6012 · Subtask
 // MOTIR-6035; ADR `approval-gates.md` §11.3–§11.6) — against a REAL Postgres.
@@ -101,7 +101,7 @@ const digestOf = (planId: string) =>
 async function secondMember(role: 'viewer' | 'member') {
   const other = await createTestUser({ email: `${role}@ex.com`, name: `A ${role}` });
   await workspacesService.addMember({ userId: other.id, workspaceId: fx.workspaceId });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,
@@ -296,10 +296,12 @@ describe('ROUTING (§11.6) — the requester, else the workspace owner, else nob
         await resolvePlanGateRoute({ createdById: null, workspaceId: fx.workspaceId }, tx),
       ).toBe(fx.ownerId);
     });
-    // A workspace with no owner row — an invariant violation — routes to nobody.
+    // A workspace with no Manager — an invariant violation — routes to nobody.
+    // (The stand-in is the oldest MANAGER since MOTIR-6462, so a legacy `admin`
+    // would stand in; the row is made a plain Member instead.)
     await adminDb.workspaceMembership.updateMany({
       where: { workspaceId: fx.workspaceId, role: 'owner' },
-      data: { role: 'admin' },
+      data: { role: 'member', workspaceRole: 'member' },
     });
     await withWorkspaceContext(fx.ctx, async (tx) => {
       expect(

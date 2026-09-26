@@ -49,6 +49,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
 import { waitForEmail, emailsTo } from './_helpers/email-capture';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -108,6 +109,8 @@ async function grantProjectRole(
   await db.projectMembership.create({
     data: { userId, workspaceId: tenant.workspaceId, projectId: tenant.projectId, role },
   });
+  // Roles live on the workspace since MOTIR-6168.
+  await setWorkspaceRoleFor(userId, tenant.workspaceId, role);
 }
 
 async function pinActiveProject(userId: string, tenant: Tenant): Promise<void> {

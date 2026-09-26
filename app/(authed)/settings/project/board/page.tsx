@@ -83,7 +83,7 @@ export default async function ProjectBoardSettingsPage({
   const selectedBoardId = resolveSelectedBoardId(sp.board);
 
   // MOTIR-2473 retired the private admin derivation that used to sit here — a
-  // WORKSPACE-OWNER check (`isOwnerRole`) standing in for "may configure this",
+  // WORKSPACE-OWNER check (`isLegacyOwnerRole`) standing in for "may configure this",
   // which was both a second policy and a tighter one than the key the service
   // actually asserts. The page is reached only by an actor who holds its registry
   // key (the guard above), so the edit affordances are simply on.

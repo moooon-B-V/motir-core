@@ -19,7 +19,6 @@ import {
   approvalGatesService,
   resolveCardlessGateAuthority,
 } from '@/lib/services/approvalGatesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { HomeActorContext } from '@/lib/services/homeService';
@@ -28,6 +27,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // THE GATE READS ADMIT A GATE WITH NO WORK ITEM (Story MOTIR-6012 · Subtask MOTIR-6034;
 // ADR `approval-gates.md` §11.1, §11.2, §11.5b, §11.6) — against a REAL Postgres.
@@ -297,7 +297,7 @@ describe('the DECIDE DOOR on a card-less gate — the arms a registered kind rea
   });
 
   it('asserts the kind’s permission against the gate’s OWN project — a viewer is refused', async () => {
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
@@ -316,7 +316,7 @@ describe('the DECIDE DOOR on a card-less gate — the arms a registered kind rea
   });
 
   it('a member holding `ai:decide_plan` may decide a plan gate routed to somebody else', async () => {
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

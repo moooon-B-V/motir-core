@@ -126,3 +126,91 @@ export class WorkspaceNotSoleMemberError extends Error {
     this.name = 'WorkspaceNotSoleMemberError';
   }
 }
+
+/**
+ * Authoring a workspace custom role — create, edit, delete — is the workspace
+ * MANAGER's, or the org Owner's (Story MOTIR-6168 · MOTIR-6460). A ROLE check,
+ * not a permission key: workspace administration belongs to the built-in
+ * Manager, and a custom role carries project-scope keys only, so no custom role
+ * can author roles. → 403.
+ */
+export class WorkspaceRoleForbiddenError extends Error {
+  readonly code = 'WORKSPACE_ROLE_FORBIDDEN' as const;
+  constructor(userId: string, workspaceId: string) {
+    super(
+      `User ${userId} is not a Manager of workspace ${workspaceId}, so cannot change its roles.`,
+    );
+    this.name = 'WorkspaceRoleForbiddenError';
+  }
+}
+
+/** A second workspace custom role with a name the workspace already uses. → 409. */
+export class WorkspaceRoleNameTakenError extends Error {
+  readonly code = 'WORKSPACE_ROLE_NAME_TAKEN' as const;
+  constructor(readonly roleName: string) {
+    super(`This workspace already has a role called "${roleName}".`);
+    this.name = 'WorkspaceRoleNameTakenError';
+  }
+}
+
+/**
+ * Deleting a workspace custom role somebody holds, with no role to move them
+ * to. Carries the COUNT the confirmation dialog names, and nothing is written.
+ * → 409.
+ */
+export class WorkspaceRoleInUseError extends Error {
+  readonly code = 'WORKSPACE_ROLE_IN_USE' as const;
+  constructor(
+    readonly roleName: string,
+    readonly count: number,
+  ) {
+    super(`"${roleName}" is held by ${count} member(s); choose a role to move them to.`);
+    this.name = 'WorkspaceRoleInUseError';
+  }
+}
+
+/**
+ * A role change that would leave the workspace with no Manager (Story MOTIR-6168 ·
+ * MOTIR-6463). → 409. Nothing is written.
+ */
+export class LastManagerError extends Error {
+  readonly code = 'LAST_MANAGER' as const;
+  constructor(workspaceId: string) {
+    super(`Workspace ${workspaceId} needs at least one Manager.`);
+    this.name = 'LastManagerError';
+  }
+}
+
+/** The person whose role is being changed is not a member of this workspace. → 404. */
+export class WorkspaceMemberNotFoundError extends Error {
+  readonly code = 'WORKSPACE_MEMBER_NOT_FOUND' as const;
+  constructor(userId: string, workspaceId: string) {
+    super(`User ${userId} is not a member of workspace ${workspaceId}.`);
+    this.name = 'WorkspaceMemberNotFoundError';
+  }
+}
+
+/** A role value that is not Manager, Member or Viewer. → 422. */
+export class InvalidWorkspaceRoleError extends Error {
+  readonly code = 'INVALID_WORKSPACE_ROLE' as const;
+  constructor(value: string) {
+    super(`"${value}" is not a workspace role (manager, member or viewer).`);
+    this.name = 'InvalidWorkspaceRoleError';
+  }
+}
+
+/**
+ * The person is the organization's Owner or an Admin, so they are a Manager of
+ * every workspace of the org and their role here is not the workspace's to change
+ * (MOTIR-6456 panel 6a; `role-model.md` AMENDMENT 1). → 409.
+ */
+export class OrgManagedWorkspaceRoleError extends Error {
+  readonly code = 'ORG_MANAGED_WORKSPACE_ROLE' as const;
+  constructor(userId: string, workspaceId: string) {
+    super(
+      `User ${userId} is an organization Owner or Admin, so is a Manager of workspace ` +
+        `${workspaceId}; change their organization role instead.`,
+    );
+    this.name = 'OrgManagedWorkspaceRoleError';
+  }
+}

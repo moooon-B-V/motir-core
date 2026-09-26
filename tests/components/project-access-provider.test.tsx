@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, afterEach } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import type { MemberRole, ProjectAccessLevel } from '@/generated/prisma/client';
+import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
 import {
   ProjectAccessProvider,
   useProjectAccess,
@@ -40,12 +40,14 @@ import { PERMISSIONS, type PermissionKey } from '@/lib/permissions/catalog';
 // actually discharge, and it is load-bearing only because half 1 sits under it.
 
 const ACCESS_LEVELS: ProjectAccessLevel[] = ['public', 'open', 'limited', 'private'];
-const WORKSPACE_ROLES: (MemberRole | null)[] = ['owner', 'admin', 'member', null];
-const PROJECT_ROLES: (MemberRole | null)[] = ['admin', 'member', 'viewer', null];
+// The policy's input space since MOTIR-6459: the workspace role (or none) and
+// whether the actor was added to the project — 4 levels × 4 roles × 2 = 32.
+const WORKSPACE_ROLES: (WorkspaceRole | null)[] = ['manager', 'member', 'viewer', null];
+const ADDED: boolean[] = [true, false];
 
 const GRID: ProjectAccessInputs[] = ACCESS_LEVELS.flatMap((accessLevel) =>
   WORKSPACE_ROLES.flatMap((workspaceRole) =>
-    PROJECT_ROLES.map((projectRole) => ({ accessLevel, workspaceRole, projectRole })),
+    ADDED.map((addedToProject) => ({ accessLevel, workspaceRole, addedToProject })),
   ),
 );
 
@@ -65,12 +67,12 @@ function viaPermissionSet(i: ProjectAccessInputs) {
 }
 
 describe('the layout substitution is behaviour-neutral', () => {
-  it('covers all 64 access-level × workspace-role × project-role combinations', () => {
-    expect(GRID).toHaveLength(64);
+  it('covers all 32 access-level × workspace-role × added combinations', () => {
+    expect(GRID).toHaveLength(32);
   });
 
   it.each(GRID)(
-    'level=$accessLevel workspace=$workspaceRole project=$projectRole — the set derives the same three booleans',
+    'level=$accessLevel workspace=$workspaceRole added=$addedToProject — the set derives the same three booleans',
     (inputs) => {
       expect(viaPermissionSet(inputs)).toEqual(viaPredicates(inputs));
     },

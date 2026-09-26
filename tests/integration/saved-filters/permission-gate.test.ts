@@ -2,13 +2,11 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { encodeFilterParam } from '@/lib/filters/ast';
 import type { FilterAst } from '@/lib/filters/ast';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { SavedFilterForbiddenError, SavedFilterNotFoundError } from '@/lib/savedFilters/errors';
-import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { CUSTOM_ROLE_TIER } from '@/lib/permissions/builtinRoles';
 import { adminDb } from '../../helpers/adminDb';
 import { makeWorkItemFixture } from '../../fixtures';
@@ -16,6 +14,7 @@ import { createTestUser } from '../../fixtures/userFixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { addToProjectAs, setProjectRoleDefinitionFor } from '../../helpers/workspaceRoleFixtures';
 
 // The `saved_filter:manage` GATE (Story MOTIR-2291 · Subtask MOTIR-2352).
 //
@@ -61,7 +60,7 @@ async function makeTeam(): Promise<Team> {
       workspaceId: fx.workspaceId,
       role: 'member',
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
@@ -217,23 +216,22 @@ describe('the manage-ANY tier is a PERMISSION a custom role can hold (MOTIR-5293
       workspaceId: t.fx.workspaceId,
       role: 'member',
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: t.key,
       actorUserId: t.fx.ownerId,
       ctx: t.fx.ctx,
       targetUserId: user.id,
       role: 'member',
     });
-    const definition = await adminDb.projectRoleDefinition.create({
+    const definition = await adminDb.workspaceRoleDefinition.create({
       data: {
         workspaceId: t.fx.workspaceId,
-        projectId: t.fx.projectId,
         name: `Curator ${slug}`,
         permissions,
       },
     });
     await adminDb.$transaction((tx) =>
-      projectMembershipRepository.setRoleDefinition(
+      setProjectRoleDefinitionFor(
         user.id,
         t.fx.projectId,
         { roleDefinitionId: definition.id, role: CUSTOM_ROLE_TIER },

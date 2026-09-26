@@ -983,6 +983,8 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: 'Historical: the app-hosted /p/<key> path MOTIR-3951 deleted, quoted as the address the retargets replace. Permanent.',
   },
 
+  // (The two FORWARD-LOOKING rows for `/settings/workspace/roles` that MOTIR-6456
+  // added are gone — deleted by MOTIR-6466, which built the route.)
   // ── The git surface MOVED A TIER (Story MOTIR-4669 · MOTIR-4680) ─────────
   //    Twelve assets draw the old address; ALL of them are point-in-time records
   //    of a surface that shipped, and the address still resolves — as a 308.

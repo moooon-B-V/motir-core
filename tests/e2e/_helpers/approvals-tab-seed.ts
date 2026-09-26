@@ -5,6 +5,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { createTestPerson } from './testPerson';
+import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
 
 // THE APPROVALS-TAB seed (Story MOTIR-4879 · Subtask MOTIR-5149), modelled on
 // `design-approval-seed.ts` — which plants the same shape one surface over, and
@@ -123,6 +124,8 @@ export async function seedApprovalsTab(slug: string): Promise<ApprovalsTabSeed> 
     await adminDb.projectMembership.create({
       data: { userId: user.id, projectId: project.id, workspaceId: workspace.id, role },
     });
+    // Roles live on the workspace since MOTIR-6168.
+    await setWorkspaceRoleFor(user.id, workspace.id, role);
     await pin(user.id);
     return user.id;
   }

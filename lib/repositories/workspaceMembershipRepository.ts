@@ -4,6 +4,8 @@ import {
   type User,
   type Workspace,
   type WorkspaceMembership,
+  type WorkspaceRole,
+  type WorkspaceRoleDefinition,
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 
@@ -12,6 +14,13 @@ import { dbRead } from '@/lib/db';
 // data-access concern; the service maps it to a DTO.
 export type MembershipWithUser = WorkspaceMembership & {
   user: Pick<User, 'id' | 'name' | 'email'>;
+  /** The workspace custom role the member holds (id + name), or null on a built-in. */
+  roleDefinition: Pick<WorkspaceRoleDefinition, 'id' | 'name'> | null;
+};
+
+/** A membership with the workspace CUSTOM role it points at (or null for a built-in). */
+export type MembershipWithRoleDefinition = WorkspaceMembership & {
+  roleDefinition: WorkspaceRoleDefinition | null;
 };
 
 // WorkspaceMembership repository — single Prisma operations on the
@@ -37,6 +46,114 @@ export const workspaceMembershipRepository = {
     return tx.workspaceMembership.findUnique({
       where: { userId_workspaceId: { userId, workspaceId } },
     });
+  },
+
+  /**
+   * The membership WITH the workspace custom role it points at, in ONE round
+   * trip (Story MOTIR-6168 · MOTIR-6457). The resolver (MOTIR-6459) needs both —
+   * the role tier and, for a custom role, its stored key set — for every
+   * permission check, so reading them apart would double the reads on the
+   * hottest path in the product. Requires `tx`: both tables are RLS-gated.
+   */
+  async findByUserAndWorkspaceWithRoleDefinition(
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<MembershipWithRoleDefinition | null> {
+    return tx.workspaceMembership.findUnique({
+      where: { userId_workspaceId: { userId, workspaceId } },
+      include: { roleDefinition: true },
+    });
+  },
+
+  /**
+   * Every membership of a workspace WITH the custom role each points at, in ONE
+   * query (MOTIR-6459) — the many-actor twin of
+   * {@link findByUserAndWorkspaceWithRoleDefinition}, for
+   * `projectAccessService.resolveCanEditForUsers`, which answers "who may edit
+   * this project?" for a whole team without a round trip per person.
+   */
+  async findMembersByWorkspaceWithRoleDefinition(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<MembershipWithRoleDefinition[]> {
+    return tx.workspaceMembership.findMany({
+      where: { workspaceId },
+      include: { roleDefinition: true },
+    });
+  },
+
+  /**
+   * How many members of a workspace sit on each BUILT-IN role, grouped by both
+   * columns — `(workspaceRole, role)` for memberships with no custom role — so
+   * the service can fold a not-yet-migrated row (`workspace_role` NULL) through
+   * `resolveWorkspaceRole` the same way the resolver does (MOTIR-6460).
+   */
+  async countBuiltInRolesByWorkspace(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ workspaceRole: WorkspaceRole | null; role: MemberRole; count: number }[]> {
+    const rows = await tx.workspaceMembership.groupBy({
+      by: ['workspaceRole', 'role'],
+      where: { workspaceId, roleDefinitionId: null },
+      _count: { _all: true },
+    });
+    return rows.map((r) => ({
+      workspaceRole: r.workspaceRole,
+      role: r.role,
+      count: r._count._all,
+    }));
+  },
+
+  /** Every membership holding one workspace custom role — the delete path's movers. */
+  async findByRoleDefinition(
+    roleDefinitionId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkspaceMembership[]> {
+    return tx.workspaceMembership.findMany({ where: { roleDefinitionId } });
+  },
+
+  /**
+   * Write a member's WORKSPACE ROLE — `workspace_role` and `role_definition_id`
+   * together, in ONE statement (MOTIR-6457). THE ONLY WRITER of the two columns:
+   * they move together (a custom role is `CUSTOM_WORKSPACE_ROLE_TIER` + its
+   * pointer; a built-in is its value + NULL), and a second writer is how they
+   * come apart. Which pairs are legal is the service's call; this writes what it
+   * is given. Targets the row by the `(userId, workspaceId)` unique.
+   */
+  async setWorkspaceRole(
+    userId: string,
+    workspaceId: string,
+    role: { workspaceRole: WorkspaceRole; roleDefinitionId: string | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkspaceMembership> {
+    return tx.workspaceMembership.update({
+      where: { userId_workspaceId: { userId, workspaceId } },
+      data: { workspaceRole: role.workspaceRole, roleDefinitionId: role.roleDefinitionId },
+    });
+  },
+
+  /**
+   * How many members of the workspace hold the MANAGER role — `workspace_role =
+   * 'manager'` rows only; a NULL (not-yet-migrated) row is not counted, because
+   * the mapping (MOTIR-6458) runs before any reader of this (MOTIR-6463).
+   *
+   * LOCKS those rows `FOR UPDATE`, because its reader is the last-Manager guard:
+   * a count-then-write that, unlocked, lets two concurrent demotions of a
+   * two-Manager workspace both read `2` and both commit, leaving none — the same
+   * race `countByWorkspaceForUpdate` closes for the last-member guard. `ORDER BY
+   * "id"` pins the lock order; Postgres forbids `count(*) … FOR UPDATE`, so the
+   * ids are selected under the lock and counted here. `tx` is REQUIRED — the
+   * lock lives only for its transaction, and the RLS policy needs its GUCs.
+   */
+  async countManagers(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "workspace_membership"
+      WHERE "workspaceId" = ${workspaceId} AND "workspace_role" = 'manager'
+      ORDER BY "id"
+      FOR UPDATE
+    `;
+    return rows.length;
   },
 
   /**
@@ -117,7 +234,10 @@ export const workspaceMembershipRepository = {
     return tx.workspaceMembership.findMany({
       where: { workspaceId },
       orderBy: { createdAt: 'asc' },
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        roleDefinition: { select: { id: true, name: true } },
+      },
     });
   },
 
@@ -191,30 +311,53 @@ export const workspaceMembershipRepository = {
   },
 
   /**
-   * The workspace's OWNER membership — the oldest `role: 'owner'` row (a
-   * workspace is born with exactly one owner at creation; `orderBy createdAt
-   * asc` pins a deterministic pick should role changes ever produce more than
-   * one). Used by Story 6.12's public-submit path as the deterministic "intake
-   * reporter": a cross-org public submitter is NOT a workspace member, but
-   * `createWorkItem` requires the reporter to BE one (`assertReporterMember`),
-   * so the owner stands in as `reporterId` while the real submitter rides
-   * `submittedByUserId` (the 6.11.4 seam). Read-only → the `db` singleton
-   * (optional `tx` for a caller already inside a transaction). Returns null only
-   * for a workspace with no owner (an invariant violation the caller handles).
+   * The workspace's STAND-IN principal — a deterministic workspace MEMBER who acts
+   * as reporter / actor on the writes the system makes for the workspace (the
+   * public-intake reporter, a status rollup's transitioner, an OIDC caller). It
+   * must be a MEMBER, not the org Owner: `createWorkItem`'s `assertReporterMember`
+   * requires one, and the org Owner may hold no membership at all (MOTIR-6308).
+   *
+   * The rule (Story MOTIR-6168 · MOTIR-6462): the oldest MANAGER — a membership
+   * whose `workspace_role` is `manager`, or, while the column is still NULL in the
+   * deploy window, whose legacy `role` is `owner` / `admin` (the fallback
+   * `resolveWorkspaceRole` applies). The legacy `role` orders FIRST so the pick is
+   * the same person the old owner-only lookup returned wherever that owner row
+   * still holds the Manager role: `member_role` declares `owner` first, so
+   * `role asc` puts the founder ahead of a later Manager. A founder demoted out
+   * of the Manager role no longer matches, and the oldest remaining Manager
+   * stands in. Returns null only for a workspace with no Manager (an invariant
+   * violation the caller handles). Read-only → `dbRead` without a `tx`.
    */
-  async findOwnerByWorkspace(
+  async findStandInManagerByWorkspace(
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkspaceMembership | null> {
     const client = tx ?? dbRead;
     return client.workspaceMembership.findFirst({
-      where: { workspaceId, role: 'owner' },
-      orderBy: { createdAt: 'asc' },
+      where: {
+        workspaceId,
+        OR: [
+          { workspaceRole: 'manager' },
+          { workspaceRole: null, role: { in: ['owner', 'admin'] } },
+        ],
+      },
+      orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
     });
   },
 
   async create(
-    data: { userId: string; workspaceId: string; role: MemberRole },
+    data: {
+      userId: string;
+      workspaceId: string;
+      /**
+       * The workspace role (MOTIR-6462): every new membership carries one, so the
+       * resolver's NULL fallback is only ever reached by a row the still-serving
+       * old build wrote during the deploy window.
+       */
+      workspaceRole: WorkspaceRole;
+      /** The legacy column, still NOT NULL until the contract story drops it. */
+      role: MemberRole;
+    },
     tx: Prisma.TransactionClient,
   ): Promise<WorkspaceMembership> {
     return tx.workspaceMembership.create({ data });

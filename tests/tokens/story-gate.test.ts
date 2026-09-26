@@ -9,7 +9,6 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import { grantFromExtra, contextFromExtra } from '@/lib/mcp/context';
 import { verifyMcpToken } from '@/lib/mcp/auth';
@@ -29,6 +28,7 @@ import enMessages from '@/messages/en.json';
 import zhMessages from '@/messages/zh.json';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // The STORY gate for MOTIR-2572 (Subtask MOTIR-2585).
 //
@@ -222,7 +222,7 @@ describe('SEAM 4 — grant ∩ role, at BOTH gates', () => {
       name: 'Viewer',
     });
     await workspacesService.addMember({ userId: u.id, workspaceId: fx.workspaceId });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: { userId: fx.ownerId, workspaceId: fx.workspaceId },

@@ -88,7 +88,7 @@ async function ownersOf(organizationId: string): Promise<string[]> {
 }
 
 describe('seam 1 — a transfer, read straight back through the reach resolver', () => {
-  it('the new Owner reaches a workspace they never joined the moment the transfer commits; the old one no longer does', async () => {
+  it('the new Owner reaches a workspace they never joined the moment the transfer commits; the old one keeps an Admin’s reach', async () => {
     const org = await makeOrg();
     // A workspace the OWNER creates and then leaves, so neither the old Owner
     // nor the Admin holds a membership in it: whoever reaches it, reaches it as
@@ -106,11 +106,19 @@ describe('seam 1 — a transfer, read straight back through the reach resolver',
     await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'private' } });
     await adminDb.workspaceMembership.deleteMany({ where: { workspaceId: vault.id } });
 
-    // Before: the Owner reaches it, the Admin does not.
+    // Before: the Owner reaches it as the Owner, and the Admin as an Admin —
+    // an org Admin carries the Manager role into every workspace (MOTIR-6168,
+    // overturning reading R1).
     expect(
       (await organizationsService.resolveWorkspaceAccess(org.owner.id, vault.id))?.isOrgOwner,
     ).toBe(true);
-    expect(await organizationsService.resolveWorkspaceAccess(org.admin.id, vault.id)).toBeNull();
+    expect(await organizationsService.resolveWorkspaceAccess(org.admin.id, vault.id)).toMatchObject(
+      {
+        effectiveRole: 'manager',
+        isOrgOwner: false,
+        reachesEveryWorkspace: true,
+      },
+    );
 
     await organizationsService.transferOwnership({
       organizationId: org.organizationId,
@@ -124,7 +132,7 @@ describe('seam 1 — a transfer, read straight back through the reach resolver',
     // the project tier's permission input, on a private project.
     const newOwner = await organizationsService.resolveWorkspaceAccess(org.admin.id, vault.id);
     expect(newOwner).toMatchObject({
-      effectiveRole: 'owner',
+      effectiveRole: 'manager',
       workspaceRole: null,
       isOrgOwner: true,
     });
@@ -135,10 +143,17 @@ describe('seam 1 — a transfer, read straight back through the reach resolver',
         'work_item:edit',
       ),
     ).resolves.toBeUndefined();
-    // The previous Owner is an Admin now, and an Admin reaches by membership —
-    // at the access resolver and at the workspace read the shell renders from.
-    expect(await organizationsService.resolveWorkspaceAccess(org.owner.id, vault.id)).toBeNull();
-    expect(await workspacesService.getWorkspaceSummary(vault.id, org.owner.id)).toBeNull();
+    // The previous Owner is an Admin now, and still reaches it — as an Admin, no
+    // longer as the Owner — at the access resolver and at the shell's read.
+    expect(await organizationsService.resolveWorkspaceAccess(org.owner.id, vault.id)).toMatchObject(
+      {
+        effectiveRole: 'manager',
+        isOrgOwner: false,
+      },
+    );
+    expect((await workspacesService.getWorkspaceSummary(vault.id, org.owner.id))?.id).toBe(
+      vault.id,
+    );
     expect((await workspacesService.getWorkspaceSummary(vault.id, org.admin.id))?.id).toBe(
       vault.id,
     );

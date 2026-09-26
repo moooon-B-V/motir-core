@@ -1,11 +1,11 @@
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
 import { toJobRunDTO, toJobRunDlqDTO } from '@/lib/mappers/jobMappers';
 import { emailDeliveryRepository } from '@/lib/repositories/emailDeliveryRepository';
 import { withWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { replayDLQ as replayDlqInTx, type ReplayDLQResult } from '@/lib/jobs/dlq';
-import { isOwnerRole } from '@/lib/workspaces/roles';
+import { readReachRole } from '@/lib/workspaces/membershipGate';
+import { isWorkspaceManager } from '@/lib/projects/roles';
 import { ReplayForbiddenError, DlqEntryNotFoundError } from '@/lib/jobs/errors';
 import type { JobRunDTO, JobRunDlqDTO, JobRunStatus } from '@/lib/dto/jobs';
 
@@ -164,12 +164,11 @@ export const jobsDashboardService = {
     return withWorkspaceContext(
       { userId: input.userId, workspaceId: input.workspaceId },
       async (tx) => {
-        const membership = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
-          input.userId,
-          input.workspaceId,
-          tx,
-        );
-        if (!isOwnerRole(membership?.role)) {
+        // The workspace MANAGER replays (MOTIR-6462): a legacy `owner` or `admin`
+        // resolves to it, and so does the org Owner or an org Admin, who may hold
+        // no membership — the same composed role the pane reads for its button.
+        const role = await readReachRole(input.userId, input.workspaceId, tx);
+        if (!isWorkspaceManager(role)) {
           throw new ReplayForbiddenError(input.userId, input.workspaceId);
         }
 

@@ -12,6 +12,7 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
 
 // The FOLDER READS (Story MOTIR-5308 · MOTIR-5343) on a REAL Postgres, through
 // the service under the ordinary workspace context:
@@ -54,6 +55,9 @@ async function memberWithRole(fx: WorkItemFixture, role: 'viewer' | 'member', em
       tx,
     ),
   );
+  // The role is the WORKSPACE's since Story MOTIR-6168; the row above only adds
+  // them to the project.
+  await setWorkspaceRoleFor(user.id, fx.workspaceId, role);
   return { userId: user.id, workspaceId: fx.workspaceId };
 }
 

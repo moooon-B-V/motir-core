@@ -5,12 +5,12 @@ import { buildScope, PROJECT_SCOPE } from '@/lib/planChange/scope';
 import { PLAN_SESSION_RESUME_WINDOW_MS } from '@/lib/planChange/sessionWindow';
 import { PlanSessionNotFoundError, PlanTargetLockedError } from '@/lib/planChange/errors';
 import { usersService } from '@/lib/services/usersService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // MOTIR-6021 — SESSIONS ADDRESSED BY ID (story MOTIR-6011;
 // `agent-authored-plans.md` AMENDMENT 17 §1–§3, §6), against a REAL Postgres.
@@ -59,7 +59,7 @@ async function teammate(): Promise<ProjectContext> {
   await adminDb.workspaceMembership.create({
     data: { userId: u.id, workspaceId: fx.workspaceId, role: 'member' },
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.project.identifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

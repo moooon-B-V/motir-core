@@ -79,6 +79,11 @@ export async function seedPlanHistory(slug: string): Promise<PlanHistorySeed> {
   await adminDb.projectMembership.create({
     data: { userId: viewer.id, projectId: project.id, workspaceId: workspace.id, role: 'viewer' },
   });
+  // Roles live on the workspace since MOTIR-6168.
+  await adminDb.workspaceMembership.update({
+    where: { userId_workspaceId: { userId: viewer.id, workspaceId: workspace.id } },
+    data: { workspaceRole: 'viewer', roleDefinitionId: null },
+  });
   await pin(viewer.id);
 
   const epic = await workItemsService.createWorkItem(

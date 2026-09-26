@@ -460,7 +460,7 @@ fall back to an `integration`-scoped API token otherwise.**
 - **Keyless-publish actor.** OIDC carries no user, but `Attachment.uploaderUserId`
   is required. `GithubInstallation` records no connecting user, so the evidence is
   attributed to the **workspace OWNER** — the `role: 'owner'` membership resolved
-  via `workspaceMembershipRepository.findOwnerByWorkspace`, the accountable analog
+  via `workspaceMembershipRepository.findStandInManagerByWorkspace`, the accountable analog
   of the PAT's owner — an existing User in the workspace; no synthetic user and no
   nullable FK. The **workspace** is the authorization scope either way.
 - **Not** a brand-new service bearer: that would duplicate token issuance,

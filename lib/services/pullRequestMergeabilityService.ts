@@ -214,7 +214,7 @@ export const pullRequestMergeabilityService = {
 async function ownerContext(workspaceId: string): Promise<ServiceContext | null> {
   const owner = await withSystemContext(async (tx) => {
     await bindWorkspaceContext(tx, workspaceId);
-    return workspaceMembershipRepository.findOwnerByWorkspace(workspaceId, tx);
+    return workspaceMembershipRepository.findStandInManagerByWorkspace(workspaceId, tx);
   });
   return owner ? { userId: owner.userId, workspaceId } : null;
 }

@@ -208,7 +208,10 @@ export const childStatusCascadeService = {
       const item = await workItemRepository.findById(itemId, tx);
       if (!item) return null;
       const settings = await projectRepository.findStatusAutomation(item.projectId, tx);
-      const owner = await workspaceMembershipRepository.findOwnerByWorkspace(item.workspaceId, tx);
+      const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(
+        item.workspaceId,
+        tx,
+      );
       const children = await workItemRepository.findChildren(itemId, tx);
       // WHEN the parent was declared done — the immutable `changedAt` of the
       // revision the event names (MOTIR-3334). Read in the same pass as the

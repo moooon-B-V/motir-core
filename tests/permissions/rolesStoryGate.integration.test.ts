@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { workspaceRoleDefinitionService } from '@/lib/services/workspaceRoleDefinitionService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { PERMISSIONS, isEnforced, type PermissionKey } from '@/lib/permissions/catalog';
@@ -14,6 +15,7 @@ import { toRoleCatalogDTO } from '@/lib/mappers/permissionMappers';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // THE STORY GATE for MOTIR-2282 (Subtask MOTIR-2264) — run against the merged
 // surface of the story's cards, doing the three things a per-card unit test
@@ -83,7 +85,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
 
   async function projectActor(role: 'viewer' | 'member' | 'admin') {
     const user = await workspaceUser(role);
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
@@ -211,21 +213,20 @@ describe('the capability methods and getPermissions agree, on every level and ev
 });
 
 describe('the widened DTO survives the round trip through real rows', () => {
-  it("reports each role's real headcount and the two groupings still cover the catalog", async () => {
+  it('counts every WORKSPACE member under exactly one role, and the two groupings still cover the catalog', async () => {
     const s = await buildScenario('open', 'seam-dto');
-    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    const { catalog } = await workspaceRoleDefinitionService.getRolesPageCatalog(
+      s.ctxs.owner.workspaceId,
+      s.ctxs.owner,
+    );
 
-    const seeded = await adminDb.projectMembership.groupBy({
-      by: ['role'],
-      where: { projectId: s.projectId },
-      _count: { _all: true },
+    // Roles live on the workspace (Story MOTIR-6168 · MOTIR-6466): each member
+    // holds one role, so the headcounts sum to the workspace's membership.
+    for (const role of catalog.roles) expect(role.builtInRole).not.toBeNull();
+    const members = await adminDb.workspaceMembership.count({
+      where: { workspaceId: s.ctxs.owner.workspaceId },
     });
-    const expected = new Map(seeded.map((row) => [row.role, row._count._all]));
-    for (const role of catalog.roles) {
-      // Keyed by the `MemberRole` enum, which only a BUILT-IN carries.
-      expect(role.builtInRole).not.toBeNull();
-      expect(role.memberCount, `${role.key}`).toBe(expected.get(role.builtInRole!) ?? 0);
-    }
+    expect(catalog.roles.reduce((n, role) => n + role.memberCount, 0)).toBe(members);
 
     // The screens' own contract, read off the SERVICE rather than the mapper.
     const rows = catalog.domains.flatMap((group) => group.permissions.map((p) => p.key));
@@ -244,7 +245,10 @@ describe('the widened DTO survives the round trip through real rows', () => {
     // On an `open` project a project member's resolved set is their role's set —
     // so the marks a real member would see are the capabilities they really have.
     const s = await buildScenario('open', 'seam-marks');
-    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.member);
+    const { catalog } = await workspaceRoleDefinitionService.getRolesPageCatalog(
+      s.ctxs.owner.workspaceId,
+      s.ctxs.member,
+    );
     const memberRole = catalog.roles.find((role) => role.key === 'member')!;
     const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.member);
     for (const key of ROLE_GATED_PERMISSIONS.filter((k) => isEnforced(k))) {
@@ -254,7 +258,10 @@ describe('the widened DTO survives the round trip through real rows', () => {
 
   it('is JSON-serialisable end to end — no Set reaches a Server Component prop', async () => {
     const s = await buildScenario('limited', 'seam-json');
-    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.admin);
+    const { catalog } = await workspaceRoleDefinitionService.getRolesPageCatalog(
+      s.ctxs.owner.workspaceId,
+      s.ctxs.admin,
+    );
     expect(JSON.parse(JSON.stringify(catalog))).toEqual(catalog);
   });
 });
@@ -289,12 +296,16 @@ describe('the public path resolves for a genuinely anonymous actor', () => {
       PERMISSIONS.filter((key) => key.startsWith('public_request:')).sort(),
     );
     // …and no ROLE grants one, on the very level where everybody holds them.
+    // The catalog is the workspace's — the same for every reader in it.
+    const { catalog } = await workspaceRoleDefinitionService.getRolesPageCatalog(
+      s.ctxs.owner.workspaceId,
+      s.ctxs.owner,
+    );
+    for (const role of catalog.roles) {
+      expect(role.permissions.some((key) => key.startsWith('public_request:'))).toBe(false);
+    }
     for (const persona of PERSONAS) {
       const held = await projectAccessService.getPermissions(s.projectId, s.ctxs[persona]);
-      const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs[persona]);
-      for (const role of catalog.roles) {
-        expect(role.permissions.some((key) => key.startsWith('public_request:'))).toBe(false);
-      }
       // The actor DOES hold them — from the level, which is the whole point.
       for (const key of levelGated) expect(held.has(key), `${persona} ${key}`).toBe(true);
     }
@@ -350,7 +361,8 @@ function valueImports(source: string): string {
 const IMPORTS_THE_MODEL = /from '@\/lib\/permissions\/(catalog|builtinRoles|resolve)'/;
 
 describe('guard — the settings screens read the SERVICE, never the model', () => {
-  const SCREENS = 'app/(authed)/settings/project/roles';
+  // The Roles screens moved to workspace settings (MOTIR-6466).
+  const SCREENS = 'app/(authed)/settings/workspace/roles';
 
   it('no file under the roles screens imports the catalog or the role sets', () => {
     const offenders = sourcesUnder(SCREENS)
@@ -396,7 +408,7 @@ const INLINE_ROLE_COMPARISON =
 
 describe('guard — access is decided by the predicates, never by an inline role string', () => {
   it('the roles screens decide nothing by comparing a role string', () => {
-    const offenders = sourcesUnder('app/(authed)/settings/project/roles')
+    const offenders = sourcesUnder('app/(authed)/settings/workspace/roles')
       .filter(([, source]) => INLINE_ROLE_COMPARISON.test(source))
       .map(([path]) => path);
     // An inline comparison is a policy the catalog cannot see and a custom role

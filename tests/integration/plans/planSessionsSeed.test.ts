@@ -4,7 +4,6 @@ import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { buildScope, PROJECT_SCOPE } from '@/lib/planChange/scope';
 import { usersService } from '@/lib/services/usersService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import {
@@ -14,6 +13,7 @@ import {
 } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // MOTIR-6209 — a Plans row NAMES the refused work item its session was seeded
 // from (story MOTIR-6068; design MOTIR-6206 `plans-sessions--seeded.mock.html`).
@@ -117,7 +117,7 @@ async function teammate(): Promise<ProjectContext> {
   await adminDb.workspaceMembership.create({
     data: { userId: u.id, workspaceId: fx.workspaceId, role: 'member' },
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.project.identifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

@@ -3,7 +3,6 @@ import type { User } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { projectTagsService } from '@/lib/services/projectTagsService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectTagRepository } from '@/lib/repositories/projectTagRepository';
 import { MAX_TAGS_PER_PROJECT, PROJECT_TAG_VOCABULARY } from '@/lib/projectTags/vocabulary';
 import { InvalidProjectTagError, TooManyProjectTagsError } from '@/lib/projectTags/errors';
@@ -14,6 +13,7 @@ import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // projectTagsService (Story 6.13 · Subtask 6.13.5) — the topic-tag model +
 // per-project tagging + the public tag-FACET read, against a REAL Postgres (the
@@ -149,7 +149,7 @@ describe('projectTagsService — the 6.4 two-tier admin gate', () => {
     }
     const { ctx: memberCtx } = await wsMember('member@ex.com', 'Plain Member');
     const { user: projAdmin, ctx: projectAdminCtx } = await wsMember('padmin@ex.com', 'Proj Admin');
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

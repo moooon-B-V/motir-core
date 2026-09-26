@@ -3,8 +3,6 @@ import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import {
   normalizeTestInstructionsContent,
   testInstructionsService,
@@ -36,6 +34,11 @@ import { truncateAuthTables } from '../helpers/db';
 import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { organizationIdOf } from '../helpers/organizationOf';
 import { randomToken } from '../helpers/random';
+import {
+  addToProjectAs,
+  createCustomRoleAs,
+  setProjectRoleAs,
+} from '../helpers/workspaceRoleFixtures';
 
 // testInstructionsService (Story MOTIR-4906 · Subtask MOTIR-5328 — HOW TO TEST
 // per RUN on the run target) against a REAL Postgres. The cases are chosen so a
@@ -397,20 +400,20 @@ describe('testInstructionsService.publish', () => {
       name: 'Viewer',
     });
     await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
-    const browseOnly = await projectRoleDefinitionService.create({
+    const browseOnly = await createCustomRoleAs({
       projectId: fx.projectId,
       ctx: fx.ctx,
       name: 'Browse only',
       permissions: ['project:browse', 'comment:add'],
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
       targetUserId: viewer.id,
       role: 'member',
     });
-    await projectMembersService.setRole({
+    await setProjectRoleAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
@@ -854,20 +857,20 @@ describe('testInstructionsService.getDraftForWorkItem', () => {
       name: 'Viewer',
     });
     await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
-    const browseOnly = await projectRoleDefinitionService.create({
+    const browseOnly = await createCustomRoleAs({
       projectId: fx.projectId,
       ctx: fx.ctx,
       name: 'Browse only',
       permissions: ['project:browse', 'comment:add'],
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
       targetUserId: viewer.id,
       role: 'member',
     });
-    await projectMembersService.setRole({
+    await setProjectRoleAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

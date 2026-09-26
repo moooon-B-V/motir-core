@@ -1248,7 +1248,7 @@ export const publicProjectsService = {
     // just resolved, so no policy work is needed. Workspace-tier only, because a public
     // submitter is cross-org and is not the actor whose membership is being read.
     const owner = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
-      workspaceMembershipRepository.findOwnerByWorkspace(project.workspaceId, tx),
+      workspaceMembershipRepository.findStandInManagerByWorkspace(project.workspaceId, tx),
     );
     if (!owner) throw new PublicProjectIntakeUnavailableError(projectId);
 

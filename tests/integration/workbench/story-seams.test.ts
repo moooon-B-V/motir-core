@@ -10,7 +10,6 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { withWorkspaceContext } from '@/lib/workspaces';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   createTestProject,
@@ -20,6 +19,7 @@ import {
   type WorkItemFixture,
 } from '../../fixtures';
 import type { ProjectDTO } from '@/lib/dto/projects';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // The STORY-level seam tests for Home (Story MOTIR-2649 · Subtask MOTIR-2655),
 // against the real Postgres and the shipped services. The subtask suites
@@ -261,7 +261,7 @@ describe('Home story seam — the access matrix', () => {
       role: 'member',
     });
     await own(item.id, { assignee: member.id, reporter: fx.ownerId });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: secret.identifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

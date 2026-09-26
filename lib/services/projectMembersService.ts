@@ -1,25 +1,20 @@
-import { MemberRole, Prisma } from '@/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
-import { projectRoleDefinitionRepository } from '@/lib/repositories/projectRoleDefinitionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
 import { isCloud } from '@/lib/billing/availability';
 import {
   AlreadyProjectMemberError,
   InvalidAccessLevelError,
-  InvalidProjectRoleError,
-  LastProjectAdminError,
   NotAProjectMemberError,
   PublicAccessUnavailableError,
   TargetNotWorkspaceMemberError,
 } from '@/lib/projects/errors';
 import { resolveProjectByKeyWithAliasInTx } from '@/lib/projects/resolveByKey';
-import { asAccessLevel, asProjectRole, type ProjectRole } from '@/lib/projects/roles';
+import { asAccessLevel } from '@/lib/projects/roles';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { PermissionKey } from '@/lib/permissions/catalog';
-import { CUSTOM_ROLE_TIER } from '@/lib/permissions/builtinRoles';
-import { RoleDefinitionNotFoundError } from '@/lib/permissions/errors';
 import { toProjectAccessDTO, toProjectMemberDTO } from '@/lib/mappers/projectMemberMappers';
 import type { ProjectAccessDTO, ProjectMemberDTO } from '@/lib/dto/projectMembers';
 
@@ -27,6 +22,14 @@ import type { ProjectAccessDTO, ProjectMemberDTO } from '@/lib/dto/projectMember
 // (Story 6.4 · Subtask 6.4.4). 4-layer: this service owns the transaction, the
 // validation, the project-admin gate, and the DTO mapping; the routes are thin
 // HTTP transports; the single Prisma ops live in the repositories.
+//
+// ⚠️ A PROJECT MEMBERSHIP CARRIES NO ROLE (Story MOTIR-6168 · MOTIR-6464). Roles
+// live on the workspace — one per person, the same in every project — so a row
+// here means only "this person was added to this project", which is what a
+// `limited` / `private` project's access level reads. `setRole` and the
+// last-project-admin guard are gone with the project admin they protected; the
+// legacy `role` column is still written (`member`, NOT NULL) until the contract
+// story drops it.
 //
 // AUTHORIZATION — ⚠️ ONE POLICY, ASKED BY KEY (Story MOTIR-2256 · MOTIR-2295).
 // Until this card, this file declared its OWN module-private `assertCanManage`
@@ -37,7 +40,7 @@ import type { ProjectAccessDTO, ProjectMemberDTO } from '@/lib/dto/projectMember
 // so this could not happen; it is deleted, and every gate here now asks
 // `projectAccessService.assertPermission` for a named key:
 //
-//   * `addMember` / `setRole` / `removeMember`  → `member:manage`
+//   * `addMember` / `removeMember`              → `member:manage`
 //   * `setAccessLevel`                          → `project:manage_access`
 //     Its own key on purpose: who is IN the project and how open the project is
 //     to the workspace are different decisions, and Jira separates them too.
@@ -60,8 +63,7 @@ import type { ProjectAccessDTO, ProjectMemberDTO } from '@/lib/dto/projectMember
 //   * A browser who lacks the key gets PermissionDeniedError (403) rather than
 //     NotProjectAdminError. Same status; the code changes from
 //     `NOT_PROJECT_ADMIN` to `PERMISSION_DENIED`, which no consumer of these
-//     three routes reads (`ProjectMembersSettings` special-cases only
-//     `LAST_PROJECT_ADMIN` and falls through to a generic message).
+//     routes reads (`ProjectMembersSettings` shows a generic message).
 //
 // RLS: every method runs inside withWorkspaceContext(ctx) so the project +
 // project_membership RLS policies see the per-transaction workspace GUC under
@@ -111,50 +113,6 @@ function assertPermission(
   return projectAccessService.assertPermission(projectId, actorContext(input), key, tx);
 }
 
-function validateRole(role: string): ProjectRole {
-  const parsed = asProjectRole(role);
-  if (!parsed) throw new InvalidProjectRoleError(role);
-  return parsed;
-}
-
-/**
- * Resolve a `RoleDTO.key` — a built-in's enum value, or a custom role
- * definition's id — to the PAIR of columns a membership carries (MOTIR-2485).
- *
- * ⚠️ THE ONE RULE THE ASSIGNMENT ADDS: a role definition must belong to THIS
- * project. A cross-project or cross-workspace id is `RoleDefinitionNotFoundError`
- * → 404, thrown before any write and indistinguishable from an id that does not
- * exist at all, so the endpoint cannot be used to probe whether a role in another
- * workspace is real. (The read runs inside the caller's `withWorkspaceContext`
- * transaction, so RLS already hides another WORKSPACE's rows under the non-bypass
- * role; the explicit `projectId` check is what covers a sibling project in the
- * SAME workspace, which RLS admits.)
- *
- * A name that is a `MemberRole` the project cannot assign — `owner` — is a 400,
- * not a 404: it is a real enum member the caller misused, not a missing object,
- * and nothing about a global enum leaks. That preserves the shipped
- * InvalidProjectRoleError contract for exactly the input that used to hit it.
- */
-async function resolveAssignment(
-  roleKey: string,
-  projectId: string,
-  tx: Prisma.TransactionClient,
-): Promise<{ roleDefinitionId: string | null; role: ProjectRole }> {
-  const builtIn = asProjectRole(roleKey);
-  if (builtIn) return { roleDefinitionId: null, role: builtIn };
-  if ((Object.values(MemberRole) as string[]).includes(roleKey)) {
-    throw new InvalidProjectRoleError(roleKey);
-  }
-
-  const definition = await projectRoleDefinitionRepository.findById(roleKey, tx);
-  if (!definition || definition.projectId !== projectId) {
-    throw new RoleDefinitionNotFoundError(roleKey);
-  }
-  // Every custom role sits at the same tier, so the access level subtracts
-  // nothing from it — it grants exactly what it lists.
-  return { roleDefinitionId: definition.id, role: CUSTOM_ROLE_TIER };
-}
-
 export interface ActorScopedInput {
   key: string;
   actorUserId: string;
@@ -197,14 +155,12 @@ export const projectMembersService = {
   },
 
   /**
-   * Add a workspace member to the project with a project role. The target must
-   * already be a member of the workspace (TargetNotWorkspaceMemberError → 400);
-   * a duplicate add throws AlreadyProjectMemberError (409). Project-admin gated.
+   * Add a workspace member to the project. The target must already be a member
+   * of the workspace (TargetNotWorkspaceMemberError → 400); a duplicate add
+   * throws AlreadyProjectMemberError (409). `member:manage` gated. What they may
+   * do here is their WORKSPACE role's — being added grants nothing of its own.
    */
-  async addMember(
-    input: ActorScopedInput & { targetUserId: string; role: string },
-  ): Promise<ProjectMemberDTO> {
-    const role = validateRole(input.role);
+  async addMember(input: ActorScopedInput & { targetUserId: string }): Promise<ProjectMemberDTO> {
     return withWorkspaceContext(input.ctx, async (tx) => {
       const project = await resolveProjectInTx(input.key, input.ctx, tx);
       await assertPermission(input, project.id, 'member:manage', tx);
@@ -227,7 +183,7 @@ export const projectMembersService = {
             workspaceId: input.ctx.workspaceId,
             projectId: project.id,
             userId: input.targetUserId,
-            role,
+            role: 'member',
           },
           tx,
         );
@@ -249,69 +205,9 @@ export const projectMembersService = {
   },
 
   /**
-   * Put a member on a role — a built-in OR one of the project's own custom roles
-   * (Story MOTIR-2257 · Subtask MOTIR-2485). `input.role` carries a `RoleDTO.key`:
-   * `admin` / `member` / `viewer`, or a role definition's id. Project-admin
-   * gated. Guards the last admin: moving the only `admin` off `admin` — including
-   * onto a custom role, which sits at `CUSTOM_ROLE_TIER` — throws
-   * LastProjectAdminError (409). The target must already be a member
-   * (NotAProjectMemberError → 404).
-   *
-   * ⚠️ THIS IS THE ONLY SINGLE-MEMBER ASSIGNMENT PATH, and it writes the tier and
-   * the pointer TOGETHER through `setRoleDefinition`. The bulk move a role
-   * deletion performs belongs to `projectRoleDefinitionService`; neither
-   * reimplements the other, and neither writes `role_definition_id` any other way
-   * (`tests/permissions/roleAssignment.test.ts` asserts no third writer
-   * appears in `lib/services/`).
-   */
-  async setRole(
-    input: ActorScopedInput & { targetUserId: string; role: string },
-  ): Promise<ProjectMemberDTO> {
-    return withWorkspaceContext(input.ctx, async (tx) => {
-      const project = await resolveProjectInTx(input.key, input.ctx, tx);
-      await assertPermission(input, project.id, 'member:manage', tx);
-
-      // Resolved AFTER the gate and BEFORE any write: a role definition id is a
-      // tenant object, so a caller who cannot manage this project must not learn
-      // from the status code whether some id exists.
-      const assignment = await resolveAssignment(input.role, project.id, tx);
-
-      const existing = await projectMembershipRepository.findByUserAndProject(
-        input.targetUserId,
-        project.id,
-        tx,
-      );
-      if (!existing) throw new NotAProjectMemberError(input.targetUserId, project.id);
-
-      // Last-admin guard: demoting the only admin would strand the project with
-      // no project-level admin. The count + the update run in one tx so two
-      // concurrent demotions can't both see count > 1. It reads the RESOLVED
-      // tier, not the requested key — putting the last admin on a custom role is
-      // a demotion (custom roles sit at CUSTOM_ROLE_TIER) and trips this too.
-      if (existing.role === 'admin' && assignment.role !== 'admin') {
-        const adminCount = await projectMembershipRepository.countAdmins(project.id, tx);
-        if (adminCount <= 1) throw new LastProjectAdminError(project.id);
-      }
-
-      await projectMembershipRepository.setRoleDefinition(
-        input.targetUserId,
-        project.id,
-        assignment,
-        tx,
-      );
-      const updated = await projectMembershipRepository.findByUserAndProjectWithUser(
-        input.targetUserId,
-        project.id,
-        tx,
-      );
-      return toProjectMemberDTO(updated!);
-    });
-  },
-
-  /**
-   * Remove a member from the project. Project-admin gated. Guards the last
-   * admin (removing the only `admin` throws LastProjectAdminError → 409) and
-   * 404s when the target isn't a member. Returns the removed member DTO.
+   * Remove a member from the project. `member:manage` gated; 404s when the
+   * target isn't a member. Returns the removed member DTO. There is no
+   * last-admin guard: a project has no admin of its own to strand (MOTIR-6464).
    */
   async removeMember(
     input: ActorScopedInput & { targetUserId: string },
@@ -327,11 +223,6 @@ export const projectMembersService = {
       );
       if (!existing) throw new NotAProjectMemberError(input.targetUserId, project.id);
 
-      if (existing.role === 'admin') {
-        const adminCount = await projectMembershipRepository.countAdmins(project.id, tx);
-        if (adminCount <= 1) throw new LastProjectAdminError(project.id);
-      }
-
       await projectMembershipRepository.deleteByUserAndProject(input.targetUserId, project.id, tx);
       return toProjectMemberDTO(existing);
     });
@@ -339,9 +230,9 @@ export const projectMembersService = {
 
   /**
    * Set the project's browse-access level (open / limited / private).
-   * Project-admin gated. Going PRIVATE seeds every current workspace member as
-   * a project `member` (skipping anyone already a member, so an admin keeps
-   * their role) — the Jira "go private → keep the people who had access" shape,
+   * Project-admin gated. Going PRIVATE adds every current workspace member to
+   * the project (skipping anyone already on it) — the Jira "go private → keep
+   * the people who had access" shape,
    * so the owner + current users aren't locked out of a freshly-private project.
    */
   async setAccessLevel(input: ActorScopedInput & { level: string }): Promise<ProjectAccessDTO> {

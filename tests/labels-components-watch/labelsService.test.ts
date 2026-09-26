@@ -24,6 +24,7 @@ import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // labelsService (Story 5.4 · Subtask 5.4.2) — the folksonomy BUSINESS rules
 // over the 5.4.1 leaves, against a REAL Postgres (no-mocks rule): the
@@ -68,7 +69,7 @@ async function buildScenario(): Promise<LabelScenario> {
   const { ctx: memberCtx } = await wsMember('member@ex.com', 'Plain Member');
   const { user: viewer, ctx: viewerCtx } = await wsMember('viewer@ex.com', 'Read Only');
 
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

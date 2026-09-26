@@ -27,7 +27,7 @@ import { validateFilterAst } from '@/lib/filters/registry';
 // degenerate done-less-workflow built-ins.
 
 function inputs(over: Partial<ProjectAccessInputs> = {}): ProjectAccessInputs {
-  return { accessLevel: 'open', workspaceRole: 'member', projectRole: null, ...over };
+  return { accessLevel: 'open', workspaceRole: 'member', addedToProject: false, ...over };
 }
 
 function caps(over: Partial<SavedFilterProjectCapabilities> = {}): SavedFilterProjectCapabilities {
@@ -35,34 +35,38 @@ function caps(over: Partial<SavedFilterProjectCapabilities> = {}): SavedFilterPr
 }
 
 describe('savedFilterCapabilities — the project-level tier', () => {
-  it('workspace owner/admin always sit in the admin tier', () => {
-    expect(savedFilterCapabilities(inputs({ workspaceRole: 'owner' }))).toEqual({
+  // Roles are the WORKSPACE's (MOTIR-6459): a Manager is the admin tier in every
+  // project, added or not; a Member shares; a Viewer only browses.
+  it('a workspace Manager always sits in the admin tier, added to the project or not', () => {
+    expect(savedFilterCapabilities(inputs({ workspaceRole: 'manager' }))).toEqual({
       canBrowse: true,
       canShare: true,
       canManageAny: true,
     });
-    expect(savedFilterCapabilities(inputs({ workspaceRole: 'admin' }))).toEqual({
+    expect(
+      savedFilterCapabilities(inputs({ workspaceRole: 'manager', addedToProject: true })),
+    ).toEqual({
       canBrowse: true,
       canShare: true,
       canManageAny: true,
     });
   });
 
-  it('a project admin is the admin tier; a plain member shares but does not administer', () => {
-    expect(savedFilterCapabilities(inputs({ projectRole: 'admin' }))).toEqual({
+  it('a Member shares but does not administer, added or not', () => {
+    expect(savedFilterCapabilities(inputs({ workspaceRole: 'member' }))).toEqual({
       canBrowse: true,
       canShare: true,
-      canManageAny: true,
+      canManageAny: false,
     });
-    expect(savedFilterCapabilities(inputs({ projectRole: 'member' }))).toEqual({
+    expect(savedFilterCapabilities(inputs({ addedToProject: true }))).toEqual({
       canBrowse: true,
       canShare: true,
       canManageAny: false,
     });
   });
 
-  it('a project viewer browses but neither shares nor administers', () => {
-    expect(savedFilterCapabilities(inputs({ projectRole: 'viewer' }))).toEqual({
+  it('a Viewer browses but neither shares nor administers', () => {
+    expect(savedFilterCapabilities(inputs({ workspaceRole: 'viewer' }))).toEqual({
       canBrowse: true,
       canShare: false,
       canManageAny: false,
@@ -187,10 +191,10 @@ describe('retryOnceOnUniqueRace — the unique-race backstop', () => {
 describe('the manage-any tier is read off the PERMISSION, not the role (MOTIR-5293)', () => {
   it('a custom role that lists saved_filter:manage_any holds the tier; the same role without it does not', () => {
     // A custom-role membership always carries the `member` tier in its role
-    // column, so the old role read (`projectRole === 'admin'`) could never be
-    // true for one — the defect in one line.
+    // column, so a role read ("is this the admin role?") could never be true for
+    // one — the defect in one line.
     const custom = (customRolePermissions: string[]): ProjectAccessInputs =>
-      inputs({ projectRole: 'member', customRolePermissions });
+      inputs({ workspaceRole: 'member', addedToProject: true, customRolePermissions });
     expect(
       savedFilterCapabilities(
         custom(['project:browse', 'saved_filter:manage', 'saved_filter:manage_any']),
@@ -204,7 +208,7 @@ describe('the manage-any tier is read off the PERMISSION, not the role (MOTIR-52
   it('a custom role holding only the key sees and manages exactly what the admin tier did', () => {
     const tier = savedFilterCapabilities(
       inputs({
-        projectRole: 'member',
+        addedToProject: true,
         customRolePermissions: ['project:browse', 'saved_filter:manage_any'],
       }),
     );

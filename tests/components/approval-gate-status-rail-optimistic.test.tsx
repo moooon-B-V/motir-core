@@ -82,7 +82,13 @@ import { OptimisticStatusProvider } from '@/app/(authed)/items/[key]/_components
 afterEach(cleanup);
 
 const members: WorkspaceMemberDTO[] = [
-  { userId: 'u_reviewer', name: 'Ada Lovelace', email: 'ada@example.com', role: 'owner' },
+  {
+    userId: 'u_reviewer',
+    name: 'Ada Lovelace',
+    email: 'ada@example.com',
+    workspaceRole: 'manager',
+    customRole: null,
+  },
 ];
 
 const workflow: WorkflowDto = {

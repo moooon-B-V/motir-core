@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // MOTIR-6177 — Story MOTIR-6166's INTEGRATION gate: the ASSEMBLED seam from a
 // real actor's resolved permissions, through the same resolution the pages make,
@@ -68,7 +69,6 @@ const { renderWithIntl: render } = await import('../../helpers/renderWithIntl');
 const { makeWorkItemFixture, createTestWorkItem } = await import('../../fixtures');
 const { createTestUser } = await import('../../fixtures/userFixtures');
 const { workspacesService } = await import('@/lib/services/workspacesService');
-const { projectMembersService } = await import('@/lib/services/projectMembersService');
 const { projectAccessService } = await import('@/lib/services/projectAccessService');
 const { organizationsService } = await import('@/lib/services/organizationsService');
 const { workItemsService } = await import('@/lib/services/workItemsService');
@@ -113,7 +113,7 @@ async function buildScenario(): Promise<Scenario> {
     const email = `gate-${role}-${n}@example.com`;
     const user = await createTestUser({ email, name: role });
     await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: ownerCtx,

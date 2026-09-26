@@ -121,11 +121,14 @@ export async function linkPrByIdentifier(args: {
     throw new Error(
       `linkPrByIdentifier: no ${args.identifier} in a workspace connected to ${args.owner}/${args.name}`,
     );
-  // The OWNER membership — the oldest `role: 'owner'` row, exactly as
-  // `workspaceMembershipRepository.findOwnerByWorkspace` resolves it.
+  // The stand-in MANAGER membership, exactly as
+  // `workspaceMembershipRepository.findStandInManagerByWorkspace` resolves it.
   const owner = await adminDb.workspaceMembership.findFirstOrThrow({
-    where: { workspaceId: item.workspaceId, role: 'owner' },
-    orderBy: { createdAt: 'asc' },
+    where: {
+      workspaceId: item.workspaceId,
+      OR: [{ workspaceRole: 'manager' }, { workspaceRole: null, role: { in: ['owner', 'admin'] } }],
+    },
+    orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
     select: { userId: true },
   });
   return linkPr(

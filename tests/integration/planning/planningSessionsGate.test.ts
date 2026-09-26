@@ -6,11 +6,11 @@ import { PLAN_SESSION_RESUME_WINDOW_MS } from '@/lib/planChange/sessionWindow';
 import { PlanTargetLockedError } from '@/lib/planChange/errors';
 import { plansService } from '@/lib/services/plansService';
 import { usersService } from '@/lib/services/usersService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // MOTIR-6026 — the STORY-LEVEL integration gate for MOTIR-6011 (a planning
 // conversation is a SESSION from its first turn; `agent-authored-plans.md`
@@ -96,7 +96,7 @@ async function teammate(email: string): Promise<string> {
   await adminDb.workspaceMembership.create({
     data: { userId: u.id, workspaceId: caller.fixture.workspaceId, role: 'member' },
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: caller.projectKey,
     actorUserId: caller.fixture.ownerId,
     ctx: caller.ctx,

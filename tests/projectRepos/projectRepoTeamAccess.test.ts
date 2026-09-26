@@ -20,6 +20,7 @@ import {
   type ActionsVariableFake,
 } from '../helpers/actionsVariableFake';
 import { spyOnJobDispatch } from '../helpers/jobs';
+import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
 
 // TEAM CODE ACCESS over real Postgres (Story MOTIR-1775 · MOTIR-1910).
 //
@@ -194,6 +195,11 @@ async function addMember(
     },
   });
   if (opts.projectRole) {
+    // The tier is the WORKSPACE role since Story MOTIR-6168 (a workspace owner /
+    // admin already is the Manager); the row below only adds them to the project.
+    if (opts.workspaceRole !== 'owner' && opts.workspaceRole !== 'admin') {
+      await setWorkspaceRoleFor(user.id, fx.workspaceId, opts.projectRole);
+    }
     await adminDb.projectMembership.create({
       data: {
         userId: user.id,

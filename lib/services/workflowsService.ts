@@ -58,7 +58,7 @@ import type { WorkItemRefStatusDto } from '@/lib/dto/workItems';
  * it and it says what the call means.
  *
  * ⚠️ IT REPLACES A GATE THAT ASKED A DIFFERENT QUESTION, AND THAT IS A DELIBERATE
- * WIDENING. Until this card the body resolved `isOwnerRole(membership?.role)` —
+ * WIDENING. Until this card the body resolved `isLegacyOwnerRole(membership?.role)` —
  * the workspace OWNER, and nobody else. A workflow status is a PROJECT-wide
  * contract (every work item's state, every board column, every automation rule
  * and every ready-set computation reads it), so restricting who defines one is

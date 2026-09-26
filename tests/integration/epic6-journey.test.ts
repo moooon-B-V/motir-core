@@ -7,6 +7,7 @@ import path from 'node:path';
 // half of the permission matrix drives `wsCtx.current`; the service-layer seams
 // pass `ctx` explicitly.
 import type { WorkspaceContext } from '@/lib/workspaces';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 const wsCtx = { current: null as WorkspaceContext | null };
 vi.mock('@/lib/workspaces', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/workspaces')>();
@@ -18,7 +19,6 @@ import { automationRulesService } from '@/lib/services/automationRulesService';
 import { automationEngineService } from '@/lib/services/automationEngineService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import type { AutomationRuleWriteInput } from '@/lib/services/automationRulesService';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -95,7 +95,7 @@ async function makeTeam(): Promise<Team> {
       workspaceId: fx.workspaceId,
       role: 'member',
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

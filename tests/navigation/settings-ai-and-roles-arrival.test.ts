@@ -29,8 +29,18 @@ const CHANGED = [
 ] as const;
 const UNCHANGED = [
   { row: 8, rel: `${DIR}/ai-planning/lessons/[lessonId]/page.tsx`, decider: 'getLesson' },
-  { row: 9, rel: `${DIR}/roles/[roleKey]/page.tsx`, decider: 'getRoleCatalog' },
-  { row: 10, rel: `${DIR}/roles/[roleKey]/edit/page.tsx`, decider: 'getRoleCatalog' },
+  // The Roles room moved to workspace settings (Story MOTIR-6168 · MOTIR-6466);
+  // its deciding read is the catalog load every Roles page makes.
+  {
+    row: 9,
+    rel: 'app/(authed)/settings/workspace/roles/[roleKey]/page.tsx',
+    decider: 'loadRolesPage',
+  },
+  {
+    row: 10,
+    rel: 'app/(authed)/settings/workspace/roles/[roleKey]/edit/page.tsx',
+    decider: 'loadRolesPage',
+  },
 ] as const;
 
 describe('rows 6–7 mount the shared frame below their gate (MOTIR-3559)', () => {

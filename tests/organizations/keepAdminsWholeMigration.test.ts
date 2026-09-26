@@ -93,7 +93,7 @@ describe('keep_org_admins_workspace_reach', () => {
     for (const ws of [w2, w3]) {
       expect(
         (await organizationsService.resolveWorkspaceAccess(admin.id, ws.id))?.effectiveRole,
-      ).toBe('admin');
+      ).toBe('manager');
     }
   });
 });

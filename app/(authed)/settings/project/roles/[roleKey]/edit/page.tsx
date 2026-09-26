@@ -1,59 +1,12 @@
-import { notFound, redirect } from 'next/navigation';
-import { getSession } from '@/lib/auth';
-import { getActiveProject } from '@/lib/projects';
-import { projectAccessService } from '@/lib/services/projectAccessService';
-import { RoleEditor } from '../../_components/RoleEditor';
-import { guardSettingsPage } from '../../../_guard';
+import { permanentRedirect } from 'next/navigation';
+import { workspaceRolePath } from '../../_redirect';
 
-// Project settings → Access → Roles & permissions → EDIT (Story MOTIR-2257 ·
-// Subtask MOTIR-2483). *"Editing a custom role is this same page with the values
-// filled in"* — one authoring surface, built once.
-//
-// ⚠️ A BUILT-IN 404s HERE. `admin` / `member` / `viewer` are code, not rows, and
-// editing one is not a thing that exists — so the editor is not offered for them
-// at all, rather than offered and refused. The service refuses it independently
-// (`BuiltInRoleImmutableError`), so this is the nice half of the same answer.
-//
-// ⚠️ NO `Start from` ON THIS ROUTE. Nothing records which built-in seeded a role
-// (Yue, 2026-08-09), so there is no base to show and nothing that could be
-// changed — the editor omits the field rather than showing a disabled one, which
-// would imply a value exists.
-
-export default async function EditProjectRolePage({
+// RETIRED (MOTIR-6466): a role is edited on the workspace now.
+export default async function EditProjectRoleRedirect({
   params,
 }: {
   params: Promise<{ roleKey: string }>;
-}) {
-  const session = await getSession();
-  if (!session) redirect('/sign-in');
-
-  const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
-
-  // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
-  // protection: this door is still one typed URL away once its rail row is gone.
-  // The key comes from the registry entry `roles`, never re-declared here — it
-  // replaced the bare `notFound()` MOTIR-2483 shipped, so every settings
-  // destination refuses the same way (see the sibling `new` route's note).
-  const refused = await guardSettingsPage('roles', ctx);
-  if (refused) return refused;
-
-  const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+}): Promise<never> {
   const { roleKey } = await params;
-  const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, actor);
-  const role = catalog.roles.find((candidate) => candidate.key === roleKey);
-  // Unknown segment, or a BUILT-IN: neither has an editor.
-  if (!role || role.builtIn || role.name === null) notFound();
-
-  return (
-    <RoleEditor
-      projectKey={ctx.project.identifier}
-      domains={catalog.domains}
-      catalog={catalog}
-      role={{ id: role.key, name: role.name, permissions: role.permissions }}
-    />
-  );
+  permanentRedirect(workspaceRolePath(roleKey, '/edit'));
 }

@@ -42,8 +42,20 @@ afterEach(() => {
 });
 
 const MEMBERS: WorkspaceMemberDTO[] = [
-  { userId: 'u1', name: 'Zhu Yue', email: 'yue@example.com', role: 'owner' },
-  { userId: 'u2', name: 'Mei Lin', email: 'mei@example.com', role: 'member' },
+  {
+    userId: 'u1',
+    name: 'Zhu Yue',
+    email: 'yue@example.com',
+    workspaceRole: 'manager',
+    customRole: null,
+  },
+  {
+    userId: 'u2',
+    name: 'Mei Lin',
+    email: 'mei@example.com',
+    workspaceRole: 'member',
+    customRole: null,
+  },
 ];
 
 /** The ACTIVE project's workflow — one, since MOTIR-2761 narrowed Home to it.

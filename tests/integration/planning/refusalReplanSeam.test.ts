@@ -3,12 +3,12 @@ import type { ApprovalGateKind, WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { computeGateStamp } from '@/lib/approvalGates/stamp';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { createTestWorkItem } from '../../fixtures/workItemFixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // STORY GATE — A REFUSED DECISION OPENS THE PLANNER (Story MOTIR-6068 · Subtask
 // MOTIR-6212; ADR `approval-gates.md` §10f, `agent-authored-plans.md` AMENDMENT 17 §9).
@@ -126,7 +126,7 @@ async function member(inProject: boolean): Promise<Actor> {
     data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
   });
   if (inProject) {
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.project.identifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

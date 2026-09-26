@@ -66,3 +66,33 @@ describe('the pointer, not a door', () => {
     expect(screen.queryByTestId('workspace-remove-hint')).toBeNull();
   });
 });
+
+describe('an org Owner or Admin cannot Leave (Story MOTIR-6168 · design panel 6a)', () => {
+  it('Leave is disabled and the row says why, naming the org and the workspace', () => {
+    render(
+      <ToastProvider>
+        <DangerZoneCard
+          isLastMember={false}
+          canRemoveWorkspace
+          placement="workspace"
+          leaveLockedByOrg={{ organizationName: 'moooon', workspaceName: 'Sales' }}
+        />
+      </ToastProvider>,
+    );
+    expect((screen.getByRole('button', { name: 'Leave' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect(
+      screen.getByText(
+        'You’re an organization Admin, so you’re a Manager of every workspace in moooon. To step out of Sales, your organization role has to change.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('anyone else keeps an operable Leave', () => {
+    renderCard({ canRemoveWorkspace: false, placement: 'workspace' });
+    expect((screen.getByRole('button', { name: 'Leave' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  });
+});

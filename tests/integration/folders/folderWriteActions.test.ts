@@ -19,6 +19,7 @@ import { createFolderAction, renameFolderAction } from '@/app/(authed)/items/act
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
 
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe(
@@ -113,6 +114,7 @@ describe('createFolderAction + renameFolderAction', () => {
         tx,
       ),
     );
+    await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
     actAs(fx, viewer.id);
 
     await expect(createFolderAction({ parentFolderId: null, name: 'Mine' })).resolves.toMatchObject(

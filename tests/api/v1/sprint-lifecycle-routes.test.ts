@@ -71,10 +71,13 @@ async function seedIssueIn(caller: V1ProjectCaller, sprintId: string, title: str
 /** A `sprints:write` token whose OWNER is an ordinary member, not the owner. */
 async function nonAdminWriter(caller: V1ProjectCaller): Promise<V1Caller> {
   const user = await createTestUser();
+  // A workspace VIEWER: since roles moved to the workspace (Story MOTIR-6168) a
+  // Member holds `sprint:manage` in every project, so the role a sprint-writing
+  // scope cannot widen is the Viewer's.
   await workspacesService.addMember({
     userId: user.id,
     workspaceId: caller.workspace.id,
-    role: 'member',
+    role: 'viewer',
   });
   return withTokenFor(user, caller.workspace, { scopes: ['read', 'sprints:write'] });
 }

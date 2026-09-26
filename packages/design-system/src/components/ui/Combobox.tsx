@@ -82,6 +82,13 @@ export interface ComboboxOption<T extends string> {
   icon?: ReactNode;
   /** Trailing muted text (e.g. the identifier). */
   secondary?: string;
+  /**
+   * A one-line description drawn UNDER the label in the menu row only — never in
+   * the trigger, which stays the label alone (the workspace role picker's
+   * "what this role does" line, MOTIR-6465). Decorative for the accessible name,
+   * which stays `label`.
+   */
+  description?: string;
   /** Trailing rich content pinned to the option row's far end (e.g. a state
    *  Pill or a "Linked to …" chip in the PR-link picker, MOTIR-1596).
    *  Decorative — the accessible name is `label`; renders after `secondary`. */
@@ -556,7 +563,16 @@ export function Combobox<T extends string>({
                       {opt.icon}
                     </span>
                   ) : null}
-                  <span className="truncate">{opt.label}</span>
+                  {opt.description ? (
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate">{opt.label}</span>
+                      <span className="text-(--el-text-secondary) max-w-[18rem] text-xs leading-snug whitespace-normal">
+                        {opt.description}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="truncate">{opt.label}</span>
+                  )}
                   {opt.secondary ? (
                     // --el-text-identifier (= --color-slate, the -secondary
                     // weight), NOT -muted: muted (#787671) fails AA (4.16:1) on

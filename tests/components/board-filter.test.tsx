@@ -72,7 +72,13 @@ const STATUSES: WorkflowStatusDto[] = [
 ];
 
 const MEMBERS: WorkspaceMemberDTO[] = [
-  { userId: 'u-alice', name: 'Alice Chen', email: 'alice@acme.test', role: 'owner' },
+  {
+    userId: 'u-alice',
+    name: 'Alice Chen',
+    email: 'alice@acme.test',
+    workspaceRole: 'manager',
+    customRole: null,
+  },
 ];
 
 const VIEWER: Viewer = { userId: 'u-alice', canBrowse: true, canShare: true, canManageAny: false };

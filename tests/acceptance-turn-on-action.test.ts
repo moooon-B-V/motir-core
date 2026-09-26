@@ -1,11 +1,11 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { addToProjectAs } from './helpers/workspaceRoleFixtures';
 
 // `turnOnAcceptanceVideoAction` — the acceptance panel's own write, after
 // MOTIR-5172 made it PROJECT-scoped. Real Postgres, real service, real permission
@@ -62,7 +62,7 @@ async function seed(slug: string) {
   async function projectActor(role: 'admin' | 'member') {
     const u = await user(`${role}-${slug}@ex.com`, role);
     await workspacesService.addMember({ userId: u.id, workspaceId: workspace.id });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,

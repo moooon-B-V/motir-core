@@ -17,11 +17,10 @@ import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs, setProjectRoleDefinitionFor } from '../../helpers/workspaceRoleFixtures';
 
 // STORY MOTIR-6179's INTEGRATION GATE (Subtask MOTIR-6336).
 //
@@ -83,7 +82,7 @@ async function seat(role: 'member' | 'viewer'): Promise<ServiceContext> {
     name: `Gate ${role}`,
   });
   await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,
@@ -94,10 +93,9 @@ async function seat(role: 'member' | 'viewer'): Promise<ServiceContext> {
 }
 
 async function customRole(permissions: string[]) {
-  return adminDb.projectRoleDefinition.create({
+  return adminDb.workspaceRoleDefinition.create({
     data: {
       workspaceId: fx.workspaceId,
-      projectId: fx.projectId,
       name: `Gate role ${seq++}`,
       permissions,
     },
@@ -108,7 +106,7 @@ async function seatCustom(permissions: string[]): Promise<ServiceContext> {
   const reader = await seat('member');
   const role = await customRole(permissions);
   await adminDb.$transaction((tx) =>
-    projectMembershipRepository.setRoleDefinition(
+    setProjectRoleDefinitionFor(
       reader.userId,
       fx.projectId,
       { roleDefinitionId: role.id, role: CUSTOM_ROLE_TIER },
@@ -328,24 +326,28 @@ describe('the MIGRATION keeps every persisted grant’s reach (before = after)',
     // BEFORE the read cards enforced the keys, `project:browse` alone read every
     // plan and every run — that is the reach to keep. This role was written with
     // browse and no view key, as every pre-story custom role was.
-    const legacy = await seatCustom(['project:browse']);
-    const before = await planSessionsService.listSessions(fx.projectId, legacy, {
-      view: 'project',
+    // ⚠️ The READ half of this moved with the roles (Story MOTIR-6168): a
+    // project custom role grants nothing now, and the workspace-role mapping
+    // (20260926100100) re-creates each one on the workspace from the keys this
+    // migration wrote. So what is asserted here is the WRITE: the persisted
+    // project role gains both room keys, which is what the mapping then carries.
+    const legacyRole = await adminDb.projectRoleDefinition.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        name: `Pre-story role ${seq++}`,
+        permissions: ['project:browse'],
+      },
     });
-    expect(before.scope).toBe('mine'); // the un-migrated row has lost the room…
 
     await runMigration();
 
-    const plans = await planSessionsService.listSessions(fx.projectId, legacy, { view: 'project' });
-    expect(plans.scope).toBe('project'); // …and the migration gives it back
-    expect(plans.sessions).toHaveLength(TOTAL.plans);
-    const runs = await dispatchRunService.listRunsForProject(
-      fx.projectIdentifier,
-      { take: 50, view: 'project' },
-      legacy,
+    const migrated = await adminDb.projectRoleDefinition.findUniqueOrThrow({
+      where: { id: legacyRole.id },
+    });
+    expect(migrated.permissions).toEqual(
+      expect.arrayContaining(['project:browse', 'plan:view_any', 'run:view_any']),
     );
-    expect(runs).toMatchObject({ scope: 'project' });
-    expect(runs.runs).toHaveLength(TOTAL.runs);
 
     // The TOKEN half is read-time, never a migration: a chosen grant stored
     // before the mint path wrote its marker reads forward…

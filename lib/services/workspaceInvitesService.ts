@@ -16,6 +16,7 @@ import { verificationRepository } from '@/lib/repositories/verificationRepositor
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { readMembership } from '@/lib/workspaces/membershipGate';
+import { legacyToWorkspaceRole } from '@/lib/workspaces/roles';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
@@ -362,6 +363,9 @@ export const workspaceInvitesService = {
           {
             userId: sessionUser.id,
             workspaceId: payload.workspaceId,
+            // Every invite is minted `member` (`invite` above), so an accepted
+            // invite lands as a workspace Member (MOTIR-6462).
+            workspaceRole: legacyToWorkspaceRole(payload.role),
             role: payload.role,
           },
           tx,

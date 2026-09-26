@@ -29,7 +29,13 @@ import {
 import { readMembership, readReachRole } from '@/lib/workspaces/membershipGate';
 import { bindOrganizationContext, withOrgContext } from '@/lib/organizations/context';
 import { assertOrgCapability } from '@/lib/services/organizationAccessService';
-import { WORKSPACE_ROLE } from '@/lib/workspaces/roles';
+import {
+  CUSTOM_WORKSPACE_ROLE_TIER,
+  legacyToWorkspaceRole,
+  resolveWorkspaceRole,
+  WORKSPACE_ROLES,
+  type WorkspaceRole,
+} from '@/lib/workspaces/roles';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { entitlementsService } from '@/lib/services/entitlementsService';
@@ -37,12 +43,19 @@ import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboarding
 import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
 import {
   AlreadyMemberError,
+  InvalidWorkspaceRoleError,
+  LastManagerError,
   LastMemberError,
   NotAMemberError,
+  OrgManagedWorkspaceRoleError,
   SlugCollisionError,
+  WorkspaceMemberNotFoundError,
   WorkspaceNotFoundError,
   WorkspaceNotSoleMemberError,
+  WorkspaceRoleForbiddenError,
 } from '@/lib/workspaces/errors';
+import { RoleDefinitionNotFoundError } from '@/lib/permissions/errors';
+import { workspaceRoleDefinitionRepository } from '@/lib/repositories/workspaceRoleDefinitionRepository';
 import {
   toCurrentWorkspaceDTO,
   toWorkspaceMemberDTO,
@@ -52,7 +65,9 @@ import type {
   CurrentWorkspaceDTO,
   OrgWorkspacePageDTO,
   OrgWorkspaceRowDTO,
+  MemberRoleContextDTO,
   WorkspaceMemberDTO,
+  WorkspaceMemberRoleDTO,
   WorkspaceSummaryDTO,
 } from '@/lib/dto/workspaces';
 
@@ -238,13 +253,18 @@ async function insertWorkspaceWithOwner(
     { name: input.name, slug: input.slug, organizationId },
     tx,
   );
-  // The workspace creator is its OWNER — the privileged tier the 1.6.5 operator
-  // dashboard's replay gate keys off. Invited members default to `member`
-  // (workspacesService.addMember). This is what the function name has always
-  // promised; Story 1.2 wrote `member` here as a single-role shortcut, corrected
-  // now — see lib/workspaces/roles.ts (PRODECT_FINDINGS #36).
+  // The workspace creator is its MANAGER (Story MOTIR-6168 · MOTIR-6462 —
+  // `role-model.md` left who becomes a new workspace's Manager open; it is the
+  // creator, its first and only member). Invited members default to `member`
+  // (workspacesService.addMember). The legacy column is still NOT NULL, so it
+  // keeps its `owner` until the contract story drops it.
   const membership = await workspaceMembershipRepository.create(
-    { userId: input.ownerUserId, workspaceId: workspace.id, role: WORKSPACE_ROLE.owner },
+    {
+      userId: input.ownerUserId,
+      workspaceId: workspace.id,
+      workspaceRole: 'manager',
+      role: 'owner',
+    },
     tx,
   );
   return { workspace, membership };
@@ -418,6 +438,47 @@ async function deleteWorkspaceCascade(input: {
     coreProjectIds: projectIds,
     reason: 'workspace_deleted',
   });
+}
+
+/**
+ * Whether `userId` is the Owner or an Admin of the workspace's ORGANIZATION — a
+ * Manager of every workspace by their org role, whose workspace role is not a
+ * workspace Manager's to change (MOTIR-6463; MOTIR-6456 panel 6a).
+ *
+ * The target's org membership is ANOTHER person's row, admitted only by the
+ * active-org arm of `org_membership_visible_active_or_own`, so the workspace's
+ * own organization is bound first — a trusted resolution (the workspace row the
+ * caller just read), never request input. The binding outlives this read for the
+ * rest of `tx`, which is harmless: it only ever ADDS the org arm.
+ */
+async function isOrgManagerTarget(
+  userId: string,
+  workspace: { id: string; organizationId: string },
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  await bindOrganizationContext(tx, workspace.organizationId);
+  return organizationMembershipRepository.isOrgManagerOfWorkspaceOrg(userId, workspace.id, tx);
+}
+
+/**
+ * The organization's Owner and Admins, and its name — what the Members page's
+ * locked rows need (MOTIR-6465; MOTIR-6456 panel 6a). Other people's org rows,
+ * so the workspace's own organization is bound first, exactly as
+ * {@link isOrgManagerTarget} does.
+ */
+async function orgManagersOf(
+  workspace: { organizationId: string },
+  tx: Prisma.TransactionClient,
+): Promise<{ userIds: string[]; organizationName: string }> {
+  await bindOrganizationContext(tx, workspace.organizationId);
+  const [userIds, org] = [
+    await organizationMembershipRepository.findManagerUserIdsByOrganization(
+      workspace.organizationId,
+      tx,
+    ),
+    await organizationRepository.findByIdInTx(workspace.organizationId, tx),
+  ];
+  return { userIds, organizationName: org?.name ?? '' };
 }
 
 export const workspacesService = {
@@ -676,16 +737,17 @@ export const workspacesService = {
       ACTIVE_WORKSPACE_RESOLVE_TX,
     );
 
-    // THE ORG OWNER OPENS A WORKSPACE THEY ARE NOT A MEMBER OF (MOTIR-6308): the
+    // THE ORG OWNER — OR AN ORG ADMIN, SINCE MOTIR-6168 — OPENS A WORKSPACE THEY
+    // ARE NOT A MEMBER OF (MOTIR-6308): the
     // switcher lists every workspace of their org, so a cookie may pin one with no
     // membership row. The user-bound transaction above cannot see that workspace
     // (no `workspace_membership_visible` arm, no workspace GUC), so the gate runs
     // in its OWN workspace-bound read — and only in this case, so the common path
-    // keeps its one transaction. It admits the Owner alone: `resolveWorkspaceAccess`
-    // refuses every non-member who is not the org Owner.
+    // keeps its one transaction. It admits the Owner and the Admins alone:
+    // `resolveWorkspaceAccess` refuses every other non-member.
     if (cookieWorkspaceId && cookieWithoutMembership) {
       const access = await organizationsService.resolveWorkspaceAccess(userId, cookieWorkspaceId);
-      if (access?.isOrgOwner) return cookieWorkspaceId;
+      if (access?.reachesEveryWorkspace) return cookieWorkspaceId;
     }
 
     if (existing) return existing;
@@ -775,16 +837,19 @@ export const workspacesService = {
   async listUserWorkspaces(userId: string): Promise<Workspace[]> {
     return withUserContext(userId, async (tx) => {
       const memberOf = await workspaceMembershipRepository.findWorkspacesByUser(userId, tx);
-      // THE ORG OWNER SEES EVERY WORKSPACE OF THEIR ORG (MOTIR-6308): they act in
-      // all of them, member or not, so the switcher lists all of them. Anyone
-      // else — an org Admin included (`role-model.md` §1 R1) — sees exactly their
-      // memberships. The workspaces they are a member of come first, in the
+      // THE ORG OWNER AND THE ORG ADMINS SEE EVERY WORKSPACE OF THEIR ORG
+      // (MOTIR-6308, widened to Admins by MOTIR-6168): they act in all of them,
+      // member or not, so the switcher lists all of them. Anyone else sees
+      // exactly their memberships. The workspaces they are a member of come first, in the
       // order they always did; the rest follow by creation.
       //
       // ONE transaction, the org GUC re-bound per owned org: `workspace_org_member_read`
       // admits an org's workspaces off `app.organization_id`, and the ids come from
       // the actor's own owner rows (trusted — `bindOrganizationContext`'s rule).
-      const owned = await organizationMembershipRepository.findOwnedOrganizationsByUser(userId, tx);
+      const owned = await organizationMembershipRepository.findManagedOrganizationsByUser(
+        userId,
+        tx,
+      );
       if (owned.length === 0) return memberOf;
       const seen = new Set(memberOf.map((w) => w.id));
       const extra: Workspace[] = [];
@@ -834,6 +899,7 @@ export const workspacesService = {
             {
               userId: input.userId,
               workspaceId: input.workspaceId,
+              workspaceRole: legacyToWorkspaceRole(input.role ?? 'member'),
               role: input.role ?? 'member',
             },
             tx,
@@ -1033,12 +1099,22 @@ export const workspacesService = {
             tx,
           );
           const projectCount = await projectRepository.countByWorkspace(workspace.id, tx);
+          // Whether the actor is on this workspace's roster — an org Owner / Admin
+          // reaches every workspace as its Manager, member or not, and the row
+          // says which (MOTIR-6456 panel 6b).
+          const viewerIsMember =
+            (await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+              input.actorUserId,
+              workspace.id,
+              tx,
+            )) !== null;
           workspaces.push({
             id: workspace.id,
             name: workspace.name,
             slug: workspace.slug,
             memberCount,
             projectCount,
+            viewerIsMember,
             createdAt: workspace.createdAt.toISOString(),
           });
         }
@@ -1152,6 +1228,146 @@ export const workspacesService = {
   },
 
   /**
+   * A Manager changes a member's WORKSPACE role (Story MOTIR-6168 · MOTIR-6463) —
+   * to Manager, Member or Viewer, or to one of this workspace's custom roles
+   * (`roleDefinitionId`, held at the `CUSTOM_WORKSPACE_ROLE_TIER`). The new role
+   * is the person's role in every project of the workspace from their next
+   * request: permissions resolve per call (`projectAccessService.resolveInputs`),
+   * with no cache in front of them.
+   *
+   * Refusals, each before anything is written:
+   *   * an unknown role value → InvalidWorkspaceRoleError (422);
+   *   * the actor is not in the workspace → NotAMemberError (404), or is not its
+   *     Manager → WorkspaceRoleForbiddenError (403). The org Owner and an org
+   *     Admin are Managers with or without a membership (`readReachRole`);
+   *   * the target is not a member → WorkspaceMemberNotFoundError (404);
+   *   * the target is the org Owner or an org Admin → OrgManagedWorkspaceRoleError
+   *     (409) — a Manager of every workspace by their org role, which only the
+   *     organization changes (MOTIR-6456 panel 6a);
+   *   * a custom role that is not this workspace's → RoleDefinitionNotFoundError
+   *     (404, never confirming a foreign id exists);
+   *   * the change would leave no Manager → LastManagerError (409).
+   *
+   * ⚠️ THE LAST-MANAGER GUARD IS A READ-DERIVED WRITE, so the Manager rows are
+   * LOCKED (`countManagers` is `SELECT … FOR UPDATE`) before the target is read
+   * and the guard decides. Two Managers demoting each other at once serialise on
+   * it: the second wakes to committed state, counts one Manager left — the one
+   * it is demoting — and is refused with LastManagerError.
+   */
+  async setMemberRole(input: {
+    actorUserId: string;
+    workspaceId: string;
+    targetUserId: string;
+    role: unknown;
+    roleDefinitionId?: string | null;
+  }): Promise<WorkspaceMemberRoleDTO> {
+    const requested =
+      typeof input.role === 'string' && (WORKSPACE_ROLES as readonly string[]).includes(input.role)
+        ? (input.role as WorkspaceRole)
+        : null;
+    if (!input.roleDefinitionId && !requested) {
+      throw new InvalidWorkspaceRoleError(String(input.role));
+    }
+
+    return withWorkspaceContext(
+      { userId: input.actorUserId, workspaceId: input.workspaceId },
+      async (tx) => {
+        const actorRole = await readReachRole(input.actorUserId, input.workspaceId, tx);
+        if (!actorRole) throw new NotAMemberError(input.actorUserId, input.workspaceId);
+        if (actorRole !== 'manager') {
+          throw new WorkspaceRoleForbiddenError(input.actorUserId, input.workspaceId);
+        }
+
+        // Lock the Manager rows BEFORE the reads the guard derives from.
+        const managers = await workspaceMembershipRepository.countManagers(input.workspaceId, tx);
+
+        const target = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+          input.targetUserId,
+          input.workspaceId,
+          tx,
+        );
+        if (!target) throw new WorkspaceMemberNotFoundError(input.targetUserId, input.workspaceId);
+
+        const workspace = await workspaceRepository.findByIdInTx(input.workspaceId, tx);
+        if (!workspace) throw new NotAMemberError(input.actorUserId, input.workspaceId);
+        if (await isOrgManagerTarget(input.targetUserId, workspace, tx)) {
+          throw new OrgManagedWorkspaceRoleError(input.targetUserId, input.workspaceId);
+        }
+
+        let destination: { workspaceRole: WorkspaceRole; roleDefinitionId: string | null };
+        let customRole: { id: string; name: string } | null = null;
+        if (input.roleDefinitionId) {
+          const definition = await workspaceRoleDefinitionRepository.findById(
+            input.roleDefinitionId,
+            tx,
+          );
+          if (!definition || definition.workspaceId !== input.workspaceId) {
+            throw new RoleDefinitionNotFoundError(input.roleDefinitionId);
+          }
+          destination = {
+            workspaceRole: CUSTOM_WORKSPACE_ROLE_TIER,
+            roleDefinitionId: definition.id,
+          };
+          customRole = { id: definition.id, name: definition.name };
+        } else {
+          destination = { workspaceRole: requested!, roleDefinitionId: null };
+        }
+
+        // `countManagers` counts STORED Managers; a not-yet-migrated target that
+        // resolves to Manager is not among them, so it is subtracted only when it is.
+        const targetIsManager = resolveWorkspaceRole(target) === 'manager';
+        const remaining = managers - (target.workspaceRole === 'manager' ? 1 : 0);
+        if (targetIsManager && destination.workspaceRole !== 'manager' && remaining < 1) {
+          throw new LastManagerError(input.workspaceId);
+        }
+
+        await workspaceMembershipRepository.setWorkspaceRole(
+          input.targetUserId,
+          input.workspaceId,
+          destination,
+          tx,
+        );
+        return {
+          userId: input.targetUserId,
+          workspaceRole: destination.workspaceRole,
+          customRole,
+        };
+      },
+    );
+  },
+
+  /**
+   * What the Members page draws its role column with (Story MOTIR-6168 ·
+   * MOTIR-6465): whether the viewer may change roles (a Manager — their own
+   * role, or the org Owner / an org Admin), which members the ORG makes a
+   * Manager (locked rows), the org's name for their reason, and this
+   * workspace's custom roles for the picker. The gate is decided HERE, on the
+   * server; the client only receives the boolean.
+   */
+  async getMemberRoleContext(
+    workspaceId: string,
+    actorUserId: string,
+  ): Promise<MemberRoleContextDTO> {
+    return withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => {
+      const role = await readReachRole(actorUserId, workspaceId, tx);
+      if (!role) throw new NotAMemberError(actorUserId, workspaceId);
+      const workspace = await workspaceRepository.findByIdInTx(workspaceId, tx);
+      if (!workspace) throw new NotAMemberError(actorUserId, workspaceId);
+      const customRoles = await workspaceRoleDefinitionRepository.findManyByWorkspace(
+        workspaceId,
+        tx,
+      );
+      const managers = await orgManagersOf(workspace, tx);
+      return {
+        canManageRoles: role === 'manager',
+        orgManagedUserIds: managers.userIds,
+        organizationName: managers.organizationName,
+        customRoles: customRoles.map((r) => ({ id: r.id, name: r.name })),
+      };
+    });
+  },
+
+  /**
    * List the members of a workspace as DTOs for the settings Members
    * card. Reads inside withWorkspaceContext so the workspace_membership
    * RLS policy exposes the rows (it keys off the per-transaction GUCs).
@@ -1182,17 +1398,17 @@ export const workspacesService = {
   },
 
   /**
-   * The user's EFFECTIVE workspace role (`owner` | `member`), or null if they
-   * have no access. Read-only — used by surfaces that gate an action on the
-   * privileged tier (e.g. the 1.6.5 dashboard's owner-only Replay button).
+   * The user's EFFECTIVE workspace role (`manager` | `member` | `viewer`), or null
+   * if they have no access. Read-only — used by surfaces that gate an action on
+   * the Manager (the jobs dashboard's Replay button, the 2FA policy switch).
    *
-   * Story 6.10.4: the role composes the org tier above the 6.4 workspace role —
-   * the org OWNER reports `owner` on every workspace under the org even with no
-   * workspace membership (MOTIR-6308); anyone else reports their stored
-   * workspace role; a non-org-member (no access) reports null. Callers compare
-   * via lib/workspaces/roles.
+   * Story 6.10.4: the role composes the org tier above the workspace role — the
+   * org Owner and an org Admin report `manager` on every workspace under the org
+   * even with no workspace membership (MOTIR-6168); anyone else reports their own
+   * workspace role; a non-org-member (no access) reports null. Callers ask
+   * `isWorkspaceManager`.
    */
-  async getMemberRole(userId: string, workspaceId: string): Promise<string | null> {
+  async getMemberRole(userId: string, workspaceId: string): Promise<WorkspaceRole | null> {
     const access = await organizationsService.resolveWorkspaceAccess(userId, workspaceId);
     return access?.effectiveRole ?? null;
   },

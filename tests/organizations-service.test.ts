@@ -45,7 +45,7 @@ describe('resolveWorkspaceAccess (the org access gate)', () => {
 
     const access = await organizationsService.resolveWorkspaceAccess(owner.id, workspace.id);
     expect(access).not.toBeNull();
-    expect(access!.effectiveRole).toBe('owner');
+    expect(access!.effectiveRole).toBe('manager');
     expect(access!.orgRole).toBe('owner');
     expect(access!.isOrgOwner).toBe(true);
   });
@@ -81,20 +81,25 @@ describe('resolveWorkspaceAccess (the org access gate)', () => {
 
     const ownerAccess = await organizationsService.resolveWorkspaceAccess(owner.id, w2.id);
     expect(ownerAccess, 'the Owner reaches a workspace they never joined').not.toBeNull();
-    expect(ownerAccess!.effectiveRole).toBe('owner');
+    expect(ownerAccess!.effectiveRole).toBe('manager');
     expect(ownerAccess!.isOrgOwner).toBe(true);
     expect(ownerAccess!.workspaceRole).toBeNull(); // spans by org role, not membership
 
-    // The Admin is a member of neither owner-made workspace: an Admin's reach is
-    // membership (role-model.md §1 R1).
+    // The Admin is a member of neither owner-made workspace, and reaches both as
+    // an Admin — an org Admin carries the Manager role into every workspace
+    // (MOTIR-6168, overturning `role-model.md` §1 reading R1).
     for (const ws of [w1, wOwner]) {
-      expect(await organizationsService.resolveWorkspaceAccess(admin.id, ws.id)).toBeNull();
+      expect(await organizationsService.resolveWorkspaceAccess(admin.id, ws.id)).toMatchObject({
+        effectiveRole: 'manager',
+        workspaceRole: null,
+        reachesEveryWorkspace: true,
+      });
     }
-    // …and in w2, where they are the stored owner, they read exactly that.
+    // …and in w2, which they created, they are its Manager in their own right.
     const adminAccess = await organizationsService.resolveWorkspaceAccess(admin.id, w2.id);
-    expect(adminAccess!.effectiveRole).toBe('owner');
+    expect(adminAccess!.effectiveRole).toBe('manager');
     expect(adminAccess!.isOrgOwner).toBe(false);
-    expect(adminAccess!.workspaceRole).toBe('owner');
+    expect(adminAccess!.workspaceRole).toBe('manager');
   });
 
   it('grants a plain org member only the workspaces they are explicitly added to (falls back to their workspace role)', async () => {

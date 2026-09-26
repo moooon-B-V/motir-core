@@ -24,6 +24,7 @@ import { createTestWorkspace } from '../fixtures/workspaceFixtures';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // `list_projects` (MOTIR-1879) over real Postgres — the read that lets a client
 // RESOLVE a project instead of demanding its key.
@@ -240,7 +241,7 @@ describe('list_projects — the access checks are the UI switcher’s', () => {
     expect(rowsOf(await callListProjects(plainCtx)).map((r) => r.key)).toEqual([open.identifier]);
 
     // Adding them to the private project reveals it — same gate, no tool logic.
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: secret.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,

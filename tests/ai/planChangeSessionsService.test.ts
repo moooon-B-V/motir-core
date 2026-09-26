@@ -12,12 +12,12 @@ import {
   PlanSessionNotFoundError,
 } from '@/lib/planChange/errors';
 import { usersService } from '@/lib/services/usersService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { addressOf, openTestSession } from '../helpers/planSession';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // planChangeSessionsService — the plan-change CONVERSATION seam (Story 7.30 ·
 // MOTIR-1728) against a REAL Postgres (the motir-core convention). Only the
@@ -172,7 +172,7 @@ describe('planChangeSessionsService — open + resume', () => {
     await adminDb.workspaceMembership.create({
       data: { userId: teammate.id, workspaceId: fx.workspaceId, role: 'member' },
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.project.identifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

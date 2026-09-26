@@ -63,7 +63,7 @@ const ROW_PX = 40; // mirrors TreeTable's fixed row height
 const VIEWPORT_PX = 320; // 8 rows tall
 
 const members: WorkspaceMemberDTO[] = [
-  { userId: 'u1', name: 'Ada', email: 'ada@x.com', role: 'admin' },
+  { userId: 'u1', name: 'Ada', email: 'ada@x.com', workspaceRole: 'manager', customRole: null },
 ];
 const workflow: WorkflowDto = {
   statuses: [
