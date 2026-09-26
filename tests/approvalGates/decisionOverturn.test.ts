@@ -311,7 +311,7 @@ describe('the handler directly', () => {
       where: { workItemId: itemId, kind: 'decision_confirmation' },
     });
     const item = await adminDb.workItem.findUniqueOrThrow({ where: { id: itemId } });
-    return { gate: gate!, item, ctx: fx.ctx, resolvedStatusKey };
+    return { gate: gate!, item, ctx: fx.ctx, resolvedStatusKey, refusalVerdict: null };
   }
 
   it('a project with no cancelled status records nothing on the status — and says why', async () => {

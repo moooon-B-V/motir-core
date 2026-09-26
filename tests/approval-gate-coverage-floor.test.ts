@@ -218,6 +218,7 @@ describe('the design handler’s NO-STATUS arm — a workflow with nothing in `d
         ctx: fx.ctx,
         tx,
         resolvedStatusKey: null,
+        refusalVerdict: null,
       });
     });
 
@@ -440,6 +441,7 @@ describe('the repository translates the write failures it OWNS (MOTIR-4796)', ()
             decisionSource: 'ui',
             outcomeRef: null,
             confirmedRecord: null,
+            refusalVerdict: null,
             chosenOption: null,
           },
           tx,

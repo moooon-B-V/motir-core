@@ -16,7 +16,7 @@ import {
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
-import { isRefusalSeedGate } from '@/lib/planning/refusalSeed';
+import { isRefusalSeedGate, refusalSeedAnchorsOnParent } from '@/lib/planning/refusalSeed';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planSessionsService } from '@/lib/services/planSessionsService';
@@ -416,6 +416,12 @@ async function resumeOrStartWithin(
  * or hidden by RLS, lives in another workspace or project, is not a refusal
  * {@link isRefusalSeedGate} accepts, or belongs to a work item the scope does
  * not anchor on (a card-less gate included).
+ *
+ * THE ANCHOR is the gate's own card — or, for a kind that anchors on the card's
+ * PARENT ({@link refusalSeedAnchorsOnParent}: a design Re-plan, MOTIR-6424), the
+ * card OR its parent, since the seed read hands the planner the parent and a
+ * parentless design card anchors on itself. The decision kinds keep the card
+ * alone: the parent is never read for them.
  */
 async function assertSeedApplicableWithin(
   pctx: ProjectContext,
@@ -434,13 +440,21 @@ async function assertSeedApplicableWithin(
     throw new PlanSeedNotApplicableError(seedGateId);
   }
   const item = await workItemRepository.findById(gate.workItemId, tx);
-  if (
-    !item ||
-    item.projectId !== pctx.projectId ||
-    !scope.targetKeys.includes(item.identifier.toUpperCase())
-  ) {
+  if (!item || item.projectId !== pctx.projectId) {
     throw new PlanSeedNotApplicableError(seedGateId);
   }
+  if (scope.targetKeys.includes(item.identifier.toUpperCase())) return;
+  if (refusalSeedAnchorsOnParent(gate.kind) && item.parentId) {
+    const parent = await workItemRepository.findById(item.parentId, tx);
+    if (
+      parent &&
+      parent.projectId === pctx.projectId &&
+      scope.targetKeys.includes(parent.identifier.toUpperCase())
+    ) {
+      return;
+    }
+  }
+  throw new PlanSeedNotApplicableError(seedGateId);
 }
 
 /**

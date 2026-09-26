@@ -8,9 +8,14 @@ import { Button } from '@/components/ui/Button';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import { FormField } from '@/components/ui/FormField';
 import { Textarea } from '@/components/ui/Textarea';
-import { RefusalReasonQuote } from './RefusalReason';
+import {
+  RefusalReasonQuote,
+  RefusalVerdictChip,
+  RefusalVerdictGroup,
+  type RefusalVerdictField,
+} from './RefusalReason';
 import { PortRenderStatusProvider, usePortRenderStatus } from './portRenderStatus';
-import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
+import type { ApprovalGateDTO, ApprovalGateRefusalVerdictDTO } from '@/lib/dto/approvalGate';
 import type { GateDecision } from '@/lib/dto/approvalGate';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import type { StampComponent } from '@/lib/approvalGates/stamp';
@@ -134,6 +139,15 @@ export interface GateVerb {
    * refuses it again regardless (`overturn_needs_a_note`). Absent on every other verb.
    */
   note?: { label: string; helper: string; required: string };
+  /**
+   * A REQUIRED VERDICT this verb records beside its note (Story MOTIR-6070 · Subtask
+   * MOTIR-6427; design `approval-control--design-verdict.mock.html` panels 1–2) — a design
+   * sent back says Revise or Re-plan. The confirm band draws the two tiles under the note,
+   * nothing pre-selected, and refuses a press without one IN PLACE, reporting a missing
+   * note on the same press; the door refuses it again (`refusal_verdict_required`).
+   * Absent on every other verb, whose band is unchanged.
+   */
+  verdict?: RefusalVerdictField;
   /**
    * The confirm band's words FOR THIS VERB, when a kind's verbs confirm different acts
    * (MOTIR-5960 — *Confirming this will:* and *Overturning this will:*). Absent, the
@@ -301,6 +315,8 @@ export interface ApprovalGateControlProps {
     optionId?: string,
     /** The verb's REQUIRED note (MOTIR-5960), trimmed — only a `note` verb passes one. */
     noteMd?: string,
+    /** The verb's REQUIRED verdict (MOTIR-6427) — only a `verdict` verb passes one. */
+    refusalVerdict?: ApprovalGateRefusalVerdictDTO,
   ) => Promise<GateRefusal | null>;
   /**
    * RE-READ what is being decided, in place — the STALE refusal's one control,
@@ -702,7 +718,11 @@ export function useRefusalCopy(
       headline = t('decisionUnresolvable.title');
       break;
     case 'APPROVAL_GATE_VERB_NOT_OFFERED':
-      headline = t('verbNotOffered.title');
+      // A verdict sent where none is offered (MOTIR-6421) has its own words (MOTIR-6427).
+      headline =
+        refusal.reason === 'refusal_verdict_not_offered'
+          ? t('verbNotOffered.verdict.title')
+          : t('verbNotOffered.title');
       break;
     case 'APPROVAL_GATE_PRIMARY_PENDING':
       // Names WHICH question the merge follows (MOTIR-5785) — the next action differs.
@@ -781,7 +801,10 @@ export function useRefusalCopy(
         : t('mergeAppPermissionMissing.nextUnnamed')
       : refusal.tag === 'APPROVAL_GATE_PRIMARY_PENDING'
         ? t(`primaryPending.${refusal.primary}.next`)
-        : t(`${nextActionKey}.next`);
+        : refusal.tag === 'APPROVAL_GATE_VERB_NOT_OFFERED' &&
+            refusal.reason === 'refusal_verdict_not_offered'
+          ? t('verbNotOffered.verdict.next')
+          : t(`${nextActionKey}.next`);
 
   // ⚠️ A CONFLICT FOUND AT THE PRESS WROTE NOTHING, AND SAYS SO (MOTIR-5916; design/github
   // § 30 Panel 5a). The press-time host read refused before the decision write, so the
@@ -950,6 +973,11 @@ export function ApprovalGateControl({
   // A `note` verb's draft, and whether an empty press was just refused (MOTIR-5960).
   const [noteDraft, setNoteDraft] = useState('');
   const [noteRefused, setNoteRefused] = useState(false);
+  // A `verdict` verb's choice, and whether a press without one was just refused (MOTIR-6427).
+  // NO DEFAULT: the verdict is only worth recording if a person chose it (design § *Why no
+  // default*).
+  const [verdictDraft, setVerdictDraft] = useState<ApprovalGateRefusalVerdictDTO | null>(null);
+  const [verdictRefused, setVerdictRefused] = useState(false);
   // ⚠️ A REQUEST FROM OUTSIDE THE VERB ROW OPENS THE SAME BAND (§ 28 panel 8a), and it is
   // DERIVED rather than written into state: a press is a render's fact here, and an effect
   // that set the phase would fight every phase the press itself writes (and is what
@@ -1027,8 +1055,20 @@ export function ApprovalGateControl({
     // A verb that REQUIRES a note is refused in place while it has none (MOTIR-5960):
     // the band stays open with the field's error, and nothing reaches the door.
     const note = verb.note ? noteDraft.trim() : undefined;
-    if (verb.note && !note) {
-      setNoteRefused(true);
+    // …and one that requires a VERDICT, the same way (MOTIR-6427, design panel 2). ONE press
+    // reports BOTH missing inputs, each under its own field, and focus goes to the first
+    // invalid one in reading order: the reason, else the verdict group's first tile.
+    const noteMissing = Boolean(verb.note) && !note;
+    const verdictMissing = Boolean(verb.verdict) && verdictDraft === null;
+    if (noteMissing || verdictMissing) {
+      setNoteRefused(noteMissing);
+      setVerdictRefused(verdictMissing);
+      const target = noteMissing
+        ? document.getElementById(`gate-note-${gate.id}`)
+        : document.querySelector<HTMLInputElement>(
+            `input[type="radio"][name="gate-verdict-${gate.id}"]`,
+          );
+      target?.focus();
       return;
     }
     setPhase({ kind: 'pending' });
@@ -1044,20 +1084,35 @@ export function ApprovalGateControl({
     try {
       refusal = verb.perform
         ? await verb.perform()
-        : note !== undefined
-          ? await onDecide(verb.decision, undefined, note)
-          : verb.optionId !== undefined
-            ? await onDecide(verb.decision, verb.optionId)
-            : await onDecide(verb.decision);
+        : verb.verdict && note !== undefined && verdictDraft !== null
+          ? await onDecide(verb.decision, undefined, note, verdictDraft)
+          : note !== undefined
+            ? await onDecide(verb.decision, undefined, note)
+            : verb.optionId !== undefined
+              ? await onDecide(verb.decision, verb.optionId)
+              : await onDecide(verb.decision);
     } catch {
       refusal = { tag: 'UNEXPECTED' };
     }
     // A note verb the DOOR refused as not offered is the empty-reason refusal arriving
     // late (a stale client, a race — MOTIR-6075): it is answered IN PLACE, with the
     // field's own error, exactly as the empty press above is. The band stays open.
-    if (refusal && verb.note && refusal.tag === 'APPROVAL_GATE_VERB_NOT_OFFERED') {
+    // A MISSING VERDICT the door refused (`refusal_verdict_required`, MOTIR-6421) is the
+    // verdict's own error, in place, for the same reason. `refusal_verdict_not_offered` is
+    // NOT an input the reader can supply, so it is drawn as the frame's refusal, with its
+    // own words (`useRefusalCopy`).
+    if (
+      refusal &&
+      (verb.note || verb.verdict) &&
+      refusal.tag === 'APPROVAL_GATE_VERB_NOT_OFFERED' &&
+      refusal.reason !== 'refusal_verdict_not_offered'
+    ) {
       setPhase({ kind: 'confirming', verb });
-      setNoteRefused(true);
+      if (refusal.reason === 'refusal_verdict_required' && verb.verdict) {
+        setVerdictRefused(true);
+      } else {
+        setNoteRefused(true);
+      }
       return;
     }
     // On success the CALLER has reconciled and re-rendered us with the decided
@@ -1303,6 +1358,11 @@ export function ApprovalGateControl({
             {gate.state === 'changes_requested' ? (
               <span>{changesRequestedLine ?? t('record.willRepublish')}</span>
             ) : null}
+            {/* A DESIGN SENT BACK IS A VERDICT (MOTIR-6427; design panel 4): the chip sits
+              after the kind's line and BEFORE the quote, which starts the next line. */}
+            {gate.state === 'changes_requested' ? (
+              <RefusalVerdictChip verdict={gate.refusalVerdict} />
+            ) : null}
             {/* A REFUSAL SAYS WHY (MOTIR-6075; design Panel 4) — quoted as the overturned
               record quotes its note, after who / when / version and the kind's line. */}
             {gate.state === 'changes_requested' ? (
@@ -1373,6 +1433,20 @@ export function ApprovalGateControl({
                     aria-invalid={noteRefused || undefined}
                   />
                 </FormField>
+              ) : null}
+              {phase.verb.verdict ? (
+                // THE VERDICT (MOTIR-6427, design panels 1–2) — in the slot MOTIR-6073
+                // reserved: below the reason, above the buttons.
+                <RefusalVerdictGroup
+                  field={phase.verb.verdict}
+                  groupId={`gate-verdict-${gate.id}`}
+                  value={verdictDraft}
+                  refused={verdictRefused}
+                  onChange={(value) => {
+                    setVerdictDraft(value);
+                    if (verdictRefused) setVerdictRefused(false);
+                  }}
+                />
               ) : null}
               <div className="mt-3 flex flex-wrap justify-end gap-2">
                 <Button

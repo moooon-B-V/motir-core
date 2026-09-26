@@ -265,6 +265,28 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * The DEPENDENTS of a work item with their KEYS — {@link findDependentStates}
+   * plus the `identifier`, ordered by the dependent's key number, for a surface
+   * that NAMES the work waiting on an item (the design Re-plan seed's first turn,
+   * MOTIR-6424). Archived dependents are excluded for the same reason.
+   */
+  async findDependentKeys(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ identifier: string; status: string; projectId: string }>> {
+    const rows = await tx.workItemLink.findMany({
+      where: { toId: workItemId, kind: 'is_blocked_by', fromItem: { archivedAt: null } },
+      select: { fromItem: { select: { identifier: true, status: true, projectId: true } } },
+      orderBy: { fromItem: { key: 'asc' } },
+    });
+    return rows.map((r) => ({
+      identifier: r.fromItem.identifier,
+      status: r.fromItem.status,
+      projectId: r.fromItem.projectId,
+    }));
+  },
+
+  /**
    * Batched form of {@link findBlockerStates} for MANY items at once — the board
    * projection (3.1.4) needs a ready flag per card without an N+1. Returns every
    * `is_blocked_by` blocker of any item in `fromIds`, each row carrying the

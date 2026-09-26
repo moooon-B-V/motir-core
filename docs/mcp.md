@@ -828,6 +828,25 @@ root-first) — the same two fields `/api/v1`'s work-item detail
 publishes. Both are `null` for an unfiled item **and** for a child of a filed
 item: only a root is ever filed, and a child's ancestry already travels as keys.
 
+The aggregate carries **`latestRefusal`** (Story MOTIR-6070 · MOTIR-6422): when
+the item's most recently DECIDED approval gate — of ANY kind, ordered by
+`decidedAt` — is `changes_requested`, the refusal the next attempt must answer;
+`null` otherwise, including when a later approval answered it (an `awaiting`
+gate is not a decision and does not clear it). It is the same read the dispatched
+prompt's **CHANGES REQUESTED** section renders, so a runbook run and a dispatched
+agent are handed the same reason. `noteMd` is the reason verbatim, and is `null`
+only on a GitHub review submitted with no body (surfaces say _no reason given on
+GitHub_); `refusalVerdict` is set only on a design refusal pressed in Motir;
+`subjectVersion` is the refused version.
+
+```jsonc
+"latestRefusal": {
+  "gateId": "cm…", "kind": "design_result", "noteMd": "The empty state is missing.",
+  "decidedByLabel": "Ada <ada@example.com>", "decidedAt": "2026-09-26T01:02:03.000Z",
+  "decisionSource": "ui", "refusalVerdict": "revise", "subjectVersion": "cm…"
+}
+```
+
 The item carries its **`difficulty`** (Story MOTIR-6016) — `trivial` / `low` /
 `medium` / `high`, how hard the work is to reason about, or `null` when unset
 and always `null` on an epic or story. Every tool returning a `WorkItemDto`, and

@@ -100,6 +100,7 @@ function decided(
     subject: subject(subjectOver),
     chosenOption: null,
     confirmedRecord: null,
+    refusalVerdict: null,
     refusalReason: null,
     ...over,
   };
@@ -124,6 +125,7 @@ function gateDto(id: string, state: ApprovalGateDTO['state']): ApprovalGateDTO {
     outcomeRef: null,
     chosenOption: null,
     confirmedRecord: null,
+    refusalVerdict: null,
     replanOwed: null,
     createdAt: '2026-09-23T00:00:00.000Z',
     updatedAt: '2026-09-23T00:00:00.000Z',

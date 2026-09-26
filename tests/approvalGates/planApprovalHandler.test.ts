@@ -264,6 +264,7 @@ describe('REGISTRATION — `handlerFor(plan_approval)` is the handler', () => {
           subjectId: planId,
         },
         resolvedStatusKey: null,
+        refusalVerdict: null,
       };
       expect(await planApprovalGateHandler.currentSubject(withGate)).toBe(planId);
       expect((await planApprovalGateHandler.resolveSubject(withGate))?.id).toBe(planId);

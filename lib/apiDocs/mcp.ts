@@ -511,9 +511,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-5981, summary WIDENED: the payload declares `errors`,
     // the item's monitor links with their stored evidence — a new question the
     // tool answers, so the line a reader picks a tool from names it.
+    // Re-pinned for MOTIR-6422, summary WIDENED: the payload declares `latestRefusal`,
+    // the reason the last attempt was sent back (with its verdict) — the refusal the
+    // next run is told to address, so the line names it.
     summary:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, and the errors linked to it.',
-    descriptionFingerprint: 'a876d00e6243',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
+    descriptionFingerprint: '882e56fda8df',
   },
   get_design: {
     // Story MOTIR-5553 · MOTIR-5561.
