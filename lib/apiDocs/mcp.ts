@@ -705,8 +705,16 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // blockers). Summary UNCHANGED: like the advisory channel, it never touches
     // the finishability verdict this line describes.
     summary:
-      'Is this epic, story, task or bug finishable? Names the out-of-subtree work still gating it.',
-    descriptionFingerprint: '0d3d65e3c70f',
+      'Is this epic, story, task or bug finishable, and do its cross-parent edges have their parent edges? Names what is missing.',
+    // SUMMARY REWRITTEN for MOTIR-6370: `valid` now also requires every
+    // cross-parent edge to be carried by its parents (`invalidEdges`), so a line
+    // asking only "finishable?" described half the verdict. (MOTIR-6369 had
+    // re-pinned it unchanged for the `cross-level-edge` advisory.)
+    // Re-pinned for MOTIR-6411, summary UNCHANGED: the level rule the description
+    // states moved from kind to POSITION (MOTIR-6387); the summary names neither.
+    // Re-pinned for MOTIR-6443, summary UNCHANGED: the level rule the text states
+    // gains the epic tier (an epic is blocked only by another epic).
+    descriptionFingerprint: '8b1dad10299e',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
@@ -717,8 +725,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // reading that made a malformed plan safe to close, so this is the drift the
     // pin exists to catch rather than an explanatory edit it can ride out.
     summary:
-      'Would approve TAKE this plan, and is it finishable? Both, before `final: true` — nobody else will ask.',
-    descriptionFingerprint: 'e4886b97d214',
+      'Would approve TAKE this plan, is it finishable, and do its cross-parent edges have their parent edges? All three, before `final: true` — nobody else will ask.',
+    // SUMMARY REWRITTEN for MOTIR-6370: "Both" became false when `valid` gained a
+    // THIRD question (`invalidEdges`). MOTIR-6367 had re-pinned it unchanged for
+    // the `cross_level` refusal, which sits inside "would approve take it".
+    // Re-pinned for MOTIR-6411, summary UNCHANGED: the level rule the description
+    // states moved from kind to POSITION (MOTIR-6387); the summary names neither.
+    // Re-pinned for MOTIR-6443, summary UNCHANGED: the level rule the text states
+    // gains the epic tier (an epic is blocked only by another epic).
+    descriptionFingerprint: '4f1627c162f6',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool
@@ -947,7 +962,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   link_work_items: {
     summary:
       'Create an edge between two items — blocked_by is the one that holds an item out of the ready set.',
-    descriptionFingerprint: 'e2d02dc88244',
+    // Re-pinned for MOTIR-6369, summary UNCHANGED: the description gained the
+    // same-level rule and its CROSS_LEVEL_LINK refusal, which the summary does not
+    // enumerate for the other refusals either.
+    // Re-pinned for MOTIR-6411, summary UNCHANGED: the level rule the description
+    // states moved from kind to POSITION (MOTIR-6387); the summary names neither.
+    // Re-pinned for MOTIR-6443, summary UNCHANGED: the level rule the text states
+    // gains the epic tier (an epic is blocked only by another epic).
+    descriptionFingerprint: '649ccccad4a2',
   },
   unlink_work_items: {
     summary: 'Remove an edge, given the same relationship used to create it.',

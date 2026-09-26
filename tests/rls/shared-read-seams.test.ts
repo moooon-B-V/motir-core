@@ -70,8 +70,14 @@ async function seedLinkedTrio(identifier: string): Promise<{
     { projectId: fx.projectId, kind: 'story', title: 'Member', parentId: epic.id },
     fx.ctx,
   );
+  // At the member's depth under a root of its own — a ROOT blocker would be a
+  // cross-level edge, which the link door refuses (MOTIR-6411).
+  const elsewhere = await workItemsService.createWorkItem(
+    { projectId: fx.projectId, kind: 'epic', title: 'Elsewhere' },
+    fx.ctx,
+  );
   const blocker = await workItemsService.createWorkItem(
-    { projectId: fx.projectId, kind: 'story', title: 'Blocker' },
+    { projectId: fx.projectId, kind: 'story', title: 'Blocker', parentId: elsewhere.id },
     fx.ctx,
   );
   await workItemsService.linkWorkItems(

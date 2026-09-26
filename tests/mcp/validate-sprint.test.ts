@@ -13,6 +13,7 @@ import type { SprintValidityDto } from '@/lib/dto/sprints';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { seedBlockedBy } from '../helpers/seedBlockedBy';
 import { spyOnJobDispatch } from '../helpers/jobs';
 
 // `validate_sprint` (Subtask 7.8.15) over real Postgres — the read that reports
@@ -221,7 +222,9 @@ describe('sprintsService.validateSprint — the finishability rule', () => {
     );
     const child = await mk(fx, 'Child (backlog)', story.id);
     await putInSprint(story.id, sprintId);
-    await link(fx, story.id, child.id);
+    // A parent blocked_by its own child crosses levels, which the link door
+    // refuses (MOTIR-6411); the sprint walk still meets such an edge, so it is seeded.
+    await seedBlockedBy(fx, story.id, child.id);
 
     const result = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx);
     expect(result.valid).toBe(false);

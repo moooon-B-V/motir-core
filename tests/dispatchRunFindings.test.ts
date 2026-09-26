@@ -287,8 +287,19 @@ describe('the AFTER-THE-FACT link reaches the same finding, once', () => {
   it('a non-`relates_to` link records nothing — the trace is that edge, not any edge', async () => {
     const leaf = await seedLeaf();
     const runId = await openRunWithLiveLeg(leaf.key);
+    // At the leaf's depth under a root of its own, so the link door accepts the
+    // edge (MOTIR-6411) and the case is about the edge KIND alone.
+    const elsewhere = await workItemsService.createWorkItem(
+      { projectId: fixture.projectId, kind: 'story', title: 'Elsewhere' },
+      fixture.ctx,
+    );
     const bug = await workItemsService.createWorkItem(
-      { projectId: fixture.projectId, kind: 'bug', title: 'Blocked by, rather than relates' },
+      {
+        projectId: fixture.projectId,
+        kind: 'bug',
+        title: 'Blocked by, rather than relates',
+        parentId: elsewhere.id,
+      },
       fixture.ctx,
     );
 

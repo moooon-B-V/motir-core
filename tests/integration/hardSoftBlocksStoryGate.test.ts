@@ -46,8 +46,9 @@ import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 //   └── story
 //        ├── S1                  no blockers of its own  → SOFT-blocked by E
 //        └── S2 ── blocked_by ──▶ X                      → HARD-blocked
-//   otherStory
-//   └── X                        (todo)
+//   openEpic
+//   └── otherStory               (under the unfinished epic, so X sits at S2's
+//        └── X (todo)             depth — a blocked_by never crosses levels)
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
@@ -101,7 +102,7 @@ async function seed(): Promise<Seed> {
   const story = await make(fx, 'story', 'The story under E', epic.id);
   const s1 = await make(fx, 'subtask', 'Soft only', story.id);
   const s2 = await make(fx, 'subtask', 'Own blocker', story.id);
-  const otherStory = await make(fx, 'story', 'Another story');
+  const otherStory = await make(fx, 'story', 'Another story', openEpic.id);
   const x = await make(fx, 'subtask', 'The other story’s open subtask', otherStory.id);
   await block(fx, s2.id, x.id);
   return { fx, openEpic, epic, story, s1, s2, x };

@@ -1522,13 +1522,37 @@ export interface WorkItemDeletePreviewDto {
  * {@link ValidityCondition}). Reuses {@link SprintBlockerDto} for each blocker:
  * `item` is the in-subtree item gated by out-of-subtree work `blockedBy`.
  */
+/**
+ * ONE cross-parent `blocked_by` the parents do not carry (Story MOTIR-6015 ·
+ * MOTIR-6370): `item` waits on `blockedBy`, the two sit on the same level under
+ * DIFFERENT parents, and `itemParent` is not directly `blocked_by`
+ * `blockerParent`. The remedy is to wire that parent edge (and, one level up,
+ * the same question of it) — `lib/workItems/crossParentCoverage.ts` is the rule.
+ */
+export interface InvalidEdgeDto {
+  item: string;
+  blockedBy: string;
+  itemParent: string;
+  blockerParent: string;
+}
+
 export interface WorkItemValidityDto {
   /** The validated work item's identifier (e.g. "MOTIR-1337"). */
   key: string;
-  /** True ⟺ every in-subtree item's blocked_by closure is satisfied. */
+  /**
+   * True ⟺ every in-subtree item's blocked_by closure is satisfied AND no
+   * cross-parent edge is uncovered (`invalidEdges` empty, MOTIR-6370). A gate
+   * that asks only "can this be finished?" reads `blockers`, never this.
+   */
   valid: boolean;
   /** The in-subtree items gated by out-of-subtree, unsatisfied work; empty when valid. */
   blockers: SprintBlockerDto[];
+  /**
+   * Every same-level `blocked_by` FROM a not-done subtree member whose two ends
+   * sit under different parents that carry no matching edge (MOTIR-6370).
+   * Empty when every cross-parent edge is covered.
+   */
+  invalidEdges: InvalidEdgeDto[];
   /**
    * PROSE-vs-GRAPH advisories (MOTIR-1969) plus the CONTAINER-COVERAGE family
    * (MOTIR-5362) — a SEPARATE channel from `blockers`, and **never** a blocker.
@@ -1605,7 +1629,8 @@ export type WorkItemProseShapeSeverityDto =
   | 'likely-over-gate-sizing'
   | 'likely-self-blocking-design'
   | 'body-edit-above-field-move'
-  | 'likely-blocker-count-mismatch';
+  | 'likely-blocker-count-mismatch'
+  | 'cross-level-edge';
 
 /**
  * ONE prose-vs-graph advisory (MOTIR-1969): an in-subtree card whose
@@ -1925,6 +1950,28 @@ export interface WorkItemProseBlockerCountAdvisoryDto extends WorkItemProseShape
 }
 
 /**
+ * A `blocked_by` the card ALREADY carries that joins two different LEVELS — two
+ * items at different depths below their nearest common ancestor (Story
+ * MOTIR-6015 · MOTIR-6369; the POSITION rule of MOTIR-6387). A new such edge is refused at every write door
+ * (`CROSS_LEVEL_LINK`, `INVALID_PLAN_REF_GRAPH` / `cross_level`); this reports
+ * the ones drawn before the rule, or below the doors.
+ *
+ * ⚠️ **Never a gate.** Refusing here would fail every validation of an old tree
+ * at once, over data nobody has had a chance to look at. The remedy is to
+ * re-wire the edge to the same-level item really needed (or between the
+ * containers), which only a reader of the finding can decide.
+ */
+export interface WorkItemProseCrossLevelEdgeAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'cross-level-edge';
+  /** The blocker's identifier — the far end of the edge `item` carries. */
+  blockedBy: string;
+  /** How many levels below the project root `item` sits (a folder adds none). */
+  itemDepth: number;
+  /** How many levels below the project root the blocker sits. */
+  blockedByDepth: number;
+}
+
+/**
  * ONE SHAPE advisory — narrowed by {@link WorkItemProseShapeAdvisoryDto.severity}
  * once `kind === 'shape'` has narrowed the outer union.
  *
@@ -1938,7 +1985,8 @@ export type WorkItemProseShapeAdvisoryDto =
   | WorkItemProseSizingAdvisoryDto
   | WorkItemProseSelfBlockingDesignAdvisoryDto
   | WorkItemProseBodyAboveFieldMoveAdvisoryDto
-  | WorkItemProseBlockerCountAdvisoryDto;
+  | WorkItemProseBlockerCountAdvisoryDto
+  | WorkItemProseCrossLevelEdgeAdvisoryDto;
 
 /**
  * The severity of a SUBSUMPTION advisory (MOTIR-2903). Named rather than inlined
@@ -2256,6 +2304,13 @@ export function isBodyAboveFieldMoveAdvisory(
   a: WorkItemValidityAdvisoryDto,
 ): a is WorkItemProseBodyAboveFieldMoveAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'body-edit-above-field-move';
+}
+
+/** Narrow an advisory to the cross-level-edge shape (MOTIR-6369). */
+export function isCrossLevelEdgeAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemProseCrossLevelEdgeAdvisoryDto {
+  return a.kind === 'shape' && a.severity === 'cross-level-edge';
 }
 
 /** Narrow an advisory to the counted-own-blockers shape (MOTIR-5428). */

@@ -354,6 +354,30 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * The `is_blocked_by` edges running FROM any of `fromIds` TO any of `toIds` —
+   * the cross-parent coverage check's parent-level lookup (MOTIR-6370): given the
+   * parents of every cross-parent edge's two ends, which parent pairs already
+   * carry the edge? ONE read for the whole subtree. Workspace-scoped when given.
+   */
+  async findBlockedByAmong(
+    fromIds: string[],
+    toIds: string[],
+    workspaceId?: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ fromId: string; toId: string }>> {
+    if (fromIds.length === 0 || toIds.length === 0) return [];
+    return (tx ?? dbRead).workItemLink.findMany({
+      where: {
+        fromId: { in: fromIds },
+        toId: { in: toIds },
+        kind: 'is_blocked_by',
+        ...(workspaceId ? { workspaceId } : {}),
+      },
+      select: { fromId: true, toId: true },
+    });
+  },
+
+  /**
    * The `is_blocked_by` EDGES of many items at once (Subtask 7.8.15 —
    * `validate_sprint`), each carrying the blocking item's id, `identifier`,
    * `status`, `sprintId` and `projectId`. The sprint-finishability check walks
@@ -396,6 +420,10 @@ export const workItemLinkRepository = {
       blockerStatus: string;
       blockerSprintId: string | null;
       blockerProjectId: string;
+      /** The blocker's kind — the cross-level-edge advisory's far end (MOTIR-6369). */
+      blockerKind: string;
+      /** The blocker's parent — the cross-parent coverage check's far end (MOTIR-6370). */
+      blockerParentId: string | null;
     }>
   > {
     if (fromIds.length === 0) return [];
@@ -416,6 +444,8 @@ export const workItemLinkRepository = {
             status: true,
             sprintId: true,
             projectId: true,
+            kind: true,
+            parentId: true,
           },
         },
       },
@@ -423,6 +453,8 @@ export const workItemLinkRepository = {
     return rows.map((r) => ({
       fromId: r.fromId,
       blockerId: r.toItem.id,
+      blockerKind: r.toItem.kind,
+      blockerParentId: r.toItem.parentId,
       blockerKey: r.toItem.identifier,
       blockerTitle: r.toItem.title,
       blockerStatus: r.toItem.status,
