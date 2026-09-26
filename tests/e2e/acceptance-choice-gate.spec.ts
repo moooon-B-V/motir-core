@@ -154,8 +154,7 @@ test.describe('a person picks one of N options, and the pick is stamped', () => 
       // — the gated work on the record — and not the retired sentence.
       await expect(
         dialog.getByText(
-          'The report exports story — the storage adapter, the retention rule and the download page.',
-          { exact: false },
+          /^What this choice gates — The report exports story — the storage adapter, the retention rule and the download page\.$/,
         ),
       ).toBeVisible();
       // The To-approve row underneath settled in the same moment.

@@ -590,6 +590,35 @@ describe('GET /api/approval-gates/[id]/planning-seed · a PICK (intent plan)', (
     expect(seed.anchorKey).toBe(epic.identifier);
   });
 
+  it('a pick recorded with no decision time or label still seeds — the card says neither (MOTIR-6435)', async () => {
+    const choice = await choiceUnder(null);
+    seq += 1;
+    const row = await adminDb.approvalGate.create({
+      data: {
+        workspaceId: choice.workspaceId,
+        projectId: choice.projectId,
+        workItemId: choice.id,
+        kind: 'decision_choice',
+        subjectId: `subject-${seq}`,
+        state: 'approved',
+        chosenOption: STAMP,
+      },
+    });
+    signIn(owner());
+    const res = await readSeed(row.id);
+    expect(res.status).toBe(200);
+    const { seed } = await res.json();
+    expect(seed.intent).toBe('plan');
+    expect(seed.pick).toEqual({
+      choiceKey: choice.identifier,
+      choiceTitle: 'Choose where exports live',
+      label: STAMP.label,
+      bestFor: STAMP.bestFor,
+      decidedAt: null,
+      decidedByLabel: null,
+    });
+  });
+
   it('a ROOT choice anchors at the PROJECT (anchorKey null), and the turn says so', async () => {
     const { seed } = await readPick(await choiceUnder(null));
     expect(seed.intent).toBe('plan');

@@ -79,6 +79,7 @@ const rowFor = (page: Page, key: string): Locator =>
 const serverAction = (page: Page) =>
   page.waitForResponse(
     (res) => res.request().method() === 'POST' && Boolean(res.request().headers()['next-action']),
+    { timeout: FIRST_PAINT_MS },
   );
 const seedRead = (page: Page, gateId: string): Promise<Response> =>
   page.waitForResponse(
@@ -86,6 +87,7 @@ const seedRead = (page: Page, gateId: string): Promise<Response> =>
       new URL(res.url()).pathname ===
         `/api/approval-gates/${encodeURIComponent(gateId)}/planning-seed` &&
       res.request().method() === 'GET',
+    { timeout: FIRST_PAINT_MS },
   );
 /** The AUTOMATIC send of a card-anchored first turn (the anchored plan route). */
 const anchoredSend = (page: Page, cardId: string): Promise<Response> =>
@@ -93,11 +95,13 @@ const anchoredSend = (page: Page, cardId: string): Promise<Response> =>
     (res) =>
       new URL(res.url()).pathname === `/api/work-items/${cardId}/ai/plan` &&
       res.request().method() === 'POST',
+    { timeout: FIRST_PAINT_MS },
   );
 /** The AUTOMATIC send of a project-anchored first turn (the one door). */
 const projectSend = (page: Page): Promise<Response> =>
   page.waitForResponse(
     (res) => new URL(res.url()).pathname === '/api/ai/ask' && res.request().method() === 'POST',
+    { timeout: FIRST_PAINT_MS },
   );
 const plannerOpenFrom = (gateId: string) => (url: URL) =>
   url.searchParams.get('planFrom') === 'refused-gate' &&
@@ -204,6 +208,14 @@ test.describe('a picked option is planned', () => {
   test.beforeEach(async ({ playwright, baseURL }) => {
     await resetDatabase();
     seed = await seedChoiceGate(Date.now().toString(36));
+    // An ONBOARDED project, as every real project with choices is: with
+    // `onboardingRanAt` null the planner opens on its onboarding routing first,
+    // which waits on the lane's job worker and stalls behind its scheduled bursts —
+    // the planning receipts all stamp it (`roadmap-seed.ts`, `live-drawing-seed.ts`).
+    await adminDb.project.update({
+      where: { id: seed.projectId },
+      data: { onboardingRanAt: new Date() },
+    });
     const ctx = { userId: seed.ownerId, workspaceId: seed.workspaceId };
     const s = await workItemsService.createWorkItem(
       { projectId: seed.projectId, kind: 'story', title: 'Report exports' },
