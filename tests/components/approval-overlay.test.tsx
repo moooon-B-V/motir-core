@@ -88,6 +88,7 @@ const GATE: ApprovalGateDTO = {
   decisionSource: null,
   outcomeRef: null,
   confirmedRecord: null,
+  refusalVerdict: null,
   replanOwed: null,
   chosenOption: null,
   createdAt: '2026-09-08T04:00:00.000Z',

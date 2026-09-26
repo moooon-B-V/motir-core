@@ -1103,6 +1103,7 @@ describe('MOTIR-5664 — ONE APPROVAL, TWO GATES: pressing the PRIMARY design ga
         stamp: DECIDED_WITHOUT_A_READER,
         gateId: design.id,
         decision: 'request_changes',
+        refusalVerdict: 'revise',
         noteMd: 'The empty state is missing.',
         source: 'ui',
       },

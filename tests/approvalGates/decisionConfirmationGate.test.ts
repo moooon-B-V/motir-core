@@ -467,7 +467,7 @@ describe('the handler directly', () => {
   async function args(itemId: string, resolvedStatusKey: string | null) {
     const [gate] = await confirmGates(itemId);
     const item = await adminDb.workItem.findUniqueOrThrow({ where: { id: itemId } });
-    return { gate: gate!, item, ctx: fx.ctx, resolvedStatusKey };
+    return { gate: gate!, item, ctx: fx.ctx, resolvedStatusKey, refusalVerdict: null };
   }
 
   it('a project with no done status writes none and says why — the record is still stamped', async () => {

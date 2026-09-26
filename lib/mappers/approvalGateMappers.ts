@@ -57,6 +57,8 @@ export function toApprovalGateDto(row: ApprovalGate, subjectBody?: string | null
     decidedUnderAuthority: row.decidedUnderAuthority,
     decisionSource: row.decisionSource,
     outcomeRef: row.outcomeRef,
+    // Written only in a Motir-pressed `design_result` refusal's deciding write (MOTIR-6421).
+    refusalVerdict: row.refusalVerdict,
     // Written only by the choice handler's deciding write, in `ChosenOption`'s shape.
     chosenOption: (row.chosenOption as ChosenOptionDTO | null) ?? null,
     // Written only by the confirmation handler's deciding write (MOTIR-5954).
@@ -132,6 +134,8 @@ export function toApprovalRecordDecidedRowDto(
     // A decline's note is its reason too (MOTIR-6037; optional, ADR §11.4).
     refusalReason:
       row.state === 'changes_requested' || row.state === 'declined' ? row.noteMd : null,
+    // Only a refusal carries one (MOTIR-6421); the door writes it on no other state.
+    refusalVerdict: row.state === 'changes_requested' ? row.refusalVerdict : null,
   };
 }
 
@@ -207,6 +211,7 @@ export function toApprovalGateDecisionDto(gate: ApprovalGateDTO): ApprovalGateDe
     subjectVersion: gate.subjectVersion,
     supersededCause: gate.supersededCause,
     outcomeRef: gate.outcomeRef,
+    refusalVerdict: gate.refusalVerdict,
     createdAt: gate.createdAt,
     updatedAt: gate.updatedAt,
   };

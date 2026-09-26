@@ -196,6 +196,21 @@ export type ApprovalGateAuthorityDTO =
 export type ApprovalGateDecisionSourceDTO = 'ui' | 'api' | 'mcp' | 'github';
 
 /**
+ * WHAT A PERSON MEANT BY "NO" on a refused `design_result` gate (Story MOTIR-6070 ·
+ * MOTIR-6421; ADR `approval-gates.md` §10d, amended by `design-refusal-verdict.md`).
+ * Mirrors the `ApprovalGateRefusalVerdict` Prisma enum. `revise` sends the design back
+ * to be revised; `re_plan` says the plan around it is wrong. Stored in a column of its
+ * own — never in `outcomeRef`, which the repainting surfaces read as a status key.
+ */
+export type ApprovalGateRefusalVerdictDTO = 'revise' | 're_plan';
+
+/** The verdict vocabulary as a value, for a boundary that parses one (route, action). */
+export const APPROVAL_GATE_REFUSAL_VERDICTS = [
+  'revise',
+  're_plan',
+] as const satisfies readonly ApprovalGateRefusalVerdictDTO[];
+
+/**
  * The two decision VERBS, as the wire carries them.
  *
  * ⚠️ IT LIVES HERE, NOT ON THE SERVICE, AND THE CLIENT/SERVER BOUNDARY IS WHY.
@@ -283,6 +298,11 @@ export interface ApprovalGateDTO {
   decidedUnderAuthority: ApprovalGateAuthorityDTO | null;
   /** THROUGH WHICH surface the decision arrived. Null while `awaiting`. */
   decisionSource: ApprovalGateDecisionSourceDTO | null;
+  /** WHAT THE REFUSAL MEANT — `revise` or `re_plan` — on a `design_result` gate sent back
+   *  from Motir (MOTIR-6421; ADR §10d). Null on every approval, every other kind, a
+   *  GitHub-synced refusal, and every gate decided before the column existed. Written in
+   *  the deciding write, so it is as immutable as the rest of the decided row. */
+  refusalVerdict: ApprovalGateRefusalVerdictDTO | null;
   /** WHAT it caused — the merge commit sha, or the transition applied. Written
    *  in the deciding write, never backfilled: a decided gate is immutable. */
   outcomeRef: string | null;
@@ -824,6 +844,12 @@ export interface ApprovalRecordDecidedRowDto {
    * the reason came from — a GitHub review with no body is null here.
    */
   refusalReason: string | null;
+  /**
+   * WHAT THE REFUSAL MEANT (MOTIR-6421; ADR §10d) — `revise` / `re_plan` on a
+   * `design_result` row sent back from Motir, off the immutable row. Null on every other
+   * state and kind, and on a GitHub-synced refusal.
+   */
+  refusalVerdict: ApprovalGateRefusalVerdictDTO | null;
 }
 
 /** One SECTION of the room: its rows on this page, and its total over every page. */
@@ -1207,6 +1233,12 @@ export interface ApprovalGateDecisionDTO {
    * card's own body — the option list is in it, and `outcomeRef` says which one.
    */
   outcomeRef: string | null;
+  /**
+   * WHAT THE REFUSAL MEANT — `revise` or `re_plan` — on a `design_result` gate sent
+   * back from Motir (MOTIR-6421; ADR §10d). Null everywhere else. Read it beside
+   * `noteMd`: the note says what to change, the verdict whether the plan itself is wrong.
+   */
+  refusalVerdict: ApprovalGateRefusalVerdictDTO | null;
   createdAt: string;
   updatedAt: string;
 }

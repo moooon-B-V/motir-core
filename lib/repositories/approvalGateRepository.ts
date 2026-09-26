@@ -3,6 +3,7 @@ import {
   type ApprovalGate,
   type ApprovalGateAuthority,
   type ApprovalGateDecisionSource,
+  type ApprovalGateRefusalVerdict,
   type ApprovalGateKind,
   type ApprovalGateState,
   type ApprovalGateSupersedeCause,
@@ -510,6 +511,10 @@ export const approvalGateRepository = {
       /** What a CONFIRMED decision's record was (MOTIR-5954) — null on every other
        *  decision. */
       confirmedRecord: ConfirmedRecord | null;
+      /** What a Motir-pressed `design_result` REFUSAL meant (MOTIR-6421; ADR §10d) —
+       *  null on every other decision. Written HERE, in the deciding write, because the
+       *  decided-row trigger refuses any later amendment. */
+      refusalVerdict: ApprovalGateRefusalVerdict | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<ApprovalGate> {
@@ -1273,6 +1278,8 @@ const RECORD_GATE_SELECT = {
   chosenOption: true,
   // What a CONFIRMED decision's record was (MOTIR-5961) — its row says with or without.
   confirmedRecord: true,
+  // What a design REFUSAL meant (MOTIR-6421) — the mapper keeps it on `changes_requested`.
+  refusalVerdict: true,
 } as const satisfies Prisma.ApprovalGateSelect;
 
 /** One row of the Approvals room's read, as Prisma returns it. */

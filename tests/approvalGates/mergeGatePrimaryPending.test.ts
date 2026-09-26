@@ -198,6 +198,7 @@ const decideDesign = (s: Scenario, gateId: string, decision: 'approve' | 'reques
       decision,
       source: 'ui',
       noteMd: decision === 'request_changes' ? 'Needs changes.' : null,
+      refusalVerdict: decision === 'request_changes' ? 'revise' : null,
       stamp: DECIDED_WITHOUT_A_READER,
     },
     s.ctx,
