@@ -1,3 +1,5 @@
+import type { WorkspaceRole } from '@/generated/prisma/client';
+
 // DTOs for the workspace endpoints + settings surfaces. These define
 // EXACTLY what crosses the HTTP / Server-Action boundary — no Prisma
 // model leaks. Add fields here when the UI needs them, never on raw
@@ -28,7 +30,21 @@ export interface WorkspaceMemberDTO {
   userId: string;
   name: string;
   email: string;
-  role: string;
+  /**
+   * The member's WORKSPACE role (Story MOTIR-6168 · MOTIR-6463) — their role in
+   * every project of the workspace. A custom-role holder reads the custom role's
+   * tier (`member`); `customRole` names the role itself.
+   */
+  workspaceRole: WorkspaceRole;
+  /** The workspace custom role they hold, or null on a built-in. */
+  customRole: { id: string; name: string } | null;
+}
+
+/** The answer to a role change (MOTIR-6463): the member's role as it now stands. */
+export interface WorkspaceMemberRoleDTO {
+  userId: string;
+  workspaceRole: WorkspaceRole;
+  customRole: { id: string; name: string } | null;
 }
 
 export interface WorkspaceSummaryDTO {

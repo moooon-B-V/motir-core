@@ -579,7 +579,9 @@
     },
     "role": {
       "owner": "owner",
-      "member": "member"
+      "manager": "manager",
+      "member": "member",
+      "viewer": "viewer"
     },
     "defaultStatus": {
       "todo": "To Do",
@@ -629,12 +631,16 @@
       "unknownRelationship": "Unknown relationship.",
       "pickIssueToLink": "Pick a work item to link.",
       "missingDlqId": "Missing dead-letter id.",
-      "ownerOnlyReplay": "Only a workspace owner can replay jobs.",
+      "ownerOnlyReplay": "Only a workspace Manager can replay jobs.",
       "dlqGone": "That dead-letter entry no longer exists.",
       "workspaceNameEmpty": "Workspace name cannot be empty.",
       "useLeaveToRemoveSelf": "Use Leave to remove yourself.",
       "cannotRemoveLastMember": "Cannot remove the last member.",
       "cannotLeaveLastMember": "You can't leave as the last member — delete the workspace instead.",
+      "lastManager": "A workspace needs at least one Manager.",
+      "rolesManagerOnly": "Only a workspace Manager can change roles.",
+      "orgManagedRole": "An organization Owner or Admin is a Manager in every workspace. Change it on the organization’s Members page.",
+      "roleChangeFailed": "Couldn’t change the role.",
       "keyLabelRequired": "Key and label are required.",
       "noProjectForIssue": "Pick or create a project before adding a work item.",
       "titleRequired": "Give the work item a title.",

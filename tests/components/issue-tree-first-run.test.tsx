@@ -61,7 +61,7 @@ afterEach(() => {
 });
 
 const members: WorkspaceMemberDTO[] = [
-  { userId: 'u1', name: 'Ada', email: 'ada@x.com', role: 'admin' },
+  { userId: 'u1', name: 'Ada', email: 'ada@x.com', workspaceRole: 'manager', customRole: null },
 ];
 const workflow: WorkflowDto = {
   statuses: [

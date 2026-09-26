@@ -128,7 +128,7 @@ function MemberRow({
       </div>
       {/* A role is a category label, not an "info" severity — neutral tone
           (AA-contrast-safe; see finding #35). */}
-      <Pill tone="neutral">{tl('role.' + member.role)}</Pill>
+      <Pill tone="neutral">{member.customRole?.name ?? tl('role.' + member.workspaceRole)}</Pill>
       {isSelf ? null : (
         <Button variant="ghost" size="sm" onClick={handleRemove} loading={isPending}>
           {t('members.remove')}

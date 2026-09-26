@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import {
+  InvalidWorkspaceRoleError,
+  LastManagerError,
   NotAMemberError,
+  OrgManagedWorkspaceRoleError,
+  WorkspaceMemberNotFoundError,
   WorkspaceRoleForbiddenError,
   WorkspaceRoleInUseError,
   WorkspaceRoleNameTakenError,
@@ -13,12 +17,17 @@ import {
   UngrantablePermissionError,
 } from '@/lib/permissions/errors';
 
-// Typed workspace-role errors → HTTP (Story MOTIR-6168 · MOTIR-6460), shared by
-// the two `/api/workspaces/[workspaceId]/roles` routes. A workspace the actor
+// Typed workspace-role errors → HTTP (Story MOTIR-6168 · MOTIR-6460 / MOTIR-6463),
+// shared by the two `/api/workspaces/[workspaceId]/roles` routes and the member
+// role route. A workspace the actor
 // cannot see and a role that is not this workspace's are both 404, so neither
 // confirms that a foreign id exists; a member who is not a Manager is 403.
 export function workspaceRoleErrorResponse(err: unknown): NextResponse | null {
-  if (err instanceof NotAMemberError || err instanceof RoleDefinitionNotFoundError) {
+  if (
+    err instanceof NotAMemberError ||
+    err instanceof RoleDefinitionNotFoundError ||
+    err instanceof WorkspaceMemberNotFoundError
+  ) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 404 });
   }
   if (err instanceof WorkspaceRoleForbiddenError) {
@@ -35,6 +44,12 @@ export function workspaceRoleErrorResponse(err: unknown): NextResponse | null {
       { error: err.message, code: err.code, count: err.count, roleName: err.roleName },
       { status: 409 },
     );
+  }
+  if (err instanceof LastManagerError || err instanceof OrgManagedWorkspaceRoleError) {
+    return NextResponse.json({ error: err.message, code: err.code }, { status: 409 });
+  }
+  if (err instanceof InvalidWorkspaceRoleError) {
+    return NextResponse.json({ error: err.message, code: err.code }, { status: 422 });
   }
   if (err instanceof WorkspaceRoleNameTakenError) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 409 });

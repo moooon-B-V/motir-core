@@ -127,8 +127,20 @@ describe('Edit affordance is HIDDEN for read-only (6.4.6)', () => {
 describe('AssigneePicker is the handed (access-scoped) member list (6.4.6)', () => {
   it('offers exactly the members passed in, plus Unassigned', () => {
     const members: WorkspaceMemberDTO[] = [
-      { userId: 'u1', name: 'Ada Member', email: 'ada@ex.com', role: 'member' },
-      { userId: 'u2', name: 'Bo Member', email: 'bo@ex.com', role: 'member' },
+      {
+        userId: 'u1',
+        name: 'Ada Member',
+        email: 'ada@ex.com',
+        workspaceRole: 'member',
+        customRole: null,
+      },
+      {
+        userId: 'u2',
+        name: 'Bo Member',
+        email: 'bo@ex.com',
+        workspaceRole: 'member',
+        customRole: null,
+      },
     ];
     renderWithIntl(<AssigneePicker members={members} value={null} onChange={() => {}} />);
     fireEvent.click(screen.getByRole('combobox', { name: 'Assignee' }));

@@ -75,8 +75,20 @@ const BUILT_IN_ROLES: RoleDTO[] = [
 const CONTRACTOR = customRole('role-contractor', 'Contractor');
 
 const workspaceMembers: WorkspaceMemberDTO[] = [
-  ...members.map((m) => ({ userId: m.userId, name: m.name, email: m.email, role: 'member' })),
-  { userId: 'u-julian', name: 'Julian', email: 'julian@motir.co', role: 'member' },
+  ...members.map((m) => ({
+    userId: m.userId,
+    name: m.name,
+    email: m.email,
+    workspaceRole: 'member' as const,
+    customRole: null,
+  })),
+  {
+    userId: 'u-julian',
+    name: 'Julian',
+    email: 'julian@motir.co',
+    workspaceRole: 'member',
+    customRole: null,
+  },
 ];
 
 const fetchMock = vi.fn();

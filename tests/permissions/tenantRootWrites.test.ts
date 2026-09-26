@@ -68,7 +68,7 @@ describe('tenant-root writes under the restricted runtime role', () => {
     // the row only if the membership INSERT and its RETURNING both passed.
     const members = await workspacesService.listMembers(workspace.id, owner.id);
     expect(members.map((m) => m.userId)).toEqual([owner.id]);
-    expect(members[0]!.role).toBe('owner');
+    expect(members[0]!.workspaceRole).toBe('manager');
   });
 
   it('accepting an invite writes the joiner membership, and the app can read it back', async () => {
@@ -99,7 +99,7 @@ describe('tenant-root writes under the restricted runtime role', () => {
 
     const members = await workspacesService.listMembers(workspace.id, inviter.id);
     expect(members.map((m) => m.userId).sort()).toEqual([inviter.id, joiner.id].sort());
-    expect(members.find((m) => m.userId === joiner.id)!.role).toBe('member');
+    expect(members.find((m) => m.userId === joiner.id)!.workspaceRole).toBe('member');
     // …and lands as a workspace MEMBER (MOTIR-6462), read back through the bound read.
     expect((await workspacesService.findMembership(joiner.id, workspace.id))?.workspaceRole).toBe(
       'member',

@@ -579,7 +579,9 @@
     },
     "role": {
       "owner": "所有者",
-      "member": "成员"
+      "manager": "管理者",
+      "member": "成员",
+      "viewer": "查看者"
     },
     "defaultStatus": {
       "todo": "待办",
@@ -629,12 +631,16 @@
       "unknownRelationship": "未知的关系类型。",
       "pickIssueToLink": "请选择要关联的工作项。",
       "missingDlqId": "缺少死信队列ID。",
-      "ownerOnlyReplay": "只有工作区所有者才能重放任务。",
+      "ownerOnlyReplay": "只有工作区管理者才能重放任务。",
       "dlqGone": "该死信队列条目已不存在。",
       "workspaceNameEmpty": "工作区名称不能为空。",
       "useLeaveToRemoveSelf": "请使用“离开”来移除你自己。",
       "cannotRemoveLastMember": "无法移除最后一名成员。",
       "cannotLeaveLastMember": "你是最后一名成员，无法离开——请改为删除该工作区。",
+      "lastManager": "工作区至少需要一名管理者。",
+      "rolesManagerOnly": "只有工作区管理者可以更改角色。",
+      "orgManagedRole": "组织所有者或管理员是所有工作区的管理者。请在组织的成员页面更改。",
+      "roleChangeFailed": "无法更改角色。",
       "keyLabelRequired": "键和标签为必填项。",
       "noProjectForIssue": "添加工作项前请先选择或创建一个项目。",
       "titleRequired": "请填写工作项标题。",

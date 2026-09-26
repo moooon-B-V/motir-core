@@ -26,7 +26,13 @@ import {
 import { readMembership, readReachRole } from '@/lib/workspaces/membershipGate';
 import { bindOrganizationContext, withOrgContext } from '@/lib/organizations/context';
 import { assertOrgCapability } from '@/lib/services/organizationAccessService';
-import { legacyToWorkspaceRole, type WorkspaceRole } from '@/lib/workspaces/roles';
+import {
+  CUSTOM_WORKSPACE_ROLE_TIER,
+  legacyToWorkspaceRole,
+  resolveWorkspaceRole,
+  WORKSPACE_ROLES,
+  type WorkspaceRole,
+} from '@/lib/workspaces/roles';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { entitlementsService } from '@/lib/services/entitlementsService';
@@ -34,12 +40,19 @@ import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboarding
 import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
 import {
   AlreadyMemberError,
+  InvalidWorkspaceRoleError,
+  LastManagerError,
   LastMemberError,
   NotAMemberError,
+  OrgManagedWorkspaceRoleError,
   SlugCollisionError,
+  WorkspaceMemberNotFoundError,
   WorkspaceNotFoundError,
   WorkspaceNotSoleMemberError,
+  WorkspaceRoleForbiddenError,
 } from '@/lib/workspaces/errors';
+import { RoleDefinitionNotFoundError } from '@/lib/permissions/errors';
+import { workspaceRoleDefinitionRepository } from '@/lib/repositories/workspaceRoleDefinitionRepository';
 import {
   toCurrentWorkspaceDTO,
   toWorkspaceMemberDTO,
@@ -50,6 +63,7 @@ import type {
   OrgWorkspacePageDTO,
   OrgWorkspaceRowDTO,
   WorkspaceMemberDTO,
+  WorkspaceMemberRoleDTO,
   WorkspaceSummaryDTO,
 } from '@/lib/dto/workspaces';
 
@@ -1111,6 +1125,125 @@ export const workspacesService = {
       },
     );
     return workspace ? toWorkspaceSummaryDTO(workspace) : null;
+  },
+
+  /**
+   * A Manager changes a member's WORKSPACE role (Story MOTIR-6168 · MOTIR-6463) —
+   * to Manager, Member or Viewer, or to one of this workspace's custom roles
+   * (`roleDefinitionId`, held at the `CUSTOM_WORKSPACE_ROLE_TIER`). The new role
+   * is the person's role in every project of the workspace from their next
+   * request: permissions resolve per call (`projectAccessService.resolveInputs`),
+   * with no cache in front of them.
+   *
+   * Refusals, each before anything is written:
+   *   * an unknown role value → InvalidWorkspaceRoleError (422);
+   *   * the actor is not in the workspace → NotAMemberError (404), or is not its
+   *     Manager → WorkspaceRoleForbiddenError (403). The org Owner and an org
+   *     Admin are Managers with or without a membership (`readReachRole`);
+   *   * the target is not a member → WorkspaceMemberNotFoundError (404);
+   *   * the target is the org Owner or an org Admin → OrgManagedWorkspaceRoleError
+   *     (409) — a Manager of every workspace by their org role, which only the
+   *     organization changes (MOTIR-6456 panel 6a);
+   *   * a custom role that is not this workspace's → RoleDefinitionNotFoundError
+   *     (404, never confirming a foreign id exists);
+   *   * the change would leave no Manager → LastManagerError (409).
+   *
+   * ⚠️ THE LAST-MANAGER GUARD IS A READ-DERIVED WRITE, so the Manager rows are
+   * LOCKED (`countManagers` is `SELECT … FOR UPDATE`) before the target is read
+   * and the guard decides. Two Managers demoting each other at once serialise on
+   * it: the second wakes to committed state, counts one Manager left — the one
+   * it is demoting — and is refused with LastManagerError.
+   */
+  async setMemberRole(input: {
+    actorUserId: string;
+    workspaceId: string;
+    targetUserId: string;
+    role: unknown;
+    roleDefinitionId?: string | null;
+  }): Promise<WorkspaceMemberRoleDTO> {
+    const requested =
+      typeof input.role === 'string' && (WORKSPACE_ROLES as readonly string[]).includes(input.role)
+        ? (input.role as WorkspaceRole)
+        : null;
+    if (!input.roleDefinitionId && !requested) {
+      throw new InvalidWorkspaceRoleError(String(input.role));
+    }
+
+    return withWorkspaceContext(
+      { userId: input.actorUserId, workspaceId: input.workspaceId },
+      async (tx) => {
+        const actorRole = await readReachRole(input.actorUserId, input.workspaceId, tx);
+        if (!actorRole) throw new NotAMemberError(input.actorUserId, input.workspaceId);
+        if (actorRole !== 'manager') {
+          throw new WorkspaceRoleForbiddenError(input.actorUserId, input.workspaceId);
+        }
+
+        // Lock the Manager rows BEFORE the reads the guard derives from.
+        const managers = await workspaceMembershipRepository.countManagers(input.workspaceId, tx);
+
+        const target = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+          input.targetUserId,
+          input.workspaceId,
+          tx,
+        );
+        if (!target) throw new WorkspaceMemberNotFoundError(input.targetUserId, input.workspaceId);
+
+        // The target's ORG role is a row of another person, admitted only by the
+        // active-org arm — so bind the workspace's own organization (a trusted
+        // resolution, never request input) before asking.
+        const workspace = await workspaceRepository.findByIdInTx(input.workspaceId, tx);
+        if (!workspace) throw new NotAMemberError(input.actorUserId, input.workspaceId);
+        await bindOrganizationContext(tx, workspace.organizationId);
+        if (
+          await organizationMembershipRepository.isOrgManagerOfWorkspaceOrg(
+            input.targetUserId,
+            input.workspaceId,
+            tx,
+          )
+        ) {
+          throw new OrgManagedWorkspaceRoleError(input.targetUserId, input.workspaceId);
+        }
+
+        let destination: { workspaceRole: WorkspaceRole; roleDefinitionId: string | null };
+        let customRole: { id: string; name: string } | null = null;
+        if (input.roleDefinitionId) {
+          const definition = await workspaceRoleDefinitionRepository.findById(
+            input.roleDefinitionId,
+            tx,
+          );
+          if (!definition || definition.workspaceId !== input.workspaceId) {
+            throw new RoleDefinitionNotFoundError(input.roleDefinitionId);
+          }
+          destination = {
+            workspaceRole: CUSTOM_WORKSPACE_ROLE_TIER,
+            roleDefinitionId: definition.id,
+          };
+          customRole = { id: definition.id, name: definition.name };
+        } else {
+          destination = { workspaceRole: requested!, roleDefinitionId: null };
+        }
+
+        // `countManagers` counts STORED Managers; a not-yet-migrated target that
+        // resolves to Manager is not among them, so it is subtracted only when it is.
+        const targetIsManager = resolveWorkspaceRole(target) === 'manager';
+        const remaining = managers - (target.workspaceRole === 'manager' ? 1 : 0);
+        if (targetIsManager && destination.workspaceRole !== 'manager' && remaining < 1) {
+          throw new LastManagerError(input.workspaceId);
+        }
+
+        await workspaceMembershipRepository.setWorkspaceRole(
+          input.targetUserId,
+          input.workspaceId,
+          destination,
+          tx,
+        );
+        return {
+          userId: input.targetUserId,
+          workspaceRole: destination.workspaceRole,
+          customRole,
+        };
+      },
+    );
   },
 
   /**

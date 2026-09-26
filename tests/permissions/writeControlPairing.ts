@@ -16,7 +16,7 @@ export type ActionGate =
   /** The service asserts this project permission key. */
   | { kind: 'key'; key: PermissionKey }
   /** The service asserts a WORKSPACE or ORG role rather than a project key. */
-  | { kind: 'role'; role: 'org:owner-or-admin' | 'workspace:owner-or-admin' | 'workspace:owner' }
+  | { kind: 'role'; role: 'org:owner-or-admin' | 'workspace:manager' }
   /** A READ. Its page's own gate decides who reaches it; nothing to enable. */
   | { kind: 'read' }
   /** Acts on the actor's OWN account or membership — there is no right to lack. */
@@ -256,10 +256,11 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
     card: 'MOTIR-6168',
     reason: 'membership only; who may rename is the workspace-roles story’s question',
   },
-  'settings/workspace/jobs/actions.ts#replayDlqAction': { kind: 'role', role: 'workspace:owner' },
+  'settings/workspace/actions.ts#setMemberRoleAction': { kind: 'role', role: 'workspace:manager' },
+  'settings/workspace/jobs/actions.ts#replayDlqAction': { kind: 'role', role: 'workspace:manager' },
   'settings/workspace/security/actions.ts#setWorkspaceRequireTwoFactorAction': {
     kind: 'role',
-    role: 'workspace:owner-or-admin',
+    role: 'workspace:manager',
   },
 };
 

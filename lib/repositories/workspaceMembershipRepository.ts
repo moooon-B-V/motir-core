@@ -14,6 +14,8 @@ import { dbRead } from '@/lib/db';
 // data-access concern; the service maps it to a DTO.
 export type MembershipWithUser = WorkspaceMembership & {
   user: Pick<User, 'id' | 'name' | 'email'>;
+  /** The workspace custom role the member holds (id + name), or null on a built-in. */
+  roleDefinition: Pick<WorkspaceRoleDefinition, 'id' | 'name'> | null;
 };
 
 /** A membership with the workspace CUSTOM role it points at (or null for a built-in). */
@@ -232,7 +234,10 @@ export const workspaceMembershipRepository = {
     return tx.workspaceMembership.findMany({
       where: { workspaceId },
       orderBy: { createdAt: 'asc' },
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        roleDefinition: { select: { id: true, name: true } },
+      },
     });
   },
 

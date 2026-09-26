@@ -8,7 +8,17 @@ import { getSession } from '@/lib/auth';
 import { getWorkspaceContext, WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
 import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { LastMemberError } from '@/lib/workspaces/errors';
+import {
+  InvalidWorkspaceRoleError,
+  LastManagerError,
+  LastMemberError,
+  NotAMemberError,
+  OrgManagedWorkspaceRoleError,
+  WorkspaceMemberNotFoundError,
+  WorkspaceRoleForbiddenError,
+} from '@/lib/workspaces/errors';
+import { RoleDefinitionNotFoundError } from '@/lib/permissions/errors';
+import type { WorkspaceRole } from '@/lib/workspaces/roles';
 
 // Server Actions for the workspace settings page. HTTP/transport layer:
 // each reads the session + active workspace, calls exactly one service
@@ -102,6 +112,49 @@ export async function removeMemberAction(targetUserId: string): Promise<ActionRe
   } catch (err) {
     if (err instanceof LastMemberError) {
       return { ok: false, error: t('actions.cannotRemoveLastMember') };
+    }
+    throw err;
+  }
+  revalidateWorkspaceSettingsSurfaces();
+  return { ok: true };
+}
+
+/**
+ * Change a member's WORKSPACE role (Story MOTIR-6168 · MOTIR-6463) — a built-in
+ * (`role`) or one of the workspace's custom roles (`roleDefinitionId`). The
+ * service asserts the actor is the Manager and guards the last Manager; every
+ * refusal comes back as `{ ok: false, error }` and changes nothing, so the Members
+ * page leaves the picker on the role the member still holds.
+ */
+export async function setMemberRoleAction(
+  targetUserId: string,
+  role: WorkspaceRole,
+  roleDefinitionId?: string | null,
+): Promise<ActionResult> {
+  const { userId, workspaceId } = await requireContext();
+  const t = await getErrorsTranslator();
+  try {
+    await workspacesService.setMemberRole({
+      actorUserId: userId,
+      workspaceId,
+      targetUserId,
+      role,
+      roleDefinitionId: roleDefinitionId ?? null,
+    });
+  } catch (err) {
+    if (err instanceof LastManagerError) return { ok: false, error: t('actions.lastManager') };
+    if (err instanceof WorkspaceRoleForbiddenError || err instanceof NotAMemberError) {
+      return { ok: false, error: t('actions.rolesManagerOnly') };
+    }
+    if (err instanceof OrgManagedWorkspaceRoleError) {
+      return { ok: false, error: t('actions.orgManagedRole') };
+    }
+    if (
+      err instanceof WorkspaceMemberNotFoundError ||
+      err instanceof RoleDefinitionNotFoundError ||
+      err instanceof InvalidWorkspaceRoleError
+    ) {
+      return { ok: false, error: t('actions.roleChangeFailed') };
     }
     throw err;
   }
