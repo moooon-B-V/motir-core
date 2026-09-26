@@ -29,7 +29,10 @@ import {
   sleep,
   waitForWindowBoundary,
 } from '../../helpers/rateLimitWindow';
-import { pinSharedRateLimitStoreDeadline } from '../../helpers/rateLimitStore';
+import {
+  pinSharedRateLimitStoreDeadline,
+  testDeadlineRateLimitStore,
+} from '../../helpers/rateLimitStore';
 
 // `/api/v1` counts through the SHARED store (Subtask 8.5.10 — MOTIR-2037).
 //
@@ -73,6 +76,16 @@ import { pinSharedRateLimitStoreDeadline } from '../../helpers/rateLimitStore';
 // Each of those makes ONE counted call, so the deadline exposure is a twelfth of
 // the atomicity batch's — and an override would answer the question they exist
 // to ask. Silence is not what puts them outside the pin; these three lines are.
+//
+// ⚠️ THE PIN REACHES ONLY THE STORE `beforeEach` INSTALLS — a client a case
+// builds for itself is outside it (MOTIR-6520). The two-client cases below each
+// construct a SECOND store standing in for the other machine; a bare
+// `createPostgresRateLimitStore()` there takes the production 250 ms and throws
+// `RateLimitStoreTimeoutError` on a loaded runner, leaving its `INSERT … ON
+// CONFLICT` still running when the test ends. So every client a case builds
+// comes from `testDeadlineRateLimitStore()`, and a third one added later owes
+// the same — the fail-open cases further down, whose tiny deadline IS their
+// subject, are the only stores here built with an explicit `timeoutMs`.
 
 const ME = 'http://localhost:3000/api/v1/me';
 
@@ -194,7 +207,9 @@ describe('TWO STORE CLIENTS enforce ONE window — the defect this card closes',
     budget(LIMIT, ALIGNED_WINDOW_MS);
     const caller = await createV1Caller();
     await waitForWindowBoundary(ALIGNED_WINDOW_MS);
-    const other = createPostgresRateLimitStore();
+    // The second machine gets the test-time deadline too — the header's pin
+    // covers only the store `beforeEach` installs (MOTIR-6520).
+    const other = testDeadlineRateLimitStore();
     const windowStart = currentWindowStart(ALIGNED_WINDOW_MS);
 
     for (let i = 0; i < LIMIT; i++) {
@@ -215,7 +230,9 @@ describe('TWO STORE CLIENTS enforce ONE window — the defect this card closes',
     budget(10, ALIGNED_WINDOW_MS);
     const caller = await createV1Caller();
     await waitForWindowBoundary(ALIGNED_WINDOW_MS);
-    const other = createPostgresRateLimitStore();
+    // The second machine gets the test-time deadline too — the header's pin
+    // covers only the store `beforeEach` installs (MOTIR-6520).
+    const other = testDeadlineRateLimitStore();
     const windowStart = currentWindowStart(ALIGNED_WINDOW_MS);
 
     await GET(req(caller.headers));
