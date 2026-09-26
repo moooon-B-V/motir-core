@@ -85,12 +85,17 @@ describe('resolveWorkspaceAccess (the org access gate)', () => {
     expect(ownerAccess!.isOrgOwner).toBe(true);
     expect(ownerAccess!.workspaceRole).toBeNull(); // spans by org role, not membership
 
-    // The Admin is a member of neither owner-made workspace: an Admin's reach is
-    // membership (role-model.md §1 R1).
+    // The Admin is a member of neither owner-made workspace, and reaches both as
+    // an Admin — an org Admin carries the Manager role into every workspace
+    // (MOTIR-6168, overturning `role-model.md` §1 reading R1).
     for (const ws of [w1, wOwner]) {
-      expect(await organizationsService.resolveWorkspaceAccess(admin.id, ws.id)).toBeNull();
+      expect(await organizationsService.resolveWorkspaceAccess(admin.id, ws.id)).toMatchObject({
+        effectiveRole: 'admin',
+        workspaceRole: null,
+        reachesEveryWorkspace: true,
+      });
     }
-    // …and in w2, where they are the stored owner, they read exactly that.
+    // …and in w2, where they are the stored owner, they keep exactly that.
     const adminAccess = await organizationsService.resolveWorkspaceAccess(admin.id, w2.id);
     expect(adminAccess!.effectiveRole).toBe('owner');
     expect(adminAccess!.isOrgOwner).toBe(false);

@@ -11,6 +11,8 @@
   migration) · MOTIR-6169 (access on the project) · MOTIR-6170 (the Visitor) · MOTIR-6179 (the rooms'
   tabs and view-only keys) · MOTIR-6171 (motir.co's read pages move into the app) · MOTIR-6166 (the
   surface scan that offers each role only what it can use)
+- **Amended:** 2026-09-26 — reading R1 OVERTURNED at the MOTIR-6456 design gate: an org Admin is a
+  Manager in every workspace of the org. See _AMENDMENT 1_ at the end.
 
 ---
 
@@ -271,3 +273,48 @@ and the edit rides the card that builds the change.
   belong to Epic 10 (MOTIR-726).
 - **Seats, prices, SSO / SCIM role mapping, and a separate guest role.** A contractor is covered by
   role plus access.
+
+---
+
+## AMENDMENT 1 (2026-09-26) — reading R1 is overturned: an org Admin is a Manager in every workspace
+
+**Source:** the owner, at the design gate of MOTIR-6456 (the workspace roles design, Story
+MOTIR-6168), 2026-09-26: _"I think an org admin should always be a manager in the workspace, or just
+carry the org admin role to the workspace. Check how other applications do this."_ The first round of
+that gate asked how an org Admin who left a workspace, or stepped down in one, would ever get back —
+questions reading R1 could only answer with "ask someone else".
+
+**What changes.** Reading R1 (§1) read the settled text literally — an org Admin holds nothing inside
+a workspace beyond the workspace role they are given. **That reading is withdrawn.** An org **Admin**,
+like the **Owner**, carries the **Manager** role into EVERY workspace of the organization, member or
+not, and that role is decided by their ORG role: a workspace Manager cannot narrow it, and it ends
+only when the org role does.
+
+- The _Every role_ table's **Org Admin** row reads: _create and remove workspaces; org settings,
+  billing included; **a Manager in every workspace of the organization** (this amendment)._ The
+  Workspace Manager / Member / Viewer / custom rows' _who grants it_ column gains **an org Admin**
+  beside the org Owner, since a Manager of a workspace grants its roles.
+- `organization-tier.md` §4, which R1 narrowed, **stands for Admins again**: org `owner` and `admin`
+  are Manager-equivalent in every workspace.
+- A plain org **Member** is unchanged: everything they hold comes from the workspace roles they are
+  given.
+
+**Checked against the mirror products** (rung 1), as the owner asked. Each carries an org-tier admin's
+reach into the units beneath it:
+
+- **GitHub:** organization owners have admin access to every repository the organization owns
+  ([Roles in an organization](https://docs.github.com/en/organizations/managing-peoples-access-to-your-organization-with-roles/roles-in-an-organization));
+- **Atlassian:** the organization admin is the highest admin role and has automatic product access
+  ([What are the different types of admin roles?](https://support.atlassian.com/user-management/docs/what-are-the-different-types-of-admin-roles/));
+- **Slack Enterprise:** Org Owners and Admins control workspace policies and add people to any
+  workspace, hidden ones included
+  ([Manage workspace access in an Enterprise organization](https://slack.com/help/articles/115001915507-Manage-workspace-access-on-Enterprise-Grid)).
+
+**Where it is built** (Story MOTIR-6168): the workspace-access resolver (`organizationsService.resolveWorkspaceAccess`),
+the project permission gate's reach (`composeOwnerReach` / `readReachRole`), the workspace switcher and
+the active-workspace resolution raise an org Admin exactly as they raise the Owner; the role
+migration's never-wider check (MOTIR-6461) admits that raise as a decided widening; and the workspace
+roles design (MOTIR-6456) draws an org Admin's row as a Manager set by the organization.
+
+**What this does NOT decide:** whether a workspace may opt OUT of its org Admins' reach (no mirror
+product offers it, and nothing asks for it), and anything about the org Owner, who is unchanged.

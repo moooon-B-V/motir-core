@@ -71,20 +71,24 @@ export async function readOwnMembership(
 }
 
 /**
- * The actor's WORKSPACE ROLE FOR A GATE, with the org Owner composed in
- * (MOTIR-6308; `role-model.md` §1 — the Owner "acts with full rights in every
- * workspace and project", member or not): the membership's workspace role (read
- * through `resolveWorkspaceRole`, so a not-yet-migrated row resolves by the legacy
- * mapping), or `manager` for the Owner of the workspace's organization, or null
- * for anyone else with no membership. An org Admin gets no raise here — their
- * reach is their membership (reading R1).
+ * The actor's WORKSPACE ROLE FOR A GATE, with the org's Owner AND Admins composed
+ * in: the membership's workspace role (read through `resolveWorkspaceRole`, so a
+ * not-yet-migrated row resolves by the legacy mapping), or `manager` for the Owner
+ * or an Admin of the workspace's organization, member or not, or null for anyone
+ * else with no membership.
+ *
+ * ⚠️ AN ORG ADMIN IS RAISED TOO (Story MOTIR-6168). MOTIR-6308 raised the Owner
+ * alone, on reading R1 of `role-model.md`; the owner overturned R1 at the
+ * MOTIR-6456 design gate on 2026-09-26 — an org Admin carries the Manager role
+ * into every workspace of the org, as the mirror products do — and the record's
+ * AMENDMENT says so.
  *
  * For the gates that answer "may this ACTOR act in this workspace". NOT for the
  * ones that ask whether some other SUBJECT is a member (an assignee, a
  * reporter, an invitee) — being the Owner does not put a person on a roster.
  *
  * Binding as {@link readMembership}: the owner join needs `app.workspace_id`
- * (`organizationMembershipRepository.isOwnerOfWorkspaceOrg`), so a `tx` passed
+ * (`organizationMembershipRepository.isOrgManagerOfWorkspaceOrg`), so a `tx` passed
  * here must be a `withWorkspaceContext` body; omitted, this opens one.
  */
 export async function readReachRole(
@@ -112,7 +116,7 @@ export async function readReachRole(
  *
  * A member who is already a Manager passes every workspace gate, so it is
  * returned without a read; anyone else costs one indexed round trip, and the org
- * Owner reads as `manager` (MOTIR-6459 — the tier the old `owner` mapped to).
+ * Owner or an org Admin reads as `manager`.
  * `tx` must bind `app.workspace_id` to `workspaceId`.
  */
 export async function composeOwnerReach(
@@ -123,10 +127,10 @@ export async function composeOwnerReach(
 ): Promise<WorkspaceRole | null> {
   const stored = membership ? resolveWorkspaceRole(membership) : null;
   if (stored === 'manager') return stored;
-  const isOwner = await organizationMembershipRepository.isOwnerOfWorkspaceOrg(
+  const reachesAsManager = await organizationMembershipRepository.isOrgManagerOfWorkspaceOrg(
     userId,
     workspaceId,
     tx,
   );
-  return isOwner ? 'manager' : stored;
+  return reachesAsManager ? 'manager' : stored;
 }

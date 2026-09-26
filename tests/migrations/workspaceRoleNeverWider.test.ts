@@ -182,6 +182,18 @@ describe('the check, over the mapping fixture', () => {
     expect(await checkError()).toBeNull();
   });
 
+  it('an org ADMIN holding a narrower workspace row is raised to Manager — the second decided class', async () => {
+    const t = await tenantWithLevels();
+    await adminDb.organizationMembership.update({
+      where: { organizationId_userId: { organizationId: t.orgId, userId: t.people.member! } },
+      data: { role: 'admin' },
+    });
+    await runMigrationFile(MAPPING);
+    // The Member is now an org Admin: the new rule raises them to the Manager rail
+    // (MOTIR-6168 overturned reading R1), which the old rule never did.
+    expect(await checkError()).toBeNull();
+  });
+
   it('is idempotent — a re-run over a checked database writes nothing', async () => {
     await tenantWithLevels();
     await runMigrationFile(MAPPING);

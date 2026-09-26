@@ -669,16 +669,17 @@ export const workspacesService = {
       ACTIVE_WORKSPACE_RESOLVE_TX,
     );
 
-    // THE ORG OWNER OPENS A WORKSPACE THEY ARE NOT A MEMBER OF (MOTIR-6308): the
+    // THE ORG OWNER — OR AN ORG ADMIN, SINCE MOTIR-6168 — OPENS A WORKSPACE THEY
+    // ARE NOT A MEMBER OF (MOTIR-6308): the
     // switcher lists every workspace of their org, so a cookie may pin one with no
     // membership row. The user-bound transaction above cannot see that workspace
     // (no `workspace_membership_visible` arm, no workspace GUC), so the gate runs
     // in its OWN workspace-bound read — and only in this case, so the common path
-    // keeps its one transaction. It admits the Owner alone: `resolveWorkspaceAccess`
-    // refuses every non-member who is not the org Owner.
+    // keeps its one transaction. It admits the Owner and the Admins alone:
+    // `resolveWorkspaceAccess` refuses every other non-member.
     if (cookieWorkspaceId && cookieWithoutMembership) {
       const access = await organizationsService.resolveWorkspaceAccess(userId, cookieWorkspaceId);
-      if (access?.isOrgOwner) return cookieWorkspaceId;
+      if (access?.reachesEveryWorkspace) return cookieWorkspaceId;
     }
 
     if (existing) return existing;
@@ -768,16 +769,19 @@ export const workspacesService = {
   async listUserWorkspaces(userId: string): Promise<Workspace[]> {
     return withUserContext(userId, async (tx) => {
       const memberOf = await workspaceMembershipRepository.findWorkspacesByUser(userId, tx);
-      // THE ORG OWNER SEES EVERY WORKSPACE OF THEIR ORG (MOTIR-6308): they act in
-      // all of them, member or not, so the switcher lists all of them. Anyone
-      // else — an org Admin included (`role-model.md` §1 R1) — sees exactly their
-      // memberships. The workspaces they are a member of come first, in the
+      // THE ORG OWNER AND THE ORG ADMINS SEE EVERY WORKSPACE OF THEIR ORG
+      // (MOTIR-6308, widened to Admins by MOTIR-6168): they act in all of them,
+      // member or not, so the switcher lists all of them. Anyone else sees
+      // exactly their memberships. The workspaces they are a member of come first, in the
       // order they always did; the rest follow by creation.
       //
       // ONE transaction, the org GUC re-bound per owned org: `workspace_org_member_read`
       // admits an org's workspaces off `app.organization_id`, and the ids come from
       // the actor's own owner rows (trusted — `bindOrganizationContext`'s rule).
-      const owned = await organizationMembershipRepository.findOwnedOrganizationsByUser(userId, tx);
+      const owned = await organizationMembershipRepository.findManagedOrganizationsByUser(
+        userId,
+        tx,
+      );
       if (owned.length === 0) return memberOf;
       const seen = new Set(memberOf.map((w) => w.id));
       const extra: Workspace[] = [];

@@ -2,8 +2,9 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminDb } from '../helpers/adminDb';
 
 // MOTIR-6308 — the org OWNER acts with full rights in every workspace and project
-// of the org, member or not; an org ADMIN reaches a workspace through membership
-// (`docs/decisions/role-model.md` §1, reading R1). Real Postgres; run it under the
+// of the org, member or not. An org ADMIN now does too, as a Manager (MOTIR-6168:
+// the owner overturned reading R1 of `docs/decisions/role-model.md` at the
+// MOTIR-6456 design gate, 2026-09-26; the record's AMENDMENT says so). Real Postgres; run it under the
 // non-bypass role (`TEST_DB_APP_ROLE=1`) to prove RLS ADMITS the non-member Owner:
 // the reads below go through `withWorkspaceContext`, whose `workspace_active` /
 // `project_active_workspace` / `work_item_active_workspace` arms key on the bound
@@ -23,7 +24,6 @@ const { createTestWorkItem } = await import('../fixtures/workItemFixtures');
 const { truncateAuthTables } = await import('../helpers/db');
 const { readMembership } = await import('@/lib/workspaces/membershipGate');
 const { NotAMemberError } = await import('@/lib/workspaces/errors');
-const { ProjectAccessDeniedError } = await import('@/lib/projects/errors');
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -165,8 +165,8 @@ describe('the org Owner, in a workspace they never joined', () => {
   });
 });
 
-describe('an org Admin reaches a workspace through membership', () => {
-  it('resolves NO active project in a workspace they are not a member of', async () => {
+describe('an org Admin reaches every workspace of the org as its Manager (MOTIR-6168)', () => {
+  it('resolves an active project in a workspace they are not a member of', async () => {
     const { owner, admin, organizationId } = await orgWithForeignWorkspace();
     // A workspace the Owner creates now: the Admin was never added to it.
     const { workspace: ops } = await workspacesService.createWorkspace({
@@ -175,15 +175,16 @@ describe('an org Admin reaches a workspace through membership', () => {
       organizationId,
     });
     expect(await readMembership(admin.id, ops.id)).toBeNull();
-    // A project exists, so a null answer is the REFUSAL and not an empty workspace.
-    await createTestProject({ workspaceId: ops.id, actorUserId: owner.id, identifier: 'OPS' });
-    expect(await projectsService.getActiveProject(admin.id, ops.id)).toBeNull();
-    expect(await projectsService.getActiveProject(owner.id, ops.id)).not.toBeNull();
+    const project = await createTestProject({
+      workspaceId: ops.id,
+      actorUserId: owner.id,
+      identifier: 'OPS',
+    });
+    expect((await projectsService.getActiveProject(admin.id, ops.id))?.id).toBe(project.id);
   });
 
-  it('is refused a workspace they are not a member of, and its projects', async () => {
+  it('is admitted to a workspace they are not a member of, and holds every role-gated key in its private project', async () => {
     const { owner, admin, organizationId } = await orgWithForeignWorkspace();
-    // Created AFTER the keep-whole migration: the Admin holds no membership here.
     const { workspace: later } = await workspacesService.createWorkspace({
       name: 'Later',
       ownerUserId: owner.id,
@@ -194,21 +195,27 @@ describe('an org Admin reaches a workspace through membership', () => {
       actorUserId: owner.id,
       identifier: 'LATE',
     });
-    expect(await organizationsService.resolveWorkspaceAccess(admin.id, later.id)).toBeNull();
-    await expect(workspacesService.assertMembership(admin.id, later.id)).rejects.toBeInstanceOf(
-      NotAMemberError,
-    );
-    // The project gate's non-member refusal (the same one any workspace non-member meets).
-    await expect(
-      projectAccessService.assertCanBrowse(project.id, { userId: admin.id, workspaceId: later.id }),
-    ).rejects.toBeInstanceOf(ProjectAccessDeniedError);
-    // Not in the switcher, and a pinned cookie does not open it.
+    await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'private' } });
+    expect(await organizationsService.resolveWorkspaceAccess(admin.id, later.id)).toMatchObject({
+      effectiveRole: 'admin',
+      workspaceRole: null,
+      isOrgOwner: false,
+      reachesEveryWorkspace: true,
+    });
+    await expect(workspacesService.assertMembership(admin.id, later.id)).resolves.toBeUndefined();
+    const ctx = { userId: admin.id, workspaceId: later.id };
+    for (const key of ROLE_GATED_PERMISSIONS) {
+      await expect(
+        projectAccessService.assertPermission(project.id, ctx, key),
+      ).resolves.toBeUndefined();
+    }
+    // Listed in the switcher, and a pinned cookie opens it.
     const ids = (await workspacesService.listUserWorkspaces(admin.id)).map((w) => w.id);
-    expect(ids).not.toContain(later.id);
-    expect(await workspacesService.resolveActiveWorkspace(admin.id, later.id)).not.toBe(later.id);
+    expect(ids).toContain(later.id);
+    expect(await workspacesService.resolveActiveWorkspace(admin.id, later.id)).toBe(later.id);
   });
 
-  it('as a MEMBER of it, gets exactly the member role’s permissions — no org raise', async () => {
+  it('as a MEMBER of it on a narrower workspace role, is still a Manager — the org role wins', async () => {
     const { owner, admin, organizationId } = await orgWithForeignWorkspace();
     const { workspace: later } = await workspacesService.createWorkspace({
       name: 'Later',
@@ -221,22 +228,30 @@ describe('an org Admin reaches a workspace through membership', () => {
       identifier: 'LATE',
     });
     await workspacesService.addMember({ userId: admin.id, workspaceId: later.id, role: 'member' });
-    // The yardstick: a plain org MEMBER holding the same workspace role.
-    const plain = await createTestUser();
-    await workspacesService.addMember({ userId: plain.id, workspaceId: later.id, role: 'member' });
-
-    const access = await organizationsService.resolveWorkspaceAccess(admin.id, later.id);
-    expect(access).toMatchObject({ effectiveRole: 'member', isOrgOwner: false });
     const held = await projectAccessService.getPermissions(project.id, {
       userId: admin.id,
       workspaceId: later.id,
     });
-    const yardstick = await projectAccessService.getPermissions(project.id, {
+    expect([...held].sort()).toEqual([...ROLE_GATED_PERMISSIONS].sort());
+  });
+
+  it('a plain org MEMBER still reaches only the workspaces they belong to', async () => {
+    const { owner, organizationId } = await orgWithForeignWorkspace();
+    const plain = await createTestUser();
+    await organizationsService.addMember({
+      organizationId,
       userId: plain.id,
-      workspaceId: later.id,
+      role: 'member',
+      actorUserId: owner.id,
     });
-    expect([...held].sort()).toEqual([...yardstick].sort());
-    // …and that is less than the manager tier the org raise used to hand them.
-    expect(held.has('project:administer')).toBe(false);
+    const { workspace: later } = await workspacesService.createWorkspace({
+      name: 'Later',
+      ownerUserId: owner.id,
+      organizationId,
+    });
+    expect(await organizationsService.resolveWorkspaceAccess(plain.id, later.id)).toBeNull();
+    await expect(workspacesService.assertMembership(plain.id, later.id)).rejects.toBeInstanceOf(
+      NotAMemberError,
+    );
   });
 });

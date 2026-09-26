@@ -28,6 +28,11 @@
 --     set — so the class is stated over the plain-mapped SET, which admits that
 --     case and still refuses a Viewer written as a Member, whose gained keys are
 --     not in the Viewer set. Recorded on MOTIR-6461.)
+--     AND a second decided class: the person is an org OWNER or ADMIN. The owner
+--     overturned reading R1 at the MOTIR-6456 design gate (2026-09-26) — an org
+--     Admin carries the Manager role into every workspace of the org — so the NEW
+--     rule raises an org Admin to the Manager rail, and whatever that grants is
+--     the model's decision, not a mapping mistake.
 --   * A NARROWING IS RECORDED, NEVER REFUSED: a person narrowed in any project
 --     who has no report row yet gets one `mapped_narrower` row naming the
 --     projects and the keys lost.
@@ -143,14 +148,15 @@ CREATE FUNCTION pg_temp.nw_close(keys text[]) RETURNS text[]
     ) AS k
   $f$;
 
--- Whether `uid` is the Owner of the organization `ws` belongs to — the reach the
--- old and new gates both compose in (MOTIR-6308).
-CREATE FUNCTION pg_temp.nw_is_org_owner(uid text, ws text) RETURNS boolean
+-- Whether `uid` holds one of `roles` in the organization `ws` belongs to — the
+-- reach the gates compose in: the Owner in the OLD rule (MOTIR-6308), the Owner
+-- or an Admin in the NEW one (MOTIR-6168).
+CREATE FUNCTION pg_temp.nw_has_org_role(uid text, ws text, roles text[]) RETURNS boolean
   LANGUAGE sql STABLE AS $f$
     SELECT EXISTS (
       SELECT 1 FROM "organization_membership" om
       JOIN "workspace" w ON w."organizationId" = om."organizationId"
-      WHERE w."id" = ws AND om."userId" = uid AND om."role" = 'owner'
+      WHERE w."id" = ws AND om."userId" = uid AND om."role"::text = ANY(roles)
     )
   $f$;
 
@@ -174,7 +180,7 @@ CREATE FUNCTION pg_temp.nw_old_keys(uid text, pid text) RETURNS text[]
     SELECT wm."role"::text INTO legacy FROM "workspace_membership" wm
       WHERE wm."userId" = uid AND wm."workspaceId" = ws;
     -- The rail: a workspace owner / admin, or the org Owner.
-    IF legacy IN ('owner', 'admin') OR pg_temp.nw_is_org_owner(uid, ws) THEN
+    IF legacy IN ('owner', 'admin') OR pg_temp.nw_has_org_role(uid, ws, ARRAY['owner']) THEN
       RETURN pg_temp.nw_close(held || pg_temp.nw_set('gated'));
     END IF;
     IF legacy IS NULL THEN RETURN pg_temp.nw_close(held); END IF;
@@ -231,8 +237,8 @@ CREATE FUNCTION pg_temp.nw_new_keys(uid text, pid text) RETURNS text[]
       INTO wrole, wdef
       FROM "workspace_membership" wm WHERE wm."userId" = uid AND wm."workspaceId" = ws;
     is_member := FOUND;
-    -- The Manager rail: a Manager, or the org Owner composed in as one.
-    IF wrole = 'manager' OR pg_temp.nw_is_org_owner(uid, ws) THEN
+    -- The Manager rail: a Manager, or the org Owner or an org Admin composed in.
+    IF wrole = 'manager' OR pg_temp.nw_has_org_role(uid, ws, ARRAY['owner', 'admin']) THEN
       RETURN pg_temp.nw_close(held || pg_temp.nw_set('gated'));
     END IF;
     IF NOT is_member THEN RETURN pg_temp.nw_close(held); END IF;
@@ -294,9 +300,11 @@ BEGIN
     IF cardinality(gained) > 0 THEN
       plain := pg_temp.nw_set(CASE pair.legacy WHEN 'owner' THEN 'gated' WHEN 'admin' THEN 'gated'
                                                WHEN 'member' THEN 'member' ELSE 'viewer' END);
-      -- The ONE widening the model decides: never added here, and every gained
-      -- key inside the plain-mapped role's set.
-      IF pair.added OR NOT (gained <@ plain) THEN
+      -- The widenings the model decides: an org Owner / Admin raised to the
+      -- Manager rail; or never added here, with every gained key inside the
+      -- plain-mapped role's set.
+      IF NOT pg_temp.nw_has_org_role(pair.user_id, pair.workspace_id, ARRAY['owner', 'admin'])
+         AND (pair.added OR NOT (gained <@ plain)) THEN
         violation_count := violation_count + 1;
         IF violation_count <= 50 THEN
           violations := violations || format('user %s, project %s: +%s', pair.user_id, pair.project_key, array_to_string(gained, ','));
@@ -310,7 +318,7 @@ BEGIN
   END LOOP;
 
   IF violation_count > 0 THEN
-    RAISE EXCEPTION 'MOTIR-6461: the workspace-role migration WIDENS % (person, project) pair(s) beyond the one widening the model decides — refusing the deploy. First %: %',
+    RAISE EXCEPTION 'MOTIR-6461: the workspace-role migration WIDENS % (person, project) pair(s) beyond the widenings the model decides — refusing the deploy. First %: %',
       violation_count, LEAST(violation_count, 50), array_to_string(violations, '; ');
   END IF;
 
@@ -339,6 +347,6 @@ END $$;
 
 DROP FUNCTION pg_temp.nw_new_keys(text, text);
 DROP FUNCTION pg_temp.nw_old_keys(text, text);
-DROP FUNCTION pg_temp.nw_is_org_owner(text, text);
+DROP FUNCTION pg_temp.nw_has_org_role(text, text, text[]);
 DROP FUNCTION pg_temp.nw_close(text[]);
 DROP FUNCTION pg_temp.nw_set(text);
