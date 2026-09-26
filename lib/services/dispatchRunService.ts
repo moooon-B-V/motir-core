@@ -15,6 +15,7 @@ import {
   DispatchRunNoTargetError,
   DispatchRunNotFoundError,
   DispatchRunTerminalError,
+  DispatchRunTokenOutOfScopeError,
   DuplicateDispatchRunError,
   UnknownDispatchRunCardError,
 } from '@/lib/dispatchRuns/errors';
@@ -26,6 +27,7 @@ import type {
   DispatchRunAppendedDto,
   DispatchRunCardDto,
   DispatchRunCloseOutPromptDto,
+  DispatchRunCostDto,
   DispatchRunDetailDto,
   DispatchRunDto,
   DispatchRunEventDto,
@@ -40,6 +42,7 @@ import {
   toDispatchRunScopeDto,
 } from '@/lib/mappers/dispatchRunMappers';
 import { assembleRunCloseOutPrompt } from '@/lib/dispatch/runCloseOutPrompt';
+import { getAgentRunUsage } from '@/lib/ai/motirAiClient';
 import { toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
 import { standingQueueFailures } from './deliveryVerdict';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
@@ -275,6 +278,45 @@ async function assertMayReadRun(
   throw new DispatchRunNotFoundError(run.id);
 }
 
+/**
+ * A HOSTED run's token and credit cost, read from motir-ai by the run's own id
+ * (MOTIR-689; `docs/decisions/hosted-agent-run.md` §1). Zeroes when motir-ai has
+ * recorded no billed call yet (its 404); `null` when it could not be asked at
+ * all — a transport failure, a refusal or an unconfigured deployment — so an
+ * outage never reads as a run that cost nothing, and never fails the run page.
+ */
+async function readHostedRunCost(runId: string): Promise<DispatchRunCostDto | null> {
+  try {
+    const usage = await getAgentRunUsage(runId);
+    return {
+      inputTokens: usage?.inputTokens ?? 0,
+      outputTokens: usage?.outputTokens ?? 0,
+      cacheReadTokens: usage?.cacheReadTokens ?? 0,
+      cacheWriteTokens: usage?.cacheWriteTokens ?? 0,
+      credits: usage?.credits ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A hosted run's own credential may reach ONE run (MOTIR-688,
+ * `docs/decisions/hosted-agent-run.md` §3). `ctx.tokenDispatchRunId` is set only
+ * when a RUN token reached an ingest route that admits one; every other caller
+ * leaves it absent and passes straight through.
+ *
+ * ⚠️ Checked BEFORE the run is read, so a refusal says nothing about whether the
+ * named run exists, is closed, or lives elsewhere. Pass `null` for an OPEN,
+ * which a run token never performs: the server opens a hosted run itself.
+ */
+function assertRunTokenScope(runId: string | null, ctx: ServiceContext): void {
+  if (ctx.tokenDispatchRunId === undefined) return;
+  if (runId === null || runId !== ctx.tokenDispatchRunId) {
+    throw new DispatchRunTokenOutOfScopeError();
+  }
+}
+
 export const dispatchRunService = {
   /**
    * OPEN a run WITH ITS SET.
@@ -292,6 +334,7 @@ export const dispatchRunService = {
    * rather than allowed to escape.
    */
   async open(input: OpenDispatchRunInput, ctx: ServiceContext): Promise<DispatchRunOpenedDto> {
+    assertRunTokenScope(null, ctx);
     const project = await projectsService.getByKey(input.projectKey, ctx);
     await projectAccessService.assertCanEdit(project.id, ctx);
 
@@ -428,6 +471,7 @@ export const dispatchRunService = {
     events: AppendDispatchRunEventInput[],
     ctx: ServiceContext,
   ): Promise<DispatchRunAppendedDto> {
+    assertRunTokenScope(runId, ctx);
     for (const event of events) {
       if (event.body !== undefined) {
         const bytes = Buffer.byteLength(event.body, 'utf8');
@@ -686,6 +730,7 @@ export const dispatchRunService = {
     input: CloseDispatchRunInput,
     ctx: ServiceContext,
   ): Promise<DispatchRunDto> {
+    assertRunTokenScope(runId, ctx);
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
@@ -836,7 +881,7 @@ export const dispatchRunService = {
    * is not small, and a per-leg read would be an N+1 on the run view's only query.
    */
   async getRunDetail(runId: string, ctx: ServiceContext): Promise<DispatchRunDetailDto> {
-    return withWorkspaceContext(
+    const detail = await withWorkspaceContext<DispatchRunDetailDto>(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
         const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
@@ -875,6 +920,11 @@ export const dispatchRunService = {
         };
       },
     );
+    // A HOSTED run's cost is read from motir-ai AFTER the transaction, never
+    // inside it: an outbound call must not hold a connection and the RLS
+    // binding open (MOTIR-689). A local run makes no call and carries no key.
+    if (detail.origin !== 'hosted') return detail;
+    return { ...detail, cost: await readHostedRunCost(detail.id) };
   },
 
   /**

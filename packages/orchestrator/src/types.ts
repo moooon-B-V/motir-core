@@ -293,6 +293,15 @@ export interface ContainerUsage {
    * an ORG, and naming the last repo it happened to touch would read as a fact.
    */
   readonly slices?: readonly ContainerWorkSlice[];
+
+  /**
+   * THE DISPATCH RUN this container served (MOTIR-6448) — a hosted-agent
+   * container only; ABSENT for a CI runner or an index container, which serve no
+   * run. It is not attribution the adapter reproduces at teardown: the caller that
+   * owns the run stamps it onto the record, and the meter persists it as a pointer
+   * from the usage row to the run (`docs/decisions/hosted-agent-run.md` §1).
+   */
+  readonly dispatchRunId?: string | null;
 }
 
 /**
@@ -356,6 +365,9 @@ export interface ContainerAccrual {
   /** As {@link ContainerUsage.slices} — a checkpoint attributes what the handle
    *  has served SO FAR, on the same absolute-to-date terms as `accruedSeconds`. */
   readonly slices?: readonly ContainerWorkSlice[];
+
+  /** As {@link ContainerUsage.dispatchRunId}. */
+  readonly dispatchRunId?: string | null;
 }
 
 /**

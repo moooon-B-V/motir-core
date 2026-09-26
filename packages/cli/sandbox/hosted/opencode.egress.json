@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "enabled_providers": ["anthropic"],
+  "provider": {
+    "anthropic": {
+      "options": {
+        "baseURL": "{env:MOTIR_GATEWAY_URL}/v1",
+        "apiKey": "{env:MOTIR_RUN_KEY}"
+      }
+    }
+  },
+  "share": "disabled",
+  "autoupdate": false
+}

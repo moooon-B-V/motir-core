@@ -34,8 +34,25 @@ export type ApiTokenAuthResult =
       /** The token's resolved grant — carried onto the ServiceContext as
        *  `tokenGrant` for the record-view reads (MOTIR-6330). */
       grant: PermissionKey[];
+      /** The dispatch run a RUN token is bound to (MOTIR-688), or null. Only
+       *  ever non-null on a route that passed `acceptsRunToken`. */
+      dispatchRunId: string | null;
     }
-  | { ok: false; reason: 'unauthenticated' | 'forbidden' };
+  | { ok: false; reason: 'unauthenticated' | 'forbidden' | 'run_token_refused' };
+
+export interface AuthenticateApiTokenOptions {
+  /**
+   * Admit a RUN token (MOTIR-688, `docs/decisions/hosted-agent-run.md` §3) —
+   * a token bound to one dispatch run. Default FALSE, and that default is the
+   * whole lock: a run token holds `work_item:edit`, which on its own reaches
+   * every card in the project, so every door refuses it unless the route
+   * declared it one of the three a hosted run needs (its run's ingest append
+   * and close, its card's dispatch prompt). A route that opts in MUST then
+   * check the binding against what it touches — the key admits the kind of
+   * call, the binding decides which run.
+   */
+  acceptsRunToken?: boolean;
+}
 
 function bearerFromHeader(header: string | null): string | undefined {
   if (!header) return undefined;
@@ -48,6 +65,7 @@ function bearerFromHeader(header: string | null): string | undefined {
 export async function authenticateApiToken(
   req: Request,
   requiredPermission: PermissionKey,
+  options: AuthenticateApiTokenOptions = {},
 ): Promise<ApiTokenAuthResult> {
   const token = bearerFromHeader(req.headers.get('authorization'));
   if (!token || !token.startsWith(TOKEN_PREFIX)) return { ok: false, reason: 'unauthenticated' };
@@ -56,8 +74,9 @@ export async function authenticateApiToken(
   let workspaceId: string;
   let grant: PermissionKey[];
   let projectId: string | null;
+  let dispatchRunId: string | null;
   try {
-    ({ user, workspaceId, grant, projectId } = await apiTokensService.verify(token));
+    ({ user, workspaceId, grant, projectId, dispatchRunId } = await apiTokensService.verify(token));
   } catch (err) {
     if (
       err instanceof InvalidApiTokenError ||
@@ -69,6 +88,12 @@ export async function authenticateApiToken(
     throw err;
   }
 
+  // A RUN token at a door that did not opt in. Checked BEFORE the grant: the
+  // grant would admit it (it holds `work_item:edit`), which is exactly why the
+  // grant cannot be what refuses it.
+  if (dispatchRunId !== null && !options.acceptsRunToken) {
+    return { ok: false, reason: 'run_token_refused' };
+  }
   if (!grantAllows(grant, requiredPermission)) return { ok: false, reason: 'forbidden' };
-  return { ok: true, userId: user.id, workspaceId, projectId, grant };
+  return { ok: true, userId: user.id, workspaceId, projectId, grant, dispatchRunId };
 }

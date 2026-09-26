@@ -92,6 +92,9 @@ export async function rehearseHostedAgentMeter(
     {
       dispatchId,
       runId: dispatchId,
+      // A stand-in serves no dispatch run, and the meter column is a foreign key,
+      // so the rehearsal's row is honestly unnamed (MOTIR-6448).
+      dispatchRunId: null,
       organizationId: args.organizationId,
       workspaceId: args.workspaceId,
       projectId: args.projectId,

@@ -64,6 +64,7 @@ function requestFor(
   return {
     dispatchId: `gate-${randomToken(6)}`,
     runId: `gate-run-${randomToken(6)}`,
+    dispatchRunId: null,
     ...tenant,
     repoFullName: 'motir-projects/acme-web',
     image: 'motir/stand-in@sha256:fake',

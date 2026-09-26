@@ -4,6 +4,7 @@ import {
   ciContainerUsageRepository,
   type CiContainerUsageCreateInput,
   type CiContainerWorkload,
+  type DispatchRunMachineTime,
 } from '@/lib/repositories/ciContainerUsageRepository';
 import {
   ciContainerUsageSliceRepository,
@@ -362,6 +363,21 @@ export const ciFleetCostMeterService = {
    * no row), and this is what stops that decision from quietly folding the house's
    * bill into per-customer margin. Same rows, two readings.
    */
+  /**
+   * ONE hosted run's machine time — its billable seconds and cost, live while the
+   * container runs and final once it has settled (MOTIR-6448). The third figure a
+   * hosted run's panel shows beside motir-ai's tokens and credits.
+   *
+   * Keyed by `DispatchRun.id`, the one id a hosted run carries everywhere
+   * (`docs/decisions/hosted-agent-run.md` §1). A run with no container row answers
+   * zeroes, never a throw.
+   */
+  async getMachineTimeForDispatchRun(dispatchRunId: string): Promise<DispatchRunMachineTime> {
+    return withSystemContext((tx) =>
+      ciContainerUsageRepository.getMachineTimeForDispatchRun(dispatchRunId, tx),
+    );
+  },
+
   async getMetaPeriodCostSplit(at: Date): Promise<MetaSplitContainerCost[]> {
     return withSystemContext((tx) =>
       ciContainerPeriodCostRepository.sumForPeriodByMetaSplit(periodStartFor(at), tx),
@@ -551,6 +567,9 @@ async function writeContainerFigure(input: {
           containerStoppedAt: settle?.stoppedAt ?? null,
           terminalState: settle?.terminalState ?? null,
           teardownReason: settle?.teardownReason ?? null,
+          // Persisted on the accrual too, so a LIVE row already names its run
+          // (MOTIR-6448). A null here never clears a named row.
+          dispatchRunId: row.dispatchRunId,
         },
         tx,
       );
@@ -746,5 +765,6 @@ function rowInputFor(record: ContainerUsage | ContainerAccrual): ContainerRowIde
     containerStartedAt: record.startedAt,
     usdPerSecond: record.usdPerSecond,
     rateEffectiveFrom: record.rateEffectiveFrom,
+    dispatchRunId: record.dispatchRunId ?? null,
   };
 }

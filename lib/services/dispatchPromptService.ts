@@ -16,7 +16,9 @@ import { monitorIssueService } from '@/lib/services/monitorIssueService';
 import type { DesignVerdictDto } from '@/lib/dto/designAccess';
 import { readProject } from '@/lib/workspaces/tenantRead';
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
-import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { parseDecisionRecord } from '@/lib/approvalGates/decisionRecord';
 import type {
@@ -175,6 +177,24 @@ export interface DispatchPromptOptions {
   findingsPolicy?: FindingsPolicy;
 }
 
+/**
+ * Refuse a run token (MOTIR-688) reading any card but one its run carries — a
+ * `DispatchRunCard` of the bound run naming this work item. `WORK_ITEM_NOT_FOUND`
+ * (404), never a 403: to this credential another card does not exist.
+ */
+async function assertRunTokenOwnsCard(
+  dispatchRunId: string,
+  workItemId: string,
+  identifier: string,
+  ctx: ServiceContext,
+): Promise<void> {
+  const leg = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    (tx) => dispatchRunCardRepository.findByRunAndWorkItem(dispatchRunId, workItemId, tx),
+  );
+  if (!leg) throw new WorkItemNotFoundError(identifier);
+}
+
 export const dispatchPromptService = {
   /**
    * Assemble the canonical dispatch prompt for ONE work item.
@@ -204,6 +224,13 @@ export const dispatchPromptService = {
       throw new ProjectNotFoundError(projectId);
     }
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
+    // A hosted run's own credential reads its OWN card's prompt and no other
+    // (MOTIR-688). Checked before any of the reads below, and answered with the
+    // SAME not-found a card the caller cannot see gets, so the credential cannot
+    // be used to learn which other keys exist.
+    if (ctx.tokenDispatchRunId !== undefined) {
+      await assertRunTokenOwnsCard(ctx.tokenDispatchRunId, item.id, identifier, ctx);
+    }
 
     // ⚠️ `allSettledOrThrow`, NOT `Promise.all` (MOTIR-6235). The access gate
     // (`getWorkItemByIdentifier`) is awaited above, but one of these arms DOES

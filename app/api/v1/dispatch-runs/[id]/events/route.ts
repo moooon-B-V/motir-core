@@ -16,28 +16,34 @@ import type { Prisma } from '@/generated/prisma/client';
 // the service raises and `DOMAIN_ERROR_STATUS` maps — an already-closed run
 // (409), an event naming a card the run does not own (422), an over-sized log
 // body (413), a run at its event ceiling (422).
-export const POST = withV1Route<{ id: string }>({ permission: 'work_item:edit' }, async (ctx) => {
-  const body = await parseV1Body(ctx.req, dispatchRunAppendBodySchema);
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-688) reports here,
+// and ONLY for its own run: `dispatchRunService.appendEvents` refuses any other
+// `{id}` with `DISPATCH_RUN_TOKEN_OUT_OF_SCOPE` (403) before reading it.
+export const POST = withV1Route<{ id: string }>(
+  { permission: 'work_item:edit', acceptsRunToken: true },
+  async (ctx) => {
+    const body = await parseV1Body(ctx.req, dispatchRunAppendBodySchema);
 
-  const result = await dispatchRunService.appendEvents(
-    ctx.params.id,
-    body.events.map((event) => ({
-      kind: event.kind,
-      ...(event.workItemKey !== undefined ? { workItemKey: event.workItemKey } : {}),
-      // `data` is declared as `unknown` on the wire — the structured detail an
-      // event carries is per-kind and deliberately not enumerated in the
-      // contract. Prisma's `InputJsonValue` is the widest thing the column
-      // accepts, and the cast is where that looseness is acknowledged rather
-      // than spread through the service.
-      ...(event.data !== undefined ? { data: event.data as Prisma.InputJsonValue } : {}),
-      ...(event.body !== undefined ? { body: event.body } : {}),
-      ...(event.disposition !== undefined ? { disposition: event.disposition } : {}),
-      ...(event.skipReason !== undefined ? { skipReason: event.skipReason } : {}),
-      ...(event.sessionBranch !== undefined ? { sessionBranch: event.sessionBranch } : {}),
-      ...(event.exitCode !== undefined ? { exitCode: event.exitCode } : {}),
-    })),
-    ctx.service,
-  );
+    const result = await dispatchRunService.appendEvents(
+      ctx.params.id,
+      body.events.map((event) => ({
+        kind: event.kind,
+        ...(event.workItemKey !== undefined ? { workItemKey: event.workItemKey } : {}),
+        // `data` is declared as `unknown` on the wire — the structured detail an
+        // event carries is per-kind and deliberately not enumerated in the
+        // contract. Prisma's `InputJsonValue` is the widest thing the column
+        // accepts, and the cast is where that looseness is acknowledged rather
+        // than spread through the service.
+        ...(event.data !== undefined ? { data: event.data as Prisma.InputJsonValue } : {}),
+        ...(event.body !== undefined ? { body: event.body } : {}),
+        ...(event.disposition !== undefined ? { disposition: event.disposition } : {}),
+        ...(event.skipReason !== undefined ? { skipReason: event.skipReason } : {}),
+        ...(event.sessionBranch !== undefined ? { sessionBranch: event.sessionBranch } : {}),
+        ...(event.exitCode !== undefined ? { exitCode: event.exitCode } : {}),
+      })),
+      ctx.service,
+    );
 
-  return NextResponse.json(result);
-});
+    return NextResponse.json(result);
+  },
+);

@@ -6014,8 +6014,8 @@ model DashboardWidget {
 /// any user context exists (the pre-auth lookup), so it reads under the
 /// system context (the job-ledger precedent).
 model ApiToken {
-  id          String    @id @default(cuid())
-  userId      String    @map("user_id")
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
   /// The workspace this token is BOUND to (Story 7.8 · bug 7.21). A PAT is
   /// workspace-scoped (the verified Linear mirror: keys are created in, listed
   /// per, and act within ONE workspace), captured from the creator's ACTIVE
@@ -6024,20 +6024,20 @@ model ApiToken {
   /// a token minted in workspace A always acts on A (the bug 7.21 fix). The
   /// Settings list is filtered to this column, so a token shows only in the
   /// workspace it belongs to. Cascade: a deleted workspace takes its tokens.
-  workspaceId String    @map("workspace_id")
+  workspaceId   String    @map("workspace_id")
   /// User-facing name, e.g. "claude-code".
-  label       String
+  label         String
   /// sha-256 hex of the full secret — the lookup key. Unique so `verify` is a
   /// single equality probe on a unique index (constant work per call).
-  tokenHash   String    @unique @map("token_hash")
+  tokenHash     String    @unique @map("token_hash")
   /// First 12 chars of the secret (display-only), so the list can show
   /// `motir_pat_AbC1…`. Never enough to reconstruct the secret.
-  tokenPrefix String    @map("token_prefix")
+  tokenPrefix   String    @map("token_prefix")
   /// Null = never expires. The boundary is checked in `verify`.
-  expiresAt   DateTime? @map("expires_at")
+  expiresAt     DateTime? @map("expires_at")
   /// Throttled in `verify` (skip the write if touched < 5 min ago) so a
   /// chatty agent session does not write-amplify.
-  lastUsedAt  DateTime? @map("last_used_at")
+  lastUsedAt    DateTime? @map("last_used_at")
   /// ⚠️ RETAINED, UNUSED, AND SCHEDULED FOR REMOVAL (MOTIR-3546).
   ///
   /// This was the soft-revoke stamp: revoking set it and left the row "for the
@@ -6053,7 +6053,7 @@ model ApiToken {
   /// that window come back valid. `verify` therefore still rejects a non-null
   /// value. Both the column and that guard go together, in a follow-up, once
   /// the new image is everywhere.
-  revokedAt   DateTime? @map("revoked_at")
+  revokedAt     DateTime? @map("revoked_at")
   /// The token's GRANT — the access boundary that NARROWS the owner's project
   /// role. Stores `PermissionKey`s from `lib/permissions/catalog.ts`
   /// (MOTIR-2572); a dispatch seam admits an operation only when the grant
@@ -6070,7 +6070,7 @@ model ApiToken {
   ///
   /// A token minted without an explicit choice gets `DEFAULT_TOKEN_GRANT`,
   /// applied by `apiTokensService.create`.
-  scopes      String[]  @default([])
+  scopes        String[]  @default([])
   /// The PROJECT this token is bound to, or NULL (MOTIR-2605 Amendment 1).
   ///
   /// ⚠️ NULL IS A MEANING, NOT AN OPTION. It is the DEVICE-CREDENTIAL SHAPE —
@@ -6090,17 +6090,28 @@ model ApiToken {
   /// When set, dispatch refuses an operation resolving to a DIFFERENT project as
   /// a NOT-FOUND, never a 403 — so a narrowed credential cannot be used to
   /// enumerate the workspace. Cascade: a deleted project takes its tokens.
-  projectId   String?   @map("project_id")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  projectId     String?   @map("project_id")
+  /// The DISPATCH RUN this token is bound to, or NULL (MOTIR-688,
+  /// `docs/decisions/hosted-agent-run.md` §3). A token carrying it is a RUN
+  /// TOKEN: minted by `runCredentialService` for one hosted run, acting as the
+  /// dispatcher, and accepted ONLY by that run's own ingest and its card's
+  /// dispatch prompt — every other door refuses it (`authenticateApiToken`,
+  /// `verifyMcpToken`). NULL is every ordinary PAT and device credential.
+  /// Cascade: a deleted run takes its token, which is dead by then anyway.
+  dispatchRunId String?   @map("dispatch_run_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  dispatchRun DispatchRun? @relation(fields: [dispatchRunId], references: [id], onDelete: Cascade)
 
   // The settings-surface read: a user's tokens in a workspace, newest first.
   @@index([userId])
   @@index([workspaceId])
   @@index([projectId])
+  /// The run credential's revoke (`runCredentialService.revokeRunCredential`).
+  @@index([dispatchRunId])
   @@map("api_token")
 }
 
@@ -9129,11 +9140,21 @@ model CiContainerUsage {
   terminalState  String? @map("terminal_state")
   teardownReason String? @map("teardown_reason")
 
+  /// THE DISPATCH RUN THIS CONTAINER SERVED (MOTIR-6448) — set only for a
+  /// hosted-agent container, whose one id everywhere is `DispatchRun.id`
+  /// (`docs/decisions/hosted-agent-run.md` §1). NULL for a CI runner and an index
+  /// container, which serve no run. A POINTER FROM THE METER TO THE RUN, never a
+  /// cost column on `dispatch_run` (MOTIR-1801): the run's machine time is READ
+  /// from here. `SET NULL` for the reason `project_id` gives — a deleted run must
+  /// not erase the record that Motir paid for this container.
+  dispatchRunId String? @map("dispatch_run_id")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  dispatchRun  DispatchRun? @relation(fields: [dispatchRunId], references: [id], onDelete: SetNull)
 
   /// THE IDEMPOTENCY GUARANTEE, and it is per RUNNER because a runner is what a
   /// container is. Both callers of the sink — the `finally` that guarantees
@@ -9149,6 +9170,8 @@ model CiContainerUsage {
   /// by repo.
   @@index([periodStart])
   @@index([projectId])
+  /// A run's machine-time read (MOTIR-6448).
+  @@index([dispatchRunId])
   @@map("ci_container_usage")
 }
 
@@ -9974,6 +9997,10 @@ model DispatchRun {
   events           DispatchRunEvent[]
   /// How-to-test records this run wrote (MOTIR-5328). SetNull on the FK.
   testInstructions TestInstructions[]
+  /// The fleet meter rows for this run's container (MOTIR-6448). SetNull on the FK.
+  containerUsage   CiContainerUsage[]
+  /// The run-bound Motir credential a hosted run holds (MOTIR-688). Cascade on the FK.
+  runTokens        ApiToken[]
 
   @@unique([workspaceId, idempotencyKey])
   /// The run list and the `/runs/[id]` read: newest-first per project.
