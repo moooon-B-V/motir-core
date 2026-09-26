@@ -272,6 +272,7 @@ describe('MOTIR-5762 — AUTO: an awaiting design holds the automatic merge', ()
       {
         gateId: design.id,
         decision: 'request_changes',
+        refusalVerdict: 'revise',
         source: 'ui',
         noteMd: 'Wrong frame.',
         stamp: DECIDED_WITHOUT_A_READER,

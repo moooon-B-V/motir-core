@@ -652,6 +652,7 @@
       "selfLink": "工作项不能关联到自身。",
       "duplicate": "该关联已存在。",
       "cycle": "这会造成循环依赖。",
+      "crossLevel": "依赖只能连接同一层级的两个工作项：史诗只能与史诗相连，其他工作项须在它们共同上级之下深度相同。",
       "crossWorkspace": "该工作项属于另一个工作区。",
       "linkNotFound": "该关联已不存在。",
       "couldNotUpdate": "无法更新关联。"
@@ -6622,7 +6623,8 @@
         "verb": {
           "decisionApproval": "要求修改",
           "decisionConfirmation": "推翻",
-          "decisionChoice": "都不合适"
+          "decisionChoice": "都不合适",
+          "designResult": "要求修改"
         },
         "aria": "打开 {key}，即此对话重新规划的工作项",
         "pickLabel": "<mono>{key}</mono> 的后续规划",
@@ -6637,12 +6639,15 @@
       "verb": {
         "decisionApproval": "这个决策被要求修改。",
         "decisionConfirmation": "这个决策已被推翻。",
-        "decisionChoice": "这个选择的选项都没有被选中。"
+        "decisionChoice": "这个选择的选项都没有被选中。",
+        "designResult": "这个设计被要求修改。"
       },
       "reason": "给出的理由：\n“{reason}”",
       "supersedes": "它曾取代的工作项：{keys}",
       "keySeparator": "、",
       "ask": "请根据这个理由重新规划这个工作项。",
+      "blockedBy": "等待这个设计的工作项：{keys}",
+      "askDesign": "请根据这个理由重新规划 {parent}：这个设计以及等待它的工作。",
       "pick": {
         "followUp": "我刚在这个选择上选定了一个选项——这就是它在等的后续规划。",
         "noContainer": "这个选择没有未完成的上级工作项，所以 Motir AI 在项目上打开。",
@@ -8615,7 +8620,11 @@
       },
       "verbNotOffered": {
         "title": "这个审批不提供该决定。",
-        "next": "没有任何更改。请刷新页面，从显示的选项中重新决定。"
+        "next": "没有任何更改。请刷新页面，从显示的选项中重新决定。",
+        "verdict": {
+          "title": "这个审批不接受修订或重新规划的选择。",
+          "next": "没有任何更改。请刷新页面，从显示的选项中重新决定。"
+        }
       },
       "primaryPending": {
         "design": {
@@ -9093,11 +9102,29 @@
       "record": {
         "showAll": "显示全部",
         "showLess": "收起",
-        "noneOnGithub": "GitHub 上未给出原因。"
+        "noneOnGithub": "GitHub 上未给出原因。",
+        "verdict": {
+          "revise": "已退回修订",
+          "replan": "已退回重新规划"
+        }
       },
       "row": {
         "noneOnGithub": "GitHub 上未给出原因",
         "on": "版本 {version}"
+      },
+      "verdict": {
+        "legend": "是修订还是重新规划？",
+        "required": "请选择“修订”或“重新规划”——退回的设计需要其中之一。",
+        "revise": {
+          "label": "修订",
+          "hint": "小改动：退回重做。",
+          "consequence": "{key} 退回到{status}，下一次运行将从你的理由开始。"
+        },
+        "replan": {
+          "label": "重新规划",
+          "hint": "这会改变它之后的工作：用 Motir AI 重新规划。",
+          "consequence": "{key} 退回到{status}，然后 Motir AI 会提议重新规划 {parent}。"
+        }
       }
     },
     "planApproval": {

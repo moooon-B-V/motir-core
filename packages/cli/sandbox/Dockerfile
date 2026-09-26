@@ -421,6 +421,9 @@ RUN printf '%s\n' \
     'export PATH' \
     > /etc/profile.d/motir-agents-path.sh
 COPY --chmod=0755 packages/cli/sandbox/install-agent.sh /usr/local/lib/motir-sandbox/install-agent.sh
+# Sourced by install-agent.sh: the download-and-verify step every vendor install
+# script goes through instead of `curl … | bash` (MOTIR-6495).
+COPY --chmod=0644 packages/cli/sandbox/fetch-installer.sh /usr/local/lib/motir-sandbox/fetch-installer.sh
 RUN /usr/local/lib/motir-sandbox/install-agent.sh "${AGENT}"
 
 COPY --chmod=0755 packages/cli/sandbox/entrypoint.sh /usr/local/bin/motir-sandbox-entrypoint

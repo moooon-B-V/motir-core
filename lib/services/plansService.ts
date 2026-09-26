@@ -78,6 +78,7 @@ import {
   type ProposalRefCarrier,
 } from '@/lib/plans/refs';
 import {
+  assertBlockedByLevels,
   assertFolderPlacementsLegal,
   assertProposalSetSelfConsistent,
   assertReparentLegal,
@@ -93,6 +94,7 @@ import {
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { validateProposedDifficulty } from '@/lib/plans/validateProposedDifficulty';
+import { validateProposedBodyRefs } from '@/lib/plans/validateProposedBodyRefs';
 import { patchRescopes } from '@/lib/plans/rescopeReset';
 import { committedPlanTargets } from '@/lib/plans/planTargets';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
@@ -695,6 +697,12 @@ function validateProposal(p: ProposalInput): void {
       p.proposedFields,
       proposalLabel({ op: p.op, title: p.proposedFields.title }),
     );
+    // The bodies' INTRA-PLAN item links (bug MOTIR-6494) — a link approve cannot
+    // rewrite is refused here, by the ONE validator every proposal door shares.
+    validateProposedBodyRefs(
+      p.proposedFields,
+      proposalLabel({ op: p.op, title: p.proposedFields.title }),
+    );
     // The repo ROLE (MOTIR-1912) — checked HERE, at the append, because the check
     // is pure (a closed vocabulary, no repository need exist) and the producer is
     // a machine: telling motir-ai its role is unknown while it is still writing
@@ -740,6 +748,9 @@ function validateProposal(p: ProposalInput): void {
       null,
       proposalLabel({ op: p.op, workItemId: p.workItemId }),
     );
+    // A `modify`'s rewritten bodies are rewritten at approve too (MOTIR-3804), so
+    // they are held to the same link check as an `add`'s (bug MOTIR-6494).
+    validateProposedBodyRefs(p.patch, proposalLabel({ op: p.op, workItemId: p.workItemId }));
     // A `modify` may RE-PIN the role (MOTIR-1912) — same vocabulary check as the
     // `add` path, so the two cannot disagree about what a role is.
     assertKnownRepoRole(
@@ -1085,6 +1096,9 @@ async function runPersistGate(
   // The FOLDERS its `folder:` placements name (MOTIR-5414) — skipped entirely
   // when the plan files nothing. Bound the same way the row read above is.
   const folderById = await resolveFolderById(nodes, ctx, tx);
+  // The COMMITTED ancestor chains the same-level check places live ends with
+  // (MOTIR-6411) — one batched read, skipped when the plan writes no edge.
+  const edgeAncestorsById = await resolveEdgeAncestors(nodes, ctx, tx);
   validatePlanProposals({
     items: nodes,
     liveById,
@@ -1093,7 +1107,42 @@ async function runPersistGate(
     ancestorIdsById,
     existingBlockedByEdges,
     folderById,
+    edgeAncestorsById,
   });
+}
+
+/**
+ * The committed ancestor chain of every live work item a plan's edges or
+ * placements name — the positions the same-level check reads (MOTIR-6411,
+ * `docs/decisions/edge-level-is-position.md`). One batched recursive read, and
+ * none for a plan that writes no `blocked_by`.
+ *
+ * ⚠️ A `tx`, when given, must already have the project narrowing lifted, for
+ * the reason the row read in `runPersistGate` states: an edge may cross projects.
+ */
+async function resolveEdgeAncestors(
+  nodes: readonly ProposalNode[],
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<ReadonlyMap<string, readonly string[]>> {
+  const writesEdge = nodes.some(
+    (n) =>
+      (n.op === 'add' && n.blockedByRefs.length > 0) ||
+      (n.op === 'modify' && (n.patch?.blockedByAdd?.length ?? 0) > 0),
+  );
+  if (!writesEdge) return new Map();
+  const ids = [
+    ...new Set([
+      ...collectReferencedWorkItemIds(nodes),
+      ...nodes.filter((n) => n.op === 'modify' && n.workItemId).map((n) => n.workItemId!),
+    ]),
+  ];
+  if (ids.length === 0) return new Map();
+  return tx
+    ? await workItemRepository.findAncestorIdsForItems(ids, ctx.workspaceId, tx)
+    : await withWorkspaceServiceContext(ctx.workspaceId, (t) =>
+        workItemRepository.findAncestorIdsForItems(ids, ctx.workspaceId, t),
+      );
 }
 
 /**
@@ -3414,6 +3463,65 @@ async function assertModifyDifficultiesLegalAtAppend(
 }
 
 /**
+ * Judge the LEVEL of every `blocked_by` the batch writes, at the APPEND (Story
+ * MOTIR-6015 · MOTIR-6367) — the same `assertBlockedByLevels` the persist gate
+ * runs at the close, correction, `validate_plan` and approve, asked here so the
+ * author hears it where the edge is written.
+ *
+ * Only the batch's own proposals are judged (`subjectIds`): the incoming
+ * inserts and the existing rows an incoming `modify` merged into. A plan closed
+ * before this rule shipped is not refused an unrelated append — its edge is
+ * reported by `validate_plan` and refused at approve instead. The committed
+ * kinds cost one batched read, and only when the batch writes an edge.
+ *
+ * Suspended project narrowing, for the reason `runPersistGate` states: a
+ * cross-project `blocked_by` is legal, and a narrowed read would not see it.
+ */
+async function assertBlockedByLevelsAtAppend(
+  nodes: readonly ProposalNode[],
+  subjectIds: ReadonlySet<string>,
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const subjects = nodes.filter((n) => subjectIds.has(n.id));
+  const writesEdge = subjects.some(
+    (n) =>
+      (n.op === 'add' && n.blockedByRefs.length > 0) ||
+      (n.op === 'modify' && (n.patch?.blockedByAdd?.length ?? 0) > 0),
+  );
+  if (!writesEdge) return;
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const ids = [
+      ...new Set([
+        ...collectReferencedWorkItemIds(nodes),
+        ...nodes.filter((n) => n.op === 'modify' && n.workItemId).map((n) => n.workItemId!),
+      ]),
+    ];
+    const [rows, ancestors] = await Promise.all([
+      ids.length === 0 ? [] : workItemRepository.findByIdsInWorkspace(ids, ctx.workspaceId, tx),
+      workItemRepository.findAncestorIdsForItems(ids, ctx.workspaceId, tx),
+    ]);
+    const liveById = new Map<string, LiveWorkItemState>(
+      rows.map((r) => [
+        r.id,
+        {
+          id: r.id,
+          key: r.identifier,
+          title: r.title,
+          kind: r.kind,
+          status: r.status,
+          projectId: r.projectId,
+        },
+      ]),
+    );
+    // Only rows that exist are placed; an unknown id is the close's `dangling`.
+    const placed = new Map([...ancestors].filter(([id]) => liveById.has(id)));
+    assertBlockedByLevels(nodes, liveById, placed, subjectIds);
+  });
+}
+
+/**
  * Judge every `folder:` placement at the APPEND (MOTIR-5414): the folder exists
  * and belongs to the plan's project.
  *
@@ -3518,6 +3626,11 @@ async function editAddProposal(
       validateProposedDifficulty(
         next.difficulty,
         next.kind ?? DEFAULT_PROPOSED_KIND,
+        proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+      );
+      // And the bodies' item links on the MERGED result (bug MOTIR-6494).
+      validateProposedBodyRefs(
+        next,
         proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
       );
       await planItemRepository.update(
@@ -4224,6 +4337,25 @@ export const plansService = {
           // anything that is not a Prisma error — so the caller is told its
           // proposals ARE at fault, which `PlanPersistenceError` would deny.
           assertProposalSetSelfConsistent(effectiveNodes);
+
+          // The LEVEL of every edge this batch writes (Story MOTIR-6015 ·
+          // MOTIR-6367) — refused here, where the edge is written, rather than
+          // left for the reviewer to meet at approve. Judged over the batch's own
+          // inserts and the existing rows it merged into.
+          await assertBlockedByLevelsAtAppend(
+            effectiveNodes,
+            new Set([
+              ...fold.mergedExisting.keys(),
+              ...proposals.flatMap((_, index) =>
+                fold.dispositions[index]!.kind === 'insert'
+                  ? [`${INCOMING_PROPOSAL_ID_PREFIX}${index}`]
+                  : [],
+              ),
+            ]),
+            ctx,
+            fresh.projectId,
+            tx,
+          );
 
           // The container half of a `modify`'s DIFFICULTY (MOTIR-6133), which
           // `validateProposal` could not judge without the target's kind. Costs
@@ -5289,6 +5421,11 @@ export const plansService = {
             next.kind ?? DEFAULT_PROPOSED_KIND,
             proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
           );
+          // The bodies' item links, on the MERGED result (bug MOTIR-6494).
+          validateProposedBodyRefs(
+            next,
+            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+          );
           data.proposedFields = next as unknown as Prisma.InputJsonValue;
           touched.push(
             ...Object.keys(input).filter((k) => k !== 'parentRef' && k !== 'blockedByRefs'),
@@ -5318,6 +5455,11 @@ export const plansService = {
             );
             validateStoryPoints(input.patch?.storyPoints ?? null);
             validateEstimateMinutes(input.patch?.estimateMinutes ?? null);
+            // The replacement patch's bodies, held to the append's link check (bug MOTIR-6494).
+            validateProposedBodyRefs(
+              input.patch ?? {},
+              proposalLabel({ op: item.op, workItemId: item.workItemId }),
+            );
             // The replacement patch's DIFFICULTY (MOTIR-6133), judged against the
             // TARGET's live kind — the append's two halves in one call, since the
             // transaction is already open.

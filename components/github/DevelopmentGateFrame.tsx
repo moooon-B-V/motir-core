@@ -9,7 +9,7 @@ import {
   useRefusalCopy,
   type GateVerb,
 } from '@/components/approvals/ApprovalGateControl';
-import { useRefusalVerb } from '@/components/approvals/RefusalReason';
+import { useRefusalVerb, type DesignRefusalFacts } from '@/components/approvals/RefusalReason';
 import { asksAfterPress, useRefusalReplanSlots } from '@/components/approvals/RefusalReplan';
 import { useOptimisticStatusWriter } from '@/app/(authed)/items/[key]/_components/OptimisticStatusProvider';
 import type {
@@ -23,6 +23,7 @@ import { membersOf, type MemberVersion } from '@/lib/approvalGates/memberVersion
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import type {
   ApprovalGateDTO,
+  ApprovalGateRefusalVerdictDTO,
   ApproveAndMergeMemberOutcomeDTO,
   EarlierApprovalDTO,
   GateDecision,
@@ -212,6 +213,7 @@ export function DevelopmentGateFrame({
   verbsDisabled = false,
   handOver,
   canReplan = false,
+  designRefusal,
   children,
 }: {
   read: DevelopmentGateRead;
@@ -277,6 +279,13 @@ export function DevelopmentGateFrame({
    * sent back offers the seeded planner from its record; false or omitted, it offers none.
    */
   canReplan?: boolean;
+  /**
+   * A DESIGN SENT BACK IS A VERDICT (Story MOTIR-6070 · MOTIR-6427) — for a frame a
+   * `design_result` gate LEADS (Workflow B): where its Re-plan opens, the design card's
+   * PARENT (§10h), and the label of the status either verdict returns it to. Absent, the
+   * ask names the card itself and the tiles name no status.
+   */
+  designRefusal?: DesignRefusalFacts;
   children: ReactNode;
 }) {
   const t = useTranslations('approvalGate.pullRequestApproval');
@@ -519,6 +528,7 @@ export function DevelopmentGateFrame({
     decision: GateDecision,
     _optionId?: string,
     noteMd?: string,
+    refusalVerdict?: ApprovalGateRefusalVerdictDTO,
   ): Promise<GateRefusal | null> {
     if (!decideActions) return null;
     if (decision === 'approve') {
@@ -557,6 +567,8 @@ export function DevelopmentGateFrame({
       // The refusal's REQUIRED reason (ADR §10a). This path is only ever a refusal —
       // an approval goes through `approveAndMerge` above — so the note always travels.
       noteMd,
+      // …and a design's REQUIRED verdict (MOTIR-6427) — only the design band draws one.
+      ...(refusalVerdict ? { refusalVerdict } : {}),
     });
     if (!result.ok) return result.refusal;
     setDecided(result.gate);
@@ -695,9 +707,14 @@ export function DevelopmentGateFrame({
     ? [
         // Sending the work back moves nothing, and now CONFIRMS: the confirm band is where
         // the REQUIRED reason is written (ADR §10a) — the press asks why, not "are you sure".
-        refusalVerb(isDecision ? 'decision' : 'commits', itemIdentifier, {
-          disabled: verbsDisabled,
-        }),
+        // A DESIGN that leads the frame is sent back WITH A VERDICT (MOTIR-6427) — the
+        // design band, not the commits' one: the door requires it on a design refusal.
+        refusalVerb(
+          isDecision ? 'decision' : gate.kind === 'design_result' ? 'design' : 'commits',
+          itemIdentifier,
+          { disabled: verbsDisabled },
+          designRefusal,
+        ),
         {
           decision: 'approve',
           label: t('verb.approveAndMerge'),
@@ -977,7 +994,9 @@ export function DevelopmentGateFrame({
   // ask in its place for the reader who just pressed it (MOTIR-6211).
   const { door: replanDoor, ask: replanAskBand } = useRefusalReplanSlots({
     gate,
-    itemKey: itemIdentifier,
+    // A design's Re-plan opens on its PARENT (§10h; MOTIR-6427) — the key the ask names.
+    itemKey:
+      gate.kind === 'design_result' ? (designRefusal?.replanKey ?? itemIdentifier) : itemIdentifier,
     replan: {
       canReplan,
       asking: replanAsk === gate.id,

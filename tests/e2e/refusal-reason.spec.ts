@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { servePrivateObjectStore } from './_helpers/object-store';
@@ -12,7 +12,20 @@ import {
 } from './_helpers/plain-words-approvals-seed';
 import en from '@/messages/en.json';
 
-// ACCEPTANCE — A REFUSAL SAYS WHY (Story MOTIR-6067 · Subtask MOTIR-6077; ADR
+// ── PROMOTED FROM THE ACCEPTANCE LANE (Story MOTIR-6070) ────────────────────
+//
+// This was `acceptance-refusal-reason.spec.ts`, the receipt for MOTIR-6067. That story
+// is `done`, so the spec has discharged its purpose and, per
+// docs/decisions/acceptance-receipt-lifecycle.md §3, leaves the lane rather than being
+// edited in place. It went RED on Story MOTIR-6070's parent branch (PR #3171), whose
+// MOTIR-6427 makes a decided DESIGN row in the Approvals room lead with its verdict
+// (approved design MOTIR-6420). The swap to `_helpers/promoted-regression` is the whole
+// promotion (no `chapter()` / `beat()` / `acceptanceStory()` hand-edited); the design
+// row's expectation was then updated to the verdict-led text, as a regression test.
+// Main lane: nothing here needs a cloud-on flag. Disposition recorded in
+// docs/acceptance-lane-triage.md.
+//
+// A REFUSAL SAYS WHY (Story MOTIR-6067 · Subtask MOTIR-6077; ADR
 // `approval-gates.md` §10a; design `approval-control--refusal-reason.mock.html` and the
 // row deltas). The story's own `## Verification`, driven: a reviewer sends back a design,
 // a choice and a set of pull requests, each WITH a reason — is refused when they try to
@@ -115,6 +128,15 @@ test.describe('A refusal says why', () => {
       'A send that fails is shown in place, and the reason survives the retry',
       async () => {
         await designDialog.getByLabel(r.label).pressSequentially(DESIGN_REASON, { delay: 12 });
+        // A DESIGN sent back also names its VERDICT (MOTIR-6070 · MOTIR-6427): the door
+        // refuses a design refusal without one. Revise asks nothing afterwards, so the
+        // record below is the whole answer, as it was when this receipt was recorded.
+        // The radio is `sr-only` inside its tile's <label>, which receives the pointer.
+        const verdicts = designDialog.getByRole('radiogroup', { name: r.verdict.legend });
+        await verdicts.locator('label[data-verdict="revise"]').click();
+        await expect(
+          verdicts.getByRole('radio', { name: new RegExp(`^${r.verdict.revise.label}`) }),
+        ).toBeChecked();
         // ONE injected failure on the decide call — the server action's POST.
         let failed = false;
         await page.route('**/workbench**', async (route) => {
@@ -224,13 +246,15 @@ test.describe('A refusal says why', () => {
       await page.getByRole('button', { name: 'Next page' }).click();
       const decided = page.getByRole('main').getByTestId('approval-records-decided');
       await expect(decided).toBeVisible();
-      for (const [title, first] of [
-        [seed.designTitle, DESIGN_REASON],
-        [seed.firstChoiceTitle, CHOICE_REASON],
-        [FINISHED_TITLE, PR_REASON],
+      // A design sent back LEADS with its verdict (MOTIR-6070 · MOTIR-6427); the choice and
+      // the pull requests carry none, so their cell is the quoted reason alone.
+      for (const [title, first, lead] of [
+        [seed.designTitle, DESIGN_REASON, `${r.verdict.revise.label} · `],
+        [seed.firstChoiceTitle, CHOICE_REASON, ''],
+        [FINISHED_TITLE, PR_REASON, ''],
       ] as const) {
         const row = decided.getByTestId(/^approval-row-/).filter({ hasText: title });
-        await expect(row.getByTestId('refusal-reason-cell')).toHaveText(`“${first}”`);
+        await expect(row.getByTestId('refusal-reason-cell')).toHaveText(`${lead}“${first}”`);
       }
     });
     await beat();

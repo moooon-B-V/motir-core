@@ -58,8 +58,9 @@ export type RefusalReplanGateFacts = RefusalSeedGateFacts & {
 
 /**
  * Should a press that just RECORDED `gate` ask to re-plan? Only a refusal of the three
- * kinds (`isRefusalSeedGate`, the one predicate the seed read and the session stamp also
- * answer), and never one synced out of GitHub — that was not pressed in Motir at all.
+ * decision kinds, or a design sent back with the Re-plan verdict (`isRefusalSeedGate`,
+ * the one predicate the seed read and the session stamp also answer — a Revise never
+ * asks), and never one synced out of GitHub — that was not pressed in Motir at all.
  */
 export function asksToReplanAfterPress(gate: RefusalReplanGateFacts): boolean {
   return isRefusalSeedGate(gate) && gate.decisionSource !== 'github';

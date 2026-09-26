@@ -188,10 +188,11 @@ is built this way and why the buttons are never moved above the subject.
 
 ## The two verbs, and what each one does
 
-| verb                | what it records                                        | what it moves                                                                                        |
-| ------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| **Approve**         | that you said yes, to **this exact version**, and when | the work item to **Done** — unless a pull request is going to merge for it, in which case see below  |
-| **Request changes** | that you sent it back, and your note explaining why    | **nothing.** The card stays where it is; the agent revises and publishes a new version to be decided |
+| verb                                 | what it records                                                                               | what it moves                                                                                                                        |
+| ------------------------------------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Approve**                          | that you said yes, to **this exact version**, and when                                        | the work item to **Done** — unless a pull request is going to merge for it, in which case see below                                  |
+| **Request changes** on a **design**  | that you sent it back, your note explaining why, and your verdict — **Revise** or **Re-plan** | the work item back to **To do**, whichever verdict you chose — see [Sending back a design](#sending-back-a-design-revise-or-re-plan) |
+| **Request changes** on anything else | that you sent it back, and your note explaining why                                           | **nothing.** The card stays where it is; the agent revises and publishes a new version to be decided                                 |
 
 **Approving asks you to confirm. Sending something back asks you WHY.** Pressing
 _Request changes_ — or _None of these_ on a choice — opens the same band, with a field
@@ -229,9 +230,58 @@ you already started that conversation recently, it takes you back to it rather t
 starting a new one. The question itself is asked only once, to the person who pressed
 the refusal; a reload shows the button.
 
-**Other refusals do not open the planner yet.** Sending back a design, a story's
-recording or a set of pull requests records your reason and moves nothing, as above;
-none of them offers Motir AI today.
+A design sent back with **Re-plan** asks the same question — see the next section.
+
+**Other refusals do not open the planner yet.** Sending back a story's recording or a
+set of pull requests records your reason and moves nothing, as above; none of them
+offers Motir AI today.
+
+**Neither verb re-runs the agent.** Requesting changes records the decision. A design
+sent back is at **To do**, ready for the next run, which is shown your reason — but
+nothing starts that run for you: an automatic re-run on Motir's hosted agents is a
+later feature.
+
+### Sending back a design: Revise or Re-plan
+
+On a design, **Request changes** asks for two things, and will not send until you
+have given both: your **reason**, and a **verdict** — what kind of change you are
+asking for. Nothing is chosen for you:
+
+- **Revise** — _A small change: send it back to be redone._ The band tells you what
+  happens: _{key} goes back to To do, and the next run starts from your reason._
+- **Re-plan** — _This changes the work after it: re-plan with Motir AI._ The band
+  says: _{key} goes back to To do, and Motir AI then offers to re-plan {parent}._
+
+**Either verdict sends the design card back to To do.** A design sent back is not
+finished and waiting for approval, so it no longer sits in review; it can be picked
+up again like any card at To do. If the card also had a pull request waiting for you
+to approve and merge, that question is withdrawn — its commits are about to change.
+(A project whose workflow has no To do status records your reason and verdict and
+leaves the card where it is.)
+
+**The next run is shown your reason.** Whoever works the card next — an agent run, or
+someone running `motir run` — is handed your reason under **Changes requested**,
+beside the version you sent back, so the new version starts from what you asked for.
+
+**The decided record names your verdict**, as _Sent back to revise_ or _Sent back to
+re-plan_, above your quoted reason. The rows in _To approve_ and the Approvals room
+lead with it.
+
+**Revise asks nothing more.** The record and the card at To do are the whole answer.
+
+**Re-plan then asks** before Motir AI opens, exactly as a refused decision does:
+
+> **Re-plan {parent} with Motir AI?**
+
+Here `{parent}` is the design's **story** — the work item the design belongs to —
+because a design that changes the work after it changes the story's plan, not just
+the design. **Re-plan with AI** opens Motir AI on that story with a first message
+already written: your reason, quoted, and the work items waiting on the design.
+Nothing is sent until you send it. **Not now** opens nothing, and the decided record
+keeps a **Re-plan with AI** button that opens the same thing later, as above.
+
+A design sent back on GitHub, rather than in Motir, carries no verdict: it records the
+review, and the card stays where it is.
 
 ### After you pick an option, Motir AI offers to plan the follow-up
 
@@ -261,15 +311,12 @@ back to it and sends nothing again. The Plans page lists the conversation as the
 instead, with your reason written into the message box and nothing sent until you send
 it, as above.
 
-**Neither verb re-runs the agent.** Requesting changes records the decision; the
-revise loop that dispatches a new run off the back of it is not built yet.
-
 ### One qualification on Approve
 
 Approve moves the card to Done **when nothing is going to merge for it.** If the
 same card has a pull request open — which a design card usually does, because its
 three files are committed like any other change — approving records the decision
-and moves nothing, and the merge is what finishes the card. Motir reads which
+without moving the card, and the merge is what finishes the card. Motir reads which
 case you are in from the card itself; there is no setting, and nothing for you to
 choose.
 
@@ -306,7 +353,8 @@ changes**.
   In a project that merges automatically, the same row and a **Merge queue**
   note appear without a gate, and anyone who may edit the work item can press
   **Queue again**.
-- **Request changes** records your note and moves nothing, as on every gate.
+- **Request changes** records your note and moves nothing, as on every gate but a
+  design's (see [Sending back a design](#sending-back-a-design-revise-or-re-plan)).
 
 ## Where you find what is waiting on you
 

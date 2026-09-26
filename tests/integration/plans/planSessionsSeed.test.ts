@@ -310,11 +310,12 @@ describe('an unresolvable seed resolves to null', () => {
     expect(JSON.stringify(row)).not.toContain(card.title);
   });
 
-  it('a gate kind outside the three: no seed, the title untouched', async () => {
+  it('a gate kind outside the allowlist: no seed, the title untouched', async () => {
     const { sessionId, card } = await seededSession('decision_approval', 'changes_requested', 1);
-    // A seed the stamp never writes today — the union is the three refusals, and
-    // widening it is MOTIR-6070 / MOTIR-6071's. The mapper still answers null.
-    const other = await refusedGate(card, 'design_result', 'changes_requested');
+    // A seed the stamp never writes today — the union is the three decision refusals
+    // and the design Re-plan, and widening it further is MOTIR-6071's. The mapper
+    // still answers null.
+    const other = await refusedGate(card, 'acceptance_result', 'changes_requested');
     await adminDb.planChangeSession.update({
       where: { id: sessionId },
       data: { seedGateId: other },
@@ -366,5 +367,51 @@ describe('the seed costs no query of its own', () => {
     expect(rows).toHaveLength(5);
     expect(rows.filter((r) => r.seedCardKey !== null)).toHaveLength(3);
     expect(calls).toEqual(['$queryRaw']);
+  });
+});
+
+// MOTIR-6424 — a session seeded by a design Re-plan is anchored on the design card's
+// PARENT, and its Plans row names the refused DESIGN card through the allowlist.
+describe('a design Re-plan seed', () => {
+  it('stamps the session anchored on the parent, and the row names the design card', async () => {
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Exports' });
+    const design = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'Empty state design',
+      parentId: story.id,
+    });
+    seq += 1;
+    const gate = await adminDb.approvalGate.create({
+      data: {
+        workspaceId: design.workspaceId,
+        projectId: design.projectId,
+        workItemId: design.id,
+        kind: 'design_result',
+        subjectId: `subject-${seq}`,
+        state: 'changes_requested',
+        decidedById: fx.ownerId,
+        decidedAt: new Date(),
+        decidedByLabel: 'Owner',
+        noteMd: 'The toolbar changes.',
+        refusalVerdict: 're_plan',
+        decisionSource: 'ui',
+      },
+    });
+    const s = await planChangeSessionsService.startSeededWithFirstTurn(
+      pctx(),
+      buildScope([story.identifier]),
+      `${design.identifier} · ${design.title}`,
+      gate.id,
+    );
+    const stored = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: s.id } });
+    expect(stored.seedGateId).toBe(gate.id);
+
+    const row = await planSessionsService.getSessionRow(fx.projectId, s.id, fx.ctx);
+    expect(row!.seed).toEqual({
+      cardKey: design.identifier,
+      gateKind: 'design_result',
+      origin: 'refusal',
+      chosenLabel: null,
+    });
   });
 });

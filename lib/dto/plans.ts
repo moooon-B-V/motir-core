@@ -7,6 +7,7 @@
 import type { JobStatus } from '@/lib/ai/types';
 import type {
   ExecutorDto,
+  InvalidEdgeDto,
   WorkItemDifficultyDto,
   WorkItemPlanningSourceDto,
 } from '@/lib/dto/workItems';
@@ -178,8 +179,12 @@ export interface PlanItemProposedFields {
    * generator's default); materialize also defaults it to `ai_draft` when an
    * `explanationMd` is present but no source is set. Both optional — a proposal
    * with explanations OFF carries neither. Item-link convention (Story 5.8): a
-   * reference to another item in `explanationMd` is a link token
-   * (`motir:<id>` / `motir-ref:<tempRef>`), resolved at materialize.
+   * reference to another item in `explanationMd` is a link token —
+   * `[label](motir:<workItemId>)` for an existing item, or
+   * `[label](motir-ref:planItem:<planItemId>)` for another `add` in this plan,
+   * rewritten to `motir:<id>` at materialize. The `planItem:` prefix is part of
+   * the token: `motir-ref:<id>` without it is refused at every proposal door
+   * (`lib/plans/validateProposedBodyRefs.ts`, bug MOTIR-6494).
    */
   explanationMd?: string | null;
   explanationSource?: string | null;
@@ -1199,10 +1204,16 @@ export interface PlanApprovabilityRejectionDto {
  */
 export interface PlanValidityDto {
   planId: string;
-  /** True only when BOTH questions pass. */
+  /** True only when all THREE pass: finishable, approvable, every cross-parent edge covered. */
   valid: boolean;
   blockers: SprintBlockerDto[];
   rejections: PlanApprovabilityRejectionDto[];
+  /**
+   * Every same-level cross-parent `blocked_by` in the PROJECTION whose parents
+   * carry no matching edge (MOTIR-6370). A validation verdict only — neither the
+   * append nor approve refuses on it.
+   */
+  invalidEdges: InvalidEdgeDto[];
 }
 
 // --- Auto-plan PAUSE state (Story 7.13 · MOTIR-1740) ------------------------

@@ -16,6 +16,7 @@ import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 // TYPE-ONLY, and it has to stay that way: `stamp.ts` reaches for `node:crypto`,
 // and this DTO is imported by client components. An `import type` is erased.
 import type { StampComponent } from '@/lib/approvalGates/stamp';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
@@ -196,6 +197,50 @@ export type ApprovalGateAuthorityDTO =
 export type ApprovalGateDecisionSourceDTO = 'ui' | 'api' | 'mcp' | 'github';
 
 /**
+ * WHAT A PERSON MEANT BY "NO" on a refused `design_result` gate (Story MOTIR-6070 ·
+ * MOTIR-6421; ADR `approval-gates.md` §10d, amended by `design-refusal-verdict.md`).
+ * Mirrors the `ApprovalGateRefusalVerdict` Prisma enum. `revise` sends the design back
+ * to be revised; `re_plan` says the plan around it is wrong. Stored in a column of its
+ * own — never in `outcomeRef`, which the repainting surfaces read as a status key.
+ */
+export type ApprovalGateRefusalVerdictDTO = 'revise' | 're_plan';
+
+/** The verdict vocabulary as a value, for a boundary that parses one (route, action). */
+export const APPROVAL_GATE_REFUSAL_VERDICTS = [
+  'revise',
+  're_plan',
+] as const satisfies readonly ApprovalGateRefusalVerdictDTO[];
+
+/**
+ * THE LATEST REFUSAL on a work item (Story MOTIR-6070 · MOTIR-6422; ADR
+ * `approval-gates.md` §10h note 4) — the reason the next run is handed.
+ *
+ * Present ONLY when the item's most recently DECIDED gate — of ANY kind, ordered by
+ * `decidedAt` — is `changes_requested`. A later approval (or any later decision)
+ * supersedes it; an `awaiting` gate is not a decision and does not. One shape for both
+ * readers: the dispatched prompt's CHANGES REQUESTED section and `get_work_item`'s
+ * `latestRefusal`, so a dispatched agent and a person following the runbook are never
+ * told different things about the same card.
+ */
+export interface LatestRefusalDTO {
+  gateId: string;
+  kind: ApprovalGateKindDTO;
+  /** The reason, verbatim. NULL only on a GitHub review submitted with no body (§10b) —
+   *  a surface then says *no reason given on GitHub*, never a blank. */
+  noteMd: string | null;
+  /** Who refused, as recorded at the decision (survives their departure). */
+  decidedByLabel: string | null;
+  /** ISO-8601 — when it was refused. */
+  decidedAt: string;
+  decisionSource: ApprovalGateDecisionSourceDTO | null;
+  /** `revise` / `re_plan` on a design refusal pressed in Motir (MOTIR-6421); else null. */
+  refusalVerdict: ApprovalGateRefusalVerdictDTO | null;
+  /** The REFUSED version — the subject's version at decision time (a design result's
+   *  version, a pull request's head sha). Opaque; its shape depends on `kind`. */
+  subjectVersion: string | null;
+}
+
+/**
  * The two decision VERBS, as the wire carries them.
  *
  * ⚠️ IT LIVES HERE, NOT ON THE SERVICE, AND THE CLIENT/SERVER BOUNDARY IS WHY.
@@ -283,6 +328,11 @@ export interface ApprovalGateDTO {
   decidedUnderAuthority: ApprovalGateAuthorityDTO | null;
   /** THROUGH WHICH surface the decision arrived. Null while `awaiting`. */
   decisionSource: ApprovalGateDecisionSourceDTO | null;
+  /** WHAT THE REFUSAL MEANT — `revise` or `re_plan` — on a `design_result` gate sent back
+   *  from Motir (MOTIR-6421; ADR §10d). Null on every approval, every other kind, a
+   *  GitHub-synced refusal, and every gate decided before the column existed. Written in
+   *  the deciding write, so it is as immutable as the rest of the decided row. */
+  refusalVerdict: ApprovalGateRefusalVerdictDTO | null;
   /** WHAT it caused — the merge commit sha, or the transition applied. Written
    *  in the deciding write, never backfilled: a decided gate is immutable. */
   outcomeRef: string | null;
@@ -806,6 +856,12 @@ export interface ApprovalRecordDecidedRowDto {
    * the reason came from — a GitHub review with no body is null here.
    */
   refusalReason: string | null;
+  /**
+   * WHAT THE REFUSAL MEANT (MOTIR-6421; ADR §10d) — `revise` / `re_plan` on a
+   * `design_result` row sent back from Motir, off the immutable row. Null on every other
+   * state and kind, and on a GitHub-synced refusal.
+   */
+  refusalVerdict: ApprovalGateRefusalVerdictDTO | null;
 }
 
 /** One SECTION of the room: its rows on this page, and its total over every page. */
@@ -991,9 +1047,40 @@ export type ApprovalGateOverlaySubjectDTO =
     };
 
 /** The overlay's one read. */
+/**
+ * One workflow status as the approval overlay NAMES it (Story MOTIR-6070 · Subtask
+ * MOTIR-6427) — enough for a `StatusPill` and for the design band's *goes back to
+ * {status}*, and nothing a picker would need.
+ */
+export interface ApprovalOverlayStatusDTO {
+  key: string;
+  label: string;
+  category: StatusCategoryDto;
+  isInitial: boolean;
+}
+
 export interface ApprovalGateOverlayReadDTO {
-  /** The card the address named — what the overlay's header identifies. */
-  workItem: { id: string; identifier: string; title: string };
+  /**
+   * The card the address named — what the overlay's header identifies.
+   *
+   * `status` is its status KEY, drawn as a chip in the header and repainted from the
+   * decision's `statusWritten` (MOTIR-6427; design panel 5b). `parentIdentifier` is where a
+   * design's Re-plan opens the planner — the card's PARENT (§10h's anchor) — read only for
+   * a `design_result` address, and null for every other kind and for a parentless card.
+   */
+  workItem: {
+    id: string;
+    identifier: string;
+    title: string;
+    status: string;
+    parentIdentifier: string | null;
+  };
+  /**
+   * The project's workflow statuses, in position order (MOTIR-6427) — what labels the
+   * header's chip before and after a press, and which names the status a design sent back
+   * returns to (the initial `todo`-category one, `returnCardToTodo`'s own rule).
+   */
+  statuses: ApprovalOverlayStatusDTO[];
   /** The gate of the asked kind, whatever its state; null when the card has none. */
   gate: ApprovalGateDTO | null;
   /** The AUTHORITY answer (`approvalGatesService.getForWorkItem`), never the routing one. */
@@ -1200,6 +1287,12 @@ export interface ApprovalGateDecisionDTO {
    * card's own body — the option list is in it, and `outcomeRef` says which one.
    */
   outcomeRef: string | null;
+  /**
+   * WHAT THE REFUSAL MEANT — `revise` or `re_plan` — on a `design_result` gate sent
+   * back from Motir (MOTIR-6421; ADR §10d). Null everywhere else. Read it beside
+   * `noteMd`: the note says what to change, the verdict whether the plan itself is wrong.
+   */
+  refusalVerdict: ApprovalGateRefusalVerdictDTO | null;
   createdAt: string;
   updatedAt: string;
 }

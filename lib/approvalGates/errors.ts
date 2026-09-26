@@ -334,6 +334,12 @@ export type VerbNotOfferedReason =
   /** `request_changes` pressed with no reason — a refusal SAYS WHY (ADR §10a, MOTIR-6074).
    *  Every kind that offers the verb, *None of these* on a choice included. */
   | 'request_changes_needs_a_note'
+  /** A `refusalVerdict` sent where none is offered — any kind but `design_result`, any
+   *  verb but `request_changes`, or a `github` source (ADR §10d, MOTIR-6421). */
+  | 'refusal_verdict_not_offered'
+  /** A `request_changes` PRESSED on a `design_result` gate with no verdict — a design
+   *  refusal says `revise` or `re_plan` (ADR §10d, MOTIR-6421). */
+  | 'refusal_verdict_required'
   /** `request_changes` sent to a `plan_approval` gate (ADR §11.4, MOTIR-6035): a plan is
    *  changed by TALKING to the planner, never by a gate verb. */
   | 'request_changes_on_plan'
@@ -357,6 +363,11 @@ export type VerbNotOfferedReason =
  *     request-shape refusal like the others, and nothing is written.
  *   · `request_changes_needs_a_note` — `request_changes` PRESSED with an empty
  *     reason (MOTIR-6074, ADR §10a). Never raised for `source: github`.
+ *   · `refusal_verdict_not_offered` — a `refusalVerdict` on any kind but
+ *     `design_result`, any verb but `request_changes`, or a `github` source
+ *     (MOTIR-6421, ADR §10d); nothing is written.
+ *   · `refusal_verdict_required` — `request_changes` PRESSED on a `design_result`
+ *     gate without a verdict (MOTIR-6421, ADR §10d). Never raised for `source: github`.
  *   · `request_changes_on_plan` — `request_changes` sent to a `plan_approval` gate
  *     (MOTIR-6035, ADR §11.4): a plan is changed by a conversation, not a verb;
  *   · `decline_on_other_kind` — `decline` sent to any kind but `plan_approval`.

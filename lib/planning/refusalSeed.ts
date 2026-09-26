@@ -12,8 +12,9 @@ import type { ChosenOption } from '@/lib/approvalGates/choiceOptions';
 // beside it; MOTIR-6069, MOTIR-6070 and MOTIR-6071 each widen the predicate by
 // one kind's case when their story ships a seed for it.
 
-/** The fields the predicate reads — a whole `ApprovalGate` row satisfies it. */
-export type RefusalSeedGateFacts = Pick<ApprovalGate, 'kind' | 'state'>;
+/** The fields the predicate reads — a whole `ApprovalGate` row satisfies it (and so
+ *  does the gate DTO, which carries `refusalVerdict` since MOTIR-6421). */
+export type RefusalSeedGateFacts = Pick<ApprovalGate, 'kind' | 'state' | 'refusalVerdict'>;
 
 /**
  * Is this gate a REFUSAL that may seed a re-plan?
@@ -21,7 +22,12 @@ export type RefusalSeedGateFacts = Pick<ApprovalGate, 'kind' | 'state'>;
  *  - `decision_approval` / `decision_choice` in `changes_requested` — Request
  *    changes on a decision, None of these on a choice (MOTIR-6067's reason is
  *    required on both);
- *  - `decision_confirmation` in `overturned` — an Overturn.
+ *  - `decision_confirmation` in `overturned` — an Overturn;
+ *  - `design_result` in `changes_requested` refused with the **Re-plan** verdict
+ *    (`refusalVerdict === 're_plan'`; MOTIR-6070 · MOTIR-6424,
+ *    `docs/decisions/design-refusal-verdict.md` §3). A **Revise**, a GitHub-synced
+ *    refusal (which carries no verdict) and a refusal recorded before the verdict
+ *    existed are NOT: they ask nothing and seed nothing.
  *
  * Every other kind answers `false` in every state until its own story adds a
  * case. The switch is EXHAUSTIVE over `ApprovalGateKind` (the `never` arm), so a
@@ -37,6 +43,7 @@ export function isRefusalSeedGate(gate: RefusalSeedGateFacts): boolean {
     case 'decision_confirmation':
       return gate.state === 'overturned';
     case 'design_result':
+      return gate.state === 'changes_requested' && gate.refusalVerdict === 're_plan';
     case 'pull_request_approval':
     case 'pull_request_merge':
     case 'acceptance_result':
@@ -75,7 +82,9 @@ export function isPickSeedGate(gate: PickSeedGateFacts): boolean {
 }
 
 /** May this gate seed a planning session at all — a refusal OR a pick? */
-export function isPlanningSeedGate(gate: PickSeedGateFacts): boolean {
+export function isPlanningSeedGate(
+  gate: RefusalSeedGateFacts & { chosenOption: unknown },
+): boolean {
   return isRefusalSeedGate(gate) || isPickSeedGate(gate);
 }
 
@@ -189,13 +198,21 @@ export function anchorOf(
 /** What a composer reads: the gate's work item, the decided gate, and — on an
  *  overturn only — the keys its decision's `## Supersedes` names
  *  (`replanOwedOf`), else `[]`. A PICK also reads the stamped `chosenOption`
- *  (never the current body) and the resolved anchor (`null` = the project). */
+ *  (never the current body); a design Re-plan (MOTIR-6424) reads the keys of the
+ *  not-`done` cards `blocked_by` the design (`waitingKeys`). Both read the seed's
+ *  resolved ANCHOR (`anchorKey`; `null` = the project, a pick only). */
 export interface SeedComposerInput {
   card: { key: string; title: string };
   gate: Pick<ApprovalGate, 'kind' | 'state' | 'noteMd'>;
   supersedesKeys: readonly string[];
   chosenOption?: ChosenOption | null;
-  anchorKey?: string | null;
+  /** The work item the seeded session anchors on — the card itself for the
+   *  refusals of the decision kinds, the design card's parent for a design
+   *  Re-plan, the choice's nearest open ancestor for a pick (`null` = the
+   *  project, a pick only). */
+  anchorKey: string | null;
+  /** The open work waiting on the card (its `blocks` edges), in order. */
+  waitingKeys: readonly string[];
 }
 
 /**
@@ -271,16 +288,41 @@ function composePickTurn(input: SeedComposerInput, t: SeedTranslator): string {
 }
 
 /**
+ * A DESIGN sent back to Re-plan (MOTIR-6424; the MOTIR-6420 design's first-turn
+ * contract) — the same shape with one new part:
+ *
+ *  1. the DESIGN card's key and title (`heading`);
+ *  2. `verb.designResult`;
+ *  3. the reason, quoted verbatim (`reason`, omitted when there is none);
+ *  4. `blockedBy` — the keys of the open cards waiting on the design, joined by
+ *     `keySeparator`. NO card waiting ⇒ NO line, never a "none" one;
+ *  5. `askDesign`, naming the ANCHOR — the design card's parent.
+ */
+function composeDesignReplanTurn(input: SeedComposerInput, t: SeedTranslator): string {
+  const parts = [
+    t('heading', { key: input.card.key, title: input.card.title }),
+    t('verb.designResult'),
+  ];
+  const reason = input.gate.noteMd;
+  if (reason && reason.trim() !== '') parts.push(t('reason', { reason }));
+  if (input.waitingKeys.length > 0) {
+    parts.push(t('blockedBy', { keys: input.waitingKeys.join(t('keySeparator')) }));
+  }
+  parts.push(t('askDesign', { parent: input.anchorKey ?? input.card.key }));
+  return parts.join('\n\n');
+}
+
+/**
  * THE REGISTRY — one composer per gate kind whose refusal seeds a re-plan.
  *
  * `Partial` ON PURPOSE: a kind with no entry has no seed, and the read answers
- * it exactly as it answers an absent gate. This story (MOTIR-6068) ships the
- * three refusals `isRefusalSeedGate` accepts; the next three stories each ADD
- * ONE entry here (and widen the predicate above by the same case) rather than
- * building a read of their own:
+ * it exactly as it answers an absent gate. MOTIR-6068 shipped the three
+ * refusals of the decision kinds; MOTIR-6070 (MOTIR-6424) added `design_result`
+ * sent back with the Re-plan verdict. The remaining stories each ADD ONE entry
+ * here (and widen the predicate above by the same case) rather than building a
+ * read of their own:
  *
  *  - MOTIR-6069 — a PICKED option on a `decision_choice` is planned;
- *  - MOTIR-6070 — a `design_result` sent back is re-planned;
  *  - MOTIR-6071 — an `acceptance_result` sent back is re-planned.
  */
 export const REFUSAL_SEED_COMPOSERS: Partial<Record<ApprovalGateKind, SeedComposer>> = {
@@ -297,6 +339,9 @@ export const REFUSAL_SEED_COMPOSERS: Partial<Record<ApprovalGateKind, SeedCompos
     input.gate.state === 'approved'
       ? composePickTurn(input, t)
       : composeRefusalTurn('verb.decisionChoice', input, t, false),
+  /** A design sent back with the Re-plan verdict (`changes_requested` +
+   *  `re_plan`) — anchored on the design card's parent. */
+  design_result: composeDesignReplanTurn,
 };
 
 /** The composer for a gate's kind, or `null` when that kind has none yet. */
@@ -304,4 +349,17 @@ export function refusalSeedComposerFor(kind: ApprovalGateKind): SeedComposer | n
   return Object.prototype.hasOwnProperty.call(REFUSAL_SEED_COMPOSERS, kind)
     ? (REFUSAL_SEED_COMPOSERS[kind] ?? null)
     : null;
+}
+
+/**
+ * Does a seed of this kind anchor on the card's PARENT rather than the card?
+ * (`approval-gates.md` §10h; `design-refusal-verdict.md` §3.) Only a design
+ * Re-plan does: what a design changes is the work planned after it, so the
+ * planner opens on the item holding that work. A parentless (root or
+ * folder-filed) design card anchors on itself. The seed read resolves the anchor
+ * with it and the session stamp (`assertSeedApplicableWithin`) accepts it, so the
+ * two can never disagree; the decision kinds keep anchoring on their own card.
+ */
+export function refusalSeedAnchorsOnParent(kind: ApprovalGateKind): boolean {
+  return kind === 'design_result';
 }

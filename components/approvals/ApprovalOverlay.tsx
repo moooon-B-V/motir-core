@@ -19,9 +19,14 @@ import { Pill } from '@/components/ui/Pill';
 import { ChoiceGateFrame } from '@/components/approvals/ChoiceGate';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import { DecisionConfirmGateFrame } from '@/components/approvals/DecisionConfirmGate';
-import { useRefusalVerb } from './RefusalReason';
-import { asksAfterPress } from './RefusalReplan';
-import { ApprovalGateControl, type GateVerb } from '@/components/approvals/ApprovalGateControl';
+import { StatusPill } from '@/components/issues/StatusPill';
+import { useRefusalVerb, type DesignRefusalFacts } from './RefusalReason';
+import { asksAfterPress, useRefusalReplanSlots, type RefusalReplanProps } from './RefusalReplan';
+import {
+  ApprovalGateControl,
+  type ApprovalGateControlProps,
+  type GateVerb,
+} from '@/components/approvals/ApprovalGateControl';
 import { DesignResultPanel } from '@/app/(authed)/items/[key]/_components/DesignResultPanel';
 import { AcceptanceDevelopmentSlot } from '@/components/acceptance/AcceptanceDevelopmentSlot';
 import {
@@ -45,6 +50,8 @@ import type {
   ApprovalGateDTO,
   ApprovalGateKindDTO,
   ApprovalGateOverlayReadDTO,
+  ApprovalGateRefusalVerdictDTO,
+  ApprovalOverlayStatusDTO,
   GateDecision,
 } from '@/lib/dto/approvalGate';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
@@ -143,11 +150,23 @@ function ExitRow({
   onClose,
   onPeek,
   workItem,
+  status = null,
 }: {
   onClose: () => void;
   /** Open the work item's quick view ABOVE the overlay. */
   onPeek: (identifier: string) => void;
   workItem: { identifier: string; title: string } | null;
+  /**
+   * THE CARD'S STATUS (Story MOTIR-6070 · MOTIR-6427; `approval-control--design-verdict`
+   * panel 5b) — the shipped `StatusPill` after the title, fed from the overlay read and
+   * REPAINTED from the press's `statusWritten`: a design sent back reads To do here the
+   * moment it commits, as the item page's rail does underneath.
+   */
+  status?: {
+    key: string;
+    label: string;
+    category: ApprovalOverlayStatusDTO['category'] | null;
+  } | null;
 }) {
   const t = useTranslations('approvalOverlay');
   const tc = useTranslations('common');
@@ -185,6 +204,14 @@ function ExitRow({
               {workItem.title}
             </span>
           </a>
+          {status ? (
+            <StatusPill
+              statusKey={status.key}
+              category={status.category}
+              label={status.label}
+              className="ml-2 shrink-0 whitespace-nowrap"
+            />
+          ) : null}
           <a
             href={`/items/${workItem.identifier}`}
             target="_blank"
@@ -224,6 +251,27 @@ function LoadingBands() {
 
 /** The three arms that mount NO frame are centred in the body with the card
  *  padding around them (§ 22 *The three arms that mount NO frame*). */
+/**
+ * THE DESIGN ARM'S FRAME (Story MOTIR-6070 · MOTIR-6427) — the shared control with the
+ * refusal's two slots filled: the Re-plan with AI DOOR on a record sent back with Re-plan,
+ * or, right after this reader pressed it, the ASK in the door's place (design panels
+ * 6a–6c). Both name the design card's PARENT (§10h), which is where the planner opens. A
+ * Revise, a GitHub-synced or a pre-verdict refusal fills neither (6d, 4d).
+ */
+function DesignGateFrame({
+  replanKey,
+  replan,
+  ...frame
+}: ApprovalGateControlProps & { replanKey: string; replan: RefusalReplanProps }) {
+  const { door, ask } = useRefusalReplanSlots({
+    gate: frame.gate,
+    itemKey: replanKey,
+    replan,
+    sectioned: false,
+  });
+  return <ApprovalGateControl {...frame} recordDetail={door} recordBand={ask} />;
+}
+
 function Frameless({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-1 items-center justify-center p-(--spacing-card-padding)">
@@ -397,6 +445,10 @@ export function ApprovalOverlay() {
   // door stands in its place. (A decision's Request changes is pressed inside the
   // Development frame, which holds its own.)
   const [replanAsk, setReplanAsk] = useState<string | null>(null);
+  // THE STATUS A PRESS HERE WROTE (MOTIR-6427, design panel 5b), per address — what the
+  // exit row's chip repaints to. Null until a press writes one; a decision that moved
+  // nothing (`statusWritten: null`) leaves the read's status standing.
+  const [written, setWritten] = useState<{ token: string; status: string } | null>(null);
   // *Show the current version* (MOTIR-5235) — bumping it re-runs THIS read, the one
   // the overlay opened with, so the current subject and a FRESH stamp arrive together.
   // The previous read stays on screen until the new one lands: re-read in place, never
@@ -438,6 +490,7 @@ export function ApprovalOverlay() {
     setDecided(null);
     setPeek(null);
     setReplanAsk(null);
+    setWritten(null);
     // Open means `?approval=` is in the query, so the query is never empty here.
     shallowPush(withoutApprovalOverlay(`${pathname}?${searchParams.toString()}`));
   }, [pathname, searchParams]);
@@ -626,6 +679,11 @@ export function ApprovalOverlay() {
       : tRow(`kind.${kind}`);
 
   let workItem: { identifier: string; title: string } | null = null;
+  let headerStatus: {
+    key: string;
+    label: string;
+    category: ApprovalOverlayStatusDTO['category'] | null;
+  } | null = null;
   let srTitle = t('loading');
   let body: ReactNode = <LoadingBands />;
 
@@ -649,6 +707,22 @@ export function ApprovalOverlay() {
     );
   } else if (!loading && read !== null && read.gate !== null) {
     workItem = { identifier: read.workItem.identifier, title: read.workItem.title };
+    const statusKey =
+      written !== null && written.token === token ? written.status : read.workItem.status;
+    const statusRow = read.statuses.find((s) => s.key === statusKey);
+    headerStatus = {
+      key: statusKey,
+      label: statusRow?.label ?? statusKey,
+      category: statusRow?.category ?? null,
+    };
+    // A DESIGN SENT BACK (MOTIR-6427): where its Re-plan opens — the PARENT (§10h), or the
+    // card itself when it has none — and the status either verdict returns it to, the
+    // project's initial To-do (`returnCardToTodo`'s own rule).
+    const designRefusal: DesignRefusalFacts = {
+      replanKey: read.workItem.parentIdentifier ?? read.workItem.identifier,
+      returnStatusLabel:
+        read.statuses.find((s) => s.isInitial && s.category === 'todo')?.label ?? null,
+    };
     srTitle = t('dialogTitle', { kind: kindLabel, key: read.workItem.identifier });
     // A NEW TAB, like the exit row's (§ 28, DECISION 6): this used to `router.push`,
     // which navigated the whole tab away from the approval the reader was on.
@@ -704,22 +778,28 @@ export function ApprovalOverlay() {
       const identifier = read.workItem.identifier;
       const decidedState = gate.state !== 'awaiting';
 
-      const verbs: GateVerb[] = [
-        // A design or a recording sent back: the reason is REQUIRED (ADR §10a; design
-        // `approval-control--refusal-reason.mock.html` Panel 1).
-        refusalVerb('version', identifier),
-        {
-          decision: 'approve',
-          label: tGate('verb.approve'),
-          variant: 'primary',
-          confirms: true,
-        },
+      const approveVerb: GateVerb = {
+        decision: 'approve',
+        label: tGate('verb.approve'),
+        variant: 'primary',
+        confirms: true,
+      };
+      // A recording sent back: the reason is REQUIRED (ADR §10a; design
+      // `approval-control--refusal-reason.mock.html` Panel 1).
+      const verbs: GateVerb[] = [refusalVerb('version', identifier), approveVerb];
+      // A DESIGN sent back also takes a VERDICT — Revise or Re-plan (MOTIR-6427; design
+      // `approval-control--design-verdict.mock.html` panels 1–3). Its own subject, because
+      // `version` keeps the *Leave {key} where it is* line the acceptance still needs.
+      const designVerbs: GateVerb[] = [
+        refusalVerb('design', identifier, {}, designRefusal),
+        approveVerb,
       ];
 
       const onDecide = async (
         decision: GateDecision,
         optionId?: string,
         noteMd?: string,
+        refusalVerdict?: ApprovalGateRefusalVerdictDTO,
       ): Promise<GateRefusal | null> => {
         // ⚠️ THE STAMP THIS READ HANDED OVER, never one fetched at press time (MOTIR-5235).
         // A stamp asked for when the reader presses always matches, so the check would pass
@@ -731,6 +811,8 @@ export function ApprovalOverlay() {
           ...(optionId ? { optionId } : {}),
           // An OVERTURN carries its required note (MOTIR-5960); no other verb here does.
           ...(noteMd ? { noteMd } : {}),
+          // A DESIGN refusal carries its REQUIRED verdict (MOTIR-6427); no other verb does.
+          ...(refusalVerdict ? { refusalVerdict } : {}),
           identifier,
           stamp: read.stamp ?? '',
         });
@@ -738,6 +820,8 @@ export function ApprovalOverlay() {
         // stays open over it.
         if (!result.ok) return result.refusal;
         setDecided({ token: token!, gate: result.gate, filesKept: result.filesKept });
+        // The exit row's chip, from what the decision WROTE (panel 5b).
+        if (result.statusWritten) setWritten({ token: token!, status: result.statusWritten });
         // The WHOLE decision, not only its state: the To-approve row reads the
         // state, and the item page underneath reads `outcomeRef` for its status
         // rail and `filesKept` for its record (MOTIR-5570).
@@ -826,12 +910,25 @@ export function ApprovalOverlay() {
               mergeSubjectVersion: subject.mergeSubjectVersion,
               earlierApproval: read.earlierApproval,
             }}
+            // A design that leads this frame (Workflow B) is sent back with a verdict too
+            // (MOTIR-6427): the parent its Re-plan opens on, and the status it returns to.
+            designRefusal={designRefusal}
             gateActions={{
-              decide: decideApprovalGateAction,
+              // The exit row's chip repaints from what the press WROTE (MOTIR-6427, 5b).
+              decide: async (input) => {
+                const result = await decideApprovalGateAction(input);
+                if (result.ok && result.statusWritten) {
+                  setWritten({ token: token!, status: result.statusWritten });
+                }
+                return result;
+              },
               // A press that merges re-reads the rows it merged (`rereadRows`, MOTIR-6079).
               approveAndMerge: async (input) => {
                 const result = await approveAndMergeAction(input);
                 if (result.ok) rereadRows();
+                if (result.ok && result.gate.outcomeRef) {
+                  setWritten({ token: token!, status: result.gate.outcomeRef });
+                }
                 return result;
               },
               retryMember: async (input) => {
@@ -947,9 +1044,11 @@ export function ApprovalOverlay() {
             focusPortOnMount={settled?.outcome === 'read' && settled.reread > 0}
           />
         ) : (
-          <ApprovalGateControl
+          <DesignGateFrame
             // A fresh read is a fresh frame: a stale refusal clears and the verbs return.
             key={`${gate.id}:${settled?.outcome === 'read' ? settled.reread : 0}`}
+            replanKey={designRefusal.replanKey}
+            replan={replan}
             layout="fill"
             gate={gate}
             // THE READ'S ANSWER, never this component's — a decided gate is
@@ -964,7 +1063,7 @@ export function ApprovalOverlay() {
             // The route reads the GATE's own subject, so a decided gate shows the
             // version that was decided on (ADR §6c), not whatever is current now.
             port={<DesignResultPanel evidence={subject.evidence} isDesignCard />}
-            verbs={verbs}
+            verbs={designVerbs}
             consequence={tDesign('consequence', { key: identifier })}
             confirmConsequences={[
               tDesign('confirm.records'),
@@ -1011,6 +1110,7 @@ export function ApprovalOverlay() {
         onClose={requestClose}
         onPeek={(key) => token !== null && setPeek({ token, key })}
         workItem={workItem}
+        status={headerStatus}
       />
       <div className="flex min-h-0 flex-1 flex-col">{body}</div>
       {/* NESTED inside this dialog's content, so Radix stacks it as the TOP layer: its

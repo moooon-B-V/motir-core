@@ -922,8 +922,19 @@ describe('planValidityService — the verdict that was wrong and certain', () =>
       { projectId: fx.projectId, kind: 'task', title: 'Inside', parentId: story.id },
       fx.ctx,
     );
+    // One level down under a root of its own, at the member's depth — a ROOT
+    // task would be a cross-level edge, which the link door refuses (MOTIR-6411).
+    const elsewhere = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Elsewhere' },
+      fx.ctx,
+    );
     const outsider = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Outside and not done' },
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Outside and not done',
+        parentId: elsewhere.id,
+      },
       fx.ctx,
     );
     await workItemsService.linkWorkItems(
@@ -949,17 +960,38 @@ describe('planValidityService — the verdict that was wrong and certain', () =>
       { projectId: fx.projectId, kind: 'task', title: 'Inside', parentId: story.id },
       fx.ctx,
     );
+    // One level down under a root of its own, at the member's depth — a ROOT
+    // task would be a cross-level edge, which the link door refuses (MOTIR-6411).
+    const elsewhere = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Elsewhere' },
+      fx.ctx,
+    );
     const outsider = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Outside but finished' },
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Outside but finished',
+        parentId: elsewhere.id,
+      },
       fx.ctx,
     );
     await workItemsService.linkWorkItems(
       { fromId: child.id, toId: outsider.id, kind: 'is_blocked_by' },
       fx.ctx,
     );
-    await adminDb.workItem.update({ where: { id: outsider.id }, data: { status: 'done' } });
+    // The parents carry the edge too, so the cross-parent edge is covered
+    // (MOTIR-6370) — and both halves of the outside work are finished.
+    await workItemsService.linkWorkItems(
+      { fromId: story.id, toId: elsewhere.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    await adminDb.workItem.updateMany({
+      where: { id: { in: [outsider.id, elsewhere.id] } },
+      data: { status: 'done' },
+    });
 
     const verdict = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(verdict.invalidEdges).toEqual([]);
     expect(verdict.valid).toBe(true);
     expect(verdict.blockers).toEqual([]);
   });

@@ -633,7 +633,14 @@ function overlayRead(
   canReplan = true,
 ): ApprovalGateOverlayReadDTO {
   return {
-    workItem: { id: 'wi-42', identifier: 'ACME-42', title: 'Where exports live' },
+    workItem: {
+      id: 'wi-42',
+      identifier: 'ACME-42',
+      title: 'Where exports live',
+      status: 'in_review',
+      parentIdentifier: null,
+    },
+    statuses: [],
     gate,
     canDecide: true,
     canReplan,
@@ -978,8 +985,33 @@ describe('who asks — `asksToReplanAfterPress`', () => {
     ['acceptance_result', 'changes_requested', 'ui', false],
     ['plan_approval', 'declined', 'ui', false],
   ] as const)('%s · %s · %s → %s', (kind, state, decisionSource, expected) => {
-    expect(asksToReplanAfterPress({ kind, state, decisionSource })).toBe(expected);
+    expect(asksToReplanAfterPress({ kind, state, decisionSource, refusalVerdict: null })).toBe(
+      expected,
+    );
   });
+
+  // MOTIR-6424 — a design sent back asks ONLY with the Re-plan verdict, and never when
+  // it was synced out of GitHub.
+  it.each([
+    ['re_plan', 'ui', true],
+    ['re_plan', 'mcp', true],
+    ['revise', 'ui', false],
+    [null, 'ui', false],
+    [null, 'github', false],
+    ['re_plan', 'github', false],
+  ] as const)(
+    'design_result · changes_requested · verdict %s · %s → %s',
+    (refusalVerdict, decisionSource, expected) => {
+      expect(
+        asksToReplanAfterPress({
+          kind: 'design_result',
+          state: 'changes_requested',
+          decisionSource,
+          refusalVerdict,
+        }),
+      ).toBe(expected);
+    },
+  );
 });
 
 describe('useOpenRefusalReplan', () => {

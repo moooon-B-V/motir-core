@@ -828,6 +828,25 @@ root-first) — the same two fields `/api/v1`'s work-item detail
 publishes. Both are `null` for an unfiled item **and** for a child of a filed
 item: only a root is ever filed, and a child's ancestry already travels as keys.
 
+The aggregate carries **`latestRefusal`** (Story MOTIR-6070 · MOTIR-6422): when
+the item's most recently DECIDED approval gate — of ANY kind, ordered by
+`decidedAt` — is `changes_requested`, the refusal the next attempt must answer;
+`null` otherwise, including when a later approval answered it (an `awaiting`
+gate is not a decision and does not clear it). It is the same read the dispatched
+prompt's **CHANGES REQUESTED** section renders, so a runbook run and a dispatched
+agent are handed the same reason. `noteMd` is the reason verbatim, and is `null`
+only on a GitHub review submitted with no body (surfaces say _no reason given on
+GitHub_); `refusalVerdict` is set only on a design refusal pressed in Motir;
+`subjectVersion` is the refused version.
+
+```jsonc
+"latestRefusal": {
+  "gateId": "cm…", "kind": "design_result", "noteMd": "The empty state is missing.",
+  "decidedByLabel": "Ada <ada@example.com>", "decidedAt": "2026-09-26T01:02:03.000Z",
+  "decisionSource": "ui", "refusalVerdict": "revise", "subjectVersion": "cm…"
+}
+```
+
 The item carries its **`difficulty`** (Story MOTIR-6016) — `trivial` / `low` /
 `medium` / `high`, how hard the work is to reason about, or `null` when unset
 and always `null` on an epic or story. Every tool returning a `WorkItemDto`, and
@@ -2014,6 +2033,27 @@ Re-creating an existing link is **idempotent** (a success no-op, not an error). 
 **cross-workspace** link returns a typed error naming the violation. The link is
 an edit of the FROM item, so the same Story-6.4 edit gate as the UI applies.
 
+**A dependency joins two items on the SAME LEVEL** (Story MOTIR-6015 ·
+MOTIR-6369). The level is **position, not kind** (MOTIR-6387,
+`docs/decisions/edge-level-is-position.md`): two items are on the same level
+when they sit at the **same depth below their nearest common ancestor**, the
+project root being the ancestor of every root item and a folder adding no depth.
+So an edge **may cross parents** — a subtask `blocked_by` a subtask in another
+story, a story `blocked_by` a story in another epic, a validation task under an
+epic `blocked_by` the story beside it — and a `blocked_by` / `blocks` between two
+depths (a subtask and a story, a subtask under a task under a story and a subtask
+directly under a story) is refused **`CROSS_LEVEL_LINK`**, naming both keys and
+their depths, and nothing is written. **An epic is blocked only by another epic**
+(the record's Amendment 1): the epic tier is decided by KIND, ahead of any depth,
+so an epic and a root task, bug or story are never peers even though both hang
+off the project root — an edge with an epic at either end is refused
+`CROSS_LEVEL_LINK` unless both ends are epics. Under an epic the position rule
+stands. The same refusal guards the
+links collected by `create_work_item` / the create modal. `relates_to`,
+`duplicates` and `clones` are never judged, and an edge that already exists is
+never deleted — `validate_work_item` reports it as a `cross-level-edge`
+advisory.
+
 | Input          | Type                                                                   | Required | Notes                                                     |
 | -------------- | ---------------------------------------------------------------------- | -------- | --------------------------------------------------------- |
 | `fromKey`      | string                                                                 | yes      | The first item's identifier, e.g. `"ACME-3"`.             |
@@ -2479,7 +2519,7 @@ kind — epic / story / task / bug (a `subtask` is the leaf). Read-only.
 | `condition` | `loose`\|`tight` | no       | Default `loose` — a `done` dependency outside the subtree counts as satisfied. `tight` requires every dependency to be IN the subtree, else it gates. |
 
 **Output** — `structuredContent`: a `WorkItemValidityDto` —
-`{ key, valid, blockers, advisories, softBlocks }`. When `valid` is `false`,
+`{ key, valid, blockers, invalidEdges, advisories, softBlocks }`. When `valid` is `false`,
 `blockers` lists each gated in-subtree item as
 `{ item, blockedBy, blockerStatus, blockerSprintId }` (the out-of-subtree,
 unsatisfied work gating it — always an item's OWN edge). An unknown /
@@ -2497,6 +2537,21 @@ by `via.key`, then `blockedBy.key`; the list is empty when no ancestor is blocke
 `valid` is unchanged by it — it still answers "can this subtree finish". With
 `planId` it is read over the projected ancestor chain, where a proposed ancestor
 or blocker is named by its `planItem:<id>` temp-ref and proposed title.
+
+**A cross-parent edge is VALID only when the parents carry it** (Story MOTIR-6015 ·
+MOTIR-6370). A `blocked_by` joins two items on the same level and may cross
+parents, but then the blocked item's parent must itself be directly `blocked_by`
+the blocker's parent — and that parent edge is asked the same question one level
+up, so a subtask edge across epics owes the story edge AND the epic edge.
+`invalidEdges` lists every same-level `blocked_by` FROM a not-done subtree member
+that fails it, as `{ item, blockedBy, itemParent, blockerParent }`. Two items
+under one parent are never listed, and an end with no work-item parent (a root,
+or an item filed in a folder) is exempt. **`valid` is `true` only when `blockers`
+AND `invalidEdges` are both empty.** A caller asking only _"can this be
+finished?"_ reads `blockers` — the scope claim (`motir run <story>`) does, so a
+story with an uncovered edge is still claimable and its pull request is where the
+parent edge gets added. The predicate is `lib/workItems/crossParentCoverage.ts`,
+the one the roadmap's "blocked elsewhere" signal reads too.
 
 `advisories` is the **prose-vs-graph** channel (MOTIR-1969) and is **never a
 blocker**. It carries the same two families the dispatch surfaces return (see
@@ -2533,6 +2588,29 @@ carries `threshold`, `storyPoints` and `estimateMinutes`; the fourth carries
 carries the exact `claim`, its `claimedCount` and the graph's current
 `blockerCount`; the body-edit member carries `bodyEdit` and `fieldMove`. Only two
 of the six carry `criterionIndex`, so narrow on `severity` before reading one.
+
+A seventh shape member is `validate_work_item`'s alone (Story MOTIR-6015 ·
+MOTIR-6369): **`cross-level-edge`** — a subtree member ALREADY carries a
+`blocked_by` to an item on another LEVEL (a different depth below their nearest
+common ancestor — the position rule of MOTIR-6387 — or an epic paired with a
+non-epic, since an epic is blocked only by another epic). It carries `blockedBy`,
+`itemDepth` and `blockedByDepth` (each below the project root), and like every advisory it
+never moves `valid`. A NEW such edge is refused at every write door
+(`link_work_items` → `CROSS_LEVEL_LINK`; a plan → `INVALID_PLAN_REF_GRAPH` /
+`cross_level`), so this entry reports an edge drawn before the rule. The remedy
+is to re-wire it to the same-level item really waited on, which may sit under
+another parent. The dispatch surfaces do not emit it.
+
+```jsonc
+{
+  "kind": "shape",
+  "item": "ACME-9",
+  "severity": "cross-level-edge",
+  "blockedBy": "ACME-2",
+  "itemDepth": 2,
+  "blockedByDepth": 1,
+}
+```
 
 A `subsumption` entry (`kind: "subsumption"`) reports that a path this card's
 body names is being changed SOMEWHERE ELSE — the one advisory family whose far
@@ -3093,6 +3171,25 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
   `PLAN_GRAMMAR_VIOLATION` (`illegal_parent`), and a `folder:` ref in
   `blockedByRefs` / `patch.blockedByAdd` / `patch.blockedByRemove` as
   `INVALID_PLAN_REF_GRAPH` — a folder is a placement and blocks nothing.
+- **A `blocked_by` joins two items on the SAME LEVEL** (Story MOTIR-6015 ·
+  MOTIR-6367 / MOTIR-6411). The level is **position, not kind** (MOTIR-6387):
+  the two items sit at the same depth below their nearest common ancestor, in
+  the tree the plan would leave — an `add` under its `parentRef`, a re-parented
+  `modify` under its new parent, a folder adding no depth. An edge **may cross
+  parents** (a subtask `blocked_by` a subtask in another story, a story
+  `blocked_by` a story in another epic, a validation task under an epic
+  `blocked_by` the story beside it) and **may not cross levels** (a subtask
+  `blocked_by` a story, a subtask under a task under a story `blocked_by` a
+  subtask directly under a story). **An epic is blocked only by another epic**
+  (the record's Amendment 1): an edge with an epic at either end is cross-level
+  unless both ends are epics, whatever their depths. A cross-level edge in `blockedByRefs` or
+  `patch.blockedByAdd` is refused as `INVALID_PLAN_REF_GRAPH` with reason
+  **`cross_level`**, naming both items and their depths — at the append for what
+  the batch writes, and again at the close, on a correction (`update_plan_proposal`
+  — so re-parenting an `add` under an edge it already carries into another depth
+  is refused too), in `validate_plan`'s `rejections` and at approve.
+  `patch.blockedByRemove` is never refused, so a bad committed edge can always be
+  taken away.
 
 **Output** — `structuredContent`: the plan and its `items[]`, plus
 **`planItemIds`** — the ids of the proposals **this call** created, **in the order
@@ -3531,9 +3628,16 @@ Motir-generated plan arrives coherent.
 | `planId`    | string | yes      | The id `create_plan` returned.                                                                                                    |
 | `condition` | enum   | no       | `loose` (default) — a done dependency outside the plan counts as satisfied. `tight` — every dependency must be IN the projection. |
 
-**Output** — `structuredContent`: `{ planId, valid, blockers }`. Each blocker is
-`{ item, blockedBy, blockerStatus, blockerSprintId }`; an `item` or `blockedBy`
-of the form `planItem:<id>` names a **proposal in this plan**, not a work item.
+**Output** — `structuredContent`: `{ planId, valid, blockers, rejections,
+invalidEdges }`. Each blocker is `{ item, blockedBy, blockerStatus,
+blockerSprintId }`; an `item` or `blockedBy` of the form `planItem:<id>` names a
+**proposal in this plan**, not a work item. `invalidEdges` is the cross-parent
+rule under `validate_work_item` above, asked of the PROJECTION — proposed parents,
+proposed kinds, an `add`'s `blockedByRefs`, and a `modify`'s `blockedByAdd` /
+`blockedByRemove` on a child or on a parent. A **verdict only**: neither the
+append nor approve refuses an uncovered edge, because a titles-first pass appends
+children before it may have drawn every parent edge. `valid` is `true` only when
+all three lists are empty.
 
 ```jsonc
 validate_plan({ planId })
@@ -3543,6 +3647,13 @@ validate_plan({ planId })
 // "the invoice-email card I proposed is gated by ACME-14, which is neither in
 //  this plan nor done" — fixable now, in the plan, before anybody reads it.
 ```
+
+An approve refusal arrives in **`rejections`** (at most one, the gate is
+fail-fast), each `{ code, reason, item, message }` — among them
+`INVALID_PLAN_REF_GRAPH` / **`cross_level`** for a `blocked_by` between two
+different levels (the same-level rule under `add_plan_items` above). A plan
+appended before that rule shipped is reported here rather than silently
+approvable.
 
 > **⚠️ What `valid: true` means, exactly.** The containing set is the whole
 > projected forest of the plan's PROJECT — so a not-done item in the same project
@@ -3554,7 +3665,10 @@ validate_plan({ planId })
 **This is the WHOLE-plan verdict and takes no target.** Do not approximate it by
 looping `validate_work_item` per root: a `blocked_by` edge between two sibling
 roots — a story under proposed epic B gated by one under proposed epic A — is
-VALID here, because both materialize together, and a false positive per-root.
+FINISHABLE here, because both materialize together, and a false-positive BLOCKER
+per-root. It is not automatically VALID any more (MOTIR-6370): the two stories sit
+under different parents, so the edge is valid only when epic B is `blocked_by`
+epic A, and without that edge it is reported in `invalidEdges` here AND per-root.
 For ONE subtree, pass `planId` to `validate_work_item` instead.
 
 Requires **`project:browse`** — the key `plansService.getPlan` asserts, the same

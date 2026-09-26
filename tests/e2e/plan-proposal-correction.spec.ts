@@ -157,8 +157,10 @@ test('an agent corrects a plan a reviewer is holding, and the reviewer can see i
     arguments: {
       planId,
       planItemId: dependent,
+      // Re-parented only: a task blocked_by its own parent story is cross-level,
+      // refused since MOTIR-6367. The `parentRef` alone still makes the
+      // prerequisite a referenced proposal, which step 5's refused withdraw reads.
       parentRef: `${TEMP_REF_PREFIX}${prerequisite}`,
-      blockedByRefs: [`${TEMP_REF_PREFIX}${prerequisite}`],
       title: 'Payout schedule (weekly)',
     },
   })) as CallToolResult;

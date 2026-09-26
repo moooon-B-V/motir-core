@@ -21,6 +21,7 @@ import {
   isPickSeedGate,
   isPlanningSeedGate,
   readChosenOption,
+  refusalSeedAnchorsOnParent,
   toSeedAncestors,
 } from '@/lib/planning/refusalSeed';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -425,10 +426,15 @@ async function resumeOrStartWithin(
  * stamp — MOTIR-6434), or the scope does not sit on the gate's ANCHOR (a
  * card-less gate included).
  *
- * The anchor is the one the seed read offered, resolved by the SAME
- * `anchorOf`: a refusal's own card must be among the scope's targets; a pick's
- * nearest not-done, unarchived ancestor must be, or — when it has none (the
- * project) — the scope must be the project scope.
+ * THE ANCHOR is the one the seed read offered:
+ *  - a PICK's, resolved by the SAME `anchorOf` — its nearest not-done, unarchived
+ *    ancestor must be among the scope's targets, or, when it has none (the
+ *    project), the scope must be the project scope;
+ *  - a refusal's own card — or, for a kind that anchors on the card's PARENT
+ *    ({@link refusalSeedAnchorsOnParent}: a design Re-plan, MOTIR-6424), the card
+ *    OR its parent, since the seed read hands the planner the parent and a
+ *    parentless design card anchors on itself. The decision kinds keep the card
+ *    alone: the parent is never read for them.
  */
 async function assertSeedApplicableWithin(
   pctx: ProjectContext,
@@ -452,18 +458,32 @@ async function assertSeedApplicableWithin(
   const item = await workItemRepository.findById(gate.workItemId, tx);
   if (!item || item.projectId !== pctx.projectId) throw new PlanSeedNotApplicableError(seedGateId);
 
-  const ancestors = pick
-    ? toSeedAncestors(
-        await workItemRepository.findAncestors(item.id, pctx.workspaceId, tx),
-        await workflowsService.listStatusesByProject(pctx.projectId, pctx.workspaceId, tx),
-      )
-    : [];
-  const anchorKey = anchorOf(gate, item.identifier, ancestors);
-  const onAnchor =
-    anchorKey === null
-      ? scope.scopeKey === PROJECT_SCOPE_KEY && scope.targetKeys.length === 0
-      : scope.targetKeys.includes(anchorKey.toUpperCase());
-  if (!onAnchor) throw new PlanSeedNotApplicableError(seedGateId);
+  if (pick) {
+    const ancestors = toSeedAncestors(
+      await workItemRepository.findAncestors(item.id, pctx.workspaceId, tx),
+      await workflowsService.listStatusesByProject(pctx.projectId, pctx.workspaceId, tx),
+    );
+    const anchorKey = anchorOf(gate, item.identifier, ancestors);
+    const onAnchor =
+      anchorKey === null
+        ? scope.scopeKey === PROJECT_SCOPE_KEY && scope.targetKeys.length === 0
+        : scope.targetKeys.includes(anchorKey.toUpperCase());
+    if (!onAnchor) throw new PlanSeedNotApplicableError(seedGateId);
+    return;
+  }
+
+  if (scope.targetKeys.includes(item.identifier.toUpperCase())) return;
+  if (refusalSeedAnchorsOnParent(gate.kind) && item.parentId) {
+    const parent = await workItemRepository.findById(item.parentId, tx);
+    if (
+      parent &&
+      parent.projectId === pctx.projectId &&
+      scope.targetKeys.includes(parent.identifier.toUpperCase())
+    ) {
+      return;
+    }
+  }
+  throw new PlanSeedNotApplicableError(seedGateId);
 }
 
 /**
