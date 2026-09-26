@@ -49,17 +49,42 @@ export const WAVE_BAND_PATH =
 // `fill="currentColor"` only themes when the SVG is INLINE (design-notes.md §2).
 // Through an <img src>, as a favicon, or inside `next/og` — none of which sit in
 // the CSS tree — currentColor resolves to black, so those surfaces need a baked
-// colour. These are the LIGHT-theme literals of the tokens named beside them,
-// taken from `packages/design-system/theme.css`; that provenance is the thing to
-// keep in sync (design-notes.md §5 / §6, the documented raster exception to the
-// --el-* rule).
+// colour. These are the literals of the tokens named beside them in the MOTIR
+// palette (the monochrome one, formerly Graphite — MOTIR-6471), taken from
+// `packages/design-system/theme.css`; that provenance is the thing to keep in
+// sync (design-notes.md §10, the documented raster exception to the --el-* rule).
+//
+// ⚠️ EVERY CARRIER KEEPS THE TOKEN IT ALREADY NAMES (design-notes.md §10). Under
+// the warm palette (now Amethyst) the fill and the glyph-on-a-surface were one
+// purple, `#5645d4`, and one constant served both. Under Motir they split: a TILE
+// is the ink CTA and a bare GLYPH on a page is the cool-blue accent. So a tile
+// reads `BRAND_ACCENT_HEX` and a glyph drawn on a surface reads `BRAND_GLYPH_HEX`
+// — never the other one, even where they happen to agree again.
 
-/** `--el-accent` / `--color-primary`, light theme. */
-export const BRAND_ACCENT_HEX = '#5645d4';
+/** `--el-accent`, light theme — the TILE / FILL (the ink CTA). */
+export const BRAND_ACCENT_HEX = '#1a1d21';
 /** `--el-accent-text`, light theme — the ink ON an accent fill. */
 export const BRAND_ACCENT_INK_HEX = '#ffffff';
 /** `--el-page-bg`, light theme — the manifest's `background_color`. */
 export const BRAND_PAGE_BG_HEX = '#ffffff';
+/**
+ * `--el-accent-on-surface`, light theme — the bare GLYPH on a surface: the email
+ * header mark and both OG cards. 6.31:1 on white (design-notes.md §10).
+ */
+export const BRAND_GLYPH_HEX = '#155bc4';
+/**
+ * `--el-accent`, DARK theme — the tab icon's tile under `prefers-color-scheme:
+ * dark`. The light ink tile measures 1.01–1.40:1 against dark browser chrome;
+ * this one 8.63–13.87:1 (design-notes.md §10, the dark tab strip).
+ */
+export const BRAND_ACCENT_DARK_HEX = '#edeef0';
+/** `--el-accent-text`, DARK theme — the glyph on the dark-scheme tile (16.75:1). */
+export const BRAND_ACCENT_INK_DARK_HEX = '#0c0d0f';
+/**
+ * `--el-link`, light theme — email body links and the Stripe accent colour.
+ * 6.31:1 on white (design-notes.md §10).
+ */
+export const BRAND_LINK_HEX = '#155bc4';
 
 /**
  * The glyph as a standalone SVG document with its colour BAKED IN.
@@ -95,7 +120,7 @@ export function waveBandSvg({ size, fill }: { size: number; fill: string }): str
 // The helper is DELETED rather than left unused: the one surface it was written
 // for is the one surface it cannot work on, so anything still able to emit a
 // `data:` URI here is a regression waiting to be re-wired (MOTIR-3505). The
-// artwork is unchanged — the bare glyph in `BRAND_ACCENT_HEX` on transparency,
+// artwork is unchanged — the bare glyph (now in `BRAND_GLYPH_HEX`) on transparency,
 // exactly what the data URI drew; only its transport and format moved.
 
 /** Displayed size of the email mark, in CSS px (§7e). */
