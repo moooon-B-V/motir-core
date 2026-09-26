@@ -106,7 +106,7 @@ describe('add_plan_items — a cross-LEVEL edge is refused where it is written',
     expect(text(refused)).toContain('Subtask X');
     expect(text(refused)).toContain(t.a.identifier);
     expect(text(refused)).toContain('sits 2 level(s)');
-    expect(text(refused)).toMatch(/which sits 1/);
+    expect(text(refused)).toMatch(/sits 1, so they are not on the same level/);
     expect(await adminDb.planItem.count({ where: { planId } })).toBe(0);
     await client.close();
   });

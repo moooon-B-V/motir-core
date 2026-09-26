@@ -709,7 +709,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // re-pinned it unchanged for the `cross-level-edge` advisory.)
     // Re-pinned for MOTIR-6411, summary UNCHANGED: the level rule the description
     // states moved from kind to POSITION (MOTIR-6387); the summary names neither.
-    descriptionFingerprint: '55bc35aa2279',
+    // Re-pinned for MOTIR-6443, summary UNCHANGED: the level rule the text states
+    // gains the epic tier (an epic is blocked only by another epic).
+    descriptionFingerprint: '8b1dad10299e',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
@@ -726,7 +728,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // the `cross_level` refusal, which sits inside "would approve take it".
     // Re-pinned for MOTIR-6411, summary UNCHANGED: the level rule the description
     // states moved from kind to POSITION (MOTIR-6387); the summary names neither.
-    descriptionFingerprint: '5591350c2995',
+    // Re-pinned for MOTIR-6443, summary UNCHANGED: the level rule the text states
+    // gains the epic tier (an epic is blocked only by another epic).
+    descriptionFingerprint: '4f1627c162f6',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool
@@ -960,7 +964,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // enumerate for the other refusals either.
     // Re-pinned for MOTIR-6411, summary UNCHANGED: the level rule the description
     // states moved from kind to POSITION (MOTIR-6387); the summary names neither.
-    descriptionFingerprint: '5bd8813c3890',
+    // Re-pinned for MOTIR-6443, summary UNCHANGED: the level rule the text states
+    // gains the epic tier (an epic is blocked only by another epic).
+    descriptionFingerprint: '649ccccad4a2',
   },
   unlink_work_items: {
     summary: 'Remove an edge, given the same relationship used to create it.',

@@ -488,7 +488,7 @@ function projectedInvalidEdges(proj: Projection, memberIds: ReadonlySet<string>)
     edges,
     (id) => {
       const n = node(id);
-      return n ? { parentId: n.parentId, ancestors: chainOf(id) } : undefined;
+      return n ? { parentId: n.parentId, ancestors: chainOf(id), kind: n.kind } : undefined;
     },
     (from, to) => proj.blockedBy.get(from)?.has(to) ?? false,
   )

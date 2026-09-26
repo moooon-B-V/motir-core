@@ -25,6 +25,10 @@ import { truncateAuthTables } from '../helpers/db';
 //   epic E1 ─ story A ─ subtask Y
 //          └ story B ─ subtask X
 //   epic E2 ─ story C
+//   task R, bug G (roots — one step below the project, beside the epics)
+//
+// AMENDMENT 1 (MOTIR-6443): an epic is blocked only by another epic — the epic
+// tier is decided by KIND, so R and G are never an epic's peers.
 
 const text = (r: CallToolResult) => (r.content as { text: string }[])[0]!.text;
 
@@ -41,8 +45,11 @@ const call = async (client: Client, name: string, args: Record<string, unknown>)
   (await client.callTool({ name, arguments: args })) as CallToolResult;
 
 async function seed(fx: WorkItemFixture) {
-  const mk = (kind: 'epic' | 'story' | 'subtask', title: string, parentId?: string) =>
-    workItemsService.createWorkItem({ projectId: fx.projectId, kind, title, parentId }, fx.ctx);
+  const mk = (
+    kind: 'epic' | 'story' | 'task' | 'bug' | 'subtask',
+    title: string,
+    parentId?: string,
+  ) => workItemsService.createWorkItem({ projectId: fx.projectId, kind, title, parentId }, fx.ctx);
   const e1 = await mk('epic', 'E1');
   const e2 = await mk('epic', 'E2');
   const a = await mk('story', 'A', e1.id);
@@ -50,7 +57,9 @@ async function seed(fx: WorkItemFixture) {
   const c = await mk('story', 'C', e2.id);
   const y = await mk('subtask', 'Y', a.id);
   const x = await mk('subtask', 'X', b.id);
-  return { e1, e2, a, b, c, y, x };
+  const r = await mk('task', 'R');
+  const g = await mk('bug', 'G');
+  return { e1, e2, a, b, c, y, x, r, g };
 }
 
 const link = (fx: WorkItemFixture, fromId: string, toId: string) =>
@@ -150,6 +159,76 @@ describe('the link door, end to end through link_work_items', () => {
       relationship: 'relates_to',
     });
     expect(related.isError, text(related)).toBeFalsy();
+    await client.close();
+  });
+});
+
+describe('the epic tier — an epic is blocked only by another epic (Amendment 1)', () => {
+  it('link_work_items: epic → epic is created; epic → root task and root bug → epic are refused CROSS_LEVEL_LINK; root bug → root task is created', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await seed(fx);
+    const client = await connectClient(fx.ctx);
+    const blockedBy = (from: { identifier: string }, to: { identifier: string }) =>
+      call(client, 'link_work_items', {
+        fromKey: from.identifier,
+        toKey: to.identifier,
+        relationship: 'blocked_by',
+      });
+
+    const epicOnTask = await blockedBy(t.e1, t.r);
+    expect(epicOnTask.isError).toBe(true);
+    expect(text(epicOnTask)).toContain('CROSS_LEVEL_LINK');
+    expect(text(epicOnTask)).toContain('An epic is blocked only by another epic');
+    const bugOnEpic = await blockedBy(t.g, t.e1);
+    expect(bugOnEpic.isError).toBe(true);
+    expect(text(bugOnEpic)).toContain('CROSS_LEVEL_LINK');
+    expect(await adminDb.workItemLink.count({ where: { kind: 'is_blocked_by' } })).toBe(0);
+
+    const epics = await blockedBy(t.e1, t.e2);
+    expect(epics.isError, text(epics)).toBeFalsy();
+    const roots = await blockedBy(t.g, t.r);
+    expect(roots.isError, text(roots)).toBeFalsy();
+    expect(await adminDb.workItemLink.count({ where: { kind: 'is_blocked_by' } })).toBe(2);
+    await client.close();
+  });
+
+  it('add_plan_items: an epic blocked_by a root task, and a root bug blocked_by an epic, are refused `cross_level`; epic → epic and root bug → root task close', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await seed(fx);
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+
+    const epicOnTask = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: t.e1.id, patch: { blockedByAdd: [t.r.id] } }],
+    });
+    expect(epicOnTask.isError).toBe(true);
+    expect(text(epicOnTask)).toContain('cross_level');
+    expect(text(epicOnTask)).toContain('An epic is blocked only by another epic');
+    const bugOnEpic = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'A root bug', kind: 'bug' },
+          blockedByRefs: [t.e2.id],
+        },
+      ],
+    });
+    expect(bugOnEpic.isError).toBe(true);
+    expect(text(bugOnEpic)).toContain('cross_level');
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(0);
+
+    const accepted = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        { op: 'modify', workItemId: t.e1.id, patch: { blockedByAdd: [t.e2.id] } },
+        { op: 'modify', workItemId: t.g.id, patch: { blockedByAdd: [t.r.id] } },
+      ],
+      final: true,
+    });
+    expect(accepted.isError, text(accepted)).toBeFalsy();
+    expect((accepted.structuredContent as unknown as PlanWithItemsDto).status).toBe('planned');
     await client.close();
   });
 });

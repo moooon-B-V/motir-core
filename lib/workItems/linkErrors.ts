@@ -180,13 +180,10 @@ export class CrossLevelLinkError extends WorkItemLinkError {
   constructor(
     readonly blocked: { key: string; depth: number },
     readonly blocker: { key: string; depth: number },
+    // The explanation, worded by `edgeLevel.ts` — the rule's one home.
+    message: string,
   ) {
-    super(
-      `${blocked.key} sits ${blocked.depth} level(s) below the project root and ${blocker.key} ` +
-        `sits ${blocker.depth}, so they are not on the same level. A blocked_by joins two work ` +
-        `items at the SAME depth below their nearest common ancestor (a folder adds no depth). ` +
-        `It may cross parents; it may not cross levels.`,
-    );
+    super(message);
     this.name = 'CrossLevelLinkError';
   }
 }

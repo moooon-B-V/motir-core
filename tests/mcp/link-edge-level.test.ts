@@ -288,7 +288,11 @@ describe('validate_work_item — an EXISTING cross-level edge is an advisory, ne
 describe('the link form copy', () => {
   it('maps CROSS_LEVEL_LINK to its own catalog key', () => {
     const t = (key: string) => key;
-    const err = new CrossLevelLinkError({ key: 'ACME-2', depth: 3 }, { key: 'ACME-1', depth: 2 });
+    const err = new CrossLevelLinkError(
+      { key: 'ACME-2', depth: 3 },
+      { key: 'ACME-1', depth: 2 },
+      'ACME-2 and ACME-1 are not on the same level.',
+    );
     expect(linkErrorMessage(err, t)).toBe('links.crossLevel');
   });
 });

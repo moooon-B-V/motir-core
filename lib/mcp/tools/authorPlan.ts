@@ -508,7 +508,7 @@ const patchSchema = z
         'Dependency edges to ADD — work-item keys ("ACME-7"), real work-item ids, or ' +
           '`planItem:<id>` refs. Each joins the target to an item on the SAME LEVEL — the same ' +
           'depth below their nearest common ancestor — under any parent; a cross-level edge is ' +
-          'refused `cross_level`.',
+          'refused `cross_level`. An epic is blocked only by another epic.',
       ),
     blockedByRemove: z
       .array(z.string())
@@ -557,7 +557,8 @@ const proposalSchema = z.object({
         'the SAME LEVEL — the same depth below their nearest common ancestor, a folder adding ' +
         'none — and ' +
         'may cross parents; one between two levels is refused `INVALID_PLAN_REF_GRAPH` / ' +
-        '`cross_level`.',
+        '`cross_level`. An epic is blocked only by another epic — an edge with an epic at ' +
+        'either end is cross-level unless both ends are epics.',
     ),
   baseRevision: z
     .string()

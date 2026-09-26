@@ -267,6 +267,7 @@ describe('workItemsService.validateWorkItem — softBlocks (MOTIR-6368)', () => 
       key: story.identifier,
       valid: true,
       blockers: [],
+      invalidEdges: [],
       advisories: [],
       softBlocks: [
         {

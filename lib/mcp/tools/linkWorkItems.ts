@@ -136,7 +136,8 @@ export function registerLinkWorkItems(server: McpServer, resolveContext: McpCont
         'A dependency joins two items on the SAME LEVEL — the same depth below their nearest ' +
         'common ancestor, a folder adding none — and may cross parents; a blocked_by / blocks ' +
         'between two levels is refused ' +
-        '(CROSS_LEVEL_LINK). Re-creating an existing link is idempotent; a self / cycle / ' +
+        '(CROSS_LEVEL_LINK). An epic is blocked only by another epic: an edge with an epic at ' +
+        'either end is refused unless both ends are epics. Re-creating an existing link is idempotent; a self / cycle / ' +
         'cross-workspace link returns a typed error. Honors the same access checks as the UI.',
       inputSchema,
     },

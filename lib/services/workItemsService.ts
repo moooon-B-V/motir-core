@@ -1978,9 +1978,10 @@ export const workItemsService = {
           const directed = relationshipToLink(pending.relationship, row.id, pending.targetId);
           // The same-level rule, on the create path too (MOTIR-6369) — a
           // refusal rolls the whole create back, like every bad link here.
-          const rowEnd = { identifier: row.identifier, ancestors: rowAncestors };
+          const rowEnd = { identifier: row.identifier, kind: row.kind, ancestors: rowAncestors };
           const targetEnd = {
             identifier: target.identifier,
+            kind: target.kind,
             ancestors: chains.get(target.id) ?? [],
           };
           assertLinkSameLevel(
@@ -5271,8 +5272,16 @@ export const workItemsService = {
         );
         assertLinkSameLevel(
           input.kind,
-          { identifier: fromItem.identifier, ancestors: chains.get(fromItem.id) ?? [] },
-          { identifier: toItem.identifier, ancestors: chains.get(toItem.id) ?? [] },
+          {
+            identifier: fromItem.identifier,
+            kind: fromItem.kind,
+            ancestors: chains.get(fromItem.id) ?? [],
+          },
+          {
+            identifier: toItem.identifier,
+            kind: toItem.kind,
+            ancestors: chains.get(toItem.id) ?? [],
+          },
         );
       }
 
@@ -7911,21 +7920,26 @@ async function computeInvalidEdges(
     fromId: string;
     blockerId: string;
     blockerKey: string;
+    blockerKind: string;
     blockerParentId: string | null;
   }>,
-  membersById: ReadonlyMap<string, { id: string; identifier: string; parentId: string | null }>,
+  membersById: ReadonlyMap<
+    string,
+    { id: string; identifier: string; kind: string; parentId: string | null }
+  >,
   chains: ReadonlyMap<string, readonly string[]>,
   ctx: ServiceContext,
 ): Promise<InvalidEdgeDto[]> {
   const info = new Map<string, CoverageNodeInfo>();
   for (const m of membersById.values()) {
-    info.set(m.id, { parentId: m.parentId, ancestors: chains.get(m.id) ?? [] });
+    info.set(m.id, { parentId: m.parentId, ancestors: chains.get(m.id) ?? [], kind: m.kind });
   }
   for (const e of edges) {
     if (!info.has(e.blockerId)) {
       info.set(e.blockerId, {
         parentId: e.blockerParentId,
         ancestors: chains.get(e.blockerId) ?? [],
+        kind: e.blockerKind,
       });
     }
   }
@@ -8021,15 +8035,21 @@ async function subtreeChains(
 /**
  * The CROSS-LEVEL-EDGE advisories for a validated subtree (Story MOTIR-6015 ·
  * MOTIR-6369 / 6411): one per `blocked_by` a not-done member ALREADY carries to an
- * item on another level — a different depth below their nearest common ancestor.
+ * item on another level — a different depth below their nearest common ancestor,
+ * or an epic paired with a non-epic (Amendment 1).
  * A new such edge is refused at every write door; this surfaces the ones drawn
  * before the rule. Pure over the chains `subtreeChains` read.
  *
  * ⚠️ ADVISORY, NEVER A BLOCKER — `valid` / `blockers` are computed without it.
  */
 function crossLevelEdgeAdvisories(
-  edges: ReadonlyArray<{ fromId: string; blockerId: string; blockerKey: string }>,
-  membersById: ReadonlyMap<string, { identifier: string }>,
+  edges: ReadonlyArray<{
+    fromId: string;
+    blockerId: string;
+    blockerKey: string;
+    blockerKind: string;
+  }>,
+  membersById: ReadonlyMap<string, { identifier: string; kind: string }>,
   chains: ReadonlyMap<string, readonly string[]>,
 ): WorkItemProseCrossLevelEdgeAdvisoryDto[] {
   const out: WorkItemProseCrossLevelEdgeAdvisoryDto[] = [];
@@ -8037,7 +8057,17 @@ function crossLevelEdgeAdvisories(
     const member = membersById.get(edge.fromId);
     const from = chains.get(edge.fromId);
     const to = chains.get(edge.blockerId);
-    if (!member || !from || !to || !isCrossLevelEdge(from, to)) continue;
+    if (
+      !member ||
+      !from ||
+      !to ||
+      !isCrossLevelEdge(
+        { kind: member.kind, ancestors: from },
+        { kind: edge.blockerKind, ancestors: to },
+      )
+    ) {
+      continue;
+    }
     out.push({
       kind: 'shape',
       item: member.identifier,

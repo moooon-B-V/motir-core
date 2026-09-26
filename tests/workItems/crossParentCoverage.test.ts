@@ -30,7 +30,15 @@ const tree: Record<string, CoverageNodeInfo> = Object.fromEntries(
   Object.keys(parentOfNode).map((id) => {
     const ancestors: string[] = [];
     for (let p = parentOfNode[id]; p; p = parentOfNode[p] ?? null) ancestors.push(p);
-    return [id, { parentId: parentOfNode[id] ?? null, ancestors }];
+    // E1 / E2 are epics, A / B / C stories, T a root task, the rest subtasks.
+    const kind = /^E/.test(id)
+      ? 'epic'
+      : /^[ABC]$/.test(id)
+        ? 'story'
+        : id === 'T'
+          ? 'task'
+          : 'subtask';
+    return [id, { parentId: parentOfNode[id] ?? null, ancestors, kind }];
   }),
 );
 const parentOf = (id: string) => tree[id]?.parentId;

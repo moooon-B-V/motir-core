@@ -716,8 +716,10 @@ describe('planValidityService.validateProjectedWorkItem — softBlocks (MOTIR-63
   it('a PROPOSED ancestor and a PROPOSED blocker are named by temp-ref and proposed title; a done blocker is skipped', async () => {
     const fx = await makeWorkItemFixture();
     const epic = await mk(fx, 'Epic', 'epic');
-    const epicBlocker = await mk(fx, 'Epic blocker', 'task');
-    const doneBlocker = await mk(fx, 'Done blocker', 'task');
+    // An epic is blocked only by another epic (MOTIR-6443), and the proposed
+    // blocker sits beside the proposed story under the epic — same level.
+    const epicBlocker = await mk(fx, 'Epic blocker', 'epic');
+    const doneBlocker = await mk(fx, 'Done blocker', 'epic');
     await markDone(doneBlocker.id);
     await link(fx, epic.id, epicBlocker.id);
     await link(fx, epic.id, doneBlocker.id);
@@ -725,7 +727,8 @@ describe('planValidityService.validateProjectedWorkItem — softBlocks (MOTIR-63
     const planId = await freshPlan(fx);
     const pB = await addProposal(fx, planId, {
       op: 'add',
-      proposedFields: { title: 'Proposed blocker', kind: 'task' },
+      proposedFields: { title: 'Proposed blocker', kind: 'story' },
+      parentRef: epic.id,
     });
     const blockerRef = `planItem:${itemIdByTitle(pB, 'Proposed blocker')}`;
     const pS = await addProposal(fx, planId, {
@@ -1463,7 +1466,10 @@ describe('validate_sprint HARD blockers only — committed and projected twins a
     const story = await mk(fx, 'Story (in sprint)', 'story');
     const child = await mk(fx, 'Child (backlog)', 'subtask', story.id);
     await putInSprint(story.id, sprintId);
-    await link(fx, story.id, child.id);
+    // A parent blocked_by its own child crosses levels, which the link door
+    // refuses (MOTIR-6411); the sprint walk still meets such an edge, so it is
+    // seeded below the doors.
+    await seedBlockedBy(fx, story.id, child.id);
 
     expect(await bothVerdicts(fx, sprintId)).toEqual({
       sprintId,

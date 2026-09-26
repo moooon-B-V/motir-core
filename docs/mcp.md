@@ -2024,7 +2024,12 @@ story, a story `blocked_by` a story in another epic, a validation task under an
 epic `blocked_by` the story beside it — and a `blocked_by` / `blocks` between two
 depths (a subtask and a story, a subtask under a task under a story and a subtask
 directly under a story) is refused **`CROSS_LEVEL_LINK`**, naming both keys and
-their depths, and nothing is written. The same refusal guards the
+their depths, and nothing is written. **An epic is blocked only by another epic**
+(the record's Amendment 1): the epic tier is decided by KIND, ahead of any depth,
+so an epic and a root task, bug or story are never peers even though both hang
+off the project root — an edge with an epic at either end is refused
+`CROSS_LEVEL_LINK` unless both ends are epics. Under an epic the position rule
+stands. The same refusal guards the
 links collected by `create_work_item` / the create modal. `relates_to`,
 `duplicates` and `clones` are never judged, and an edge that already exists is
 never deleted — `validate_work_item` reports it as a `cross-level-edge`
@@ -2568,7 +2573,8 @@ of the six carry `criterionIndex`, so narrow on `severity` before reading one.
 A seventh shape member is `validate_work_item`'s alone (Story MOTIR-6015 ·
 MOTIR-6369): **`cross-level-edge`** — a subtree member ALREADY carries a
 `blocked_by` to an item on another LEVEL (a different depth below their nearest
-common ancestor — the position rule of MOTIR-6387). It carries `blockedBy`,
+common ancestor — the position rule of MOTIR-6387 — or an epic paired with a
+non-epic, since an epic is blocked only by another epic). It carries `blockedBy`,
 `itemDepth` and `blockedByDepth` (each below the project root), and like every advisory it
 never moves `valid`. A NEW such edge is refused at every write door
 (`link_work_items` → `CROSS_LEVEL_LINK`; a plan → `INVALID_PLAN_REF_GRAPH` /
@@ -3155,7 +3161,9 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
   `blocked_by` a story in another epic, a validation task under an epic
   `blocked_by` the story beside it) and **may not cross levels** (a subtask
   `blocked_by` a story, a subtask under a task under a story `blocked_by` a
-  subtask directly under a story). A cross-level edge in `blockedByRefs` or
+  subtask directly under a story). **An epic is blocked only by another epic**
+  (the record's Amendment 1): an edge with an epic at either end is cross-level
+  unless both ends are epics, whatever their depths. A cross-level edge in `blockedByRefs` or
   `patch.blockedByAdd` is refused as `INVALID_PLAN_REF_GRAPH` with reason
   **`cross_level`**, naming both items and their depths — at the append for what
   the batch writes, and again at the close, on a correction (`update_plan_proposal`

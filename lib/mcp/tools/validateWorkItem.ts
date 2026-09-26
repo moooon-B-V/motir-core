@@ -113,7 +113,8 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
     lines.push(
       '',
       `Advisory (${unaffected}): these cards are blocked_by an item on ANOTHER LEVEL — a ` +
-        'dependency joins two items at the same depth below their nearest common ancestor:',
+        'dependency joins two items at the same depth below their nearest common ancestor, ' +
+        'and an epic is blocked only by another epic:',
       ...crossLevel.map(
         (a) =>
           `  ${a.item} (depth ${a.itemDepth}) is blocked_by ${a.blockedBy} ` +

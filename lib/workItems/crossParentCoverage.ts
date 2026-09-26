@@ -59,6 +59,8 @@ export interface CoverageNodeInfo {
   parentId: string | null;
   /** The item's ancestor chain, nearest first — its POSITION (MOTIR-6411). */
   ancestors: readonly string[];
+  /** The item's kind — an epic pairs only with an epic (Amendment 1). */
+  kind: string;
 }
 
 /**
@@ -79,7 +81,7 @@ export function uncoveredCrossParentEdges(
     const blocked = info(edge.blockedId);
     const blocker = info(edge.blockerId);
     if (!blocked || !blocker) return false;
-    if (isCrossLevelEdge(blocked.ancestors, blocker.ancestors)) return false;
+    if (isCrossLevelEdge(blocked, blocker)) return false;
     return !coveredByParents(edge, (id) => info(id)?.parentId, parentBlockedBy);
   });
 }

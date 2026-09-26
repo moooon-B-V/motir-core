@@ -35,7 +35,7 @@ import { isWorkItemType, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
 import { isDifficultyRefusedOnKind } from '@/lib/plans/validateProposedDifficulty';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
-import { isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
+import { crossLevelReason, isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
 import {
   FOLDER_REF_PREFIX,
   folderRefId,
@@ -1286,6 +1286,13 @@ export function assertBlockedByLevels(
     }
   }
   const chain = (ref: string) => projectedChain(ref, addsById, reparentOf, ancestorsById);
+  // Each end's PROJECTED kind — an add's proposed kind, else the live row's
+  // (Amendment 1: an epic pairs only with an epic). Undefined = not judged here.
+  const kindOf = (ref: string): string | undefined => {
+    if (isFolderRef(ref)) return undefined;
+    if (isTempRef(ref)) return addsById.get(tempRefId(ref))?.proposedFields?.kind ?? undefined;
+    return liveById.get(ref)?.kind;
+  };
   for (const item of items) {
     if (subjectIds && !subjectIds.has(item.id)) continue;
     let subjectRef: string;
@@ -1301,10 +1308,15 @@ export function assertBlockedByLevels(
     }
     if (refs.length === 0) continue;
     const subjectChain = chain(subjectRef);
-    if (subjectChain === undefined) continue;
+    const subjectKind = kindOf(subjectRef);
+    if (subjectChain === undefined || subjectKind === undefined) continue;
+    const subjectEnd = { kind: subjectKind, ancestors: subjectChain };
     for (const ref of refs) {
       const blockerChain = chain(ref);
-      if (blockerChain === undefined || !isCrossLevelEdge(subjectChain, blockerChain)) continue;
+      const blockerKind = kindOf(ref);
+      if (blockerChain === undefined || blockerKind === undefined) continue;
+      const blockerEnd = { kind: blockerKind, ancestors: blockerChain };
+      if (!isCrossLevelEdge(subjectEnd, blockerEnd)) continue;
       const subject =
         item.op === 'add'
           ? `Proposal ${item.id} (${describeProposal(item)})`
@@ -1313,11 +1325,13 @@ export function assertBlockedByLevels(
       throw new PlanRefGraphError(
         'cross_level',
         item.id,
-        `cross_level: ${subject} sits ${subjectChain.length} level(s) below the project root, and ` +
-          `its ${where} "${ref}" names ${describeNode(edgeNodeOf(ref), items, liveById)}, which ` +
-          `sits ${blockerChain.length}, so they are not on the same level. A blocked_by joins two ` +
-          `work items at the SAME depth below their nearest common ancestor (a folder adds no ` +
-          `depth). It may cross parents; it may not cross levels.`,
+        `cross_level: ${crossLevelReason(
+          { ...subjectEnd, label: subject },
+          {
+            ...blockerEnd,
+            label: `its ${where} "${ref}" (${describeNode(edgeNodeOf(ref), items, liveById)})`,
+          },
+        )}`,
       );
     }
   }
