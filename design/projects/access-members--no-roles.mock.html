@@ -1,0 +1,1712 @@
+<!doctype html>
+<!--
+  PROJECT MEMBERS WITHOUT ROLES — a delta of design/projects/access-members.mock.html
+  (MOTIR-6456 · Story MOTIR-6168). Roles moved to the workspace
+  (design/workspaces/workspace-roles.mock.html); a project now only records who was
+  ADDED to it. The access-level card is untouched here — MOTIR-6169 redesigns it.
+  Rendered against /settings/project/members at origin/main @ 7717433af.
+  Spec: design/workspaces/design-notes.md § "Workspace roles", panel 3.
+-->
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Project Members without roles (MOTIR-6456)</title>
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — app/globals.css (light) ─────────── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-pressed: #4534b3;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --color-link-pressed: #005bab;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-control-x: 10px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+      }
+
+      /* Tier 3 — the semantic element layer components consume.
+         ⚠️ DECLARED ON `:root, [data-appearance-scope]`, which is
+         packages/design-system/theme.css's own selector and is what makes the
+         nested dark panel (6) actually recompute: a custom property's `var()` is
+         substituted where the property is DECLARED, so a Tier-3 layer declared
+         on `:root` alone inherits its LIGHT literal into a nested
+         `data-theme="dark"` subtree and the panel renders light under a dark
+         caption (MOTIR-3592 · tests/design-dark-parity.test.ts). */
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        /* the app-shell RAIL — theme.css's values verbatim; the hover shade is a
+           concrete hex there too and so carries its own dark value below. */
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+        /* the member-role hues — packages/design-system/theme.css verbatim */
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-card: var(--color-background);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --el-sidebar-item-bg-hover: #222222;
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      html[lang='en'] .zh,
+      html[lang='zh'] .en {
+        display: none;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 86ch;
+        line-height: 1.55;
+      }
+      .toggles {
+        display: flex;
+        gap: 8px;
+        flex: none;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+        line-height: 1.55;
+      }
+      /* Ink is --el-text-secondary, not --el-text-muted: this board's body is
+         --el-surface, where muted fails AA (docs/decisions/design-board-chrome-aa.md). */
+      .panel-note {
+        max-width: 1180px;
+        margin: 14px auto 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .panel-note b {
+        color: var(--el-text);
+      }
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .triple {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+      .new-mark {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        color: var(--el-accent-on-surface);
+      }
+      .stub {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 18px var(--spacing-card-padding);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        margin-bottom: 16px;
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+
+      /* ── The settings AREA shell — the shipped Sidebar / SidebarNavItem, as
+         design/settings/workspace-settings.mock.html draws it. ─────────────── */
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .shell {
+        display: flex;
+        min-height: 480px;
+        background: var(--el-page-bg);
+      }
+      .rail {
+        flex: none;
+        width: 252px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .rail-who {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 2px var(--spacing-control-x);
+      }
+      .ws-ava,
+      .org-ava {
+        flex: none;
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .org-ava {
+        background: var(--el-tint-lavender);
+      }
+      .rail-nm {
+        font-family: var(--font-serif);
+        font-size: 14.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        padding: 0 var(--spacing-control-x);
+      }
+      .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .grp-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        padding: 6px var(--spacing-control-x) 4px;
+      }
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .nav-row.is-active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 500;
+        box-shadow: var(--shadow-subtle);
+      }
+      .content {
+        flex: 1;
+        min-width: 0;
+        padding: 28px 36px 36px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .page-title {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-sub {
+        margin: -8px 0 0;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .page-sub b {
+        color: var(--el-text);
+      }
+      .sub-head {
+        margin: 8px 0 -6px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .crumbs {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .all-roles {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-top: -8px;
+      }
+
+      /* ── components/ui primitives, as they render ───────────────────────── */
+      .ico {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .ico.xs {
+        width: 12px;
+        height: 12px;
+      }
+      .card {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 20px var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .card-title-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .card-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .card-sub {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .col-head {
+        display: flex;
+        justify-content: space-between;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        padding: 4px 92px 6px 44px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 11.5px;
+        font-weight: 500;
+        white-space: nowrap;
+        color: var(--el-text-strong);
+      }
+      .pill-neutral {
+        background: var(--el-muted);
+        border: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+      }
+      .pill-manager {
+        background: var(--el-role-admin);
+      }
+      .pill-member {
+        background: var(--el-role-member);
+      }
+      .pill-viewer {
+        background: var(--el-role-viewer);
+      }
+      .pill-custom {
+        background: var(--el-role-custom);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-md);
+        padding: 0 16px;
+        border-radius: var(--radius-btn);
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+        border: 1px solid transparent;
+      }
+      .btn-sm {
+        height: 32px;
+        padding: 0 var(--spacing-btn-x-sm);
+        font-size: 13px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-primary.is-disabled {
+        opacity: 0.5;
+      }
+      .btn-secondary {
+        background: var(--el-page-bg);
+        border-color: var(--el-border);
+        color: var(--el-text);
+      }
+      .btn-ghost {
+        color: var(--el-text);
+      }
+      .btn-danger {
+        background: var(--el-danger);
+        color: var(--el-accent-text);
+      }
+      .link {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-link);
+      }
+      .info-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        border-radius: var(--radius-card);
+        padding: 10px var(--spacing-card-padding);
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .info-note.moved {
+        border-color: var(--el-info);
+        background: var(--el-tint-sky);
+        color: var(--el-text);
+      }
+      .info-ico {
+        margin-top: 2px;
+        color: var(--el-text-secondary);
+      }
+      .actions-right {
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      /* the Combobox trigger — components/ui/Combobox, closed */
+      .combo {
+        flex: none;
+        width: 8.5rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .combo-wide {
+        width: 15rem;
+      }
+      .combo-select {
+        width: 12rem;
+        height: var(--height-btn-md);
+      }
+      .combo-val {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .combo.is-disabled,
+      .combo.is-pending {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        cursor: not-allowed;
+      }
+      .chev {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-secondary);
+      }
+      .spin {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-secondary);
+      }
+      .placeholder {
+        color: var(--el-text-secondary);
+      }
+
+      /* the Combobox popover, open */
+      .popover {
+        position: absolute;
+        right: 78px;
+        top: 44px;
+        z-index: 2;
+        width: 300px;
+        list-style: none;
+        margin: 0;
+        padding: 6px;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+      }
+      .opt-group ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .opt-group-label {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        padding: 8px 8px 4px;
+      }
+      .opt {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 7px 8px;
+        border-radius: var(--radius-control);
+      }
+      .opt.is-selected {
+        background: var(--el-surface);
+      }
+      .check {
+        width: 14px;
+        height: 14px;
+        margin-top: 2px;
+        color: var(--el-accent-on-surface);
+      }
+      .check-gap {
+        width: 14px;
+        flex: none;
+      }
+      .opt-text {
+        display: flex;
+        flex-direction: column;
+      }
+      .opt-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .opt-sub {
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Members rows — MembersCard.tsx / ProjectMembersSettings.tsx ────── */
+      .mlist,
+      .rlist-report {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .mrow,
+      .rrow {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .mrow:last-child,
+      .rrow:last-child {
+        border-bottom: 0;
+      }
+      .rrow {
+        align-items: flex-start;
+      }
+      .avatar {
+        flex: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .who {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .nm {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .you {
+        font-weight: 400;
+        color: var(--el-text-secondary);
+      }
+      .em {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .row-help {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: -4px 0 6px 44px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+
+      /* the migration notice */
+      .notice {
+        border-color: var(--el-border-strong);
+      }
+      .notice-ico {
+        color: var(--el-text-secondary);
+      }
+      .rr-main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .rr-change {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        font-size: 12.5px;
+      }
+      .rr-before {
+        color: var(--el-text-secondary);
+      }
+      .arrow {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-secondary);
+      }
+      .rr-reason {
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+
+      /* toasts — components/ui/Toast */
+      .toast {
+        position: absolute;
+        right: 20px;
+        bottom: 20px;
+        z-index: 3;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        max-width: 360px;
+        padding: 12px 14px;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        color: var(--el-text);
+      }
+      .toast-err {
+        border-left: 3px solid var(--el-danger);
+      }
+      .toast-ok {
+        border-left: 3px solid var(--el-success);
+      }
+      .toast-body {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .toast-title {
+        font-size: 13.5px;
+        font-weight: 600;
+      }
+      .toast-desc {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Roles — RoleList.tsx / RoleDetail.tsx / RoleEditor.tsx ─────────── */
+      .role-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .role-row {
+        display: grid;
+        grid-template-columns: 36px minmax(0, 1fr) auto 16px;
+        align-items: center;
+        gap: 14px;
+        padding: 12px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .role-row:last-child {
+        border-bottom: 0;
+      }
+      .tile {
+        width: 36px;
+        height: 36px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-strong);
+      }
+      .tile-manager {
+        background: var(--el-role-admin);
+      }
+      .tile-member {
+        background: var(--el-role-member);
+      }
+      .tile-viewer {
+        background: var(--el-role-viewer);
+      }
+      .tile-custom {
+        background: var(--el-role-custom);
+      }
+      .role-main {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .role-name-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .role-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .builtin {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .role-desc {
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .role-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+        white-space: nowrap;
+      }
+      .mono-meta {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .role-count {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .row-chev {
+        color: var(--el-text-secondary);
+      }
+      .rooms {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 3px;
+      }
+      .rooms-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+      }
+      .room-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 1px 8px;
+        border-radius: var(--radius-badge);
+        border: 1px dashed var(--el-border-strong);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .room-chip.is-on {
+        border: 1px solid var(--el-border);
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .detail-head {
+        display: grid;
+        grid-template-columns: 36px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 14px;
+      }
+      .fields {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .field-help {
+        max-width: 42ch;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .input {
+        display: flex;
+        align-items: center;
+        width: 200px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .perm-grid {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .perm-group ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .perm-group-label {
+        display: block;
+        background: var(--el-surface);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        padding: 6px var(--spacing-card-padding);
+      }
+      .perm {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .perm-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .cbox {
+        flex: none;
+        width: 16px;
+        height: 16px;
+        border: 1px solid var(--el-border-strong);
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .cbox.is-on {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .footer-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 8px var(--spacing-card-padding);
+        box-shadow: var(--shadow-card);
+      }
+      .footer-btns {
+        display: flex;
+        gap: 8px;
+      }
+      .danger {
+        border-color: var(--el-danger);
+      }
+      .danger-title {
+        color: var(--el-danger-on-surface);
+      }
+      .danger-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .danger-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(in srgb, var(--el-text) 35%, transparent);
+      }
+      .modal {
+        width: 460px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 22px 24px;
+        background: var(--el-card);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+      }
+      .modal-title {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 19px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .modal-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 28px 0;
+        text-align: center;
+      }
+      .empty-ico {
+        width: 24px;
+        height: 24px;
+        color: var(--el-text-secondary);
+      }
+      .is-ghosted {
+        visibility: hidden;
+      }
+      .popover-room {
+        height: 170px;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="review-head">
+      <div>
+        <h1>Project Members without roles (MOTIR-6456)</h1>
+        <p>
+          The project Members page after roles move to the workspace. Toggle Theme and Language at
+          the top right.
+        </p>
+      </div>
+      <div class="toggles">
+        <button
+          class="toggle"
+          type="button"
+          onclick="
+            document.documentElement.dataset.theme =
+              document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+          "
+        >
+          Theme
+        </button>
+        <button
+          class="toggle"
+          type="button"
+          onclick="
+            document.documentElement.lang = document.documentElement.lang === 'zh' ? 'en' : 'zh'
+          "
+        >
+          Language · 语言
+        </button>
+      </div>
+    </header>
+    <div class="panel-label">3a · Project Members without the role column — populated</div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <span class="back"
+              ><svg
+                class="ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m12 19-7-7 7-7" />
+                <path d="M19 12H5" /></svg
+              ><span class="en">Back to motir</span><span class="zh">返回 motir</span></span
+            ><span class="rail-who"><span class="rail-nm">motir</span></span
+            ><span class="eyebrow"
+              ><span class="en">Project settings</span><span class="zh">项目设置</span></span
+            >
+            <div class="grp">
+              <span class="grp-label"
+                ><span class="en">Access</span><span class="zh">访问</span></span
+              ><span class="nav-row is-active"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                  <circle cx="9" cy="7" r="4" /></svg
+                ><span class="en">Members & access</span><span class="zh">成员与访问</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Code access</span><span class="zh">代码访问</span></span
+              >
+            </div>
+          </aside>
+          <div class="content">
+            <h1 class="page-title">
+              <span class="en">Access &amp; members</span><span class="zh">访问与成员</span>
+            </h1>
+            <p class="page-sub">
+              <span class="en"
+                >Control who can see and edit <b>motir</b>. Workspace Managers always have
+                access.</span
+              ><span class="zh"
+                >控制谁可以查看和编辑 <b>motir</b>。工作区管理者始终拥有访问权限。</span
+              >
+            </p>
+            <div class="stub">
+              <span class="en"
+                >Project access card — unchanged, as shipped (MOTIR-6169 redesigns it)</span
+              ><span class="zh">项目访问卡片——保持现状（由 MOTIR-6169 重新设计）</span>
+            </div>
+            <section class="card">
+              <div class="card-head">
+                <div class="card-title-row">
+                  <h2 class="card-title">
+                    <span class="en">Members</span><span class="zh">成员</span>
+                  </h2>
+                  <span class="pill pill-neutral"
+                    ><svg
+                      class="ico xs"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                      <circle cx="9" cy="7" r="4" /></svg
+                    >6</span
+                  >
+                </div>
+                <span class="combo combo-wide" role="combobox" aria-label="Add a member"
+                  ><span class="combo-val placeholder"
+                    ><span class="en">Add a member…</span><span class="zh">添加成员…</span></span
+                  ><svg
+                    class="ico chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m7 15 5 5 5-5" />
+                    <path d="m7 9 5-5 5 5" /></svg
+                ></span>
+              </div>
+              <p class="card-sub">
+                <span class="en"
+                  >People added to this project. What each can do comes from their workspace role —
+                  manage roles in workspace settings.</span
+                ><span class="zh"
+                  >已添加到此项目的成员。每人能做什么取决于其工作区角色——请在工作区设置中管理角色。</span
+                >
+                <span class="link"
+                  ><span class="en">Workspace roles</span><span class="zh">工作区角色</span
+                  ><svg
+                    class="ico xs"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" /></svg
+                ></span>
+              </p>
+              <ul class="mlist" role="list">
+                <li class="mrow">
+                  <span class="avatar" aria-hidden="true">Z</span
+                  ><span class="who"
+                    ><span class="nm"
+                      >Zhu Yue<span class="you"
+                        ><span class="en"> (you)</span><span class="zh">（你）</span></span
+                      ></span
+                    ><span class="em">zhuyue@motir.co</span></span
+                  >
+                </li>
+                <li class="mrow">
+                  <span class="avatar" aria-hidden="true">B</span
+                  ><span class="who"
+                    ><span class="nm">Bo Philips</span
+                    ><span class="em">bophilips@motir.co</span></span
+                  ><span class="btn btn-ghost btn-sm"
+                    ><span class="en">Remove</span><span class="zh">移除</span></span
+                  >
+                </li>
+                <li class="mrow">
+                  <span class="avatar" aria-hidden="true">O</span
+                  ><span class="who"
+                    ><span class="nm">Odie</span><span class="em">odie@motir.co</span></span
+                  ><span class="btn btn-ghost btn-sm"
+                    ><span class="en">Remove</span><span class="zh">移除</span></span
+                  >
+                </li>
+                <li class="mrow">
+                  <span class="avatar" aria-hidden="true">M</span
+                  ><span class="who"
+                    ><span class="nm">Mo</span><span class="em">mo@motir.co</span></span
+                  ><span class="btn btn-ghost btn-sm"
+                    ><span class="en">Remove</span><span class="zh">移除</span></span
+                  >
+                </li>
+                <li class="mrow">
+                  <span class="avatar" aria-hidden="true">J</span
+                  ><span class="who"
+                    ><span class="nm">Julian</span><span class="em">julian@motir.co</span></span
+                  ><span class="btn btn-ghost btn-sm"
+                    ><span class="en">Remove</span><span class="zh">移除</span></span
+                  >
+                </li>
+                <li class="mrow">
+                  <span class="avatar" aria-hidden="true">E</span
+                  ><span class="who"
+                    ><span class="nm">Eikooc</span><span class="em">eikooc@motir.co</span></span
+                  ><span class="btn btn-ghost btn-sm"
+                    ><span class="en">Remove</span><span class="zh">移除</span></span
+                  >
+                </li>
+              </ul>
+            </section>
+          </div>
+        </div>
+      </div>
+      <p class="panel-note">
+        The role <b>Combobox</b> and the role <b>Pill</b> are gone from every row; the people list,
+        Add a member and Remove stay. The rail loses <b>Roles &amp; permissions</b> (redirected,
+        panel 4c of the workspace asset). The subtitle’s “Workspace owners and admins” becomes
+        “Workspace Managers”.
+      </p>
+    </div>
+    <div class="panel-label">3b · Project Members — empty</div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <span class="back"
+              ><svg
+                class="ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m12 19-7-7 7-7" />
+                <path d="M19 12H5" /></svg
+              ><span class="en">Back to motir</span><span class="zh">返回 motir</span></span
+            ><span class="rail-who"><span class="rail-nm">motir</span></span
+            ><span class="eyebrow"
+              ><span class="en">Project settings</span><span class="zh">项目设置</span></span
+            >
+            <div class="grp">
+              <span class="grp-label"
+                ><span class="en">Access</span><span class="zh">访问</span></span
+              ><span class="nav-row is-active"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                  <circle cx="9" cy="7" r="4" /></svg
+                ><span class="en">Members & access</span><span class="zh">成员与访问</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Code access</span><span class="zh">代码访问</span></span
+              >
+            </div>
+          </aside>
+          <div class="content">
+            <h1 class="page-title">
+              <span class="en">Access &amp; members</span><span class="zh">访问与成员</span>
+            </h1>
+            <p class="page-sub">
+              <span class="en"
+                >Control who can see and edit <b>motir</b>. Workspace Managers always have
+                access.</span
+              ><span class="zh"
+                >控制谁可以查看和编辑 <b>motir</b>。工作区管理者始终拥有访问权限。</span
+              >
+            </p>
+            <div class="stub">
+              <span class="en"
+                >Project access card — unchanged, as shipped (MOTIR-6169 redesigns it)</span
+              ><span class="zh">项目访问卡片——保持现状（由 MOTIR-6169 重新设计）</span>
+            </div>
+            <section class="card">
+              <div class="card-head">
+                <div class="card-title-row">
+                  <h2 class="card-title">
+                    <span class="en">Members</span><span class="zh">成员</span>
+                  </h2>
+                  <span class="pill pill-neutral"
+                    ><svg
+                      class="ico xs"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                      <circle cx="9" cy="7" r="4" /></svg
+                    >0</span
+                  >
+                </div>
+                <span class="combo combo-wide" role="combobox" aria-label="Add a member"
+                  ><span class="combo-val placeholder"
+                    ><span class="en">Add a member…</span><span class="zh">添加成员…</span></span
+                  ><svg
+                    class="ico chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m7 15 5 5 5-5" />
+                    <path d="m7 9 5-5 5 5" /></svg
+                ></span>
+              </div>
+              <div class="empty">
+                <svg
+                  class="ico empty-ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                  <circle cx="9" cy="7" r="4" /></svg
+                ><span class="nm"
+                  ><span class="en">Nobody added yet</span
+                  ><span class="zh">尚未添加成员</span></span
+                ><span class="rr-reason"
+                  ><span class="en"
+                    >Everyone in the workspace can still open this project with their workspace
+                    role. Add people to mark who works here.</span
+                  ><span class="zh"
+                    >工作区中的每个人仍可凭其工作区角色打开此项目。添加成员以标明谁在此工作。</span
+                  ></span
+                >
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">3c · Dark</div>
+    <div class="panel">
+      <div class="stage" data-theme="dark" data-appearance-scope>
+        <div class="shell">
+          <aside class="rail">
+            <span class="back"
+              ><svg
+                class="ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m12 19-7-7 7-7" />
+                <path d="M19 12H5" /></svg
+              ><span class="en">Back to motir</span><span class="zh">返回 motir</span></span
+            ><span class="rail-who"><span class="rail-nm">motir</span></span
+            ><span class="eyebrow"
+              ><span class="en">Project settings</span><span class="zh">项目设置</span></span
+            >
+            <div class="grp">
+              <span class="grp-label"
+                ><span class="en">Access</span><span class="zh">访问</span></span
+              ><span class="nav-row is-active"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                  <circle cx="9" cy="7" r="4" /></svg
+                ><span class="en">Members & access</span><span class="zh">成员与访问</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Code access</span><span class="zh">代码访问</span></span
+              >
+            </div>
+          </aside>
+          <div class="content">
+            <h1 class="page-title">
+              <span class="en">Access &amp; members</span><span class="zh">访问与成员</span>
+            </h1>
+            <p class="page-sub">
+              <span class="en"
+                >Control who can see and edit <b>motir</b>. Workspace Managers always have
+                access.</span
+              ><span class="zh"
+                >控制谁可以查看和编辑 <b>motir</b>。工作区管理者始终拥有访问权限。</span
+              >
+            </p>
+            <section class="card">
+              <div class="card-head">
+                <div class="card-title-row">
+                  <h2 class="card-title">
+                    <span class="en">Members</span><span class="zh">成员</span>
+                  </h2>
+                  <span class="pill pill-neutral"
+                    ><svg
+                      class="ico xs"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                      <circle cx="9" cy="7" r="4" /></svg
+                    >6</span
+                  >
+                </div>
+                <span class="combo combo-wide" role="combobox" aria-label="Add a member"
+                  ><span class="combo-val placeholder"
+                    ><span class="en">Add a member…</span><span class="zh">添加成员…</span></span
+                  ><svg
+                    class="ico chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m7 15 5 5 5-5" />
+                    <path d="m7 9 5-5 5 5" /></svg
+                ></span>
+              </div>
+              <p class="card-sub">
+                <span class="en"
+                  >People added to this project. What each can do comes from their workspace role —
+                  manage roles in workspace settings.</span
+                ><span class="zh"
+                  >已添加到此项目的成员。每人能做什么取决于其工作区角色——请在工作区设置中管理角色。</span
+                >
+                <span class="link"
+                  ><span class="en">Workspace roles</span><span class="zh">工作区角色</span
+                  ><svg
+                    class="ico xs"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" /></svg
+                ></span>
+              </p>
+              <ul class="mlist" role="list">
+                <li class="mrow">
+                  <span class="avatar" aria-hidden="true">Z</span
+                  ><span class="who"
+                    ><span class="nm"
+                      >Zhu Yue<span class="you"
+                        ><span class="en"> (you)</span><span class="zh">（你）</span></span
+                      ></span
+                    ><span class="em">zhuyue@motir.co</span></span
+                  >
+                </li>
+                <li class="mrow">
+                  <span class="avatar" aria-hidden="true">B</span
+                  ><span class="who"
+                    ><span class="nm">Bo Philips</span
+                    ><span class="em">bophilips@motir.co</span></span
+                  ><span class="btn btn-ghost btn-sm"
+                    ><span class="en">Remove</span><span class="zh">移除</span></span
+                  >
+                </li>
+                <li class="mrow">
+                  <span class="avatar" aria-hidden="true">O</span
+                  ><span class="who"
+                    ><span class="nm">Odie</span><span class="em">odie@motir.co</span></span
+                  ><span class="btn btn-ghost btn-sm"
+                    ><span class="en">Remove</span><span class="zh">移除</span></span
+                  >
+                </li>
+                <li class="mrow">
+                  <span class="avatar" aria-hidden="true">M</span
+                  ><span class="who"
+                    ><span class="nm">Mo</span><span class="em">mo@motir.co</span></span
+                  ><span class="btn btn-ghost btn-sm"
+                    ><span class="en">Remove</span><span class="zh">移除</span></span
+                  >
+                </li>
+                <li class="mrow">
+                  <span class="avatar" aria-hidden="true">J</span
+                  ><span class="who"
+                    ><span class="nm">Julian</span><span class="em">julian@motir.co</span></span
+                  ><span class="btn btn-ghost btn-sm"
+                    ><span class="en">Remove</span><span class="zh">移除</span></span
+                  >
+                </li>
+                <li class="mrow">
+                  <span class="avatar" aria-hidden="true">E</span
+                  ><span class="who"
+                    ><span class="nm">Eikooc</span><span class="em">eikooc@motir.co</span></span
+                  ><span class="btn btn-ghost btn-sm"
+                    ><span class="en">Remove</span><span class="zh">移除</span></span
+                  >
+                </li>
+              </ul>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
