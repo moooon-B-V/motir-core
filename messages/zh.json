@@ -3205,6 +3205,7 @@
         "ranAgo": "{time}运行",
         "failedAgo": "失败 · {time}",
         "noActionsAgo": "无操作 · {time}",
+        "planHeldAgo": "计划占用 · {time}",
         "autoDisabled": "已自动停用 · {count}次失败",
         "actionsAria": "{name}的操作",
         "reEnable": "重新启用"
@@ -3312,9 +3313,11 @@
         "status": {
           "success": "成功",
           "failure": "失败",
-          "no_actions": "无操作"
+          "no_actions": "无操作",
+          "plan_held": "计划占用"
         },
         "conditionNotMet": "条件未满足",
+        "planHeldNote": "计划正在重写此工作项",
         "durationMs": "{ms} 毫秒",
         "viewItemAria": "打开 {key}",
         "tombstone": "触发工作项已删除",
@@ -6594,10 +6597,31 @@
       "filteredEmptyTitle": "此状态下没有对话",
       "filteredEmptyDescription": "本项目的其他对话在“全部”下。",
       "loadMoreError": "无法加载更多对话。",
-      "loadMoreRetry": "重试"
+      "loadMoreRetry": "重试",
+      "seed": {
+        "label": "<mono>{key}</mono> 的重新规划",
+        "verb": {
+          "decisionApproval": "要求修改",
+          "decisionConfirmation": "推翻",
+          "decisionChoice": "都不合适"
+        },
+        "aria": "打开 {key}，即此对话重新规划的工作项"
+      }
     }
   },
   "planningWorkspace": {
+    "refusalSeed": {
+      "heading": "{key} · {title}",
+      "verb": {
+        "decisionApproval": "这个决策被要求修改。",
+        "decisionConfirmation": "这个决策已被推翻。",
+        "decisionChoice": "这个选择的选项都没有被选中。"
+      },
+      "reason": "给出的理由：\n“{reason}”",
+      "supersedes": "它曾取代的工作项：{keys}",
+      "keySeparator": "、",
+      "ask": "请根据这个理由重新规划这个工作项。"
+    },
     "noProjectTitle": "未选择项目",
     "noProjectDescription": "从切换器中选择或创建一个项目，即可用 Motir AI 规划。",
     "canvasAria": "{project} 的计划",
@@ -6671,30 +6695,6 @@
         "notDecidable": "这份计划暂时还不能决定 —— 还没有人被请求批准它。没有任何改动。",
         "discard": "放弃没有成功。提议仍在画布上等待处理 —— 可以重试，或直接确认。",
         "askSilent": "没有得到任何回复。换一种方式提问试试。"
-      },
-      "diff": {
-        "add": "新增",
-        "change": "修改",
-        "locked": "已锁定",
-        "cantChange": "无法改动",
-        "field": {
-          "title": "标题",
-          "priority": "优先级",
-          "type": "类型",
-          "executor": "执行者",
-          "estimate": "预估工时",
-          "description": "描述",
-          "explanation": "说明",
-          "points": "故事点",
-          "difficulty": "难度",
-          "links": "依赖关系",
-          "parent": "父级",
-          "repo": "目标仓库",
-          "repoRole": "仓库角色",
-          "status": "状态"
-        },
-        "remove": "移除",
-        "willRemove": "确认后移除"
       },
       "answeredFrom": "{count, plural, =0 {回答未引用任何内容} other {依据 # 个工作项作答}}",
       "correctToPlan": "改为提出变更",
@@ -8443,6 +8443,16 @@
     }
   },
   "approvalGate": {
+    "replanDoor": {
+      "label": "用 AI 重新规划",
+      "aria": "根据这次拒绝用 AI 重新规划 {item}"
+    },
+    "replanAsk": {
+      "title": "用 Motir AI 重新规划 {key}？",
+      "opens": "Motir AI 会在 {key} 上打开，并把你的理由写成第一条消息。",
+      "unsent": "在你发送之前不会发出任何内容——你可以先修改。",
+      "yes": "用 AI 重新规划"
+    },
     "state": {
       "awaitingYou": "等待你处理",
       "awaiting": "等待处理",

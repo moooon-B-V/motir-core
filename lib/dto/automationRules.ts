@@ -35,11 +35,13 @@ export interface AutomationRuleDto {
   updatedAt: string;
 }
 
-/** The three terminal states a single rule execution can land in (Subtask
+/** The four terminal states a single rule execution can land in (Subtask
  * 6.6.2's `AutomationExecutionStatus`): every action ran (`success`), an action
- * threw (`failure`), or the condition didn't match so nothing ran
- * (`no_actions`). The DTO wire-narrows the Prisma enum to this literal union. */
-export type AutomationExecutionStatusDto = 'success' | 'failure' | 'no_actions';
+ * threw (`failure`), the condition didn't match so nothing ran (`no_actions`),
+ * or a `transition` met a card an undecided plan holds (`plan_held` — a no-op,
+ * never a failure; MOTIR-6340). The DTO wire-narrows the Prisma enum to this
+ * literal union. */
+export type AutomationExecutionStatusDto = 'success' | 'failure' | 'no_actions' | 'plan_held';
 
 /** The last (most-recent) run of a rule — the glyph + relative-time the list row
  * renders (6.6.6). Only the terminal status and the time are surfaced; the full
@@ -69,7 +71,8 @@ export interface AutomationExecutionDto {
   id: string;
   status: AutomationExecutionStatusDto;
   triggerItem: { key: string; title: string } | null;
-  /** The typed error text on a `failure` run, else null. */
+  /** The typed error text on a `failure` run, the `PLAN_TARGET_HELD: …` refusal
+   * on a `plan_held` run, else null. */
   error: string | null;
   durationMs: number | null;
   createdAt: string;

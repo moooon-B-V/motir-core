@@ -116,7 +116,8 @@ opens the full-screen view.
 - **Overturn** is for _"that's not what we discussed"_. It needs a short note saying
   what **was** discussed, moves the work item to **Cancelled**, and leaves a
   **re-plan owed** for the work it superseded. The overturn itself changes no other
-  work item; the page offers the epic's **Re-plan** door so someone can start it.
+  work item; the record offers **Re-plan with AI** so someone can start it — see
+  [After you refuse a decision](#after-you-refuse-a-decision-motir-ai-offers-to-re-plan).
 
 **The written record is optional.** For now it is a Markdown file attached to the
 decision work item; confirming names that file on the record, and the record says
@@ -200,6 +201,35 @@ _that_ you sent the work back, never _what_ you wanted instead. Whoever picks it
 next — a teammate, an agent, the planner — works from your reason, and anyone who
 opens the card, the approval or the Approvals room later reads it, quoted, beside
 who asked and when.
+
+### After you refuse a decision, Motir AI offers to re-plan
+
+Three refusals are about the **plan itself** rather than a version of some work:
+**Request changes** on a decision document, **Overturn** on a decision you were asked
+to confirm, and **None of these** on a choice. After one of them is recorded, the
+planner is **offered, not opened**. The decided record asks, right where you pressed:
+
+> **Re-plan {key} with Motir AI?** Motir AI opens on {key} with your reason already
+> written as the first message. Nothing is sent until you send it — you can edit it
+> first.
+
+- **Re-plan with AI** (Enter) opens Motir AI on that work item, with your reason
+  written into the message box as the first message. **Nothing is sent** until you
+  press Send, so you can edit it, add to it, or clear it first. The approval view
+  closes as the planner opens; closing the planner brings you back to the page.
+- **Not now** (or Esc) opens nothing and keeps you on the decided record. The record
+  now carries a **Re-plan with AI** button instead of the question.
+
+**The button stays on the record.** Anyone who may plan on the work item sees
+**Re-plan with AI** on those three decided records — on the work item's page and in
+the approval view — and pressing it opens the same thing, with no second question. If
+you already started that conversation recently, it takes you back to it rather than
+starting a new one. The question itself is asked only once, to the person who pressed
+the refusal; a reload shows the button.
+
+**Other refusals do not open the planner yet.** Sending back a design, a story's
+recording or a set of pull requests records your reason and moves nothing, as above;
+none of them offers Motir AI today.
 
 **Neither verb re-runs the agent.** Requesting changes records the decision; the
 revise loop that dispatches a new run off the back of it is not built yet.

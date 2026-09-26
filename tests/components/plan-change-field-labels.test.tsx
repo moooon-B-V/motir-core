@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanItemNode } from '@/components/planning/PlanItemNode';
-import { FIELD_KEY } from '@/lib/planning/planChangeDiff';
 import { PLAN_ITEM_CHANGE_FIELDS } from '@/lib/dto/planReview';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 import enMessages from '@/messages/en.json';
@@ -20,6 +19,13 @@ import zhMessages from '@/messages/zh.json';
 // (`PLAN_ITEM_CHANGE_FIELDS`), and every member of it owes copy in every catalog
 // and a name in each of the hand-maintained maps that stand between a field and
 // its label.
+//
+// ⚠️ MOTIR-6342 removed the canvas chrome's own map (`planChangeDiff`'s
+// `FIELD_KEY`) and its `planningWorkspace.conversation.diff.field.*` copy with the
+// level builder that rendered them (MOTIR-6299). The changed node now names a
+// field through `PlanItemNode`'s DiffLine and the `planReview.field_*` labels, so
+// the catalogue case above and the DiffLine cases below are what detect a field
+// with no label.
 //
 // ⚠️ MOTIR-3242 added a FOURTH such surface — the plan detail's LIST body
 // (`PlanProposalList`), which names a `modify`'s changed fields the same
@@ -61,24 +67,6 @@ describe('the change-list field vocabulary', () => {
       // absence is asserted per field rather than as a count — the count passes
       // when two fields are added and one label is.
       expect(block[key], `messages/${locale}.json ${namespace}.${key} is missing`).toBeTruthy();
-    }
-  });
-
-  it("names every wire field in the canvas chrome's FIELD_KEY, with copy", () => {
-    // The third place the same wire name has to be repeated by hand — and the
-    // quietest, because this map DROPS what it does not recognise. A field added
-    // to `buildChanges` and not to this map simply vanishes from the changed
-    // node's summary; nothing renders wrong and nothing fails.
-    for (const field of PLAN_ITEM_CHANGE_FIELDS) {
-      const copyKey = FIELD_KEY[field];
-      expect(copyKey, `planChangeDiff FIELD_KEY has no entry for ${field}`).toBeTruthy();
-      for (const locale of LOCALES) {
-        const chrome = labels(locale, ['planningWorkspace', 'conversation', 'diff', 'field']);
-        expect(
-          chrome[copyKey!],
-          `messages/${locale}.json planningWorkspace.conversation.diff.field.${copyKey} is missing`,
-        ).toBeTruthy();
-      }
     }
   });
 });

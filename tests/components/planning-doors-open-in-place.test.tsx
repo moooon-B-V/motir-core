@@ -336,3 +336,25 @@ describe('coverage · a named session reopened from an entrance (MOTIR-6024 · M
     expect(hrefOf()).toBe('/backlog?plan=project&planFrom=project');
   });
 });
+
+describe('coverage · a refused gate’s seeded launch (MOTIR-6210 · MOTIR-6212)', () => {
+  function Probe({ gateId }: { gateId: string }) {
+    const { href } = useOpenPlanningWorkspace({ kind: 'refused-gate', gateId });
+    return <a href={href}>re-plan</a>;
+  }
+
+  it('re-derives the address when ONLY the gate changes — `planGate` is part of the key', () => {
+    // Two refusals on one page: a key that left the gate out would hand the second
+    // door the first gate's address, and seed the planner from the wrong refusal.
+    const { rerender } = renderWithIntl(<Probe gateId="gate-1" />);
+    const link = () => screen.getByRole('link', { name: 're-plan' }).getAttribute('href');
+    expect(link()).toBe(
+      withPlanningOverlay('/backlog', { kind: 'refused-gate', gateId: 'gate-1' }),
+    );
+    expect(link()).toContain('planGate=gate-1');
+
+    rerender(<Probe gateId="gate-2" />);
+    expect(link()).toContain('planGate=gate-2');
+    expect(link()).not.toContain('gate-1');
+  });
+});

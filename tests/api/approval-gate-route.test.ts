@@ -279,6 +279,9 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     // The fixture owner REPORTED the card and nobody is assigned — §2's
     // reporter arm, so this reader may press the verbs.
     expect(body.canDecide).toBe(true);
+    // The owner may plan on a live card — a refused decision's record would offer
+    // Re-plan with AI (MOTIR-6211), the same condition `WorkItemPlanEntrance` draws under.
+    expect(body.canReplan).toBe(true);
     expect(typeof body.routedToLabel).toBe('string');
     // The overlay's copy of the merge gate's spent approval (MOTIR-5863): always on the
     // wire — JSON drops an `undefined`, so a route that forgot it answers undefined here —
@@ -802,6 +805,22 @@ describe('GET /api/work-items/approval-gate · the permission floor (MOTIR-5445)
     expect(body.gate.state).toBe('awaiting');
     expect(body.subject.state).toBe('resolved');
     expect(body.canDecide).toBe(false);
+    // …and a viewer may not plan either, so no Re-plan with AI door (MOTIR-6211).
+    expect(body.canReplan).toBe(false);
+  });
+});
+
+describe('GET /api/work-items/approval-gate · `canReplan` (MOTIR-6211)', () => {
+  it('an ARCHIVED card offers no re-plan, even to its owner', async () => {
+    const card = await designCard();
+    await publish(card);
+    await adminDb.workItem.update({ where: { id: card.id }, data: { archivedAt: new Date() } });
+    signIn(owner());
+
+    const res = await gateViaRoute({ key: card.identifier, kind: 'design_result' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.canReplan).toBe(false);
   });
 });
 
@@ -947,6 +966,9 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
       'designEvidenceService.getCurrentForWorkItem',
       'designEvidenceService.getForGateSubject',
       'howToTestService.getForWorkItem',
+      // The reader's project permissions (MOTIR-6211) — the item page's own `canEdit` read,
+      // which decides whether a refused decision's record offers Re-plan with AI.
+      'projectAccessService.getPermissions',
       'pullRequestMergeService.listApprovalMembers',
       // `motir fix`, beside the row whose reason a person cannot act on (MOTIR-5806) —
       // the same read `lateReads.ts` makes for the item page's own Development block.
@@ -963,6 +985,7 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
     // The approve-to-merge port's reads, each one the item page already makes.
     for (const call of [
       'decisionDocumentService.readViewForWorkItem',
+      'projectAccessService.getPermissions',
       'designEvidenceService.getCurrentForWorkItem',
       'howToTestService.getForWorkItem',
       'pullRequestMergeService.listApprovalMembers',

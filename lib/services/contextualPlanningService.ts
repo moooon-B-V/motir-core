@@ -76,6 +76,15 @@ export interface ContextualPlanRequest {
    * STARTS one (§1, §3) — nothing is created by a read.
    */
   sessionId?: string;
+  /**
+   * The REFUSED GATE this conversation is seeded from (story MOTIR-6068 ·
+   * MOTIR-6210; AMENDMENT 17 §9). Sent by the planning overlay ONLY on the first
+   * turn of a seeded re-plan — the one with no session yet — and IGNORED whenever
+   * `sessionId` is present: a continuing conversation already remembers its gate,
+   * or never had one. With it, the turn starts (or resumes) only a session seeded
+   * by THIS gate, never the caller's ordinary resumable one.
+   */
+  seedGateId?: string;
 }
 
 /**
@@ -157,10 +166,17 @@ export const contextualPlanningService = {
   ): Promise<ContextualPlanResult> {
     const scope = await resolveScope(req, pctx);
 
+    // A SEEDED first turn (AMENDMENT 17 §9; MOTIR-6210) skips the resumable read
+    // on purpose: the caller's recent UNSEEDED conversation on this card is not
+    // the one a refusal starts, so landing there would bury the seed in it.
+    // `startSeededWithFirstTurn` asserts the gate under its own lock (else
+    // `PlanSeedNotApplicableError`, nothing written), resumes only a session of
+    // the SAME seed, or creates one stamped with it.
+    const seeded = !req.sessionId && req.seedGateId ? req.seedGateId : null;
     // The ADDRESSED session, else the caller's resumable one; with neither, this
     // first turn STARTS the session (AMENDMENT 17 §1, §3). The submit then sends
     // the ACCUMULATED intent — the session's own `targetKeys` make it contextual.
-    const target = req.sessionId ?? (await resumableId(pctx, scope));
+    const target = seeded ? null : (req.sessionId ?? (await resumableId(pctx, scope)));
     // A CONTINUING conversation re-takes its targets, as opening one always did
     // (MOTIR-2786): an earlier plan's decision may have handed them back, and a
     // turn that plans them again must hold them again. Idempotent for the holder.
@@ -176,11 +192,21 @@ export const contextualPlanningService = {
             },
           )
         ).id
-      : (
-          await planChangeSessionsService.startWithFirstTurn(pctx, scope, req.prompt, {
-            isAnswer: req.isAnswer === true,
-          })
-        ).id;
+      : seeded
+        ? (
+            await planChangeSessionsService.startSeededWithFirstTurn(
+              pctx,
+              scope,
+              req.prompt,
+              seeded,
+              { isAnswer: req.isAnswer === true },
+            )
+          ).id
+        : (
+            await planChangeSessionsService.startWithFirstTurn(pctx, scope, req.prompt, {
+              isAnswer: req.isAnswer === true,
+            })
+          ).id;
     const { jobId, planId, session } = await planChangeSessionsService.submit(pctx, {
       sessionId,
     });
