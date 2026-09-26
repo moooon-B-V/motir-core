@@ -618,6 +618,27 @@ export default defineConfig({
         'app/api/projects/**/roles/route.ts',
         'app/api/projects/**/roles/**/route.ts',
 
+        // Story MOTIR-6168 · Subtask MOTIR-6467 (the story gate) — the files the
+        // workspace-roles story ADDED: the workspace custom-role service, its
+        // repository and mapper, the migration report's service and repository,
+        // the role error mapping, the three workspace role routes, the Members
+        // page's migration notice and the org fold-in's Roles door. (The moved
+        // Roles screens are the `settings/workspace/roles/_components` glob
+        // above; the grantable-key rule and the room keys are under
+        // `lib/permissions/**`.) All `app/**` and `**` for the two reasons the
+        // notes above give. Pinned below.
+        'lib/services/workspaceRoleDefinitionService.ts',
+        'lib/services/roleMigrationReportService.ts',
+        'lib/repositories/workspaceRoleDefinitionRepository.ts',
+        'lib/repositories/roleMigrationReportRepository.ts',
+        'lib/mappers/workspaceRoleMappers.ts',
+        'lib/workspaces/roleErrorResponse.ts',
+        'app/api/workspaces/**/roles/route.ts',
+        'app/api/workspaces/**/roles/**/route.ts',
+        'app/api/workspaces/**/members/**/route.ts',
+        'app/**/settings/workspace/_components/RoleMigrationNotice.tsx',
+        'app/**/settings/organization/_components/RolesDoorCard.tsx',
+
         // Story 5.7 (in-app notifications) · Subtask 5.7.6 — the per-user
         // notification-preference layer (the channel gate) lands gated.
         'lib/services/notificationPreferencesService.ts',
@@ -3642,6 +3663,53 @@ export default defineConfig({
           lines: 90,
         },
         'app/**/settings/workspace/roles/_components/*.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // Story MOTIR-6168 · Subtask MOTIR-6467 — the story gate PINS what the
+        // workspace-roles story added. MEASURED FIRST over the story's own specs
+        // (the roles routes, the member-role route, the Roles screens, the
+        // migration notice, the story gate): the services 97–100 / 92–100 / 100,
+        // the routes ≥ 95 / ≥ 89 / 100 before the edge cases in
+        // `tests/workspaces/workspaceRoleSurfaceEdges.test.ts` (401, the two-
+        // factor hold, the rethrow, a partial PATCH) took each past 90.
+        //
+        // ⚠️ NOT pinned here: the ~40 pre-existing files the story TOUCHED (the
+        // caller sweep's one-line `findStandInManagerByWorkspace` renames across
+        // the job and PR services, `workspacesService`, `projectAccessService`,
+        // `organizationsService`, …). Measured over this story's specs alone they
+        // read low because those specs do not exercise the rest of each file;
+        // their honest number is the whole suite's, and the pin belongs to each
+        // surface's owner — the same stance the `lib/mappers/permissionMappers.ts`
+        // note above takes.
+        'lib/services/workspaceRoleDefinitionService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/services/roleMigrationReportService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/workspaceRoleDefinitionRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/repositories/roleMigrationReportRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/mappers/workspaceRoleMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/workspaces/roleErrorResponse.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/workspaces/**/roles/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/workspaces/**/roles/**/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/workspaces/**/members/**/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/**/settings/workspace/_components/RoleMigrationNotice.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/settings/organization/_components/RolesDoorCard.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,

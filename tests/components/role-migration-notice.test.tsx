@@ -124,6 +124,28 @@ describe('what a row says', () => {
   });
 });
 
+describe('describeBefore — the parts it leaves out', () => {
+  it('a project row with neither a built-in nor a custom role says nothing about that project', () => {
+    const t = (key: string, v?: Record<string, string | number>) =>
+      key === 'members.migration.projectRole'
+        ? `${String(v?.['role'])} in ${String(v?.['project'])}`
+        : key;
+    expect(
+      describeBefore(
+        {
+          workspaceRole: null,
+          projects: [
+            { projectKey: 'PROD', role: null, customRoleName: null },
+            { projectKey: 'OPS', role: null, customRoleName: 'Contractor' },
+          ],
+          narrowedIn: [],
+        },
+        t,
+      ),
+    ).toBe('Contractor in OPS');
+  });
+});
+
 describe('dismiss and paging', () => {
   it('a dismissed row leaves, the count drops, and it does not come back', async () => {
     dismissAction.mockResolvedValue({ ok: true });
@@ -164,6 +186,36 @@ describe('dismiss and paging', () => {
     expect(await screen.findByText('Person 21')).toBeTruthy();
     expect(loadAction).toHaveBeenCalledWith('e19');
     expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
+  });
+
+  it('a Show more that fails keeps the rows and the control; an overlapping page is de-duplicated', async () => {
+    const first = Array.from({ length: 20 }, (_, i) => entry(i));
+    loadAction.mockResolvedValueOnce({ ok: false, error: 'nope' });
+    renderNotice(page(first, { total: 21, nextCursor: 'e19' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    await waitFor(() => expect(loadAction).toHaveBeenCalledTimes(1));
+    expect(screen.getAllByRole('listitem')).toHaveLength(20);
+    // The refused load settles back to an enabled control (the transition ends).
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('button', { name: 'Show more' }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    );
+
+    // The next page repeats the last row (a row dismissed elsewhere shifted the
+    // cursor): it is shown once.
+    loadAction.mockResolvedValueOnce({
+      ok: true,
+      page: page([entry(19), entry(20)], { total: 21 }),
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    expect(await screen.findByText('Person 20')).toBeTruthy();
+    expect(screen.getAllByText('Person 19')).toHaveLength(1);
+  });
+
+  it('a person with no name is initialled from their email', () => {
+    renderNotice(page([entry(1, { name: '', email: 'quinn@ex.com' })]));
+    expect(screen.getByText('Q')).toBeTruthy();
   });
 
   it('renders nothing when nothing is open', () => {
