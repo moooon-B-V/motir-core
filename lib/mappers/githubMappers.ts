@@ -1,10 +1,12 @@
 import type {
+  GithubAgentAuthorization,
   GithubIdentity,
   GithubInstallation,
   GithubPullRequest,
   GithubRepo,
 } from '@/generated/prisma/client';
 import type {
+  GithubAgentLinkStatusDTO,
   GithubIdentityDTO,
   GithubInstallationDTO,
   GithubRepoDTO,
@@ -175,4 +177,21 @@ export function toPullRequestLinkCandidateDto(
     state: row.merged ? 'merged' : row.state === 'open' ? 'open' : 'closed',
     linkedTo: [...linkedTo],
   };
+}
+
+/** A member's Motir Agent link state (MOTIR-6519). `expired` when the refresh
+ *  token can no longer mint a user token — GitHub's own clock or a refusal the
+ *  service recorded — so the surface offers "Link again" rather than pretending
+ *  the link works. Never references a token column. */
+export function toGithubAgentLinkStatusDTO(
+  row: GithubAgentAuthorization | null,
+  now: Date,
+): GithubAgentLinkStatusDTO {
+  if (!row) return { state: 'not_linked' };
+  const accessLive = row.accessTokenExpiresAt === null || row.accessTokenExpiresAt > now;
+  const refreshLive =
+    row.refreshTokenEncrypted !== null &&
+    (row.refreshTokenExpiresAt === null || row.refreshTokenExpiresAt > now);
+  if (!accessLive && !refreshLive) return { state: 'expired', githubLogin: row.githubLogin };
+  return { state: 'linked', githubLogin: row.githubLogin, linkedAt: row.createdAt.toISOString() };
 }

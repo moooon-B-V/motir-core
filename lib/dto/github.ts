@@ -236,3 +236,11 @@ export interface PullRequestMergeRecordDto {
   /** The merge commit SHA, or `queue:<entryId>` for an enqueue. */
   mergeOutcomeRef: string | null;
 }
+
+/** A member's Motir Agent link, as the account surface renders it (MOTIR-6519).
+ *  Token-free by construction: the tokens never leave `githubAgentAuthService`. */
+export type GithubAgentLinkStatusDTO =
+  | { state: 'not_configured' }
+  | { state: 'not_linked' }
+  | { state: 'linked'; githubLogin: string; linkedAt: string }
+  | { state: 'expired'; githubLogin: string };
