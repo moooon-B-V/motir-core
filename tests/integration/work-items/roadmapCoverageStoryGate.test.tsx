@@ -6,7 +6,6 @@ import { plansService } from '@/lib/services/plansService';
 import { planReviewService } from '@/lib/services/planReviewService';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { mergePlanLevel, withProjectedCoverage } from '@/components/planning/planLevel';
-import { isCrossLevelEdgeAdvisory } from '@/lib/dto/workItems';
 import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
 import type { ProjectRoadmapDto } from '@/lib/dto/workItems';
 import { adminDb } from '../../helpers/adminDb';
@@ -103,9 +102,8 @@ describe('Story MOTIR-6352 gate — the canvas flags exactly what the validator 
     );
     const invalid = new Set([
       ...verdict.invalidEdges.map((e) => `${idOf.get(e.item)} ${idOf.get(e.blockedBy)}`),
-      ...verdict.advisories
-        .filter(isCrossLevelEdgeAdvisory)
-        .map((a) => `${idOf.get(a.item)} ${idOf.get(a.blockedBy)}`),
+      // Cross-level edges are their own verdict since MOTIR-6509 (`crossLevelEdges`).
+      ...verdict.crossLevelEdges.map((e) => `${idOf.get(e.item)} ${idOf.get(e.blockedBy)}`),
     ]);
 
     expect([...canvasFlags].sort()).toEqual([...invalid].sort());
