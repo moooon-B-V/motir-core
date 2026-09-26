@@ -26,3 +26,30 @@ export interface OrganizationDeletionRequestDTO {
   cancelledByUserId: string | null;
   erasedAt: string | null;
 }
+
+/** One repository Motir hosts for the organization — deleted by the erasure
+ *  unless it is taken over first (DECISION §6.1). */
+export interface OrganizationHostedRepoDTO {
+  id: string;
+  fullName: string;
+}
+
+/**
+ * What the Delete organization dialog's first step lists (Story MOTIR-6306 ·
+ * MOTIR-6402, design MOTIR-6390 panel 2) — every number read on the server, so
+ * the dialog never shows one the erasure would not act on.
+ */
+export interface OrganizationDeletionConsequencesDTO {
+  workspaceNames: string[];
+  projectCount: number;
+  memberCount: number;
+  hostedRepos: OrganizationHostedRepoDTO[];
+  /** When the org would be erased if scheduled now — `now + 30 days`, the same
+   *  arithmetic the schedule stores. */
+  erasureDueAt: string;
+  /** Whether the Owner's account has a password — decides the step-up field. */
+  hasPassword: boolean;
+  /** For an account with no password: whether the acting session was created
+   *  inside the step-up window, so no Sign in again is needed (DECISION §1). */
+  signedInRecently: boolean;
+}

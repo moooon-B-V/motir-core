@@ -4955,8 +4955,8 @@
       "transferDesc": "将组织交给另一位成员。对方成为所有者——唯一可以转让或删除组织的人——你将成为管理员。",
       "transferCta": "转让所有权…",
       "deleteOrg": "删除组织",
-      "deleteOrgNote": "删除组织会移除其所有工作区和数据。此操作无法撤销。",
-      "deleteUnavailable": "暂不支持删除组织。"
+      "deleteOrgNoteLive": "将 {org} 安排在 30 天后删除。所有人都会收到通知，组织变为只读，在此之前你可以随时取消。",
+      "deleteOrgCta": "删除组织…"
     },
     "transfer": {
       "title": "转让 {org} 的所有权",
@@ -5103,6 +5103,52 @@
       "readOnlyNote": "只有 {tier} 的所有者或管理员才能更改此设置。",
       "cardBodyWorkspace": "在此工作区额外要求第二重验证。组织的设置在此之上仍然适用，且无法在这里降低。",
       "stateOnWorkspace": "{workspace} 的所有成员均需启用"
+    },
+    "delete": {
+      "title": "删除 {org}？",
+      "step1Sub": "这会安排删除整个组织。以下是将被删除的内容。",
+      "step1Label": "第 1 步，共 2 步 · 将被删除的内容",
+      "workspaces": "<b>{workspaces} 个工作区、{projects} 个项目</b>及其中的一切——工作项、看板、迭代、评论、附件。",
+      "members": "<b>{count} 位成员</b>将失去访问权限。每人今天都会收到邮件，并可在 {date} 前下载自己的数据。",
+      "exportLink": "下载你的数据",
+      "hostedRepos": "<b>{count} 个由 Motir 托管的代码仓库</b>将被删除。接管仓库即可保留其代码。",
+      "takeOver": "接管",
+      "connectedRepos": "你从 GitHub 或 GitLab 连接的代码仓库永远不会被删除——Motir 只会断开与它们的连接。",
+      "subscription": "<b>你的订阅不会续订。</b>当前计费周期会持续到结束；不会再产生任何费用。",
+      "billingKept": "账单记录将依法保留七年。",
+      "dateTitle": "所有内容将于 {date} 被清除。",
+      "dateSub": "在此之前，{org} 对所有人只读，你可以随时取消。无法提前清除。",
+      "continue": "继续",
+      "step2Sub": "所有内容将于 {date} 被清除。在此之前组织只读，你可以随时取消。",
+      "step2Label": "第 2 步，共 2 步 · 确认是你本人",
+      "confirmLabel": "输入 {org} 以确认",
+      "nameMismatch": "这不是该组织的名称。",
+      "passwordLabel": "你的密码",
+      "passwordHint": "用于确认是你本人。Motir 只会在此类操作时要求输入密码。",
+      "reauthTitle": "请重新登录以确认。",
+      "reauthBody": "你的账户没有密码，因此 Motir 改为要求最近一次登录——在过去 10 分钟内。登录后你会直接回到这里。",
+      "reauthCta": "重新登录",
+      "back": "返回",
+      "confirm": "安排删除",
+      "pending": "正在安排…",
+      "errorPassword": "密码不正确。未安排任何操作——请重试。",
+      "errorAlreadyScheduled": "{org} 已经安排了删除。",
+      "errorGeneric": "出现问题，未安排任何操作——请重试。"
+    },
+    "scheduled": {
+      "title": "已安排于 {date} 删除",
+      "body": "{name} 于 {scheduledAt} 安排了此操作。<b>还剩 {daysLeft} 天。</b>在此之前，{org} 对所有人只读，订阅不会续订，你可以随时取消。",
+      "someone": "某位成员",
+      "cancel": "取消删除",
+      "transferBlocked": "取消删除后才能转让所有权。"
+    },
+    "cancel": {
+      "title": "取消删除 {org}？",
+      "body": "一切都会恢复原样：编辑、自动化和智能体，订阅也会照常续订。所有成员都会收到通知。",
+      "keep": "保持已安排",
+      "confirm": "取消删除",
+      "success": "已取消删除。{org} 已恢复正常，所有人都已收到通知。",
+      "error": "出现问题，删除仍在安排中——请重试。"
     }
   },
   "triage": {

@@ -4955,8 +4955,8 @@
       "transferDesc": "Hand the organization to another member. They become the Owner — the only person who can transfer or delete it — and you become an Admin.",
       "transferCta": "Transfer ownership…",
       "deleteOrg": "Delete organization",
-      "deleteOrgNote": "Deleting the organization removes all its workspaces and data. This cannot be undone.",
-      "deleteUnavailable": "Organization deletion isn’t available yet."
+      "deleteOrgNoteLive": "Schedules {org} for deletion in 30 days. Everyone is told, it becomes read-only, and you can cancel until then.",
+      "deleteOrgCta": "Delete organization…"
     },
     "transfer": {
       "title": "Transfer ownership of {org}",
@@ -5103,6 +5103,52 @@
       "readOnlyNote": "Only an owner or an admin of {tier} can change this.",
       "cardBodyWorkspace": "Additionally require a second factor for everyone in this workspace. Your organization’s setting applies on top of this one and cannot be lowered here.",
       "stateOnWorkspace": "Required for every member of {workspace}"
+    },
+    "delete": {
+      "title": "Delete {org}?",
+      "step1Sub": "This schedules the whole organization for deletion. Here is what goes.",
+      "step1Label": "Step 1 of 2 · What will be deleted",
+      "workspaces": "<b>{workspaces, plural, one {# workspace} other {# workspaces}}, {projects, plural, one {# project} other {# projects}}</b> and everything in them — work items, boards, sprints, comments, attachments.",
+      "members": "<b>{count, plural, one {# member} other {# members}}</b> lose access. Each is emailed today and can download their own data until {date}.",
+      "exportLink": "Download your data",
+      "hostedRepos": "<b>{count, plural, one {# repository Motir hosts} other {# repositories Motir hosts}}</b> {count, plural, one {is} other {are}} deleted. Take one over to keep its code.",
+      "takeOver": "Take over",
+      "connectedRepos": "Repositories you connected from GitHub or GitLab are never deleted — Motir only disconnects from them.",
+      "subscription": "<b>Your subscription won’t renew.</b> The current period runs to its end; nothing more is charged.",
+      "billingKept": "Billing records are kept for seven years, as the law requires.",
+      "dateTitle": "Everything is erased on {date}.",
+      "dateSub": "Until then {org} is read-only for everyone and you can cancel. There is no way to erase it sooner.",
+      "continue": "Continue",
+      "step2Sub": "Everything is erased on {date}. Until then it is read-only, and you can cancel.",
+      "step2Label": "Step 2 of 2 · Confirm it’s you",
+      "confirmLabel": "Type {org} to confirm",
+      "nameMismatch": "That isn’t this organization’s name.",
+      "passwordLabel": "Your password",
+      "passwordHint": "Confirms it’s really you. Motir asks for it only for actions like this.",
+      "reauthTitle": "Sign in again to confirm.",
+      "reauthBody": "Your account has no password, so Motir asks for a recent sign-in instead — within the last 10 minutes. You’ll come straight back here.",
+      "reauthCta": "Sign in again",
+      "back": "Back",
+      "confirm": "Schedule deletion",
+      "pending": "Scheduling…",
+      "errorPassword": "That password isn’t right. Nothing was scheduled — try again.",
+      "errorAlreadyScheduled": "A deletion is already scheduled for {org}.",
+      "errorGeneric": "Something went wrong and nothing was scheduled — try again."
+    },
+    "scheduled": {
+      "title": "Scheduled for deletion on {date}",
+      "body": "{name} scheduled this on {scheduledAt}. <b>{daysLeft, plural, one {# day left} other {# days left}}.</b> Until then {org} is read-only for everyone, its subscription won’t renew, and you can cancel at any time.",
+      "someone": "Someone",
+      "cancel": "Cancel deletion",
+      "transferBlocked": "Cancel the deletion to transfer ownership."
+    },
+    "cancel": {
+      "title": "Cancel the deletion of {org}?",
+      "body": "Everything returns as it was: editing, automations and agents, and the subscription renews as before. Every member is told.",
+      "keep": "Keep it scheduled",
+      "confirm": "Cancel deletion",
+      "success": "Deletion cancelled. {org} is back to normal, and everyone has been told.",
+      "error": "Something went wrong and the deletion is still scheduled — try again."
     }
   },
   "triage": {

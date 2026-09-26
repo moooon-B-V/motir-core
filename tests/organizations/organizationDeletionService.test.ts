@@ -391,3 +391,44 @@ describe('the /deletion route', () => {
     expect(statuses[5]).toBe(429);
   });
 });
+
+describe('getConsequences — the dialog’s step 1 (MOTIR-6402)', () => {
+  it('reads the Owner’s counts on the server, the date and the step-up branch', async () => {
+    const now = new Date('2026-09-26T10:00:00.000Z');
+    const c = await organizationDeletionService.getConsequences(
+      org.organizationId,
+      org.owner.id,
+      new Date(now.getTime() - 60_000),
+      now,
+    );
+    expect(c).toMatchObject({
+      workspaceNames: ['Acme ws'],
+      projectCount: 0,
+      memberCount: 3,
+      hostedRepos: [],
+      hasPassword: true,
+      signedInRecently: true,
+    });
+    expect(c.erasureDueAt).toBe(new Date(now.getTime() + 30 * DAY_MS).toISOString());
+
+    const stale = await organizationDeletionService.getConsequences(
+      org.organizationId,
+      org.owner.id,
+      new Date(now.getTime() - STEP_UP_WINDOW_MS - 1),
+      now,
+    );
+    expect(stale.signedInRecently).toBe(false);
+  });
+
+  it('is the Owner’s alone — 403 an Admin or Member, 404 a non-member', async () => {
+    const at = new Date();
+    for (const who of [org.admin, org.member]) {
+      await expect(
+        organizationDeletionService.getConsequences(org.organizationId, who.id, at),
+      ).rejects.toBeInstanceOf(OrgForbiddenError);
+    }
+    await expect(
+      organizationDeletionService.getConsequences(org.organizationId, org.outsider.id, at),
+    ).rejects.toBeInstanceOf(OrganizationNotFoundError);
+  });
+});

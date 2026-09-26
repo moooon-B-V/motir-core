@@ -1,6 +1,11 @@
 import { Prisma } from '@/generated/prisma/client';
 import { markOrgClosing, reopenOrg } from '@/lib/ai/motirAiClient';
-import type { OrganizationDeletionRequestDTO } from '@/lib/dto/organizationDeletion';
+import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
+import type {
+  OrganizationDeletionConsequencesDTO,
+  OrganizationDeletionRequestDTO,
+} from '@/lib/dto/organizationDeletion';
 import { toOrganizationDeletionRequestDTO } from '@/lib/mappers/organizationDeletionMappers';
 import { withOrgContext } from '@/lib/organizations/context';
 import { erasureDueAt } from '@/lib/organizations/deletion';
@@ -11,12 +16,17 @@ import {
   OrganizationNotFoundError,
   StepUpFailedError,
 } from '@/lib/organizations/errors';
+import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { organizationDeletionRequestRepository } from '@/lib/repositories/organizationDeletionRequestRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { assertOrgCapability, assertOrgMember } from '@/lib/services/organizationAccessService';
 import { organizationDeletionNotifier } from '@/lib/services/organizationDeletionNotifier';
 import { usersService } from '@/lib/services/usersService';
+import { withSystemContext } from '@/lib/workspaces/context';
 
 // SCHEDULING AND CANCELLING AN ORGANIZATION'S DELETION (Story MOTIR-6306 ·
 // MOTIR-6399; `docs/decisions/organization-deletion.md` §1–§4). The org-tier
@@ -265,5 +275,49 @@ export const organizationDeletionService = {
         scheduledByName: scheduledBy?.name ?? null,
       };
     });
+  },
+
+  /**
+   * What deleting the organization would take — the dialog's step 1 (MOTIR-6402,
+   * design MOTIR-6390 panel 2). Owner-only, like the act it describes: a
+   * non-member 404, an Admin or Member 403.
+   *
+   * The capability is asserted in the org's own context; the counts are then read
+   * in SYSTEM context, because they cross every workspace of the org and the
+   * repository rows the Git offboarding walks (the erasure reads them the same
+   * way). Read-only.
+   */
+  async getConsequences(
+    organizationId: string,
+    actorUserId: string,
+    sessionSignedInAt: Date,
+    now: Date = new Date(),
+  ): Promise<OrganizationDeletionConsequencesDTO> {
+    const memberCount = await withOrgContext(
+      { userId: actorUserId, organizationId },
+      async (tx) => {
+        await assertOrgCapability(actorUserId, organizationId, 'deleteOrganization', tx);
+        return organizationMembershipRepository.countByOrg(organizationId, tx);
+      },
+    );
+    const hostOwner = provisioningOrgLogin();
+    const { workspaces, projectCount, repos } = await withSystemContext(async (tx) => ({
+      workspaces: await workspaceRepository.listByOrganization(organizationId, tx),
+      projectCount: await projectRepository.countByOrganization(organizationId, tx),
+      repos: await githubRepoRepository.listByOrganizationWithInstallation(organizationId, tx),
+    }));
+    const { hasPassword } = await usersService.getPasswordCapability(actorUserId);
+    return {
+      workspaceNames: workspaces.map((w) => w.name),
+      projectCount,
+      memberCount,
+      hostedRepos: repos
+        .filter((r) => r.provider === 'github')
+        .filter((r) => isMotirHostedOwner(r.owner, hostOwner))
+        .map((r) => ({ id: r.id, fullName: `${r.owner}/${r.name}` })),
+      erasureDueAt: erasureDueAt(now).toISOString(),
+      hasPassword,
+      signedInRecently: now.getTime() - sessionSignedInAt.getTime() <= STEP_UP_WINDOW_MS,
+    };
   },
 };
