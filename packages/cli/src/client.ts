@@ -15,6 +15,7 @@ import {
   toDispatchRunAppended,
   toDispatchRunOpened,
   toDispatchRunView,
+  toRunGitCredentials,
   toExpandSubmitResult,
   toScopeClaim,
   toWorkItemClaim,
@@ -1018,6 +1019,25 @@ export interface DispatchRunView {
   cards: Array<{ key: string | null; position: number; disposition: string }>;
 }
 
+/**
+ * A hosted run's GIT CREDENTIALS (MOTIR-6538 · MOTIR-6559) — one entry per
+ * repository of the run, each an App installation token and the App's bot as
+ * its author, and the dispatcher's Motir name for the pull request body.
+ *
+ * ⚠️ `token` is a live GitHub credential. It is handed to git and `gh` through
+ * `hostedGit.ts`'s helper and cache; nothing prints it.
+ */
+export interface RunGitCredentials {
+  credentials: Array<{
+    repository: string;
+    token: string;
+    expiresAt: string;
+    authorName: string;
+    authorEmail: string;
+  }>;
+  dispatchedBy: string | null;
+}
+
 export interface DispatchRunAppended {
   runId: string;
   appended: number;
@@ -1991,6 +2011,16 @@ export class MotirClient {
    */
   async getDispatchRun(runId: string): Promise<DispatchRunView> {
     return toDispatchRunView(await this.v1.request('getDispatchRun', { path: { id: runId } }));
+  }
+
+  /**
+   * Trade the RUN credential for fresh git credentials (MOTIR-6538) — one per
+   * repository of the run. Only a hosted run's own credential is answered.
+   */
+  async issueRunGitCredentials(runId: string): Promise<RunGitCredentials> {
+    return toRunGitCredentials(
+      await this.v1.request('issueDispatchRunGitCredentials', { path: { id: runId } }),
+    );
   }
 
   /** APPEND a batch of run events. The server assigns each its `seq`. */

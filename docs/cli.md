@@ -1723,19 +1723,22 @@ Eleven environment variables, none required — each overrides a default
 (`motir help environment` prints this from the shipped code). The last four are
 what a hosted run's container is configured with:
 
-| Variable                | Overrides                                                                                                              |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `MOTIR_TOKEN`           | The PAT, honoured by **every** command. Set it and there is no login step and no file. Outranks a stored credential.   |
-| `MOTIR_SERVER`          | Which server to talk to. Chain: `--server` > this > `.motir.json` > the single stored server > `https://app.motir.co`. |
-| `MOTIR_AGENT`           | The agent command. Precedence: `--agent` > `MOTIR_AGENT` > `agentCommand` in config.                                   |
-| `MOTIR_CONFIG_HOME`     | Where `motir/config.json` lives. Highest-precedence config home; also the second-choice state home.                    |
-| `XDG_CONFIG_HOME`       | The config home when `MOTIR_CONFIG_HOME` is unset (else `~/.config`).                                                  |
-| `MOTIR_STATE_HOME`      | Where `motir/session-excludes.json` lives. Chain: this > `MOTIR_CONFIG_HOME` > `XDG_STATE_HOME` > `~/.local/state`.    |
-| `XDG_DATA_HOME`         | Motir stores nothing here — `doctor` reads it only to find where _your agent_ keeps its credential.                    |
-| `MOTIR_DISPATCH_RUN_ID` | A run Motir already opened: `motir run` ADOPTS it, needs no `.motir.json` and never prompts. `--run-id` outranks it.   |
-| `MOTIR_RUN_TOKEN`       | A hosted run's own credential. Chain: `--token` > `MOTIR_TOKEN` > this > config. Never written to disk.                |
-| `MOTIR_API_URL`         | The server a hosted run reports to. Chain: `--server` > `MOTIR_SERVER` > this > `.motir.json`.                         |
-| `MOTIR_WORKSPACE`       | Where a hosted run clones its repositories, as `<root>/<name>`. Default `/workspace`.                                  |
+| Variable                | Overrides                                                                                                                                                                                    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MOTIR_TOKEN`           | The PAT, honoured by **every** command. Set it and there is no login step and no file. Outranks a stored credential.                                                                         |
+| `MOTIR_SERVER`          | Which server to talk to. Chain: `--server` > this > `.motir.json` > the single stored server > `https://app.motir.co`.                                                                       |
+| `MOTIR_AGENT`           | The agent command. Precedence: `--agent` > `MOTIR_AGENT` > `agentCommand` in config.                                                                                                         |
+| `MOTIR_CONFIG_HOME`     | Where `motir/config.json` lives. Highest-precedence config home; also the second-choice state home.                                                                                          |
+| `XDG_CONFIG_HOME`       | The config home when `MOTIR_CONFIG_HOME` is unset (else `~/.config`).                                                                                                                        |
+| `MOTIR_STATE_HOME`      | Where `motir/session-excludes.json` lives. Chain: this > `MOTIR_CONFIG_HOME` > `XDG_STATE_HOME` > `~/.local/state`.                                                                          |
+| `XDG_DATA_HOME`         | Motir stores nothing here — `doctor` reads it only to find where _your agent_ keeps its credential.                                                                                          |
+| `MOTIR_DISPATCH_RUN_ID` | A run Motir already opened: `motir run` ADOPTS it, needs no `.motir.json` and never prompts. `--run-id` outranks it.                                                                         |
+| `MOTIR_RUN_TOKEN`       | A hosted run's own credential. Chain: `--token` > `MOTIR_TOKEN` > this > config. Never written to `config.json`; the run keeps it in its own owner-only state for the git credential helper. |
+| `MOTIR_API_URL`         | The server a hosted run reports to. Chain: `--server` > `MOTIR_SERVER` > this > `.motir.json`.                                                                                               |
+| `MOTIR_WORKSPACE`       | Where a hosted run clones its repositories, as `<root>/<name>`. Default `/workspace`.                                                                                                        |
+| `MOTIR_MODEL`           | The model a hosted run's OpenCode runs on (`anthropic/<id>`). A hosted run launches OpenCode itself; `MOTIR_AGENT` is not read there, only `--agent`.                                        |
+| `MOTIR_GATEWAY_URL`     | The gateway a hosted run's OpenCode reaches its model through (the egress contract's provider configuration).                                                                                |
+| `MOTIR_RUN_KEY`         | The run's gateway key — the one credential OpenCode's environment holds.                                                                                                                     |
 
 `motir doctor` probes your agent's own key variables (`ANTHROPIC_API_KEY`,
 `OPENAI_API_KEY`, `CURSOR_API_KEY`) for **presence** and never reads a value.

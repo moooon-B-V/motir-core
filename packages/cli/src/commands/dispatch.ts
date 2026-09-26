@@ -15,6 +15,7 @@ import {
   type ParsedAgentCommand,
 } from '../agentProfiles.js';
 import { runAgent } from '../agentRun.js';
+import { hostedOpenCodeAgent } from '../hostedAgent.js';
 import { runDispatchLeg } from '../dispatchLeg.js';
 import { createDispatchRunReporter } from '../dispatchRunReporter.js';
 import { runCiWatchPhase, type CiWatchOutcome } from '../ciWatch.js';
@@ -175,11 +176,20 @@ export interface DeliveryDeps {
  * (BYOK's default is "hand me the prompt", not "fail").
  */
 export function resolveAgent(
-  opts: DeliveryOptions,
+  opts: DeliveryOptions & { runId?: string },
   env: NodeJS.ProcessEnv = process.env,
   configured: () => string | undefined = getAgentCommand,
 ): { parsed: ParsedAgentCommand; source: AgentSource } | null {
   if (opts.print) return null;
+  // ⚠️ A HOSTED RUN LAUNCHES ITS OWN AGENT (MOTIR-6559): OpenCode on the run's
+  // model through the gateway key, on an allow-listed environment. `MOTIR_AGENT`
+  // and the user config are a LOCAL person's choices and are not read — only an
+  // explicit `--agent`, for someone running the hosted path by hand.
+  if (hostedRunId(opts, env)) {
+    const flagged = parseAgentCommand(opts.agent);
+    if (flagged) return { parsed: flagged, source: 'flag' };
+    return { parsed: hostedOpenCodeAgent(env), source: 'hosted' };
+  }
   const candidates: [string | undefined, AgentSource][] = [
     [opts.agent, 'flag'],
     [env['MOTIR_AGENT'], 'env'],
@@ -347,7 +357,7 @@ async function deliver(input: DeliverInput): Promise<void> {
     // default because a person is at the terminal; in a container the default
     // would end the run having done nothing, with the card claimed.
     throw new CliError('A hosted run needs an agent to launch.', {
-      hint: 'The hosted image sets MOTIR_AGENT; pass --agent <cmd> when running it by hand.',
+      hint: 'A hosted run launches OpenCode itself; --print is not available on one.',
     });
   }
 
@@ -396,7 +406,14 @@ async function deliver(input: DeliverInput): Promise<void> {
   // reporter swallows its own failures by construction; there is deliberately no
   // error handling at this call site, because handling would imply there is
   // something a caller could do.
-  const reporter = createDispatchRunReporter({ client, reportLogBodies: opts.reportLog === true });
+  // ⚠️ A HOSTED RUN ALWAYS REPORTS ITS AGENT'S OUTPUT (MOTIR-6559). The stall
+  // watchdog ends a run with no event inside its window, and the agent's own
+  // output is the only thing a long step produces — the entrypoint this replaces
+  // teed it unconditionally, for exactly that reason.
+  const reporter = createDispatchRunReporter({
+    client,
+    reportLogBodies: opts.reportLog === true || Boolean(input.adoptedRunId),
+  });
   if (input.adoptedRunId) {
     // ⚠️ ADOPT, NEVER OPEN, A HOSTED RUN (MOTIR-6558). The server opened it with
     // this card as its leg and wrote its `run_opened`; a second open would be a
@@ -820,7 +837,7 @@ export async function runCommand(
   const adoptId = hostedRunId(opts);
   const enter = (fn: (session: ProjectSession, adopted: AdoptedRun | null) => Promise<void>) =>
     adoptId
-      ? withHostedProjectSession(adoptId, fn)
+      ? withHostedProjectSession(adoptId, fn, trimmed)
       : withProjectSession((session) => fn(session, null));
 
   if (adoptId && opts.includePlanning) {
@@ -902,7 +919,8 @@ export async function runCommand(
       // actually worked. Nothing is re-queried to produce it.
       const reporter = createDispatchRunReporter({
         client,
-        reportLogBodies: opts.reportLog === true,
+        // A hosted run always reports its agent's output (see the leaf path).
+        reportLogBodies: opts.reportLog === true || adopted !== null,
       });
       if (claimed.claim === null) {
         // A HOSTED scope — nothing was claimed here. ADOPT, never open: the set

@@ -439,6 +439,24 @@ export interface ParsedAgentCommand {
   binary: string;
   /** The remaining tokens (e.g. `--dangerously-skip-permissions`). */
   args: string[];
+  /**
+   * A BUILT-IN launcher's own environment (the hosted OpenCode launcher,
+   * MOTIR-6559). When set it REPLACES the inherited environment instead of
+   * extending it — which is the whole point: an ALLOW-LISTED environment keeps
+   * the run credential out of the agent. A command the user typed never has one.
+   */
+  env?: NodeJS.ProcessEnv;
+  /**
+   * The prompt as ARGUMENTS, for an agent that takes its message on argv
+   * (`opencode run <message>`). Called with the prompt and the path it was
+   * written to, so a long prompt can be attached as a file instead.
+   */
+  promptArgs?: (prompt: string, promptFile: string) => string[];
+  /**
+   * `false` leaves the agent's stdin unconnected. An agent that APPENDS a piped
+   * stdin to its argv message would otherwise receive the prompt twice.
+   */
+  promptOnStdin?: boolean;
 }
 
 /**

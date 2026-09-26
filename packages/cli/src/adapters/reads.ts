@@ -5,6 +5,7 @@ import type {
   DispatchRunAppended,
   DispatchRunOpened,
   DispatchRunView,
+  RunGitCredentials,
   PlanJobState,
   PlanOutcome,
   PlanProposal,
@@ -709,6 +710,22 @@ export function toDispatchRunView(body: SuccessBody<'getDispatchRun'>): Dispatch
     cards: [...body.cards]
       .sort((a, b) => a.position - b.position)
       .map((card) => ({ key: card.key, position: card.position, disposition: card.disposition })),
+  };
+}
+
+/** A hosted run's git credentials, one per repository (MOTIR-6538). */
+export function toRunGitCredentials(
+  body: SuccessBody<'issueDispatchRunGitCredentials'>,
+): RunGitCredentials {
+  return {
+    credentials: body.credentials.map((c) => ({
+      repository: c.repository,
+      token: c.token,
+      expiresAt: c.expiresAt,
+      authorName: c.authorName,
+      authorEmail: c.authorEmail,
+    })),
+    dispatchedBy: body.dispatchedBy,
   };
 }
 

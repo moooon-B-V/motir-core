@@ -127,6 +127,8 @@ const RUN_PATH_FILES = [
   'session.ts',
   // The hosted mode's own read of the run it adopts (MOTIR-6558).
   'hostedMode.ts',
+  // The hosted run's GitHub access — the git-credential route (MOTIR-6559).
+  'hostedGit.ts',
 ];
 
 /** Client method → the operations it calls, following `this.<method>` hops. */

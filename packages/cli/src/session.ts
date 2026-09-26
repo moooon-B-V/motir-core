@@ -4,6 +4,7 @@ import { CliError } from './errors.js';
 import { requireLink, type FoundLink } from './config/linkConfig.js';
 import { resolveServerUrl } from './serverResolve.js';
 import { resolveCredential } from './config/userConfig.js';
+import { prepareHostedRun } from './hostedGit.js';
 import { hostedLink, hostedWorkspace, readAdoptedRun, type AdoptedRun } from './hostedMode.js';
 
 // Shared plumbing for the commands that talk to a linked project: resolve the
@@ -68,6 +69,8 @@ export async function withProjectSession<T>(
 export async function withHostedProjectSession<T>(
   runId: string,
   fn: (session: ProjectSession, run: AdoptedRun) => Promise<T>,
+  /** The card the command was given — what the run's pull requests link (MOTIR-6559). */
+  targetKey?: string,
 ): Promise<T> {
   const serverUrl = resolveServerUrl();
   const cred = resolveCredential(serverUrl);
@@ -78,6 +81,17 @@ export async function withHostedProjectSession<T>(
   }
   const client = new MotirClient({ serverUrl, token: cred.token });
   const run = await readAdoptedRun(client, runId);
+  // ⚠️ GITHUB ACCESS BEFORE ANY CHECKOUT (MOTIR-6559). The run's git config —
+  // the credential helper, the App's identity per repository — and its `gh`
+  // shim must exist before the first clone, and the run's credentials read here
+  // are also where the pull requests' `dispatchedBy` comes from.
+  await prepareHostedRun({
+    serverUrl,
+    token: cred.token,
+    runId,
+    targetKey: targetKey ?? run.legs[0] ?? runId,
+    client,
+  });
   const link = hostedLink(hostedWorkspace(), serverUrl, run.projectKey);
   return fn({ link, serverUrl, projectKey: run.projectKey, client }, run);
 }

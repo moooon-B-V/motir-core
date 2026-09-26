@@ -493,8 +493,56 @@ describe('motir run <leaf> in hosted mode', () => {
       adopted: { runId: RUN, projectKey: 'PROD', legs: ['PROD-7'] },
     });
 
+    await expect(
+      runCommand('PROD-7', { runId: RUN, print: true }, { run: PUSHED }),
+    ).rejects.toThrow(/hosted run needs an agent/);
+    expect(runAgentMock).not.toHaveBeenCalled();
+  });
+
+  it('with no --agent, launches its OWN OpenCode on the run model — never MOTIR_AGENT (MOTIR-6559)', async () => {
+    setup({
+      details: { 'PROD-7': detail('PROD-7') },
+      prompt: (k) => leafPrompt(k),
+      adopted: { runId: RUN, projectKey: 'PROD', legs: ['PROD-7'] },
+    });
+    const saved = { ...process.env };
+    Object.assign(process.env, {
+      MOTIR_AGENT: 'claude --dangerously-skip-permissions',
+      MOTIR_MODEL: 'anthropic/claude-sonnet-5',
+      MOTIR_GATEWAY_URL: 'https://gateway.test',
+      MOTIR_RUN_KEY: 'rk_live_secret',
+      MOTIR_RUN_TOKEN: 'mrt_run_secret',
+    });
+    try {
+      await runCommand('PROD-7', { runId: RUN }, { run: PUSHED });
+    } finally {
+      for (const k of ['MOTIR_MODEL', 'MOTIR_GATEWAY_URL', 'MOTIR_RUN_KEY', 'MOTIR_RUN_TOKEN']) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    }
+
+    expect(runAgentMock).toHaveBeenCalledTimes(1);
+    const command = runAgentMock.mock.calls[0]![0].command as {
+      binary: string;
+      args: string[];
+      env: NodeJS.ProcessEnv;
+    };
+    expect(command.binary).toBe('opencode');
+    expect(command.args).toEqual(['run', '--model', 'anthropic/claude-sonnet-5', '--auto']);
+    expect(command.env['MOTIR_RUN_TOKEN']).toBeUndefined();
+    expect(command.env['MOTIR_AGENT']).toBeUndefined();
+  });
+
+  it('without the run model env, the hosted launcher refuses before anything is spawned', async () => {
+    setup({
+      details: { 'PROD-7': detail('PROD-7') },
+      prompt: (k) => leafPrompt(k),
+      adopted: { runId: RUN, projectKey: 'PROD', legs: ['PROD-7'] },
+    });
+
     await expect(runCommand('PROD-7', { runId: RUN }, { run: PUSHED })).rejects.toThrow(
-      /hosted run needs an agent/,
+      /hosted run is missing MOTIR_MODEL, MOTIR_GATEWAY_URL, MOTIR_RUN_KEY/,
     );
     expect(runAgentMock).not.toHaveBeenCalled();
   });
