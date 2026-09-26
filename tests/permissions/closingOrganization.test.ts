@@ -65,7 +65,17 @@ describe('resolvePermissions with organizationClosing', () => {
       projectRole: null,
       organizationClosing: true,
     });
-    expect([...owner].sort()).toEqual(['project:browse', 'report:view']);
+    // Every key the Owner keeps is a READ key of the viewer set — derived rather
+    // than listed, so a read key main adds to the viewer set (`approval:view_any`,
+    // `plan:view_any`, `run:view_any` arrived that way) is kept, never a write.
+    expect([...owner].sort()).toEqual(
+      [...BUILTIN_ROLE_PERMISSIONS.viewer].filter((k) => owner.has(k)).sort(),
+    );
+    expect(owner.has('project:browse')).toBe(true);
+    expect(owner.has('report:view')).toBe(true);
+    for (const key of owner) {
+      expect(key).not.toMatch(/:(edit|add|create|delete|archive|manage|administer|submit)/);
+    }
     const visitor = resolvePermissions({
       accessLevel: 'public',
       workspaceRole: null,
