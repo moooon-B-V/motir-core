@@ -173,7 +173,7 @@ describe('workItemRepository.findByIds — every consuming service resolves the 
   });
 });
 
-// ── Shared read 2 · findAncestorIdsForItems — sprintsService + workItemsService ─
+// ── Shared read 2 · findAncestorIdsForItems — readiness + validate_work_item ────
 
 describe('workItemRepository.findAncestorIdsForItems — both consumers see the chain', () => {
   it('workItemsService: readiness inherits the ancestor’s blocker', async () => {
@@ -194,20 +194,22 @@ describe('workItemRepository.findAncestorIdsForItems — both consumers see the 
     expect(epicId).toBeTruthy();
   });
 
-  it('sprintsService: validateSprint reports the inherited blocker as out-of-sprint', async () => {
+  // MOTIR-6368: `validateSprint` no longer walks the ancestor chain (it checks
+  // an item's OWN blockers only), so this read's second consumer is now
+  // `validate_work_item`'s NON-gating `softBlocks`.
+  it('workItemsService: validateWorkItem reports the ancestor’s blocker as a soft block', async () => {
     const { fx, storyId, blockerId } = await seedLinkedTrio('SR5');
-    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'S' }, fx.ctx);
-    await backlogService.assignToSprint(storyId, sprint.id, undefined, fx.ctx);
-    await sprintsService.startSprint(sprint.id, {}, fx.ctx);
+    const child = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Leaf', parentId: storyId },
+      fx.ctx,
+    );
 
-    const verdict = await sprintsService.validateSprint(fx.projectId, sprint.id, fx.ctx);
+    const verdict = await workItemsService.validateWorkItem(fx.projectId, child.identifier, fx.ctx);
 
-    // The blocker is NOT in the sprint, so the sprint cannot finish. Unbound,
-    // every read behind this said "nothing to see" and the sprint validated —
-    // a green verdict on a sprint that cannot complete.
-    expect(verdict.valid).toBe(false);
+    // Unbound, the ancestor walk returned nothing and the soft block vanished.
     const blocker = await workItemsService.getWorkItem(blockerId, fx.ctx);
-    expect(verdict.blockers.map((b) => b.blockedBy)).toContain(blocker.identifier);
+    expect(verdict.valid).toBe(true);
+    expect(verdict.softBlocks.map((s) => s.blockedBy.key)).toEqual([blocker.identifier]);
   });
 });
 

@@ -3,7 +3,6 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import * as route from '@/app/api/mcp/route';
 import { db } from '@/lib/db';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
@@ -22,6 +21,7 @@ import { seedSystemPrincipal } from '@/scripts/plan-seed/systemPrincipal';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { mcpRouteFetch } from '../../helpers/mcpRouteFetch';
 
 // THE STORY GATE (Story MOTIR-5544 · Subtask MOTIR-6232) — the ASSEMBLED
 // motir-core half of trigger 2, over the REAL Postgres, driven only through the
@@ -94,23 +94,6 @@ async function memberClient(ctx: ServiceContext): Promise<Client> {
   return client;
 }
 
-/** Route the SDK's fetch into the REAL `/api/mcp` handlers, with a bearer. */
-function routeFetch(token: string): typeof fetch {
-  return (async (input: unknown, init: RequestInit = {}) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : (input as Request).url;
-    const headers = new Headers(init.headers ?? {});
-    headers.set('authorization', `Bearer ${token}`);
-    const method = (init.method ?? 'GET').toUpperCase();
-    const handler = method === 'GET' ? route.GET : method === 'DELETE' ? route.DELETE : route.POST;
-    return handler(new Request(url, { ...init, headers }) as never);
-  }) as unknown as typeof fetch;
-}
-
 /** A client on the REAL route, authenticated by a token minted from EXACTLY `CLI_TOKEN_GRANT`. */
 async function cliClient(fx: WorkItemFixture): Promise<Client> {
   const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
@@ -118,7 +101,7 @@ async function cliClient(fx: WorkItemFixture): Promise<Client> {
     fixedGrant: [...CLI_TOKEN_GRANT],
   });
   const transport = new StreamableHTTPClientTransport(new URL(ENDPOINT), {
-    fetch: routeFetch(token),
+    fetch: mcpRouteFetch(token),
   });
   const client = new Client({ name: 'run-found-story-gate-cli', version: '0.0.0' });
   await client.connect(transport);

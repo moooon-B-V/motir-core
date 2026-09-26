@@ -617,9 +617,14 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-3095, summary UNCHANGED — same reasoning as
     // `validate_work_item` below: the optional `planId` changes which tree the
     // question is asked over, not what the question is.
+    //
+    // Re-pinned for MOTIR-6368: the tool checks HARD blockers only — an item's
+    // OWN blocked_by, never an ancestor's (a soft block `--allow-soft-block`
+    // overrides). Summary UNCHANGED: it still names every in-sprint item gated by
+    // work outside the sprint; what changed is which edges count as gating.
     summary:
       'Is this sprint finishable? Names every in-sprint item still gated by work outside it.',
-    descriptionFingerprint: '4089eae0592b',
+    descriptionFingerprint: '973e54a073f4',
   },
   validate_work_item: {
     // Re-pinned for MOTIR-3095, summary UNCHANGED and deliberately so: the tool
@@ -692,6 +697,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-6245: `likely-self-blocking-design` now names its
     // scope — a childless card that is not itself `type: design`. Summary
     // UNCHANGED: it narrows an advisory, and this line describes the verdict.
+    //
+    // Re-pinned for MOTIR-6368's NON-gating `softBlocks` (an ancestor's open
+    // blockers). Summary UNCHANGED: like the advisory channel, it never touches
+    // the finishability verdict this line describes.
     summary:
       'Is this epic, story, task or bug finishable, and do its cross-parent edges have their parent edges? Names what is missing.',
     // SUMMARY REWRITTEN for MOTIR-6370: `valid` now also requires every

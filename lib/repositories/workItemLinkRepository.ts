@@ -359,7 +359,7 @@ export const workItemLinkRepository = {
    * The `is_blocked_by` EDGES of many items at once (Subtask 7.8.15 —
    * `validate_sprint`), each carrying the blocking item's id, `identifier`,
    * `status`, `sprintId` and `projectId`. The sprint-finishability check walks
-   * every in-sprint item (∪ its ancestor chain) and asks, per blocker, "is it
+   * every in-sprint item (its OWN edges — MOTIR-6368) and asks, per blocker, "is it
    * done OR also in this sprint?" — which needs the blocker's IDENTITY (`id` for
    * the in-sprint membership test, `identifier` to NAME it) and `sprintId`
    * (in-sprint?), which neither {@link findBlockerStatesForItems} (the

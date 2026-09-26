@@ -81,10 +81,16 @@ import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
 // unrotated backup. **This branch does nothing, by design.** Article 17 is not
 // absolute, `ACCOUNT_ERASURE_KEPT_EXCEPTIONS` is the ledger copy that says so,
 // and the group is named here so a reader can tell a decision from an omission.
-// In motir-core the billing substrate is ORGANIZATION-scoped
-// (`Organization.scaledTrackerSubscription`, the `Ci*Usage` / `CiPeriodCharge`
-// meters) — nothing about it is keyed to a user, so it survives by construction
-// and the sweep never names it.
+// In motir-core the billing RECORD is ORGANIZATION-scoped
+// (`Organization.scaledTrackerSubscription` and `CiPeriodCharge`, which carries
+// no workspace) — nothing about it is keyed to a user, and erasure never deletes
+// an organization, so it survives by construction and the sweep never names it.
+// The per-workspace METERS are not the record: `CiPeriodUsage`,
+// `CiWorkflowRunUsage`, `CiContainerUsage`, `CiContainerUsageSlice` and
+// `CiContainerPeriodCost` each cascade from their workspace, so a sole-member
+// workspace deleted below takes its meters with it. That is intended — the meters
+// are inputs, the charge is what is kept (`docs/decisions/organization-deletion.md`
+// §7).
 //
 // ── SYSTEM-scoped, like every other retention sweep ────────────────────────
 // The due set spans users and tenants, so the SELECT runs under

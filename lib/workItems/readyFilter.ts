@@ -88,6 +88,24 @@ export interface ReadyListFilter {
    * re-derived.
    */
   sprintRef?: string;
+  /**
+   * WIDEN the read past a SOFT block (Story MOTIR-6354 · MOTIR-6366) — default
+   * `false`, and `false` returns exactly what the read returned before the flag
+   * existed.
+   *
+   * A HARD block is a leaf's OWN open `blocked_by` edge; a SOFT block is one it
+   * only inherits, because an ANCESTOR is not ready. With the flag on, the walk
+   * still requires every leaf's own blockers to be satisfied, but it no longer
+   * prunes a subtree because the container heading it is not ready — so a leaf
+   * held only by an ancestor's block is listed, and a leaf with its own open
+   * blocker never is.
+   *
+   * ⚠️ LIST-ONLY. `getNextReady`, `countReady` and `claimNextReady` do not take
+   * it (their filter types `Omit` it): a dispatch that silently claimed
+   * soft-blocked work would be a different product decision than a read that
+   * SHOWS it.
+   */
+  allowSoftBlock?: boolean;
   /** Opaque `base64url([kind, priority, key])` seek-after token. */
   cursor?: string;
   /** Page size; defaults to 50, hard-capped at 200. */

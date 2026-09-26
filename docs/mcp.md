@@ -2446,10 +2446,23 @@ read every other sprint tool depends on.
 #### `validate_sprint`
 
 Check whether a sprint is **finishable**: a sprint is VALID ⟺ every in-sprint,
-not-done item has its ENTIRE transitive `blocked_by` closure AND all of its
-children either `done` or also in the sprint (the parent-ready cascade applied to
-the sprint — a child inherits its ancestors' blockers, and a parent needs its
-children). Productizes the _re-validate-the-active-sprint_ rule a planning agent
+not-done item has its OWN `blocked_by` edges (transitively, through in-sprint
+blockers) AND all of its children either `done` or also in the sprint. Two rules,
+and only the first is about blockers:
+
+- **Own blockers only (HARD blocks).** An in-sprint item is gated by its OWN
+  `blocked_by` edges — each must be `done` or in the sprint — never by an
+  ancestor's (MOTIR-6354 / MOTIR-6368). An ancestor's blocker reaches a
+  descendant only through the readiness cascade: a SOFT block, overridable at run
+  time with `--allow-soft-block`, so it does not make the sprint unfinishable. A
+  blocked epic or story that is ITSELF in the sprint still gates, as its own
+  member. (`validate_work_item` reports a target's soft blocks, without gating,
+  in `softBlocks`.)
+- **A parent needs its children.** An in-sprint, not-done parent with a child
+  that is neither `done` nor in the sprint can never be finished within it, so it
+  gates (MOTIR-1337). This is not a blocker rule, and it is unchanged.
+
+Productizes the _re-validate-the-active-sprint_ rule a planning agent
 runs after any plan/re-plan that touches sprint membership or a sprint item's
 `blocked_by` edges. Read-only.
 
@@ -2462,8 +2475,9 @@ runs after any plan/re-plan that touches sprint membership or a sprint item's
 **Output** — `structuredContent`: a `SprintValidityDto` —
 `{ sprintId, valid, blockers }`. When `valid` is `false`, `blockers` lists each
 gated in-sprint item as `{ item, blockedBy, blockerStatus, blockerSprintId }`
-(the out-of-sprint, not-done work to pull in or move the gated item off). A
-missing active sprint (with no `sprintId`) returns a `NO_ACTIVE_SPRINT` tool
+(the out-of-sprint, not-done work to pull in or move the gated item off). Every
+entry is the gated item's OWN edge or OWN child, so no entry carries a hard/soft
+label. A missing active sprint (with no `sprintId`) returns a `NO_ACTIVE_SPRINT` tool
 error; an unknown `sprintId` returns `SPRINT_NOT_FOUND`.
 
 #### `validate_work_item`
@@ -2481,10 +2495,24 @@ kind — epic / story / task / bug (a `subtask` is the leaf). Read-only.
 | `condition` | `loose`\|`tight` | no       | Default `loose` — a `done` dependency outside the subtree counts as satisfied. `tight` requires every dependency to be IN the subtree, else it gates. |
 
 **Output** — `structuredContent`: a `WorkItemValidityDto` —
-`{ key, valid, blockers, invalidEdges, advisories }`. `blockers` lists each gated
-in-subtree item as `{ item, blockedBy, blockerStatus, blockerSprintId }` (the
-out-of-subtree, unsatisfied work gating it). An unknown / cross-workspace key
-returns a `WORK_ITEM_NOT_FOUND` tool error.
+`{ key, valid, blockers, invalidEdges, advisories, softBlocks }`. When `valid` is `false`,
+`blockers` lists each gated in-subtree item as
+`{ item, blockedBy, blockerStatus, blockerSprintId }` (the out-of-subtree,
+unsatisfied work gating it — always an item's OWN edge). An unknown /
+cross-workspace key returns a `WORK_ITEM_NOT_FOUND` tool error.
+
+`softBlocks` (MOTIR-6354 / MOTIR-6368) is **never gating**: it lists every open
+`blocked_by` edge owned by one of the target's ANCESTORS (parent → … → root) — a
+block that reaches the target only through the readiness cascade, and that a run
+may override with `--allow-soft-block`. Each entry is
+`{ via: { key, title }, blockedBy: { key, title }, blockerStatus }`: `via` is the
+ancestor that owns the edge, `blockedBy` the open item it waits on, and
+`blockerStatus` that item's raw workflow status key. "Open" means not in its own
+project's `done` set — the same done-ness `blockers` judges by. Entries are sorted
+by `via.key`, then `blockedBy.key`; the list is empty when no ancestor is blocked.
+`valid` is unchanged by it — it still answers "can this subtree finish". With
+`planId` it is read over the projected ancestor chain, where a proposed ancestor
+or blocker is named by its `planItem:<id>` temp-ref and proposed title.
 
 **A cross-parent edge is VALID only when the parents carry it** (Story MOTIR-6015 ·
 MOTIR-6370). A `blocked_by` joins two items on the same level and may cross

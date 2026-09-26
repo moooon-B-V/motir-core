@@ -680,6 +680,105 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
   });
 });
 
+// MOTIR-6354 / MOTIR-6368 — the projected twin of validate_work_item's NON-gating
+// `softBlocks`: every open projected blocked_by edge owned by a projected ANCESTOR.
+describe('planValidityService.validateProjectedWorkItem — softBlocks (MOTIR-6368)', () => {
+  it('a no-op plan reads the SAME softBlocks as the committed validate_work_item', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await mk(fx, 'Parent epic', 'epic');
+    const openEpic = await mk(fx, 'Open epic', 'epic');
+    const story = await mk(fx, 'Story', 'story', epic.id);
+    await link(fx, epic.id, openEpic.id);
+
+    const planId = await freshPlan(fx);
+    await plansService.markPlanned(planId, fx.ctx);
+    const projected = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    const committed = await workItemsService.validateWorkItem(
+      fx.projectId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(projected.valid).toBe(true);
+    expect(projected.softBlocks).toEqual([
+      {
+        via: { key: epic.identifier, title: 'Parent epic' },
+        blockedBy: { key: openEpic.identifier, title: 'Open epic' },
+        blockerStatus: 'todo',
+      },
+    ]);
+    expect(projected.softBlocks).toEqual(committed.softBlocks);
+  });
+
+  it('a PROPOSED ancestor and a PROPOSED blocker are named by temp-ref and proposed title; a done blocker is skipped', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await mk(fx, 'Epic', 'epic');
+    const epicBlocker = await mk(fx, 'Epic blocker', 'task');
+    const doneBlocker = await mk(fx, 'Done blocker', 'task');
+    await markDone(doneBlocker.id);
+    await link(fx, epic.id, epicBlocker.id);
+    await link(fx, epic.id, doneBlocker.id);
+
+    const planId = await freshPlan(fx);
+    const pB = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'Proposed blocker', kind: 'task' },
+    });
+    const blockerRef = `planItem:${itemIdByTitle(pB, 'Proposed blocker')}`;
+    const pS = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'Proposed story', kind: 'story' },
+      parentRef: epic.id,
+      blockedByRefs: [blockerRef],
+    });
+    const storyRef = `planItem:${itemIdByTitle(pS, 'Proposed story')}`;
+    const pC = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'Proposed subtask', kind: 'subtask' },
+      parentRef: storyRef,
+    });
+    const childRef = `planItem:${itemIdByTitle(pC, 'Proposed subtask')}`;
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(planId, childRef, fx.ctx);
+    expect(res.valid).toBe(true);
+    expect(res.softBlocks).toHaveLength(2);
+    expect(res.softBlocks).toContainEqual({
+      via: { key: epic.identifier, title: 'Epic' },
+      blockedBy: { key: epicBlocker.identifier, title: 'Epic blocker' },
+      blockerStatus: 'todo',
+    });
+    expect(res.softBlocks).toContainEqual({
+      via: { key: storyRef, title: 'Proposed story' },
+      blockedBy: { key: blockerRef, title: 'Proposed blocker' },
+      blockerStatus: 'todo',
+    });
+  });
+
+  it('a parent the plan REMOVES ends the chain — nothing above it is reported', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await mk(fx, 'Epic', 'epic');
+    const openEpic = await mk(fx, 'Open epic', 'epic');
+    const story = await mk(fx, 'Story', 'story', epic.id);
+    const subtask = await mk(fx, 'Subtask', 'subtask', story.id);
+    await link(fx, epic.id, openEpic.id);
+
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, { op: 'remove', workItemId: story.id });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      subtask.identifier,
+      fx.ctx,
+    );
+    expect(res.softBlocks).toEqual([]);
+  });
+});
+
 describe('planValidityService.validateProjectedSprint — the projected sprint rule', () => {
   it('a `modify` making an in-sprint item blocked_by a new BACKLOG add is INVALID; the add is named by temp-ref', async () => {
     const fx = await makeWorkItemFixture();
@@ -1110,6 +1209,7 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
       blockers: [],
       invalidEdges: [],
       advisories: [],
+      softBlocks: [],
     });
   });
 
@@ -1140,6 +1240,7 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
       blockers: [],
       invalidEdges: [],
       advisories: [],
+      softBlocks: [],
     });
   });
 
@@ -1238,7 +1339,11 @@ describe('planValidityService.validateProjectedSprint — the sprint rule’s qu
     ]);
   });
 
-  it('an ANCESTOR’s blocker gates every in-sprint descendant, is reported ONCE per member, and the wire order is by item then by blocker', async () => {
+  // MOTIR-6354 / MOTIR-6368: validate_sprint checks HARD blockers only. This case
+  // used to assert the ANCESTOR's blocker gated every in-sprint descendant; a
+  // parent's block now reaches its children only as a SOFT block (overridable
+  // with `--allow-soft-block`), so only each member's OWN edges are reported.
+  it('an ANCESTOR’s blocker does NOT gate in-sprint descendants — only OWN edges are reported, and the wire order is by item then by blocker (MOTIR-6354)', async () => {
     const fx = await makeWorkItemFixture();
     const sprintId = await activeSprint(fx);
     // Keys are allocated in creation order, so PROD-1 … PROD-5 below sort in the
@@ -1250,21 +1355,20 @@ describe('planValidityService.validateProjectedSprint — the sprint rule’s qu
     const blockerTwo = await mk(fx, 'Blocker two', 'task'); // PROD-5 — backlog, not done
     await putInSprint(childA.id, sprintId);
     await putInSprint(childB.id, sprintId);
-    await link(fx, story.id, blockerOne.id); // the ANCESTOR's edge — cascades to A and B
+    await link(fx, story.id, blockerOne.id); // the ANCESTOR's edge — a SOFT block on A and B
     // A's own edges run to ROOT tasks one level above it — cross-level, which the
-    // link door refuses (MOTIR-6369 / 6411). This case is about the sprint walk's
-    // dedupe over edges the tree can still carry, so they are seeded below the doors.
-    await seedBlockedBy(fx, childA.id, blockerOne.id); // A's OWN edge to the SAME blocker
-    await seedBlockedBy(fx, childA.id, blockerTwo.id); // A's second blocker
+    // link door refuses (MOTIR-6369 / 6411). This case is about the sprint walk
+    // over edges the tree can still carry, so they are seeded below the doors.
+    await seedBlockedBy(fx, childA.id, blockerTwo.id); // A's OWN edge — HARD
+    await seedBlockedBy(fx, childA.id, blockerOne.id); // A's OWN edge to the ancestor's blocker too
 
     const planId = await freshPlan(fx);
     await plansService.markPlanned(planId, fx.ctx);
 
     const res = await planValidityService.validateProjectedSprint(planId, fx.ctx);
     expect(res.valid).toBe(false);
-    // A is gated by One through BOTH its own edge and its parent's — reported
-    // once. B is gated by One through the parent alone. Sorted by gated item,
-    // then by blocker: (A,One), (A,Two), (B,One).
+    // A is gated by its own two edges; B has no own edge, so the parent's block
+    // does not reach it here. Sorted by gated item, then by blocker.
     expect(res.blockers).toEqual([
       {
         item: childA.identifier,
@@ -1278,18 +1382,101 @@ describe('planValidityService.validateProjectedSprint — the sprint rule’s qu
         blockerStatus: 'todo',
         blockerSprintId: null,
       },
-      {
-        item: childB.identifier,
-        blockedBy: blockerOne.identifier,
-        blockerStatus: 'todo',
-        blockerSprintId: null,
-      },
     ]);
-    expect(res.blockers.map((b) => `${b.item} ${b.blockedBy}`)).toEqual([
-      `${childA.identifier} ${blockerOne.identifier}`,
-      `${childA.identifier} ${blockerTwo.identifier}`,
-      `${childB.identifier} ${blockerOne.identifier}`,
-    ]);
+    // The committed twin reads the same.
+    expect(await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx)).toEqual(res);
+  });
+});
+
+// MOTIR-6354 / MOTIR-6368 — the committed (`validate_sprint`) and projected
+// (`validate_sprint {planId}`) twins give the SAME answer on the same fixtures.
+describe('validate_sprint HARD blockers only — committed and projected twins agree (MOTIR-6368)', () => {
+  async function bothVerdicts(fx: WorkItemFixture, sprintId: string) {
+    const planId = await freshPlan(fx);
+    await plansService.markPlanned(planId, fx.ctx);
+    const projected = await planValidityService.validateProjectedSprint(planId, fx.ctx);
+    const committed = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx);
+    expect(projected).toEqual(committed);
+    return projected;
+  }
+
+  it('an in-sprint subtask whose out-of-sprint story is blocked_by an open story is VALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await activeSprint(fx);
+    const story = await mk(fx, 'Story (backlog)', 'story');
+    const child = await mk(fx, 'Subtask', 'subtask', story.id);
+    const openStory = await mk(fx, 'Open story', 'story');
+    await putInSprint(child.id, sprintId);
+    await link(fx, story.id, openStory.id);
+
+    expect(await bothVerdicts(fx, sprintId)).toEqual({ sprintId, valid: true, blockers: [] });
+  });
+
+  it('an in-sprint subtask with its OWN blocked_by to an out-of-sprint, not-done subtask is INVALID, naming that edge', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await activeSprint(fx);
+    const story = await mk(fx, 'Story (backlog)', 'story');
+    const child = await mk(fx, 'Subtask', 'subtask', story.id);
+    const other = await mk(fx, 'Other subtask', 'subtask', story.id);
+    await putInSprint(child.id, sprintId);
+    await link(fx, child.id, other.id);
+
+    expect(await bothVerdicts(fx, sprintId)).toEqual({
+      sprintId,
+      valid: false,
+      blockers: [
+        {
+          item: child.identifier,
+          blockedBy: other.identifier,
+          blockerStatus: 'todo',
+          blockerSprintId: null,
+        },
+      ],
+    });
+  });
+
+  it('an in-sprint story blocked_by an out-of-sprint open story is INVALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await activeSprint(fx);
+    const story = await mk(fx, 'Story (in sprint)', 'story');
+    const openStory = await mk(fx, 'Open story', 'story');
+    await putInSprint(story.id, sprintId);
+    await link(fx, story.id, openStory.id);
+
+    expect(await bothVerdicts(fx, sprintId)).toEqual({
+      sprintId,
+      valid: false,
+      blockers: [
+        {
+          item: story.identifier,
+          blockedBy: openStory.identifier,
+          blockerStatus: 'todo',
+          blockerSprintId: null,
+        },
+      ],
+    });
+  });
+
+  it('the children rule still fires, and a member blocked_by its OWN out-of-sprint child is reported ONCE', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await activeSprint(fx);
+    const story = await mk(fx, 'Story (in sprint)', 'story');
+    const child = await mk(fx, 'Child (backlog)', 'subtask', story.id);
+    await putInSprint(story.id, sprintId);
+    await link(fx, story.id, child.id);
+
+    expect(await bothVerdicts(fx, sprintId)).toEqual({
+      sprintId,
+      valid: false,
+      blockers: [
+        {
+          item: story.identifier,
+          blockedBy: child.identifier,
+          blockerStatus: 'todo',
+          blockerSprintId: null,
+        },
+      ],
+    });
   });
 });
 
@@ -1304,7 +1491,8 @@ describe('planValidityService.validateProjectedSprint — the sprint rule’s qu
 // blocker set is a `Set` of ids and every node's identifier is distinct, the
 // `seen` de-duplication inside the two walks can never fire either. (The
 // `addBlocker` de-duplication in the SPRINT walk is a different matter and IS
-// live: there one member is reached through several probes — asserted above.)
+// live: a member blocked_by its OWN out-of-sprint child is reached by both the
+// edge and the children rule — asserted above.)
 //
 // Per `notes.html` #175, a falsified negative premise is discharged by
 // asserting the INVARIANT rather than by dropping the criterion. This is that

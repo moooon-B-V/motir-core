@@ -201,6 +201,52 @@ describe('GET /api/v1/projects/{projectKey}/ready', () => {
     expect(result.items.map((i) => i.key)).toEqual(fromService);
   });
 
+  // MOTIR-6366 — `?allowSoftBlock=true` widens past an ANCESTOR's block (soft)
+  // and never past the leaf's OWN open blocker (hard).
+  it('`?allowSoftBlock=true` lists a leaf held only by its ancestor, never one with its own open blocker', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const gate = await makeItem(caller, 'unfinished gate');
+    const gatedStory = await makeItem(caller, 'gated story', { kind: 'story' });
+    await blockedBy(caller, gatedStory.id, gate.id);
+    const soft = await makeItem(caller, 'soft-blocked child', {
+      kind: 'subtask',
+      parentId: gatedStory.id,
+    });
+    const hard = await makeItem(caller, 'hard-blocked child', {
+      kind: 'subtask',
+      parentId: gatedStory.id,
+    });
+    await blockedBy(caller, hard.id, gate.id);
+
+    const narrow = (await page(caller)).items.map((i) => i.key);
+    expect(narrow).toEqual([gate.identifier]);
+    expect((await page(caller, '?allowSoftBlock=false')).items.map((i) => i.key)).toEqual(narrow);
+    // Empty is omitted — the same wire accident as an empty `sprintId`.
+    expect((await page(caller, '?allowSoftBlock=')).items.map((i) => i.key)).toEqual(narrow);
+
+    const wide = (await page(caller, '?allowSoftBlock=true')).items.map((i) => i.key);
+    expect(new Set(wide)).toEqual(new Set([gate.identifier, soft.identifier]));
+    expect(wide).not.toContain(hard.identifier);
+    // …and the endpoint still agrees with the service exactly.
+    const fromService = (
+      await workItemsService.listReady(
+        caller.fixture.projectId,
+        { allowSoftBlock: true },
+        caller.ctx,
+      )
+    ).items.map((i) => i.key);
+    expect(wide).toEqual(fromService);
+  });
+
+  it('422s a non-boolean `?allowSoftBlock=` with the filter code, rather than reading it as false', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    for (const value of ['yes', '1', 'TRUE']) {
+      const res = await req(caller, `?allowSoftBlock=${value}`);
+      expect(res.status).toBe(422);
+      expect(((await res.json()) as { code: string }).code).toBe('INVALID_READY_FILTER');
+    }
+  });
+
   // ⚠️ An N+1 here is invisible until a 100-row page.
   it("projects the whole page's edges in ONE batched call, not one per row", async () => {
     const caller = await createV1ProjectCaller({ scopes: ['read'] });

@@ -149,7 +149,10 @@ describe('ReadinessBadge (2.4.5)', () => {
         blockedByAncestor={{ identifier: 'PROD-8', href: '/items/PROD-8', title: '7.19 Roadmap' }}
       />,
     );
-    screen.getByText('Blocked');
+    // The SOFT heading (MOTIR-6377) — the full soft variant is covered in
+    // readiness-badge-soft.test.tsx.
+    screen.getByText('Parent blocked');
+    expect(screen.queryByText('Blocked')).toBeNull();
     screen.getByText(/Waiting on a parent item —/);
     const lnk = screen.getByRole('link', { name: 'PROD-8' });
     expect(lnk.getAttribute('href')).toBe('/items/PROD-8');

@@ -583,5 +583,19 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.38.0` at `bfae2ec2b`, so this claims `1.39.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
+ *
+ * - `1.40.0` — MOTIR-6366 adds one query parameter to `getProjectReadySet`:
+ *   `allowSoftBlock` (`true` / `false`, default `false`). `true` lists a leaf
+ *   held only by an ANCESTOR's block (a SOFT block) while still excluding one
+ *   with its own open `blocked_by` (a HARD block). A non-boolean value is the
+ *   existing `INVALID_READY_FILTER` → 422.
+ *
+ *   Additive: one optional parameter on an existing operation (§8's second
+ *   allowed change); omit it and the response is byte-identical. Gated on the
+ *   same `project:browse` key; the grant is NOT widened.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.39.0` at `b889f767a`, so this claims `1.40.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the PARAMETER.
  */
-export const V1_CONTRACT_VERSION = '1.39.0';
+export const V1_CONTRACT_VERSION = '1.40.0';

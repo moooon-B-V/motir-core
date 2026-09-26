@@ -50,6 +50,30 @@ export interface ScopeRunOptions {
   print?: boolean;
   /** `--force` — leaf-only; refused on a scope. */
   force?: boolean;
+  /**
+   * `--allow-soft-block` (MOTIR-6355) — run past a SOFT block: an item held
+   * only by an ANCESTOR's open blocker. Never past a HARD one, the item's own.
+   * On a leaf it dispatches a soft-blocked card; on a container it widens the
+   * ready read (`allowSoftBlock`) so the children held only by the container's
+   * ancestor chain form the scope.
+   */
+  allowSoftBlock?: boolean;
+}
+
+/** The single-item verdict `get_work_item` returns, as the CLI reads it. */
+export type ReadinessVerdict = WorkItemDetail['readiness'];
+
+/**
+ * The ancestor a SOFT block is owed to, or `null` when the block is not soft.
+ *
+ * The verdict tells the two blocks apart by itself (MOTIR-6354): a non-empty
+ * `openBlockers` is HARD — the item's OWN `blocked_by` edge is open — while
+ * `ready: false` with NO open blockers and a `blockedByAncestor` is SOFT: only
+ * an ancestor's block holds it. A ready item has no block of either kind.
+ */
+export function softBlockAncestor(readiness: ReadinessVerdict): { identifier: string } | null {
+  if (readiness.ready || readiness.openBlockers.length > 0) return null;
+  return readiness.blockedByAncestor;
 }
 
 /**
@@ -110,8 +134,27 @@ export async function claimScopeForRun(
   target: ScopeTarget,
   opts: ScopeRunOptions,
   ownerId: string,
+  /** The TARGET's own verdict, from the `getWorkItem` `resolveScopeTarget`
+   *  already made — never re-read. Absent for a sprint scope. */
+  targetReadiness?: ReadinessVerdict,
 ): Promise<ClaimedScope | null> {
   const { client, projectKey, serverUrl } = session;
+
+  // 0 ── `--allow-soft-block` overrides a SOFT block only (MOTIR-6355). A
+  // container whose OWN blockers are open is HARD-blocked, and the flag never
+  // reaches past that: refused before anything is read or claimed. A container
+  // held only by its ancestor's block — or not held at all — goes on, and the
+  // ready read is widened so its soft-blocked children form the scope. A child
+  // with its OWN open blocker stays out of that read either way.
+  if (opts.allowSoftBlock && targetReadiness && targetReadiness.openBlockers.length > 0) {
+    const blockers = targetReadiness.openBlockers
+      .map((b) => `${b.identifier} (${b.title})`)
+      .join(', ');
+    throw new CliError(
+      `${label(target)} has its own open blocker — --allow-soft-block overrides only an ancestor's block. Waiting on: ${blockers}.`,
+      { hint: 'Finish the blocker first, or re-plan the dependency.' },
+    );
+  }
 
   // 1 ── the READY SET, fetched ONCE, up front.
   //
@@ -124,13 +167,13 @@ export async function claimScopeForRun(
     projectKey,
     ownerId,
     ...(target.kind === 'work_item' ? { ancestor: [target.key] } : { sprintId: 'active' }),
+    ...(opts.allowSoftBlock ? { allowSoftBlock: true } : {}),
   });
 
-  const label = target.kind === 'sprint' ? 'The active sprint' : target.key;
   if (ready.length === 0) {
     // ⚠️ NOT an error, and distinguishable in the output from a refusal. A story
     // whose leaves are all in flight is a plan state; nothing was claimed.
-    info(renderEmptyScope(label));
+    info(renderEmptyScope(label(target)));
     return null;
   }
 
@@ -163,6 +206,11 @@ export async function claimScopeForRun(
 
   info(renderClaimedScope(claim, ready));
   return { claim, ready, edges };
+}
+
+/** How a scope is named in a sentence. */
+function label(target: ScopeTarget): string {
+  return target.kind === 'sprint' ? 'The active sprint' : target.key;
 }
 
 /**
@@ -268,8 +316,9 @@ export type ScopeDecision =
    * what makes the branch genuinely free.
    */
   | { action: 'leaf'; detail: WorkItemDetail }
-  /** Run these leaves. */
-  | { action: 'scope'; target: ScopeTarget }
+  /** Run these leaves. A work-item scope carries the target's own verdict
+   *  from the same read, so `--allow-soft-block` never re-fetches it. */
+  | { action: 'scope'; target: ScopeTarget; readiness?: WorkItemDetail['readiness'] }
   /** Handled here; the run is over and nothing further should happen. */
   | { action: 'stop' };
 
@@ -296,7 +345,7 @@ export async function resolveScopeTarget(
   });
 
   if (shape.kind === 'leaf') return { action: 'leaf', detail };
-  if (shape.kind === 'scope') return { action: 'scope', target };
+  if (shape.kind === 'scope') return { action: 'scope', target, readiness: detail.readiness };
   if (shape.kind === 'refuse_epic') {
     const { message, hint } = epicRefusal(detail.item.identifier);
     throw new CliError(message, { hint });

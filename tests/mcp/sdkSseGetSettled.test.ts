@@ -5,6 +5,7 @@ import * as route from '@/app/api/mcp/route';
 import type { RateLimitStore } from '@/lib/api/v1/rateLimit';
 import { db } from '@/lib/db';
 import { rateLimitCounterRepository } from '@/lib/repositories/rateLimitCounterRepository';
+import { mcpBudget } from '@/lib/rateLimit/budgets';
 import { rateLimitKey } from '@/lib/rateLimit/keys';
 import { __setSharedRateLimitStoreForTest } from '@/lib/rateLimit/store';
 import { apiTokensService } from '@/lib/services/apiTokensService';
@@ -14,6 +15,11 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { inFlightBackends } from '../helpers/inFlightWork';
 import { mcpRouteFetch } from '../helpers/mcpRouteFetch';
+import {
+  currentWindowStart,
+  headroomIsSatisfied,
+  waitForWindowHeadroom,
+} from '../helpers/rateLimitWindow';
 import { pendingServerWork, settleServerWork } from '../helpers/serverWork';
 
 // MOTIR-6324 — the MCP transport tests' `idle in transaction` leftovers,
@@ -37,6 +43,20 @@ import { pendingServerWork, settleServerWork } from '../helpers/serverWork';
 
 const ENDPOINT = 'http://localhost/api/mcp';
 const HOLD_MS = 1_500;
+
+// ── THE WINDOW (MOTIR-6418) ─────────────────────────────────────────────────
+// The last case counts the `mcp:call`s the connect spent, and the limiter keys
+// every count on an EPOCH-aligned cell of `mcpBudget().windowMs` (60 s shipped).
+// Held for HOLD_MS each, the three counted calls run SERIALLY for ~3 × HOLD_MS,
+// so a connect started in the last ~4.5 s of a minute split them across two
+// rows — `[1, 2]` where `[3]` was asserted, about one run in fourteen on CI,
+// red on whichever unrelated PR drew the shard.
+//
+// So that case first buys this much of the current cell from the shared helper:
+// twice the serial span the holds alone impose. Headroom rather than a full
+// alignment, because aligning a 60 s window costs ~30 s on average; this costs
+// (9 / 60) × 4.5 s ≈ 0.7 s.
+const COUNTED_SPAN_HEADROOM_MS = HOLD_MS * 6;
 
 /** The real counter INSERT, whose transaction then stays open for `holdMs`. */
 function holdingStore(holdMs: number): RateLimitStore {
@@ -96,6 +116,42 @@ async function fixtureAndToken(): Promise<{ fx: WorkItemFixture; token: string }
   return { fx, token };
 }
 
+/**
+ * Connect, wait for the settled GET's 405, and return the `mcp:call` counts the
+ * connect left behind — one per window row, oldest window first.
+ */
+async function spentOnConnect(fx: WorkItemFixture, token: string): Promise<number[]> {
+  const statuses: number[] = [];
+  const base = mcpRouteFetch(token);
+  const observing = (async (input: unknown, init: RequestInit = {}) => {
+    const res = await base(input as never, init);
+    if ((init.method ?? 'GET').toUpperCase() === 'GET') statuses.push(res.status);
+    return res;
+  }) as typeof fetch;
+
+  await connectWith(observing);
+  await vi.waitFor(() => expect(statuses).toEqual([405]), { timeout: HOLD_MS * 4 });
+  const rows = await adminDb.$queryRawUnsafe<Array<{ count: number }>>(
+    `SELECT count::int AS count FROM "rate_limit_counter" WHERE key = $1 ORDER BY window_start`,
+    rateLimitKey('mcp:call', fx.workspaceId, fx.ownerId),
+  );
+  return rows.map((r) => r.count);
+}
+
+/**
+ * Shift `Date.now` so the current `windowMs` cell has `remainingMs` left — always
+ * FORWARD, by less than one window. Restored by `vi.restoreAllMocks` in
+ * `afterEach`. Built on the helper's `currentWindowStart`, not on a phase
+ * expression of its own (the alignment guard forbids a second copy).
+ */
+function placeClockBeforeBoundary(windowMs: number, remainingMs: number): void {
+  const realNow = Date.now.bind(Date);
+  let target = currentWindowStart(windowMs) + windowMs - remainingMs;
+  if (target <= realNow()) target += windowMs;
+  const offset = target - realNow();
+  vi.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
+}
+
 const counterInsertStillOpen = async (): Promise<boolean> =>
   (await inFlightBackends()).some(
     (b) => b.state === 'idle in transaction' && b.query.includes('rate_limit_counter'),
@@ -152,23 +208,51 @@ describe('the SDK client leaves its SSE-stream GET running after connect (MOTIR-
     expect(await inFlightBackends()).toEqual([]);
   });
 
-  it('the settled GET still ran the real gates: it was answered 405 after spending one mcp:call', async () => {
-    const statuses: number[] = [];
-    const { fx, token } = await fixtureAndToken();
-    const base = mcpRouteFetch(token);
-    const observing = (async (input: unknown, init: RequestInit = {}) => {
-      const res = await base(input as never, init);
-      if ((init.method ?? 'GET').toUpperCase() === 'GET') statuses.push(res.status);
-      return res;
-    }) as typeof fetch;
+  it(
+    'the settled GET still ran the real gates: it was answered 405 after spending one mcp:call',
+    async () => {
+      const { fx, token } = await fixtureAndToken();
 
-    await connectWith(observing);
-    await vi.waitFor(() => expect(statuses).toEqual([405]), { timeout: HOLD_MS * 4 });
-    // initialize + notifications/initialized + the GET: three spent, none skipped.
-    const rows = await adminDb.$queryRawUnsafe<Array<{ count: number }>>(
-      `SELECT count::int AS count FROM "rate_limit_counter" WHERE key = $1`,
-      rateLimitKey('mcp:call', fx.workspaceId, fx.ownerId),
-    );
-    expect(rows.map((r) => r.count)).toEqual([3]);
-  });
+      await waitForWindowHeadroom(mcpBudget().windowMs, COUNTED_SPAN_HEADROOM_MS);
+      // initialize + notifications/initialized + the GET: three spent, none skipped.
+      expect(await spentOnConnect(fx, token)).toEqual([3]);
+    },
+    COUNTED_SPAN_HEADROOM_MS + HOLD_MS * 8,
+  );
+});
+
+// MOTIR-6418 — the case above, asserted at the phase that used to break it. The
+// clock is PLACED rather than waited for: `Date.now` (which is what the limiter
+// and the helper both read) is shifted so the cell has HALF a hold left when the
+// connect starts — the first counted call lands in the outgoing cell and the
+// other two in the next one, every run.
+describe('the three mcp:calls of a connect are counted in ONE window (MOTIR-6418)', () => {
+  it(
+    'REPRODUCTION: started near the end of a cell with no headroom, the count splits across two rows',
+    async () => {
+      const { fx, token } = await fixtureAndToken();
+      placeClockBeforeBoundary(mcpBudget().windowMs, HOLD_MS / 2);
+
+      // Exactly the `[1, 2]` CI reported — the defect, not a flake of the test.
+      expect(await spentOnConnect(fx, token)).toEqual([1, 2]);
+    },
+    HOLD_MS * 8,
+  );
+
+  it(
+    'FIX: at the same phase, the headroom wait moves the connect into a cell that holds all three',
+    async () => {
+      const { fx, token } = await fixtureAndToken();
+      const windowMs = mcpBudget().windowMs;
+      placeClockBeforeBoundary(windowMs, HOLD_MS / 2);
+
+      // The cell really is too short — so the wait below is the thing under test,
+      // not a no-op that happened to pass.
+      expect(headroomIsSatisfied(windowMs, COUNTED_SPAN_HEADROOM_MS)).toBe(false);
+      await waitForWindowHeadroom(windowMs, COUNTED_SPAN_HEADROOM_MS);
+
+      expect(await spentOnConnect(fx, token)).toEqual([3]);
+    },
+    HOLD_MS * 8,
+  );
 });

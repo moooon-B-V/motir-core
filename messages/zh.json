@@ -1672,7 +1672,8 @@
       "allResolved": "所有阻塞已解决",
       "blocked": "受阻",
       "waiting": "正在等待 {count, plural, other {# 个工作项}}",
-      "waitingOnParent": "正在等待上级工作项"
+      "waitingOnParent": "正在等待上级工作项",
+      "parentBlocked": "上级受阻"
     },
     "sprintPicker": {
       "label": "Sprint",
@@ -6844,7 +6845,14 @@
       "movedAnnouncement": "正在显示 {target} 内的工作",
       "goToTarget": "方案在 {identifier} · 前往",
       "arrivedIn": "{identifier} 中有 {count} 项新内容 · 前往",
-      "arrivedAcross": "其他层级有 {count} 项新内容 · 最新在 {identifier} · 前往"
+      "arrivedAcross": "其他层级有 {count} 项新内容 · 最新在 {identifier} · 前往",
+      "levelChange": {
+        "srPrefix": "此层级的待定变更：",
+        "changed": "当前层级",
+        "titleTo": "标题 → <b>{title}</b>",
+        "removed": "确认后移除当前层级",
+        "added": "当前层级为提案 — 此处尚无任何内容"
+      }
     },
     "dividerAria": "调整对话窗口宽度"
   },

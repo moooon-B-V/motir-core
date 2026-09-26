@@ -1560,6 +1560,38 @@ export interface WorkItemValidityDto {
    * byte-identical whether or not this array is empty.
    */
   advisories: WorkItemValidityAdvisoryDto[];
+  /**
+   * The target's SOFT blocks (MOTIR-6354 / MOTIR-6368) — every open `blocked_by`
+   * edge of an ANCESTOR of the target (parent → … → root), i.e. a block that
+   * reaches the target only through the readiness cascade and that a run may
+   * override with `--allow-soft-block`. **Never gating**: `valid` and `blockers`
+   * ask "can this subtree finish", and are byte-identical whatever this holds.
+   * "Open" = the blocker is not in its own project's `done` set (the same
+   * done-ness `blockers` judges by). Sorted by `via.key`, then `blockedBy.key`;
+   * empty when no ancestor is blocked.
+   */
+  softBlocks: WorkItemSoftBlockDto[];
+}
+
+/** A `{ key, title }` reference to a work item, as a soft block names one. */
+export interface WorkItemKeyTitleDto {
+  /** The work item's identifier (e.g. "MOTIR-1337"). */
+  key: string;
+  title: string;
+}
+
+/**
+ * One SOFT block on a validated target (MOTIR-6368): the ancestor `via` is
+ * `blocked_by` the open item `blockedBy`, whose raw workflow status key is
+ * `blockerStatus`. Not a blocker — see {@link WorkItemValidityDto.softBlocks}.
+ */
+export interface WorkItemSoftBlockDto {
+  /** The target's ancestor that owns the `blocked_by` edge. */
+  via: WorkItemKeyTitleDto;
+  /** The open item the ancestor is blocked by. */
+  blockedBy: WorkItemKeyTitleDto;
+  /** The blocker's raw workflow status key (e.g. "todo"). */
+  blockerStatus: string;
 }
 
 /**

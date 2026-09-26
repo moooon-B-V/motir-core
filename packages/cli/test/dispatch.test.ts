@@ -193,6 +193,27 @@ describe('notReadyError', () => {
     });
     expect(err.message).toContain('ancestor PROD-1');
   });
+
+  it('points a SOFT block (ancestor only) at --allow-soft-block, not --force (MOTIR-6355)', () => {
+    const err = notReadyError({
+      identifier: 'PROD-7',
+      openBlockers: [],
+      blockedByAncestor: { identifier: 'PROD-1' },
+    });
+    expect(err.hint).toContain('--allow-soft-block');
+    expect(err.hint).not.toContain('--force');
+  });
+
+  it('points a HARD block at --force, and says why the soft override did not cover it', () => {
+    const err = notReadyError({
+      identifier: 'PROD-7',
+      openBlockers: [{ identifier: 'PROD-3', title: 'Schema' }],
+      blockedByAncestor: { identifier: 'PROD-1' },
+      allowSoftBlock: true,
+    });
+    expect(err.hint).toContain('overrides only an ancestor');
+    expect(err.hint).toContain('--force');
+  });
 });
 
 describe('renderDispatchAdvisories — the prose-vs-graph WARNING (MOTIR-2079)', () => {
