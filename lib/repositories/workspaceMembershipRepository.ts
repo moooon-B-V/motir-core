@@ -82,6 +82,36 @@ export const workspaceMembershipRepository = {
   },
 
   /**
+   * How many members of a workspace sit on each BUILT-IN role, grouped by both
+   * columns — `(workspaceRole, role)` for memberships with no custom role — so
+   * the service can fold a not-yet-migrated row (`workspace_role` NULL) through
+   * `resolveWorkspaceRole` the same way the resolver does (MOTIR-6460).
+   */
+  async countBuiltInRolesByWorkspace(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ workspaceRole: WorkspaceRole | null; role: MemberRole; count: number }[]> {
+    const rows = await tx.workspaceMembership.groupBy({
+      by: ['workspaceRole', 'role'],
+      where: { workspaceId, roleDefinitionId: null },
+      _count: { _all: true },
+    });
+    return rows.map((r) => ({
+      workspaceRole: r.workspaceRole,
+      role: r.role,
+      count: r._count._all,
+    }));
+  },
+
+  /** Every membership holding one workspace custom role — the delete path's movers. */
+  async findByRoleDefinition(
+    roleDefinitionId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkspaceMembership[]> {
+    return tx.workspaceMembership.findMany({ where: { roleDefinitionId } });
+  },
+
+  /**
    * Write a member's WORKSPACE ROLE — `workspace_role` and `role_definition_id`
    * together, in ONE statement (MOTIR-6457). THE ONLY WRITER of the two columns:
    * they move together (a custom role is `CUSTOM_WORKSPACE_ROLE_TIER` + its

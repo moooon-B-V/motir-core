@@ -126,3 +126,45 @@ export class WorkspaceNotSoleMemberError extends Error {
     this.name = 'WorkspaceNotSoleMemberError';
   }
 }
+
+/**
+ * Authoring a workspace custom role — create, edit, delete — is the workspace
+ * MANAGER's, or the org Owner's (Story MOTIR-6168 · MOTIR-6460). A ROLE check,
+ * not a permission key: workspace administration belongs to the built-in
+ * Manager, and a custom role carries project-scope keys only, so no custom role
+ * can author roles. → 403.
+ */
+export class WorkspaceRoleForbiddenError extends Error {
+  readonly code = 'WORKSPACE_ROLE_FORBIDDEN' as const;
+  constructor(userId: string, workspaceId: string) {
+    super(
+      `User ${userId} is not a Manager of workspace ${workspaceId}, so cannot change its roles.`,
+    );
+    this.name = 'WorkspaceRoleForbiddenError';
+  }
+}
+
+/** A second workspace custom role with a name the workspace already uses. → 409. */
+export class WorkspaceRoleNameTakenError extends Error {
+  readonly code = 'WORKSPACE_ROLE_NAME_TAKEN' as const;
+  constructor(readonly roleName: string) {
+    super(`This workspace already has a role called "${roleName}".`);
+    this.name = 'WorkspaceRoleNameTakenError';
+  }
+}
+
+/**
+ * Deleting a workspace custom role somebody holds, with no role to move them
+ * to. Carries the COUNT the confirmation dialog names, and nothing is written.
+ * → 409.
+ */
+export class WorkspaceRoleInUseError extends Error {
+  readonly code = 'WORKSPACE_ROLE_IN_USE' as const;
+  constructor(
+    readonly roleName: string,
+    readonly count: number,
+  ) {
+    super(`"${roleName}" is held by ${count} member(s); choose a role to move them to.`);
+    this.name = 'WorkspaceRoleInUseError';
+  }
+}
