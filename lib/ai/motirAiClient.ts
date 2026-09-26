@@ -1746,3 +1746,93 @@ export function retireLesson(query: LessonWriteQuery): Promise<RawLesson> {
 export function applyLesson(query: LessonWriteQuery): Promise<RawLesson> {
   return lessonWrite(query, 'apply');
 }
+
+// ── Organization lifecycle (Story MOTIR-6306) ────────────────────────────────
+
+/** motir-ai's answer to a closing / reopen call: whether anything changed, and
+ *  whether the org now reads as closing. An org motir-ai has never seen answers
+ *  `{ changed: false }` with 200, never a 404. */
+export interface OrgClosingResult {
+  changed: boolean;
+  closing: boolean;
+}
+
+/**
+ * POST /v1/orgs/:id/closing — tell motir-ai the organization is closing, so every
+ * active subscription stops renewing (MOTIR-6392). Idempotent on motir-ai's side;
+ * the schedule service calls it after its commit and never un-schedules on a
+ * failure (it throws, and the caller logs).
+ */
+export async function markOrgClosing(
+  coreOrganizationId: string,
+  dueAt: Date,
+): Promise<OrgClosingResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/orgs/${encodeURIComponent(coreOrganizationId)}/closing`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify({ dueAt: dueAt.toISOString() }),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as OrgClosingResult;
+}
+
+/**
+ * DELETE /v1/orgs/:id/closing — a cancel: restore each subscription's own prior
+ * renewal (MOTIR-6392). Idempotent; called after the cancel commits.
+ */
+export async function reopenOrg(coreOrganizationId: string): Promise<OrgClosingResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/orgs/${encodeURIComponent(coreOrganizationId)}/closing`, {
+    method: 'DELETE',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as OrgClosingResult;
+}
+
+/** motir-ai's answer to an org offboard: whether the tenant was erased this call
+ *  (`false` for an org it never saw, and on a re-run over a tombstone). */
+export interface OrgOffboardResult {
+  erased: boolean;
+}
+
+/**
+ * POST /v1/orgs/:id/offboard — erase the organization's AI tenant down to its
+ * billing tombstone (MOTIR-6393). Idempotent; the erasure sweep calls it as its
+ * third step and retries on the next run when it throws.
+ */
+export async function offboardOrg(coreOrganizationId: string): Promise<OrgOffboardResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/orgs/${encodeURIComponent(coreOrganizationId)}/offboard`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as OrgOffboardResult;
+}
+
+/** motir-ai's answer to a retained-ledger purge: whether it removed a tombstone
+ *  this call (`false` for an org it never saw, or one already purged). */
+export interface OrgPurgeRetainedResult {
+  purged: boolean;
+}
+
+/**
+ * POST /v1/orgs/:id/purge-retained — remove an erased organization's tombstone,
+ * credit ledger and Stripe ids once its seven-year retention has run
+ * (MOTIR-6394). Idempotent; motir-ai refuses (409) an org that is not a
+ * tombstone. The retention purge calls it FIRST and retries on the next run when
+ * it throws.
+ */
+export async function purgeOrgRetained(
+  coreOrganizationId: string,
+): Promise<OrgPurgeRetainedResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(
+    `${url}/v1/orgs/${encodeURIComponent(coreOrganizationId)}/purge-retained`,
+    { method: 'POST', headers: authHeaders(serviceToken) },
+  );
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as OrgPurgeRetainedResult;
+}

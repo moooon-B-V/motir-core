@@ -186,10 +186,16 @@ async function writeResponse(response: Response, res: ServerResponse): Promise<v
     return;
   }
   await new Promise<void>((resolve, reject) => {
-    Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0])
-      .on('error', reject)
-      .on('end', resolve)
-      .pipe(res);
+    const body = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]);
+    // A client that hangs up mid-stream never lets the body reach `'end'`:
+    // `pipe` unpipes and the body stays paused, so a promise waiting only on
+    // `'end'` pinned the tracked request for ever (MOTIR-6496). The socket
+    // closing ends the write, and destroying the body cancels the route's stream.
+    res.on('close', () => {
+      if (!body.readableEnded) body.destroy();
+      resolve();
+    });
+    body.on('error', reject).on('end', resolve).pipe(res);
   });
 }
 
@@ -229,10 +235,11 @@ export async function startMcpHttpServer(
   const server: Server = createServer((req, res) => {
     // Tracked, because the MCP SDK client starts a request it never awaits (its
     // SSE-stream GET): the in-flight probe settles it before checking the
-    // database (`serverWork.ts`, MOTIR-6324).
+    // database (`serverWork.ts`, MOTIR-6324). Labelled, so a request that
+    // never settles is named in the settle's deadline error (MOTIR-6496).
+    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     void trackServerWork(
       (async () => {
-        const url = new URL(req.url ?? '/', 'http://127.0.0.1');
         requests.push({
           method: req.method ?? 'GET',
           pathname: url.pathname,
@@ -275,6 +282,7 @@ export async function startMcpHttpServer(
           res.end(JSON.stringify({ error: 'Internal server error' }));
         }
       })(),
+      `${req.method ?? 'GET'} ${url.pathname}`,
     );
   });
 

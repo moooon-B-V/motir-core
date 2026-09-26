@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/auth';
+import { OrganizationClosingError } from '@/lib/organizations/errors';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { gitlabConnectionService } from '@/lib/services/gitlabConnectionService';
 import {
@@ -31,7 +32,9 @@ export type ProjectActionError =
   | 'unavailable'
   // Connecting registers the project webhook (MOTIR-5349); these two say why it could not.
   | 'webhook_not_configured'
-  | 'webhook_failed';
+  | 'webhook_failed'
+  // The organization is scheduled for deletion and read-only (MOTIR-6396).
+  | 'organization_closing';
 
 /**
  * Disconnect the workspace's whole GitLab connection. The settings page is a
@@ -96,6 +99,8 @@ export async function connectGitlabProjectAction(
   } catch (err) {
     if (err instanceof GitlabConnectionNotFoundError) return { ok: false, error: 'not_connected' };
     if (err instanceof GitlabProjectNotFoundError) return { ok: false, error: 'not_found' };
+    if (err instanceof OrganizationClosingError)
+      return { ok: false, error: 'organization_closing' };
     if (err instanceof GitlabWebhookNotConfiguredError) {
       return { ok: false, error: 'webhook_not_configured' };
     }

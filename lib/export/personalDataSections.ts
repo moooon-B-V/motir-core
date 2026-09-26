@@ -87,6 +87,7 @@ export type PersonalDataDelegate =
   | 'importSourceIdentity'
   | 'publicRequestVote'
   | 'accountDeletionRequest'
+  | 'organizationDeletionRequest'
   | 'dataExportRequest'
   | 'projectMembership'
   | 'notification'
@@ -273,6 +274,14 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     tier: 'identity',
     basis: 'Account-erasure requests the reader has raised.',
     where: byUserId,
+  },
+  {
+    table: 'organization_deletion_request',
+    model: 'organizationDeletionRequest',
+    tier: 'identity',
+    basis:
+      'Organization deletions the reader scheduled or cancelled — the record names them as the actor.',
+    where: (userId) => ({ OR: [{ requestedByUserId: userId }, { cancelledByUserId: userId }] }),
   },
   {
     table: 'data_export_request',

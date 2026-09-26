@@ -1,3 +1,4 @@
+import { assertOrgNotClosing } from '@/lib/organizations/closingGuard';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
@@ -347,6 +348,13 @@ export const billingService = {
         'Managing billing is limited to the organization owner and admins.',
       );
     }
+    // No checkout and no portal while the org closes (MOTIR-6396). The portal is
+    // refused too, not only checkout: from it a customer can resume the very
+    // subscriptions closing set to cancel at period end.
+    await withOrgContext(
+      { userId: input.actorUserId, organizationId: input.organizationId },
+      (tx) => assertOrgNotClosing(input.organizationId, tx),
+    );
   },
 
   /**
@@ -373,24 +381,33 @@ export const billingService = {
     // Off-cloud there is no billing at all — nothing to bill is the honest shape.
     if (!isCloudBilling()) return { applied: false, outcome: 'no_active_tracker_subscription' };
 
-    const { isScaledActive, memberCount, aiIncludedSeat } = await withSystemContext(async (tx) => {
-      // ⚠️ BIND THE ORG (MOTIR-2880). `organization` and `organization_membership`
-      // have no `system_admin` arm — their SELECT policies read `app.organization_id`
-      // (and, for the membership, `app.user_id`) — so under `motir_app` both reads
-      // below returned empty: `org` null and `count` 0. The method then answered
-      // `no_active_tracker_subscription` for every org, and seat billing silently
-      // stopped converging. Additive to the flag, and the id is a trusted argument
-      // (the job's own envelope), which is `withOrgServiceWriteContext`'s constraint.
-      await bindOrganizationContext(tx, organizationId);
-      const org = await organizationRepository.findByIdInTx(organizationId, tx);
-      const scaled = (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null;
-      const count = await organizationMembershipRepository.countByOrg(organizationId, tx);
-      return {
-        isScaledActive: scaled?.status === 'active',
-        memberCount: count,
-        aiIncludedSeat: org?.aiIncludedSeat ?? false,
-      };
-    });
+    const { isScaledActive, memberCount, aiIncludedSeat, closing } = await withSystemContext(
+      async (tx) => {
+        // ⚠️ BIND THE ORG (MOTIR-2880). `organization` and `organization_membership`
+        // have no `system_admin` arm — their SELECT policies read `app.organization_id`
+        // (and, for the membership, `app.user_id`) — so under `motir_app` both reads
+        // below returned empty: `org` null and `count` 0. The method then answered
+        // `no_active_tracker_subscription` for every org, and seat billing silently
+        // stopped converging. Additive to the flag, and the id is a trusted argument
+        // (the job's own envelope), which is `withOrgServiceWriteContext`'s constraint.
+        await bindOrganizationContext(tx, organizationId);
+        const org = await organizationRepository.findByIdInTx(organizationId, tx);
+        const scaled = (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null;
+        const count = await organizationMembershipRepository.countByOrg(organizationId, tx);
+        return {
+          isScaledActive: scaled?.status === 'active',
+          memberCount: count,
+          aiIncludedSeat: org?.aiIncludedSeat ?? false,
+          closing: org?.closingSince != null,
+        };
+      },
+    );
+
+    // A closing org's seat count is frozen (MOTIR-6396): its subscriptions are set
+    // to cancel at period end, and motir-ai refuses a quantity change for it. The
+    // honest answer is that nothing was applied; a cancel's next membership change
+    // resyncs from the live count, as every run does.
+    if (closing) return { applied: false, outcome: 'unchanged' };
 
     // Only an active scaled-tracker org has seats to bill; everything else is a
     // benign no-op (a free org, a past_due/canceled one — its caps are already

@@ -27,6 +27,7 @@ import { FolderCommandsProvider } from './_components/FolderCommands';
 import { IssueTreeSection } from './_components/IssueTreeSection';
 import { IssueTreeSkeleton } from './_components/IssueTreeSkeleton';
 import { IssueQuickViewController } from './_components/IssueQuickViewController';
+import { OrganizationReadOnlyNote } from '../_components/OrganizationReadOnlyNote';
 
 // The project issue index (Story 2.5 · Subtask 2.5.3; view switcher in 2.5.8) —
 // the surface the sidebar "Issues" link opens. Server Component: resolves the
@@ -176,6 +177,9 @@ export default async function IssuesPage({
                   {t('allIssuesIn', { project: ctx.project.name })}
                 </p>
               </div>
+              {/* The closing organization's one header note (MOTIR-6403, design
+                  MOTIR-6390 panel 6) — `null` for an open org. */}
+              <OrganizationReadOnlyNote workspaceId={ctx.workspaceId} />
               <IssueListToolbar
                 view={view}
                 sort={sort}

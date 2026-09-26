@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { isWorkspaceOrgClosing } from '@/lib/organizations/closingGuard';
 import { commentsService } from '@/lib/services/commentsService';
 import { projectsService } from '@/lib/services/projectsService';
 import { sprintsService } from '@/lib/services/sprintsService';
@@ -198,6 +199,20 @@ export async function runClaimNextReady(
   // WITHOUT planning a sprint (plain Kanban), so a missing active sprint is NOT
   // an error — it just widens the claim to the project's ready set.
   const activeSprint = await sprintsService.getActiveSprint(project.id, ctx);
+  // A closing organization dispatches nothing (MOTIR-6396). Said apart from the
+  // empty ready set, because "RETRY" is the wrong advice for it: nothing will be
+  // ready until the Owner cancels the deletion.
+  if (await isWorkspaceOrgClosing(ctx.workspaceId)) {
+    return toolOk(
+      'This organization is scheduled for deletion and is read-only: no work item can be ' +
+        'claimed. Do NOT retry — dispatch resumes only if its Owner cancels the deletion.',
+      derived(claimNextReadyPayload, {
+        item: null,
+        reason: 'organization_closing',
+        advisories: [],
+      }),
+    );
+  }
   const item = await workItemsService.claimNextReady(project.id, activeSprint?.id ?? null, ctx);
   if (!item) {
     const scope = activeSprint ? 'the active sprint' : 'this project';

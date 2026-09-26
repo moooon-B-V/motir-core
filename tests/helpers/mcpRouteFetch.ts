@@ -26,6 +26,9 @@ export function mcpRouteFetch(token?: string): typeof fetch {
     if (token) headers.set('authorization', `Bearer ${token}`);
     const method = (init.method ?? 'GET').toUpperCase();
     const handler = method === 'GET' ? route.GET : method === 'DELETE' ? route.DELETE : route.POST;
-    return trackServerWork(handler(new Request(url, { ...init, headers }) as never));
+    return trackServerWork(
+      handler(new Request(url, { ...init, headers }) as never),
+      `${method} ${new URL(url).pathname}`,
+    );
   }) as unknown as typeof fetch;
 }

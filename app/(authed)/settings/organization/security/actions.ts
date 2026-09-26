@@ -6,7 +6,11 @@ import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/auth';
 import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
-import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
+import {
+  OrganizationClosingError,
+  OrganizationNotFoundError,
+  OrgForbiddenError,
+} from '@/lib/organizations/errors';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { twoFactorPolicyService } from '@/lib/services/twoFactorPolicyService';
 import type { RequireTwoFactorSaveResult } from '../_components/RequireTwoFactorCard';
@@ -46,6 +50,9 @@ export async function setOrganizationRequireTwoFactorAction(
     // swallowing it here would report a failed write as a handled refusal.
     if (err instanceof OrgForbiddenError || err instanceof OrganizationNotFoundError) {
       return { ok: false, error: errors('actions.orgSecurityForbidden') };
+    }
+    if (err instanceof OrganizationClosingError) {
+      return { ok: false, error: errors('actions.organizationClosing') };
     }
     throw err;
   }
