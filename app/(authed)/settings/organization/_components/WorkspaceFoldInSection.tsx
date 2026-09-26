@@ -10,6 +10,7 @@ import { roleMigrationReportService } from '@/lib/services/roleMigrationReportSe
 import { DangerZoneCard } from '../../workspace/_components/DangerZoneCard';
 import { setWorkspaceRequireTwoFactorAction } from '../../workspace/security/actions';
 import { RequireTwoFactorCard } from './RequireTwoFactorCard';
+import { RolesDoorCard } from './RolesDoorCard';
 
 // §6d's SETTINGS COLLAPSE (MOTIR-3502 · design/org-admin panel 2). Below the
 // workspace-tier reveal threshold there is no `/settings/workspace` area — it
@@ -88,6 +89,8 @@ export async function WorkspaceFoldInSection({
         currentUserId={actorUserId}
         roleContext={roleContext}
       />
+
+      <RolesDoorCard customRoleCount={roleContext.customRoles.length} />
 
       {/* ⚠️ RELOCATING A SURFACE PRESERVES ITS GATE, AND THIS SECTION DOES NOT
           CARRY THIS ONE. This host renders for ANY member of the workspace —

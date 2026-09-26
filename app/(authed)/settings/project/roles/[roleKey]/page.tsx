@@ -1,65 +1,12 @@
-import { notFound, redirect } from 'next/navigation';
-import { getSession } from '@/lib/auth';
-import { getActiveProject } from '@/lib/projects';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
-import { RoleDetail } from '../_components/RoleDetail';
-import { guardSettingsPage } from '../../_guard';
+import { permanentRedirect } from 'next/navigation';
+import { workspaceRolePath } from '../_redirect';
 
-// Project settings → Access → Roles & permissions → one ROLE, screen 2 of the
-// drill-down (Story MOTIR-2282 · Subtask MOTIR-2263).
-//
-// ⚠️ THE ROLE IS RESOLVED OUT OF THE CATALOG THE READ RETURNS, never narrowed
-// against a constant — and MOTIR-2478 CASHED THAT IN. A custom role reaches this
-// page with no routing change at all: the segment is `RoleDTO.key`, which is the
-// enum value for a built-in and the definition's id for a custom role, and the
-// lookup is the same `find` it always was. An unknown segment is still a 404.
-//
-// This route deliberately has NO rail entry of its own — it is reached by
-// activating a row on the list, and `lib/settings/projectSettingsNav.ts` declares
-// it as the `roles` entry's `nestedRoutes`, which is what keeps the route↔registry
-// totality guard meaningful rather than relaxed.
-
-export default async function ProjectRoleDetailPage({
+// RETIRED (MOTIR-6466): a role's detail lives on the workspace now.
+export default async function ProjectRoleDetailRedirect({
   params,
 }: {
   params: Promise<{ roleKey: string }>;
-}) {
-  const session = await getSession();
-  if (!session) redirect('/sign-in');
-
-  const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
-
-  // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
-  // protection: this page is still one typed URL away once its rail row is
-  // gone. The key comes from the registry entry `roles`, never re-declared here.
-  const refused = await guardSettingsPage('roles', ctx);
-  if (refused) return refused;
-
+}): Promise<never> {
   const { roleKey } = await params;
-  const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const catalog = await projectRoleDefinitionService.getRoleCatalog(ctx.projectId, actor);
-  // MOTIR-2483 — the WRITE affordances. `true` past the guard, and that is the
-  // point of MOTIR-2469's model: this destination's key IS `project:manage_access`
-  // (the registry entry says so, and the service asserts the same key on every
-  // write), so an actor who got here holds it. Re-reading it in the page would be
-  // a SECOND copy of the policy — the exact shape the destination guard forbids,
-  // because it is how a row hides on one permission while its page offers on
-  // another. Presentation only either way: the API refuses independently.
-  const canManage = true;
-  const role = catalog.roles.find((candidate) => candidate.key === roleKey);
-  if (!role) notFound();
-
-  return (
-    <RoleDetail
-      role={role}
-      catalog={catalog}
-      projectName={ctx.project.name}
-      canManage={canManage}
-      projectKey={ctx.project.identifier}
-    />
-  );
+  permanentRedirect(workspaceRolePath(roleKey));
 }

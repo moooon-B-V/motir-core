@@ -4,7 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl, enMessages } from '../helpers/renderWithIntl';
 import zhMessages from '@/messages/zh.json';
 import { toRoleCatalogDTO } from '@/lib/mappers/permissionMappers';
-import { RoleDetail } from '@/app/(authed)/settings/project/roles/_components/RoleDetail';
+import { RoleDetail } from '@/app/(authed)/settings/workspace/roles/_components/RoleDetail';
 import type { RoleCatalogDTO } from '@/lib/dto/permissions';
 
 // Deleting a custom role (Story MOTIR-2257 · Subtask MOTIR-2480), built to
@@ -31,7 +31,7 @@ vi.mock('@/components/ui/Toast', async (importOriginal) => {
 
 function catalogWith(counts: Record<string, number> = {}): RoleCatalogDTO {
   return toRoleCatalogDTO(
-    { admin: 1, member: 2, viewer: 0 },
+    { manager: 1, member: 2, viewer: 0 },
     [
       { id: 'r_contractor', name: 'Contractor', permissions: ['project:browse'] },
       { id: 'r_reporter', name: 'Reporter', permissions: ['project:browse'] },
@@ -49,9 +49,9 @@ function renderDetail(
     <RoleDetail
       role={role}
       catalog={catalog}
-      projectName="motir"
+      workspaceName="motir"
       canManage={opts.canManage ?? true}
-      projectKey="MOTIR"
+      workspaceId="ws1"
     />,
     { messages: enMessages },
   );
@@ -148,12 +148,12 @@ describe('confirming', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/api/projects/MOTIR/roles/r_contractor?reassignTo=r_reporter');
+    expect(url).toBe('/api/workspaces/ws1/roles/r_contractor?reassignToDefinitionId=r_reporter');
     expect(init.method).toBe('DELETE');
 
     // The list is a SERVER-rendered surface: push + refresh, so the
     // destination's member count is read again rather than patched client-side.
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/settings/project/roles'));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/settings/workspace/roles'));
     expect(refreshMock).toHaveBeenCalled();
     expect(toastMock.mock.calls[0]?.[0]).toMatchObject({ variant: 'success' });
   });
@@ -167,7 +167,7 @@ describe('confirming', () => {
     fireEvent.click(screen.getByTestId('delete-confirm'));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect((fetchMock.mock.calls[0] as [string])[0]).toBe('/api/projects/MOTIR/roles/r_contractor');
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe('/api/workspaces/ws1/roles/r_contractor');
   });
 
   it('a 409 RE-ASKS with the SERVER`s count — the number that went stale is replaced', async () => {
@@ -252,7 +252,7 @@ describe('confirming', () => {
     fireEvent.click(screen.getByTestId('delete-role'));
     fireEvent.click(screen.getByTestId('delete-confirm'));
 
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/settings/project/roles'));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/settings/workspace/roles'));
     expect(toastMock.mock.calls[0]?.[0]).toMatchObject({ variant: 'error' });
   });
 });
@@ -285,7 +285,13 @@ describe('the dialog is a real Modal', () => {
     const catalog = catalogWith({ r_contractor: 3 });
     const role = catalog.roles.find((r) => r.key === 'r_contractor')!;
     const { container } = renderWithIntl(
-      <RoleDetail role={role} catalog={catalog} projectName="motir" canManage projectKey="MOTIR" />,
+      <RoleDetail
+        role={role}
+        catalog={catalog}
+        workspaceName="motir"
+        canManage
+        workspaceId="ws1"
+      />,
       { messages: zhMessages as unknown as Record<string, unknown> },
     );
     fireEvent.click(screen.getByTestId('delete-role'));

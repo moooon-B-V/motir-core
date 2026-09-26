@@ -24,9 +24,11 @@ import {
   RoleDefinitionNotFoundError,
   UngrantablePermissionError,
 } from '@/lib/permissions/errors';
-import { grantablePermissionKeys } from '@/lib/services/projectRoleDefinitionService';
+import { grantablePermissionKeys } from '@/lib/permissions/grantable';
 import { toWorkspaceRoleCatalogDTO, toWorkspaceRoleDTO } from '@/lib/mappers/workspaceRoleMappers';
 import type { WorkspaceRoleCatalogDTO, WorkspaceRoleDTO } from '@/lib/dto/workspaceRoles';
+import type { RoleCatalogDTO } from '@/lib/dto/permissions';
+import { toRoleCatalogDTO } from '@/lib/mappers/permissionMappers';
 
 // workspaceRoleDefinitionService — a workspace's OWN roles (Story MOTIR-6168 ·
 // MOTIR-6460). The workspace-tier home of what `projectRoleDefinitionService`
@@ -167,6 +169,44 @@ export const workspaceRoleDefinitionService = {
         builtInCounts[key] = (builtInCounts[key] ?? 0) + row.count;
       }
       return toWorkspaceRoleCatalogDTO(workspaceId, builtInCounts, customRoles, customCounts);
+    });
+  },
+
+  /**
+   * What the workspace Roles pages render (MOTIR-6466): the catalog in the shape
+   * the moved screens consume (`RoleCatalogDTO` — built-ins, then custom roles by
+   * name, each with its WORKSPACE holder count), and whether the reader may
+   * author roles. Readable by every member; `canManage` is the Manager test,
+   * decided here so no page restates it.
+   */
+  async getRolesPageCatalog(
+    workspaceId: string,
+    actor: Actor,
+  ): Promise<{ catalog: RoleCatalogDTO; canManage: boolean }> {
+    return withWorkspaceContext({ userId: actor.userId, workspaceId }, async (tx) => {
+      const role = await readReachRole(actor.userId, workspaceId, tx);
+      if (role == null) throw new NotAMemberError(actor.userId, workspaceId);
+      const [builtInRows, customRoles] = await Promise.all([
+        workspaceMembershipRepository.countBuiltInRolesByWorkspace(workspaceId, tx),
+        workspaceRoleDefinitionRepository.findManyByWorkspace(workspaceId, tx),
+      ]);
+      const customCounts = await workspaceRoleDefinitionRepository.countHolders(
+        customRoles.map((r) => r.id),
+        tx,
+      );
+      const builtInCounts: Partial<Record<WorkspaceRole, number>> = {};
+      for (const row of builtInRows) {
+        const key = resolveWorkspaceRole(row);
+        builtInCounts[key] = (builtInCounts[key] ?? 0) + row.count;
+      }
+      return {
+        catalog: toRoleCatalogDTO(
+          builtInCounts,
+          customRoles.map((r) => ({ id: r.id, name: r.name, permissions: r.permissions })),
+          Object.fromEntries(customCounts),
+        ),
+        canManage: role === 'manager',
+      };
     });
   },
 

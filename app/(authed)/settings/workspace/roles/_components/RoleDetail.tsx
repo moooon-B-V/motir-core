@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { buttonVariants } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { RoleDeleteControl } from './RoleDeleteControl';
+import { RoomChips } from './RoleList';
 import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
 import { PermissionGroups } from './PermissionGroups';
 import { RoleGlyph, roleDescription, roleName, roleTileTint } from './roleIdentity';
@@ -39,17 +40,17 @@ import { RoleGlyph, roleDescription, roleName, roleTileTint } from './roleIdenti
 export function RoleDetail({
   role,
   catalog,
-  projectName,
+  workspaceName,
   canManage = false,
-  projectKey,
+  workspaceId,
 }: {
   role: RoleDTO;
   catalog: RoleCatalogDTO;
-  projectName: string;
-  /** `project:manage_access` — MOTIR-2483. Absent means read-only, as before. */
+  workspaceName: string;
+  /** Whether the reader is a workspace Manager (MOTIR-6466). Absent means read-only. */
   canManage?: boolean;
-  /** The `[key]` segment the delete control calls — MOTIR-2480. */
-  projectKey?: string;
+  /** The workspace the delete control calls (MOTIR-6466). */
+  workspaceId?: string;
 }) {
   const t = useTranslations('settings.rolesPage');
   const tCatalog = useTranslations();
@@ -58,11 +59,11 @@ export function RoleDetail({
   return (
     <div className="flex flex-col">
       <p className="text-(--el-text-secondary) mb-2 font-mono text-[11px] tracking-[0.02em]">
-        {t('crumbs', { projectName, roleName: displayName })}
+        {t('crumbs', { workspaceName, roleName: displayName })}
       </p>
 
       <Link
-        href="/settings/project/roles"
+        href="/settings/workspace/roles"
         className="text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) mb-3 inline-flex w-fit items-center gap-1.5 rounded-(--radius-control) font-sans text-[12.5px] font-medium focus-visible:ring-2"
       >
         <ArrowLeft aria-hidden="true" className="h-3.5 w-3.5" />
@@ -79,7 +80,7 @@ export function RoleDetail({
           </span>
           <div className="min-w-0">
             <h1 className="text-(--el-text) font-serif text-xl font-semibold">{displayName}</h1>
-            <p className="text-(--el-text-muted) mt-1.5 max-w-[62ch] font-sans text-[13px] leading-relaxed">
+            <p className="text-(--el-text-secondary) mt-1.5 max-w-[62ch] font-sans text-[13px] leading-relaxed">
               {roleDescription(role, tCatalog)}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -107,7 +108,7 @@ export function RoleDetail({
               MOTIR-2480's and lands beside this. */}
           {canManage && !role.builtIn ? (
             <Link
-              href={`/settings/project/roles/${role.key}/edit`}
+              href={`/settings/workspace/roles/${role.key}/edit`}
               data-testid="edit-role"
               className={buttonVariants({ variant: 'secondary' })}
             >
@@ -118,8 +119,8 @@ export function RoleDetail({
           {/* DELETE — MOTIR-2480. Same two conditions as Edit: admin, and
               custom. A built-in cannot be deleted by anyone, workspace owner
               included, so there is no control to disable. */}
-          {canManage && !role.builtIn && projectKey ? (
-            <RoleDeleteControl projectKey={projectKey} role={role} roles={catalog.roles} />
+          {canManage && !role.builtIn && workspaceId ? (
+            <RoleDeleteControl workspaceId={workspaceId} role={role} roles={catalog.roles} />
           ) : null}
           <p className="text-(--el-text-secondary) shrink-0 font-sans text-[12.5px] whitespace-nowrap">
             {t.rich('holdsCount', {
@@ -130,6 +131,8 @@ export function RoleDetail({
           </p>
         </div>
       </div>
+
+      <RoomChips held={role.permissions} />
 
       <div className="border-(--el-border) bg-(--el-card) mt-5 overflow-hidden rounded-(--radius-card) border shadow-(--shadow-card)">
         <PermissionGroups domains={catalog.domains} held={role.permissions} />

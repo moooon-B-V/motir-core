@@ -42,7 +42,7 @@ runAsCloudBuild();
 //      every test it wrote for itself.
 //
 // ⚠️ happy-dom + REAL POSTGRES in one file, deliberately. Two of the seams end
-// at a SCREEN — a stored row read out through `getRoleCatalog` and rendered by
+// at a SCREEN — a stored row read out through the Roles catalog and rendered by
 // the component that consumes the DTO — and a seam test that stopped at the DTO
 // and compared it to a fixture would be exactly the test this file exists to
 // replace. `tests/components/ConnectCliPanel.test.tsx` already pairs the two.
@@ -73,14 +73,15 @@ vi.mock('@/lib/workspaces', async (importOriginal) => {
 const { projectsService } = await import('@/lib/services/projectsService');
 const { projectMembersService } = await import('@/lib/services/projectMembersService');
 const { projectAccessService } = await import('@/lib/services/projectAccessService');
-const { projectRoleDefinitionService } =
-  await import('@/lib/services/projectRoleDefinitionService');
-const { projectRoleDefinitionRepository } =
-  await import('@/lib/repositories/projectRoleDefinitionRepository');
+const { workspaceRoleDefinitionService } =
+  await import('@/lib/services/workspaceRoleDefinitionService');
+const { workspaceRoleDefinitionRepository } =
+  await import('@/lib/repositories/workspaceRoleDefinitionRepository');
 const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
-const { RoleList } = await import('@/app/(authed)/settings/project/roles/_components/RoleList');
-const { RoleDetail } = await import('@/app/(authed)/settings/project/roles/_components/RoleDetail');
+const { RoleList } = await import('@/app/(authed)/settings/workspace/roles/_components/RoleList');
+const { RoleDetail } =
+  await import('@/app/(authed)/settings/workspace/roles/_components/RoleDetail');
 const { truncateAuthTables } = await import('../helpers/db');
 
 const PASSWORD = 'hunter2hunter2';
@@ -127,14 +128,18 @@ async function build(slug: string, projectName = `Project ${slug}`): Promise<Fix
 }
 
 /**
- * A PROJECT custom role row, seeded straight into the table. Nothing can author
- * one any more (the routes answer 410 since MOTIR-6464), but the rows exist and
- * the retiring Roles screens still render them until MOTIR-6466 moves them.
+ * A custom role, authored where roles live now — on the WORKSPACE (MOTIR-6466
+ * moved the Roles screens there). Seeded straight into the table: the authoring
+ * route has its own tests (`tests/workspaces/workspaceRoleRoutes.test.ts`).
  */
 function authorRole(fx: Fixture, name: string, permissions: PermissionKey[]) {
-  return adminDb.projectRoleDefinition.create({
-    data: { workspaceId: fx.workspaceId, projectId: fx.projectId, name, permissions },
+  return adminDb.workspaceRoleDefinition.create({
+    data: { workspaceId: fx.workspaceId, name, permissions },
   });
+}
+
+async function readCatalog(workspaceId: string, ctx: WorkspaceContext) {
+  return (await workspaceRoleDefinitionService.getRolesPageCatalog(workspaceId, ctx)).catalog;
 }
 
 /**
@@ -169,7 +174,7 @@ describe('SEAM 2 · store → read → SCREEN', () => {
     await authorRole(fx, 'Contractor', ['project:browse', 'comment:add']);
 
     // The screen's OWN read — not a fixture shaped like one.
-    const catalog = await projectRoleDefinitionService.getRoleCatalog(fx.projectId, fx.ownerCtx);
+    const catalog = await readCatalog(fx.workspaceId, fx.ownerCtx);
     renderWithIntl(<RoleList catalog={catalog} />);
 
     // The role's name is text its author typed; it must arrive verbatim and never
@@ -180,7 +185,7 @@ describe('SEAM 2 · store → read → SCREEN', () => {
     // Nobody holds a project role since roles moved to the workspace (MOTIR-6464).
     expect(row.textContent).toContain('0 members');
     // The three built-ins are still drawn beside it, unchanged.
-    for (const name of ['Admin', 'Member', 'Viewer']) {
+    for (const name of ['Manager', 'Member', 'Viewer']) {
       expect(screen.getByRole('link', { name: new RegExp(name) })).toBeTruthy();
     }
   });
@@ -188,11 +193,11 @@ describe('SEAM 2 · store → read → SCREEN', () => {
   it('the DETAIL screen renders the stored set — the permission the role withholds is drawn as withheld', async () => {
     const fx = await build('seam2b');
     const role = await authorRole(fx, 'Contractor', ['project:browse', 'comment:add']);
-    const catalog = await projectRoleDefinitionService.getRoleCatalog(fx.projectId, fx.ownerCtx);
+    const catalog = await readCatalog(fx.workspaceId, fx.ownerCtx);
     const dto = catalog.roles.find((r) => r.key === role.id)!;
 
     const { container } = renderWithIntl(
-      <RoleDetail role={dto} catalog={catalog} projectName="Motir" />,
+      <RoleDetail role={dto} catalog={catalog} workspaceName="Motir" />,
     );
 
     // Read back through the component's own output: the DTO's keys are what the
@@ -339,17 +344,17 @@ describe('GUARD · tenancy at the non-bypass app role', () => {
     // below is the POLICY and not a service-level filter.
     const [rows, counts] = await asAppRole(theirs.ownerCtx, (tx) =>
       Promise.all([
-        projectRoleDefinitionRepository.findManyByProject(mine.projectId, tx),
-        projectRoleDefinitionRepository.countByProject(mine.projectId, tx),
+        workspaceRoleDefinitionRepository.findManyByWorkspace(mine.workspaceId, tx),
+        workspaceRoleDefinitionRepository.findById(role.id, tx),
       ]),
     );
     expect(rows).toEqual([]);
-    expect(counts).toBe(0);
+    expect(counts).toBeNull();
 
     // The same read under MY GUC does see it — otherwise the two assertions above
     // would also pass against a policy that hides the row from everyone.
     const own = await asAppRole(mine.ownerCtx, (tx) =>
-      projectRoleDefinitionRepository.findManyByProject(mine.projectId, tx),
+      workspaceRoleDefinitionRepository.findManyByWorkspace(mine.workspaceId, tx),
     );
     expect(own.map((r) => r.name)).toEqual(['Contractor']);
 
@@ -357,21 +362,16 @@ describe('GUARD · tenancy at the non-bypass app role', () => {
     // the service gate that never gets the chance to run in production either.
     await expect(
       asAppRole(theirs.ownerCtx, (tx) =>
-        projectRoleDefinitionRepository.update(role.id, { name: 'Stolen' }, tx),
+        workspaceRoleDefinitionRepository.update(role.id, { name: 'Stolen' }, tx),
       ),
     ).rejects.toThrow();
 
     // The catalog read refuses before it counts anything — a foreign project is
     // indistinguishable from a missing one.
-    await expect(
-      projectRoleDefinitionService.getRoleCatalog(mine.projectId, theirs.ownerCtx),
-    ).rejects.toThrow();
+    await expect(readCatalog(mine.workspaceId, theirs.ownerCtx)).rejects.toThrow();
 
     // Untouched, read back under its OWN context.
-    const catalog = await projectRoleDefinitionService.getRoleCatalog(
-      mine.projectId,
-      mine.ownerCtx,
-    );
+    const catalog = await readCatalog(mine.workspaceId, mine.ownerCtx);
     expect(catalog.roles.find((r) => r.key === role.id)?.name).toBe('Contractor');
   });
 });

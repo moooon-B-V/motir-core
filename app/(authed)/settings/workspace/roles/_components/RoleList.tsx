@@ -1,11 +1,9 @@
 import Link from 'next/link';
-import { ChevronRight, Info, Lock, Plus } from 'lucide-react';
+import { Check, ChevronRight, Info, Lock, Plus, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Button, buttonVariants } from '@/components/ui/Button';
+import { buttonVariants } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
-import { Tooltip } from '@/components/ui/Tooltip';
-import { MAX_CUSTOM_ROLES_PER_PROJECT } from '@/lib/permissions/limits';
 import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
 import { PermissionMark } from './PermissionMark';
 import { RoleGlyph, roleDescription, roleName, roleTileTint } from './roleIdentity';
@@ -44,50 +42,37 @@ export function RoleList({
   canManage = false,
 }: {
   catalog: RoleCatalogDTO;
-  /** `project:manage_access` — MOTIR-2483. Absent means read-only, as before. */
+  /** Whether the reader is a workspace Manager (MOTIR-6466). Absent means read-only. */
   canManage?: boolean;
 }) {
   const t = useTranslations('settings.rolesPage');
-  // The count is the project's OWN roles, and the cap the SAME constant the
-  // server enforces — so the button and the refusal can never disagree, and a
-  // test at the boundary needs no hardcoded number.
-  const customCount = catalog.roles.filter((role) => !role.builtIn).length;
-  const atCap = customCount >= MAX_CUSTOM_ROLES_PER_PROJECT;
 
   return (
     <div className="flex flex-col gap-5">
       {canManage ? (
         <div className="flex justify-end">
-          {/* AT THE CAP: visible-but-DISABLED with its explanation, which is the
-              treatment design-notes § Gating affordances (6.4.6) prescribes for
-              an IN-PLACE control. A missing button reads as "this project cannot
-              have custom roles"; a disabled one reads as "you have used them
-              all" — the true statement, and the one that says what to do next. */}
-          {atCap ? (
-            <Tooltip content={t('createRoleAtCap', { limit: MAX_CUSTOM_ROLES_PER_PROJECT })}>
-              <span>
-                <Button variant="primary" disabled data-testid="create-role">
-                  <Plus aria-hidden="true" className="h-4 w-4" />
-                  {t('createRole')}
-                </Button>
-              </span>
-            </Tooltip>
-          ) : (
-            /* A real LINK, not a button with a router push — this component is
-               rendered from a server page, and a link is focusable and
-               activatable by keyboard by construction. `buttonVariants` is the
-               shipped way to give one the button's shape. */
-            <Link
-              href="/settings/project/roles/new"
-              data-testid="create-role"
-              className={buttonVariants({ variant: 'primary' })}
-            >
-              <Plus aria-hidden="true" className="h-4 w-4" />
-              {t('createRole')}
-            </Link>
-          )}
+          {/* A real LINK, not a button with a router push — this component is
+              rendered from a server page, and a link is focusable and
+              activatable by keyboard by construction. `buttonVariants` is the
+              shipped way to give one the button's shape. */}
+          <Link
+            href="/settings/workspace/roles/new"
+            data-testid="create-role"
+            className={buttonVariants({ variant: 'primary' })}
+          >
+            <Plus aria-hidden="true" className="h-4 w-4" />
+            {t('createRole')}
+          </Link>
         </div>
-      ) : null}
+      ) : (
+        // A non-Manager reads every role, and is told who changes them (design
+        // panel 2d) — the entry point is absent rather than disabled, because
+        // it is a door, not an in-place control.
+        <p className="border-(--el-info) bg-(--el-tint-sky) text-(--el-text-strong) flex items-center gap-2 rounded-(--radius-control) border-l-2 px-(--spacing-control-x) py-(--spacing-control-y) font-sans text-xs">
+          <Info aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+          {t('managersOnly')}
+        </p>
+      )}
       <div className="border-(--el-border) bg-(--el-surface-soft) text-(--el-text-secondary) flex items-start gap-2 rounded-(--radius-card) border px-(--spacing-card-padding) py-(--spacing-control-y) font-sans text-[12.5px] leading-relaxed">
         <Info aria-hidden="true" className="mt-[2px] h-4 w-4 shrink-0 text-(--el-text-faint)" />
         <span>{t('builtInNote')}</span>
@@ -116,7 +101,7 @@ function RoleRow({ role, total }: { role: RoleDTO; total: number }) {
 
   return (
     <Link
-      href={`/settings/project/roles/${role.key}`}
+      href={`/settings/workspace/roles/${role.key}`}
       data-role-row={role.key}
       className="hover:bg-(--el-surface-soft) focus-visible:ring-(--focus-ring-color) grid grid-cols-[36px_minmax(0,1fr)_auto_16px] items-center gap-3.5 px-(--spacing-card-padding) py-(--spacing-control-y) focus-visible:ring-2 focus-visible:ring-inset focus-visible:outline-none"
     >
@@ -153,6 +138,7 @@ function RoleRow({ role, total }: { role: RoleDTO; total: number }) {
         <span className="text-(--el-text-secondary) mt-0.5 block font-sans text-[12.5px] leading-relaxed">
           {roleDescription(role, tRoles)}
         </span>
+        <RoomChips held={role.permissions} />
       </span>
 
       <span className="flex flex-col items-end gap-0.5 text-right whitespace-nowrap">
@@ -166,6 +152,48 @@ function RoleRow({ role, total }: { role: RoleDTO; total: number }) {
 
       <ChevronRight aria-hidden="true" className="text-(--el-text-faint) h-4 w-4" />
     </Link>
+  );
+}
+
+/** The three rooms a view-any key opens (MOTIR-6328), in the design's order. */
+const ROOM_KEYS = [
+  { key: 'plan:view_any', labelKey: 'rooms.plans' },
+  { key: 'approval:view_any', labelKey: 'rooms.approvals' },
+  { key: 'run:view_any', labelKey: 'rooms.runs' },
+] as const;
+
+/**
+ * The Rooms row (design panel 2): which of Plans · Approvals · Runs this role
+ * sees whole. Held and not-held differ by GLYPH and by a spoken word, never by
+ * hue alone — how a Manager sees which room a custom role closes.
+ */
+export function RoomChips({ held }: { held: readonly string[] }) {
+  const t = useTranslations('settings.rolesPage');
+  return (
+    <span className="mt-1.5 flex flex-wrap items-center gap-1.5 font-sans text-[11.5px]">
+      <span className="text-(--el-text-secondary)">{t('rooms.label')}</span>
+      {ROOM_KEYS.map((room) => {
+        const has = held.includes(room.key);
+        return (
+          <span
+            key={room.key}
+            className={
+              has
+                ? 'border-(--el-border) bg-(--el-muted) text-(--el-text) inline-flex items-center gap-1 rounded-(--radius-badge) border px-(--spacing-chip-x) py-(--spacing-chip-y)'
+                : 'border-(--el-border-strong) text-(--el-text-secondary) inline-flex items-center gap-1 rounded-(--radius-badge) border border-dashed px-(--spacing-chip-x) py-(--spacing-chip-y)'
+            }
+          >
+            {has ? (
+              <Check aria-hidden="true" className="h-3 w-3" />
+            ) : (
+              <X aria-hidden="true" className="h-3 w-3" />
+            )}
+            {t(room.labelKey)}
+            <span className="sr-only">{has ? t('rooms.held') : t('rooms.notHeld')}</span>
+          </span>
+        );
+      })}
+    </span>
   );
 }
 

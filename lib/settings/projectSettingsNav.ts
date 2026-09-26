@@ -9,7 +9,6 @@ import {
   Globe,
   KeyRound,
   Link2,
-  Shield,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
@@ -373,53 +372,10 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // dependency precisely so two cards could not add one field twice.
     cloudOnly: true,
   },
-  {
-    id: 'roles',
-    group: 'access',
-    href: '/settings/project/roles',
-    icon: Shield,
-    labelKey: 'nav.roles',
-    // Story MOTIR-2282 · MOTIR-2263 — what each role in the project can DO.
-    // Sits between Members & access (who is on the team) and Code access (who
-    // can clone), which is the order `design/projects/design-notes.md` draws:
-    // the model, then its two applications.
-    //
-    // A DRILL-DOWN: the list is the rail row, and `roles/[roleKey]` is reached
-    // by activating a row — hence `nestedRoutes` rather than a second entry. The
-    // rail keeps this row active on the detail screen (non-`exact` matching).
-    //
-    // MOTIR-2468 retired the browse gate this entry shipped with — a member does
-    // NOT read this screen, because the parent story's recipe requires a member
-    // to see no settings entries, and "what may I do here" is a question the
-    // affordances answer in place.
-    //
-    // ⚠️ `project:manage_access`, NOT `member:manage` — CHANGED BY MOTIR-2257, and
-    // the change is the anticipated half of MOTIR-2468's own reasoning arriving.
-    // That entry chose `member:manage` as a JUDGEMENT expressly because *"the page
-    // has no write, so it asserts no key of its own"*, while naming this story as
-    // the one that would add role AUTHORING here. It has: `Create role`, `Edit`
-    // and `Delete` all live on this screen now, and every one of them is gated by
-    // `project:manage_access` at the service (`docs/decisions/permission-inventory.md`
-    // R51 — governed by the shipped key rather than a new one). So the premise
-    // that made `member:manage` a judgement is gone, and the destination now has
-    // a key of its own to LOOK UP.
-    //
-    // The two are identical for all three built-ins, so nothing observable moves
-    // today. They come apart for exactly the thing this story invented: a role
-    // somebody composed by hand can hold one and not the other — and a rail row
-    // that opened onto a screen whose every affordance then refused would be the
-    // "looks governed without being it" failure MOTIR-2469's guard exists to stop,
-    // wearing the other face.
-    permission: 'project:manage_access',
-    // MOTIR-2483 adds the two AUTHORING routes beside the drill-down. The static
-    // `new` segment resolves ahead of the dynamic sibling; all three keep this
-    // row active, so an author never watches the rail lose its place mid-edit.
-    nestedRoutes: [
-      '/settings/project/roles/[roleKey]',
-      '/settings/project/roles/[roleKey]/edit',
-      '/settings/project/roles/new',
-    ],
-  },
+  // ⚠️ NO `roles` ROW (Story MOTIR-6168 · MOTIR-6466). Roles live on the
+  // WORKSPACE — one per person, the same in every project — so the Roles room
+  // moved to Workspace settings → Access, and every `/settings/project/roles/**`
+  // route redirects there (design `workspace-roles.mock.html` panel 4c).
   {
     id: 'code-access',
     group: 'access',
@@ -716,3 +672,17 @@ export function groupSettingsNav(
     entries: entries.filter((entry) => entry.group === group),
   })).filter((section) => section.entries.length > 0);
 }
+
+/**
+ * The RETIRED project-settings routes — pages that exist on disk only to
+ * PERMANENTLY redirect (Story MOTIR-6168 · MOTIR-6466: the Roles room moved to
+ * workspace settings). Not destinations, so not in
+ * {@link PROJECT_SETTINGS_ROUTE_PATHS}, the rail or the palette; listed so the
+ * route ↔ registry totality test still accounts for every `page.tsx`.
+ */
+export const PROJECT_SETTINGS_RETIRED_ROUTES: string[] = [
+  '/settings/project/roles',
+  '/settings/project/roles/[roleKey]',
+  '/settings/project/roles/[roleKey]/edit',
+  '/settings/project/roles/new',
+];

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   PROJECT_SETTINGS_NAV,
+  PROJECT_SETTINGS_RETIRED_ROUTES,
   PROJECT_SETTINGS_ROOT,
   PROJECT_SETTINGS_ROUTES,
   PROJECT_SETTINGS_ROUTE_PATHS,
@@ -14,8 +15,8 @@ import {
   isSettingsEntryActive,
   settingsEntryViewKey,
   toSettingsNavPermissions,
-  visibleSettingsNav,
   type SettingsNavEntry,
+  visibleSettingsNav,
 } from '@/lib/settings/projectSettingsNav';
 import { resolveSettingsRefusal, settingsEntryKeys } from '@/app/(authed)/settings/project/_guard';
 import { BUILTIN_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
@@ -63,7 +64,12 @@ const ALWAYS_PRESENT = PROJECT_SETTINGS_NAV.filter((e) => !e.cloudOnly);
 describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29)', () => {
   it('every settings route is accounted for EXACTLY once, and vice versa', () => {
     const fsRoutes = collectFsRoutes(SETTINGS_DIR, PROJECT_SETTINGS_ROOT).sort();
-    const registryRoutes = [...PROJECT_SETTINGS_ROUTE_PATHS].sort();
+    // The retired Roles routes are redirect-only pages (MOTIR-6466): accounted
+    // for, but never destinations.
+    const registryRoutes = [
+      ...PROJECT_SETTINGS_ROUTE_PATHS,
+      ...PROJECT_SETTINGS_RETIRED_ROUTES,
+    ].sort();
 
     // No drift in either direction: a new page nothing accounts for, or an
     // accounted-for route with no page, both fail.
@@ -108,27 +114,13 @@ describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29
     }
   });
 
-  it('Roles & permissions is a member-domain Access entry with the detail as its drill-down', () => {
-    const roles = PROJECT_SETTINGS_NAV.find((e) => e.id === 'roles');
-    expect(roles?.href).toBe('/settings/project/roles');
-    expect(roles?.group).toBe('access');
-    expect(roles?.labelKey).toBe('nav.roles');
-    // A real route, which since MOTIR-4324 retired the reserved-slot flag is
-    // asserted as membership of the destination set rather than as the absence
-    // of that flag.
-    expect(PROJECT_SETTINGS_ROUTES).toContainEqual(roles);
-    // MOTIR-2468 retired the browse gate this entry shipped with, and MOTIR-2257
-    // moved the key it left to `project:manage_access`: that entry's own
-    // reasoning turned on the screen having "no write of its own", and this story
-    // gave it three — each gated by that key at the service.
-    expect(roles?.permission).toBe('project:manage_access');
-    expect(visibleSettingsNav(MEMBER).map((e) => e.id)).not.toContain('roles');
-    expect(visibleSettingsNav(ADMIN).map((e) => e.id)).toContain('roles');
-    // MOTIR-2483 added the two AUTHORING routes. Pinned literally, in order,
-    // because this list is what keeps the rail row active on a drilled-in
-    // screen — a route missing from it looks like a working page whose nav
-    // silently deselects, which is exactly what the totality guard is for.
-    expect(roles?.nestedRoutes).toEqual([
+  it('Roles & permissions is NO LONGER a project row — it moved to workspace settings (MOTIR-6466)', () => {
+    expect(PROJECT_SETTINGS_NAV.find((e) => e.id === 'roles')).toBeUndefined();
+    expect(PROJECT_SETTINGS_ROUTE_PATHS.some((r) => r.startsWith('/settings/project/roles'))).toBe(
+      false,
+    );
+    expect(PROJECT_SETTINGS_RETIRED_ROUTES).toEqual([
+      '/settings/project/roles',
       '/settings/project/roles/[roleKey]',
       '/settings/project/roles/[roleKey]/edit',
       '/settings/project/roles/new',
@@ -147,7 +139,7 @@ describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29
     // and Roles", and that slot was taken by Public page while the story was in
     // flight. Two public rooms either side of one door is the coherent shape,
     // and the asset reading beats the card text.
-    expect(accessIds).toEqual(['members', 'public-page', 'public-address', 'roles', 'code-access']);
+    expect(accessIds).toEqual(['members', 'public-page', 'public-address', 'code-access']);
   });
 
   it('has no duplicate hrefs and no duplicate ids', () => {
@@ -475,11 +467,6 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
   // writes (`Create role` / `Edit` / `Delete`) and a service that asserts
   // `project:manage_access` on every one of them, so the row now cites the code
   // the destination actually runs.
-  roles: {
-    permission: 'project:manage_access',
-    source: 'lib/services/projectRoleDefinitionService.ts',
-    gate: 'assertPermission',
-  },
   'code-access': {
     permission: 'repository:manage_access',
     source: 'lib/services/projectRepoAccessService.ts',

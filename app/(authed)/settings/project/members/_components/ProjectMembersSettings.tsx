@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -492,6 +493,15 @@ export function ProjectMembersSettings({
           </div>
         }
       >
+        {/* Panel 3 of `design/projects/access-members--no-roles.mock.html`
+            (Story MOTIR-6168 · MOTIR-6466): the rows carry no role any more, so
+            one line says where what each person can do comes from. */}
+        <p className="text-(--el-text-secondary) mb-3 font-sans text-xs">
+          {t('access.membersFromWorkspaceRole')}{' '}
+          <Link href="/settings/workspace/roles" className="text-(--el-link) hover:underline">
+            {t('access.workspaceRolesLink')}
+          </Link>
+        </p>
         {!canManage ? (
           <div className="mb-3 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface) p-(--spacing-control-y) px-(--spacing-control-x)">
             <Info className="size-4 shrink-0 text-(--el-text-muted)" aria-hidden />

@@ -235,6 +235,11 @@ describe('GET /api/organizations/[orgId]/workspaces', () => {
     // these workspaces must still see the true numbers, not zeros.
     expect(page1.workspaces[0]).toMatchObject({ memberCount: 2, projectCount: 1 }); // Owner + Member
     expect(page1.nextCursor).not.toBeNull();
+    // …and each row says the Admin reaches it only through the organization,
+    // not by the roster (MOTIR-6456 panel 6b's "Manager · via organization").
+    expect(page1.workspaces.map((w) => (w as { viewerIsMember?: boolean }).viewerIsMember)).toEqual(
+      [false, false],
+    );
 
     const second = (await (
       await list(organizationId, `?limit=2&cursor=${page1.nextCursor}`)

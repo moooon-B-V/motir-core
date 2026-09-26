@@ -1729,17 +1729,21 @@
       "bugs": "Bugs"
     },
     "roles": {
+      "manager": {
+        "name": "Manager",
+        "description": "Everything in this workspace — its settings, members and every project."
+      },
       "admin": {
         "name": "Admin",
         "description": "Runs the project. Every setting, every domain, and the work itself."
       },
       "member": {
         "name": "Member",
-        "description": "Does the work — edits items, comments, attaches, runs the planner. No project settings."
+        "description": "Does the work in every project — edits items, comments, runs the planner."
       },
       "viewer": {
         "name": "Viewer",
-        "description": "Reads the project and its reports. Changes nothing."
+        "description": "Reads every project and its reports. Changes nothing."
       }
     },
     "area": {
@@ -1832,6 +1836,7 @@
         },
         "workspace": "Workspace",
         "security": "Security",
+        "roles": "Roles & permissions",
         "jobs": "Job runs"
       }
     },
@@ -2289,7 +2294,7 @@
     "access": {
       "title": "Access & members",
       "cardDescription": "Who can find, view, and edit this project, and the people on it.",
-      "subtitle": "Control who can see and edit <strong>{projectName}</strong>. Workspace owners and admins always have access.",
+      "subtitle": "Control who can see and edit <strong>{projectName}</strong>. Workspace Managers always have access.",
       "accessHeading": "Project access",
       "accessSubheading": "Who in the {workspaceName} workspace can reach this project.",
       "levelGroupLabel": "Project access level",
@@ -2317,33 +2322,20 @@
       "addMemberHint": "Members already on the project are hidden.",
       "remove": "Remove",
       "youSuffix": " (you)",
-      "roleSelectLabel": "Role for {name}",
-      "roleGroup": {
-        "builtIn": "Built-in",
-        "custom": "Custom roles",
-        "customOption": "Custom role"
-      },
-      "customRoleChipLabel": "{name} — a custom role",
       "role": {
         "admin": "Admin",
         "member": "Member",
         "viewer": "Viewer"
       },
-      "roleDesc": {
-        "admin": "Manage members + access",
-        "member": "View + edit work items",
-        "viewer": "View only, cannot edit"
-      },
       "readOnly": "Read-only",
       "readOnlyNote": "Only project admins can add members or change access.",
       "memberAddedToast": "Added {name}",
       "memberRemovedToast": "Removed {name}",
-      "roleChangedToast": "Updated {name}’s role",
       "addMemberErrorTitle": "Could not add member",
       "removeMemberErrorTitle": "Could not remove member",
-      "changeRoleErrorTitle": "Could not change role",
-      "errorLastAdmin": "This is the only project admin — assign another admin first.",
-      "errorGeneric": "Something went wrong. Please try again."
+      "errorGeneric": "Something went wrong. Please try again.",
+      "membersFromWorkspaceRole": "People added to this project. What each can do comes from their workspace role — manage roles in workspace settings.",
+      "workspaceRolesLink": "Workspace roles →"
     },
     "publicPage": {
       "title": "Public page",
@@ -3653,14 +3645,14 @@
     },
     "rolesPage": {
       "title": "Roles & permissions",
-      "subtitle": "What each role in <strong>{projectName}</strong> can do. Workspace owners and admins always hold everything.",
+      "subtitle": "What each role in <strong>{workspaceName}</strong> can do — a person’s role is the same in every project. Managers hold everything.",
       "builtInNote": "The three built-in roles can’t be changed — they’re what Motir guarantees. To fit a shape they don’t cover, create a role of your own.",
       "builtIn": "Built-in",
       "builtInLocked": "Built-in · can’t be changed",
       "permissionCount": "{held} of {total} permissions",
       "memberCount": "{count, plural, one {# member} other {# members}}",
       "allRoles": "All roles",
-      "crumbs": "Settings · {projectName} · Roles & permissions · {roleName}",
+      "crumbs": "Workspace settings · Roles & permissions · {roleName}",
       "holdsCount": "Holds <strong>{held}</strong> of {total}",
       "mark": {
         "held": "Held",
@@ -3674,7 +3666,6 @@
       },
       "custom": "Custom",
       "createRole": "Create role",
-      "createRoleAtCap": "This project has all {limit} custom roles. Delete one to create another.",
       "editRole": "Edit",
       "createRoleTitle": "Create a role",
       "editRoleTitle": "Edit role",
@@ -3686,7 +3677,7 @@
       "startFrom": "Start from",
       "startFromPlaceholder": "Choose a role…",
       "editorHintNew": "Start from seeds the grid below with everything that role holds — then edit freely. The pick is not stored: a saved role is its name and its set.",
-      "editorHintEdit": "Tick what this role holds. A role is its name and its set — nothing else is recorded.",
+      "editorHintEdit": "Tick what this role holds. Saving changes the role for everyone who holds it, in every project of the workspace.",
       "saveRole": "Save changes",
       "deleteRole": "Delete {name}",
       "deleteDialog": {
@@ -3708,7 +3699,19 @@
         "invalidName": "Give the role a name.",
         "noLongerAllowed": "You no longer have permission to manage this project’s roles.",
         "generic": "That didn’t save. Try again."
-      }
+      },
+      "managersOnly": "Only a workspace Manager can create or change roles.",
+      "movedFromProject": "Roles now live on the workspace — the same role in every project. You were sent here from the project’s old Roles page.",
+      "rooms": {
+        "label": "Rooms",
+        "plans": "Plans",
+        "approvals": "Approvals",
+        "runs": "Runs",
+        "held": "(sees the whole room)",
+        "notHeld": "(sees only their own)"
+      },
+      "doorSummary": "3 built-in · {custom, plural, =0 {no custom roles} one {# custom} other {# custom}}",
+      "openRoles": "Open roles"
     },
     "noAccess": {
       "title": "Admins only",
@@ -5108,7 +5111,10 @@
       "removeConfirmLabel": "Type {workspace} to confirm",
       "removeConfirmButton": "Remove workspace",
       "removed": "{workspace} removed",
-      "removeErrorTitle": "Couldn’t remove {workspace}"
+      "removeErrorTitle": "Couldn’t remove {workspace}",
+      "open": "Open",
+      "openAria": "Open {workspace}",
+      "viaOrganization": "Manager · via organization"
     },
     "states": {
       "emptyTitle": "It’s just you so far",

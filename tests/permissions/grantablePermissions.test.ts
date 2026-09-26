@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { grantablePermissionKeys } from '@/lib/services/projectRoleDefinitionService';
+import { grantablePermissionKeys } from '@/lib/permissions/grantable';
 import { MAX_CUSTOM_ROLES_PER_PROJECT, MAX_ROLE_NAME_LENGTH } from '@/lib/permissions/limits';
 import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { isEnforced, type PermissionKey } from '@/lib/permissions/catalog';

@@ -599,7 +599,7 @@ export default defineConfig({
         // branch: the same four files enter it under `app/**/…` and are absent
         // under `app/(authed)/…`. See MOTIR-2449 — four component thresholds
         // already in this file are keyed the literal way and are therefore inert.
-        'app/**/settings/project/roles/_components/*.tsx',
+        'app/**/settings/workspace/roles/_components/*.tsx',
 
         // Story MOTIR-2257 · Subtask MOTIR-2486 (the story gate) — the custom-role
         // WRITE surface. `lib/permissions/**` above already reported the policy
@@ -612,8 +612,9 @@ export default defineConfig({
         // literal `app/api/projects/[key]/roles/route.ts` names a directory
         // called `k`. `tests/coverage-gate-globs.test.ts` fails the build on
         // either mistake rather than passing vacuously.
-        'lib/services/projectRoleDefinitionService.ts',
-        'lib/repositories/projectRoleDefinitionRepository.ts',
+        // (The project-role-definition service and repository were retired by
+        // Story MOTIR-6168 · MOTIR-6466 — the grantable-key rule they carried
+        // now lives in `lib/permissions/grantable.ts`, gated by the glob above.)
         'app/api/projects/**/roles/route.ts',
         'app/api/projects/**/roles/**/route.ts',
 
@@ -3640,7 +3641,7 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
-        'app/**/settings/project/roles/_components/*.tsx': {
+        'app/**/settings/workspace/roles/_components/*.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
@@ -3662,16 +3663,6 @@ export default defineConfig({
         // pinning them individually would gate code no card here wrote. The four
         // files the epic added or rewrote carry the aggregate on their own.
         'lib/permissions/**': { branches: 90, functions: 90, lines: 90 },
-        'lib/services/projectRoleDefinitionService.ts': {
-          branches: 90,
-          functions: 90,
-          lines: 90,
-        },
-        'lib/repositories/projectRoleDefinitionRepository.ts': {
-          branches: 90,
-          functions: 90,
-          lines: 90,
-        },
         'app/api/projects/**/roles/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/projects/**/roles/**/route.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 11.1 · Subtask 11.1.5 — the public `/api/v1` envelope.

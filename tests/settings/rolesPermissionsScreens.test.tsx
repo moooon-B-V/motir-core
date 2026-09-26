@@ -11,8 +11,8 @@ import { PERMISSIONS, isEnforced } from '@/lib/permissions/catalog';
 /** The screens draw ENFORCED role-gated keys only (MOTIR-6328 parks the Plans /
  *  Runs view keys as `planned` until MOTIR-6330 / MOTIR-6331 wire them). */
 const OFFERED_GATED = ROLE_GATED_PERMISSIONS.filter((key) => isEnforced(key));
-import { RoleList } from '@/app/(authed)/settings/project/roles/_components/RoleList';
-import { RoleDetail } from '@/app/(authed)/settings/project/roles/_components/RoleDetail';
+import { RoleList } from '@/app/(authed)/settings/workspace/roles/_components/RoleList';
+import { RoleDetail } from '@/app/(authed)/settings/workspace/roles/_components/RoleDetail';
 import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
 
 // The Roles & permissions SCREENS (Story MOTIR-2282 · Subtask MOTIR-2263), built
@@ -25,7 +25,7 @@ import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
 // missing key is a visible `permissions.work_item_edit.label` in the DOM, which
 // is exactly what these tests look for.
 
-const CATALOG = toRoleCatalogDTO({ admin: 3, member: 12, viewer: 0 });
+const CATALOG = toRoleCatalogDTO({ manager: 3, member: 12, viewer: 0 });
 
 function renderWith(ui: React.ReactElement, messages: Record<string, unknown> = enMessages) {
   return renderWithIntl(ui, { messages });
@@ -38,9 +38,9 @@ describe('the role LIST (screen 1)', () => {
     renderWith(<RoleList catalog={CATALOG} />);
     const rows = screen.getAllByRole('link');
     expect(rows.map((row) => row.getAttribute('href'))).toEqual([
-      '/settings/project/roles/admin',
-      '/settings/project/roles/member',
-      '/settings/project/roles/viewer',
+      '/settings/workspace/roles/manager',
+      '/settings/workspace/roles/member',
+      '/settings/workspace/roles/viewer',
     ]);
   });
 
@@ -56,9 +56,9 @@ describe('the role LIST (screen 1)', () => {
 
   it("shows each role's name, purpose, Built-in chip, N of M and headcount", () => {
     renderWith(<RoleList catalog={CATALOG} />);
-    const admin = screen.getByRole('link', { name: /Admin/ });
+    const admin = screen.getByRole('link', { name: /Manager/ });
     expect(within(admin).getByText('Built-in')).toBeTruthy();
-    expect(within(admin).getByText(/Runs the project/)).toBeTruthy();
+    expect(within(admin).getByText(/Everything in this workspace/)).toBeTruthy();
     // Admin holds the whole role-gated set — asserted against the constant, so
     // the expectation grows with the model instead of pinning a stale 28.
     expect(
@@ -77,7 +77,7 @@ describe('the role LIST (screen 1)', () => {
   });
 
   it('pluralises the headcount — one member, not "1 members"', () => {
-    renderWith(<RoleList catalog={toRoleCatalogDTO({ admin: 1 })} />);
+    renderWith(<RoleList catalog={toRoleCatalogDTO({ manager: 1 })} />);
     expect(screen.getByText('1 member')).toBeTruthy();
   });
 
@@ -123,7 +123,7 @@ describe('the role DETAIL (screen 2)', () => {
   const member = CATALOG.roles.find((role) => role.key === 'member')!;
 
   it('renders every role-gated permission, grouped under its domain heading', () => {
-    renderWith(<RoleDetail role={member} catalog={CATALOG} projectName="motir" />);
+    renderWith(<RoleDetail role={member} catalog={CATALOG} workspaceName="motir" />);
     for (const key of OFFERED_GATED) {
       expect(document.querySelector(`[data-permission="${key}"]`), `${key} missing`).toBeTruthy();
     }
@@ -131,12 +131,13 @@ describe('the role DETAIL (screen 2)', () => {
     for (const group of CATALOG.domains) {
       const heading = domainLabels[group.domain];
       expect(heading, `no en label for domain ${group.domain}`).toBeTruthy();
-      expect(screen.getByText(heading as string)).toBeTruthy();
+      // `getAll`: the Rooms row (MOTIR-6466) also names Plans / Approvals / Runs.
+      expect(screen.getAllByText(heading as string).length).toBeGreaterThan(0);
     }
   });
 
   it('marks exactly the permissions the role holds — the marks come from its set', () => {
-    renderWith(<RoleDetail role={member} catalog={CATALOG} projectName="motir" />);
+    renderWith(<RoleDetail role={member} catalog={CATALOG} workspaceName="motir" />);
     for (const key of OFFERED_GATED) {
       const row = document.querySelector(`[data-permission="${key}"]`) as HTMLElement;
       const mark = within(row).getByRole('img').getAttribute('aria-label');
@@ -145,7 +146,7 @@ describe('the role DETAIL (screen 2)', () => {
   });
 
   it('never carries state by colour alone — every mark has an accessible name', () => {
-    renderWith(<RoleDetail role={member} catalog={CATALOG} projectName="motir" />);
+    renderWith(<RoleDetail role={member} catalog={CATALOG} workspaceName="motir" />);
     const marks = screen.getAllByRole('img');
     expect(marks.length).toBe(OFFERED_GATED.length);
     for (const mark of marks) {
@@ -154,7 +155,7 @@ describe('the role DETAIL (screen 2)', () => {
   });
 
   it('leaves a withheld row fully legible — a mark, never a dimmed row', () => {
-    renderWith(<RoleDetail role={member} catalog={CATALOG} projectName="motir" />);
+    renderWith(<RoleDetail role={member} catalog={CATALOG} workspaceName="motir" />);
     const withheld = OFFERED_GATED.find((key) => !member.permissions.includes(key))!;
     const row = document.querySelector(`[data-permission="${withheld}"]`) as HTMLElement;
     // The state lives on the MARK, not on the row's opacity.
@@ -163,14 +164,14 @@ describe('the role DETAIL (screen 2)', () => {
   });
 
   it('carries BOTH the crumb trail and the back link, and the link returns to the list', () => {
-    renderWith(<RoleDetail role={member} catalog={CATALOG} projectName="motir" />);
-    expect(screen.getByText('Settings · motir · Roles & permissions · Member')).toBeTruthy();
+    renderWith(<RoleDetail role={member} catalog={CATALOG} workspaceName="motir" />);
+    expect(screen.getByText('Workspace settings · Roles & permissions · Member')).toBeTruthy();
     const back = screen.getByRole('link', { name: 'All roles' });
-    expect(back.getAttribute('href')).toBe('/settings/project/roles');
+    expect(back.getAttribute('href')).toBe('/settings/workspace/roles');
   });
 
   it('states the holding as N of M and locks a built-in with no control at all', () => {
-    renderWith(<RoleDetail role={member} catalog={CATALOG} projectName="motir" />);
+    renderWith(<RoleDetail role={member} catalog={CATALOG} workspaceName="motir" />);
     expect(screen.getByText('Built-in · can’t be changed')).toBeTruthy();
     expect(screen.getByText('12 members')).toBeTruthy();
     expect(screen.getByText(String(member.permissions.length))).toBeTruthy();
@@ -179,7 +180,7 @@ describe('the role DETAIL (screen 2)', () => {
 
   it('renders no raw catalog key anywhere', () => {
     const { container } = renderWith(
-      <RoleDetail role={member} catalog={CATALOG} projectName="m" />,
+      <RoleDetail role={member} catalog={CATALOG} workspaceName="m" />,
     );
     expectNoRawKeys(container);
   });
@@ -192,7 +193,7 @@ describe('the zh catalog carries every string these screens render', () => {
     cleanup();
     const member = CATALOG.roles.find((role) => role.key === 'member')!;
     const { container: detail } = renderWith(
-      <RoleDetail role={member} catalog={CATALOG} projectName="motir" />,
+      <RoleDetail role={member} catalog={CATALOG} workspaceName="motir" />,
       zhMessages,
     );
     expectNoRawKeys(detail);
@@ -234,7 +235,7 @@ describe('a11y — zero axe violations on both screens', () => {
   it('the role detail', async () => {
     const member = CATALOG.roles.find((role) => role.key === 'member')!;
     const { container } = renderWith(
-      <RoleDetail role={member} catalog={CATALOG} projectName="motir" />,
+      <RoleDetail role={member} catalog={CATALOG} workspaceName="motir" />,
     );
     expect((await axe.run(container, AXE)).violations).toEqual([]);
   });
@@ -247,7 +248,7 @@ describe('a11y — zero axe violations on both screens', () => {
 // something about a value that cannot occur.
 describe('a project`s OWN roles on the two screens', () => {
   const CUSTOM: RoleCatalogDTO = toRoleCatalogDTO(
-    { admin: 3, member: 12, viewer: 0 },
+    { manager: 3, member: 12, viewer: 0 },
     [
       {
         id: 'r_contractor',
@@ -270,10 +271,10 @@ describe('a project`s OWN roles on the two screens', () => {
   it('it links by its ID, and the built-ins still link by their enum value', () => {
     renderWith(<RoleList catalog={CUSTOM} />);
     expect(screen.getAllByRole('link').map((row) => row.getAttribute('href'))).toEqual([
-      '/settings/project/roles/admin',
-      '/settings/project/roles/member',
-      '/settings/project/roles/viewer',
-      '/settings/project/roles/r_contractor',
+      '/settings/workspace/roles/manager',
+      '/settings/workspace/roles/member',
+      '/settings/workspace/roles/viewer',
+      '/settings/workspace/roles/r_contractor',
     ]);
   });
 
@@ -285,7 +286,7 @@ describe('a project`s OWN roles on the two screens', () => {
   });
 
   it('the DETAIL renders its literal name, its set, and NO provenance chip', () => {
-    renderWith(<RoleDetail role={contractor} catalog={CUSTOM} projectName="motir" />);
+    renderWith(<RoleDetail role={contractor} catalog={CUSTOM} workspaceName="motir" />);
     expect(screen.getByText('Contractor')).toBeTruthy();
     expect(screen.queryByText(/^Based on /)).toBeNull();
     expect(screen.queryByText('Built-in · can’t be changed')).toBeNull();
@@ -297,7 +298,7 @@ describe('a project`s OWN roles on the two screens', () => {
     // stored `based_on`. It described how the role was once authored rather than
     // what it is, and went stale the moment either side was edited.
     for (const role of CUSTOM.roles) {
-      renderWith(<RoleDetail role={role} catalog={CUSTOM} projectName="motir" />);
+      renderWith(<RoleDetail role={role} catalog={CUSTOM} workspaceName="motir" />);
       expect(screen.queryByText(/^Based on /), role.key).toBeNull();
       cleanup();
     }
@@ -311,7 +312,7 @@ describe('a project`s OWN roles on the two screens', () => {
     expect(within(list).queryByText(/Create role/)).toBeNull();
     cleanup();
     const { container: detail } = renderWith(
-      <RoleDetail role={contractor} catalog={CUSTOM} projectName="motir" />,
+      <RoleDetail role={contractor} catalog={CUSTOM} workspaceName="motir" />,
     );
     expect(within(detail).queryAllByRole('button')).toEqual([]);
     expect(within(detail).queryByText(/^Edit$/)).toBeNull();
@@ -352,7 +353,7 @@ describe('a project`s OWN roles on the two screens', () => {
       ...CATALOG.roles.find((role) => role.key === 'viewer')!,
       permissions: [],
     };
-    renderWith(<RoleDetail role={empty} catalog={CATALOG} projectName="motir" />);
+    renderWith(<RoleDetail role={empty} catalog={CATALOG} workspaceName="motir" />);
     const marks = screen.getAllByRole('img');
     expect(marks.length).toBe(OFFERED_GATED.length);
     expect(marks.every((mark) => mark.getAttribute('aria-label') === 'Not held')).toBe(true);
@@ -378,7 +379,7 @@ describe('AA — the screens carry no un-measurable ink on informational text', 
     cleanup();
     const member = CATALOG.roles.find((role) => role.key === 'member')!;
     const { container: detail } = renderWith(
-      <RoleDetail role={member} catalog={CATALOG} projectName="motir" />,
+      <RoleDetail role={member} catalog={CATALOG} workspaceName="motir" />,
     );
     for (const container of [list, detail]) {
       for (const el of faintElements(container)) {

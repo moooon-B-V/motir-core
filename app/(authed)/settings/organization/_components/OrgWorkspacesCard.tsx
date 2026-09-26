@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Info, Layers, Plus, TriangleAlert } from 'lucide-react';
+import { ArrowRight, Info, Layers, Plus, TriangleAlert } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
@@ -16,6 +16,7 @@ import { afterContextSwitchTarget } from '@/lib/navigation/afterContextSwitch';
 import type { OrgWorkspacePageDTO, OrgWorkspaceRowDTO } from '@/lib/dto/workspaces';
 import { CreateWorkspaceDialog } from '../../../_components/CreateWorkspaceDialog';
 import { reconcileActiveWorkspaceAction } from '../actions';
+import { switchWorkspaceAction } from '../../../_actions';
 import { ORG_WORKSPACES_PAGE_SIZE } from './workspacesPageSize';
 
 export interface OrgWorkspacesCardProps {
@@ -112,6 +113,16 @@ export function OrgWorkspacesCard({
     // shell's reveal test) and this list's total — both halves.
     reloadCurrent();
     router.refresh();
+  }
+
+  // Open (panel 6b): switch to the workspace, then land on its settings. It
+  // writes nothing to the workspace's roster — an org Owner / Admin reaches it
+  // by their org role.
+  function openWorkspace(w: OrgWorkspaceRowDTO) {
+    void switchWorkspaceAction(w.id).then(() => {
+      router.push('/settings/workspace');
+      router.refresh();
+    });
   }
 
   function onRemoved(removed: OrgWorkspaceRowDTO) {
@@ -249,6 +260,22 @@ export function OrgWorkspacesCard({
                     })}
                   </span>
                 </div>
+                {w.viewerIsMember ? null : (
+                  // An org Owner / Admin reaches a workspace they are not on the
+                  // roster of as its Manager (panel 6b) — said here, in words.
+                  <Pill memberRole="admin" className="shrink-0">
+                    {t('workspaces.viaOrganization')}
+                  </Pill>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
+                  aria-label={t('workspaces.openAria', { workspace: w.name })}
+                  onClick={() => openWorkspace(w)}
+                >
+                  {t('workspaces.open')}
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"

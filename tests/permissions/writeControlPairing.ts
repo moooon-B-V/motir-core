@@ -311,6 +311,16 @@ export const CONTROL_EXEMPTIONS: Record<string, ControlExemption> = {
       'app/(authed)/items/_components/IssueQuickViewPanel.tsx',
     ],
   },
+  // The migration report is handed only to a Manager by the server
+  // (`roleMigrationReportService.firstPageForViewer`); both mounts read the
+  // workspace capability before rendering it.
+  'app/(authed)/settings/workspace/_components/RoleMigrationNotice.tsx': {
+    kind: 'mounted-by',
+    parents: [
+      'app/(authed)/settings/workspace/page.tsx',
+      'app/(authed)/settings/organization/_components/WorkspaceFoldInSection.tsx',
+    ],
+  },
   'app/(authed)/settings/project/_components/ArchiveProjectModal.tsx': {
     kind: 'page-guarded',
     page: 'app/(authed)/settings/project/page.tsx',

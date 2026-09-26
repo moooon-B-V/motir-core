@@ -66,6 +66,12 @@ export interface OrgWorkspaceRowDTO {
   memberCount: number;
   projectCount: number;
   createdAt: string;
+  /**
+   * Whether the viewer is on this workspace's roster. An org Owner / Admin
+   * reaches it as its Manager either way; the row marks the ones they reach
+   * only through the organization (MOTIR-6456 panel 6b).
+   */
+  viewerIsMember: boolean;
 }
 
 /** One keyset page of {@link OrgWorkspaceRowDTO}s. */

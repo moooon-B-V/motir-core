@@ -42,14 +42,15 @@ import type { RoleDTO } from '@/lib/dto/permissions';
 // and the server does the move and the removal in one transaction.
 
 export function RoleDeleteControl({
-  projectKey,
+  workspaceId,
   role,
   roles,
 }: {
-  projectKey: string;
+  /** The workspace whose role this is — the DELETE goes to its roles route (MOTIR-6466). */
+  workspaceId: string;
   /** The custom role being deleted. */
   role: RoleDTO;
-  /** Every role in the project — the destinations are these minus this one. */
+  /** Every role in the workspace — the destinations are these minus this one. */
   roles: RoleDTO[];
 }) {
   const t = useTranslations('settings.rolesPage');
@@ -69,13 +70,23 @@ export function RoleDeleteControl({
     return candidate.labelKey ? tCatalog(candidate.labelKey) : (candidate.name ?? candidate.key);
   }
 
-  /** `reassignTo` omitted on the probe; present on the confirm. */
+  /**
+   * `reassignTo` omitted on the probe; present on the confirm. A built-in
+   * destination goes as `reassignToRole`, another custom role as
+   * `reassignToDefinitionId` — the workspace route's two parameters.
+   */
   function requestDelete(reassignTo?: string) {
     startTransition(async () => {
-      const query = reassignTo ? `?reassignTo=${encodeURIComponent(reassignTo)}` : '';
-      const res = await fetch(`/api/projects/${projectKey}/roles/${role.key}${query}`, {
-        method: 'DELETE',
-      });
+      const target = reassignTo ? roles.find((candidate) => candidate.key === reassignTo) : null;
+      const query = !reassignTo
+        ? ''
+        : target?.builtIn
+          ? `?reassignToRole=${encodeURIComponent(reassignTo)}`
+          : `?reassignToDefinitionId=${encodeURIComponent(reassignTo)}`;
+      const res = await fetch(
+        `/api/workspaces/${workspaceId}/roles/${encodeURIComponent(role.key)}${query}`,
+        { method: 'DELETE' },
+      );
 
       if (res.ok) {
         toast({ variant: 'success', title: t('toast.deleted', { name: label(role) }) });
@@ -83,7 +94,7 @@ export function RoleDeleteControl({
         // The role list is a SERVER-rendered surface, so the shipped settings
         // routing is a push + refresh — the destination's member count is read
         // again on the server rather than patched in the client.
-        router.push('/settings/project/roles');
+        router.push('/settings/workspace/roles');
         router.refresh();
         return;
       }
@@ -92,7 +103,7 @@ export function RoleDeleteControl({
 
       // The in-use refusal is not an error to report — it is the question being
       // asked. Open the dialog on it.
-      if (body.code === 'ROLE_IN_USE') {
+      if (body.code === 'WORKSPACE_ROLE_IN_USE' || body.code === 'ROLE_IN_USE') {
         setDestination('');
         setPrompt({ count: body.count ?? 0 });
         return;
@@ -112,7 +123,7 @@ export function RoleDeleteControl({
       });
       if (res.status === 404) {
         // The role is already gone — the list is the honest place to be.
-        router.push('/settings/project/roles');
+        router.push('/settings/workspace/roles');
         router.refresh();
       }
     });

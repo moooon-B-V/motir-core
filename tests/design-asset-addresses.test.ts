@@ -983,19 +983,8 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: 'Historical: the app-hosted /p/<key> path MOTIR-3951 deleted, quoted as the address the retargets replace. Permanent.',
   },
 
-  // ── FORWARD-LOOKING: the workspace Roles room (Story MOTIR-6168 · MOTIR-6456) ──
-  //    MOTIR-6456 draws roles moving from project settings to workspace settings
-  //    before MOTIR-6466 builds the route. Both rows delete themselves with that card.
-  {
-    file: 'design/workspaces/design-notes.md',
-    address: '/settings/workspace/roles',
-    why: 'the workspace Roles room drawn by MOTIR-6456 BEFORE MOTIR-6466 builds `app/(authed)/settings/workspace/roles/page.tsx` — FORWARD-LOOKING: MOTIR-6466 deletes this row in the pull request that adds the page, and the `stopped applying` arm below fails until it does',
-  },
-  {
-    file: 'design/projects/design-notes.md',
-    address: '/settings/workspace/roles',
-    why: 'the workspace Roles room drawn by MOTIR-6456 BEFORE MOTIR-6466 builds `app/(authed)/settings/workspace/roles/page.tsx` — FORWARD-LOOKING: MOTIR-6466 deletes this row in the pull request that adds the page, and the `stopped applying` arm below fails until it does',
-  },
+  // (The two FORWARD-LOOKING rows for `/settings/workspace/roles` that MOTIR-6456
+  // added are gone — deleted by MOTIR-6466, which built the route.)
   // ── The git surface MOVED A TIER (Story MOTIR-4669 · MOTIR-4680) ─────────
   //    Twelve assets draw the old address; ALL of them are point-in-time records
   //    of a surface that shipped, and the address still resolves — as a 308.

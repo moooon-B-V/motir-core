@@ -4,7 +4,8 @@ import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
+import { workspaceRoleDefinitionService } from '@/lib/services/workspaceRoleDefinitionService';
+import { NotAMemberError } from '@/lib/workspaces/errors';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -18,7 +19,7 @@ import {
 import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { CUSTOM_WORKSPACE_ROLE_TIER } from '@/lib/workspaces/roles';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
-import { grantablePermissionKeys } from '@/lib/services/projectRoleDefinitionService';
+import { grantablePermissionKeys } from '@/lib/permissions/grantable';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -312,10 +313,13 @@ describe('the rails, resolved through the database', () => {
   it('`approval:view_any` is OFFERED once enforced — on the role screens, and grantable to a custom role (MOTIR-5301)', async () => {
     const s = await buildScenario('open', 'view-any-offered');
     expect(ENFORCED_PERMISSIONS).toContain('approval:view_any');
-    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    const { catalog } = await workspaceRoleDefinitionService.getRolesPageCatalog(
+      s.workspaceId,
+      s.ctxs.owner,
+    );
     const rows = catalog.domains.flatMap((d) => d.permissions.map((p) => p.key));
     expect(rows).toContain('approval:view_any');
-    expect(catalog.roles.find((r) => r.key === 'admin')?.permissions).toContain(
+    expect(catalog.roles.find((r) => r.key === 'manager')?.permissions).toContain(
       'approval:view_any',
     );
     expect(catalog.roles.find((r) => r.key === 'member')?.permissions).toContain(
@@ -349,21 +353,18 @@ describe('the cross-workspace posture is preserved — 404, never 403', () => {
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 
-  it('getRoleCatalog throws ProjectNotFoundError for a project in another workspace', async () => {
+  it('the Roles catalog of a workspace the reader is not in is not-found', async () => {
     const mine = await buildScenario('open', 'leak2-mine');
     const theirs = await buildScenario('open', 'leak2-theirs');
     await expect(
-      projectRoleDefinitionService.getRoleCatalog(theirs.projectId, mine.ctxs.owner),
-    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+      workspaceRoleDefinitionService.getRolesPageCatalog(theirs.workspaceId, mine.ctxs.owner),
+    ).rejects.toBeInstanceOf(NotAMemberError);
   });
 
-  it('both throw ProjectNotFoundError for an id that never existed', async () => {
+  it('getPermissions throws ProjectNotFoundError for an id that never existed', async () => {
     const s = await buildScenario('open', 'leak3');
     await expect(
       projectAccessService.getPermissions('does-not-exist', s.ctxs.owner),
-    ).rejects.toBeInstanceOf(ProjectNotFoundError);
-    await expect(
-      projectRoleDefinitionService.getRoleCatalog('does-not-exist', s.ctxs.owner),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 });
@@ -380,11 +381,14 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 
-  it('getRoleCatalog returns the three built-in roles, each with its set in catalog order', async () => {
+  it('the workspace Roles catalog returns the three built-in roles, each with its set in catalog order', async () => {
     const s = await buildScenario('open', 'dto-catalog');
-    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.member);
+    const { catalog } = await workspaceRoleDefinitionService.getRolesPageCatalog(
+      s.workspaceId,
+      s.ctxs.member,
+    );
 
-    expect(catalog.roles.map((r) => r.key)).toEqual(['admin', 'member', 'viewer']);
+    expect(catalog.roles.map((r) => r.key)).toEqual(['manager', 'member', 'viewer']);
     for (const role of catalog.roles) {
       expect(role.builtIn, `${role.key} must be marked built-in`).toBe(true);
       expect(role.labelKey).toBe(`settings.roles.${role.key}.name`);
@@ -434,7 +438,7 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     // the ordering of the source constant.
     // …minus any role-gated key still `planned` (MOTIR-5305's `approval:view_any`),
     // which the admin set HOLDS and no role screen may draw.
-    expect([...(catalog.roles.find((r) => r.key === 'admin')?.permissions ?? [])].sort()).toEqual(
+    expect([...(catalog.roles.find((r) => r.key === 'manager')?.permissions ?? [])].sort()).toEqual(
       ROLE_GATED_PERMISSIONS.filter((key) => isEnforced(key)).sort(),
     );
 
@@ -448,7 +452,10 @@ describe('the DTO boundary is serialisable and deterministic', () => {
 
   it('groups every ROLE-GATED permission under a labelled, non-empty domain', async () => {
     const s = await buildScenario('open', 'dto-domains');
-    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.member);
+    const { catalog } = await workspaceRoleDefinitionService.getRolesPageCatalog(
+      s.workspaceId,
+      s.ctxs.member,
+    );
     const flattened = catalog.domains.flatMap((d) => d.permissions.map((p) => p.key));
     // ⚠️ NARROWED BY MOTIR-2439, and the narrowing is the point. This used to
     // assert the WHOLE catalog, on the reasoning that the settings page must show
@@ -794,117 +801,11 @@ describe('the workspace role decides every project at once (MOTIR-6459)', () => 
   });
 });
 
-describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
-  async function seedRole(fx: Scenario, name: string, permissions: string[]) {
-    return adminDb.projectRoleDefinition.create({
-      data: { workspaceId: fx.workspaceId, projectId: fx.projectId, name, permissions },
-    });
-  }
-
-  it('appends them AFTER the three built-ins, by name, with their provenance', async () => {
-    const s = await buildScenario('open', 'cat-custom');
-    await seedRole(s, 'Reporter', ['project:browse', 'work_item:triage']);
-    await seedRole(s, 'Contractor', ['project:browse', 'comment:add']);
-
-    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
-    expect(catalog.roles.map((r) => r.name)).toEqual([null, null, null, 'Contractor', 'Reporter']);
-    expect(catalog.roles.slice(0, 3).map((r) => r.key)).toEqual(['admin', 'member', 'viewer']);
-
-    const contractor = catalog.roles.find((r) => r.name === 'Contractor')!;
-    expect(contractor.builtIn).toBe(false);
-    expect(contractor.builtInRole).toBeNull();
-    expect(contractor.labelKey).toBeNull();
-    expect('basedOn' in contractor).toBe(false); // nothing records the seed
-    expect(contractor.permissions).toEqual(['project:browse', 'comment:add']);
-  });
-
-  it('a project with NO custom roles returns exactly what it returned before', async () => {
-    // Asserted against the EXISTING expectations rather than rewritten ones —
-    // the widening must be invisible to a project that has no roles of its own.
-    const s = await buildScenario('open', 'cat-none');
-    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
-    expect(catalog.roles).toHaveLength(3);
-    expect(catalog.roles.every((r) => r.builtIn)).toBe(true);
-  });
-
-  it('counts nobody — a project role is held by no one since roles moved to the workspace', async () => {
-    // Story MOTIR-6168 · MOTIR-6464: a project membership carries no role, so the
-    // retiring catalog reports every role as held by nobody and reads no
-    // membership at all — one read of the role rows, however many roles there are.
-    const s = await buildScenario('open', 'cat-counts');
-    await seedRole(s, 'A role', ['project:browse']);
-    await seedRole(s, 'B role', ['project:browse']);
-
-    async function countReads(): Promise<number> {
-      let reads = 0;
-      const client = adminDb.$extends({
-        query: {
-          async $allOperations({ args, query, operation, model }) {
-            if (
-              model !== 'ProjectMembership' &&
-              (operation.startsWith('find') || operation === 'count' || operation === 'groupBy')
-            ) {
-              reads += 1;
-            }
-            return query(args);
-          },
-        },
-      });
-      await (client as unknown as typeof db).$transaction(async (tx) => {
-        await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner, tx);
-      });
-      return reads;
-    }
-
-    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
-    expect(catalog.roles.every((r) => r.memberCount === 0)).toBe(true);
-
-    const withTwo = await countReads();
-    await seedRole(s, 'C role', ['project:browse']);
-    expect(await countReads()).toBe(withTwo);
-    expect(
-      (await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner)).roles,
-    ).toHaveLength(3 + 3);
-  });
-
-  it('the GATE runs before the read — a foreign project`s roles are never returned OR counted', async () => {
-    const mine = await buildScenario('open', 'cat-gate-mine');
-    const theirs = await buildScenario('open', 'cat-gate-theirs');
-    await seedRole(theirs, 'Theirs', ['project:browse']);
-    // It really is there for its own workspace…
-    expect(
-      (
-        await projectRoleDefinitionService.getRoleCatalog(theirs.projectId, theirs.ctxs.owner)
-      ).roles.some((r) => r.name === 'Theirs'),
-    ).toBe(true);
-    // …and unreachable from mine.
-    await expect(
-      projectRoleDefinitionService.getRoleCatalog(theirs.projectId, mine.ctxs.owner),
-    ).rejects.toBeInstanceOf(ProjectNotFoundError);
-  });
-
-  it('is INVISIBLE under a foreign workspace GUC, as the non-bypass app role', async () => {
-    const mine = await buildScenario('open', 'cat-rls-mine');
-    const other = await buildScenario('open', 'cat-rls-other');
-    const role = await seedRole(mine, 'Contractor', ['project:browse']);
-    const leaked = await adminDb.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${other.workspaceId}, true)`;
-      await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
-      return tx.projectRoleDefinition.findMany({ where: { id: role.id } });
-    });
-    expect(leaked).toEqual([]);
-  });
-
-  it('a stale stored key is dropped from the DTO too, so `N of M` never over-counts', async () => {
-    const s = await buildScenario('open', 'cat-stale');
-    await seedRole(s, 'Stale', [
-      'project:browse',
-      'repository:connect', // retired by MOTIR-2294
-    ]);
-    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
-    expect(catalog.roles.find((r) => r.name === 'Stale')?.permissions).toEqual(['project:browse']);
-  });
-});
+// The project's OWN role catalog retired with the project roles (Story
+// MOTIR-6168 · MOTIR-6464 / MOTIR-6466). Custom roles are the WORKSPACE's, and
+// its catalog — built-ins then custom roles by name, holder counts, the gate
+// before the read — is `tests/workspaces/workspaceRoleRoutes.test.ts` and
+// `tests/workspaces/rolesPageCatalog.test.ts`.
 
 describe('getPermissions agrees with the capability method it generalises', () => {
   it('matches getSettingsCapabilities for every role on a limited project', async () => {

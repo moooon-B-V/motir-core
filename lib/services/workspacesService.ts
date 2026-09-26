@@ -1092,12 +1092,22 @@ export const workspacesService = {
             tx,
           );
           const projectCount = await projectRepository.countByWorkspace(workspace.id, tx);
+          // Whether the actor is on this workspace's roster — an org Owner / Admin
+          // reaches every workspace as its Manager, member or not, and the row
+          // says which (MOTIR-6456 panel 6b).
+          const viewerIsMember =
+            (await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+              input.actorUserId,
+              workspace.id,
+              tx,
+            )) !== null;
           workspaces.push({
             id: workspace.id,
             name: workspace.name,
             slug: workspace.slug,
             memberCount,
             projectCount,
+            viewerIsMember,
             createdAt: workspace.createdAt.toISOString(),
           });
         }

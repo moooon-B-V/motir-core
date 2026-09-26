@@ -1729,17 +1729,21 @@
       "bugs": "缺陷"
     },
     "roles": {
+      "manager": {
+        "name": "管理者",
+        "description": "此工作区的一切——设置、成员及每个项目。"
+      },
       "admin": {
         "name": "管理员",
         "description": "负责运营项目。每项设置、每个领域，以及工作本身。"
       },
       "member": {
         "name": "成员",
-        "description": "负责推进工作——编辑工作项、发表评论、上传附件、运行规划器。不包含项目设置。"
+        "description": "在每个项目中推进工作——编辑工作项、评论、运行规划器。"
       },
       "viewer": {
         "name": "访客",
-        "description": "可查看项目及其报表。不做任何更改。"
+        "description": "查看每个项目及其报表，不做任何更改。"
       }
     },
     "area": {
@@ -1832,6 +1836,7 @@
         },
         "workspace": "工作区",
         "security": "安全",
+        "roles": "角色与权限",
         "jobs": "任务运行"
       }
     },
@@ -2289,7 +2294,7 @@
     "access": {
       "title": "访问与成员",
       "cardDescription": "谁可以找到、查看和编辑此项目，以及项目中的成员。",
-      "subtitle": "控制谁可以查看和编辑 <strong>{projectName}</strong>。工作区所有者和管理员始终拥有访问权限。",
+      "subtitle": "控制谁可以查看和编辑 <strong>{projectName}</strong>。工作区管理者始终拥有访问权限。",
       "accessHeading": "项目访问权限",
       "accessSubheading": "{workspaceName} 工作区中谁可以访问此项目。",
       "levelGroupLabel": "项目访问级别",
@@ -2317,33 +2322,20 @@
       "addMemberHint": "已在项目中的成员会被隐藏。",
       "remove": "移除",
       "youSuffix": "（你）",
-      "roleSelectLabel": "{name} 的角色",
-      "roleGroup": {
-        "builtIn": "内置",
-        "custom": "自定义角色",
-        "customOption": "自定义角色"
-      },
-      "customRoleChipLabel": "{name}——自定义角色",
       "role": {
         "admin": "管理员",
         "member": "成员",
         "viewer": "查看者"
       },
-      "roleDesc": {
-        "admin": "管理成员和访问权限",
-        "member": "查看和编辑工作项",
-        "viewer": "仅查看，无法编辑"
-      },
       "readOnly": "只读",
       "readOnlyNote": "只有项目管理员才能添加成员或更改访问权限。",
       "memberAddedToast": "已添加 {name}",
       "memberRemovedToast": "已移除 {name}",
-      "roleChangedToast": "已更新 {name} 的角色",
       "addMemberErrorTitle": "无法添加成员",
       "removeMemberErrorTitle": "无法移除成员",
-      "changeRoleErrorTitle": "无法更改角色",
-      "errorLastAdmin": "这是唯一的项目管理员——请先指定另一名管理员。",
-      "errorGeneric": "出了点问题，请重试。"
+      "errorGeneric": "出了点问题，请重试。",
+      "membersFromWorkspaceRole": "已添加到此项目的成员。每人能做什么取决于其工作区角色——请在工作区设置中管理角色。",
+      "workspaceRolesLink": "工作区角色 →"
     },
     "publicPage": {
       "title": "公开页面",
@@ -3653,14 +3645,14 @@
     },
     "rolesPage": {
       "title": "角色与权限",
-      "subtitle": "<strong>{projectName}</strong> 中每个角色可以做什么。工作区所有者和管理员始终拥有全部权限。",
+      "subtitle": "<strong>{workspaceName}</strong> 中每个角色能做什么——每人的角色在所有项目中相同。管理者拥有全部权限。",
       "builtInNote": "三个内置角色无法修改——它们是 Motir 提供的基本保障。如果需要它们未涵盖的组合，请自建一个角色。",
       "builtIn": "内置",
       "builtInLocked": "内置 · 无法修改",
       "permissionCount": "{total} 项权限中的 {held} 项",
       "memberCount": "{count, plural, other {# 位成员}}",
       "allRoles": "全部角色",
-      "crumbs": "设置 · {projectName} · 角色与权限 · {roleName}",
+      "crumbs": "工作区设置 · 角色与权限 · {roleName}",
       "holdsCount": "拥有 {total} 项中的 <strong>{held}</strong> 项",
       "mark": {
         "held": "已拥有",
@@ -3674,7 +3666,6 @@
       },
       "custom": "自定义",
       "createRole": "创建角色",
-      "createRoleAtCap": "本项目的 {limit} 个自定义角色已用完。删除一个后才能再创建。",
       "editRole": "编辑",
       "createRoleTitle": "创建角色",
       "editRoleTitle": "编辑角色",
@@ -3686,7 +3677,7 @@
       "startFrom": "以此为起点",
       "startFromPlaceholder": "选择一个角色…",
       "editorHintNew": "“以此为起点”会用该角色的全部权限预填下面的列表，之后可自由修改。该选择不会被保存：保存后的角色只有名称和权限集合。",
-      "editorHintEdit": "勾选该角色拥有的权限。角色只由名称和权限集合构成，不记录其他内容。",
+      "editorHintEdit": "勾选此角色拥有的权限。保存后，工作区所有项目中持有此角色的每个人都会随之改变。",
       "saveRole": "保存修改",
       "deleteRole": "删除 {name}",
       "deleteDialog": {
@@ -3708,7 +3699,19 @@
         "invalidName": "请为该角色填写名称。",
         "noLongerAllowed": "你已不再拥有管理本项目角色的权限。",
         "generic": "保存失败，请重试。"
-      }
+      },
+      "managersOnly": "只有工作区管理者可以创建或更改角色。",
+      "movedFromProject": "角色现在属于工作区——在所有项目中相同。你是从项目原来的角色页面跳转过来的。",
+      "rooms": {
+        "label": "空间",
+        "plans": "计划",
+        "approvals": "审批",
+        "runs": "运行",
+        "held": "（查看整个空间）",
+        "notHeld": "（仅查看自己的）"
+      },
+      "doorSummary": "3 个内置 · {custom, plural, =0 {无自定义角色} other {# 个自定义}}",
+      "openRoles": "打开角色"
     },
     "noAccess": {
       "title": "仅限管理员",
@@ -5108,7 +5111,10 @@
       "removeConfirmLabel": "输入 {workspace} 以确认",
       "removeConfirmButton": "移除工作区",
       "removed": "已移除 {workspace}",
-      "removeErrorTitle": "无法移除 {workspace}"
+      "removeErrorTitle": "无法移除 {workspace}",
+      "open": "打开",
+      "openAria": "打开 {workspace}",
+      "viaOrganization": "管理者 · 来自组织"
     },
     "states": {
       "emptyTitle": "目前只有你一个人",
