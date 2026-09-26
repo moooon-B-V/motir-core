@@ -93,6 +93,7 @@ import {
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { validateProposedDifficulty } from '@/lib/plans/validateProposedDifficulty';
+import { validateProposedBodyRefs } from '@/lib/plans/validateProposedBodyRefs';
 import { patchRescopes } from '@/lib/plans/rescopeReset';
 import { committedPlanTargets } from '@/lib/plans/planTargets';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
@@ -695,6 +696,12 @@ function validateProposal(p: ProposalInput): void {
       p.proposedFields,
       proposalLabel({ op: p.op, title: p.proposedFields.title }),
     );
+    // The bodies' INTRA-PLAN item links (bug MOTIR-6494) — a link approve cannot
+    // rewrite is refused here, by the ONE validator every proposal door shares.
+    validateProposedBodyRefs(
+      p.proposedFields,
+      proposalLabel({ op: p.op, title: p.proposedFields.title }),
+    );
     // The repo ROLE (MOTIR-1912) — checked HERE, at the append, because the check
     // is pure (a closed vocabulary, no repository need exist) and the producer is
     // a machine: telling motir-ai its role is unknown while it is still writing
@@ -740,6 +747,9 @@ function validateProposal(p: ProposalInput): void {
       null,
       proposalLabel({ op: p.op, workItemId: p.workItemId }),
     );
+    // A `modify`'s rewritten bodies are rewritten at approve too (MOTIR-3804), so
+    // they are held to the same link check as an `add`'s (bug MOTIR-6494).
+    validateProposedBodyRefs(p.patch, proposalLabel({ op: p.op, workItemId: p.workItemId }));
     // A `modify` may RE-PIN the role (MOTIR-1912) — same vocabulary check as the
     // `add` path, so the two cannot disagree about what a role is.
     assertKnownRepoRole(
@@ -3520,6 +3530,11 @@ async function editAddProposal(
         next.kind ?? DEFAULT_PROPOSED_KIND,
         proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
       );
+      // And the bodies' item links on the MERGED result (bug MOTIR-6494).
+      validateProposedBodyRefs(
+        next,
+        proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+      );
       await planItemRepository.update(
         planItemId,
         { proposedFields: next as unknown as Prisma.InputJsonValue },
@@ -5289,6 +5304,11 @@ export const plansService = {
             next.kind ?? DEFAULT_PROPOSED_KIND,
             proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
           );
+          // The bodies' item links, on the MERGED result (bug MOTIR-6494).
+          validateProposedBodyRefs(
+            next,
+            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+          );
           data.proposedFields = next as unknown as Prisma.InputJsonValue;
           touched.push(
             ...Object.keys(input).filter((k) => k !== 'parentRef' && k !== 'blockedByRefs'),
@@ -5318,6 +5338,11 @@ export const plansService = {
             );
             validateStoryPoints(input.patch?.storyPoints ?? null);
             validateEstimateMinutes(input.patch?.estimateMinutes ?? null);
+            // The replacement patch's bodies, held to the append's link check (bug MOTIR-6494).
+            validateProposedBodyRefs(
+              input.patch ?? {},
+              proposalLabel({ op: item.op, workItemId: item.workItemId }),
+            );
             // The replacement patch's DIFFICULTY (MOTIR-6133), judged against the
             // TARGET's live kind — the append's two halves in one call, since the
             // transaction is already open.

@@ -178,8 +178,12 @@ export interface PlanItemProposedFields {
    * generator's default); materialize also defaults it to `ai_draft` when an
    * `explanationMd` is present but no source is set. Both optional — a proposal
    * with explanations OFF carries neither. Item-link convention (Story 5.8): a
-   * reference to another item in `explanationMd` is a link token
-   * (`motir:<id>` / `motir-ref:<tempRef>`), resolved at materialize.
+   * reference to another item in `explanationMd` is a link token —
+   * `[label](motir:<workItemId>)` for an existing item, or
+   * `[label](motir-ref:planItem:<planItemId>)` for another `add` in this plan,
+   * rewritten to `motir:<id>` at materialize. The `planItem:` prefix is part of
+   * the token: `motir-ref:<id>` without it is refused at every proposal door
+   * (`lib/plans/validateProposedBodyRefs.ts`, bug MOTIR-6494).
    */
   explanationMd?: string | null;
   explanationSource?: string | null;
