@@ -9,7 +9,10 @@ import {
   STORY_TITLE_EXPORT,
   type ApprovalsTabSeed,
 } from './approvals-tab-seed';
-import { setProjectRoleDefinitionFor } from '../../helpers/workspaceRoleFixtures';
+import {
+  setProjectRoleDefinitionFor,
+  setWorkspaceRoleFor,
+} from '../../helpers/workspaceRoleFixtures';
 
 // Seed for the Approval records room's acceptance spec (Story MOTIR-5299 · Subtask
 // MOTIR-5304).
@@ -86,10 +89,8 @@ export async function seedApprovalsRoom(slug: string): Promise<ApprovalsRoomSeed
 
   // The built-in project ADMIN.
   const adminId = await person('admin', 'Ada Admin');
-  await adminDb.projectMembership.update({
-    where: { userId_projectId: { userId: adminId, projectId: tab.projectId } },
-    data: { role: 'admin' },
-  });
+  // Roles live on the workspace since MOTIR-6168: a project admin is a Manager.
+  await setWorkspaceRoleFor(adminId, tab.workspaceId, 'admin');
 
   // The CUSTOM-ROLE reader: browse + the key, and nothing else.
   const customId = await person('custom', 'Cora Custom');

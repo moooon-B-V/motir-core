@@ -275,8 +275,20 @@ describe('listMembers', () => {
 
     const members = await listMembers(workspace.id, owner.id);
     expect(members).toEqual([
-      { userId: owner.id, name: 'Owner Person', email: 'owner@example.com', role: 'owner' },
-      { userId: invitee.id, name: 'Invitee Person', email: 'invitee@example.com', role: 'member' },
+      {
+        userId: owner.id,
+        name: 'Owner Person',
+        email: 'owner@example.com',
+        workspaceRole: 'manager',
+        customRole: null,
+      },
+      {
+        userId: invitee.id,
+        name: 'Invitee Person',
+        email: 'invitee@example.com',
+        workspaceRole: 'member',
+        customRole: null,
+      },
     ]);
   });
 });

@@ -37,6 +37,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -122,6 +123,8 @@ async function grantProjectRole(
   await db.projectMembership.create({
     data: { userId, workspaceId: t.workspaceId, projectId: t.projectId, role },
   });
+  // Roles live on the workspace since MOTIR-6168.
+  await setWorkspaceRoleFor(userId, t.workspaceId, role);
 }
 
 test('@smoke Story 2.9: editor archives → archived view → restore → back in active views + restored activity', async ({

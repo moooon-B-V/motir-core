@@ -2693,7 +2693,7 @@
       "runDetailTitle": "Run detail",
       "dlqTableCaption": "Dead-letter queue",
       "replay": "Replay",
-      "replayTooltip": "Only a workspace owner can replay jobs",
+      "replayTooltip": "Only a workspace Manager can replay jobs",
       "alreadyReplayedToastTitle": "Already replayed",
       "alreadyReplayedToastDesc": "This entry was replayed earlier — nothing new was queued.",
       "replayedToastTitle": "Job replayed",

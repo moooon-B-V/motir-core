@@ -77,6 +77,13 @@ vi.mock('@/app/(authed)/settings/organization/_components/RequireTwoFactorCard',
   RequireTwoFactorCard: () => <div data-testid="cap-two-factor" />,
 }));
 
+// The Roles DOOR (Story MOTIR-6168 · MOTIR-6466) — a link to
+// `/settings/workspace/roles`, which answers at every workspace count. It is not
+// one of the capabilities the fold-in HOSTS, so it is stubbed apart from the set.
+vi.mock('@/app/(authed)/settings/organization/_components/RolesDoorCard', () => ({
+  RolesDoorCard: () => <div data-testid="door-roles" />,
+}));
+
 import { WorkspaceFoldInSection } from '@/app/(authed)/settings/organization/_components/WorkspaceFoldInSection';
 
 /** The FIVE capabilities a single-workspace org must still reach. */

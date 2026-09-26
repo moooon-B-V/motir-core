@@ -48,3 +48,14 @@ export const CONTEXT_SWITCH_LANDING = AUTHED_LANDING_PATH;
 export function afterContextSwitchTarget(currentPath: string | null): string | null {
   return currentPath === CONTEXT_SWITCH_LANDING ? null : CONTEXT_SWITCH_LANDING;
 }
+
+/**
+ * Where the org Workspaces card's **Open** lands (Story MOTIR-6168 · MOTIR-6466;
+ * `design/workspaces/workspace-roles.mock.html` panel 6b): the opened
+ * workspace's SETTINGS, not the context-switch landing. Open is how an org Owner
+ * or Admin reaches a workspace they manage by their org role, so the page they
+ * asked for is its settings — the one switcher whose destination IS its purpose.
+ * Declared here so the answer stays owned by this module, beside the landing it
+ * departs from.
+ */
+export const OPENED_WORKSPACE_TARGET = '/settings/workspace';

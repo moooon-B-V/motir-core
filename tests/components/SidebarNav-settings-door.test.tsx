@@ -227,7 +227,6 @@ describe('the settings rail inside the area (design panel 2)', () => {
       'Details',
       'Repositories',
       'Members & access',
-      'Roles & permissions',
       'Code access',
       'Workflow',
       'Boards',

@@ -37,6 +37,7 @@
 import { expect, test, type APIResponse, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -101,6 +102,8 @@ async function seedTenant(slug: string): Promise<Tenant> {
     await db.projectMembership.create({
       data: { userId: u.id, projectId: project.id, workspaceId: workspace.id, role },
     });
+    // Roles live on the workspace since MOTIR-6168.
+    await setWorkspaceRoleFor(u.id, workspace.id, role);
     await pinActiveProject(u.id, { workspaceId: workspace.id, projectId: project.id });
     return u.id;
   }

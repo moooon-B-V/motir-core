@@ -5,6 +5,7 @@ import { buttonVariants } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
+import { ROOM_VIEW_KEYS } from '@/lib/permissions/rooms';
 import { PermissionMark } from './PermissionMark';
 import { RoleGlyph, roleDescription, roleName, roleTileTint } from './roleIdentity';
 
@@ -156,11 +157,10 @@ function RoleRow({ role, total }: { role: RoleDTO; total: number }) {
 }
 
 /** The three rooms a view-any key opens (MOTIR-6328), in the design's order. */
-const ROOM_KEYS = [
-  { key: 'plan:view_any', labelKey: 'rooms.plans' },
-  { key: 'approval:view_any', labelKey: 'rooms.approvals' },
-  { key: 'run:view_any', labelKey: 'rooms.runs' },
-] as const;
+const ROOM_KEYS = (['plans', 'approvals', 'runs'] as const).map((room) => ({
+  key: ROOM_VIEW_KEYS[room],
+  labelKey: `rooms.${room}` as const,
+}));
 
 /**
  * The Rooms row (design panel 2): which of Plans · Approvals · Runs this role

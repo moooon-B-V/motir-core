@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight, Shield } from 'lucide-react';
-import { getTranslations } from 'next-intl/server';
+import { useTranslations } from 'next-intl';
 import { Card } from '@/components/ui/Card';
 
 // The Roles door in the one-workspace fold-in (Story MOTIR-6168 · MOTIR-6466;
@@ -10,8 +10,8 @@ import { Card } from '@/components/ui/Card';
 // carries a DOOR to it. `/settings/workspace/roles` answers at every workspace
 // count (the design's one reveal carve-out), so the door always lands.
 
-export async function RolesDoorCard({ customRoleCount }: { customRoleCount: number }) {
-  const t = await getTranslations('settings.rolesPage');
+export function RolesDoorCard({ customRoleCount }: { customRoleCount: number }) {
+  const t = useTranslations('settings.rolesPage');
   return (
     <Card>
       <div className="flex items-center justify-between gap-4">

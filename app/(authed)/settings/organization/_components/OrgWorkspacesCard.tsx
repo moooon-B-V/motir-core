@@ -18,6 +18,7 @@ import { CreateWorkspaceDialog } from '../../../_components/CreateWorkspaceDialo
 import { reconcileActiveWorkspaceAction } from '../actions';
 import { switchWorkspaceAction } from '../../../_actions';
 import { ORG_WORKSPACES_PAGE_SIZE } from './workspacesPageSize';
+import { OPENED_WORKSPACE_TARGET } from '@/lib/navigation/afterContextSwitch';
 
 export interface OrgWorkspacesCardProps {
   orgId: string;
@@ -120,7 +121,7 @@ export function OrgWorkspacesCard({
   // by their org role.
   function openWorkspace(w: OrgWorkspaceRowDTO) {
     void switchWorkspaceAction(w.id).then(() => {
-      router.push('/settings/workspace');
+      router.push(OPENED_WORKSPACE_TARGET);
       router.refresh();
     });
   }

@@ -8,6 +8,7 @@ import {
   addToProjectAs,
   createCustomRoleAs,
   setProjectRoleAs,
+  setWorkspaceRoleFor,
 } from '../../helpers/workspaceRoleFixtures';
 
 // Seed for Story MOTIR-2258's E2E + acceptance recording (Subtask MOTIR-2479).
@@ -77,6 +78,8 @@ export async function seedPermissionGatedUi(slug: string): Promise<PermissionGat
     await db.projectMembership.create({
       data: { userId: user.id, projectId: project.id, workspaceId: workspace.id, role },
     });
+    // Roles live on the workspace since MOTIR-6168.
+    await setWorkspaceRoleFor(user.id, workspace.id, role);
     await pin(user.id);
     return user.id;
   }

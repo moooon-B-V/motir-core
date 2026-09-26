@@ -124,7 +124,11 @@ describe('a seeded role renders exactly what it holds', () => {
     //
     // 14 → 15 (MOTIR-4927 · MOTIR-4938): the `bugs` room joined `work`, gated on
     // `project:administer`, which an admin holds.
-    expect(shell.settingsEntries.length).toBe(15);
+    //
+    // 15 → 14 (MOTIR-6168 · MOTIR-6466): the `roles` room left project settings
+    // for the workspace (`/settings/workspace/roles`).
+    expect(shell.settingsEntries.length).toBe(14);
+    expect(shell.settingsEntries).not.toContain('roles');
     expect(shell.settingsEntries).toContain('approvals');
     expect(shell.settingsEntries).toContain('monitoring');
     expect(shell.settingsEntries).toContain('bugs');

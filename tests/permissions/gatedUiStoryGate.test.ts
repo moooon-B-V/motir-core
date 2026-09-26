@@ -74,7 +74,6 @@ const SERVICE_OF: Record<string, string> = {
   // different axis and not expressible as a project permission at all; the
   // rail names the project key its destination checks, which is this one.
   'public-address': 'lib/services/customDomainService.ts',
-  roles: 'lib/services/projectMembersService.ts',
   'code-access': 'lib/services/projectRepoAccessService.ts',
   workflow: 'lib/services/workflowsService.ts',
   // ⚠️ RESTORED 2026-09-13 — the Approvals room is manage-only (MOTIR-4880 re-plan ·
@@ -136,9 +135,17 @@ describe('the three-way key agreement — rail ↔ page ↔ service (MOTIR-2476)
     },
   );
 
-  it('the drill-down agrees with its parent, having no row of its own', () => {
-    const detail = PAGES.find(([p]) => p.includes('[roleKey]'))!;
-    expect(readFileSync(join(ROOT, detail[1]), 'utf8')).toContain("guardSettingsPage('roles'");
+  // The Roles room left project settings for the workspace (Story MOTIR-6168 ·
+  // MOTIR-6466): its four old routes have no rail row and so no key to agree
+  // on — each is a permanent redirect, and none guards on a registry entry.
+  it('the retired Roles routes carry no gate of their own — each permanently redirects', () => {
+    const retired = PAGES.filter(([p]) => p.includes('/roles'));
+    expect(retired).toHaveLength(4);
+    for (const [, file] of retired) {
+      const source = readFileSync(join(ROOT, file), 'utf8');
+      expect(source, file).not.toContain('guardSettingsPage(');
+      expect(source, file).toContain('permanentRedirect(');
+    }
   });
 });
 
