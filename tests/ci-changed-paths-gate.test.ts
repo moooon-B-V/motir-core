@@ -769,11 +769,48 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
         'packages/cli/src/index.ts',
         'packages/cli/sandbox/Dockerfile',
         'pnpm-lock.yaml',
+        'pnpm-workspace.yaml',
         'package.json',
-        'prisma/schema.prisma',
+        '.npmrc',
       ]) {
         expect(covers(imagePatterns, path), path).toBe(true);
       }
+    });
+
+    it('does NOT count prisma/ as an image input — and re-proves why on every run', () => {
+      // MOTIR-6498. `prisma/` is in the `COPY . .` context but no build step
+      // reads it, so a schema-only pull request must not build ten images. That
+      // holds only while BOTH preconditions below hold; if either breaks, this
+      // fails and `prisma/*` has to come back into the `images` arm.
+      for (const path of [
+        'prisma/schema.prisma',
+        'prisma/migrations/20260926000000_x/migration.sql',
+      ]) {
+        expect(covers(imagePatterns, path), path).toBe(false);
+      }
+
+      // 1. The builder's install skips the root postinstall — the only place
+      //    `prisma generate` runs.
+      const dockerfile = codeOf(read('packages/cli/sandbox/Dockerfile'));
+      const installs = [...dockerfile.matchAll(/^.*\bpnpm (?:install|i)\b.*$/gm)].map((m) => m[0]);
+      expect(installs.length, 'the sandbox builder runs a pnpm install').toBeGreaterThan(0);
+      for (const line of installs) {
+        expect(line, 'restore prisma/* to the images arm').toContain('--ignore-scripts');
+      }
+      expect(dockerfile, 'restore prisma/* to the images arm').not.toMatch(/prisma/);
+
+      // 2. The CLI it packs depends on nothing prisma.
+      const cli = JSON.parse(read('packages/cli/package.json')) as Record<string, unknown>;
+      const deps = [
+        'dependencies',
+        'devDependencies',
+        'peerDependencies',
+        'optionalDependencies',
+      ].flatMap((field) => Object.keys((cli[field] as Record<string, string> | undefined) ?? {}));
+      expect(
+        deps.filter((d) => /prisma/i.test(d)),
+        'restore prisma/* to the images arm',
+      ).toEqual([]);
     });
 
     it('re-proves the images when the workflows that build them change', () => {

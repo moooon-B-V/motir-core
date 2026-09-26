@@ -485,11 +485,11 @@ So in JSX, use arbitrary-value utilities pointing at `--el-*`:
   contrasts with its red fill — white, or in a dark-first palette a near-black.
   Painted on a page instead, measured across all ten palettes:
 
-  | theme | what it does                                                                                                                                                                                                         |
-  | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-  | light | **1.00–1.04:1 in ALL TEN palettes** — the ink and the page are the same white                                                                                                                                        |
-  | dark  | **1.00:1 in six** (amber · candy · citrine · evergreen · garnet · sienna)                                                                                                                                            |
-  | dark  | 18.59–19.44:1 in the other four (base · cobalt · graphite · spectrum) — legible, and still the bug: it renders near-white, indistinguishable from `--el-text`, so the **danger SIGNAL is lost rather than the text** |
+  | theme | what it does                                                                                                                                                                                                      |
+  | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | light | **1.00–1.04:1 in ALL TEN palettes** — the ink and the page are the same white                                                                                                                                     |
+  | dark  | **1.00:1 in six** (amber · candy · citrine · evergreen · garnet · sienna)                                                                                                                                         |
+  | dark  | 18.59–19.44:1 in the other four (base · cobalt · motir · spectrum) — legible, and still the bug: it renders near-white, indistinguishable from `--el-text`, so the **danger SIGNAL is lost rather than the text** |
 
   On the `--el-danger-surface` tint it is 1.14–1.29:1 in all twenty. Its one
   correct use in the whole tree is `Button`'s danger variant,
@@ -503,7 +503,7 @@ So in JSX, use arbitrary-value utilities pointing at `--el-*`:
   combinations**, so it is right whichever surface the element lands on — the
   same property that makes `--el-text-secondary` the answer on the grey inks.
   **Raw `--el-danger` is NOT that token**: it is 4.25 / 4.11 / 4.24:1 on the
-  DARK page in the base, cobalt and graphite palettes, and under AA on most
+  DARK page in the base, cobalt and motir palettes, and under AA on most
   tints. For a big label or a glyph beside one, putting the hue in the
   **border + glyph** and keeping the label on `--el-text` is still the better
   composition (graphics need only 3:1) — `DeviceApproval` is the worked example.

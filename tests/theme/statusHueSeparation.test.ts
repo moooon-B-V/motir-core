@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
+import { BASE_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
 import { DEFAULT_STATUSES } from '@/lib/workflows/defaultWorkflow';
 import { statusElVar } from '@/lib/workflows/statusColor';
 import { isMeasuredStep, loadTokenLayer, resolveToken, type ThemeContext } from './paletteCascade';
@@ -92,8 +92,8 @@ const KNOWN_SUB_BAR: Record<string, string> = {
   // `--color-stone`, the documented "faint labels (decorative, sub-AA)" step —
   // the exemption the MIN_UI_CONTRAST doc above already states, now spelled out
   // where the sweep can check it. 2.61:1 light, 2.82:1 dark.
-  'motir/light --el-status-todo': 'rides --color-stone, the documented decorative step',
-  'motir/dark --el-status-todo': 'rides --color-stone, the documented decorative step',
+  'amethyst/light --el-status-todo': 'rides --color-stone, the documented decorative step',
+  'amethyst/dark --el-status-todo': 'rides --color-stone, the documented decorative step',
 };
 
 /**
@@ -164,26 +164,26 @@ describe('status hue separation — every palette keeps the six statuses apart',
       }
     }
     expect(tooClose.sort()).toEqual([...KNOWN_TOO_CLOSE].sort());
-    // Graphite is fixed, so it appears nowhere in the allowlist.
-    expect(KNOWN_TOO_CLOSE.filter((entry) => entry.startsWith('graphite/'))).toEqual([]);
+    // Motir (formerly Graphite, MOTIR-6471) is fixed, so it appears nowhere in the allowlist.
+    expect(KNOWN_TOO_CLOSE.filter((entry) => entry.startsWith('motir/'))).toEqual([]);
   });
 
-  it('keeps in_progress and in_review apart under Graphite, in BOTH themes (MOTIR-2073)', () => {
+  it('keeps in_progress and in_review apart under Motir (formerly Graphite), in BOTH themes (MOTIR-2073)', () => {
     // The specific collision this card fixed, pinned by name so a regression
     // reads as itself rather than as one line in the sweep above. Graphite
     // deliberately unifies --color-info with --color-primary (monochrome, one
     // accent), so the ramp gets its own SECOND STEP of that accent instead.
     for (const theme of THEMES) {
-      const ctx: ThemeContext = { palette: 'graphite', theme };
+      const ctx: ThemeContext = { palette: 'motir', theme };
       const inProgress = hueOf(ctx, '--el-status-in-progress');
       const inReview = hueOf(ctx, '--el-status-in-review');
-      expect(inReview, `graphite/${theme} must not re-collapse in_review`).not.toBe(inProgress);
+      expect(inReview, `motir/${theme} must not re-collapse in_review`).not.toBe(inProgress);
       expect(deltaE2000(inProgress, inReview)).toBeGreaterThan(MIN_DELTA_E);
       // Still ONE chromatic accent: the review step is a blue, not a new hue
       // family — its own Tier-0 source stays out of it, so the palette's
       // `--color-info` / `--color-primary` identity choice is untouched.
       const [, a, b] = lab(inReview);
-      expect(b, `graphite/${theme} review step should stay on the blue axis`).toBeLessThan(a);
+      expect(b, `motir/${theme} review step should stay on the blue axis`).toBeLessThan(a);
     }
   });
 
@@ -208,9 +208,9 @@ describe('status hue separation — every palette keeps the six statuses apart',
     let baseChecked = 0;
     for (const ctx of CONTEXTS) {
       for (const token of STATUS_TOKENS) {
-        if (!isMeasuredStep(paletteBlock, DEFAULT_PALETTE_ID, ctx, token)) continue;
+        if (!isMeasuredStep(paletteBlock, BASE_PALETTE_ID, ctx, token)) continue;
         checked += 1;
-        if (ctx.palette === DEFAULT_PALETTE_ID) baseChecked += 1;
+        if (ctx.palette === BASE_PALETTE_ID) baseChecked += 1;
         const hue = hueOf(ctx, token);
         for (const backdrop of BACKDROPS) {
           const ratio = contrast(hue, hueOf(ctx, backdrop));
@@ -254,7 +254,7 @@ describe('status hue separation — every palette keeps the six statuses apart',
     // needs no change, its block re-asserts the same `var(--color-*)` source
     // explicitly. That is why several blocks carry what looks like a no-op.
     const unpaired: string[] = [];
-    for (const palette of PALETTE_IDS.filter((id) => id !== DEFAULT_PALETTE_ID)) {
+    for (const palette of PALETTE_IDS.filter((id) => id !== BASE_PALETTE_ID)) {
       const [light, dark] = THEMES.map((theme) => paletteBlock(palette, theme));
       for (const token of STATUS_TOKENS) {
         const inLight = token in (light ?? {});
@@ -271,12 +271,11 @@ describe('status hue separation — every palette keeps the six statuses apart',
     // Cheap cross-check that the resolution is really palette-sensitive — a
     // model that returned the base block for every context would pass all of
     // the above.
-    for (const palette of PALETTE_IDS.filter((id) => id !== DEFAULT_PALETTE_ID)) {
+    for (const palette of PALETTE_IDS.filter((id) => id !== BASE_PALETTE_ID)) {
       const differs = THEMES.some((theme) =>
         STATUS_TOKENS.some(
           (token) =>
-            hueOf({ palette, theme }, token) !==
-            hueOf({ palette: DEFAULT_PALETTE_ID, theme }, token),
+            hueOf({ palette, theme }, token) !== hueOf({ palette: BASE_PALETTE_ID, theme }, token),
         ),
       );
       expect(differs, `${palette} must re-skin the status ramp`).toBe(true);

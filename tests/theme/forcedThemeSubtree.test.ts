@@ -79,7 +79,7 @@ describe('a nested subtree that forces the other theme on', () => {
   });
 
   it('resolves the tokens the card names to concrete colours, not empty strings', () => {
-    const scoped = resolveAll([root('dark', 'motir'), scope('light', 'motir')], AC_TOKENS);
+    const scoped = resolveAll([root('dark', 'amethyst'), scope('light', 'amethyst')], AC_TOKENS);
     for (const token of AC_TOKENS) expect(scoped[token]).toMatch(/^#[0-9a-f]{3,8}$/);
   });
 });
@@ -92,14 +92,14 @@ describe('the documented limit: the scope attribute is what re-skins a subtree',
   // left as folklore: whoever changes it will see this test go red and can then
   // decide the mechanism deliberately.
   it('a nested data-theme WITHOUT data-appearance-scope leaves the element tokens at the root theme', () => {
-    const bare: ElementAttributes = { 'data-palette': 'motir', 'data-theme': 'light' };
-    const nested = resolveAll([root('dark', 'motir'), bare], AC_TOKENS);
-    expect(nested).toEqual(resolveAll([root('dark', 'motir')], AC_TOKENS));
+    const bare: ElementAttributes = { 'data-palette': 'amethyst', 'data-theme': 'light' };
+    const nested = resolveAll([root('dark', 'amethyst'), bare], AC_TOKENS);
+    expect(nested).toEqual(resolveAll([root('dark', 'amethyst')], AC_TOKENS));
   });
 
   it('but its Tier-0 sources DO flip, which is what makes the scope attribute sufficient', () => {
-    const bare: ElementAttributes = { 'data-palette': 'motir', 'data-theme': 'light' };
-    const chain: ScopeChain = [root('dark', 'motir'), bare];
+    const bare: ElementAttributes = { 'data-palette': 'amethyst', 'data-theme': 'light' };
+    const chain: ScopeChain = [root('dark', 'amethyst'), bare];
     expect(resolveTokenInScope(rules, chain, '--color-background').value).toBe('#ffffff');
     expect(resolveTokenInScope(rules, chain, '--color-canvas').value).not.toBe('#0e0e0e');
   });

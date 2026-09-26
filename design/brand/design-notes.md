@@ -322,22 +322,24 @@ The reference implementation, as CSS (the mock's `.brand-lockup` — copy it):
 
 ## 4. Colour and the dark variant
 
+> **⚠️ The colour values in this section are the Amethyst palette's (formerly called Motir). Since MOTIR-6471 the brand follows the monochrome Motir palette: §10 amends every literal here.**
+
 The mark is a graphical object, so the bar is WCAG 1.4.11's **3:1**; the wordmark is live text and
 takes 1.4.3's **4.5:1**. Every ratio below was computed from the literal token values in
 `packages/design-system/theme.css`.
 
-| Element                           | Token                    | Resolved  | On                         | Ratio   | Bar                |
-| --------------------------------- | ------------------------ | --------- | -------------------------- | ------- | ------------------ |
-| glyph, light                      | `--el-accent-on-surface` | `#5645d4` | `--el-page-bg` `#ffffff`   | 6.57:1  | ≥3 ✓               |
-| glyph, light                      | `--el-accent-on-surface` | `#5645d4` | `--el-surface` `#f6f5f4`   | 6.03:1  | ≥3 ✓               |
-| glyph, light                      | `--el-accent-on-surface` | `#5645d4` | `--el-auth-wash` `#dcecfa` | 5.45:1  | ≥3 ✓               |
-| glyph, dark                       | `--el-accent-on-surface` | `#7b6ce5` | `--el-page-bg` `#0f0f0f`   | 4.67:1  | ≥3 ✓               |
-| glyph, dark                       | `--el-accent-on-surface` | `#7b6ce5` | `--el-surface` `#1a1a1a`   | 4.24:1  | ≥3 ✓               |
-| glyph, dark — **the wrong token** | `--el-accent`            | `#6c5cdd` | `--el-page-bg` `#0f0f0f`   | 3.85:1  | passes, but dimmer |
-| glyph on tile, light              | `--el-accent-text`       | `#ffffff` | `--el-accent` `#5645d4`    | 6.57:1  | ≥3 ✓               |
-| glyph on tile, dark               | `--el-accent-text`       | `#ffffff` | `--el-accent` `#6c5cdd`    | 4.99:1  | ≥3 ✓               |
-| wordmark, light                   | `--el-text`              | `#1a1a1a` | `--el-page-bg` `#ffffff`   | 17.40:1 | ≥4.5 ✓             |
-| wordmark, dark                    | `--el-text`              | `#f3f4f6` | `--el-page-bg` `#0f0f0f`   | 17.42:1 | ≥4.5 ✓             |
+| Element                           | Token                    | Resolved  | On                         | Ratio   | Bar                                                         |
+| --------------------------------- | ------------------------ | --------- | -------------------------- | ------- | ----------------------------------------------------------- |
+| glyph, light                      | `--el-accent-on-surface` | `#5645d4` | `--el-page-bg` `#ffffff`   | 6.57:1  | ≥3 ✓ — **superseded by §10 (Amethyst value)**               |
+| glyph, light                      | `--el-accent-on-surface` | `#5645d4` | `--el-surface` `#f6f5f4`   | 6.03:1  | ≥3 ✓ — **superseded by §10 (Amethyst value)**               |
+| glyph, light                      | `--el-accent-on-surface` | `#5645d4` | `--el-auth-wash` `#dcecfa` | 5.45:1  | ≥3 ✓ — **superseded by §10 (Amethyst value)**               |
+| glyph, dark                       | `--el-accent-on-surface` | `#7b6ce5` | `--el-page-bg` `#0f0f0f`   | 4.67:1  | ≥3 ✓ — **superseded by §10 (Amethyst value)**               |
+| glyph, dark                       | `--el-accent-on-surface` | `#7b6ce5` | `--el-surface` `#1a1a1a`   | 4.24:1  | ≥3 ✓ — **superseded by §10 (Amethyst value)**               |
+| glyph, dark — **the wrong token** | `--el-accent`            | `#6c5cdd` | `--el-page-bg` `#0f0f0f`   | 3.85:1  | passes, but dimmer — **superseded by §10 (Amethyst value)** |
+| glyph on tile, light              | `--el-accent-text`       | `#ffffff` | `--el-accent` `#5645d4`    | 6.57:1  | ≥3 ✓ — **superseded by §10 (Amethyst value)**               |
+| glyph on tile, dark               | `--el-accent-text`       | `#ffffff` | `--el-accent` `#6c5cdd`    | 4.99:1  | ≥3 ✓ — **superseded by §10 (Amethyst value)**               |
+| wordmark, light                   | `--el-text`              | `#1a1a1a` | `--el-page-bg` `#ffffff`   | 17.40:1 | ≥4.5 ✓                                                      |
+| wordmark, dark                    | `--el-text`              | `#f3f4f6` | `--el-page-bg` `#0f0f0f`   | 17.42:1 | ≥4.5 ✓                                                      |
 
 Three rules follow:
 
@@ -355,6 +357,8 @@ Three rules follow:
 ---
 
 ## 5. Favicon / app-icon set
+
+> **⚠️ The colour values in this section are the Amethyst palette's (formerly called Motir). Since MOTIR-6471 the brand follows the monochrome Motir palette: §10 amends every literal here.**
 
 `app/favicon.ico` (16 + 32) is the only icon that ships today and stays as the legacy fallback.
 Everything else is new — and Next.js only auto-wires files it _finds_, so each of these has to exist:
@@ -408,17 +412,19 @@ Today, with none of these present, an iOS "Add to Home Screen" gets a screenshot
 
 ## 6. OG template · 1200 × 630
 
+> **⚠️ The colour values in this section are the Amethyst palette's (formerly called Motir). Since MOTIR-6471 the brand follows the monochrome Motir palette: §10 amends every literal here.**
+
 Both shipped OG routes render from one template. `ImageResponse` renders outside the CSS tree and
 cannot read a variable, so these files carry inline hexes — the exception both files already document.
 Each literal below names the token it came from; that provenance is the thing to keep in sync.
 
-|             |                                                                                                                                                                                                                                          |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **canvas**  | 1200 × 630, padding 80. `background: linear-gradient(135deg, #e6e0f5 0%, #dcecfa 100%)` — kept as-is: those are `--color-tint-lavender` → `--color-tint-sky`, so the wash was already token-traceable.                                   |
-| **lockup**  | glyph 72 × 72 in `#5645d4` (`--color-primary`), wordmark 30 px / 700 in `#2a2342`, gap 20. Replaces the 72 px purple tile bearing the letter M.                                                                                          |
-| **type**    | headline 60 / 800 / 1.1 in `#1f1b2e`; lede 28 in `#473f63`, max-width 920. Unchanged — only the brand row changes.                                                                                                                       |
-| **⚠ fonts** | Pass Inter via `ImageResponse({ fonts: [{ name: 'Inter', data, weight: 700 }] })` and set `fontFamily: 'Inter'`. Both files say `'sans-serif'` today, so the current cards are set in whatever face the build container happens to ship. |
-| **alt**     | `export const alt` exists on the explore route and must exist on the project route too — it is the only accessible name a social embed gets.                                                                                             |
+|             |                                                                                                                                                                                                                                                 |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **canvas**  | 1200 × 630, padding 80. `background: linear-gradient(135deg, #e6e0f5 0%, #dcecfa 100%)` — kept as-is: those are `--color-tint-lavender` → `--color-tint-sky`, so the wash was already token-traceable. — **superseded by §10 (Amethyst value)** |
+| **lockup**  | glyph 72 × 72 in `#5645d4` (`--color-primary`), wordmark 30 px / 700 in `#2a2342`, gap 20. Replaces the 72 px purple tile bearing the letter M. — **superseded by §10 (Amethyst value)**                                                        |
+| **type**    | headline 60 / 800 / 1.1 in `#1f1b2e`; lede 28 in `#473f63`, max-width 920. Unchanged — only the brand row changes. — **superseded by §10 (Amethyst value)**                                                                                     |
+| **⚠ fonts** | Pass Inter via `ImageResponse({ fonts: [{ name: 'Inter', data, weight: 700 }] })` and set `fontFamily: 'Inter'`. Both files say `'sans-serif'` today, so the current cards are set in whatever face the build container happens to ship.        |
+| **alt**     | `export const alt` exists on the explore route and must exist on the project route too — it is the only accessible name a social embed gets.                                                                                                    |
 
 **Two layouts, not one.** The _section_ card (`explore`) puts the brand lockup top-left with headline
 and lede anchoring the bottom. The _project_ card (`p/[identifier]`) keeps its big project tile — the
@@ -428,6 +434,8 @@ compete.
 ---
 
 ## 7. Where the mark goes (the access path)
+
+> **⚠️ The colour values in this section are the Amethyst palette's (formerly called Motir). Since MOTIR-6471 the brand follows the monochrome Motir palette: §10 amends every literal here.**
 
 The mark is not a page you navigate to; its "entrance" is the set of slots it occupies. In five of the
 six it is also the **home link**.
@@ -588,3 +596,192 @@ The card's acceptance criteria name `design/brand/brand-mark.design-notes.md`. T
 `design/brand/design-notes.md` instead, which is the convention `motir-core/CLAUDE.md` states and
 every other area follows (`design/<area>/design-notes.md`, one per area, indexing that area's
 surfaces). The mock and PNG keep the `brand-mark` basename the card asks for.
+
+---
+
+## 10. The monochrome Motir palette — static brand colours (MOTIR-6473)
+
+**Amends §4, §5, §6 and §7e, and adds Stripe.** Mock:
+[`design/brand/brand-mark--motir-mono.mock.html`](brand-mark--motir-mono.mock.html), a delta holding
+only the surfaces whose colour changes. Story MOTIR-6470; consumed by **MOTIR-6474** (motir-core
+carriers), the motir.co brand card and the Stripe branding card (MOTIR-6479).
+
+MOTIR-6471 renamed the cool monochrome palette from **Graphite** to **Motir** and made it the
+default. The warm palette the mark was coloured from is now **Amethyst**. The in-app `BrandMark`
+needs nothing, because it paints with `--el-accent-on-surface` and follows the active palette. This
+section covers every surface that draws the brand with a **literal** colour, because the medium
+cannot read a token: a favicon, a raster, a manifest, `next/og`, an email, and a third-party
+dashboard.
+
+### The rule — every carrier keeps the TOKEN it already names
+
+Under Amethyst, `--el-accent` (the fill) and `--el-accent-on-surface` (the glyph on a page) were the
+same purple, `#5645d4`. That hid a distinction every carrier was already making. Under Motir they
+split: the fill is the **ink CTA** and the glyph-on-surface is the **one cool-blue accent**.
+Nothing is re-chosen per surface. Each literal keeps the role it has always stood for and takes that
+role's new value:
+
+| Role (token, Motir light)                     | Resolved  | Carriers                                                                                                |
+| --------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------- |
+| tile / fill — `--el-accent`                   | `#1a1d21` | tab icon, iOS + Android icons, `favicon.ico`, manifest `theme_color`, email button, Stripe brand colour |
+| ink on the fill — `--el-accent-text`          | `#ffffff` | the glyph knocked out of every tile, the email button label                                             |
+| glyph on a surface — `--el-accent-on-surface` | `#155bc4` | email header mark, both OG cards' glyph                                                                 |
+| link — `--el-link`                            | `#155bc4` | email body links, Stripe accent colour                                                                  |
+| page — `--el-page-bg`                         | `#ffffff` | manifest `background_color`                                                                             |
+
+That is also what the **app** does. The shell slot (§7a) already paints its glyph blue on a neutral
+field under Motir, so the email header and the link cards match what a signed-in person sees.
+
+**Considered and not taken:** a **blue tile** everywhere (`#155bc4`, white glyph 6.31:1). It would
+survive a dark tab strip without a variant (2.55:1 against Chrome's), but it spends the palette's
+single accent on the one mark that is the brand. The palette's own statement is the ink CTA, and its
+reference products (Vercel, Linear) are black and white at the favicon.
+
+### The dark tab strip — the one state the purple never had
+
+A browser tab has no page behind it. The ink tile against the chrome it sits in, measured:
+
+| Ground (representative)      | ink tile `#1a1d21` | dark-variant tile `#edeef0` |
+| ---------------------------- | ------------------ | --------------------------- |
+| Chrome light strip `#dee1e6` | 12.90:1            | —                           |
+| Chrome light tab `#ffffff`   | 16.91:1            | —                           |
+| Chrome dark strip `#202124`  | **1.05:1** ✗       | 13.87:1                     |
+| Chrome dark tab `#35363a`    | **1.40:1** ✗       | 10.40:1                     |
+| Firefox dark tab `#42414d`   | —                  | 8.63:1                      |
+| Firefox dark strip `#1c1b22` | **1.01:1** ✗       | —                           |
+
+**Decision: `app/icon.svg` carries a `@media (prefers-color-scheme: dark)` variant.** It swaps the
+tile to the dark theme's `--el-accent` `#edeef0` and the glyph to its `--el-accent-text` `#0c0d0f`
+(16.75:1). This is the palette's own light/dark inversion, the same way its ink CTA inverts to
+near-white on the dark canvas. The purple tile never needed it, because a saturated mid-tone reads
+on both chrome themes.
+
+- **Only the SVG can switch.** `favicon.ico`, `apple-icon.png` and the two maskable PNGs are rasters
+  with one appearance each, and they take the **ink** tile. The `.ico` is a legacy fallback for
+  clients that do not load the SVG. iOS and Android set icons on a wallpaper, not on browser chrome,
+  and an opaque ink tile is legible on both.
+- **Where a browser does not evaluate the media query inside a favicon, it shows the light (ink)
+  variant.** On a dark strip the tile's edge is then lost, but the glyph inside it still reads
+  (16.91:1 against the tile). That is the accepted fallback, not a defect to chase.
+
+### §4 amended — colour
+
+The mark's token rule is unchanged: glyph `--el-accent-on-surface`, tile `--el-accent` with
+`--el-accent-text` ink. Under Motir:
+
+| Element              | Token                    | Resolved  | On                       | Ratio   | Bar  |
+| -------------------- | ------------------------ | --------- | ------------------------ | ------- | ---- |
+| glyph, light         | `--el-accent-on-surface` | `#155bc4` | `--el-page-bg` `#ffffff` | 6.31:1  | ≥3 ✓ |
+| glyph, light         | `--el-accent-on-surface` | `#155bc4` | `--el-surface` `#eef0f3` | 5.53:1  | ≥3 ✓ |
+| glyph, dark          | `--el-accent-on-surface` | `#91bcfc` | `--el-page-bg` `#0c0d0f` | 10.00:1 | ≥3 ✓ |
+| glyph on tile, light | `--el-accent-text`       | `#ffffff` | `--el-accent` `#1a1d21`  | 16.91:1 | ≥3 ✓ |
+| glyph on tile, dark  | `--el-accent-text`       | `#0c0d0f` | `--el-accent` `#edeef0`  | 16.75:1 | ≥3 ✓ |
+
+(`--el-accent-on-surface` in dark is `color-mix(in srgb, #7db1ff 82%, #edeef0)`, resolved here.)
+
+### §5 amended — favicon / app-icon set
+
+Geometry, radii and scales are unchanged (0.22 × canvas radius; glyph 0.605 non-maskable, 0.55
+maskable). Only the two fills move.
+
+| File                  | Tile                                                   | Glyph     | Dark variant                              |
+| --------------------- | ------------------------------------------------------ | --------- | ----------------------------------------- |
+| `app/icon.svg`        | `#1a1d21`                                              | `#ffffff` | **yes** — `#edeef0` tile, `#0c0d0f` glyph |
+| `app/favicon.ico`     | `#1a1d21`                                              | `#ffffff` | no (raster)                               |
+| `app/apple-icon.png`  | `#1a1d21`                                              | `#ffffff` | no (raster, opaque)                       |
+| `public/icon-192.png` | `#1a1d21`                                              | `#ffffff` | no (maskable, full bleed)                 |
+| `public/icon-512.png` | `#1a1d21`                                              | `#ffffff` | no (maskable, full bleed)                 |
+| `app/manifest.ts`     | `theme_color` `#1a1d21` · `background_color` `#ffffff` |           | a manifest has one `theme_color`          |
+
+The manifest's `theme_color` tints Android's status bar and the installed-app title bar. White
+system text on it is 16.91:1.
+
+### §6 amended — OG template
+
+Layouts, type sizes and fonts are unchanged. Every literal takes the Motir light value of the token
+§6 already named, and the headline's warm near-black joins the wordmark on `--el-text`.
+
+| Literal       | Old (Amethyst)        | New (Motir)           | Token                                        | Contrast on the wash (`#e4e6f3` / `#dde9f6`) |
+| ------------- | --------------------- | --------------------- | -------------------------------------------- | -------------------------------------------- |
+| canvas wash   | `#e6e0f5` → `#dcecfa` | `#e4e6f3` → `#dde9f6` | `--color-tint-lavender` → `--color-tint-sky` | —                                            |
+| glyph (72 px) | `#5645d4`             | `#155bc4`             | `--el-accent-on-surface`                     | 5.09 / 5.13 (≥3 ✓)                           |
+| wordmark      | `#2a2342`             | `#16191d`             | `--el-text`                                  | 14.20 / 14.33 (≥4.5 ✓)                       |
+| headline      | `#1f1b2e`             | `#16191d`             | `--el-text`                                  | 14.20 / 14.33 (≥4.5 ✓)                       |
+| lede          | `#473f63`             | `#565c64`             | `--el-text-secondary`                        | 5.44 / 5.48 (≥4.5 ✓)                         |
+
+The glyph rides the **surface** role (it sits on the wash, not in a tile), so it takes the blue.
+
+### §7e amended — email
+
+The body stays the hard-coded white `EmailLayout` uses, and email still has no dark-mode signal, so
+there is one colour per role:
+
+| Element                 | Old       | New       | Token                    | On        | Ratio            |
+| ----------------------- | --------- | --------- | ------------------------ | --------- | ---------------- |
+| header mark (40 px PNG) | `#5645d4` | `#155bc4` | `--el-accent-on-surface` | `#ffffff` | 6.31:1 (≥3 ✓)    |
+| primary button fill     | `#4f46e5` | `#1a1d21` | `--el-accent`            | `#ffffff` | 16.91:1 (shape)  |
+| primary button label    | `#ffffff` | `#ffffff` | `--el-accent-text`       | `#1a1d21` | 16.91:1 (≥4.5 ✓) |
+| body link               | `#2563eb` | `#155bc4` | `--el-link`              | `#ffffff` | 6.31:1 (≥4.5 ✓)  |
+
+**A near-black button beside near-black text.** The button is a filled block with 16.91:1 against
+the body, so it is found by its shape and fill, not by hue. That is the same way the app's own ink
+CTA is found. The body copy stays on its neutral greys (`#111827`, `#4b5563`, `#6b7280`): they are
+not brand literals, and nothing here changes them.
+
+### Stripe (new)
+
+| Setting (Stripe → Branding) | Old       | New       | Token         | What it colours                                   | Contrast                    |
+| --------------------------- | --------- | --------- | ------------- | ------------------------------------------------- | --------------------------- |
+| Brand colour                | `#5645d4` | `#1a1d21` | `--el-accent` | Checkout's business panel, invoice / receipt band | white text 16.91:1          |
+| Accent colour               | (unset)   | `#155bc4` | `--el-link`   | Checkout's pay button and links                   | white label 6.31:1 (≥4.5 ✓) |
+
+The accent is blue rather than ink so that a pay button and links on the white form read as
+actionable next to an ink brand panel.
+
+### The static brand colours — the checklist the three implementing cards close against
+
+One row per literal. **"Constant"** is where the value lives once MOTIR-6474 lands. Every
+rasterised or generated file reads it from `@motir/brand`, never from a literal in a consumer.
+
+| #   | Repo · file / setting                                                                                                                                                                                                                                        | Constant / property                                      | Old                          | New                          | Source token (Motir)                         | Contrast (ground)                            |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- | ---------------------------- | ---------------------------- | -------------------------------------------- | -------------------------------------------- |
+| 1   | core · `packages/brand/src/waveBand.ts`                                                                                                                                                                                                                      | `BRAND_ACCENT_HEX` (tile / fill)                         | `#5645d4`                    | `#1a1d21`                    | `--el-accent` light                          | glyph on it 16.91                            |
+| 2   | core · `packages/brand/src/waveBand.ts`                                                                                                                                                                                                                      | `BRAND_ACCENT_INK_HEX`                                   | `#ffffff`                    | `#ffffff`                    | `--el-accent-text` light                     | 16.91 (tile)                                 |
+| 3   | core · `packages/brand/src/waveBand.ts`                                                                                                                                                                                                                      | `BRAND_PAGE_BG_HEX`                                      | `#ffffff`                    | `#ffffff`                    | `--el-page-bg` light                         | —                                            |
+| 4   | core · `packages/brand/src/waveBand.ts`                                                                                                                                                                                                                      | **new** `BRAND_GLYPH_HEX` (glyph on a surface)           | —                            | `#155bc4`                    | `--el-accent-on-surface` light               | 6.31 (white), 5.09 (OG wash)                 |
+| 5   | core · `packages/brand/src/waveBand.ts`                                                                                                                                                                                                                      | **new** `BRAND_ACCENT_DARK_HEX` (dark-tab tile)          | —                            | `#edeef0`                    | `--el-accent` dark                           | 8.63–13.87 (dark chrome)                     |
+| 6   | core · `packages/brand/src/waveBand.ts`                                                                                                                                                                                                                      | **new** `BRAND_ACCENT_INK_DARK_HEX`                      | —                            | `#0c0d0f`                    | `--el-accent-text` dark                      | 16.75 (dark tile)                            |
+| 7   | core · `packages/brand/src/waveBand.ts`                                                                                                                                                                                                                      | **new** `BRAND_LINK_HEX` (email links, Stripe accent)    | —                            | `#155bc4`                    | `--el-link` light                            | 6.31 (white)                                 |
+| 8   | core · `app/icon.svg` (generated)                                                                                                                                                                                                                            | tile / glyph, plus `@media (prefers-color-scheme: dark)` | `#5645d4` / `#ffffff`        | rows 1–2, dark rows 5–6      | as rows 1–2, 5–6                             | as rows                                      |
+| 9   | core · `app/favicon.ico`, `app/apple-icon.png`, `public/icon-192.png`, `public/icon-512.png` (generated)                                                                                                                                                     | tile / glyph                                             | `#5645d4` / `#ffffff`        | rows 1–2                     | `--el-accent` / `--el-accent-text`           | 16.91                                        |
+| 10  | core · `public/email-mark-40.png` (generated)                                                                                                                                                                                                                | glyph                                                    | `#5645d4`                    | row 4                        | `--el-accent-on-surface`                     | 6.31 (white body)                            |
+| 11  | core · `app/manifest.ts`                                                                                                                                                                                                                                     | `theme_color` / `background_color`                       | `#5645d4` / `#ffffff`        | rows 1 / 3                   | `--el-accent` / `--el-page-bg`               | 16.91 (white status text)                    |
+| 12  | core · `lib/emailTemplates/_components/PrimaryButton.tsx`                                                                                                                                                                                                    | `backgroundColor` / `color`                              | `#4f46e5` / `#ffffff`        | rows 1 / 2                   | `--el-accent` / `--el-accent-text`           | 16.91                                        |
+| 13  | core · the 10 templates' link style (`automationRuleFailed`, `emailChange`, `filterSubscription`, `followConfirm`, `followDigest`, `mentionNotification`, `passwordReset`, `watcherCommentNotification`, `watcherTransitionNotification`, `workspaceInvite`) | `color`                                                  | `#2563eb`                    | row 7                        | `--el-link`                                  | 6.31 (white)                                 |
+| 14  | core · `lib/emailTemplates/_components/EmailLayout.tsx`                                                                                                                                                                                                      | the §7e comment's cited colour and ratio                 | `#5645d4` 6.57:1             | row 4, 6.31:1                | `--el-accent-on-surface`                     | —                                            |
+| 15  | core · `docs/decisions/billing-tiering.md` (~468)                                                                                                                                                                                                            | the Stripe brand colour record                           | `#5645d4`                    | `#1a1d21` + accent `#155bc4` | rows 1 / 7                                   | —                                            |
+| 16  | motir.co · `motir-marketing/app/icon.svg`, `…/app/apple-icon.png`, `…/app/favicon.ico` via `motir-marketing/scripts/brand/generate-brand-icons.ts`                                                                                                           | tile / glyph, dark variant on the SVG                    | `#5645d4` / `#ffffff`        | rows 1–2, 5–6                | as core rows 8–9                             | as core — **same tile rules, no difference** |
+| 17  | motir.co · `motir-marketing/app/opengraph-image.tsx`, `motir-marketing/app/p/[identifier]/opengraph-image.tsx`                                                                                                                                               | glyph `fill`                                             | `BRAND_ACCENT_HEX` `#5645d4` | `BRAND_GLYPH_HEX` `#155bc4`  | `--el-accent-on-surface`                     | 5.09 / 5.13                                  |
+| 18  | motir.co · both OG routes                                                                                                                                                                                                                                    | canvas `linear-gradient`                                 | `#e6e0f5` → `#dcecfa`        | `#e4e6f3` → `#dde9f6`        | `--color-tint-lavender` → `--color-tint-sky` | —                                            |
+| 19  | motir.co · both OG routes                                                                                                                                                                                                                                    | wordmark `color`                                         | `#2a2342`                    | `#16191d`                    | `--el-text`                                  | 14.20 / 14.33                                |
+| 20  | motir.co · both OG routes                                                                                                                                                                                                                                    | headline `color`                                         | `#1f1b2e`                    | `#16191d`                    | `--el-text`                                  | 14.20 / 14.33                                |
+| 21  | motir.co · both OG routes                                                                                                                                                                                                                                    | lede `color`                                             | `#473f63`                    | `#565c64`                    | `--el-text-secondary`                        | 5.44 / 5.48                                  |
+| 22  | Stripe dashboard · Branding                                                                                                                                                                                                                                  | Brand colour                                             | `#5645d4`                    | `#1a1d21`                    | `--el-accent`                                | 16.91 (white text)                           |
+| 23  | Stripe dashboard · Branding                                                                                                                                                                                                                                  | Accent colour                                            | (unset)                      | `#155bc4`                    | `--el-link`                                  | 6.31 (white label)                           |
+
+Rows 4–7 are **new** exports (MOTIR-6474 adds them, per its card: _"any new colour the table
+introduces is added here as a named export, never as a literal in a consumer"_). The generator reads
+row 4 for the email mark in place of `BRAND_ACCENT_HEX`, because the two used to be one colour and
+now are not.
+
+**Not a brand literal, and kept:** the Amethyst palette's own tokens in `theme.css` and its picker
+swatch keep `#5645d4`. That is the warm palette's colour, not the brand's.
+
+### What this does NOT decide
+
+- **The mark's shape, geometry, radii or scales.** §1–§3 and §5's arithmetic stand.
+- **motir.co's palette showcase** and re-basing `theme.css`'s `:root` onto Motir. Both are out of the
+  story.
+- **The onboarding Design step's default for a user's project**, which stays on Amethyst
+  (MOTIR-6471).
+- **A dark-mode email.** Email has no reliable signal, so there is one colour per role.

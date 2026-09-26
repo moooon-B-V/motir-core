@@ -50,8 +50,9 @@ const brandRow = {
 // element, never a CSS variable. `alt="Motir"` is not decoration: roughly 40% of
 // clients block images by default, and the alt text is then the entire header.
 //
-// One colour for both themes. Email has no reliable dark-mode signal, and
-// #5645d4 holds 6.57:1 on the white body this layout hardcodes (§4).
+// One colour for both themes. Email has no reliable dark-mode signal, and the
+// mark's `BRAND_GLYPH_HEX` (#155bc4, the Motir palette's --el-accent-on-surface)
+// holds 6.31:1 on the white body this layout hardcodes (§10).
 //
 // ⚠️ THE SRC IS A HOSTED PNG AT AN ABSOLUTE https:// URL, AND ALL THREE WORDS
 // ARE LOAD-BEARING (MOTIR-3505). The paragraph above was here from the start and

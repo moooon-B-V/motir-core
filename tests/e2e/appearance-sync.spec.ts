@@ -38,7 +38,8 @@ const APPEARANCE_URL = '/settings/account/appearance';
 // body resolves it under.
 //   theme   default 'system' (NO data-theme server-side) → 'dark'
 //   style   default 'warm-editorial' → 'soft-playful'
-//   palette default 'motir'          → 'cobalt'
+//   palette default 'motir'          → 'cobalt'   ('motir' is the monochrome palette since MOTIR-6471;
+//                                                 the warm one it used to name is 'amethyst')
 //   type    default 'motir'          → 'grotesk'  (soft-playful's default is 'motir', so this is a real change)
 const AXES = [
   { group: 'Theme', option: 'Dark', attr: 'data-theme', value: 'dark', prefKey: 'pattern' },

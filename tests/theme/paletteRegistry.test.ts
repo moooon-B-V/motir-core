@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  BASE_PALETTE_ID,
   DEFAULT_PALETTE_ID,
   PALETTE_IDS,
   PALETTE_REGISTRY,
@@ -27,11 +28,11 @@ const GLOBALS_CSS =
   readFileSync(join(process.cwd(), 'packages/design-system/theme.css'), 'utf8');
 
 describe('palette registry', () => {
-  it('registers the palette set (Motir — the house palette — plus the cool set Cobalt/Graphite/Evergreen/Spectrum and the warm-primary brand set Amber/Sienna/Garnet/Citrine)', () => {
+  it('registers the palette set (Motir — the monochrome house palette — and Amethyst, plus the cool set Cobalt/Evergreen/Spectrum and the warm-primary brand set Amber/Sienna/Garnet/Citrine)', () => {
     expect(PALETTE_IDS).toEqual([
       'motir',
+      'amethyst',
       'cobalt',
-      'graphite',
       'evergreen',
       'spectrum',
       'amber',
@@ -41,8 +42,8 @@ describe('palette registry', () => {
       'candy',
     ]);
     expect(PALETTE_REGISTRY['motir'].name).toBe('Motir');
+    expect(PALETTE_REGISTRY['amethyst'].name).toBe('Amethyst');
     expect(PALETTE_REGISTRY['cobalt'].name).toBe('Cobalt');
-    expect(PALETTE_REGISTRY['graphite'].name).toBe('Graphite');
     expect(PALETTE_REGISTRY['evergreen'].name).toBe('Evergreen');
     expect(PALETTE_REGISTRY['spectrum'].name).toBe('Spectrum');
     expect(PALETTE_REGISTRY['amber'].name).toBe('Amber');
@@ -121,9 +122,9 @@ describe('runtime contract in globals.css', () => {
     expect(GLOBALS_CSS).toContain('AXIS 1 (COLOUR) — data-palette overrides');
   });
 
-  it('ships a [data-palette] block for every non-default palette', () => {
+  it('ships a [data-palette] block for every non-base palette', () => {
     for (const id of PALETTE_IDS) {
-      if (id === DEFAULT_PALETTE_ID) continue; // the base needs no override block
+      if (id === BASE_PALETTE_ID) continue; // the base needs no override block
       expect(GLOBALS_CSS).toContain(`[data-palette='${id}']`);
     }
   });

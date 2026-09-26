@@ -1,7 +1,12 @@
 import { STYLE_IDS, STYLE_DEFAULT_TYPE } from './styles';
 import { PALETTE_IDS } from './palettes';
 import { TYPE_IDS } from './typography';
-import { THEME_DEFAULTS, THEME_STORAGE_KEYS } from './types';
+import {
+  PALETTE_ID_MIGRATION,
+  PALETTE_IDS_VERSION,
+  THEME_DEFAULTS,
+  THEME_STORAGE_KEYS,
+} from './types';
 import type { AppliedAppearanceDto } from '../appearance';
 
 /**
@@ -24,6 +29,11 @@ import type { AppliedAppearanceDto } from '../appearance';
  * - **Anonymous (serverPref null)** → unchanged from the original behaviour:
  *   read localStorage, resolve each axis through the registries (baked in at
  *   build time), and fall an unpinned type back to the active style's default.
+ *   A stored palette id written before MOTIR-6471's rename is read through
+ *   `PALETTE_ID_MIGRATION` ONCE — keyed on the `paletteIds` version marker,
+ *   never on the value, since `motir` is a valid id both before and after — and
+ *   the migrated value and the marker are written back. (The signed-in branch
+ *   writes the marker with the server's already-migrated id.)
  *
  * For `data-theme` the script still resolves `pattern==='system'` via
  * `matchMedia` at runtime — the one axis the server cannot know — so the root
@@ -48,11 +58,14 @@ export function buildThemeInitScript(serverPref: AppliedAppearanceDto | null): s
   var typeIds=${JSON.stringify(TYPE_IDS)};
   var styleDefaultType=${JSON.stringify(STYLE_DEFAULT_TYPE)};
   var K=${JSON.stringify(THEME_STORAGE_KEYS)};
+  var paletteMigration=${JSON.stringify(PALETTE_ID_MIGRATION)};
+  var paletteIdsVersion=${JSON.stringify(PALETTE_IDS_VERSION)};
   var pattern,style,palette,type;
   if(server){
     pattern=server.pattern;style=server.styleId;palette=server.paletteId;type=server.typeId;
     try{
       ls.setItem(K.pattern,pattern);ls.setItem(K.style,style);ls.setItem(K.palette,palette);
+      ls.setItem(K.paletteIds,paletteIdsVersion);
       if(server.typePinned){ls.setItem(K.type,type);}else{ls.removeItem(K.type);}
     }catch(e){}
   }else{
@@ -60,6 +73,13 @@ export function buildThemeInitScript(serverPref: AppliedAppearanceDto | null): s
     style=ls.getItem(K.style);
     if(styleIds.indexOf(style)===-1){style=${JSON.stringify(THEME_DEFAULTS.style)};}
     palette=ls.getItem(K.palette);
+    if(ls.getItem(K.paletteIds)!==paletteIdsVersion){
+      if(palette!==null&&Object.prototype.hasOwnProperty.call(paletteMigration,palette)){palette=paletteMigration[palette];}
+      try{
+        if(palette!==null){ls.setItem(K.palette,palette);}
+        ls.setItem(K.paletteIds,paletteIdsVersion);
+      }catch(e){}
+    }
     if(paletteIds.indexOf(palette)===-1){palette=${JSON.stringify(THEME_DEFAULTS.palette)};}
     type=ls.getItem(K.type);
     if(typeIds.indexOf(type)===-1){type=styleDefaultType[style]||${JSON.stringify(THEME_DEFAULTS.type)};}
