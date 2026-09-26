@@ -6,10 +6,13 @@ import {
   IRREVERSIBLE_PERMISSIONS,
   UNGRANTABLE_PERMISSIONS,
   V1_ONLY_PERMISSIONS,
+  RECORD_VIEW_PERMISSIONS,
   expandStoredGrant,
   grantAllows,
   grantsIrreversible,
   isGrantable,
+  ROOM_VIEW_FORWARD_KEYS,
+  GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER,
 } from '@/lib/tokens/grant';
 import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { PERMISSIONS, isPermissionKey, type PermissionKey } from '@/lib/permissions/catalog';
@@ -29,6 +32,9 @@ describe('GRANTABLE_PERMISSIONS is DERIVED, in both directions', () => {
     const asserted = new Set<PermissionKey>([
       ...Object.values(TOOL_PERMISSIONS),
       ...V1_ONLY_PERMISSIONS,
+      // MOTIR-6330 — the record-view keys a token-reachable read consults after
+      // its door, honoured against the grant in the service (`holdsRecordView`).
+      ...RECORD_VIEW_PERMISSIONS,
       ACCEPTANCE_PUBLISH_PERMISSION,
     ]);
     for (const key of GRANTABLE_PERMISSIONS) {
@@ -313,11 +319,19 @@ describe('expandStoredGrant — reading a row written before this story', () => 
     // — later than every one of the three above. Conferring it on a stored
     // `work_items:write` row would let a token issued years ago for work-item
     // edits start recording occurrences against a project's lesson corpus.
+    //
+    // ⚠️ AND `plan:view_any` (MOTIR-6330) is not an exclusion of the same kind:
+    // a legacy row that BROWSES is read forward into it — but only given the
+    // token's provenance (`expandStoredGrant`'s second argument, MOTIR-6329),
+    // which this provenance-free call does not pass. The forward read has its own
+    // describe block below.
     const POSTDATE_THE_SCOPES: PermissionKey[] = [
       'ai:decide_plan',
       'lesson:manage',
       'lesson:view',
       'lesson:reinforce',
+      'plan:view_any',
+      'run:view_any',
     ];
     expect([...grant].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),
@@ -325,5 +339,71 @@ describe('expandStoredGrant — reading a row written before this story', () => 
     // Said as its own assertion so an exclusion cannot be read as an oversight
     // in the line above: no legacy scope confers either key, by construction.
     for (const key of POSTDATE_THE_SCOPES) expect(grant).not.toContain(key);
+  });
+});
+
+describe('expandStoredGrant — the room view keys read FORWARD (MOTIR-6329)', () => {
+  const CHOSEN = { projectId: 'p1' };
+  const MARK = GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER;
+
+  it('a CHOSEN grant stored WITHOUT the mint marker that browses gains both keys', () => {
+    const { grant } = expandStoredGrant(['project:browse', 'work_item:edit'], CHOSEN);
+    expect(grant).toContain('plan:view_any');
+    expect(grant).toContain('run:view_any');
+  });
+
+  it('a CHOSEN grant minted WITH the marker and without the keys stays without — a deliberate narrowing holds', () => {
+    const { grant, unrecognised } = expandStoredGrant(
+      ['project:browse', 'work_item:edit', MARK],
+      CHOSEN,
+    );
+    expect(unrecognised).toEqual([]);
+    expect(grant).toEqual(['project:browse', 'work_item:edit']);
+  });
+
+  it('a marked grant that CHOSE one key keeps exactly what it chose', () => {
+    const { grant } = expandStoredGrant(['project:browse', 'plan:view_any', MARK], CHOSEN);
+    expect(grant).toContain('plan:view_any');
+    expect(grant).not.toContain('run:view_any');
+  });
+
+  it('the marker is never a permission — it is dropped, not displayed and not unrecognised', () => {
+    const { grant, unrecognised } = expandStoredGrant([MARK], CHOSEN);
+    expect(grant).toEqual([]);
+    expect(unrecognised).toEqual([]);
+  });
+
+  it('a FIXED device grant follows the same rule — read forward without the marker, exact with it', () => {
+    const before = expandStoredGrant(['project:browse'], { projectId: null }).grant;
+    expect(before).toContain('plan:view_any');
+    expect(before).toContain('run:view_any');
+    expect(expandStoredGrant(['project:browse', MARK], { projectId: null }).grant).toEqual([
+      'project:browse',
+    ]);
+  });
+
+  it('a grant that cannot browse gains nothing', () => {
+    expect(expandStoredGrant(['comment:add'], CHOSEN).grant).toEqual(['comment:add']);
+  });
+
+  it('a legacy `read` scope maps to browse and is carried forward with it', () => {
+    const { grant } = expandStoredGrant(['read'], CHOSEN);
+    expect(grant).toContain('project:browse');
+    expect(grant).toContain('plan:view_any');
+    expect(grant).toContain('run:view_any');
+  });
+
+  it('legacy scopes map EXACTLY as before when no provenance is given', () => {
+    expect(expandStoredGrant(['read']).grant).not.toContain('plan:view_any');
+  });
+
+  it('the forward keys are ONLY the Plans and Runs view keys — never approval:view_any', () => {
+    expect([...ROOM_VIEW_FORWARD_KEYS]).toEqual(['plan:view_any', 'run:view_any']);
+  });
+
+  it('DEFAULT_TOKEN_GRANT carries each view key exactly when it is grantable — derived, never hand-added', () => {
+    for (const key of ROOM_VIEW_FORWARD_KEYS) {
+      expect(DEFAULT_TOKEN_GRANT.includes(key), key).toBe(GRANTABLE_PERMISSIONS.includes(key));
+    }
   });
 });

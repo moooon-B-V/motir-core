@@ -178,8 +178,10 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       'comment:add',
       'attachment:create',
       'report:view',
+      // MOTIR-6328 — the Plans and Runs rooms' view keys (not Approvals').
+      ...PLAN_RUN_VIEW_KEYS(),
     ],
-    viewer: ['project:browse', 'report:view'],
+    viewer: ['project:browse', 'report:view', ...ROOM_VIEW_KEYS()],
     member: [
       'project:browse',
       'work_item:edit',
@@ -197,6 +199,8 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       // because a delete cascade belongs at admin. That stays true — this is the
       // other operation the one key was carrying.
       'work_item:archive',
+      // MOTIR-6328 — the three rooms' view-any keys.
+      ...ROOM_VIEW_KEYS(),
     ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
@@ -206,8 +210,14 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
     // view + comment, but NOT edit — the level subtracts it from a non-member.
     // `report:view` survives: `levelGrants` names only the three edit-ish keys
     // (MOTIR-2347 §3 added no branch), so every other key takes the default arm.
-    plainMember: ['project:browse', 'comment:add', 'attachment:create', 'report:view'],
-    viewer: ['project:browse', 'report:view'],
+    plainMember: [
+      'project:browse',
+      'comment:add',
+      'attachment:create',
+      'report:view',
+      ...PLAN_RUN_VIEW_KEYS(),
+    ],
+    viewer: ['project:browse', 'report:view', ...ROOM_VIEW_KEYS()],
     member: [
       'project:browse',
       'work_item:edit',
@@ -225,6 +235,8 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       // because a delete cascade belongs at admin. That stays true — this is the
       // other operation the one key was carrying.
       'work_item:archive',
+      // MOTIR-6328 — the three rooms' view-any keys.
+      ...ROOM_VIEW_KEYS(),
     ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
@@ -233,7 +245,7 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
     wsAdmin: [...ROLE_GATED_PERMISSIONS],
     // Invisible without a project membership — including for `report:view`.
     plainMember: [],
-    viewer: ['project:browse', 'report:view'],
+    viewer: ['project:browse', 'report:view', ...ROOM_VIEW_KEYS()],
     member: [
       'project:browse',
       'work_item:edit',
@@ -251,6 +263,8 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       // because a delete cascade belongs at admin. That stays true — this is the
       // other operation the one key was carrying.
       'work_item:archive',
+      // MOTIR-6328 — the three rooms' view-any keys.
+      ...ROOM_VIEW_KEYS(),
     ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
@@ -263,9 +277,10 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       'comment:add',
       'attachment:create',
       'report:view',
+      ...PLAN_RUN_VIEW_KEYS(),
       ...PUBLIC_KEYS(),
     ],
-    viewer: ['project:browse', 'report:view', ...PUBLIC_KEYS()],
+    viewer: ['project:browse', 'report:view', ...ROOM_VIEW_KEYS(), ...PUBLIC_KEYS()],
     member: [
       'project:browse',
       'work_item:edit',
@@ -276,11 +291,30 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       'ai:decide_plan',
       // MOTIR-3629 — see the note on the `open` row above.
       'work_item:archive',
+      ...ROOM_VIEW_KEYS(),
       ...PUBLIC_KEYS(),
     ],
     admin: [...ROLE_GATED_PERMISSIONS, ...PUBLIC_KEYS()],
   },
 };
+
+/**
+ * MOTIR-6328 (Story MOTIR-6179, `member-facing-permissions.md` AMENDMENT 1) —
+ * the three rooms' view-any keys every built-in role that browses holds, and the
+ * two of them the implicit workspace-member grant and the `public` level add.
+ * Written out for the same reason as {@link MEMBER_FACING_AT_MEMBER}.
+ */
+function ROOM_VIEW_KEYS(): PermissionKey[] {
+  return ['approval:view_any', 'plan:view_any', 'run:view_any'];
+}
+function PLAN_RUN_VIEW_KEYS(): PermissionKey[] {
+  return ['plan:view_any', 'run:view_any'];
+}
+
+/** The role screens draw ENFORCED keys only; a `planned` one is held but not drawn. */
+function drawn(keys: PermissionKey[]): PermissionKey[] {
+  return keys.filter((key) => isEnforced(key));
+}
 
 function PUBLIC_KEYS(): PermissionKey[] {
   return ['public_request:submit', 'public_request:upvote', 'public_request:comment'];
@@ -316,7 +350,8 @@ describe('the rails, resolved through the database', () => {
   // MOTIR-5305 — `approval:view_any`, the Approvals room's full view. Asserted
   // through the SERVICE rather than by reading the constant, because what the room
   // will consult is `getPermissions`, and the rail is the part a constant cannot show.
-  it('`approval:view_any` resolves for the rail and the built-in admin, and for no member or viewer', async () => {
+  // MOTIR-6328 (DECISION MOTIR-6165 Q2) widened it to `member` and `viewer`.
+  it('`approval:view_any` resolves for the rail, the built-in admin, member and viewer', async () => {
     const s = await buildScenario('private', 'view-any');
     const holds = async (who: keyof Scenario['ctxs']) =>
       (await projectAccessService.getPermissions(s.projectId, s.ctxs[who])).has(
@@ -325,8 +360,8 @@ describe('the rails, resolved through the database', () => {
     expect(await holds('owner'), 'workspace owner, through the always-pass rail').toBe(true);
     expect(await holds('wsAdmin'), 'workspace admin, through the always-pass rail').toBe(true);
     expect(await holds('admin'), 'the built-in project admin set').toBe(true);
-    expect(await holds('member'), 'a member sees their OWN records — no key').toBe(false);
-    expect(await holds('viewer')).toBe(false);
+    expect(await holds('member'), 'every built-in role that browses holds it').toBe(true);
+    expect(await holds('viewer'), 'every built-in role that browses holds it').toBe(true);
   });
 
   it('`approval:view_any` is OFFERED once enforced — on the role screens, and grantable to a custom role (MOTIR-5301)', async () => {
@@ -338,7 +373,7 @@ describe('the rails, resolved through the database', () => {
     expect(catalog.roles.find((r) => r.key === 'admin')?.permissions).toContain(
       'approval:view_any',
     );
-    expect(catalog.roles.find((r) => r.key === 'member')?.permissions).not.toContain(
+    expect(catalog.roles.find((r) => r.key === 'member')?.permissions).toContain(
       'approval:view_any',
     );
     expect(grantablePermissionKeys().has('approval:view_any')).toBe(true);
@@ -432,8 +467,10 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     // is `work_item:edit`, which every holder of the retired key already had. Its
     // absence below is therefore the assertion that no built-in role grants a key
     // nothing enforces.
+    // MOTIR-6328 adds the three rooms' view-any keys to both (AMENDMENT 1), each
+    // drawn once its read enforces it.
     expect([...(catalog.roles.find((r) => r.key === 'viewer')?.permissions ?? [])].sort()).toEqual(
-      ['project:browse', 'report:view'].sort(),
+      drawn(['project:browse', 'report:view', ...ROOM_VIEW_KEYS()]).sort(),
     );
     expect([...(catalog.roles.find((r) => r.key === 'member')?.permissions ?? [])].sort()).toEqual(
       [
@@ -444,6 +481,7 @@ describe('the DTO boundary is serialisable and deterministic', () => {
         'attachment:create',
         ...MEMBER_FACING_AT_MEMBER(),
         'ai:decide_plan',
+        ...drawn(ROOM_VIEW_KEYS()),
       ].sort(),
     );
     // Compare as a SET: the DTO emits catalog order, which MOTIR-2277 changed
@@ -695,7 +733,9 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
         }
         // …and it gains nothing either: the set is the whole answer.
         expect([...held].sort()).toEqual(
-          level === 'public' ? [...permissions, ...PUBLIC_KEYS()].sort() : [...permissions].sort(),
+          level === 'public'
+            ? [...permissions, ...PLAN_RUN_VIEW_KEYS(), ...PUBLIC_KEYS()].sort()
+            : [...permissions].sort(),
         );
         await truncateAuthTables();
       }

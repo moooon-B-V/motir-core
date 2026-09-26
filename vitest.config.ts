@@ -2608,6 +2608,21 @@ export default defineConfig({
         // here would gate this story on code no card in it wrote — the trap the
         // `changeRequestCiFeedback.ts` note above names.
         'components/planning/PlanChangeComposer.tsx',
+        // ── Story MOTIR-6179 · THE ROOMS' VIEW-ANY KEYS (Subtask MOTIR-6336) ──
+        // The four modules this story CREATED for the Mine / Project rooms,
+        // measured on this branch with their own suites before being pinned: all
+        // four at 100 / 100 / 100 / 100 (`RoomViewSwitch`'s `next === value` guard
+        // is reached only through a stubbed `Segmented`, which
+        // `room-view-switch-guard.test.tsx` supplies). The services the story
+        // widened (`approvalGatesService`, `planSessionsService`,
+        // `dispatchRunService`, `apiTokensService`, `lib/tokens/grant.ts`,
+        // `lib/settings/projectNavAccess.ts`, `lib/permissions/**`) keep the floors
+        // already pinned for them below; their new branches are walked, per actor,
+        // by `tests/integration/rooms/roomsStoryGate.test.ts`.
+        'lib/rooms/roomView.ts',
+        'lib/approvalGates/actPermissions.ts',
+        'lib/runs/runsAddress.ts',
+        'components/rooms/RoomViewSwitch.tsx',
         // ── Story MOTIR-6166 · PERMISSION-GATED SURFACES (Subtask MOTIR-6177) ──
         // The five surfaces this story CREATED or reshaped around a permission
         // branch, measured on this branch with the story's specs before being
@@ -2666,6 +2681,21 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // ── Story MOTIR-6179 · THE ROOMS' VIEW-ANY KEYS (Subtask MOTIR-6336) ──
+        'lib/rooms/roomView.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/approvalGates/actPermissions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/runs/runsAddress.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'components/rooms/RoomViewSwitch.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // ── Story MOTIR-6166 · PERMISSION-GATED SURFACES (Subtask MOTIR-6177) ──
         'app/**/_components/FieldCard.tsx': {
           lines: 90,

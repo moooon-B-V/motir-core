@@ -161,8 +161,21 @@ function removeEdge(blockedBy: Map<string, Set<string>>, fromId: string, toId: s
  * is read through `plansService.getPlan`, which applies the browse access gate, so
  * the caller never reaches a plan/project it can't see.
  */
-export async function buildProjection(planId: string, ctx: ServiceContext): Promise<Projection> {
-  const plan = await plansService.getPlan(planId, ctx);
+export async function buildProjection(
+  planId: string,
+  ctx: ServiceContext,
+  opts: { caller?: 'actor' | 'system' } = {},
+): Promise<Projection> {
+  // An ACTOR's read of what a plan proposes (`validate_plan`, `get_work_item` /
+  // `search_work_items` / `validate_work_item` / `validate_sprint` with `planId`)
+  // admits by the Plans room's scope (MOTIR-6330): a plan the reader may not see
+  // projects nothing and is not-found. The one SYSTEM caller — motir-ai's
+  // internal `validate-plan-forest` route, validating a plan its own job wrote —
+  // passes `caller: 'system'` and keeps the browse floor alone.
+  const plan =
+    opts.caller === 'system'
+      ? await plansService.getPlan(planId, ctx)
+      : await plansService.getPlanForReader(planId, ctx);
   const projectId = plan.projectId;
 
   // The project's live node set + the initial status an `add` would be created in.

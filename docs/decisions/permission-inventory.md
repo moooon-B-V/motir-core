@@ -143,10 +143,12 @@ carries a decided policy, and no row says `new`.
 | `import` (1)         | `import:run` ᵖ                                                                                          |
 | `integration` (1)    | `integration:manage`                                                                                    |
 | `member` (2)         | `member:manage` · `project:manage_access`                                                               |
+| `plan` (1)           | `plan:view_any` (MOTIR-6328 · planned until MOTIR-6330)                                                 |
 | `project` (2)        | `project:administer` · `project:browse`                                                                 |
 | `public_request` (3) | `public_request:comment` · `public_request:submit` · `public_request:upvote`                            |
 | `report` (3)         | `report:view` ᵖ · `saved_filter:manage` ᵖ · `saved_filter:manage_any`                                   |
 | `repository` (2)     | `repository:manage` · `repository:manage_access`                                                        |
+| `run` (1)            | `run:view_any` (MOTIR-6328 · planned until MOTIR-6331)                                                  |
 | `sprint` (1)         | `sprint:manage` ᵖ                                                                                       |
 | `watcher` (1)        | `watcher:manage`                                                                                        |
 | `work_item` (5)      | `project:browse` · `work_item:archive` · `work_item:delete` ᵖ · `work_item:edit` · `work_item:triage` ᵖ |
@@ -1042,6 +1044,8 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `app/(onboarding)/onboarding/actions.ts`                 | clearPendingIdeaAction, startPlanningAction                                                                 | — none —                                                                                                                                                                                                                    | `work_item:edit`     | existing         | R41 |
 | `app/(public)/p/[identifier]/overview-actions.ts`        | savePublicOverviewAction                                                                                    | — none —                                                                                                                                                                                                                    | `work_item:edit`     | existing         | R41 |
 | `lib/i18n/actions.ts`                                    | setLocale                                                                                                   | — none —                                                                                                                                                                                                                    | —                    | user-scoped      | R47 |
+
+**R71.** THE PLANS AND RUNS ROOMS' PROJECT VIEW (Story MOTIR-6179 · MOTIR-6328 names both keys; MOTIR-6330 consults `plan:view_any`, MOTIR-6331 consults `run:view_any`) — _list every plan, or every agent run, of one project, other people's included._ **R68's shape carried to the two sibling rooms: a `project:browse` floor, the reader's OWN rows as relationships that need no key, and one `_view_any` key that WIDENS to the whole project.** `plan:view_any` is the VIEW half of what `ai:view_plan` conflated (MOTIR-3188): `ai:view_plan` keeps the AUTHOR writes, so a role can now read every plan without being able to append to one. `run:view_any` is the first key the Runs room has ever had — before it, `dispatchRunService.listRunsForProject` asserted browse and nothing further, so no role could be kept out of it. **Defaults** (DECISION MOTIR-6165 Q2, 2026-09-24; `member-facing-permissions.md` AMENDMENT 1): `admin`, `member` and `viewer` hold both, and so do the implicit workspace-member grant and `PUBLIC_PROJECT_PERMISSIONS`, because every one of those actors opens `/plans` and `/runs` on browse today. Both keys are named `planned` by MOTIR-6328 and flip to `enforced` in the change whose read first asserts them.
 
 ---
 

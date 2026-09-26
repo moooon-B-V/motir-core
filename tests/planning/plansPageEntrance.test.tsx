@@ -52,7 +52,13 @@ vi.mock('@/lib/services/projectAccessService', () => ({
   projectAccessService: { getCapabilities },
 }));
 vi.mock('@/lib/services/planSessionsService', () => ({
-  planSessionsService: { listSessions, countSessionsByPlanState, getSessionRow: vi.fn() },
+  planSessionsService: {
+    listSessions,
+    countSessionsByPlanState,
+    getSessionRow: vi.fn(),
+    // MOTIR-6334 — the room's views; one view keeps these renders switch-free.
+    roomAccess: async () => ({ views: ['project'], canAuthor: true }),
+  },
 }));
 // The row view-model builder formats relative times; the entrance is not its
 // business, so it is stubbed to the identity of "one row per session".
@@ -139,11 +145,13 @@ describe('/plans carries ONE Plan-with-AI entrance (MOTIR-3237)', () => {
 
     expect(head).toBeDefined();
     expect(launchers(head)).toHaveLength(0);
-    // The `justify-between` layout existed ONLY to push the pill to the far end.
-    // Asserting its absence is what stops the pill coming back with the layout
-    // that makes room for it.
+    // ⚠️ AMENDED (MOTIR-6334): the header is a ROW again — `justify-between` —
+    // because design MOTIR-6327 puts the Mine / Project switch at its right, the
+    // same place on all three rooms. What this test guards is unchanged: the pill
+    // does not come back. The row's far end holds the view switch or nothing.
     const className = String((head!.props as { className?: string }).className ?? '');
-    expect(className).not.toContain('justify-between');
+    expect(className).toContain('justify-between');
+    expect(launchers(head)).toHaveLength(0);
     expect(walk(head).some((el) => el.type === 'h1')).toBe(true);
   });
 

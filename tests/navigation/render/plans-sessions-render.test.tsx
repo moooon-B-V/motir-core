@@ -38,7 +38,13 @@ vi.mock('@/lib/services/projectAccessService', () => ({
   projectAccessService: { getCapabilities },
 }));
 vi.mock('@/lib/services/planSessionsService', () => ({
-  planSessionsService: { listSessions, countSessionsByPlanState, getSessionRow },
+  planSessionsService: {
+    listSessions,
+    countSessionsByPlanState,
+    getSessionRow,
+    // MOTIR-6334 — the room's views; one view keeps these renders switch-free.
+    roomAccess: async () => ({ views: ['project'], canAuthor: true }),
+  },
 }));
 
 import PlansPage from '@/app/(authed)/plans/page';

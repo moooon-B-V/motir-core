@@ -121,6 +121,10 @@ describe('GET /api/v1/dispatch-runs/{id}/close-out-prompt', () => {
         projectId,
         command: opts.scope ? 'run_scope' : 'auto',
         status: 'running',
+        // The caller STARTED the run — the agent that reads a run's close-out
+        // prompt is the one that ran it, and a token without `run:view_any`
+        // reads only its own runs (MOTIR-6331).
+        createdById: caller.user.id,
         ...(opts.scope ? { scopeWorkItemId: story.id } : {}),
         cards: {
           create: [

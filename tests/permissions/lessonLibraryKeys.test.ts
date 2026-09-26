@@ -67,6 +67,8 @@ describe('the catalog carries both keys, enforced, in the project domain', () =>
     // in lib/projects/access.ts are part of THIS card rather than the route's:
     // there is no moment where the catalog advertises a key nothing resolves
     // through.
+    // (MOTIR-6328 parked `plan:view_any` / `run:view_any` here for two commits;
+    // MOTIR-6330 and MOTIR-6331 wired them and emptied it.)
     expect([...PLANNED_PERMISSIONS]).toEqual([]);
     expect([...ENFORCED_PERMISSIONS].sort()).toEqual([...PERMISSIONS].sort());
   });

@@ -23,7 +23,7 @@ import {
 } from '@/lib/permissions/errors';
 import { MAX_CUSTOM_ROLES_PER_PROJECT, MAX_ROLE_NAME_LENGTH } from '@/lib/permissions/limits';
 import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
-import type { PermissionKey } from '@/lib/permissions/catalog';
+import { isEnforced, type PermissionKey } from '@/lib/permissions/catalog';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -223,7 +223,7 @@ describe('a permission no gate consults can never be granted', () => {
       (key) => key !== synthetic,
     );
     expect(derived.has(synthetic)).toBe(false);
-    for (const key of ROLE_GATED_PERMISSIONS) {
+    for (const key of ROLE_GATED_PERMISSIONS.filter((k) => isEnforced(k))) {
       expect(derived.has(key), `${key} was dropped`).toBe(true);
     }
 
@@ -231,7 +231,12 @@ describe('a permission no gate consults can never be granted', () => {
     // `origin/main` — the grantable set IS the whole role-gated set, so the
     // check refuses nothing in practice today. (MOTIR-5305 parked
     // `approval:view_any` here as the first real refusal; MOTIR-5301 enforced it.)
-    expect([...grantablePermissionKeys()].sort()).toEqual([...ROLE_GATED_PERMISSIONS].sort());
+    // (MOTIR-6328 parks `plan:view_any` / `run:view_any` the same way until
+    // MOTIR-6330 / MOTIR-6331 enforce them, so the comparison names the
+    // enforced role-gated keys rather than assuming every one is.)
+    expect([...grantablePermissionKeys()].sort()).toEqual(
+      ROLE_GATED_PERMISSIONS.filter((k) => isEnforced(k)).sort(),
+    );
   });
 
   it('a custom role may be granted `approval:view_any` — the room follows the key, not a role (MOTIR-5301)', async () => {
@@ -242,8 +247,9 @@ describe('a permission no gate consults can never be granted', () => {
 
   it('every role-gated key IS accepted, so the guard is not over-broad', async () => {
     const fx = await build('perm-all');
-    const role = await createRole(fx, 'Everything', [...ROLE_GATED_PERMISSIONS]);
-    expect(role.permissions.sort()).toEqual([...ROLE_GATED_PERMISSIONS].sort());
+    const grantable = ROLE_GATED_PERMISSIONS.filter((k) => isEnforced(k));
+    const role = await createRole(fx, 'Everything', grantable);
+    expect(role.permissions.sort()).toEqual([...grantable].sort());
   });
 
   it('a duplicate key in the request is de-duplicated, not an error', async () => {

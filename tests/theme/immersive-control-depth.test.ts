@@ -200,9 +200,11 @@ describe('3D / Immersive — control depth', () => {
     // field can never be lifted by it.
     expect(DEPTH_BLOCK).toContain('button.rounded-\\(--radius-input\\)');
     expect(DEPTH_BLOCK).not.toContain('input.rounded-\\(--radius-input\\)');
-    // …and the field itself gets an INSET.
+    // …and the field itself gets an INSET — its first depth layer, after the
+    // Tailwind ring layers every 3D shadow leads with so a focus ring survives
+    // (MOTIR-6440, `immersiveRingSurvivesDepth.test.ts`).
     const recessed = DEPTH_BLOCK.slice(DEPTH_BLOCK.indexOf("[data-surface='input']"));
-    expect(recessed).toMatch(/box-shadow:\s*\n?\s*inset/);
+    expect(recessed).toMatch(/box-shadow:\s*(?:var\(--tw-[a-z-]+, 0 0 #0000\),\s*)*inset/);
   });
 
   it('adds no colour token — the style and palette axes stay disjoint', () => {

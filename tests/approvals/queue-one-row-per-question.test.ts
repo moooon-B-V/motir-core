@@ -203,7 +203,9 @@ describe('the Approvals room lists the card ONCE in its pending section', () => 
   it('in the full view — every card of the project, each once', async () => {
     const { both, mergeOnly, designOnly, theirs } = await seed();
 
-    const page = await approvalGatesService.listRecords(meCtx, { limit: 100 });
+    // Asked for explicitly: the room serves Mine by default to a reader who has
+    // rows there (MOTIR-6333), and this case is about the PROJECT view.
+    const page = await approvalGatesService.listRecords(meCtx, { limit: 100, view: 'project' });
 
     expect(page.fullView).toBe(true);
     expect(page.sections.awaiting.items.map((row) => row.gateId).sort()).toEqual(

@@ -220,11 +220,11 @@ describe('the two list reads agree about the same data', () => {
       fixture.ctx,
     );
 
-    const active = await dispatchRunService.listActiveRunsForProject(
+    const { runs: active } = await dispatchRunService.listActiveRunsForProject(
       fixture.projectIdentifier,
       fixture.ctx,
     );
-    const listed = await dispatchRunService.listRunsForProject(
+    const { runs: listed } = await dispatchRunService.listRunsForProject(
       fixture.projectIdentifier,
       { take: 25, statuses: ['running'] },
       fixture.ctx,

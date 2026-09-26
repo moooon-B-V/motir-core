@@ -340,6 +340,8 @@
       "attachment": "Attachments",
       "watcher": "Watchers",
       "approval": "Approvals",
+      "plan": "Plans",
+      "run": "Agent runs",
       "public_request": "Public requests",
       "member": "Members & access",
       "board": "Boards",
@@ -404,6 +406,14 @@
     "approval_view_any": {
       "label": "See every approval",
       "description": "See all of the project's approval records, including other people's. Without it you see the approvals routed to you and the ones you decided."
+    },
+    "plan_view_any": {
+      "label": "See every plan",
+      "description": "See all of the project's AI plans, including other people's. Without it you see the plans you started and the ones routed to you or decided by you."
+    },
+    "run_view_any": {
+      "label": "See every agent run",
+      "description": "See all of the project's agent runs, including other people's. Without it you see the runs you started."
     },
     "public_request_comment": {
       "label": "Comment on requests",
@@ -6693,6 +6703,14 @@
       "filteredEmptyDescription": "This project's other conversations are under All.",
       "loadMoreError": "Couldn’t load more conversations.",
       "loadMoreRetry": "Retry",
+      "viewAria": "Show your conversations or the whole project's",
+      "subtitleMine": "Planning conversations you started in {project}, and plans you were asked to decide",
+      "emptyMineTitle": "No planning conversations of yours yet",
+      "emptyMineDescription": "Conversations you start with Motir AI, and plans you are asked to decide, are listed here.",
+      "emptyDescriptionRead": "When someone in this project starts a planning conversation with Motir AI, it is listed here — with a plan or not yet.",
+      "filteredEmptyDescriptionMine": "Your other conversations are under All.",
+      "readFailedTitle": "We couldn’t load these conversations",
+      "readFailedBody": "Reload to try again.",
       "seed": {
         "label": "Re-plan of <mono>{key}</mono>",
         "verb": {
@@ -7795,7 +7813,10 @@
       "decidedFull": "No approval in this project has been decided yet.",
       "decidedOwn": "You have not decided an approval in this project yet."
     },
-    "decidedByOnGithub": "{label} · on GitHub"
+    "decidedByOnGithub": "{label} · on GitHub",
+    "viewAria": "Show your approvals or the whole project's",
+    "readFailedTitle": "We couldn’t load these approvals",
+    "readFailedBody": "Reload to try again."
   },
   "platformAdmin": {
     "shell": {
@@ -8469,8 +8490,16 @@
       "emptyTitle": "{key} has not been run as a scope yet",
       "emptyBody": "Run the whole work item with motir run {key}. A run that worked one of its children on its own shows on that child’s page.",
       "notFoundTitle": "No work item {key} in this project",
-      "notFoundBody": "It may have been deleted, or you may not have access to it. Runs of a deleted work item stay under All runs, listed by their label."
-    }
+      "notFoundBody": "It may have been deleted, or you may not have access to it. Runs of a deleted work item stay under All runs, listed by their label.",
+      "emptyMineTitle": "You haven’t run {key} as a scope yet"
+    },
+    "viewAria": "Show your runs or the whole project's",
+    "indexSubtitleMine": "Runs you started in {project} — current and past.",
+    "indexEmptyMineTitle": "You haven’t started a run yet",
+    "indexEmptyMineBody": "When you dispatch work with motir next, motir run or motir batch, your runs appear here — the one happening now, and every one before it.",
+    "indexEmptyBodyRead": "When work in this project is dispatched with motir next, motir run or motir batch, every run appears here — the one happening now, and every one before it.",
+    "noneRunningMine": "Nothing you started is running.",
+    "nonePastMine": "No run you started has finished yet."
   },
   "repositoryPicker": {
     "add": "Add repository",
@@ -9542,5 +9571,9 @@
       "export": "Download your data"
     },
     "readOnlyNote": "Read-only while {org} closes"
+  },
+  "roomView": {
+    "mine": "Mine",
+    "project": "Project"
   }
 }

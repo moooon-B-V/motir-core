@@ -120,7 +120,9 @@ test('a run claims a story, and you can watch the whole set advance', async ({
     await expect(page.getByRole('dialog')).toBeVisible();
     // ⚠️ THE URL STAYED ON `/runs`. An overlay, not a navigation — the whole
     // reason the list survives underneath.
-    await expect(page).toHaveURL(/\/runs\?run=/);
+    // (`view` rides along beside `run` once the reader has the Mine / Project
+    // switch — Story MOTIR-6179 · MOTIR-6335 — so `run` need not be first.)
+    await expect(page).toHaveURL(/\/runs\?(?:[^#]*&)?run=/);
     await beat();
   });
 
@@ -197,7 +199,8 @@ test('a run claims a story, and you can watch the whole set advance', async ({
     // dialog's must win. This collision is the likeliest regression here.
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toBeHidden();
-    await expect(page).toHaveURL(/\/runs$/);
+    // Closing drops `run` and keeps the reader's view (MOTIR-6335).
+    await expect(page).toHaveURL(/\/runs(?:\?view=(?:mine|project))?$/);
     // Both headed sections are still there — the partition survived, which is
     // the difference between an overlay and a page.
     await expect(page.getByRole('heading', { name: 'Past runs' })).toBeVisible();

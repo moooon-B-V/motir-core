@@ -15,7 +15,12 @@ import { grantFromExtra, contextFromExtra } from '@/lib/mcp/context';
 import { verifyMcpToken } from '@/lib/mcp/auth';
 import { authenticateApiToken } from '@/lib/apiTokens/routeAuth';
 import { TOOL_PERMISSIONS, CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
-import { GRANTABLE_PERMISSIONS, isGrantable } from '@/lib/tokens/grant';
+import {
+  GRANTABLE_PERMISSIONS,
+  RECORD_VIEW_PERMISSIONS,
+  ROOM_VIEW_FORWARD_KEYS,
+  isGrantable,
+} from '@/lib/tokens/grant';
 import { LEGACY_SCOPE_PERMISSIONS, LEGACY_TOKEN_SCOPES } from '@/lib/mcp/scopes';
 import { PERMISSIONS, permissionSlug } from '@/lib/permissions/catalog';
 import { V1_OPERATIONS } from '@/lib/api/v1/openapi/registry';
@@ -117,7 +122,15 @@ describe('SEAM 2 — the LEGACY-ROW promise, key by key, against real Postgres',
     });
 
     const verified = await apiTokensService.verify(token);
-    const expected = [...new Set(LEGACY_TOKEN_SCOPES.flatMap((s) => LEGACY_SCOPE_PERMISSIONS[s]))];
+    // MOTIR-6329 (`token-permissions.md` AMENDMENT 2): a FIXED grant that browses
+    // is read forward into the Plans and Runs rooms' view keys, so it keeps the two
+    // rooms once their reads assert them — the promise, carried, not broken.
+    const expected = [
+      ...new Set([
+        ...LEGACY_TOKEN_SCOPES.flatMap((s) => LEGACY_SCOPE_PERMISSIONS[s]),
+        ...ROOM_VIEW_FORWARD_KEYS,
+      ]),
+    ];
     expect([...verified.grant].sort()).toEqual([...expected].sort());
 
     // …and the gate agrees, tool by tool, rather than in aggregate.
@@ -177,7 +190,9 @@ describe('SEAM 2 — the LEGACY-ROW promise, key by key, against real Postgres',
       data: { scopes: ['read', 'utter-nonsense'] },
     });
     const verified = await apiTokensService.verify(token);
-    expect(verified.grant).toEqual(['project:browse']);
+    // `read` → browse, and browse reads forward into the two room view keys
+    // (MOTIR-6329); the nonsense value still contributes NOTHING.
+    expect(verified.grant).toEqual(['project:browse', 'plan:view_any', 'run:view_any']);
   });
 });
 
@@ -239,6 +254,9 @@ describe('GUARDS — the properties no single card owns', () => {
       ...Object.values(TOOL_PERMISSIONS),
       ...V1_OPERATIONS.map((o) => o.permission),
       'work_item:edit', // the acceptance publish
+      // The record-view keys the plan / run reads consult after their door,
+      // against the token's grant (MOTIR-6330 · `holdsRecordView`).
+      ...RECORD_VIEW_PERMISSIONS,
     ]);
     for (const key of GRANTABLE_PERMISSIONS) expect(asserted.has(key)).toBe(true);
     for (const key of asserted) expect(GRANTABLE_PERMISSIONS).toContain(key);

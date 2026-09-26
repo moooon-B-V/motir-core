@@ -87,10 +87,15 @@ export async function GET(
   const scope = url.searchParams.get('scope') ?? undefined;
 
   try {
-    const runs = await dispatchRunService.listRunsForProject(
+    // `view` asks WHOSE runs (MOTIR-6331); the service answers with the scope it
+    // SERVED, which the response carries so the client can say which it got.
+    const viewParam = url.searchParams.get('view');
+    const view = viewParam === 'mine' || viewParam === 'project' ? viewParam : undefined;
+    const { runs, scope: served } = await dispatchRunService.listRunsForProject(
       key,
       {
         take,
+        ...(view ? { view } : {}),
         ...(cursor ? { cursor } : {}),
         ...(statuses ? { statuses } : {}),
         ...(scope ? { scopeWorkItemKey: scope } : {}),
@@ -101,6 +106,7 @@ export async function GET(
     // the same shape every other cursor-paginated read in the product answers.
     return NextResponse.json({
       runs,
+      scope: served,
       nextCursor: runs.length === take ? (runs[runs.length - 1]?.id ?? null) : null,
     });
   } catch (err) {
