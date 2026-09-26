@@ -6625,7 +6625,13 @@
       "reason": "The reason given:\n“{reason}”",
       "supersedes": "The work items it superseded: {keys}",
       "keySeparator": ", ",
-      "ask": "Re-plan this work item from that reason."
+      "ask": "Re-plan this work item from that reason.",
+      "pick": {
+        "noContainer": "This choice has no open container, so Motir AI opened on the project.",
+        "chosen": "The option chosen: {label}\nBest if you want: {bestFor}",
+        "gates": "What this choice gates:\n{gates}",
+        "ask": "Plan this work with the option chosen."
+      }
     },
     "noProjectTitle": "No project selected",
     "noProjectDescription": "Pick or create a project from the switcher to plan with Motir AI.",

@@ -6621,7 +6621,13 @@
       "reason": "给出的理由：\n“{reason}”",
       "supersedes": "它曾取代的工作项：{keys}",
       "keySeparator": "、",
-      "ask": "请根据这个理由重新规划这个工作项。"
+      "ask": "请根据这个理由重新规划这个工作项。",
+      "pick": {
+        "noContainer": "这个选择没有未完成的上级工作项，所以 Motir AI 在项目上打开。",
+        "chosen": "选中的选项：{label}\n如果你更看重：{bestFor}",
+        "gates": "这个选择决定的工作：\n{gates}",
+        "ask": "请按选中的选项规划这项工作。"
+      }
     },
     "noProjectTitle": "未选择项目",
     "noProjectDescription": "从切换器中选择或创建一个项目，即可用 Motir AI 规划。",

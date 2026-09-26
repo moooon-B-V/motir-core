@@ -4,13 +4,20 @@ import type { Locale } from '@/lib/i18n/locales';
 import { getMessagesFor } from '@/lib/i18n/messages';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { replanOwedOf } from '@/lib/approvalGates/decisionRecord';
 import {
   REFUSAL_SEED_NAMESPACE,
-  isRefusalSeedGate,
+  anchorOf,
+  isPickSeedGate,
+  isPlanningSeedGate,
+  readChosenOption,
   refusalSeedComposerFor,
+  seedIntentOf,
+  type SeedAncestor,
   type SeedTranslator,
 } from '@/lib/planning/refusalSeed';
 import { PlanningSeedNotFoundError } from '@/lib/planChange/errors';
@@ -19,8 +26,10 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 import type { PlanningSeedDTO } from '@/lib/dto/planningSeed';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 
-// THE REFUSAL SEED read (story MOTIR-6068 · MOTIR-6208; `approval-gates.md`
-// §10f): addressed by the GATE ID, never by the reason's text in a URL. The gate
+// THE PLANNING SEED read (story MOTIR-6068 · MOTIR-6208, widened to a PICKED
+// option by story MOTIR-6069 · MOTIR-6433; `approval-gates.md` §10f and
+// `picked-option-planning.md`): addressed by the GATE ID, never by the reason's
+// or the option's text in a URL. The gate
 // row is read here, its work item is resolved through the SAME browse gate the
 // overlay's gate read uses, and the first turn is composed from the row by the
 // kind's composer (`REFUSAL_SEED_COMPOSERS`). READING NEVER WRITES: no session,
@@ -44,21 +53,39 @@ function translatorFor(locale: Locale): SeedTranslator {
   }) as unknown as SeedTranslator;
 }
 
+/** The work item's ancestors, root → parent, with each one's status CATEGORY. */
+async function ancestorsOf(workItemId: string, pctx: ProjectContext): Promise<SeedAncestor[]> {
+  const [rows, statuses] = await Promise.all([
+    withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+      workItemRepository.findAncestors(workItemId, pctx.workspaceId, tx),
+    ),
+    workflowsService.listStatusesByProject(pctx.projectId, pctx.workspaceId),
+  ]);
+  const categoryOf = new Map(statuses.map((s) => [s.key, s.category as string]));
+  return rows.map((row) => ({
+    key: row.identifier,
+    statusCategory: categoryOf.get(row.status) ?? null,
+    archived: row.archivedAt !== null,
+  }));
+}
+
 export const planningSeedService = {
   /**
-   * The seed a refused gate offers the planning surface, for THIS viewer.
+   * The seed a decided gate offers the planning surface, for THIS viewer — a
+   * refusal's re-plan, or a pick's forward plan (`intent`).
    *
    * ⚠️ ONE REFUSAL — {@link PlanningSeedNotFoundError} — for an unknown id, a
    * gate in another workspace or project (the viewer's active project is the
    * one the seeded turn will be sent in, and the seed guard refuses any other),
    * a card-less gate, a gate whose work item the viewer cannot browse, a gate
-   * that is not a refusal `isRefusalSeedGate` accepts, and a refused kind with no
-   * registered composer. Nothing in the answer tells them apart.
+   * `isPlanningSeedGate` does not accept (an awaiting or withdrawn choice among
+   * them), a chosen gate whose `chosenOption` stamp is missing or malformed, and a
+   * kind with no registered composer. Nothing in the answer tells them apart.
    *
    * `seededSessionId` is the viewer's own recent session seeded by this gate
    * (`findSeededSession`), else `null`.
    */
-  async getRefusalSeed(
+  async getPlanningSeed(
     gateId: string,
     pctx: ProjectContext,
     locale: Locale,
@@ -73,10 +100,13 @@ export const planningSeedService = {
       gate.workspaceId !== pctx.workspaceId ||
       gate.projectId !== pctx.projectId ||
       !gate.workItemId ||
-      !isRefusalSeedGate(gate)
+      !isPlanningSeedGate(gate)
     ) {
       throw new PlanningSeedNotFoundError();
     }
+    const pick = isPickSeedGate(gate);
+    const chosenOption = pick ? readChosenOption(gate.chosenOption) : null;
+    if (pick && !chosenOption) throw new PlanningSeedNotFoundError();
     const compose = refusalSeedComposerFor(gate.kind);
     if (!compose) throw new PlanningSeedNotFoundError();
 
@@ -93,11 +123,21 @@ export const planningSeedService = {
     // would be refused in this project, so no seed is offered for it here.
     if (item.projectId !== pctx.projectId) throw new PlanningSeedNotFoundError();
 
+    // THE ANCHOR. A refusal anchors on its own card; a pick walks UP from the
+    // choice's parent to the nearest ancestor that is not done (by CATEGORY) and
+    // not archived, else the project (`anchorOf`). The ancestor read is BOUND to
+    // the workspace, like the gate read — unbound, a policy-gated table narrows to
+    // nothing and every pick would silently anchor at the project.
+    const ancestors: SeedAncestor[] = pick ? await ancestorsOf(gate.workItemId, pctx) : [];
+    const anchorKey = anchorOf(gate, item.identifier, ancestors);
+
     const firstTurn = compose(
       {
         card: { key: item.identifier, title: item.title },
         gate,
         supersedesKeys: replanOwedOf(gate, item.descriptionMd)?.keys ?? [],
+        chosenOption,
+        anchorKey,
       },
       translatorFor(locale),
     );
@@ -106,7 +146,8 @@ export const planningSeedService = {
     return {
       gateId: gate.id,
       gateKind: gate.kind,
-      anchorKey: item.identifier,
+      intent: seedIntentOf(gate),
+      anchorKey,
       firstTurn,
       seededSessionId,
     };

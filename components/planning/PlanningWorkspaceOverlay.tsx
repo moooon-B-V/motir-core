@@ -229,20 +229,26 @@ export function PlanningWorkspaceOverlay({
       try {
         const found = await fetchPlanningSeed(gateId, controller.signal);
         if (controller.signal.aborted) return;
+        // A PICK's seed (`intent: 'plan'`, possibly anchored at the project —
+        // `anchorKey: null`) is not a re-plan, and this overlay only knows how to
+        // open a re-plan on a card. Until MOTIR-6435 resolves a plan-intent seed to
+        // a forward launch, it opens the same silent fall-back as an unreadable
+        // gate, rather than re-planning the choice's parent.
+        const anchorKey = found?.intent === 'replan' ? found.anchorKey : null;
         setSeed(
-          found === null
+          found === null || anchorKey === null
             ? { gateId, kind: 'fallback' }
             : found.seededSessionId
               ? {
                   gateId,
                   kind: 'resume',
-                  anchorKey: found.anchorKey,
+                  anchorKey,
                   sessionId: found.seededSessionId,
                 }
               : {
                   gateId,
                   kind: 'seeded',
-                  anchorKey: found.anchorKey,
+                  anchorKey,
                   firstTurn: found.firstTurn,
                 },
         );
