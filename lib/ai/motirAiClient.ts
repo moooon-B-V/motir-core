@@ -1746,3 +1746,69 @@ export function retireLesson(query: LessonWriteQuery): Promise<RawLesson> {
 export function applyLesson(query: LessonWriteQuery): Promise<RawLesson> {
   return lessonWrite(query, 'apply');
 }
+
+// ── The models a hosted run may use (MOTIR-6483) ────────────────────────────
+//
+// GET /v1/agent-models — motir-ai's OFFERED list for a hosted agent run and its
+// default (`docs/decisions/hosted-agent-run.md` §7): every model the gateway
+// serves, from a provider the hosted egress contract configures, that motir-ai
+// can bill in the agent lane. Ids are the gateway's BARE ids.
+//
+// Kept as one self-contained block — its types and parser live here rather than
+// in `./types` — so it stays a single hunk beside the other agent-run reads.
+
+/** One offered model, as motir-ai names it. */
+export interface AgentModel {
+  /** The gateway's bare id (`claude-opus-5-5`), never provider-prefixed (`toOpenCodeModel` adds that). */
+  id: string;
+  provider: string;
+}
+
+/**
+ * The offered list, or `unavailable`. ⚠️ `unavailable` is a STATE, never an
+ * empty list: a network error, a timeout, a non-2xx, an unconfigured client or
+ * a body that is not a model list must never read as "no models exist".
+ */
+export type AgentModelsRead =
+  | { state: 'ok'; models: AgentModel[]; default: string | null }
+  | { state: 'unavailable'; reason: string };
+
+function parseAgentModels(body: unknown): AgentModelsRead | null {
+  if (!body || typeof body !== 'object') return null;
+  const { models, default: defaultId } = body as { models?: unknown; default?: unknown };
+  if (!Array.isArray(models)) return null;
+  const parsed: AgentModel[] = [];
+  for (const m of models) {
+    const { id, provider } = (m ?? {}) as { id?: unknown; provider?: unknown };
+    if (typeof id !== 'string' || !id || typeof provider !== 'string') return null;
+    parsed.push({ id, provider });
+  }
+  if (defaultId !== null && defaultId !== undefined && typeof defaultId !== 'string') return null;
+  return { state: 'ok', models: parsed, default: defaultId ?? null };
+}
+
+/**
+ * GET /v1/agent-models over the service credential. TOTAL: every failure is
+ * `{ state: 'unavailable' }` with its reason, so the caller decides what an
+ * unanswered question means (the start path refuses; the picker disables).
+ * No cache — see `hostedRunModelService`.
+ */
+export async function getAgentModels(): Promise<AgentModelsRead> {
+  try {
+    const { url, serviceToken } = config();
+    const res = await aiFetch(`${url}/v1/agent-models`, {
+      method: 'GET',
+      headers: authHeaders(serviceToken),
+    });
+    if (!res.ok) return { state: 'unavailable', reason: `motir-ai answered ${res.status}` };
+    const parsed = parseAgentModels(await res.json().catch(() => null));
+    return (
+      parsed ?? {
+        state: 'unavailable',
+        reason: 'motir-ai answered a body that is not a model list',
+      }
+    );
+  } catch (err) {
+    return { state: 'unavailable', reason: describe(err) };
+  }
+}
