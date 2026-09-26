@@ -33,7 +33,9 @@ import en from '@/messages/en.json';
 // transcript's turn, the seeded session's row. `chapter()` / `beat()` only HOLD a state
 // already proven.
 
-test.describe.configure({ timeout: 480_000 });
+// 240s, not the lane's 480s: the paced run takes about 40s, and a hang must fail INSIDE
+// the shard's budget so its report and trace upload (a cancelled shard leaves none).
+test.describe.configure({ timeout: 240_000 });
 
 const JOBS_FIXTURE = process.env['MOTIR_AI_JOBS_FIXTURE_PATH']!;
 
@@ -127,7 +129,7 @@ async function seededUserTurns(gateId: string): Promise<number> {
 
 async function closePlanner(page: Page): Promise<void> {
   await page.keyboard.press('Escape');
-  await page.waitForURL(plannerClosed);
+  await page.waitForURL(plannerClosed, { timeout: FIRST_PAINT_MS });
   await expect(rail(page)).toHaveCount(0);
 }
 
@@ -154,9 +156,14 @@ async function stubAiAccess(page: Page): Promise<void> {
 /** Open the choice full screen from the To-approve list, pick OPTION and confirm. */
 async function chooseOption(page: Page, key: string): Promise<Locator> {
   await page.goto('/workbench?tab=approvals');
+  // SIGNED IN, on the workbench — never the sign-in page or the public site a lost
+  // session redirects to (the failure this names instead of hanging on a click).
+  await expect(page, `landed on ${page.url()}`).toHaveURL(/\/workbench/, {
+    timeout: FIRST_PAINT_MS,
+  });
   await rowFor(page, key)
     .getByRole('button', { name: en.workbench.approvals.review, exact: true })
-    .click();
+    .click({ timeout: FIRST_PAINT_MS });
   const dialog = overlayFor(page, key);
   await expect(dialog).toHaveCount(1, { timeout: FIRST_PAINT_MS });
   // The PORT is mounted before anything is asserted about it. The option's ROW is the
@@ -164,15 +171,15 @@ async function chooseOption(page: Page, key: string): Promise<Locator> {
   // checked radio is the committed signal.
   const row = dialog.locator('label[data-option-id]').filter({ hasText: OPTION });
   await expect(row).toBeVisible({ timeout: FIRST_PAINT_MS });
-  await row.click();
+  await row.click({ timeout: FIRST_PAINT_MS });
   await expect(dialog.getByRole('radio', { name: new RegExp(escapeRe(OPTION)) })).toBeChecked();
   await dialog
     .getByRole('button', { name: fill(ch.verb.choose, { label: OPTION }), exact: true })
-    .click();
+    .click({ timeout: FIRST_PAINT_MS });
   const action = serverAction(page);
   await dialog
     .getByRole('button', { name: fill(ch.confirm.proceed, { label: OPTION }), exact: true })
-    .click();
+    .click({ timeout: FIRST_PAINT_MS });
   expect((await action).status()).toBe(200);
   return dialog;
 }
@@ -277,6 +284,14 @@ test.describe('a picked option is planned', () => {
     await stubAiAccess(page);
   });
 
+  // On a failure, say WHERE the page ended up: a lost session reads as the public site.
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      await testInfo.attach('final-url', { body: page.url(), contentType: 'text/plain' });
+      console.warn(`[picked-option] ${testInfo.title} ended on ${page.url()}`);
+    }
+  });
+
   test('pick an option, say yes — the planner starts on the story with the follow-up already sent', async ({
     page,
     chapter,
@@ -300,8 +315,10 @@ test.describe('a picked option is planned', () => {
       gateId = await gateOf(choice);
       const read = seedRead(page, gateId);
       const sent = anchoredSend(page, story.id);
-      await band.getByRole('button', { name: planAsk.yes, exact: true }).click();
-      await page.waitForURL(plannerOpenFrom(gateId));
+      await band
+        .getByRole('button', { name: planAsk.yes, exact: true })
+        .click({ timeout: FIRST_PAINT_MS });
+      await page.waitForURL(plannerOpenFrom(gateId), { timeout: FIRST_PAINT_MS });
       expect((await read).status()).toBe(200);
       // THE AUTOMATIC SEND — on the STORY, not the choice card; nobody pressed Send.
       expect((await sent).status()).toBe(200);
@@ -335,8 +352,8 @@ test.describe('a picked option is planned', () => {
       await page
         .getByRole('navigation', { name: 'Primary' })
         .getByRole('link', { name: 'Plans' })
-        .click();
-      await page.waitForURL('**/plans');
+        .click({ timeout: FIRST_PAINT_MS });
+      await page.waitForURL('**/plans', { timeout: FIRST_PAINT_MS });
       const seedLink = page
         .getByRole('list', { name: 'Planning conversations' })
         .getByTestId('plan-session-seed');
@@ -359,8 +376,8 @@ test.describe('a picked option is planned', () => {
         await expect(page.getByText(/planning owed/)).toHaveCount(0);
         await beat();
         const read = seedRead(page, gateId);
-        await door.click();
-        await page.waitForURL(plannerOpenFrom(gateId));
+        await door.click({ timeout: FIRST_PAINT_MS });
+        await page.waitForURL(plannerOpenFrom(gateId), { timeout: FIRST_PAINT_MS });
         expect((await read).status()).toBe(200);
         await expect(transcript(page)).toContainText(`The option chosen: ${OPTION}`, {
           timeout: FIRST_PAINT_MS,
@@ -388,8 +405,8 @@ test.describe('a picked option is planned', () => {
 
     const gateId = await gateOf(choice);
     const sent = anchoredSend(page, story.id);
-    await door.click();
-    await page.waitForURL(plannerOpenFrom(gateId));
+    await door.click({ timeout: FIRST_PAINT_MS });
+    await page.waitForURL(plannerOpenFrom(gateId), { timeout: FIRST_PAINT_MS });
     expect((await sent).status()).toBe(200);
     await expect(transcript(page)).toContainText(`The option chosen: ${OPTION}`, {
       timeout: FIRST_PAINT_MS,
@@ -405,8 +422,10 @@ test.describe('a picked option is planned', () => {
     await expect(band.getByText(planAsk.opensProject)).toBeVisible({ timeout: FIRST_PAINT_MS });
     const gateId = await gateOf(rootChoice);
     const sent = projectSend(page);
-    await band.getByRole('button', { name: planAsk.yes, exact: true }).click();
-    await page.waitForURL(plannerOpenFrom(gateId));
+    await band
+      .getByRole('button', { name: planAsk.yes, exact: true })
+      .click({ timeout: FIRST_PAINT_MS });
+    await page.waitForURL(plannerOpenFrom(gateId), { timeout: FIRST_PAINT_MS });
     expect((await sent).status()).toBe(200);
     await expect(transcript(page)).toContainText(
       en.planningWorkspace.refusalSeed.pick.noContainer,
@@ -423,15 +442,17 @@ test.describe('a picked option is planned', () => {
     await page.goto('/workbench?tab=approvals');
     await rowFor(page, second.identifier)
       .getByRole('button', { name: en.workbench.approvals.review, exact: true })
-      .click();
+      .click({ timeout: FIRST_PAINT_MS });
     const dialog = overlayFor(page, second.identifier);
     await expect(dialog).toHaveCount(1, { timeout: FIRST_PAINT_MS });
-    await dialog.getByRole('button', { name: ch.verb.noneOfThese, exact: true }).click();
+    await dialog
+      .getByRole('button', { name: ch.verb.noneOfThese, exact: true })
+      .click({ timeout: FIRST_PAINT_MS });
     await dialog.getByLabel(en.approvalGate.reason.choice.label).fill(NONE_REASON);
     const action = serverAction(page);
     await dialog
       .getByRole('button', { name: en.approvalGate.reason.choice.proceed, exact: true })
-      .click();
+      .click({ timeout: FIRST_PAINT_MS });
     expect((await action).status()).toBe(200);
 
     const band = dialog.getByRole('group', {
@@ -441,8 +462,10 @@ test.describe('a picked option is planned', () => {
     await expect(band).toBeVisible({ timeout: FIRST_PAINT_MS });
     await expect(pickAsk(dialog)).toHaveCount(0);
     const gateId = await gateOf(second);
-    await band.getByRole('button', { name: replanAsk.yes, exact: true }).click();
-    await page.waitForURL(plannerOpenFrom(gateId));
+    await band
+      .getByRole('button', { name: replanAsk.yes, exact: true })
+      .click({ timeout: FIRST_PAINT_MS });
+    await page.waitForURL(plannerOpenFrom(gateId), { timeout: FIRST_PAINT_MS });
     await expect(composer(page)).toHaveValue(new RegExp(`“${escapeRe(NONE_REASON)}”`), {
       timeout: FIRST_PAINT_MS,
     });
