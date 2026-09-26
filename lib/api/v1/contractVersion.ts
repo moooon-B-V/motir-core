@@ -625,5 +625,21 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.41.0` at `c6cf7e5b4`, so this claims `1.42.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
+ *
+ * - `1.43.0` — MOTIR-6538 adds `issueDispatchRunGitCredentials`:
+ *   `POST /api/v1/dispatch-runs/{id}/git-credential`, a running HOSTED run's git
+ *   credentials — one entry per repository of the run, each an installation token
+ *   of the Motir GitHub App that writes it, with the App's bot as author and the
+ *   dispatcher named only as `dispatchedBy`
+ *   (`docs/decisions/hosted-run-runs-the-cli-as-the-app.md` §5).
+ *
+ *   Additive: a NEW operation (§8's allowed list); no existing operation, field
+ *   or code changes meaning. It answers ONLY a hosted run's own credential
+ *   (`DISPATCH_RUN_TOKEN_OUT_OF_SCOPE`, 403, for any other token, a person's
+ *   included), so no person's grant is widened by it.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.42.0` at `a51c5476f`, so this claims `1.43.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the OPERATION.
  */
-export const V1_CONTRACT_VERSION = '1.42.0';
+export const V1_CONTRACT_VERSION = '1.43.0';

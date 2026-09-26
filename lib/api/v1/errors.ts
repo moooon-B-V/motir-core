@@ -156,6 +156,17 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // (MOTIR-688). Checked before the run is read, so it is not an existence
   // oracle: the answer is the same for a run that exists and one that does not.
   DISPATCH_RUN_TOKEN_OUT_OF_SCOPE: 403,
+  // ── MOTIR-6538, a hosted run's git credentials ─────────────────────────────
+  // 409 — the run ended between its read and the mint (a close racing the call).
+  // The same fact as DISPATCH_RUN_TERMINAL, raised from the mint's own re-read.
+  RUN_CREDENTIAL_RUN_NOT_LIVE: 409,
+  // 409 — a repository of the run can no longer be written by its App (the
+  // installation lost it, or its write permissions are not accepted). The run
+  // cannot go on; the message names every such repository and its fix.
+  hosted_repository_not_writable: 409,
+  // 503 — GitHub could not be reached, or the App a repository needs is not
+  // configured here: a Motir-side fault the run can retry, not a refusal.
+  run_git_credential_unavailable: 503,
   // 409 — two opens raced on one idempotency key. The ordinary repeat is not this
   // (it returns the existing run); this is the narrow window in which the unique
   // index is the arbiter, and it exists so a `P2002` never escapes as a bare 500.

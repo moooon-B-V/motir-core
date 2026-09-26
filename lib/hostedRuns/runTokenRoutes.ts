@@ -169,12 +169,11 @@ export const RUN_TOKEN_ROUTES: readonly RunTokenRoute[] = [
     calledBy: 'cli',
   },
   {
-    operationId: null,
+    operationId: 'issueDispatchRunGitCredentials',
     method: 'POST',
     path: '/api/v1/dispatch-runs/{id}/git-credential',
     binding: 'own_run',
     calledBy: 'git_credential_helper',
-    pendingCard: 'MOTIR-6538',
   },
 ];
 

@@ -2019,6 +2019,32 @@ export const dispatchRunAppendedSchema = z.object({
 });
 
 /**
+ * What `POST /api/v1/dispatch-runs/{id}/git-credential` answers (MOTIR-6538,
+ * `docs/decisions/hosted-run-runs-the-cli-as-the-app.md` §5): the run's git
+ * credentials, ONE ENTRY PER REPOSITORY of the run. Repositories written through
+ * one App installation share a token. The author is that App's bot — never the
+ * dispatcher, who is named only as `dispatchedBy`, for pull-request bodies.
+ *
+ * ⚠️ `token` is a live secret. It is answered to the run's own credential only,
+ * and nothing may log or echo it.
+ */
+export const dispatchRunGitCredentialsSchema = z.object({
+  credentials: z.array(
+    z.object({
+      /** `owner/name`. */
+      repository: z.string(),
+      token: z.string(),
+      /** ISO-8601; GitHub's own expiry, one hour from the mint. */
+      expiresAt: z.string(),
+      authorName: z.string(),
+      authorEmail: z.string(),
+    }),
+  ),
+  /** The dispatcher's Motir display name, or `null` when the run has none. */
+  dispatchedBy: z.string().nullable(),
+});
+
+/**
  * One card in the SET a run is opened with.
  *
  * ⚠️ THE PAIRING IS REFUSED AT THE EDGE, IN BOTH DIRECTIONS, and it mirrors the

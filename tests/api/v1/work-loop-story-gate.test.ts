@@ -193,6 +193,12 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     'The agent is the SUBJECT of that run, not its reporter, so it has no use for reading the ' +
     'record and a tool would have no caller. It takes `project:browse`, the key ' +
     '`dispatchRunService.getRun` asserts on every run read, so no permission is invented.',
+  issueDispatchRunGitCredentials:
+    "MOTIR-6538 — a run's git credentials, for the process AROUND the agent: the git " +
+    'credential helper in a hosted container fetches a fresh App installation token before a ' +
+    "clone, a push or a pull request. It answers ONLY a hosted run's own credential, which " +
+    'never reaches MCP (`verifyMcpToken` refuses a run-bound token), so a tool would have no ' +
+    "caller. It takes `work_item:edit`, the key the run's ingest already asserts.",
   getDispatchRunCloseOutPrompt:
     'MOTIR-5357 — the close-out prompt is a run READ for the process AROUND the agent: the CLI ' +
     'fetches it and hands it to the agent as its prompt, so the agent never calls for it and a ' +
@@ -264,7 +270,8 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // to test read (MOTIR-5358), both READS the CLI makes for the operator's loop.
     // 21 since MOTIR-5464: the REPAIR claim `motir fix` makes.
     // 22 since MOTIR-6558: the run READ a hosted run's CLI adopts its run by.
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(22);
+    // 23 since MOTIR-6538: a hosted run's git credentials, for its credential helper.
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(23);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {

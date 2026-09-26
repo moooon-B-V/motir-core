@@ -61,6 +61,7 @@ export declare const operation_getWorkItemDesign: ValidateFunction;
 export declare const operation_getWorkItemDispatchPrompt: ValidateFunction;
 export declare const operation_getWorkItemHowToTest: ValidateFunction;
 export declare const operation_getWorkItemPlan: ValidateFunction;
+export declare const operation_issueDispatchRunGitCredentials: ValidateFunction;
 export declare const operation_linkWorkItemPullRequest: ValidateFunction;
 export declare const operation_listFolders: ValidateFunction;
 export declare const operation_listProjectDesigns: ValidateFunction;
