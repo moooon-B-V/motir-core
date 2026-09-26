@@ -1394,7 +1394,7 @@ describe('validatePlanProposals — a blocked_by joins two items on the SAME LEV
     expect(err.message).toContain('X1');
     expect(err.message).toContain('sits 3 level(s)');
     expect(err.message).toContain(`MOTIR-${Y}`);
-    expect(err.message).toMatch(/which sits 2/);
+    expect(err.message).toMatch(/sits 2, so they are not on the same level/);
   });
 
   it('case 4 — a root bug filed in a folder, blocked_by a subtask, is refused (a folder adds no depth)', () => {
