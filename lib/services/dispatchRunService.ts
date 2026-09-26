@@ -26,6 +26,7 @@ import type {
   DispatchRunAppendedDto,
   DispatchRunCardDto,
   DispatchRunCloseOutPromptDto,
+  DispatchRunCostDto,
   DispatchRunDetailDto,
   DispatchRunDto,
   DispatchRunEventDto,
@@ -40,6 +41,7 @@ import {
   toDispatchRunScopeDto,
 } from '@/lib/mappers/dispatchRunMappers';
 import { assembleRunCloseOutPrompt } from '@/lib/dispatch/runCloseOutPrompt';
+import { getAgentRunUsage } from '@/lib/ai/motirAiClient';
 import { toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
 import { standingQueueFailures } from './deliveryVerdict';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
@@ -273,6 +275,28 @@ async function assertMayReadRun(
   if (holdsRecordView(held, ctx, 'run:view_any')) return;
   if (run.createdById !== null && run.createdById === ctx.userId) return;
   throw new DispatchRunNotFoundError(run.id);
+}
+
+/**
+ * A HOSTED run's token and credit cost, read from motir-ai by the run's own id
+ * (MOTIR-689; `docs/decisions/hosted-agent-run.md` §1). Zeroes when motir-ai has
+ * recorded no billed call yet (its 404); `null` when it could not be asked at
+ * all — a transport failure, a refusal or an unconfigured deployment — so an
+ * outage never reads as a run that cost nothing, and never fails the run page.
+ */
+async function readHostedRunCost(runId: string): Promise<DispatchRunCostDto | null> {
+  try {
+    const usage = await getAgentRunUsage(runId);
+    return {
+      inputTokens: usage?.inputTokens ?? 0,
+      outputTokens: usage?.outputTokens ?? 0,
+      cacheReadTokens: usage?.cacheReadTokens ?? 0,
+      cacheWriteTokens: usage?.cacheWriteTokens ?? 0,
+      credits: usage?.credits ?? 0,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export const dispatchRunService = {
@@ -836,7 +860,7 @@ export const dispatchRunService = {
    * is not small, and a per-leg read would be an N+1 on the run view's only query.
    */
   async getRunDetail(runId: string, ctx: ServiceContext): Promise<DispatchRunDetailDto> {
-    return withWorkspaceContext(
+    const detail = await withWorkspaceContext<DispatchRunDetailDto>(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
         const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
@@ -875,6 +899,11 @@ export const dispatchRunService = {
         };
       },
     );
+    // A HOSTED run's cost is read from motir-ai AFTER the transaction, never
+    // inside it: an outbound call must not hold a connection and the RLS
+    // binding open (MOTIR-689). A local run makes no call and carries no key.
+    if (detail.origin !== 'hosted') return detail;
+    return { ...detail, cost: await readHostedRunCost(detail.id) };
   },
 
   /**

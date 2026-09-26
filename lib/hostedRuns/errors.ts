@@ -33,3 +33,34 @@ export class HostedModelsUnavailableError extends Error {
     this.name = 'HostedModelsUnavailableError';
   }
 }
+
+// --- The hosted-run key wiring (MOTIR-689) ---
+
+/** Why a per-run key could not be minted. Every reason means the same thing to
+ *  the start path: fail the run BEFORE the container boots. */
+export type HostedRunKeyNotMintedReason =
+  /** This deployment lacks `MOTIR_GATEWAY_URL` or `MOTIR_RUN_KEY_MINT_SECRET`. */
+  | 'not_configured'
+  /** The gateway answered and refused (a 4xx, or its own `run_keys_not_configured`). */
+  | 'refused'
+  /** The gateway could not be reached, timed out, or failed. */
+  | 'unavailable'
+  /** The run is past its timeout, or the model is empty — nothing was asked. */
+  | 'invalid_request';
+
+/**
+ * A per-run key was NOT minted. The start path (MOTIR-690) receives it BEFORE
+ * booting anything: no container, no spend (`docs/decisions/hosted-agent-run.md`,
+ * and MOTIR-689's approach).
+ */
+export class HostedRunKeyNotMintedError extends Error {
+  constructor(
+    readonly reason: HostedRunKeyNotMintedReason,
+    message: string,
+    /** The gateway's own refusal code, when it answered one. */
+    readonly gatewayCode: string | null = null,
+  ) {
+    super(message);
+    this.name = 'HostedRunKeyNotMintedError';
+  }
+}

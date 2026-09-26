@@ -1199,6 +1199,68 @@ function parseRunTimings(value: unknown): CodeGraphRunTimings | null {
 }
 
 /** What motir-ai removed for ONE repo (`POST /v1/code-graph/offboard`). */
+// ── A hosted agent run's token and credit cost (MOTIR-689) ──────────────────
+
+/**
+ * What ONE hosted agent run cost, as motir-ai records it (MOTIR-6381's
+ * `AgentRunUsageDto`). The fields motir-core reads are the totals; the rest of
+ * the body is ignored.
+ */
+export interface RawAgentRunUsage {
+  coreRunId: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  credits: number;
+}
+
+const AGENT_RUN_USAGE_TOTALS = [
+  'inputTokens',
+  'outputTokens',
+  'cacheReadTokens',
+  'cacheWriteTokens',
+  'credits',
+] as const;
+
+/**
+ * GET /v1/agent-runs/:coreRunId/usage — one hosted run's token, cache and credit
+ * totals, keyed by its `DispatchRun.id` (`docs/decisions/hosted-agent-run.md` §1).
+ *
+ * ⚠️ A 404 IS `null`, NEVER AN ERROR: motir-ai answers it for a run whose agent
+ * has not yet made a billed call, which is the ordinary state of a run that has
+ * just booted. Every OTHER failure throws — transport and deadline as
+ * {@link MotirAiUnavailableError}, a non-2xx as its §5 typed error, a body that
+ * carries no numeric totals as `MotirAiUnavailableError` — so a caller can never
+ * read "could not ask" as "cost nothing".
+ */
+export async function getAgentRunUsage(coreRunId: string): Promise<RawAgentRunUsage | null> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/agent-runs/${encodeURIComponent(coreRunId)}/usage`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as Record<string, unknown> | null;
+  if (!body || typeof body !== 'object') {
+    throw new MotirAiUnavailableError('agent-run usage answered with no body');
+  }
+  for (const key of AGENT_RUN_USAGE_TOTALS) {
+    if (typeof body[key] !== 'number' || !Number.isFinite(body[key])) {
+      throw new MotirAiUnavailableError(`agent-run usage answered without a numeric ${key}`);
+    }
+  }
+  return {
+    coreRunId: typeof body['coreRunId'] === 'string' ? body['coreRunId'] : coreRunId,
+    inputTokens: body['inputTokens'] as number,
+    outputTokens: body['outputTokens'] as number,
+    cacheReadTokens: body['cacheReadTokens'] as number,
+    cacheWriteTokens: body['cacheWriteTokens'] as number,
+    credits: body['credits'] as number,
+  };
+}
+
 export interface CodeGraphOffboardRepoResult {
   repoRef: string;
   snapshotObjectsDeleted: number;

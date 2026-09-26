@@ -150,9 +150,32 @@ export interface DispatchRunCardWithDeliveriesDto extends DispatchRunCardDto {
   deliveries: WorkItemDeliveryDto[];
 }
 
+/**
+ * What a HOSTED run cost in model tokens and credits (MOTIR-689), read from
+ * motir-ai's per-run usage (`GET /v1/agent-runs/:coreRunId/usage`), keyed by the
+ * run's own id (`docs/decisions/hosted-agent-run.md` §1).
+ *
+ * ⚠️ A READ, NEVER A COLUMN: `DispatchRun` carries no cost (MOTIR-1801). Zeroes
+ * mean motir-ai has recorded no billed call for the run yet. Machine time is not
+ * here — it is the fleet meter's (MOTIR-6448).
+ */
+export interface DispatchRunCostDto {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  credits: number;
+}
+
 /** The run as the BROWSER reads it — the header, its set, and what each leg shipped. */
 export interface DispatchRunDetailDto extends Omit<DispatchRunDto, 'cards'> {
   cards: DispatchRunCardWithDeliveriesDto[];
+  /**
+   * A HOSTED run's token and credit cost (MOTIR-689). ABSENT on a local run,
+   * which is billed nowhere Motir can read and makes no such call. `null` on a
+   * hosted run means motir-ai could not be asked — never "cost nothing".
+   */
+  cost?: DispatchRunCostDto | null;
 }
 
 /**
