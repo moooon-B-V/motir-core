@@ -50,6 +50,13 @@ async function closeRun(headers: Record<string, string>, id: string): Promise<Re
   });
 }
 
+async function readRun(headers: Record<string, string>, id: string): Promise<Response> {
+  const { GET } = await import('@/app/api/v1/dispatch-runs/[id]/route');
+  return GET(new Request(`${BASE}/dispatch-runs/${id}`, { headers }), {
+    params: Promise.resolve({ id }),
+  });
+}
+
 async function dispatchPrompt(headers: Record<string, string>, key: string): Promise<Response> {
   const { GET } = await import('@/app/api/v1/work-items/[key]/dispatch-prompt/route');
   return GET(new Request(`${BASE}/work-items/${key}/dispatch-prompt`, { headers }), {
@@ -142,6 +149,32 @@ describe('a hosted run credential at the /api/v1 doors (MOTIR-688)', () => {
     });
   });
 
+  describe('MOTIR-6558 — it READS its own run, which is how the CLI in its container adopts it', () => {
+    it('reads its OWN run with the set the server opened it with (200)', async () => {
+      const res = await readRun(runHeaders, own.id);
+      expect(res.status).toBe(200);
+      const run = (await res.json()) as { id: string; cards: { key: string }[] };
+      expect(run.id).toBe(own.id);
+      expect(run.cards.map((c) => c.key)).toEqual([own.key]);
+    });
+
+    it('is refused 403 on ANOTHER run — and on one that does not exist, the same 403', async () => {
+      const res = await readRun(runHeaders, other.id);
+      expect(res.status).toBe(403);
+      expect(await codeOf(res)).toBe('DISPATCH_RUN_TOKEN_OUT_OF_SCOPE');
+
+      const missing = await readRun(runHeaders, 'no-such-run');
+      expect(missing.status).toBe(403);
+      expect(await codeOf(missing)).toBe('DISPATCH_RUN_TOKEN_OUT_OF_SCOPE');
+    });
+
+    it('the owner’s ordinary PAT reads every run, and 404s one that does not exist', async () => {
+      expect((await readRun(caller.headers, own.id)).status).toBe(200);
+      expect((await readRun(caller.headers, other.id)).status).toBe(200);
+      expect((await readRun(caller.headers, 'no-such-run')).status).toBe(404);
+    });
+  });
+
   describe('AC 2 — its own card’s dispatch prompt, and nothing else', () => {
     it('reads its OWN card’s prompt (200)', async () => {
       expect((await dispatchPrompt(runHeaders, own.key)).status).toBe(200);
@@ -201,6 +234,7 @@ describe('a hosted run credential at the /api/v1 doors (MOTIR-688)', () => {
       expect(append.status).toBe(401);
       expect((await closeRun(runHeaders, own.id)).status).toBe(401);
       expect((await dispatchPrompt(runHeaders, own.key)).status).toBe(401);
+      expect((await readRun(runHeaders, own.id)).status).toBe(401);
     });
 
     it('past its expiresAt', async () => {

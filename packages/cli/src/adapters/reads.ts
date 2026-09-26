@@ -4,6 +4,7 @@ import type {
   DispatchItem,
   DispatchRunAppended,
   DispatchRunOpened,
+  DispatchRunView,
   PlanJobState,
   PlanOutcome,
   PlanProposal,
@@ -693,6 +694,21 @@ export function toDispatchRunOpened(body: SuccessBody<'openDispatchRun'>): Dispa
     status: body.run.status,
     seq: body.run.seq,
     cards: body.run.cards.map((card) => ({ key: card.key, disposition: card.disposition })),
+  };
+}
+
+/** A run READ back, for a CLI adopting a run the server opened (MOTIR-6558). */
+export function toDispatchRunView(body: SuccessBody<'getDispatchRun'>): DispatchRunView {
+  return {
+    runId: body.id,
+    status: body.status,
+    command: body.command,
+    origin: body.origin,
+    model: body.model,
+    endedAt: body.endedAt,
+    cards: [...body.cards]
+      .sort((a, b) => a.position - b.position)
+      .map((card) => ({ key: card.key, position: card.position, disposition: card.disposition })),
   };
 }
 

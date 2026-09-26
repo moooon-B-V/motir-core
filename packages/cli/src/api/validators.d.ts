@@ -44,6 +44,7 @@ export declare const operation_createWorkItem: ValidateFunction;
 export declare const operation_createWorkItemComment: ValidateFunction;
 export declare const operation_createWorkItemLink: ValidateFunction;
 export declare const operation_deleteFolder: ValidateFunction;
+export declare const operation_getDispatchRun: ValidateFunction;
 export declare const operation_getDispatchRunCloseOutPrompt: ValidateFunction;
 export declare const operation_getFolder: ValidateFunction;
 export declare const operation_getMe: ValidateFunction;

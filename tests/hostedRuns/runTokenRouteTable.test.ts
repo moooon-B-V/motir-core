@@ -125,6 +125,8 @@ const RUN_PATH_FILES = [
   'closeOutHowToTest.ts',
   'ciWatch.ts',
   'session.ts',
+  // The hosted mode's own read of the run it adopts (MOTIR-6558).
+  'hostedMode.ts',
 ];
 
 /** Client method → the operations it calls, following `this.<method>` hops. */

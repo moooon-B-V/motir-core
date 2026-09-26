@@ -146,6 +146,15 @@ export const RUN_TOKEN_ROUTES: readonly RunTokenRoute[] = [
     calledBy: 'cli',
   },
   {
+    // The CLI's hosted mode reads the run the server opened, to ADOPT it with
+    // its legs in the run's own order (MOTIR-6558).
+    operationId: 'getDispatchRun',
+    method: 'GET',
+    path: '/api/v1/dispatch-runs/{id}',
+    binding: 'own_run',
+    calledBy: 'cli',
+  },
+  {
     operationId: 'getDispatchRunCloseOutPrompt',
     method: 'GET',
     path: '/api/v1/dispatch-runs/{id}/close-out-prompt',

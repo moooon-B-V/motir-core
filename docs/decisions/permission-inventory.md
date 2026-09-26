@@ -544,6 +544,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | Operation                                                | Verbs | Gate today                                         | Permission | Decision     | Why |
 | -------------------------------------------------------- | ----- | -------------------------------------------------- | ---------- | ------------ | --- |
 | `/api/v1/dispatch-runs`                                  | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
+| `/api/v1/dispatch-runs/[id]`                             | —     | RLS (the run's own workspace)                      | —          | token-scoped | R1  |
 | `/api/v1/dispatch-runs/[id]/close`                       | —     | RLS (the run's own workspace)                      | —          | token-scoped | R1  |
 | `/api/v1/dispatch-runs/[id]/close-out-prompt`            | —     | `assertPermission` (`project:browse`)              | —          | token-scoped | R1  |
 | `/api/v1/dispatch-runs/[id]/events`                      | —     | RLS (the run's own workspace)                      | —          | token-scoped | R1  |

@@ -611,5 +611,19 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.40.0` at `b4588d153`, so this claims `1.41.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD.
+ *
+ * - `1.42.0` — MOTIR-6558 adds `getDispatchRun` (`GET /api/v1/dispatch-runs/{id}`):
+ *   one run with its SET, the same `DispatchRun` component the ingest operations
+ *   already answer with. A hosted run is opened by the SERVER, and the `motir`
+ *   CLI in its container ADOPTS it (`hosted-run-runs-the-cli-as-the-app.md` §3) —
+ *   this read is how it learns the cards it owns, in the run's own order. A run's
+ *   own credential may read its own run and no other.
+ *
+ *   Additive: one new READ operation reusing an existing component (§8's allowed
+ *   list); nothing existing changes.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.41.0` at `c6cf7e5b4`, so this claims `1.42.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the OPERATION.
  */
-export const V1_CONTRACT_VERSION = '1.41.0';
+export const V1_CONTRACT_VERSION = '1.42.0';

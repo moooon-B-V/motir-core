@@ -772,6 +772,39 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
   }),
 
   defineOperation({
+    method: 'GET',
+    path: '/api/v1/dispatch-runs/{id}',
+    operationId: 'getDispatchRun',
+    summary: 'Get a dispatch run, with the SET of cards it owns',
+    description:
+      'READ one run and its set: every card in the run’s own order with its current ' +
+      'disposition, and the stream’s cursor. ' +
+      'It is how a CLI that did not open a run — a hosted run the SERVER opened, which the ' +
+      '`motir` CLI in its container then adopts (`docs/decisions/hosted-run-runs-the-cli-as-the-app.md` ' +
+      '§3) — learns the cards it owns and their order, instead of claiming a second set. ' +
+      'A hosted run’s own credential may read its own run and no other. ' +
+      'A read: it writes nothing and moves no status.',
+    permission: 'project:browse',
+    parameters: [
+      {
+        name: 'id',
+        in: 'path',
+        required: true,
+        description: 'The dispatch run’s id.',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: dispatchRunSchema },
+      description: 'The run with its set and its resume cursor.',
+    },
+    // 403 for a run credential naming another run; 404 for an unknown or
+    // cross-workspace run (no existence leak).
+    errorStatuses: [403, 404],
+  }),
+
+  defineOperation({
     method: 'POST',
     path: '/api/v1/dispatch-runs/{id}/events',
     operationId: 'appendDispatchRunEvents',

@@ -360,6 +360,11 @@ export function buildProgram(): Command {
       '--report-log',
       'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
     )
+    // ── The HOSTED mode (Story MOTIR-683 · MOTIR-6558) ──────────────────────
+    .option(
+      '--run-id <id>',
+      'Adopt a run Motir already opened (a hosted run) instead of opening one. Env: MOTIR_DISPATCH_RUN_ID.',
+    )
     .action(runCommand);
   // `motir fix <key>` (MOTIR-5465) — the repair of a red card, or one the merge queue
   // threw out (MOTIR-5803).

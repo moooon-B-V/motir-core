@@ -187,6 +187,12 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     'the event stream is the account of what the agent did, and an agent that could append to it ' +
     'could write its own account. The reporter is the process AROUND the agent, which speaks ' +
     '/api/v1. `work_item:edit`, mirroring the rest of the ingest.',
+  getDispatchRun:
+    'MOTIR-6558 — a run READ for the process AROUND the agent: the `motir` CLI in a hosted ' +
+    'container reads the run the server opened so it can ADOPT it, rather than open a second. ' +
+    'The agent is the SUBJECT of that run, not its reporter, so it has no use for reading the ' +
+    'record and a tool would have no caller. It takes `project:browse`, the key ' +
+    '`dispatchRunService.getRun` asserts on every run read, so no permission is invented.',
   getDispatchRunCloseOutPrompt:
     'MOTIR-5357 — the close-out prompt is a run READ for the process AROUND the agent: the CLI ' +
     'fetches it and hands it to the agent as its prompt, so the agent never calls for it and a ' +
@@ -257,7 +263,8 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // 20 since MOTIR-4906: the run's close-out prompt (MOTIR-5357) and the How
     // to test read (MOTIR-5358), both READS the CLI makes for the operator's loop.
     // 21 since MOTIR-5464: the REPAIR claim `motir fix` makes.
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(21);
+    // 22 since MOTIR-6558: the run READ a hosted run's CLI adopts its run by.
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(22);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {

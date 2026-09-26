@@ -675,6 +675,14 @@ describe('every operation’s REAL response validates against its declared schem
       { id: runId },
     );
 
+    // The READ a CLI adopting a server-opened hosted run makes (MOTIR-6558).
+    await drive(
+      'getDispatchRun',
+      () => import('@/app/api/v1/dispatch-runs/[id]/route'),
+      send(`/api/v1/dispatch-runs/${runId}`, 'GET'),
+      { id: runId },
+    );
+
     await drive(
       'getDispatchRunCloseOutPrompt',
       () => import('@/app/api/v1/dispatch-runs/[id]/close-out-prompt/route'),

@@ -776,10 +776,15 @@ export const dispatchRunService = {
   },
 
   /**
-   * The run WITH its set — the read the ingest operations answer with, and the
-   * one MOTIR-1793's browser routes will compose.
+   * The run WITH its set — the read the ingest operations answer with, the one
+   * MOTIR-1793's browser routes compose, and the one a CLI ADOPTING a
+   * server-opened hosted run reads its set from (`GET /api/v1/dispatch-runs/{id}`,
+   * MOTIR-6558).
    */
   async getRun(runId: string, ctx: ServiceContext): Promise<DispatchRunDto> {
+    // A hosted run's own credential reads its own run and no other — checked
+    // before the read, like every run-token route (MOTIR-6558).
+    assertRunTokenScope(runId, ctx);
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {

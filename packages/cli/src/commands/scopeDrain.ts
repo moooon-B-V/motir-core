@@ -20,7 +20,13 @@ import {
   type AutoOptions,
   type ResolvedAgent,
 } from './auto.js';
-import { findingsPolicyOf, resolveDispatchTarget, resolveDispatchTargets } from '../dispatch.js';
+import {
+  findingsPolicyOf,
+  materializeDispatchCheckouts,
+  renderMaterialization,
+  resolveDispatchTarget,
+  resolveDispatchTargets,
+} from '../dispatch.js';
 import { orderClaimedSet, unsatisfiedBlockers, type ScopeEdges } from '../scopedRun.js';
 import { nullDispatchRunReporter, type DispatchRunReporter } from '../dispatchRunReporter.js';
 import type { runAgent } from '../agentRun.js';
@@ -89,6 +95,13 @@ export interface ScopeDrainInput {
    * skipped ones entirely.
    */
   reporter?: DispatchRunReporter;
+  /**
+   * CLONE a leg's missing repositories before its session branch is made
+   * (MOTIR-6558), exactly as `motir auto` does (MOTIR-3588). ON for a hosted
+   * run, whose workspace starts empty; OFF for a local scope, whose checkouts
+   * are the operator's — so a local run is unchanged by this card.
+   */
+  materialize?: boolean;
 }
 
 /**
@@ -255,13 +268,37 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
         const targets = resolveDispatchTargets(
           session.link.dir,
           session.link.config,
-          (dispatch.targetRepos ?? []).map((r) => r.name),
+          // The clone URL travels WITH the name only when this drain clones
+          // (MOTIR-6558); a local scope keeps resolving by name alone.
+          (dispatch.targetRepos ?? []).map((r) =>
+            input.materialize ? { name: r.name, cloneUrl: r.cloneUrl } : r.name,
+          ),
         );
         const resolved =
           targets.length > 0
             ? targets
-            : [resolveDispatchTarget(session.link.dir, session.link.config, dispatch.targetRepo)];
+            : [
+                resolveDispatchTarget(
+                  session.link.dir,
+                  session.link.config,
+                  dispatch.targetRepo,
+                  input.materialize ? { cloneUrl: dispatch.targetRepoCloneUrl ?? null } : {},
+                ),
+              ];
         const target = resolved[0]!;
+
+        // ⚠️ MATERIALIZE BEFORE `repos.ensure` — `ensure` makes the session
+        // branch IN a real checkout, so a missing repository must arrive first,
+        // and a clone that fails halts the run rather than launching an agent at
+        // the workspace root.
+        if (input.materialize) {
+          const materialized = materializeDispatchCheckouts(session.link.dir, resolved, { run });
+          for (const line of renderMaterialization(materialized)) info(line);
+          if (materialized.failures.length > 0) {
+            stopReason = 'halted';
+            break drain;
+          }
+        }
 
         let repo: RepoSession[] | null = null;
         try {

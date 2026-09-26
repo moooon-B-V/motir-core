@@ -14,6 +14,7 @@ import {
   toDispatchPrompt,
   toDispatchRunAppended,
   toDispatchRunOpened,
+  toDispatchRunView,
   toExpandSubmitResult,
   toScopeClaim,
   toWorkItemClaim,
@@ -1000,6 +1001,23 @@ export interface DispatchRunOpened {
   cards: Array<{ key: string | null; disposition: string }>;
 }
 
+/**
+ * A run READ back — what a CLI that did not open the run needs to adopt it
+ * (MOTIR-6558): its lifecycle and its SET, in the run's own order.
+ *
+ * A card's `key` survives the work item's deletion and is null only when the row
+ * lost it, which no adopting caller can dispatch.
+ */
+export interface DispatchRunView {
+  runId: string;
+  status: string;
+  command: string;
+  origin: string;
+  model: string | null;
+  endedAt: string | null;
+  cards: Array<{ key: string | null; position: number; disposition: string }>;
+}
+
 export interface DispatchRunAppended {
   runId: string;
   appended: number;
@@ -1374,6 +1392,17 @@ export class MotirClient {
    * error the caller sees is the same either way — the FIRST read's, `/me`'s
    * when both fail — but the call no longer ends with its own work in flight.
    */
+  /**
+   * WHO the credential is — `getMe` ALONE (MOTIR-6558). A hosted run's own
+   * credential may read itself and nothing wider, so the hosted mode resolves
+   * the dispatcher here rather than through {@link whoami}, whose workspace list
+   * spans every workspace the person belongs to (`runTokenRoutes.ts`).
+   */
+  async me(): Promise<WhoamiResult['user']> {
+    const me = await this.v1.request('getMe');
+    return { id: me.user.id, name: me.user.name, email: me.user.email };
+  }
+
   async whoami(): Promise<WhoamiResult> {
     const [me, workspaces] = await Promise.allSettled([
       this.v1.request('getMe'),
@@ -1953,6 +1982,15 @@ export class MotirClient {
         },
       }),
     );
+  }
+
+  /**
+   * READ one run with its set (MOTIR-6558). The hosted mode reads the run the
+   * server opened so it can ADOPT it — its cards and their order — instead of
+   * opening, or claiming, a second.
+   */
+  async getDispatchRun(runId: string): Promise<DispatchRunView> {
+    return toDispatchRunView(await this.v1.request('getDispatchRun', { path: { id: runId } }));
   }
 
   /** APPEND a batch of run events. The server assigns each its `seq`. */
