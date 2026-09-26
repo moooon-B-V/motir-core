@@ -21,7 +21,11 @@ import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRep
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { parseDecisionRecord } from '@/lib/approvalGates/decisionRecord';
-import type { ConfirmedDecisionForPrompt } from '@/lib/dispatch/promptTemplate';
+import type {
+  ChangesRequestedForPrompt,
+  ConfirmedDecisionForPrompt,
+} from '@/lib/dispatch/promptTemplate';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 
 // The DISPATCH-PROMPT read (Story 7.9 · MOTIR-1802) — resolve everything the
 // canonical prompt is assembled from, then hand it to the PURE assembler
@@ -250,6 +254,7 @@ export const dispatchPromptService = {
       designReference,
       confirmedDecisions,
       errorEvidence,
+      ownRefusal,
     ] = await allSettledOrThrow([
       item.parentId
         ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -306,7 +311,24 @@ export const dispatchPromptService = {
       // access gate above has already admitted the item). `[]` is the ordinary
       // answer and renders nothing.
       monitorIssueService.listForWorkItem(item.id, ctx),
+      // The LATEST REFUSAL on this card (MOTIR-6422) — the reason its last attempt
+      // was sent back, when the latest decided gate is `changes_requested`. No
+      // refusal path: a refusal that could not be read never stops a dispatch.
+      approvalGatesService.latestRefusalFor(item.id, ctx).catch(() => null),
     ]);
+
+    // …and its RUN TARGET's, when this card is a leg of a run launched against
+    // another item — a story sent back at acceptance (MOTIR-6071) is re-run through
+    // its members' prompts. Read after the fan-out because it needs `runScope`.
+    const targetRefusal =
+      runScope && runScope.id !== item.id
+        ? await approvalGatesService.latestRefusalFor(runScope.id, ctx).catch(() => null)
+        : null;
+    const changesRequested: ChangesRequestedForPrompt[] = [];
+    if (ownRefusal) changesRequested.push({ ...ownRefusal, key: item.identifier });
+    if (targetRefusal && runScope) {
+      changesRequested.push({ ...targetRefusal, key: runScope.identifier });
+    }
 
     const targetRepo = dispatchRepo?.name ?? null;
     const targetRepos = await resolveDispatchRepos(repoDelivery, projectId, dispatchRepo, ctx);
@@ -327,6 +349,7 @@ export const dispatchPromptService = {
       designReference,
       confirmedDecisions,
       errorEvidence,
+      changesRequested,
       parent: parentRow ? { key: parentRow.identifier, title: parentRow.title } : null,
       projectName: project.name,
       projectKey: project.identifier,

@@ -53,7 +53,8 @@ const { designEvidenceService, designPrefix } =
   await import('@/lib/services/designEvidenceService');
 const { pullRequestMergeService } = await import('@/lib/services/pullRequestMergeService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
-const { ApprovalGatePrimaryPendingError } = await import('@/lib/approvalGates/errors');
+const { ApprovalGatePrimaryPendingError, ApprovalGateSupersededError } =
+  await import('@/lib/approvalGates/errors');
 const { APPROVAL_GATE_STATUS } = await import('@/lib/approvalGates/httpStatus');
 const { toGateRefusal } = await import('@/lib/approvalGates/refusals');
 const { POST: decideRoute } = await import('@/app/api/approval-gates/[id]/decide/route');
@@ -198,6 +199,7 @@ const decideDesign = (s: Scenario, gateId: string, decision: 'approve' | 'reques
       decision,
       source: 'ui',
       noteMd: decision === 'request_changes' ? 'Needs changes.' : null,
+      refusalVerdict: decision === 'request_changes' ? 'revise' : null,
       stamp: DECIDED_WITHOUT_A_READER,
     },
     s.ctx,
@@ -267,19 +269,30 @@ describe('MOTIR-5785 — the merge gate cannot be approved over an unanswered de
     expect(decided.gate.state).toBe('changes_requested');
   });
 
-  it('a design sent back (CHANGES_REQUESTED) still refuses the merge gate’s approve', async () => {
+  it('a design sent back (CHANGES_REQUESTED) withdraws the merge gate — its approve is refused', async () => {
+    // ⚠️ AMENDED — Story MOTIR-6070 · MOTIR-6423 (`design-refusal-verdict.md` §2). A
+    // design refusal now RETURNS THE CARD TO TO DO and withdraws the card's other
+    // awaiting questions as `pulled_back`, so the merge gate no longer survives the
+    // refusal to be refused as primary-pending: it is gone. What this test protects is
+    // unchanged — nothing merges over a refused design — and it now holds because the
+    // question itself was withdrawn.
     const s = await makeScenario('pp-sentback@example.com');
     const item = await card(s, 73);
     await publish(s, item.id, 'v1');
-    await decideDesign(s, (await awaiting(item.id, 'design_result'))!.id, 'request_changes');
     await green('sha-a', 73);
     const merge = (await awaiting(item.id, 'pull_request_approval'))!;
     expect(merge).toBeTruthy();
 
-    await expect(approveMergeGate(s, merge.id)).rejects.toBeInstanceOf(
-      ApprovalGatePrimaryPendingError,
+    await decideDesign(s, (await awaiting(item.id, 'design_result'))!.id, 'request_changes');
+    expect(await adminDb.approvalGate.findUniqueOrThrow({ where: { id: merge.id } })).toMatchObject(
+      { state: 'superseded', supersededCause: 'pulled_back' },
     );
-    expect(await stateOf(merge.id)).toBe('awaiting');
+    expect(await awaiting(item.id, 'pull_request_approval')).toBeNull();
+
+    fetchSpy.mockClear();
+    await expect(approveMergeGate(s, merge.id)).rejects.toBeInstanceOf(ApprovalGateSupersededError);
+    expect(await stateOf(merge.id)).toBe('superseded');
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('an approval of a SUPERSEDED result still refuses the merge gate’s approve', async () => {

@@ -24,6 +24,7 @@ import type { PlanTreeSkeletonItem } from '@/lib/dto/ai';
 import type { AttachmentDTO } from '@/lib/dto/attachments';
 import type { CommentDTO } from '@/lib/dto/comments';
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
+import type { LatestRefusalDTO } from '@/lib/dto/approvalGate';
 import { definePayload } from './define';
 
 // The WORK-ITEM payload shapes (Story 11.6 · Subtask 11.6.2 — MOTIR-2228).
@@ -136,6 +137,18 @@ export const mcpMonitorIssueLinkSchema = z
   // agent is TOLD to rely on are the ones named above.
   .catchall(z.unknown());
 
+/** `get_work_item`'s `latestRefusal` — {@link LatestRefusalDTO}, field for field. */
+const mcpLatestRefusalSchema = z.object({
+  gateId: z.string(),
+  kind: z.string(),
+  noteMd: z.string().nullable(),
+  decidedByLabel: z.string().nullable(),
+  decidedAt: z.string(),
+  decisionSource: z.enum(['ui', 'api', 'mcp', 'github']).nullable(),
+  refusalVerdict: z.enum(['revise', 're_plan']).nullable(),
+  subjectVersion: z.string().nullable(),
+});
+
 export const getWorkItemPayload = definePayload({
   schema: z
     .object({
@@ -157,6 +170,12 @@ export const getWorkItemPayload = definePayload({
        * projected answer, where a proposal has no link.
        */
       errors: z.array(mcpMonitorIssueLinkSchema).optional(),
+      /**
+       * The LATEST REFUSAL (Story MOTIR-6070 · MOTIR-6422) — present when the item's
+       * most recently DECIDED gate, of any kind, is `changes_requested`; `null`
+       * otherwise. Absent on the projected answer, where a proposal has no gate.
+       */
+      latestRefusal: mcpLatestRefusalSchema.nullable().optional(),
     })
     .catchall(z.unknown()) as unknown as z.ZodType<
     {
@@ -164,6 +183,7 @@ export const getWorkItemPayload = definePayload({
       folderId?: string | null;
       folderPath?: string[] | null;
       errors?: MonitorIssueLinkDto[];
+      latestRefusal?: LatestRefusalDTO | null;
     } & Record<string, unknown>
   >,
   probes: [

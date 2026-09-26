@@ -1,15 +1,20 @@
 import { createTranslator } from 'next-intl';
+import type { ApprovalGateKind } from '@/generated/prisma/client';
 import type { ProjectContext } from '@/lib/projects';
 import type { Locale } from '@/lib/i18n/locales';
 import { getMessagesFor } from '@/lib/i18n/messages';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { workflowsService } from '@/lib/services/workflowsService';
+import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { replanOwedOf } from '@/lib/approvalGates/decisionRecord';
 import {
   REFUSAL_SEED_NAMESPACE,
   isRefusalSeedGate,
+  refusalSeedAnchorsOnParent,
   refusalSeedComposerFor,
   type SeedTranslator,
 } from '@/lib/planning/refusalSeed';
@@ -42,6 +47,59 @@ function translatorFor(locale: Locale): SeedTranslator {
     messages: getMessagesFor(locale),
     namespace: REFUSAL_SEED_NAMESPACE,
   }) as unknown as SeedTranslator;
+}
+
+/**
+ * The seed's ANCHOR (`approval-gates.md` §10h): the card itself, or — for a kind
+ * that anchors on the card's parent (a design Re-plan) — that parent. A parentless
+ * (root or folder-filed) card, or a parent this viewer cannot browse in this
+ * project, anchors on the card itself; the session stamp accepts either.
+ */
+async function anchorKeyFor(
+  kind: ApprovalGateKind,
+  item: WorkItemDto,
+  pctx: ProjectContext,
+): Promise<string> {
+  if (!refusalSeedAnchorsOnParent(kind) || !item.parentId) return item.identifier;
+  try {
+    const parent = await workItemsService.getWorkItem(item.parentId, {
+      userId: pctx.userId,
+      workspaceId: pctx.workspaceId,
+    });
+    return parent.projectId === pctx.projectId ? parent.identifier : item.identifier;
+  } catch (err) {
+    if (isNotVisible(err)) return item.identifier;
+    /* v8 ignore next -- a real fault, never a fallback. */
+    throw err;
+  }
+}
+
+/**
+ * The keys of the OPEN work waiting on a card — not archived, `blocked_by` it, in
+ * this project, and outside its project's `done` category (`isTerminalStatus`, the
+ * predicate the design-result publish gate applies to the same edge). Read only
+ * for a kind that anchors on the parent: the decision kinds name no dependents.
+ */
+async function waitingKeysFor(
+  kind: ApprovalGateKind,
+  item: WorkItemDto,
+  pctx: ProjectContext,
+): Promise<string[]> {
+  if (!refusalSeedAnchorsOnParent(kind)) return [];
+  return withWorkspaceServiceContext(pctx.workspaceId, async (tx) => {
+    const dependents = (await workItemLinkRepository.findDependentKeys(item.id, tx)).filter(
+      (d) => d.projectId === pctx.projectId,
+    );
+    if (dependents.length === 0) return [];
+    const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+      [pctx.projectId],
+      pctx.workspaceId,
+      tx,
+    );
+    return dependents
+      .filter((d) => !isTerminalStatus(d, terminalByProject))
+      .map((d) => d.identifier);
+  });
 }
 
 export const planningSeedService = {
@@ -93,11 +151,17 @@ export const planningSeedService = {
     // would be refused in this project, so no seed is offered for it here.
     if (item.projectId !== pctx.projectId) throw new PlanningSeedNotFoundError();
 
+    const [anchorKey, waitingKeys] = await Promise.all([
+      anchorKeyFor(gate.kind, item, pctx),
+      waitingKeysFor(gate.kind, item, pctx),
+    ]);
     const firstTurn = compose(
       {
         card: { key: item.identifier, title: item.title },
         gate,
         supersedesKeys: replanOwedOf(gate, item.descriptionMd)?.keys ?? [],
+        anchorKey,
+        waitingKeys,
       },
       translatorFor(locale),
     );
@@ -106,7 +170,7 @@ export const planningSeedService = {
     return {
       gateId: gate.id,
       gateKind: gate.kind,
-      anchorKey: item.identifier,
+      anchorKey,
       firstTurn,
       seededSessionId,
     };

@@ -138,7 +138,9 @@ describe('POST /api/internal/ai/validate-plan', () => {
     const fx = await makeWorkItemFixture();
     const story = await mk(fx, 'Story', 'story');
     const child = await mk(fx, 'Child', 'subtask', story.id);
-    const outside = await mk(fx, 'Outside', 'task');
+    // One level down under its own root — the child's depth (MOTIR-6411).
+    const elsewhere = await mk(fx, 'Elsewhere', 'story');
+    const outside = await mk(fx, 'Outside', 'task', elsewhere.id);
     const planId = await planBlocking(fx, child.id, outside.id);
 
     const invalid = await validatePlanPOST(
@@ -160,6 +162,16 @@ describe('POST /api/internal/ai/validate-plan', () => {
           blockerSprintId: null,
         },
       ],
+      // The cross-parent half (MOTIR-6370), carried verbatim like the rest: the
+      // child's parent does not block the outsider's, so the edge is uncovered.
+      invalidEdges: [
+        {
+          item: child.identifier,
+          blockedBy: outside.identifier,
+          itemParent: story.identifier,
+          blockerParent: elsewhere.identifier,
+        },
+      ],
       advisories: [],
       softBlocks: [],
     });
@@ -179,6 +191,8 @@ describe('POST /api/internal/ai/validate-plan', () => {
       key: story.identifier,
       valid: true,
       blockers: [],
+      // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
+      invalidEdges: [],
       advisories: [],
       softBlocks: [],
     });
@@ -316,6 +330,8 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       // verbatim (MOTIR-3575) — which is what the generator's pre-commit
       // post-condition needs it to carry.
       rejections: [],
+      // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
+      invalidEdges: [],
     });
 
     // Invalid: a new root add gated by a not-done cross-project item.
@@ -367,6 +383,8 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
           blockerSprintId: null,
         },
       ],
+      // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
+      invalidEdges: [],
     });
   });
 });

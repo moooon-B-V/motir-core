@@ -35,6 +35,7 @@ import { isWorkItemType, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
 import { isDifficultyRefusedOnKind } from '@/lib/plans/validateProposedDifficulty';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
+import { crossLevelReason, isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
 import {
   FOLDER_REF_PREFIX,
   folderRefId,
@@ -203,6 +204,13 @@ export interface ValidatePlanProposalsInput {
    * one. The two inputs above would, missing, pass a cycle silently.
    */
   folderById?: ReadonlyMap<string, LiveFolderState>;
+  /**
+   * The COMMITTED ancestor chain (nearest first) of every live work item the
+   * plan's edges and placements name (MOTIR-6411) — what places a live end for
+   * the same-level check. OPTIONAL and permissive when absent: a live end with no
+   * chain is skipped, never guessed.
+   */
+  edgeAncestorsById?: ReadonlyMap<string, readonly string[]>;
 }
 
 /** One committed `is_blocked_by` edge: `blockedId` is blocked BY `blockerId`. */
@@ -1207,6 +1215,128 @@ function assertBlockedByGraphAcyclic(
   }
 }
 
+// ── THE LEVEL OF A `blocked_by` EDGE (Story MOTIR-6015 · MOTIR-6367 / 6411) ───
+//
+// A `blocked_by` joins two work items on the SAME LEVEL — the same depth below
+// their nearest common ancestor (`lib/workItems/edgeLevel.ts`, the POSITION rule
+// of MOTIR-6387). It may cross parents: nothing below compares PARENTS. What it
+// may not do is join two levels.
+//
+// Each end's position is read from the PROJECTION the plan would leave: an
+// `add` sits under its `parentRef` (a proposal or a live row; a folder or none
+// makes it a root), a `modify` that re-parents (`patch.parentRef`) sits under its
+// new parent, and any other live row keeps its committed ancestor chain
+// (`ancestorsById`, one batched read by the caller). `blockedByRemove` is never
+// judged, so a plan can always take a bad edge away.
+//
+// An end whose position is not known here is SKIPPED rather than guessed: an
+// unresolvable ref is `assertRefsResolvable`'s refusal, and a live row the caller
+// did not read is left to a gate that reads it.
+
+/**
+ * The PROJECTED ancestor chain (nearest first) of the node a ref names, or
+ * `undefined` when it cannot be placed here. A proposal's chain element is its
+ * `planItem:` node id, a live row's its own id — the same node ids the cycle walk
+ * uses, so two chains through one proposed parent share it.
+ */
+function projectedChain(
+  ref: string,
+  addsById: ReadonlyMap<string, ProposalNode>,
+  reparentOf: ReadonlyMap<string, string | null>,
+  ancestorsById: ReadonlyMap<string, readonly string[]>,
+  visiting: Set<string> = new Set(),
+): readonly string[] | undefined {
+  if (isFolderRef(ref)) return undefined;
+  const node = edgeNodeOf(ref);
+  if (visiting.has(node)) return undefined; // a parent cycle is another check's refusal
+  visiting.add(node);
+  const under = (parent: string | null | undefined): readonly string[] | undefined => {
+    if (!parent || isFolderRef(parent)) return [];
+    const above = projectedChain(parent, addsById, reparentOf, ancestorsById, visiting);
+    return above === undefined ? undefined : [edgeNodeOf(parent), ...above];
+  };
+  if (isTempRef(ref)) {
+    const add = addsById.get(tempRefId(ref));
+    return add ? under(add.parentRef) : undefined;
+  }
+  if (reparentOf.has(ref)) return under(reparentOf.get(ref));
+  return ancestorsById.get(ref);
+}
+
+/**
+ * Refuse the first `blocked_by` the plan would WRITE between two different
+ * levels, as `INVALID_PLAN_REF_GRAPH` / `cross_level`.
+ *
+ * `subjectIds`, when given, narrows WHICH proposals' edges are judged — the
+ * append judges only what the batch writes, so a plan closed before this rule
+ * existed is not locked out of an unrelated append. The refs still resolve
+ * against every proposal in `items`.
+ */
+export function assertBlockedByLevels(
+  items: readonly ProposalNode[],
+  liveById: ValidatePlanProposalsInput['liveById'],
+  ancestorsById: ReadonlyMap<string, readonly string[]>,
+  subjectIds?: ReadonlySet<string>,
+): void {
+  const addsById = new Map(items.filter((i) => i.op === 'add').map((a) => [a.id, a]));
+  const reparentOf = new Map<string, string | null>();
+  for (const item of items) {
+    if (item.op === 'modify' && item.workItemId && item.patch && 'parentRef' in item.patch) {
+      reparentOf.set(item.workItemId, item.patch.parentRef ?? null);
+    }
+  }
+  const chain = (ref: string) => projectedChain(ref, addsById, reparentOf, ancestorsById);
+  // Each end's PROJECTED kind — an add's proposed kind, else the live row's
+  // (Amendment 1: an epic pairs only with an epic). Undefined = not judged here.
+  const kindOf = (ref: string): string | undefined => {
+    if (isFolderRef(ref)) return undefined;
+    if (isTempRef(ref)) return addsById.get(tempRefId(ref))?.proposedFields?.kind ?? undefined;
+    return liveById.get(ref)?.kind;
+  };
+  for (const item of items) {
+    if (subjectIds && !subjectIds.has(item.id)) continue;
+    let subjectRef: string;
+    let refs: readonly string[];
+    if (item.op === 'add') {
+      subjectRef = addNodeId(item.id);
+      refs = item.blockedByRefs;
+    } else if (item.op === 'modify' && item.workItemId) {
+      subjectRef = item.workItemId;
+      refs = item.patch?.blockedByAdd ?? [];
+    } else {
+      continue;
+    }
+    if (refs.length === 0) continue;
+    const subjectChain = chain(subjectRef);
+    const subjectKind = kindOf(subjectRef);
+    if (subjectChain === undefined || subjectKind === undefined) continue;
+    const subjectEnd = { kind: subjectKind, ancestors: subjectChain };
+    for (const ref of refs) {
+      const blockerChain = chain(ref);
+      const blockerKind = kindOf(ref);
+      if (blockerChain === undefined || blockerKind === undefined) continue;
+      const blockerEnd = { kind: blockerKind, ancestors: blockerChain };
+      if (!isCrossLevelEdge(subjectEnd, blockerEnd)) continue;
+      const subject =
+        item.op === 'add'
+          ? `Proposal ${item.id} (${describeProposal(item)})`
+          : describeSubject(item, liveById);
+      const where = item.op === 'add' ? 'blockedByRefs' : 'patch.blockedByAdd';
+      throw new PlanRefGraphError(
+        'cross_level',
+        item.id,
+        `cross_level: ${crossLevelReason(
+          { ...subjectEnd, label: subject },
+          {
+            ...blockerEnd,
+            label: `its ${where} "${ref}" (${describeNode(edgeNodeOf(ref), items, liveById)})`,
+          },
+        )}`,
+      );
+    }
+  }
+}
+
 /**
  * THE GATE. Re-validate an approved proposal set independently, before it
  * becomes rows. Throws the first violation as a typed error — `PlanRefGraphError`
@@ -1256,6 +1386,12 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   //     where the specific reason is a dangling ref, and BEFORE the grammar,
   //     because a plan that cannot be wired is not a plan whose placements are
   //     worth discussing.
+  // 2a. Every edge the plan WRITES joins two items on the SAME LEVEL (Story
+  //     MOTIR-6015 · MOTIR-6367). After resolution, so a dangling ref is reported
+  //     as dangling; before the cycle walk, because an edge that may not exist
+  //     at all is the more specific reason than a ring it happens to close.
+  assertBlockedByLevels(items, liveById, input.edgeAncestorsById ?? new Map());
+
   assertBlockedByGraphAcyclic(items, liveById, existingBlockedByEdges);
 
   // 3. The kind-parent grammar — asked of `lib/issues/parentRules.ts`, the same
