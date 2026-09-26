@@ -98,7 +98,10 @@ export async function resolvePlanGateRoute(
   tx: Prisma.TransactionClient,
 ): Promise<string | null> {
   if (plan.createdById) return plan.createdById;
-  const owner = await workspaceMembershipRepository.findOwnerByWorkspace(plan.workspaceId, tx);
+  const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(
+    plan.workspaceId,
+    tx,
+  );
   return owner?.userId ?? null;
 }
 

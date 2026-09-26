@@ -114,7 +114,7 @@ describe('seam 1 — a transfer, read straight back through the reach resolver',
     ).toBe(true);
     expect(await organizationsService.resolveWorkspaceAccess(org.admin.id, vault.id)).toMatchObject(
       {
-        effectiveRole: 'admin',
+        effectiveRole: 'manager',
         isOrgOwner: false,
         reachesEveryWorkspace: true,
       },
@@ -132,7 +132,7 @@ describe('seam 1 — a transfer, read straight back through the reach resolver',
     // the project tier's permission input, on a private project.
     const newOwner = await organizationsService.resolveWorkspaceAccess(org.admin.id, vault.id);
     expect(newOwner).toMatchObject({
-      effectiveRole: 'owner',
+      effectiveRole: 'manager',
       workspaceRole: null,
       isOrgOwner: true,
     });
@@ -147,7 +147,7 @@ describe('seam 1 — a transfer, read straight back through the reach resolver',
     // longer as the Owner — at the access resolver and at the shell's read.
     expect(await organizationsService.resolveWorkspaceAccess(org.owner.id, vault.id)).toMatchObject(
       {
-        effectiveRole: 'admin',
+        effectiveRole: 'manager',
         isOrgOwner: false,
       },
     );

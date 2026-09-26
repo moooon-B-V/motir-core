@@ -348,7 +348,7 @@ export const autoPlanCadenceService = {
       if (!row) return { projectId: project.id, status: 'skipped', reason: 'project_gone' };
 
       const owner = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
-        workspaceMembershipRepository.findOwnerByWorkspace(project.workspaceId, tx),
+        workspaceMembershipRepository.findStandInManagerByWorkspace(project.workspaceId, tx),
       );
       if (!owner) return { projectId: project.id, status: 'skipped', reason: 'no_owner' };
 

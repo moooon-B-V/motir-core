@@ -190,17 +190,14 @@ export const twoFactorPolicyService = {
   },
 
   /**
-   * Set the workspace's require-2FA policy. Workspace manager (`owner` /
-   * `admin`) only — `isWorkspaceManager` from `lib/projects/roles.ts`.
+   * Set the workspace's require-2FA policy. Workspace Manager only —
+   * `isWorkspaceManager` from `lib/projects/roles.ts` (a legacy `owner` /
+   * `admin` resolves to the Manager, so both still pass).
    *
-   * ⚠️ NOT `lib/workspaces/roles.ts`'s `LEGACY_WORKSPACE_ROLE`, which carries only
-   * `owner` and `member` and predates the four-value `MemberRole` enum; gating
-   * on it would refuse a workspace `admin`.
-   *
-   * The org OWNER passes WITHOUT a workspace membership row, as they do
-   * everywhere else beneath the org tier: `resolveWorkspaceAccess` composes the
-   * org role into `effectiveRole`, reporting `owner` for them. An org Admin
-   * passes through their workspace membership's role (MOTIR-6308).
+   * The org OWNER and an org ADMIN pass WITHOUT a workspace membership row, as
+   * they do everywhere else beneath the org tier: `resolveWorkspaceAccess`
+   * composes the org role into `effectiveRole`, reporting `manager` for them
+   * (Story MOTIR-6168).
    *
    * The write is admitted by `workspace_mutate_active`
    * (`id = current_setting('app.workspace_id')`), which needs no user arm — so

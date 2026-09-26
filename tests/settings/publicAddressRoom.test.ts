@@ -125,10 +125,10 @@ describe('the two axes this room is gated on', () => {
     expect(PROJECT_SETTINGS_NAV.find((e) => e.id === 'public-address')?.permission).toBe(
       'project:manage_access',
     );
-    expect(roleMayManageAddress('owner')).toBe(true);
-    expect(roleMayManageAddress('admin')).toBe(true);
+    expect(roleMayManageAddress('manager')).toBe(true);
     expect(roleMayManageAddress('member')).toBe(false);
     expect(roleMayManageAddress('viewer')).toBe(false);
+    expect(roleMayManageAddress(null)).toBe(false);
   });
 
   it('the page asks the SERVICE for that predicate rather than restating the roles', () => {

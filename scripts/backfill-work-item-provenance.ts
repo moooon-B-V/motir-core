@@ -35,7 +35,7 @@
 import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { LEGACY_WORKSPACE_ROLE } from '@/lib/workspaces/roles';
+import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import {
   MOTIR_SEED_BURST_END,
   type ProvenanceBackfillBucket,
@@ -70,16 +70,13 @@ function parseArgs(argv: string[]): Args {
 }
 
 /**
- * The user whose GUCs the writes bind — the workspace OWNER (the creator tier),
+ * The user whose GUCs the writes bind — the workspace's stand-in Manager,
  * falling back to any member. Mirrors `backfill-default-boards.ts`: under the
  * dev/CI BYPASSRLS superuser the binding is moot, but binding a real member
  * keeps the path production-correct.
  */
 async function resolveActorUserId(workspaceId: string): Promise<string | null> {
-  const owner = await db.workspaceMembership.findFirst({
-    where: { workspaceId, role: LEGACY_WORKSPACE_ROLE.owner },
-    orderBy: { createdAt: 'asc' },
-  });
+  const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(workspaceId);
   if (owner) return owner.userId;
   const member = await db.workspaceMembership.findFirst({
     where: { workspaceId },

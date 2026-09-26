@@ -84,14 +84,18 @@ describe('the org Owner, in a workspace they never joined', () => {
     const { owner, sales } = await orgWithForeignWorkspace();
     expect(await readMembership(owner.id, sales.id)).toBeNull();
     const access = await organizationsService.resolveWorkspaceAccess(owner.id, sales.id);
-    expect(access).toMatchObject({ effectiveRole: 'owner', workspaceRole: null, isOrgOwner: true });
+    expect(access).toMatchObject({
+      effectiveRole: 'manager',
+      workspaceRole: null,
+      isOrgOwner: true,
+    });
   });
 
-  it('opens the workspace: the gates pass and the role reads owner', async () => {
+  it('opens the workspace: the gates pass and the role reads manager', async () => {
     const { owner, sales } = await orgWithForeignWorkspace();
     await expect(workspacesService.assertMembership(owner.id, sales.id)).resolves.toBeUndefined();
     await expect(projectsService.assertMembership(owner.id, sales.id)).resolves.toBeUndefined();
-    expect(await workspacesService.getMemberRole(owner.id, sales.id)).toBe('owner');
+    expect(await workspacesService.getMemberRole(owner.id, sales.id)).toBe('manager');
     expect((await workspacesService.getWorkspaceSummary(sales.id, owner.id))?.id).toBe(sales.id);
   });
 
@@ -197,7 +201,7 @@ describe('an org Admin reaches every workspace of the org as its Manager (MOTIR-
     });
     await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'private' } });
     expect(await organizationsService.resolveWorkspaceAccess(admin.id, later.id)).toMatchObject({
-      effectiveRole: 'admin',
+      effectiveRole: 'manager',
       workspaceRole: null,
       isOrgOwner: false,
       reachesEveryWorkspace: true,

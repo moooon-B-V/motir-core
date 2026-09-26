@@ -306,30 +306,53 @@ export const workspaceMembershipRepository = {
   },
 
   /**
-   * The workspace's OWNER membership — the oldest `role: 'owner'` row (a
-   * workspace is born with exactly one owner at creation; `orderBy createdAt
-   * asc` pins a deterministic pick should role changes ever produce more than
-   * one). Used by Story 6.12's public-submit path as the deterministic "intake
-   * reporter": a cross-org public submitter is NOT a workspace member, but
-   * `createWorkItem` requires the reporter to BE one (`assertReporterMember`),
-   * so the owner stands in as `reporterId` while the real submitter rides
-   * `submittedByUserId` (the 6.11.4 seam). Read-only → the `db` singleton
-   * (optional `tx` for a caller already inside a transaction). Returns null only
-   * for a workspace with no owner (an invariant violation the caller handles).
+   * The workspace's STAND-IN principal — a deterministic workspace MEMBER who acts
+   * as reporter / actor on the writes the system makes for the workspace (the
+   * public-intake reporter, a status rollup's transitioner, an OIDC caller). It
+   * must be a MEMBER, not the org Owner: `createWorkItem`'s `assertReporterMember`
+   * requires one, and the org Owner may hold no membership at all (MOTIR-6308).
+   *
+   * The rule (Story MOTIR-6168 · MOTIR-6462): the oldest MANAGER — a membership
+   * whose `workspace_role` is `manager`, or, while the column is still NULL in the
+   * deploy window, whose legacy `role` is `owner` / `admin` (the fallback
+   * `resolveWorkspaceRole` applies). The legacy `role` orders FIRST so the pick is
+   * the same person the old owner-only lookup returned wherever that owner row
+   * still holds the Manager role: `member_role` declares `owner` first, so
+   * `role asc` puts the founder ahead of a later Manager. A founder demoted out
+   * of the Manager role no longer matches, and the oldest remaining Manager
+   * stands in. Returns null only for a workspace with no Manager (an invariant
+   * violation the caller handles). Read-only → `dbRead` without a `tx`.
    */
-  async findOwnerByWorkspace(
+  async findStandInManagerByWorkspace(
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkspaceMembership | null> {
     const client = tx ?? dbRead;
     return client.workspaceMembership.findFirst({
-      where: { workspaceId, role: 'owner' },
-      orderBy: { createdAt: 'asc' },
+      where: {
+        workspaceId,
+        OR: [
+          { workspaceRole: 'manager' },
+          { workspaceRole: null, role: { in: ['owner', 'admin'] } },
+        ],
+      },
+      orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
     });
   },
 
   async create(
-    data: { userId: string; workspaceId: string; role: MemberRole },
+    data: {
+      userId: string;
+      workspaceId: string;
+      /**
+       * The workspace role (MOTIR-6462): every new membership carries one, so the
+       * resolver's NULL fallback is only ever reached by a row the still-serving
+       * old build wrote during the deploy window.
+       */
+      workspaceRole: WorkspaceRole;
+      /** The legacy column, still NOT NULL until the contract story drops it. */
+      role: MemberRole;
+    },
     tx: Prisma.TransactionClient,
   ): Promise<WorkspaceMembership> {
     return tx.workspaceMembership.create({ data });

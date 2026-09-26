@@ -3,7 +3,6 @@ import { isWorkspaceManager } from '@/lib/projects/roles';
 import {
   CUSTOM_WORKSPACE_ROLE_TIER,
   customRolePermissionsOf,
-  isLegacyOwnerRole,
   legacyToWorkspaceRole,
   resolveWorkspaceRole,
   WORKSPACE_ROLES,
@@ -31,12 +30,19 @@ describe('resolveWorkspaceRole — the deploy-window fallback lives in ONE funct
   });
 });
 
-describe('isWorkspaceManager — Manager, and the legacy values that map to it', () => {
-  it('answers true for manager, owner and admin, and false for everything else', () => {
-    for (const role of ['manager', 'owner', 'admin']) expect(isWorkspaceManager(role)).toBe(true);
-    for (const role of ['member', 'viewer', null, undefined, 'nonsense']) {
+describe('isWorkspaceManager — the Manager, and nothing else (MOTIR-6462)', () => {
+  it('answers true for manager only — a legacy value is resolved BEFORE it arrives', () => {
+    expect(isWorkspaceManager('manager')).toBe(true);
+    for (const role of ['member', 'viewer', null, undefined] as const) {
       expect(isWorkspaceManager(role)).toBe(false);
     }
+    // The legacy owner / admin reach it through the resolver, never directly.
+    expect(isWorkspaceManager(resolveWorkspaceRole({ workspaceRole: null, role: 'owner' }))).toBe(
+      true,
+    );
+    expect(isWorkspaceManager(resolveWorkspaceRole({ workspaceRole: null, role: 'admin' }))).toBe(
+      true,
+    );
   });
 });
 
@@ -57,10 +63,8 @@ describe('customRolePermissionsOf — the resolver’s custom-role input', () =>
 });
 
 describe('the constants', () => {
-  it('three built-ins, a custom role at the member tier, and the legacy owner predicate', () => {
+  it('three built-ins, and a custom role at the member tier', () => {
     expect(WORKSPACE_ROLES).toEqual(['manager', 'member', 'viewer']);
     expect(CUSTOM_WORKSPACE_ROLE_TIER).toBe('member');
-    expect(isLegacyOwnerRole('owner')).toBe(true);
-    expect(isLegacyOwnerRole('admin')).toBe(false);
   });
 });

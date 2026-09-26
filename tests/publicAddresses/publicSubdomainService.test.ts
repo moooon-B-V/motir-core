@@ -236,11 +236,24 @@ describe('authorisation — a WORKSPACE resource, not a project one', () => {
     ).rejects.toBeInstanceOf(SubdomainForbiddenError);
   });
 
-  it('lets an ADMIN write — the role `WORKSPACE_ROLE` does not carry', async () => {
-    // ⚠️ The regression this pins: `lib/workspaces/roles.ts`'s `WORKSPACE_ROLE`
-    // is a narrower legacy constant with only `owner` / `member`, so a gate
-    // written against it silently refuses every workspace admin. The gate is
-    // written against `MemberRole`, the schema's enum, instead.
+  it('lets a stored workspace MANAGER write (MOTIR-6462)', async () => {
+    const manager = await createTestUser();
+    await adminDb.workspaceMembership.create({
+      data: {
+        userId: manager.id,
+        workspaceId: fx.workspaceId,
+        role: 'member',
+        workspaceRole: 'manager',
+      },
+    });
+    await expect(
+      publicSubdomainService.claim(fx.workspaceId, 'acme', manager.id),
+    ).resolves.toMatchObject({ hostname: `acme.${BASE}` });
+  });
+
+  it('lets a legacy ADMIN write — it resolves to the Manager', async () => {
+    // A deploy-window row: `workspace_role` NULL, legacy `admin`. The gate asks
+    // the workspace role, and `resolveWorkspaceRole` maps it to `manager`.
     const admin = await createTestUser();
     await adminDb.workspaceMembership.create({
       data: { userId: admin.id, workspaceId: fx.workspaceId, role: 'admin' },

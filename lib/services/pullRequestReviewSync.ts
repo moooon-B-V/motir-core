@@ -176,7 +176,7 @@ async function resolveActors(
   // The reviewer is not a Motir member, so somebody else has to be entitled to write the
   // status. The workspace OWNER is the fallback `changeRequestStatusSync` already uses for a
   // webhook-driven move, and reusing it keeps one answer to "who writes when nobody clicked".
-  const owner = await workspaceMembershipRepository.findOwnerByWorkspace(workspaceId, tx);
+  const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(workspaceId, tx);
   return owner ? { writerUserId: owner.userId } : null;
 }
 

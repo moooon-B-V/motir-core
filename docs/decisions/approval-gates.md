@@ -4873,7 +4873,7 @@ plan and the same question.
   schema will not attribute the request to anyone. Routing is not attribution:
   `routedToId` records who was ASKED, not who requested it. **A null requester
   routes to the workspace OWNER**
-  (`workspaceMembershipRepository.findOwnerByWorkspace`), the identity the
+  (`workspaceMembershipRepository.findStandInManagerByWorkspace`), the identity the
   cadence watcher already acts as (`autoPlanCadenceService`). A gate routed to
   nobody would appear in no To approve at all, which is the exact failure this
   story exists to end. A workspace with no owner row (an invariant violation the

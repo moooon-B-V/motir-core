@@ -303,7 +303,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
     // (Same client as before; only the context changed.)
     await withWorkspaceContext({ userId: dev.id, workspaceId: s.workspace.id }, async (tx) => {
       await workspaceMembershipRepository.create(
-        { userId: dev.id, workspaceId: s.workspace.id, role: 'member' },
+        { userId: dev.id, workspaceId: s.workspace.id, workspaceRole: 'member', role: 'member' },
         tx,
       );
       await githubIdentityRepository.upsertForUser(

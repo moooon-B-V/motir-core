@@ -1,4 +1,4 @@
-import { type OrganizationRole, Prisma } from '@/generated/prisma/client';
+import { type OrganizationRole, Prisma, type WorkspaceRole } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
@@ -16,6 +16,7 @@ import {
   withWorkspaceContext,
 } from '@/lib/workspaces/context';
 import { isOrgOwnerRole, ORGANIZATION_ROLE } from '@/lib/organizations/roles';
+import { resolveWorkspaceRole } from '@/lib/workspaces/roles';
 import { orgCan } from '@/lib/organizations/capabilities';
 import {
   AlreadyOrgMemberError,
@@ -54,9 +55,9 @@ import type {
 // owns:
 //
 //   * the ACCESS GATE (resolveWorkspaceAccess) — org membership gates workspace
-//     access, and the org OWNER's role composes ABOVE the 6.4 workspace
-//     MemberRole (owner-equivalent on every workspace under the org; an org
-//     Admin reaches by membership since MOTIR-6308). A
+//     access, and the org OWNER's and an org ADMIN's role composes ABOVE the
+//     workspace role (the Manager on every workspace under the org — Story
+//     MOTIR-6168, `role-model.md` AMENDMENT 1). A
 //     non-org-member is denied with 404-not-403 (the cross-tenant no-leak rule).
 //     This is the single shared helper the workspace-scoped guards
 //     (workspacesService.assertMembership / getMemberRole / resolveActiveWorkspace)
@@ -116,10 +117,10 @@ function isUniqueViolation(err: unknown): err is Prisma.PrismaClientKnownRequest
 /**
  * The result of the workspace access gate. `granted` is implied by a non-null
  * return (null = no access → the caller raises 404). `effectiveRole` is the
- * workspace-scoped role the actor effectively has AFTER composing the org role:
- * the org OWNER is `owner` and an org ADMIN is `admin` on EVERY workspace under
- * the org, member or not; everyone else falls back to their stored workspace
- * `MemberRole`.
+ * WORKSPACE ROLE the actor effectively has AFTER composing the org role: the org
+ * OWNER and an org ADMIN are `manager` on EVERY workspace under the org, member
+ * or not; everyone else holds their own workspace role, read through
+ * `resolveWorkspaceRole` (Story MOTIR-6168 · MOTIR-6462).
  *
  * ⚠️ AN ORG ADMIN REACHES EVERY WORKSPACE AGAIN (Story MOTIR-6168). MOTIR-6308
  * raised the Owner alone, on reading R1 of `role-model.md`; the owner overturned
@@ -130,10 +131,10 @@ function isUniqueViolation(err: unknown): err is Prisma.PrismaClientKnownRequest
 export interface WorkspaceAccess {
   organizationId: string;
   orgRole: OrganizationRole;
-  /** The actor's stored workspace MemberRole, or null when they have none (the org Owner spanning the workspace by role). */
-  workspaceRole: string | null;
-  /** The composed workspace-scoped role (org Owner ⇒ 'owner'). */
-  effectiveRole: string;
+  /** The actor's OWN workspace role, or null when they hold no membership (an org Owner / Admin spanning the workspace by role). */
+  workspaceRole: WorkspaceRole | null;
+  /** The composed workspace role (org Owner or Admin ⇒ 'manager'). */
+  effectiveRole: WorkspaceRole;
   /** True when the actor is the org's Owner. */
   isOrgOwner: boolean;
   /** True when the actor's ORG role reaches every workspace as its Manager — the Owner or an Admin. */
@@ -196,22 +197,14 @@ export const organizationsService = {
       // Everyone else reaches only the workspaces they're a member of.
       if (!reachesEveryWorkspace && !workspaceMembership) return null;
 
+      const workspaceRole = workspaceMembership ? resolveWorkspaceRole(workspaceMembership) : null;
       return {
         organizationId: workspace.organizationId,
         orgRole: orgMembership.role,
-        workspaceRole: workspaceMembership?.role ?? null,
-        // The org Owner composes to workspace-owner-equivalent and an org Admin
-        // to workspace-admin-equivalent (both the Manager tier); otherwise the
-        // stored workspace role (guaranteed present in that branch).
-        // (An Admin whose stored role is already `owner` / `admin` keeps it —
-        // the legacy Replay gate still reads `owner` until MOTIR-6462.)
-        effectiveRole: isOrgOwner
-          ? ORGANIZATION_ROLE.owner
-          : reachesEveryWorkspace &&
-              workspaceMembership?.role !== 'owner' &&
-              workspaceMembership?.role !== 'admin'
-            ? ORGANIZATION_ROLE.admin
-            : workspaceMembership!.role,
+        workspaceRole,
+        // The org Owner and an org Admin compose to the Manager; otherwise the
+        // actor's own workspace role (guaranteed present in that branch).
+        effectiveRole: reachesEveryWorkspace ? 'manager' : workspaceRole!,
         isOrgOwner,
         reachesEveryWorkspace,
       };
@@ -428,7 +421,7 @@ export const organizationsService = {
           if (existing) return;
 
           await workspaceMembershipRepository.create(
-            { userId: input.userId, workspaceId: sole.id, role: 'member' },
+            { userId: input.userId, workspaceId: sole.id, workspaceRole: 'member', role: 'member' },
             tx,
           );
         },

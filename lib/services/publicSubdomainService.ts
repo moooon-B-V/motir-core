@@ -1,4 +1,4 @@
-import type { Prisma } from '@/generated/prisma/client';
+import type { Prisma, WorkspaceRole } from '@/generated/prisma/client';
 
 import { isCloud } from '@/lib/billing/availability';
 import type { PublicSubdomainDto, RetiredSubdomainDto } from '@/lib/dto/publicAddresses';
@@ -22,6 +22,7 @@ import { publicAddressRepository } from '@/lib/repositories/publicAddressReposit
 import { publicHostnameReservationRepository } from '@/lib/repositories/publicHostnameReservationRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { readReachRole } from '@/lib/workspaces/membershipGate';
+import { isWorkspaceManager } from '@/lib/projects/roles';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // A WORKSPACE'S TENANT SUBDOMAIN — claim it, rename it, read it back.
@@ -48,17 +49,11 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //
 // ── AUTHORISATION: a WORKSPACE resource, not a project one ─────────────────
 //
-// The address names the workspace, so the gate is the workspace membership's
-// ROLE — `owner` or `admin` on `MemberRole` — and NOT project `canManage`. A
+// The address names the workspace, so the gate is the WORKSPACE ROLE — the
+// Manager (Story MOTIR-6168; the legacy `owner` / `admin` both resolve to it,
+// and so does the org Owner or an org Admin) — and NOT project `canManage`. A
 // project admin who is an ordinary member of the workspace must not be able to
 // rename an address every other project in that workspace answers under.
-//
-// ⚠️ The role test is written against `MemberRole` (`owner` | `admin` | `member`
-// | `viewer`, the schema's enum) rather than against `lib/workspaces/roles.ts`'s
-// `LEGACY_WORKSPACE_ROLE`, which is a NARROWER legacy constant carrying only
-// `owner` / `member` — its own comment says it "only materializes the owner tier
-// the replay gate depends on". Using it here would silently refuse every
-// workspace `admin`.
 //
 // The two refusals are deliberately different: a MEMBER gets 403 (they can see
 // the workspace, so telling them the control is admin-only leaks nothing and is
@@ -75,14 +70,6 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // Both are needed and neither is redundant.
 
 /**
- * Roles that may change a workspace's public address — a workspace MANAGER
- * (`readReachRole` answers a workspace role since MOTIR-6459), and the legacy
- * `owner` / `admin` a page still reads off `membership.role` until MOTIR-6462
- * moves it.
- */
-const ADDRESS_ADMIN_ROLES = new Set(['manager', 'owner', 'admin']);
-
-/**
  * Whether a workspace ROLE may change the address — the predicate the settings
  * pane's read-only arm asks (MOTIR-4221, design panel 8).
  *
@@ -92,8 +79,8 @@ const ADDRESS_ADMIN_ROLES = new Set(['manager', 'owner', 'admin']);
  * the copy going stale shows up as controls that appear and then refuse. This is
  * presentation only: {@link assertAddressAdmin} still enforces on every write.
  */
-export function roleMayManageAddress(role: string): boolean {
-  return ADDRESS_ADMIN_ROLES.has(role);
+export function roleMayManageAddress(role: WorkspaceRole | null | undefined): boolean {
+  return isWorkspaceManager(role);
 }
 
 export const publicSubdomainService = {
@@ -293,8 +280,8 @@ function assertAvailable(): void {
   if (!isCloud()) throw new PublicAddressesUnavailableError();
 }
 
-async function assertMember(workspaceId: string, actorUserId: string): Promise<string> {
-  // The org Owner reads as `owner` in every workspace of the org (MOTIR-6308).
+async function assertMember(workspaceId: string, actorUserId: string): Promise<WorkspaceRole> {
+  // The org Owner or an org Admin reads as `manager` in every workspace of the org.
   const role = await readReachRole(actorUserId, workspaceId);
   if (!role) throw new WorkspaceNotVisibleError();
   return role;
@@ -302,7 +289,7 @@ async function assertMember(workspaceId: string, actorUserId: string): Promise<s
 
 async function assertAddressAdmin(workspaceId: string, actorUserId: string): Promise<void> {
   const role = await assertMember(workspaceId, actorUserId);
-  if (!ADDRESS_ADMIN_ROLES.has(role)) throw new SubdomainForbiddenError();
+  if (!roleMayManageAddress(role)) throw new SubdomainForbiddenError();
 }
 
 /** Refuse a label the ADR §8 grammar or reserved set rejects. */

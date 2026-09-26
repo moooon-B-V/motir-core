@@ -26,7 +26,7 @@ import {
 import { readMembership, readReachRole } from '@/lib/workspaces/membershipGate';
 import { bindOrganizationContext, withOrgContext } from '@/lib/organizations/context';
 import { assertOrgCapability } from '@/lib/services/organizationAccessService';
-import { LEGACY_WORKSPACE_ROLE } from '@/lib/workspaces/roles';
+import { legacyToWorkspaceRole, type WorkspaceRole } from '@/lib/workspaces/roles';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { entitlementsService } from '@/lib/services/entitlementsService';
@@ -233,13 +233,18 @@ async function insertWorkspaceWithOwner(
     { name: input.name, slug: input.slug, organizationId },
     tx,
   );
-  // The workspace creator is its OWNER — the privileged tier the 1.6.5 operator
-  // dashboard's replay gate keys off. Invited members default to `member`
-  // (workspacesService.addMember). This is what the function name has always
-  // promised; Story 1.2 wrote `member` here as a single-role shortcut, corrected
-  // now — see lib/workspaces/roles.ts (PRODECT_FINDINGS #36).
+  // The workspace creator is its MANAGER (Story MOTIR-6168 · MOTIR-6462 —
+  // `role-model.md` left who becomes a new workspace's Manager open; it is the
+  // creator, its first and only member). Invited members default to `member`
+  // (workspacesService.addMember). The legacy column is still NOT NULL, so it
+  // keeps its `owner` until the contract story drops it.
   const membership = await workspaceMembershipRepository.create(
-    { userId: input.ownerUserId, workspaceId: workspace.id, role: LEGACY_WORKSPACE_ROLE.owner },
+    {
+      userId: input.ownerUserId,
+      workspaceId: workspace.id,
+      workspaceRole: 'manager',
+      role: 'owner',
+    },
     tx,
   );
   return { workspace, membership };
@@ -831,6 +836,7 @@ export const workspacesService = {
             {
               userId: input.userId,
               workspaceId: input.workspaceId,
+              workspaceRole: legacyToWorkspaceRole(input.role ?? 'member'),
               role: input.role ?? 'member',
             },
             tx,
@@ -1138,17 +1144,17 @@ export const workspacesService = {
   },
 
   /**
-   * The user's EFFECTIVE workspace role (`owner` | `member`), or null if they
-   * have no access. Read-only — used by surfaces that gate an action on the
-   * privileged tier (e.g. the 1.6.5 dashboard's owner-only Replay button).
+   * The user's EFFECTIVE workspace role (`manager` | `member` | `viewer`), or null
+   * if they have no access. Read-only — used by surfaces that gate an action on
+   * the Manager (the jobs dashboard's Replay button, the 2FA policy switch).
    *
-   * Story 6.10.4: the role composes the org tier above the 6.4 workspace role —
-   * the org OWNER reports `owner` on every workspace under the org even with no
-   * workspace membership (MOTIR-6308); anyone else reports their stored
-   * workspace role; a non-org-member (no access) reports null. Callers compare
-   * via lib/workspaces/roles.
+   * Story 6.10.4: the role composes the org tier above the workspace role — the
+   * org Owner and an org Admin report `manager` on every workspace under the org
+   * even with no workspace membership (MOTIR-6168); anyone else reports their own
+   * workspace role; a non-org-member (no access) reports null. Callers ask
+   * `isWorkspaceManager`.
    */
-  async getMemberRole(userId: string, workspaceId: string): Promise<string | null> {
+  async getMemberRole(userId: string, workspaceId: string): Promise<WorkspaceRole | null> {
     const access = await organizationsService.resolveWorkspaceAccess(userId, workspaceId);
     return access?.effectiveRole ?? null;
   },

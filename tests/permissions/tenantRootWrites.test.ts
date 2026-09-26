@@ -61,6 +61,8 @@ describe('tenant-root writes under the restricted runtime role', () => {
       ownerUserId: owner.id,
     });
     expect(membership.role).toBe('owner');
+    // The creator is the workspace's MANAGER (Story MOTIR-6168 · MOTIR-6462).
+    expect(membership.workspaceRole).toBe('manager');
 
     // The bound read: `listMembers` runs under withWorkspaceContext, so it sees
     // the row only if the membership INSERT and its RETURNING both passed.
@@ -98,6 +100,10 @@ describe('tenant-root writes under the restricted runtime role', () => {
     const members = await workspacesService.listMembers(workspace.id, inviter.id);
     expect(members.map((m) => m.userId).sort()).toEqual([inviter.id, joiner.id].sort());
     expect(members.find((m) => m.userId === joiner.id)!.role).toBe('member');
+    // …and lands as a workspace MEMBER (MOTIR-6462), read back through the bound read.
+    expect((await workspacesService.findMembership(joiner.id, workspace.id))?.workspaceRole).toBe(
+      'member',
+    );
   });
 
   it('createOrganization writes the org AND its owner membership, both readable by the app', async () => {

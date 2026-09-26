@@ -6,12 +6,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { workspaceRoleDefinitionRepository } from '@/lib/repositories/workspaceRoleDefinitionRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import {
-  CUSTOM_WORKSPACE_ROLE_TIER,
-  WORKSPACE_ROLES,
-  isLegacyOwnerRole,
-  LEGACY_WORKSPACE_ROLE,
-} from '@/lib/workspaces/roles';
+import { CUSTOM_WORKSPACE_ROLE_TIER, WORKSPACE_ROLES } from '@/lib/workspaces/roles';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
@@ -136,12 +131,14 @@ async function asAppRole<T>(
 }
 
 describe('the new columns and tables land BESIDE the old ones', () => {
-  it('an existing membership reads NULL for both new columns — nothing is backfilled', async () => {
+  it('a membership written without the new columns reads NULL for both — nothing is backfilled', async () => {
+    // A row as the still-serving old build writes it (the service writers set the
+    // workspace role since MOTIR-6462, so the raw admin insert stands in for it).
     const fx = await makeTenants();
     const m = await adminDb.workspaceMembership.findUnique({
-      where: { userId_workspaceId: { userId: fx.owner1, workspaceId: fx.w1 } },
+      where: { userId_workspaceId: { userId: fx.member1, workspaceId: fx.w1 } },
     });
-    expect(m?.role).toBe('owner');
+    expect(m?.role).toBe('member');
     expect(m?.workspaceRole).toBeNull();
     expect(m?.roleDefinitionId).toBeNull();
   });
@@ -149,9 +146,6 @@ describe('the new columns and tables land BESIDE the old ones', () => {
   it('the vocabulary: three built-ins, and a custom role sits at the member tier', () => {
     expect(WORKSPACE_ROLES).toEqual(['manager', 'member', 'viewer']);
     expect(CUSTOM_WORKSPACE_ROLE_TIER).toBe('member');
-    expect(isLegacyOwnerRole(LEGACY_WORKSPACE_ROLE.owner)).toBe(true);
-    expect(isLegacyOwnerRole('member')).toBe(false);
-    expect(isLegacyOwnerRole(null)).toBe(false);
   });
 });
 
@@ -388,6 +382,12 @@ describe('workspaceMembershipRepository — the workspace-role writers and reade
 
   it('countManagers counts workspace_role = manager rows only — never the legacy owner, never NULL', async () => {
     const fx = await makeTenants();
+    // The creator is written as a Manager since MOTIR-6462; put W1's rows back to
+    // the deploy-window shape — the legacy `owner` with `workspace_role` NULL.
+    await adminDb.workspaceMembership.updateMany({
+      where: { workspaceId: fx.w1 },
+      data: { workspaceRole: null },
+    });
     const before = await adminDb.$transaction((tx) =>
       workspaceMembershipRepository.countManagers(fx.w1, tx),
     );

@@ -92,7 +92,7 @@ beforeEach(() => {
     { userId: 'u1', name: 'Ada', email: 'ada@example.com', role: 'owner' },
     { userId: 'u2', name: 'Grace', email: 'grace@example.com', role: 'member' },
   ]);
-  getMemberRole.mockResolvedValue('owner');
+  getMemberRole.mockResolvedValue('manager');
   getWorkspacePolicy.mockResolvedValue(UNLOCKED);
 });
 afterEach(cleanup);
@@ -204,11 +204,11 @@ describe('the fold-in on /settings/organization', () => {
     // The host renders for ANY member — MOTIR-3519 moved the org refusal down to
     // the org-scoped cards precisely so a plain member could still reach Leave
     // workspace. A control that inherited that gate would let a `viewer` change
-    // a security policy. All four `MemberRole` values, so neither direction can
-    // regress unnoticed.
+    // a security policy. All three workspace roles (the composed role
+    // `getMemberRole` answers since MOTIR-6462), so neither direction can regress
+    // unnoticed.
     for (const [role, operable] of [
-      ['owner', true],
-      ['admin', true],
+      ['manager', true],
       ['member', false],
       ['viewer', false],
     ] as const) {

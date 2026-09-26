@@ -131,8 +131,8 @@ const ALLOWED_DERIVATIONS: { file: string; why: string }[] = [
     why: 'a WORKSPACE-level jobs dashboard, gated on the workspace role. No project is resolved, so no project permission can govern it (the `repository:connect` argument, MOTIR-2294)',
   },
   {
-    file: 'lib/services/projectAccessService.ts',
-    why: 'the enforcement half of the model itself — it resolves the three facts and applies `lib/permissions/resolve.ts`',
+    file: 'lib/services/publicSubdomainService.ts',
+    why: "a WORKSPACE's public address (MOTIR-4221), gated on the workspace role — the Manager (Story MOTIR-6168 · MOTIR-6462; it was a `['owner','admin']` set before, which the patterns could not see). The address names the whole workspace, so no project permission can govern it — the `jobsDashboardService` argument",
   },
   {
     file: 'lib/services/twoFactorPolicyService.ts',
