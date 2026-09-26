@@ -127,7 +127,8 @@ export const organizationGitOffboardingService = {
       if (repo.provider === 'gitlab' && repo.installation.organizationId === organizationId) {
         continue;
       }
-      if (repo.provider === 'github' && isMotirHostedOwner(repo.owner, hostOwner)) {
+      const onGithub = repo.provider === 'github';
+      if (onGithub && isMotirHostedOwner(repo.owner, hostOwner)) {
         await deps.deleteRepo({
           installationId: repo.installation.installationId,
           owner: repo.owner,

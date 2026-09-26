@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminDb } from '../helpers/adminDb';
+import { pinSharedRateLimitStoreDeadline } from '../helpers/rateLimitStore';
 
 // SCHEDULING AND CANCELLING AN ORGANIZATION'S DELETION (Story MOTIR-6306 ·
 // MOTIR-6399) against a REAL Postgres — the locks, the partial unique index and the
@@ -10,7 +11,7 @@ import { adminDb } from '../helpers/adminDb';
 vi.mock('@/lib/billing/seatSync', () => ({ enqueueScaledTrackerSeatSync: vi.fn() }));
 const { requireCompliantSession } = vi.hoisted(() => ({ requireCompliantSession: vi.fn() }));
 vi.mock('@/lib/auth/requireCompliantSession', () => ({ requireCompliantSession }));
-const sendEvent = vi.hoisted(() => vi.fn(async () => undefined));
+const sendEvent = vi.hoisted(() => vi.fn(async (_name: string, _data: unknown) => undefined));
 vi.mock('@/lib/jobs/sendEvent', () => ({ sendEvent }));
 const ai = vi.hoisted(() => ({
   markOrgClosing: vi.fn(async () => ({ changed: true, closing: true })),
@@ -100,6 +101,8 @@ let org: Org;
 beforeEach(async () => {
   await truncateAuthTables();
   vi.clearAllMocks();
+  // The route's 429 is asserted through the shared store (MOTIR-3067).
+  pinSharedRateLimitStoreDeadline();
   org = await makeOrg();
   sendEvent.mockClear();
 });
