@@ -1,3 +1,4 @@
+import { assertOrgNotClosing } from '@/lib/organizations/closingGuard';
 import {
   type MemberRole,
   Prisma,
@@ -205,6 +206,8 @@ async function insertWorkspaceWithOwner(
     // below. It also retires the upward auto-join this branch used to perform:
     // an actor who passes is by construction already an org member.
     await assertOrgCapability(input.ownerUserId, organizationId, 'manageWorkspaces', tx);
+    // No new workspace in an org scheduled for deletion (MOTIR-6396).
+    await assertOrgNotClosing(organizationId, tx);
     // §4.4 workspace cap (8.1.11): a 2nd+ workspace under an existing org is
     // gated (free org = exactly 1 workspace). Lock + count inside this tx.
     await entitlementsService.assertWithinWorkspaceCap(organizationId, tx);
@@ -304,6 +307,8 @@ async function assertMayRemoveWorkspace(
   }
   await bindOrganizationContext(tx, organizationId);
   await assertOrgCapability(input.actorUserId, organizationId, 'manageWorkspaces', tx);
+  // A closing org's workspaces are the erasure sweep's to remove (MOTIR-6396).
+  await assertOrgNotClosing(organizationId, tx);
 }
 
 /**

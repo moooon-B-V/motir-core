@@ -54,6 +54,67 @@ export const organizationRepository = {
   },
 
   /**
+   * When organization `id` started CLOSING, or null when it is not closing
+   * (MOTIR-6396) — the org-tier write guard's read (`lib/organizations/closingGuard.ts`).
+   * Takes `tx`: it guards a write, and the caller's context admits the row.
+   */
+  async findClosingSinceById(id: string, tx: Prisma.TransactionClient): Promise<Date | null> {
+    const row = await tx.organization.findUnique({ where: { id }, select: { closingSince: true } });
+    return row?.closingSince ?? null;
+  },
+
+  /**
+   * The CLOSING organization that owns `workspaceId`, or null when that org is
+   * open (MOTIR-6396) — the workspace-addressed twin of {@link findClosingSinceById},
+   * returning the org id the refusal names.
+   */
+  async findClosingByWorkspaceId(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ organizationId: string } | null> {
+    const rows = await tx.$queryRaw<Array<{ organizationId: string }>>`
+      SELECT o."id" AS "organizationId"
+      FROM "workspace" w
+      JOIN "organization" o ON o."id" = w."organizationId"
+      WHERE w."id" = ${workspaceId}
+        AND o."closing_since" IS NOT NULL
+      LIMIT 1
+    `;
+    return rows[0] ?? null;
+  },
+
+  /**
+   * When the organization that owns `workspaceId` started CLOSING, or null when it
+   * is not closing (Story MOTIR-6306 · MOTIR-6396) — the one read the permission
+   * resolution adds, so that every actor in every workspace of a closing org
+   * resolves to read-only.
+   *
+   * Through the workspace, in ONE statement, because the resolver is handed a
+   * workspace and never an org. Takes `tx`: both rows are RLS-gated, and the
+   * caller's transaction is the one binding the GUCs that admit them — a workspace
+   * member is always an org member (`organization-tier.md`, the upward invariant),
+   * so `organization_membership_visible` admits the org; an unbound public read is
+   * admitted by `organization_public_project_read`. A row that is not visible
+   * reads as not closing — the answer for a workspace the caller cannot see is
+   * decided by the gates around this read, not by it. `tx` is optional ONLY for
+   * that unbound public path (`dbRead`, the MOTIR-4295 rule).
+   */
+  async findClosingSinceByWorkspaceId(
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Date | null> {
+    const client = tx ?? dbRead;
+    const rows = await client.$queryRaw<Array<{ closingSince: Date | null }>>`
+      SELECT o."closing_since" AS "closingSince"
+      FROM "workspace" w
+      JOIN "organization" o ON o."id" = w."organizationId"
+      WHERE w."id" = ${workspaceId}
+      LIMIT 1
+    `;
+    return rows[0]?.closingSince ?? null;
+  },
+
+  /**
    * Of the organisation ids given, which still have a row — the liveness read
    * motir-ai's code-graph reconciler subtracts from its own bucket enumeration
    * (MOTIR-4647). Answers about the ids it is GIVEN and never enumerates, so a

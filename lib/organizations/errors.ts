@@ -154,3 +154,19 @@ export class OwnershipConfirmationMismatchError extends Error {
     this.name = 'OwnershipConfirmationMismatchError';
   }
 }
+
+/**
+ * The organization is CLOSING — scheduled for deletion and read-only until it is
+ * erased or the Owner cancels (Story MOTIR-6306 · MOTIR-6396;
+ * `docs/decisions/organization-deletion.md` §3). Raised by the org-tier writes
+ * that do not go through the project permission resolver: rename, the 2FA
+ * policy, workspaces, members, billing and Git connections. → 409: the request is
+ * well-formed and conflicts with the organization's state, which a cancel undoes.
+ */
+export class OrganizationClosingError extends Error {
+  readonly code = 'ORGANIZATION_CLOSING' as const;
+  constructor(readonly organizationId: string) {
+    super(`Organization ${organizationId} is scheduled for deletion and is read-only.`);
+    this.name = 'OrganizationClosingError';
+  }
+}

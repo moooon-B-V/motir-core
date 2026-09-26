@@ -373,10 +373,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   // before the change has no `planHeld`, and absent reads as 0, which is exactly
   // what that run recorded (a held card was then counted in `failed`). Nothing
   // branches on the summary; it is surfaced on `job_run.output` only.
+  // MOTIR-6396 added the OPTIONAL `orgClosing` member the same way and for the same
+  // reason: absent reads as 0, and no earlier run skipped for a closing org.
   'run-rules': {
     file: 'lib/jobs/definitions/automationEngine.ts',
     shape:
-      '{ deduped: number; failed: number; matched: number; noActions: number; planHeld?: number | undefined; skipped: boolean; succeeded: number }',
+      '{ deduped: number; failed: number; matched: number; noActions: number; orgClosing?: number | undefined; planHeld?: number | undefined; skipped: boolean; succeeded: number }',
   },
   'schedule-health': {
     file: 'lib/jobs/definitions/dailyHealthCheck.ts',

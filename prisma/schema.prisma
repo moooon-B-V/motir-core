@@ -5819,6 +5819,7 @@ enum AutomationExecutionStatus {
   failure
   no_actions
   plan_held
+  org_closing
 
   @@map("automation_execution_status")
 }

@@ -1,3 +1,4 @@
+import { isWorkspaceOrgClosing } from '@/lib/organizations/closingGuard';
 import { Prisma } from '@/generated/prisma/client';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { automationRuleRepository } from '@/lib/repositories/automationRuleRepository';
@@ -112,6 +113,9 @@ export interface AutomationRunSummary {
    * written before the member existed has none — absent reads as 0, which is
    * what that run recorded. */
   planHeld?: number;
+  /** Rules that met an organization scheduled for deletion and stood still
+   * (MOTIR-6396). Optional for `planHeld`'s reason: an older memo has none. */
+  orgClosing?: number;
   /** Rules already run for this event (idempotency replay skips). */
   deduped: number;
 }
@@ -235,6 +239,9 @@ function setFieldPatch(config: Extract<AutomationActionConfig, { type: 'set_fiel
   }
 }
 
+/** The reason an `org_closing` execution row carries — the refusal's stable code. */
+export const ORG_CLOSING_REASON = 'ORGANIZATION_CLOSING';
+
 export const automationEngineService = {
   /**
    * Run every enabled rule a trigger event matches. Returns a per-event
@@ -278,6 +285,30 @@ export const automationEngineService = {
     );
     const matching = rules.filter((rule) => triggerMatches(rule, input));
     summary.matched = matching.length;
+
+    // A CLOSING organization's automations stand still (MOTIR-6396; `organization-
+    // deletion.md` §3) — paused, not failed: each matched rule records an
+    // `org_closing` row, the failure streak is untouched and nobody is emailed.
+    // Read per event, never stored on the rule, so a cancel resumes every rule on
+    // the next event with nothing to re-enable.
+    if (matching.length > 0 && (await isWorkspaceOrgClosing(input.workspaceId))) {
+      console.warn('[automation] skipping rules: the organization is scheduled for deletion', {
+        workspaceId: input.workspaceId,
+        eventId: input.eventId,
+        rules: matching.length,
+      });
+      for (const rule of matching) {
+        await this.writeExecution(rule, {
+          status: 'org_closing',
+          workItemId: input.workItemId,
+          eventId: input.eventId,
+          durationMs: 0,
+          error: `${ORG_CLOSING_REASON}: the organization is scheduled for deletion`,
+        });
+      }
+      summary.orgClosing = matching.length;
+      return summary;
+    }
 
     for (const rule of matching) {
       const outcome = await this.runRule(rule, input);
@@ -537,7 +568,7 @@ export const automationEngineService = {
   async writeExecution(
     rule: { id: string; workspaceId: string },
     data: {
-      status: 'success' | 'failure' | 'no_actions' | 'plan_held';
+      status: 'success' | 'failure' | 'no_actions' | 'plan_held' | 'org_closing';
       workItemId: string;
       eventId: string;
       durationMs: number;

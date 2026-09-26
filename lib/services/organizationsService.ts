@@ -1,3 +1,4 @@
+import { assertOrgNotClosing } from '@/lib/organizations/closingGuard';
 import { type OrganizationRole, Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
@@ -309,6 +310,7 @@ export const organizationsService = {
       { userId: input.actorUserId, organizationId: input.organizationId },
       async (tx) => {
         await assertOrgAdmin(input.actorUserId, input.organizationId, tx);
+        await assertOrgNotClosing(input.organizationId, tx);
         return organizationRepository.update(input.organizationId, { name: trimmed }, tx);
       },
     );
@@ -375,6 +377,7 @@ export const organizationsService = {
           if (input.role === ORGANIZATION_ROLE.owner) {
             throw new OwnerOnlyByTransferError(input.organizationId);
           }
+          await assertOrgNotClosing(input.organizationId, tx);
           await organizationMembershipRepository.create(
             { organizationId: input.organizationId, userId: input.userId, role: input.role },
             tx,
@@ -482,6 +485,7 @@ export const organizationsService = {
           throw new OwnerOnlyByTransferError(input.organizationId);
         }
         await assertNotOwnerMembership(input.organizationId, input.userId, tx);
+        await assertOrgNotClosing(input.organizationId, tx);
         await writeMembershipRole(input.organizationId, input.userId, input.role, tx);
       },
     );
@@ -517,6 +521,7 @@ export const organizationsService = {
           );
         }
         await assertNotOwnerMembership(input.organizationId, input.userId, tx);
+        await assertOrgNotClosing(input.organizationId, tx);
         await organizationMembershipRepository.deleteByOrgAndUser(
           input.organizationId,
           input.userId,

@@ -269,6 +269,14 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'the arm that admits it — without which the picker returns a SUBSET and looks like a ' +
       'short list rather than a bug.',
   },
+  'lib/services/organizationDeletionNotifier.ts#orgSnapshot': {
+    tables: ['organization', 'organization_membership'],
+    source: 'scan',
+    why:
+      'MOTIR-6395 — the deletion notices resolve the org and its roster at send time, with no ' +
+      'actor: the org by id (organization_active) and every membership with its user ' +
+      '(org_membership_visible_active_or_own), both admitted by the bound app.organization_id',
+  },
   'lib/services/workspacesService.ts#addMember': {
     tables: ['organization_membership'],
     source: 'hand',
