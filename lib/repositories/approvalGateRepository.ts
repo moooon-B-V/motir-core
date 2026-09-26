@@ -302,6 +302,29 @@ export const approvalGateRepository = {
   },
 
   /**
+   * The most recently DECIDED gate on one work item, of ANY kind (Story MOTIR-6070 ·
+   * MOTIR-6422) — the read the CHANGES REQUESTED prompt section and `get_work_item`'s
+   * `latestRefusal` answer from. The caller keeps it only when its state is
+   * `changes_requested`.
+   *
+   * ⚠️ DELIBERATELY NOT {@link findLatestByWorkItem}: that one is per-KIND and prefers
+   * an AWAITING row (the live question). This question is *what was the last thing a
+   * person decided about this card*, across kinds — so awaiting and superseded rows
+   * (whose `decidedAt` is NULL) are not candidates, and the order is over DECISIONS
+   * (`decidedAt`), with `createdAt`/`id` only as deterministic tie-breaks.
+   */
+  async findLatestDecidedByWorkItem(
+    workItemId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ApprovalGate | null> {
+    const client = tx ?? dbRead;
+    return client.approvalGate.findFirst({
+      where: { workItemId, decidedAt: { not: null }, state: { notIn: ['awaiting', 'superseded'] } },
+      orderBy: [{ decidedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
+  /**
    * The most recently DECIDED `approved` gate of one kind, for MANY work items
    * — arm (a) of `design-result.md` AMENDMENT 5 Q2's ladder (Story MOTIR-5553 ·
    * Subtask MOTIR-5557). Returned as a MAP keyed by work-item id.

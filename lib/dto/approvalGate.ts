@@ -211,6 +211,35 @@ export const APPROVAL_GATE_REFUSAL_VERDICTS = [
 ] as const satisfies readonly ApprovalGateRefusalVerdictDTO[];
 
 /**
+ * THE LATEST REFUSAL on a work item (Story MOTIR-6070 · MOTIR-6422; ADR
+ * `approval-gates.md` §10h note 4) — the reason the next run is handed.
+ *
+ * Present ONLY when the item's most recently DECIDED gate — of ANY kind, ordered by
+ * `decidedAt` — is `changes_requested`. A later approval (or any later decision)
+ * supersedes it; an `awaiting` gate is not a decision and does not. One shape for both
+ * readers: the dispatched prompt's CHANGES REQUESTED section and `get_work_item`'s
+ * `latestRefusal`, so a dispatched agent and a person following the runbook are never
+ * told different things about the same card.
+ */
+export interface LatestRefusalDTO {
+  gateId: string;
+  kind: ApprovalGateKindDTO;
+  /** The reason, verbatim. NULL only on a GitHub review submitted with no body (§10b) —
+   *  a surface then says *no reason given on GitHub*, never a blank. */
+  noteMd: string | null;
+  /** Who refused, as recorded at the decision (survives their departure). */
+  decidedByLabel: string | null;
+  /** ISO-8601 — when it was refused. */
+  decidedAt: string;
+  decisionSource: ApprovalGateDecisionSourceDTO | null;
+  /** `revise` / `re_plan` on a design refusal pressed in Motir (MOTIR-6421); else null. */
+  refusalVerdict: ApprovalGateRefusalVerdictDTO | null;
+  /** The REFUSED version — the subject's version at decision time (a design result's
+   *  version, a pull request's head sha). Opaque; its shape depends on `kind`. */
+  subjectVersion: string | null;
+}
+
+/**
  * The two decision VERBS, as the wire carries them.
  *
  * ⚠️ IT LIVES HERE, NOT ON THE SERVICE, AND THE CLIENT/SERVER BOUNDARY IS WHY.

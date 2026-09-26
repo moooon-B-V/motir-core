@@ -8,6 +8,7 @@ import type {
   ApprovalGatePendingPayloadDTO,
   EarlierApprovalDTO,
   HeldTransitionDTO,
+  LatestRefusalDTO,
   ApprovalQueueDto,
   ApprovalQueueRowDto,
   ApprovalRecordsPageDto,
@@ -908,6 +909,46 @@ export const approvalGatesService = {
         routedToLabel: routedToDisplayName(routedTo),
         earlierApproval: null,
         settingsDoor: null,
+      };
+    });
+  },
+
+  /**
+   * THE LATEST REFUSAL on one work item, or null (Story MOTIR-6070 · MOTIR-6422; ADR
+   * `approval-gates.md` §10h note 4) — the ONE read both the dispatched prompt's
+   * CHANGES REQUESTED section and `get_work_item`'s `latestRefusal` answer from.
+   *
+   * The item's most recently DECIDED gate of ANY kind (by `decidedAt`); kept only when
+   * its state is `changes_requested`. So an approval after a refusal answers null, a
+   * refusal after an approval answers the refusal, and of two refusals the later wins.
+   * An `awaiting` gate is not a decision: a design republished after a refusal still
+   * carries that refusal until the new gate is decided.
+   *
+   * Keyed on the KIND-LESS question on purpose: a story's acceptance refusal
+   * (MOTIR-6071) is handed to its re-run through this same read.
+   *
+   * Tenant-scoped like every gate read: an item outside the caller's workspace
+   * answers null, indistinguishable from one with no refusal. A render read — no
+   * lock, one transaction.
+   */
+  async latestRefusalFor(
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<LatestRefusalDTO | null> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const item = await workItemRepository.findById(workItemId, tx);
+      if (!item || item.workspaceId !== ctx.workspaceId) return null;
+      const gate = await approvalGateRepository.findLatestDecidedByWorkItem(workItemId, tx);
+      if (!gate || gate.state !== 'changes_requested' || gate.decidedAt === null) return null;
+      return {
+        gateId: gate.id,
+        kind: gate.kind,
+        noteMd: gate.noteMd,
+        decidedByLabel: gate.decidedByLabel,
+        decidedAt: gate.decidedAt.toISOString(),
+        decisionSource: gate.decisionSource,
+        refusalVerdict: gate.refusalVerdict,
+        subjectVersion: gate.subjectVersion,
       };
     });
   },
