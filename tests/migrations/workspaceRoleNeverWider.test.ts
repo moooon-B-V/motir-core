@@ -122,7 +122,15 @@ describe('the check, over the mapping fixture', () => {
     await client.connect();
     try {
       await client.query(withoutDrops);
-      const projects = [t.p1.id, t.p2.id, t.p3.id];
+      // ⚠️ The `limited` project (p2) is left out since Story MOTIR-6169 ·
+      // MOTIR-6543. This migration's NEW rule is the resolver as MOTIR-6459 left
+      // it, where `limited` kept a non-added member's keys minus edit; the
+      // resolver has since moved on — `limited` maps to Members only, so a member
+      // who was not added holds nothing there. The migration is a point in time
+      // and is not rewritten; the pair-by-pair agreement still holds for `open`
+      // (→ Open to the workspace) and `private` (→ Members only), whose entry
+      // rule did not change.
+      const projects = [t.p1.id, t.p3.id];
       for (const [label, userId] of Object.entries(t.people)) {
         for (const projectId of projects) {
           const { rows } = await client.query<{ keys: string[] }>(

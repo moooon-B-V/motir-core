@@ -6,10 +6,12 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { composeOwnerReach } from '@/lib/workspaces/membershipGate';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { customRolePermissionsOf, resolveWorkspaceRole } from '@/lib/workspaces/roles';
-import type { Project } from '@/generated/prisma/client';
+import type { Project, ProjectAccessLevel } from '@/generated/prisma/client';
+import { accessModeOf } from '@/lib/projects/accessMode';
 import {
   canBrowse,
   canComment,
+  canEnter,
   canCommentPublicRequest,
   canCreateAttachments,
   canDeleteAllAttachments,
@@ -89,6 +91,14 @@ export function holdsRecordView(
 }
 
 /**
+ * The resolved inputs plus the project's legacy `accessLevel`, which rides along
+ * for the one caller that still scopes by it (`getCommentCapabilities` → the
+ * mention candidates) until the readers card (MOTIR-6547) moves it to the mode.
+ * The POLICY never reads it: `resolvePermissions` decides on `accessMode`.
+ */
+type ResolvedInputs = ProjectAccessInputs & { accessLevel: ProjectAccessLevel };
+
+/**
  * Resolve the policy inputs for `(actor, project)`. Throws ProjectNotFoundError
  * (→ 404, no existence leak) when the project is missing OR lives in another
  * workspace — a cross-tenant id must be indistinguishable from a never-existed
@@ -98,7 +108,7 @@ async function resolveInputs(
   projectId: string,
   ctx: AccessActorContext,
   tx?: Prisma.TransactionClient,
-): Promise<ProjectAccessInputs> {
+): Promise<ResolvedInputs> {
   // MOTIR-2527: when the caller has no bound transaction, this opens ONE for the
   // whole resolution rather than binding only the membership read. All three rows
   // the gate reads are RLS-gated on `app.workspace_id` — `project` by
@@ -153,8 +163,14 @@ async function resolveInputs(
     tx,
   );
   return {
+    // The project's MODE — derived from `accessLevel` while the column is NULL
+    // (Story MOTIR-6169) — and the actor's SCOPE, read off the membership row; an
+    // org Owner / Admin composed in as a Manager has no row, and a Manager's
+    // scope is never read.
+    accessMode: accessModeOf(project),
     accessLevel: project.accessLevel,
     workspaceRole,
+    accessScope: workspaceMembership?.accessScope ?? null,
     customRolePermissions: customRolePermissionsOf(workspaceRole, workspaceMembership),
     addedToProject: projectMembership != null,
     // A CLOSING organization is read-only for every actor (MOTIR-6396). Read at
@@ -199,15 +215,16 @@ async function resolvePublicInputs(
   tx?: Prisma.TransactionClient,
 ): Promise<ProjectAccessInputs> {
   const project = await projectRepository.findById(projectId, tx);
-  if (!project || project.accessLevel !== 'public') {
+  if (!project || accessModeOf(project) !== 'public') {
     throw new ProjectNotFoundError(projectId);
   }
   if (!actorUserId) {
     // Unbound: `organization_public_project_read` admits the org of a public
     // project, so an anonymous visitor's public-request writes close too.
     return {
-      accessLevel: project.accessLevel,
+      accessMode: 'public',
       workspaceRole: null,
+      accessScope: null,
       addedToProject: false,
       organizationClosing: await isWorkspaceOrgClosing(project.workspaceId, tx),
     };
@@ -248,8 +265,9 @@ async function resolvePublicInputs(
     ? readBound(tx)
     : withWorkspaceContext({ userId: actorUserId, workspaceId: project.workspaceId }, readBound));
   return {
-    accessLevel: project.accessLevel,
+    accessMode: 'public',
     workspaceRole,
+    accessScope: workspaceMembership?.accessScope ?? null,
     customRolePermissions: customRolePermissionsOf(workspaceRole, workspaceMembership),
     addedToProject: added,
     organizationClosing: await isWorkspaceOrgClosing(project.workspaceId, tx),
@@ -290,7 +308,7 @@ export const projectAccessService = {
     canBrowse: boolean;
     canComment: boolean;
     canModerate: boolean;
-    accessLevel: ProjectAccessInputs['accessLevel'];
+    accessLevel: ProjectAccessLevel;
   }> {
     const inputs = await resolveInputs(projectId, ctx, tx);
     return {
@@ -364,20 +382,26 @@ export const projectAccessService = {
   },
 
   /**
-   * Filter a workspace's projects down to the ones the actor may BROWSE — the
-   * switcher / nav / command-palette list (Subtask 6.4.6) shows only these, so a
-   * private project the actor isn't on is ABSENT (never shown-then-denied). Takes
-   * the already-loaded `Project` rows (each carries `accessLevel`) and resolves
-   * the actor's roles in ONE pass — workspace role once, all project memberships
-   * in a single query — then applies the pure `canBrowse` policy in memory (no
-   * N+1). A workspace owner/admin keeps every project; a non-member gets none.
+   * Filter a workspace's projects down to the ones the actor may ENTER — the
+   * switcher / nav / command-palette / project list / MCP `list_projects` /
+   * quick search (Subtask 6.4.6; Story MOTIR-6169) show only these, so a project
+   * the actor cannot enter is ABSENT (never shown-then-denied). Takes the
+   * already-loaded `Project` rows and resolves the actor in ONE pass — workspace
+   * role and scope once, all project memberships in a single query — then applies
+   * the pure {@link canEnter} rule in memory (no N+1). A Manager keeps every
+   * project; a non-member gets none.
+   *
+   * ⚠️ `canEnter`, NOT `canBrowse` (MOTIR-6543). They differ on one cell: a
+   * Limited person not added to a `public` project BROWSES it (its link behaves
+   * as a Visitor's) but does not ENTER it, and it must not appear in their own
+   * lists.
    *
    * ⚠️ It honours the token's PROJECT BINDING itself (MOTIR-5763). This batch
    * path never calls {@link resolveInputs}, so the refusal there did not reach
    * it: a project-bound token was LISTED every project it would then 404 on.
    * A bound actor keeps at most its one project, before any role is read.
    */
-  async filterBrowsable<T extends Pick<Project, 'id' | 'accessLevel'>>(
+  async filterBrowsable<T extends Pick<Project, 'id' | 'accessLevel' | 'accessMode'>>(
     projects: T[],
     ctx: AccessActorContext,
     tx?: Prisma.TransactionClient,
@@ -408,7 +432,7 @@ export const projectAccessService = {
       workspaceMembership,
       tx,
     );
-    // A Manager always browses everything; a non-member never browses any.
+    // A Manager always enters everything; a non-member never enters any.
     if (workspaceRole === 'manager') return projects;
     if (workspaceRole == null) return [];
     const memberships = await projectMembershipRepository.findByUserAndProjects(
@@ -417,12 +441,12 @@ export const projectAccessService = {
       tx,
     );
     const added = new Set(memberships.map((m) => m.projectId));
-    const customRolePermissions = customRolePermissionsOf(workspaceRole, workspaceMembership);
+    const accessScope = workspaceMembership?.accessScope ?? null;
     return projects.filter((p) =>
-      canBrowse({
-        accessLevel: p.accessLevel,
+      canEnter({
+        accessMode: accessModeOf(p),
         workspaceRole,
-        customRolePermissions,
+        accessScope,
         addedToProject: added.has(p.id),
       }),
     );
@@ -434,6 +458,7 @@ export const projectAccessService = {
    * over a batch of inputs without a per-project round-trip.
    */
   canBrowse,
+  canEnter,
   canEdit,
   canManageProject,
 
@@ -499,8 +524,9 @@ export const projectAccessService = {
           result.set(
             userId,
             canEdit({
-              accessLevel: project.accessLevel,
+              accessMode: accessModeOf(project),
               workspaceRole,
+              accessScope: membership?.accessScope ?? null,
               customRolePermissions: customRolePermissionsOf(workspaceRole, membership),
               addedToProject: added.has(userId),
               organizationClosing,
@@ -617,7 +643,9 @@ export const projectAccessService = {
     const inputs = await resolvePublicInputs(projectId, actorUserId, tx);
     if (!canBrowse(inputs)) throw new ProjectAccessDeniedError(projectId, 'browse');
     return {
-      isMember: inputs.workspaceRole != null || inputs.addedToProject,
+      // A MEMBER here is someone who can ENTER the project (MOTIR-6543): a
+      // Limited person not added to it reads the public page as a Visitor does.
+      isMember: canEnter(inputs),
       // The in-place "Edit" affordance gate for the public page (Subtask 6.16.3)
       // — admin-only; an anonymous / cross-org viewer resolves to `false`.
       canManage: canManageProject(inputs),

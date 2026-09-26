@@ -216,11 +216,12 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
     member: MEMBER_SET(),
     admin: MEMBER_SET(),
   },
+  // A legacy `limited` project with a NULL mode resolves as Members only
+  // (`accessModeOf`, Story MOTIR-6169 · MOTIR-6543): not added, nothing at all.
   limited: {
     owner: [...ROLE_GATED_PERMISSIONS],
     wsAdmin: [...ROLE_GATED_PERMISSIONS],
-    // Not added: everything but EDIT.
-    plainMember: MEMBER_SET().filter((k) => k !== 'work_item:edit'),
+    plainMember: [],
     viewer: VIEWER_SET(),
     member: MEMBER_SET(),
     admin: MEMBER_SET(),
@@ -577,7 +578,7 @@ describe('a membership on a WORKSPACE custom role, resolved through the database
   // hang rather than a busy runner. `tests/timeout-budget-lane.test.ts` is what
   // found this test and what keeps the third one from being written.
   it(
-    'the access LEVEL subtracts NOTHING — a custom role grants exactly what it lists',
+    'the access MODE subtracts NOTHING — a custom role grants exactly what it lists',
     { timeout: 60_000 },
     async () => {
       // The actor was ADDED to the project, and the level reads only that — so a
@@ -607,12 +608,13 @@ describe('a membership on a WORKSPACE custom role, resolved through the database
     },
   );
 
-  it('a BUILT-IN role is still narrowed by the level — the change is custom-only', async () => {
-    // The other half, and the one that proves nothing leaked: an ordinary
-    // `viewer` on a `limited` project still cannot edit.
+  it('a BUILT-IN role not added to a Members-only project holds nothing there', async () => {
+    // The other half, and the one that proves nothing leaked: a plain Member on a
+    // legacy `limited` project — Members only since MOTIR-6169 — neither browses
+    // nor edits it.
     const s = await buildScenario('limited', 'builtin-still-narrowed');
     const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.plainMember);
-    expect(held.has('project:browse')).toBe(true);
+    expect(held.has('project:browse')).toBe(false);
     expect(held.has('work_item:edit')).toBe(false);
   });
 

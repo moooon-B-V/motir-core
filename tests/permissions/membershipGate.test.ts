@@ -198,7 +198,7 @@ describe('projectAccessService — resolveInputs + filterBrowsable', () => {
 
   it('filterBrowsable KEEPS the project for a member', async () => {
     const kept = await projectAccessService.filterBrowsable(
-      [{ id: home.projectId, accessLevel: 'limited' as const }],
+      [{ id: home.projectId, accessLevel: 'limited' as const, accessMode: null }],
       { userId: home.ownerId, workspaceId: home.workspaceId },
     );
     expect(kept).toHaveLength(1);
@@ -206,7 +206,7 @@ describe('projectAccessService — resolveInputs + filterBrowsable', () => {
 
   it('filterBrowsable drops everything for a non-member', async () => {
     const kept = await projectAccessService.filterBrowsable(
-      [{ id: home.projectId, accessLevel: 'limited' as const }],
+      [{ id: home.projectId, accessLevel: 'limited' as const, accessMode: null }],
       { userId: outsiderId, workspaceId: home.workspaceId },
     );
     expect(kept).toHaveLength(0);

@@ -1,4 +1,4 @@
-# ADR: Public projects — `public` is a 4th `ProjectAccessLevel`, the one cross-org read exception
+# ADR: Public projects — `public` is an access MODE (one of three, beside a membership scope), the one cross-org read exception
 
 - **Status:** Accepted (2026-06-13, model locked with Yue 2026-06-12)
 - **Story / Subtask:** 6.12 (Public projects — open project management) · Subtask 6.12.2
@@ -9,6 +9,11 @@
   (`docs/decisions/triage-model.md` — a submission IS a `work_item` in a
   `triage` state) and Story 6.10's org gate.
 - **Supersedes / superseded by:** none
+- **Amended:** 2026-09-27 — the four `ProjectAccessLevel` values became three access MODES
+  (Open to the workspace · Members only · Public) plus a membership SCOPE (Full / Limited), by
+  `docs/decisions/role-model.md` Q1 (Story MOTIR-6169 · MOTIR-6543). The title, the shipped-ground
+  list, §1's ladder and table and §2's code are updated in place; see _AMENDMENT 1 (2026-09-27)_ at
+  the end. §5 (READ anonymous, WRITE signed in) stands.
 - **Consumed by:** 6.12.3 (schema — add `public` to the enum + the
   `PublicRequestVote` join + `project.publicOverviewMd` + the access-check
   extension), 6.12.4 (the public read-only view + the public projection +
@@ -93,11 +98,18 @@ points **outranks the card's prose** (rung 2 over rung 3):
 private }`**, `project.accessLevel @default(open)` (`prisma/schema.prisma`).
   Adding a value is an enum ALTER + no default change — existing projects
   stay their current level, nothing is locked out.
+  _(Amended 2026-09-27: entry is now `project.accessMode` — `workspace` ·
+  `members` · `public` — read with each membership's `accessScope`, `full` or
+  `limited`, by the one rule `canEnter` in `lib/permissions/resolve.ts`.
+  `accessLevel` survives beside it until the contract story drops it, written
+  together with the mode so the RLS policies keyed on `'public'` still agree.)_
 - **The policy is pure + already factored** (`lib/projects/access.ts`):
   `canBrowse` / `canEdit` / `canComment` / `canModerateComments` /
   `canCreateAttachments` / `canDeleteAllAttachments` / `canManageWatchers` /
   `canManageProject` decide over `ProjectAccessInputs = { accessLevel,
-workspaceRole, projectRole }` with **no IO**. Two rails frame every level:
+workspaceRole, projectRole }` with **no IO** _(amended 2026-09-27: `{ accessMode,
+workspaceRole, accessScope, addedToProject }` — roles live on the workspace since
+  MOTIR-6168 and entry on the mode since MOTIR-6169)_. Two rails frame every level:
   a workspace **owner/admin always passes**, and a **non-workspace-member
   (`workspaceRole == null`) always FAILS both browse and edit** — "the
   project gate sits beneath the workspace gate (finding #26)."
@@ -124,11 +136,28 @@ workspaceRole, projectRole }` with **no IO**. Two rails frame every level:
 
 ## Decision
 
-### 1. `public` extends `ProjectAccessLevel`; the ladder is public > open > limited > private
+### 1. `public` is an access mode; the ladder is public > workspace > members
 
-Add `public` as a fourth value of the existing enum — `enum
-ProjectAccessLevel { open, limited, private, public }` — with the same
-`@@map("project_access_level")`. The **openness ladder** (most → least open):
+_(Amended 2026-09-27, Story MOTIR-6169 — `role-model.md` Q1.)_ Entry is one of three
+**access modes** — `enum ProjectAccessMode { workspace, members, public }`,
+`@@map("project_access_mode")` — read with each workspace membership's **access
+scope**, `full` or `limited`. The old four levels map onto them: `open` → `workspace`,
+`limited` and `private` → `members`, `public` → `public`. The **openness ladder**
+(most → least open):
+
+| Mode                                | Who can ENTER (and READ)                                                         | Who can WRITE (normal edits)                                                   |
+| ----------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **`public`**                        | as `workspace`, plus **ANY account, across orgs, reading** (the public read set) | an entrant whose workspace role writes — a non-entrant only the 3 grants of §3 |
+| `workspace` (Open to the workspace) | every **Full**-scope workspace member, anyone added, and Managers                | an entrant whose workspace role writes                                         |
+| `members` (Members only)            | only the people **added**, and Managers                                          | an entrant whose workspace role writes                                         |
+
+A **Limited**-scope member enters only the projects they were added to, in every
+mode — on a `public` one they were not added to they read as a visitor does, and it
+is not listed as one of their projects. What an entrant may DO is their workspace
+role (Manager · Member · Viewer · custom), never the mode.
+
+The table as first written, for the record — the four-value enum `{ open, limited,
+private, public }` that Story 6.12 extended:
 
 | Level        | Who can READ                                           | Who can WRITE (normal edits)                         |
 | ------------ | ------------------------------------------------------ | ---------------------------------------------------- |
@@ -163,6 +192,16 @@ auditable branch — and nowhere else**:
      if (i.workspaceRole == null) return false;
      // …open/limited/private unchanged…
    }
+   ```
+
+   _(Amended 2026-09-27: the policy is a permission SET now, and the exception is its
+   first layer — `resolveOpen` in `lib/permissions/resolve.ts`:)_
+
+   ```ts
+   if (i.accessMode === 'public') held ∪= PUBLIC_PROJECT_PERMISSIONS; // ← the public read exception
+   if (!canEnter(i)) return held;          // no membership / Members only and not added / Limited and not added
+   if (i.workspaceRole === 'manager') held ∪= ROLE_GATED_PERMISSIONS;
+   else held ∪= the workspace role's set;  // nothing subtracted by the mode
    ```
 
    It is leading + unconditional so a `public` project is browsable by anyone
@@ -436,3 +475,33 @@ portal pattern is built around.
   finding #26 (the project gate sits beneath the workspace gate — the rail
   §2 carves the public exception through) + the decision-authority ladder
   (mirror → shipped code → card) this ADR resolves from.
+
+---
+
+## AMENDMENT 1 (2026-09-27) — three access modes and a membership scope
+
+**By:** Story MOTIR-6169 · Subtask MOTIR-6543, applying `docs/decisions/role-model.md` Q1
+(confirmed at the DECISION, MOTIR-6165).
+
+- **Levels → modes.** `ProjectAccessLevel` `{ open, limited, private, public }` is replaced, as
+  the statement of who may ENTER, by `ProjectAccessMode` `{ workspace, members, public }` on
+  `project.accessMode`. The data migration (MOTIR-6542) maps `open` → `workspace`, `limited` and
+  `private` → `members`, `public` → `public`, and reports every person a `limited` project stops
+  admitting. `accessLevel` is kept, written together with the mode, until the contract story
+  drops it.
+- **A membership scope.** Each workspace membership is `full` (enters every `workspace` /
+  `public` project, plus any `members` project they were added to) or `limited` (enters ONLY the
+  projects they were added to). A Manager — the org Owner and Admins included — enters every
+  project; scope is never read for one.
+- **One entry rule.** `canEnter` (`lib/permissions/resolve.ts`) decides entry; an entrant holds
+  exactly their workspace role's keys and a non-entrant nothing, except the public read set on a
+  `public` project. The per-level subtraction (`limited` withholding edit, `private` everything)
+  retired with the levels.
+- **Listings follow entry, not browse.** A project list, switcher or search shows the projects the
+  actor can ENTER. `canBrowse` still answers the read gate, so a `public` project's link keeps
+  working for a Limited person who was not added — as a visitor's does — without the project
+  appearing among their own.
+- **What stands.** §2's two touch-points (the public branch of the policy and the one
+  workspace-equality bypass in `resolvePublicInputs`, which now reads `accessModeOf(project) ===
+'public'`), §3's three grants, §4's projection and **§5 — READ anonymous, WRITE signed in** —
+  are unchanged. The Visitor role that formalises the public read set is MOTIR-6170's.
