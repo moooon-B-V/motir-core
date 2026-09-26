@@ -7,12 +7,12 @@ import { buildMcpServer } from '@/lib/mcp/registry';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // THE SERVER-INTERNAL VERDICT READ (Story MOTIR-5544 · Subtask MOTIR-6284) over
 // real Postgres — `plansService.resolveApprovedShapeForReport`, the read beneath
@@ -47,7 +47,7 @@ afterAll(async () => {
 async function keylessMemberOf(fx: WorkItemFixture): Promise<ServiceContext> {
   const user = await createTestUser({ name: 'Keyless' });
   await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

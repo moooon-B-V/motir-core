@@ -84,8 +84,20 @@ const STATUSES: WorkflowStatusDto[] = [
 ];
 
 const MEMBERS: WorkspaceMemberDTO[] = [
-  { userId: 'u-alice', name: 'Alice Chen', email: 'alice@acme.test', role: 'owner' },
-  { userId: 'u-dana', name: 'Dana Kim', email: 'dana@acme.test', role: 'member' },
+  {
+    userId: 'u-alice',
+    name: 'Alice Chen',
+    email: 'alice@acme.test',
+    workspaceRole: 'manager',
+    customRole: null,
+  },
+  {
+    userId: 'u-dana',
+    name: 'Dana Kim',
+    email: 'dana@acme.test',
+    workspaceRole: 'member',
+    customRole: null,
+  },
 ];
 
 function renderBar(filter: IssueFilter = EMPTY_FILTER) {

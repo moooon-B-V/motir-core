@@ -7,13 +7,12 @@ import {
   type PermissionDomain,
   type PermissionKey,
 } from '@/lib/permissions/catalog';
-import { BUILTIN_ROLE_PERMISSIONS, ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
-import { PROJECT_ASSIGNABLE_ROLES, type ProjectRole } from '@/lib/projects/roles';
+import { ROLE_GATED_PERMISSIONS, WORKSPACE_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { WORKSPACE_ROLES, type WorkspaceRole } from '@/lib/workspaces/roles';
 import type {
   ActorPermissionsDTO,
   PermissionDomainDTO,
   RoleCatalogDTO,
-  RoleDefinitionDTO,
   RoleDTO,
 } from '@/lib/dto/permissions';
 
@@ -22,10 +21,14 @@ import type {
 // returns. Every permission list leaves here in CATALOG order, so the boundary is
 // deterministic and the grid never reshuffles between two identical requests.
 
-/** How many of the project's members hold each BUILT-IN role — a role absent from the map is `0`. */
-export type RoleMemberCounts = Partial<Record<ProjectRole, number>>;
+/**
+ * How many of the WORKSPACE's members hold each BUILT-IN role — a role absent from
+ * the map is `0` (Story MOTIR-6168: roles and their Roles pages live on the
+ * workspace since MOTIR-6466).
+ */
+export type RoleMemberCounts = Partial<Record<WorkspaceRole, number>>;
 
-/** The slice of a `ProjectRoleDefinition` row the mappers need (MOTIR-2478). */
+/** The slice of a workspace custom role row the mappers need (MOTIR-2478 · MOTIR-6466). */
 export interface CustomRoleRow {
   id: string;
   name: string;
@@ -95,10 +98,10 @@ function groupsToDTOs(
 
 /**
  * One BUILT-IN role as a DTO — its i18n identity, its set in catalog order, and
- * its headcount. Its `key` IS its enum value, which is what keeps every existing
- * `/settings/project/roles/admin` URL working after the MOTIR-2478 widening.
+ * its headcount. Its `key` IS its enum value, so `/settings/workspace/roles/manager`
+ * addresses it (the old `/settings/project/roles/admin` redirects there).
  */
-export function toBuiltinRoleDTO(role: ProjectRole, memberCount: number): RoleDTO {
+export function toBuiltinRoleDTO(role: WorkspaceRole, memberCount: number): RoleDTO {
   return {
     key: role,
     builtInRole: role,
@@ -108,7 +111,7 @@ export function toBuiltinRoleDTO(role: ProjectRole, memberCount: number): RoleDT
     description: null,
     builtIn: true,
     permissions: sortByCatalogOrder(
-      [...BUILTIN_ROLE_PERMISSIONS[role]].filter((key) => isEnforced(key)),
+      [...WORKSPACE_ROLE_PERMISSIONS[role]].filter((key) => isEnforced(key)),
     ),
     memberCount,
   };
@@ -181,7 +184,7 @@ export function toRoleCatalogDTO(
     // order. (The repository returns them name-ordered; re-sorting here means
     // the DTO's contract does not rest on a `findMany` option.)
     roles: [
-      ...PROJECT_ASSIGNABLE_ROLES.map((role) => toBuiltinRoleDTO(role, memberCounts[role] ?? 0)),
+      ...WORKSPACE_ROLES.map((role) => toBuiltinRoleDTO(role, memberCounts[role] ?? 0)),
       ...[...customRoles]
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((row) => toCustomRoleDTO(row, customRoleMemberCounts[row.id] ?? 0)),
@@ -198,35 +201,4 @@ export function toActorPermissionsDTO(
   held: Iterable<PermissionKey>,
 ): ActorPermissionsDTO {
   return { projectId, permissions: sortByCatalogOrder(held) };
-}
-
-/**
- * ONE custom role definition → the DTO the write API returns (Story MOTIR-2257 ·
- * Subtask MOTIR-2472). Not `RoleDTO`: that is what the READ screens render for
- * every role in a project, built-ins included. This is the row that was just
- * written.
- *
- * The stored `permissions` array is INTERSECTED with the role-gated set and
- * re-sorted into catalog order on the way out — the same posture
- * `resolvePermissions` takes on the read side (MOTIR-2470). The service refuses
- * an ungrantable key at write time, so this is not a second policy: it is what
- * keeps a row authored BEFORE a key was retired from reporting a permission the
- * product no longer governs.
- */
-export function toRoleDefinitionDTO(row: {
-  id: string;
-  name: string;
-  permissions: string[];
-  createdAt: Date;
-  updatedAt: Date;
-}): RoleDefinitionDTO {
-  const roleGated = new Set<string>(ROLE_GATED_PERMISSIONS);
-  const held = row.permissions.filter((key): key is PermissionKey => roleGated.has(key));
-  return {
-    id: row.id,
-    name: row.name,
-    permissions: sortByCatalogOrder(held),
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
 }

@@ -273,7 +273,13 @@ describe('the /items rows — a rejected write', () => {
         pagination={{ total: 1, page: 1, pageSize: 50 }}
         workflow={listWorkflow}
         members={[
-          { userId: 'u_ada', name: 'Ada Lovelace', email: 'ada@example.com', role: 'member' },
+          {
+            userId: 'u_ada',
+            name: 'Ada Lovelace',
+            email: 'ada@example.com',
+            workspaceRole: 'member',
+            customRole: null,
+          },
         ]}
       />,
     );

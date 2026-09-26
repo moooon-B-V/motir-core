@@ -86,10 +86,11 @@ test.beforeAll(async () => {
     name: 'Grace Hopper',
   });
   await workspacesService.addMember({ userId: reader.id, workspaceId: workspace.id });
-  const definition = await adminDb.projectRoleDefinition.create({
+  // Roles live on the workspace since MOTIR-6168: the custom role is a
+  // WORKSPACE custom role, held on the workspace membership at the member tier.
+  const definition = await adminDb.workspaceRoleDefinition.create({
     data: {
       workspaceId: workspace.id,
-      projectId: project.id,
       name: 'Reader',
       permissions: ['project:browse'],
     },
@@ -101,13 +102,16 @@ test.beforeAll(async () => {
       projectId: project.id,
       userId: reader.id,
       role: 'member',
-      roleDefinitionId: definition.id,
     },
-    update: { role: 'member', roleDefinitionId: definition.id },
+    update: {},
   });
   await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: reader.id, workspaceId: workspace.id } },
-    data: { activeProjectId: project.id },
+    data: {
+      activeProjectId: project.id,
+      workspaceRole: 'member',
+      roleDefinitionId: definition.id,
+    },
   });
 });
 

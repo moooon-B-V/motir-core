@@ -2,8 +2,6 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { PermissionDeniedError } from '@/lib/projects/errors';
@@ -11,6 +9,11 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import {
+  addToProjectAs,
+  createCustomRoleAs,
+  setProjectRoleAs,
+} from '../helpers/workspaceRoleFixtures';
 
 // AC4 of Bug MOTIR-3188, against REAL Postgres and a REAL custom role.
 //
@@ -75,7 +78,7 @@ async function buildScenario(slug: string): Promise<Scenario> {
   });
   const ownerCtx: WorkspaceContext = { userId: owner.id, workspaceId: workspace.id };
 
-  const role = await projectRoleDefinitionService.create({
+  const role = await createCustomRoleAs({
     projectId: project.id,
     ctx: ownerCtx,
     name: 'Plan follower',
@@ -88,14 +91,14 @@ async function buildScenario(slug: string): Promise<Scenario> {
     name: 'Author',
   });
   await workspacesService.addMember({ userId: author.id, workspaceId: workspace.id });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: project.identifier,
     actorUserId: owner.id,
     ctx: ownerCtx,
     targetUserId: author.id,
     role: 'member',
   });
-  await projectMembersService.setRole({
+  await setProjectRoleAs({
     key: project.identifier,
     actorUserId: owner.id,
     ctx: ownerCtx,

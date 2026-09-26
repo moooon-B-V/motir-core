@@ -272,7 +272,7 @@ export const parentStatusRollupService = {
       const parent = await workItemRepository.findById(parentIdIn, tx);
       if (!parent) return null;
       const settings = await projectRepository.findStatusAutomation(parent.projectId, tx);
-      const owner = await workspaceMembershipRepository.findOwnerByWorkspace(
+      const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(
         parent.workspaceId,
         tx,
       );

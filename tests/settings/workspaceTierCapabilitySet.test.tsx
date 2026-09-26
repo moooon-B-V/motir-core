@@ -35,11 +35,21 @@ const listMembers = vi.fn();
 const getMemberRole = vi.fn();
 const getWorkspacePolicy = vi.fn();
 
+vi.mock('@/lib/services/roleMigrationReportService', () => ({
+  roleMigrationReportService: { firstPageForViewer: async () => null },
+}));
 vi.mock('@/lib/services/workspacesService', () => ({
   workspacesService: {
     getWorkspaceSummary: (...a: unknown[]) => getWorkspaceSummary(...a),
     listMembers: (...a: unknown[]) => listMembers(...a),
     getMemberRole: (...a: unknown[]) => getMemberRole(...a),
+    // The Members role column's context (MOTIR-6465) — inert here.
+    getMemberRoleContext: async () => ({
+      canManageRoles: false,
+      orgManagedUserIds: [],
+      organizationName: 'Acme',
+      customRoles: [],
+    }),
   },
 }));
 vi.mock('@/lib/services/twoFactorPolicyService', () => ({
@@ -65,6 +75,13 @@ vi.mock('@/app/(authed)/settings/workspace/_components/DangerZoneCard', () => ({
 }));
 vi.mock('@/app/(authed)/settings/organization/_components/RequireTwoFactorCard', () => ({
   RequireTwoFactorCard: () => <div data-testid="cap-two-factor" />,
+}));
+
+// The Roles DOOR (Story MOTIR-6168 · MOTIR-6466) — a link to
+// `/settings/workspace/roles`, which answers at every workspace count. It is not
+// one of the capabilities the fold-in HOSTS, so it is stubbed apart from the set.
+vi.mock('@/app/(authed)/settings/organization/_components/RolesDoorCard', () => ({
+  RolesDoorCard: () => <div data-testid="door-roles" />,
 }));
 
 import { WorkspaceFoldInSection } from '@/app/(authed)/settings/organization/_components/WorkspaceFoldInSection';

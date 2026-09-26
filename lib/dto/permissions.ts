@@ -1,5 +1,5 @@
 import type { PermissionDomain, PermissionKey } from '@/lib/permissions/catalog';
-import type { ProjectRole } from '@/lib/projects/roles';
+import type { WorkspaceRole } from '@/generated/prisma/client';
 
 // DTOs for the permission model (Story MOTIR-2255 · Subtask MOTIR-2262). These
 // define EXACTLY what crosses the HTTP / Server-Action boundary — no `Set`, no
@@ -28,22 +28,6 @@ export interface PermissionDescriptorDTO {
 }
 
 /**
- * ONE custom role definition, as the write API returns it (Story MOTIR-2257 ·
- * Subtask MOTIR-2472). Distinct from {@link RoleDTO}, which is what the READ
- * screens render for every role in a project, built-in ones included — this is
- * the row the create / rename / re-permission calls just wrote, and nothing
- * more.
- */
-export interface RoleDefinitionDTO {
-  id: string;
-  name: string;
-  /** The permissions it holds, in CATALOG order (never insertion order). */
-  permissions: PermissionKey[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
  * One role in the catalog: its identity, and the permissions it holds.
  *
  * ⚠️ WIDENED BY MOTIR-2478, and the widening IS the ripple of custom roles. Until
@@ -61,11 +45,11 @@ export interface RoleDTO {
    */
   key: string;
   /**
-   * The `ProjectRole` enum where it still exists — a built-in's own value, or
-   * `null` for a custom role. What the icon map and the tint choice key off, and
-   * the one field a `Record<ProjectRole, …>` may be indexed with.
+   * The `WorkspaceRole` a built-in IS (`manager` / `member` / `viewer`), or `null`
+   * for a custom role. What the icon map and the tint choice key off, and the one
+   * field a `Record<WorkspaceRole, …>` may be indexed with (MOTIR-6466).
    */
-  builtInRole: ProjectRole | null;
+  builtInRole: WorkspaceRole | null;
   /**
    * i18n key for a BUILT-IN's display name (`settings.roles.<role>.name`), or
    * `null` for a custom role. Exactly one of `labelKey` / `name` is non-null.

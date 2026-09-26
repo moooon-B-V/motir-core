@@ -5,13 +5,13 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { toAttachmentDto } from '@/lib/mappers/attachmentMappers';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // attachmentsService management surface (Story 5.2 · Subtask 5.2.2) against a
 // REAL Postgres: attachToWorkItem / listForWorkItem / deleteAttachment — the
@@ -84,14 +84,14 @@ async function buildScenario(): Promise<Scenario> {
   const { user: viewer, ctx: viewerCtx } = await wsMember('viewer@ex.com', 'Read Only');
   const { user: projAdmin, ctx: projAdminCtx } = await wsMember('padmin@ex.com', 'Proj Admin');
 
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,
     targetUserId: viewer.id,
     role: 'viewer',
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

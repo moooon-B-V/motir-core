@@ -21,6 +21,7 @@ import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
 
 // The two OAuth ROUTES (Story MOTIR-4926 · Subtask MOTIR-5260) — what only the
 // route layer owns: the httpOnly state cookie, the nonce check, the four named
@@ -152,6 +153,7 @@ describe('GET /api/monitors/sentry/oauth/start', () => {
         role: 'viewer',
       },
     });
+    await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
     session.current = { user: { id: viewer.id, email: 'v@x', name: 'V' } };
     workspaceCookie.current = fx.workspaceId;
 

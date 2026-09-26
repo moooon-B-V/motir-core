@@ -5,7 +5,6 @@ import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { settingsDoorFor } from '@/lib/approvalGates/settingsDoor';
@@ -14,6 +13,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { addToProjectAs } from './helpers/workspaceRoleFixtures';
 
 // THE SETTINGS DOOR IS GATED BY THE SERVER READ (Story MOTIR-4882 · MOTIR-5513),
 // against a REAL Postgres.
@@ -45,7 +45,7 @@ async function seatedOn(role: 'admin' | 'member') {
   await adminDb.workspaceMembership.create({
     data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

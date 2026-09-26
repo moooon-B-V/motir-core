@@ -5,6 +5,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 // tests pass `ctx` explicitly; the route transport tests drive
 // `wsCtx.current` (the saved-filters suite convention).
 import type { WorkspaceContext } from '@/lib/workspaces';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 const wsCtx = { current: null as WorkspaceContext | null };
 vi.mock('@/lib/workspaces', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/workspaces')>();
@@ -62,7 +63,7 @@ async function makePrivateTeam(): Promise<Team> {
     workspaceId: fx.workspaceId,
     role: 'member',
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

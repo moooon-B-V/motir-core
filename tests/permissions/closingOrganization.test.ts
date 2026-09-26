@@ -1,14 +1,16 @@
-import type { MemberRole, ProjectAccessLevel } from '@/generated/prisma/client';
+import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
 import { describe, expect, it } from 'vitest';
-import { BUILTIN_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { WORKSPACE_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { CLOSING_READ_SET, resolvePermissions } from '@/lib/permissions/resolve';
 
 // A CLOSING organization is read-only (Story MOTIR-6306 · MOTIR-6396;
 // `docs/decisions/organization-deletion.md` §3) — the pure half: the resolver's
 // intersection, over every input the parity table enumerates plus custom roles.
+// (Inputs are the WORKSPACE role and whether the actor was added — Story
+// MOTIR-6168 moved roles off the project.)
 
 const LEVELS: ProjectAccessLevel[] = ['open', 'limited', 'private', 'public'];
-const ROLES: Array<MemberRole | null> = [null, 'owner', 'admin', 'member', 'viewer'];
+const ROLES: Array<WorkspaceRole | null> = [null, 'manager', 'member', 'viewer'];
 const CUSTOM: Array<readonly string[] | null> = [
   null,
   [],
@@ -18,14 +20,14 @@ const CUSTOM: Array<readonly string[] | null> = [
 function* allInputs() {
   for (const accessLevel of LEVELS)
     for (const workspaceRole of ROLES)
-      for (const projectRole of ROLES)
+      for (const addedToProject of [false, true])
         for (const customRolePermissions of CUSTOM)
-          yield { accessLevel, workspaceRole, projectRole, customRolePermissions };
+          yield { accessLevel, workspaceRole, addedToProject, customRolePermissions };
 }
 
 describe('the closing read set', () => {
-  it('is the built-in viewer set — derived, so a new write key is closed by default', () => {
-    expect([...CLOSING_READ_SET].sort()).toEqual([...BUILTIN_ROLE_PERMISSIONS.viewer].sort());
+  it('is the Viewer role’s set — derived, so a new write key is closed by default', () => {
+    expect([...CLOSING_READ_SET].sort()).toEqual([...WORKSPACE_ROLE_PERMISSIONS.viewer].sort());
     for (const key of CLOSING_READ_SET) {
       expect(key).not.toMatch(/:(edit|add|create|delete|archive|manage|administer|submit)/);
     }
@@ -61,15 +63,15 @@ describe('resolvePermissions with organizationClosing', () => {
   it('closes the Owner too, and a public visitor’s request writes', () => {
     const owner = resolvePermissions({
       accessLevel: 'open',
-      workspaceRole: 'owner',
-      projectRole: null,
+      workspaceRole: 'manager',
+      addedToProject: false,
       organizationClosing: true,
     });
     // Every key the Owner keeps is a READ key of the viewer set — derived rather
     // than listed, so a read key main adds to the viewer set (`approval:view_any`,
     // `plan:view_any`, `run:view_any` arrived that way) is kept, never a write.
     expect([...owner].sort()).toEqual(
-      [...BUILTIN_ROLE_PERMISSIONS.viewer].filter((k) => owner.has(k)).sort(),
+      [...WORKSPACE_ROLE_PERMISSIONS.viewer].filter((k) => owner.has(k)).sort(),
     );
     expect(owner.has('project:browse')).toBe(true);
     expect(owner.has('report:view')).toBe(true);
@@ -79,7 +81,7 @@ describe('resolvePermissions with organizationClosing', () => {
     const visitor = resolvePermissions({
       accessLevel: 'public',
       workspaceRole: null,
-      projectRole: null,
+      addedToProject: false,
       organizationClosing: true,
     });
     // A public visitor keeps the browse, and whatever other READ keys their

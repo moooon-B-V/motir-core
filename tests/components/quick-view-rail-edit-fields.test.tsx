@@ -90,8 +90,20 @@ const STATUSES = [
 ];
 
 const MEMBERS = [
-  { userId: 'u_ada', name: 'Ada Lovelace', email: 'ada@example.com', role: 'member' as const },
-  { userId: 'u_grace', name: '', email: 'grace@example.com', role: 'owner' as const },
+  {
+    userId: 'u_ada',
+    name: 'Ada Lovelace',
+    email: 'ada@example.com',
+    workspaceRole: 'member' as const,
+    customRole: null,
+  },
+  {
+    userId: 'u_grace',
+    name: '',
+    email: 'grace@example.com',
+    workspaceRole: 'manager' as const,
+    customRole: null,
+  },
 ];
 
 const CUSTOM_FIELDS: CustomFieldWithValueDto[] = [

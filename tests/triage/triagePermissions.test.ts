@@ -3,13 +3,13 @@ import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { triageService } from '@/lib/services/triageService';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // 6.11.8 — the triage 6.4 PERMISSION matrix. Triage reads gate on `canBrowse`
 // and triage WRITES (accept / promote / decline / mark-duplicate / snooze /
@@ -62,7 +62,7 @@ async function buildScenario(): Promise<PermScenario> {
   async function enrol(email: string, name: string, role: 'viewer' | 'member') {
     const u = await usersService.createUser({ email, password: 'hunter2hunter2', name });
     await workspacesService.addMember({ userId: u.id, workspaceId: fx.workspaceId });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

@@ -4222,3 +4222,11 @@ raised here so it clears AA on every surface the card lands on). Keys use
 `radiogroup` of `radio`s with `aria-checked`; the picker is the shipped WAI-ARIA
 combobox + `listbox`; the archived state conveys itself with text and an icon, not
 colour alone.
+
+## Project Members without roles — `access-members--no-roles.mock.html` (MOTIR-6456)
+
+A delta of `access-members.mock.html`: roles moved to the workspace (Story MOTIR-6168), so the project
+Members card loses its role `Combobox` and role `Pill`, and the project rail loses **Roles &
+permissions** (its routes redirect to `/settings/workspace/roles`). The spec — panels 3a–3c, copy,
+tokens and the element → card allocation — is `design/workspaces/design-notes.md` § _Workspace roles_,
+where the rest of the same room is drawn. The access-level card is unchanged here; MOTIR-6169 owns it.

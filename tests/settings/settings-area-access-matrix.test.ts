@@ -15,6 +15,7 @@ import type { ProjectAccessLevel } from '@/generated/prisma/client';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // Story 6.5 · Subtask 6.5.4 — the settings-area role-gating matrix proven over
 // the REAL stack (Postgres + the shipped services), the DB-backed half of the
@@ -114,7 +115,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   async function projectActor(role: 'viewer' | 'member' | 'admin') {
     const u = await makeUser(`${role}-${slug}@ex.com`, role);
     await workspacesService.addMember({ userId: u.id, workspaceId: workspace.id });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,

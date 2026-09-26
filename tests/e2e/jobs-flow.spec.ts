@@ -353,7 +353,7 @@ test('@smoke role gating: a non-owner member sees a disabled Replay with a toolt
   // hover/focus (after a 700ms delay); the disabled button can't receive pointer
   // events, so the component wraps it in a <span> trigger — hover that.
   await replay.locator('xpath=..').hover();
-  await expect(memberPage.getByText('Only a workspace owner can replay jobs')).toBeVisible();
+  await expect(memberPage.getByText('Only a workspace Manager can replay jobs')).toBeVisible();
 
   await memberCtx.close();
 });
