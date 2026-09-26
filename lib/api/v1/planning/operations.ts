@@ -11,7 +11,12 @@ import {
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
 import { projectRepositorySchema } from '@/lib/api/v1/projects/repositories';
 import { projectSchema } from '@/lib/api/v1/projects/schema';
-import { readyItemSchema, SPRINT_ACTIVE, UNASSIGNED } from '@/lib/api/v1/ready/schema';
+import {
+  ALLOW_SOFT_BLOCK_VALUES,
+  readyItemSchema,
+  SPRINT_ACTIVE,
+  UNASSIGNED,
+} from '@/lib/api/v1/ready/schema';
 import {
   membershipMoveBodySchema,
   membershipMoveResultSchema,
@@ -292,7 +297,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
         in: 'query',
         required: false,
         description:
-          'SCOPE the read to the ready leaves STRICTLY BENEATH one or more containers, at ANY depth, as `?ancestor=MOTIR-42&ancestor=MOTIR-43` — an any-of set, like `kind`. The named container is NOT in its own result, so a childless one returns an empty page rather than itself: that is the honest answer to “what is ready under this story” for a story nobody has decomposed. ⚠️ It NARROWS the same answer the unfaceted read gives and can never widen it — a leaf whose ancestor chain reaches the named container but is not itself all-ready stays absent, because the parent-ready cascade is computed first and this filters its result. An unknown key, or one belonging to another project, is a 422 — indistinguishable from each other.',
+          'SCOPE the read to the ready leaves STRICTLY BENEATH one or more containers, at ANY depth, as `?ancestor=MOTIR-42&ancestor=MOTIR-43` — an any-of set, like `kind`. The named container is NOT in its own result, so a childless one returns an empty page rather than itself: that is the honest answer to “what is ready under this story” for a story nobody has decomposed. ⚠️ It NARROWS the same answer the unfaceted read gives and can never widen it — a leaf whose ancestor chain reaches the named container but is not itself all-ready stays absent, because the parent-ready cascade is computed first and this filters its result (with `allowSoftBlock=true` it narrows that widened answer in the same way). An unknown key, or one belonging to another project, is a 422 — indistinguishable from each other.',
         // An ARRAY for the same reason `kind` is one: a generated client that
         // typed it as a scalar could not express two containers, which is a
         // legitimate ask (one run over two stories) the shape must not forbid.
@@ -305,6 +310,14 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
         required: false,
         description: `SCOPE the read to the items whose OWN \`sprintId\` matches — a sprint id, or the reserved literal \`${SPRINT_ACTIVE}\` for the project's active sprint. SINGLE-VALUED: membership is a scalar column, so there is no any-of question to ask. Membership is DIRECT and never inherited — an item under an in-sprint parent but not itself in the sprint is out of scope. A sprint that is not this project's, and \`${SPRINT_ACTIVE}\` on a project between sprints, are both a 422 rather than a silently unfiltered page. An empty value is treated as omitted.`,
         schema: z.string().min(1),
+      },
+      {
+        name: 'allowSoftBlock',
+        in: 'query',
+        required: false,
+        description:
+          'WIDEN the read past a SOFT block. `true` keeps the requirement that every listed leaf’s OWN `blocked_by` dependencies are done, but no longer drops a leaf because an ANCESTOR is not ready — so a leaf held only by its epic’s or story’s block is listed, while a leaf with its own open blocker (a HARD block) never is. A container whose own blockers are open counts toward its children only as an ancestor. Composes with every other parameter, `ancestor` included. Absent, empty or `false` returns exactly the parent-ready cascade described above. Any other value is a 422.',
+        schema: z.enum(ALLOW_SOFT_BLOCK_VALUES),
       },
     ],
     response: {

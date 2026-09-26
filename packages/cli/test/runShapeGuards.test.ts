@@ -362,3 +362,30 @@ describe('the scoped command is COVERED by the record walks, not exempted from t
     expect(command!.options.map((o) => o.flags)).toEqual(entry!.options.map((o) => o.flags));
   });
 });
+
+describe('`--allow-soft-block` is a `run` flag and nothing else (MOTIR-6355)', () => {
+  it('is registered on `run`, right after `--force`, with the HARD/SOFT help text', () => {
+    const command = buildProgram().commands.find((c) => c.name() === 'run');
+    const flags = command!.options.map((o) => o.flags);
+    expect(flags.indexOf('--allow-soft-block')).toBe(flags.indexOf('--force') + 1);
+    const help = command!.options.find((o) => o.flags === '--allow-soft-block')!.description;
+    expect(help).toContain('SOFT');
+    expect(help).toContain('HARD');
+  });
+
+  it.each(['next', 'auto', 'batch'])(
+    '`motir %s --allow-soft-block` is an unknown option',
+    (name) => {
+      const built = buildProgram();
+      built.exitOverride();
+      built.commands.forEach((c) => c.exitOverride());
+      // Stop commander printing its own error to stderr during the test.
+      built.commands.forEach((c) => c.configureOutput({ writeErr: () => undefined }));
+      expect(() => built.parse(['node', 'motir', name, '--allow-soft-block'])).toThrow(
+        expect.objectContaining({
+          message: expect.stringContaining("unknown option '--allow-soft-block'"),
+        }),
+      );
+    },
+  );
+});

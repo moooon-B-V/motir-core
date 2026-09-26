@@ -368,6 +368,26 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(snapshot.map((i) => i.key)).toEqual(['PROD-1', 'PROD-4']);
   });
 
+  it('forwards allowSoftBlock as the string "true", and omits it otherwise (MOTIR-6355)', async () => {
+    const client = connected();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': {
+        body: { items: [v1ReadyRow('PROD-1')], nextCursor: null },
+      },
+    });
+
+    await client.listReadyForDispatch({
+      projectKey: 'PROD',
+      ancestor: ['PROD-9'],
+      allowSoftBlock: true,
+    });
+    expect(server.v1Calls.at(-1)?.query.get('allowSoftBlock')).toBe('true');
+    expect(server.v1Calls.at(-1)?.query.getAll('ancestor')).toEqual(['PROD-9']);
+
+    await client.listReadyForDispatch({ projectKey: 'PROD', allowSoftBlock: false });
+    expect(server.v1Calls.at(-1)?.query.has('allowSoftBlock')).toBe(false);
+  });
+
   it('CLAIMS a card through the ATOMIC endpoint — one POST, no assignment body', async () => {
     // MOTIR-3048: this used to be a `PATCH { assigneeId }` the caller followed
     // with a separate `transition_status` — two unlocked writes with a race

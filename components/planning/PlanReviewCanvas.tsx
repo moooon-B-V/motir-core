@@ -33,6 +33,8 @@ import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 // against this module, unchanged.
 import { arrivalLevel } from '@/lib/planning/planArrival';
 import { liveArrivals, proposalChangeKey } from '@/lib/planning/livePane';
+import { levelChangeFor, planElsewhere } from '@/lib/planning/levelChange';
+import { LevelChangeBand } from '@/components/planning/LevelChangeBand';
 
 export { arrivalLevel };
 
@@ -125,6 +127,15 @@ export interface PlanReviewCanvasProps {
    * unchanged by its existence.
    */
   live?: boolean;
+  /**
+   * OFFER THE TRIP when the plan is BESIDE the reader (bug MOTIR-6223, second
+   * half): the pending plan places nothing on the level in view and something on
+   * another, so the bar arms MOTIR-6161's *"Plan is in {identifier} · Go there"*.
+   * The planning surface opts in; the plan page, which ARRIVES where the plan is
+   * and has no follow to decline, passes nothing and is unchanged. Never while
+   * `live` — the arrivals count owns that slot while the plan is written.
+   */
+  offerPlanElsewhere?: boolean;
 }
 
 export function PlanReviewCanvas({
@@ -139,6 +150,7 @@ export function PlanReviewCanvas({
   readerHasNavigated = false,
   onLevelChange,
   live = false,
+  offerPlanElsewhere = false,
 }: PlanReviewCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tPlan = useTranslations('planReview');
@@ -496,6 +508,26 @@ export function PlanReviewCanvas({
     [live, items, proposedWord],
   );
 
+  // ── A CHANGE TO THE LEVEL ITSELF (bug MOTIR-6223; design MOTIR-6241) ───────
+  // `mergePlanLevel` frames the nodes ON a level, and the level the reader stands
+  // in is not one of them — so the plan's change to it is drawn in the bar
+  // instead, asked of whichever level is in view (arrived, drilled or followed).
+  const levelBand = useCallback(
+    (focus: { id: string }) => {
+      const change = levelChangeFor(items, focus.id, outcome);
+      return change ? <LevelChangeBand change={change} outcome={outcome} /> : null;
+    },
+    [items, outcome],
+  );
+  // …and the plan BESIDE the reader, on the surface that opts in.
+  const elsewhereOffer = useCallback(
+    (trail: readonly CanvasCrumb[]) => {
+      const where = planElsewhere(items, trail, proposedWord);
+      return where ? { key: `elsewhere:${where.levelId ?? 'root'}`, trail: where.trail } : null;
+    },
+    [items, proposedWord],
+  );
+
   return (
     <>
       <ProjectRoadmapCanvas
@@ -574,6 +606,8 @@ export function PlanReviewCanvas({
         // elsewhere are counted rather than jumped to. Off on the plan page.
         motion={live}
         arrivals={arrivals}
+        levelBand={levelBand}
+        elsewhereOffer={offerPlanElsewhere && !live ? elsewhereOffer : undefined}
       />
       {/* Every PROPOSAL — `add`, `modify` and `remove` — opens the shipped peek in
           proposal mode (MOTIR-4185). A COMMITTED sibling node still opens the

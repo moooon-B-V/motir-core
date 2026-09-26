@@ -597,6 +597,99 @@ describe('motir run <scope> — the leaf-only flags', () => {
   });
 });
 
+describe('motir run <container> --allow-soft-block (MOTIR-6355)', () => {
+  /** The story is held only by its EPIC's block — a SOFT block. */
+  const softStory = (): WorkItemDetail => ({
+    ...detail({}, ['PROD-2']),
+    readiness: {
+      ready: false,
+      openBlockers: [],
+      blockedByAncestor: { identifier: 'PROD-0', title: 'The epic' },
+    },
+  });
+  /** The story has its OWN open blocker — a HARD block. */
+  const hardStory = (): WorkItemDetail => ({
+    ...detail({}, ['PROD-2']),
+    readiness: {
+      ready: false,
+      openBlockers: [{ identifier: 'PROD-8', kind: 'story', title: 'Other story', status: 'todo' }],
+      blockedByAncestor: null,
+    },
+  });
+
+  it('widens the ready read with allowSoftBlock when only the epic is blocked', async () => {
+    setup({ detail: softStory() });
+
+    await runCommand('PROD-1', { ...SCOPE_OPTS, allowSoftBlock: true }, SCOPE_DEPS);
+
+    // The target verdict is the one `resolveScopeTarget` already read — no
+    // second read of the story before the ready walk.
+    expect(toolNames().slice(0, 4)).toEqual([
+      'get_work_item',
+      'whoami',
+      'list_ready',
+      'claim_scope',
+    ]);
+    expect(callsTo('list_ready')[0]?.args).toEqual({
+      projectKey: 'PROD',
+      ownerId: OWNER,
+      ancestor: ['PROD-1'],
+      allowSoftBlock: true,
+    });
+    expect(callsTo('claim_scope')).toHaveLength(1);
+  });
+
+  it('refuses a story with its OWN open blocker before anything is read or claimed', async () => {
+    setup({ detail: hardStory() });
+
+    const err = await runCommand(
+      'PROD-1',
+      { ...SCOPE_OPTS, allowSoftBlock: true },
+      SCOPE_DEPS,
+    ).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(CliError);
+    expect((err as CliError).message).toContain('PROD-1 has its own open blocker');
+    expect((err as CliError).message).toContain('PROD-8 (Other story)');
+    expect(toolNames()).not.toContain('list_ready');
+    expect(toolNames()).not.toContain('claim_scope');
+  });
+
+  it('without the flag the ready read is unchanged — no allowSoftBlock is sent', async () => {
+    setup({ detail: hardStory() });
+
+    await runCommand('PROD-1', SCOPE_OPTS, SCOPE_DEPS);
+
+    expect(callsTo('list_ready')[0]?.args).toEqual({
+      projectKey: 'PROD',
+      ownerId: OWNER,
+      ancestor: ['PROD-1'],
+    });
+  });
+
+  it('a SPRINT scope has no target verdict to check, and widens its read', async () => {
+    setup();
+
+    await runCommand('sprint', { ...SCOPE_OPTS, allowSoftBlock: true }, SCOPE_DEPS);
+
+    expect(callsTo('list_ready')[0]?.args).toEqual({
+      projectKey: 'PROD',
+      ownerId: OWNER,
+      sprintId: 'active',
+      allowSoftBlock: true,
+    });
+  });
+
+  it('refuses it combined with --force as redundant', async () => {
+    setup({ detail: softStory() });
+
+    await expect(
+      runCommand('PROD-1', { ...SCOPE_OPTS, allowSoftBlock: true, force: true }, SCOPE_DEPS),
+    ).rejects.toThrow(/redundant with `--force`/);
+    expect(toolNames()).toEqual([]);
+  });
+});
+
 describe('motir run <container> — the close-out RE-READS the child set (MOTIR-3268 → MOTIR-4967)', () => {
   // ⚠️ THE CLAIM IS TAKEN AT t=0 AND THE CHILD SET MOVES UNDER IT.
   // `motir run` may file a bug mid-drain (MOTIR-3017) and it parents that bug

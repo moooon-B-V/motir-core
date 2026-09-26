@@ -591,6 +591,10 @@ export function usePlanChangeConversation({
   // The plan the poll has SEEN generating — what makes a later non-`generating`
   // snapshot a TRANSITION rather than merely a state.
   const sawGeneratingRef = useRef<string | null>(null);
+  // The plan a NAMED session's open is still waiting on (bug MOTIR-6346): its
+  // pending read was null, so the pane has nothing to draw until the poll's FIRST
+  // read settles — and until then the phase stays `loading`, the skeleton.
+  const openingLiveRef = useRef<string | null>(null);
   // The ONE proposed-review read per run: the hand-over and the settle of a hosted
   // run both reach for it, and whichever comes second awaits the first's read.
   const proposalReadRef = useRef<{
@@ -611,7 +615,20 @@ export function usePlanChangeConversation({
   const resetLiveRun = useCallback(() => {
     sawGeneratingRef.current = null;
     proposalReadRef.current = null;
+    openingLiveRef.current = null;
   }, []);
+
+  /** Settle a named session's open on the poll's first answer about `planId`:
+   *  `true` once, when that answer is the one the open was waiting on. The caller
+   *  ends `loading` in the SAME update as whatever the answer brought, so no pane
+   *  is drawn in between. */
+  const settlesOpen = (planId: string) => {
+    if (openingLiveRef.current !== planId) return false;
+    openingLiveRef.current = null;
+    return true;
+  };
+  const endOpening = (s: PlanChangeConversationState, settles: boolean) =>
+    settles && s.phase === 'loading' ? { phase: 'idle' as const } : {};
 
   /** The run that watched `planId` has ended: its settle has filed what it
    *  proposed, so stop watching — a plan a failed run left `generating` must not
@@ -642,9 +659,17 @@ export function usePlanChangeConversation({
   const { failing: liveFailing } = useGeneratingPlanPoll(livePlanId, {
     onSnapshot: (snap) => {
       if (!livePlanId || !mountedRef.current) return;
+      // A named session's open ends HERE, in the same update as this snapshot:
+      // the skeleton hands straight to the live pane (or to the no-plan state).
+      const settles = settlesOpen(livePlanId);
       if (snap.status === 'generating') {
         sawGeneratingRef.current = livePlanId;
-        setState((s) => ({ ...s, liveReview: snap, liveVersion: s.liveVersion + 1 }));
+        setState((s) => ({
+          ...s,
+          ...endOpening(s, settles),
+          liveReview: snap,
+          liveVersion: s.liveVersion + 1,
+        }));
         return;
       }
       // Out of `generating` — the poll has stopped itself. Only an OBSERVED
@@ -652,7 +677,10 @@ export function usePlanChangeConversation({
       // the run's own read to file, not this one's.
       const transitioned = sawGeneratingRef.current === livePlanId;
       sawGeneratingRef.current = null;
-      if (!transitioned) return;
+      if (!transitioned) {
+        if (settles) setState((s) => ({ ...s, ...endOpening(s, true) }));
+        return;
+      }
       // DISCARDED while it was being written (§23.12): nothing is proposed, so there
       // is nothing to hand over — the ended snapshot replaces the live one in ONE
       // update, so the pane that drew it stays mounted and says how it ended.
@@ -663,6 +691,15 @@ export function usePlanChangeConversation({
       void handOver(livePlanId);
     },
   });
+
+  // A named session's open whose poll cannot read the plan (MOTIR-6346): once the
+  // poll says it is FAILING the skeleton gives way to the no-plan state rather than
+  // standing for ever. The poll keeps retrying, and a later snapshot still brings
+  // the live pane in over it.
+  useEffect(() => {
+    if (!liveFailing || !livePlanId || !settlesOpen(livePlanId)) return;
+    setState((s) => ({ ...s, ...endOpening(s, true) }));
+  }, [liveFailing, livePlanId]);
 
   // Open OR RESUME the thread on mount — the project's, or the ANCHORED item's.
   // Best-effort: a failure leaves an empty thread with a recoverable error, never
@@ -751,9 +788,20 @@ export function usePlanChangeConversation({
           // Nothing reviewable YET on a named session's plan may mean an agent is
           // still writing it (MOTIR-6295): watch it live. The poll's first read
           // says whether it is `generating`; one that is not stops at once.
+          //
+          // ⚠️ AND UNTIL THAT FIRST READ SETTLES, THE PHASE STAYS `loading` (bug
+          // MOTIR-6346). A null here is exactly the MOTIR-6289 interval one read
+          // later: an `idle` now would draw the roadmap, and the live pane would
+          // swap in over it when the poll answered. The poll's first applied
+          // snapshot ends it (`settlesOpen`), and so does the poll reporting
+          // `failing`, so a plan that cannot be read never holds the skeleton.
           if (!pending) {
-            setState((s) => ({ ...s, phase: 'idle' }));
-            if (sessionId) setLivePlanId(planId);
+            if (sessionId) {
+              openingLiveRef.current = planId;
+              setLivePlanId(planId);
+            } else {
+              setState((s) => ({ ...s, phase: 'idle' }));
+            }
             return;
           }
           setState((s) => ({ ...s, phase: 'review', review: pending }));

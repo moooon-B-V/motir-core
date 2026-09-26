@@ -8,7 +8,6 @@ import type {
   ApprovalGateDTO,
   ConfirmedRecordDTO,
   DecisionConfirmationBodyDTO,
-  DecisionEpicDTO,
 } from '@/lib/dto/approvalGate';
 
 vi.mock('next/navigation', () => ({
@@ -53,15 +52,6 @@ const RECORD: ConfirmedRecordDTO = {
   sizeBytes: 2048,
   createdAt: '2026-09-20T10:00:00.000Z',
 };
-const EPIC: DecisionEpicDTO = {
-  key: 'ACME-1',
-  title: 'Exports',
-  hasDescription: true,
-  archived: false,
-  statusCategory: 'in_progress',
-  canPlan: true,
-};
-
 function port(record: ConfirmedRecordDTO = RECORD, recordCount = 2) {
   const parse = parseDecisionRecord(BODY);
   if (!parse.ok) throw new Error(parse.defect.reason);
@@ -76,7 +66,6 @@ function port(record: ConfirmedRecordDTO = RECORD, recordCount = 2) {
       { key: 'ACME-6', title: 'Postgres export table' },
       { key: 'ACME-9', title: null },
     ],
-    epic: EPIC,
   };
 }
 
@@ -327,7 +316,6 @@ describe('the item page — the Decision section', () => {
           recordCount: 0,
           presentRecordIds: [],
           supersedesItems: [],
-          epic: null,
         }}
         gate={null}
         canDecide
@@ -355,7 +343,6 @@ describe('the item page — the Decision section', () => {
           recordCount: 0,
           presentRecordIds: [],
           supersedesItems: [],
-          epic: null,
         }}
         gate={null}
         canDecide
@@ -411,7 +398,6 @@ describe('the item page — the Decision section', () => {
           recordCount: 0,
           presentRecordIds: [],
           supersedesItems: [],
-          epic: null,
         }}
         gate={{ ...CONFIRMED, confirmedRecord: { kind: 'none' } }}
         canDecide={false}

@@ -189,22 +189,27 @@ export const sprintsService = {
    * Is a sprint FINISHABLE? (Subtask 7.8.15) — the productized form of the
    * *re-validate-the-active-sprint* rule (`motir-meta` `plan-rules.md` #94). A
    * sprint is VALID ⟺ for EVERY in-sprint, NOT-done item, BOTH (a) its ENTIRE
-   * transitive `blocked_by` closure and (b) ALL of its children are `done` OR
-   * also in the SAME sprint. Two cascades meet here:
-   *   - blockers cascade DOWN the hierarchy (a child inherits its ancestors'
-   *     blockers — we walk the parent chain's blockers too), and
-   *   - completion cascades UP it (a parent can only be finished once every
-   *     child is done — the parent-ready rule). So a parent in the sprint with
-   *     an out-of-sprint, not-done child can NEVER be finished within the sprint
-   *     and the sprint is INVALID (MOTIR-1337) — the bug this rule was missing.
+   * transitive `blocked_by` closure of its OWN edges and (b) ALL of its children
+   * are `done` OR also in the SAME sprint.
+   *   - (a) checks HARD blockers only (MOTIR-6354 / MOTIR-6368): an item is
+   *     gated by its OWN `blocked_by`, never by an ancestor's. An ancestor's
+   *     block reaches a descendant only through the readiness cascade — a SOFT
+   *     block a run may override with `--allow-soft-block` — so it does not
+   *     make the sprint unfinishable. A blocked epic or story that is ITSELF in
+   *     the sprint still gates, as its own member.
+   *   - (b) completion cascades UP the hierarchy (a parent can only be finished
+   *     once every child is done — the parent-ready rule). So a parent in the
+   *     sprint with an out-of-sprint, not-done child can NEVER be finished
+   *     within the sprint and the sprint is INVALID (MOTIR-1337). Not a
+   *     blocker; kept as is.
    * When `sprintId` is `null` the project's ACTIVE sprint is validated; an
    * explicit id validates that sprint. The transitive blocker closure is
    * realized WITHOUT a recursive walk: iterating over every not-done member and
-   * checking its own ∪ ancestors' direct blockers (and its own direct children)
-   * catches the whole chain, because a gating item that is itself in-sprint is
-   * checked as its OWN member, a `done` one terminates the path, and an
-   * out-of-sprint, not-done one is the violation we report at the nearest
-   * in-sprint item it gates. ARCHIVED items (blockers and children) are ignored.
+   * checking its own direct blockers (and its own direct children) catches the
+   * whole chain, because a gating item that is itself in-sprint is checked as
+   * its OWN member, a `done` one terminates the path, and an out-of-sprint,
+   * not-done one is the violation we report at the in-sprint item that owns the
+   * edge. ARCHIVED items (blockers and children) are ignored.
    *
    * `condition` (Subtask 7.8.22) tunes how a `done`-but-out-of-sprint gating
    * item is treated: `loose` (the default — today's behaviour) accepts it as
@@ -924,19 +929,20 @@ export function assertSprintTransition(from: SprintState, to: SprintState): void
  * Compute a sprint's finishability (Subtask 7.8.15) — the engine behind
  * `validateSprint`, given an already-resolved sprint. See the method's doc for
  * the validity rule. Reads: the sprint's non-archived members (status + parent),
- * the project terminal set ("done"), the not-done members' ancestor chains, the
- * `blocked_by` edges of every member ∪ ancestor (the probe set), and the DIRECT
- * children of every not-done member. A not-done in-sprint item is gated by:
- *   - an unsatisfied `blocked_by` edge (its own, or an ancestor's — a child
- *     inherits its ancestors' blockers), AND
+ * the project terminal set ("done"), the `blocked_by` edges of every not-done
+ * member, and the DIRECT children of every not-done member. A not-done in-sprint
+ * item is gated by:
+ *   - an unsatisfied `blocked_by` edge of its OWN — a HARD block. An ancestor's
+ *     blocker is NOT reported against a descendant: it reaches the descendant
+ *     only through the readiness cascade (a SOFT block), which a run may
+ *     override with `--allow-soft-block` (MOTIR-6354 / MOTIR-6368). A blocked
+ *     epic or story that is ITSELF in the sprint still gates, as its own member;
  *   - any of its OWN children that is neither done nor also in the sprint (the
  *     parent-ready cascade: a parent can only be finished once every child is
  *     done, so an out-of-sprint not-done child means the parent can never close
- *     within the sprint — MOTIR-1337).
+ *     within the sprint — MOTIR-1337). Not a blocker; kept as is.
  * In every case "satisfied" means the gating item is done OR also in this
- * sprint; a violation is attributed to the in-sprint item it gates (a member's
- * own blocker/child → that member; an ancestor's blocker → every descendant
- * member in the sprint).
+ * sprint; a violation is attributed to the in-sprint member that owns the edge.
  */
 async function computeSprintValidity(
   sprintId: string,
@@ -965,35 +971,16 @@ async function computeSprintValidity(
     return { sprintId, valid: true, blockers: [] };
   }
 
-  // The PROBE set = each not-done member ∪ its ancestor chain (the cascade: a
-  // child inherits its ancestors' blockers). `gatedMembersByProbe` maps every
-  // probe id back to the in-sprint not-done member(s) it gates, so a violating
-  // blocker is reported at the in-sprint item, not the ancestor.
-  const ancestorsByItem = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-    workItemRepository.findAncestorIdsForItems(
+  const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemLinkRepository.findBlockerEdgesForItems(
       notDone.map((m) => m.id),
-      ctx.workspaceId,
+      undefined,
       tx,
     ),
   );
-  const gatedMembersByProbe = new Map<string, Set<string>>();
-  const gate = (probeId: string, memberId: string) => {
-    const set = gatedMembersByProbe.get(probeId);
-    if (set) set.add(memberId);
-    else gatedMembersByProbe.set(probeId, new Set([memberId]));
-  };
-  for (const m of notDone) {
-    gate(m.id, m.id);
-    for (const ancestorId of ancestorsByItem.get(m.id) ?? []) gate(ancestorId, m.id);
-  }
-
-  const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-    workItemLinkRepository.findBlockerEdgesForItems([...gatedMembersByProbe.keys()], undefined, tx),
-  );
   // The parent-ready cascade: a not-done in-sprint item is also gated by its OWN
   // not-done children (a parent can only be finished once every child is done).
-  // Keyed on the not-done MEMBERS directly (not the ancestor probe set) — this is
-  // a direct parent→child dependency owned by the member.
+  // A direct parent→child dependency owned by the member.
   const childEdges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
     workItemRepository.findChildrenForItems(
       notDone.map((m) => m.id),
@@ -1012,7 +999,7 @@ async function computeSprintValidity(
   const blockers: SprintBlockerDto[] = [];
   const seen = new Set<string>();
   // Attribute one blocker per (in-sprint member, gating item) pair — deduped, so
-  // a member gated via several probes for the same blocker is reported once.
+  // a member that both is blocked_by and parents the same item is reported once.
   const addBlocker = (
     memberId: string,
     blockedBy: string,
@@ -1034,9 +1021,7 @@ async function computeSprintValidity(
     const inSprint = memberIds.has(edge.blockerId);
     const isDone = terminalByProject.get(edge.blockerProjectId)?.has(edge.blockerStatus) ?? false;
     if (gatingItemSatisfied(inSprint, isDone, condition)) continue;
-    for (const memberId of gatedMembersByProbe.get(edge.fromId) ?? []) {
-      addBlocker(memberId, edge.blockerKey, edge.blockerStatus, edge.blockerSprintId);
-    }
+    addBlocker(edge.fromId, edge.blockerKey, edge.blockerStatus, edge.blockerSprintId);
   }
   for (const child of childEdges) {
     const inSprint = memberIds.has(child.childId);

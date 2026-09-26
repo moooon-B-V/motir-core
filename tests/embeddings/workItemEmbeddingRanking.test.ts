@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
@@ -34,9 +34,19 @@ const OTHER_MODEL = 'text-embedding-3-large';
 const FILLER_ROWS = 1_500;
 const TARGET_ROWS = 3;
 
-beforeEach(async () => {
-  await truncateAuthTables();
-});
+/**
+ * The budget for building the 1 500-row table ONCE (MOTIR-6406).
+ *
+ * The seed used to run inside every at-scale test body, under the 15 s
+ * `testTimeout`. On a loaded CI shard those cases took 12.9–19.5 s (run
+ * `36196749223`), so one went over. A timed-out test does not cancel its query:
+ * the filler `INSERT` kept running, and the next test's `truncateAuthTables`
+ * deadlocked on it (`40P01`). Built once in a `beforeAll`, the seed is paid once
+ * per file. It still needs an explicit budget, because the hook timeout is only
+ * 30 s. The slowest CI case, seed plus query, was 19.5 s, so 90 s leaves about
+ * 4.5× headroom.
+ */
+const AT_SCALE_SEED_TIMEOUT_MS = 90_000;
 
 afterAll(async () => {
   await db.$disconnect();
@@ -212,43 +222,25 @@ async function plansThroughAnnIndex(
   return rows.some((r) => r['QUERY PLAN'].includes('work_item_embedding_embedding_idx'));
 }
 
-describe('the HNSW pre-filter under-return is REAL', () => {
-  it('forced onto the ANN index, a small project comes back SHORT', async () => {
-    const t = await makeTable(FILLER_ROWS);
+// ─── AT SCALE — one large table, built once and only READ ───────────────────
+//
+// Every case below reads the same 1 500-row table. Their planner knobs
+// (`forceAnnPath`, `disableOrderedIndexScan`, the service's `setEfSearch`) are
+// `SET LOCAL`, so they end with each case's transaction and cannot leak into the
+// next one. So the table is built once, and not truncated between these cases.
+describe('at scale — one 1 500-row table, seeded once', () => {
+  let t: RankingFixture;
 
-    const [rows, usedAnnIndex] = await bound(t.fx.workspaceId, async (tx) => {
-      await forceAnnPath(tx);
-      const result = await workItemEmbeddingRepository.rankByEmbedding(
-        {
-          projectId: t.targetProjectId,
-          model: MODEL,
-          queryEmbedding: uniform(0.5),
-          limit: 10,
-        },
-        tx,
-      );
-      return [result, await plansThroughAnnIndex(tx, t.targetProjectId)] as const;
-    });
+  beforeAll(async () => {
+    await truncateAuthTables();
+    t = await makeTable(FILLER_ROWS);
+  }, AT_SCALE_SEED_TIMEOUT_MS);
 
-    // The plan really IS the ANN index — without this the next assertion could
-    // pass for some entirely different reason and prove nothing.
-    expect(usedAnnIndex).toBe(true);
-    // …and it loses rows that exist. THIS is the defect the mitigation answers:
-    // no error, no warning, just a candidate-finder quietly failing to find.
-    expect(rows.length).toBeLessThan(TARGET_ROWS);
-  });
-
-  it('disabling the ordered index recovers the FULL set from the same query', async () => {
-    const t = await makeTable(FILLER_ROWS);
-
-    const [rows, usedAnnIndex] = await bound(t.fx.workspaceId, async (tx) => {
-      // Only `ef_search` and the mitigation — the seq/bitmap/sort knobs above are
-      // deliberately NOT set, because that is the state the service runs in: it
-      // has one lever, and the assertion is that the lever alone is enough.
-      await tx.$executeRawUnsafe('SET LOCAL hnsw.ef_search = 40');
-      await workItemEmbeddingRepository.disableOrderedIndexScan(tx);
-      return [
-        await workItemEmbeddingRepository.rankByEmbedding(
+  describe('the HNSW pre-filter under-return is REAL', () => {
+    it('forced onto the ANN index, a small project comes back SHORT', async () => {
+      const [rows, usedAnnIndex] = await bound(t.fx.workspaceId, async (tx) => {
+        await forceAnnPath(tx);
+        const result = await workItemEmbeddingRepository.rankByEmbedding(
           {
             projectId: t.targetProjectId,
             model: MODEL,
@@ -256,154 +248,195 @@ describe('the HNSW pre-filter under-return is REAL', () => {
             limit: 10,
           },
           tx,
-        ),
-        await plansThroughAnnIndex(tx, t.targetProjectId),
-      ] as const;
+        );
+        return [result, await plansThroughAnnIndex(tx, t.targetProjectId)] as const;
+      });
+
+      // The plan really IS the ANN index — without this the next assertion could
+      // pass for some entirely different reason and prove nothing.
+      expect(usedAnnIndex).toBe(true);
+      // …and it loses rows that exist. THIS is the defect the mitigation answers:
+      // no error, no warning, just a candidate-finder quietly failing to find.
+      expect(rows.length).toBeLessThan(TARGET_ROWS);
     });
 
-    expect(usedAnnIndex).toBe(false);
-    expect(rows.map((r) => r.identifier).sort()).toEqual([...t.targetIdentifiers].sort());
+    it('disabling the ordered index recovers the FULL set from the same query', async () => {
+      const [rows, usedAnnIndex] = await bound(t.fx.workspaceId, async (tx) => {
+        // Only `ef_search` and the mitigation — the seq/bitmap/sort knobs above are
+        // deliberately NOT set, because that is the state the service runs in: it
+        // has one lever, and the assertion is that the lever alone is enough.
+        await tx.$executeRawUnsafe('SET LOCAL hnsw.ef_search = 40');
+        await workItemEmbeddingRepository.disableOrderedIndexScan(tx);
+        return [
+          await workItemEmbeddingRepository.rankByEmbedding(
+            {
+              projectId: t.targetProjectId,
+              model: MODEL,
+              queryEmbedding: uniform(0.5),
+              limit: 10,
+            },
+            tx,
+          ),
+          await plansThroughAnnIndex(tx, t.targetProjectId),
+        ] as const;
+      });
+
+      expect(usedAnnIndex).toBe(false);
+      expect(rows.map((r) => r.identifier).sort()).toEqual([...t.targetIdentifiers].sort());
+    });
+
+    it('the ANN index IS usable by the shipped query — the two-stage shape is why', async () => {
+      // The other half of the same fact. If the identifier tiebreak sat in the
+      // ranking `ORDER BY` beside the distance, no plan could ever use the index
+      // and the migration would ship an index that costs every write and serves no
+      // read. Keeping the tiebreak OUTSIDE the limited subquery is what makes the
+      // index reachable — and therefore what makes the mitigation above necessary.
+      const usedAnnIndex = await bound(t.fx.workspaceId, async (tx) => {
+        await forceAnnPath(tx);
+        return plansThroughAnnIndex(tx, t.targetProjectId);
+      });
+      expect(usedAnnIndex).toBe(true);
+    });
   });
 
-  it('the ANN index IS usable by the shipped query — the two-stage shape is why', async () => {
-    // The other half of the same fact. If the identifier tiebreak sat in the
-    // ranking `ORDER BY` beside the distance, no plan could ever use the index
-    // and the migration would ship an index that costs every write and serves no
-    // read. Keeping the tiebreak OUTSIDE the limited subquery is what makes the
-    // index reachable — and therefore what makes the mitigation above necessary.
-    const t = await makeTable(FILLER_ROWS);
-    const usedAnnIndex = await bound(t.fx.workspaceId, async (tx) => {
-      await forceAnnPath(tx);
-      return plansThroughAnnIndex(tx, t.targetProjectId);
+  describe('rankSimilar — the guarantee', () => {
+    it('returns a small project its FULL ranked set inside a large table', async () => {
+      const result = await workItemEmbeddingsService.rankSimilar({
+        workspaceId: t.fx.workspaceId,
+        projectId: t.targetProjectId,
+        model: MODEL,
+        queryEmbedding: uniform(0.5),
+        limit: 10,
+      });
+
+      expect(result.rankable).toBe(TARGET_ROWS);
+      expect(result.results).toHaveLength(TARGET_ROWS);
+      expect(result.results.map((r) => r.identifier).sort()).toEqual(
+        [...t.targetIdentifiers].sort(),
+      );
+      // Never a filler row: the pre-filter is a filter, not a preference.
+      expect(result.results.every((r) => r.identifier.startsWith('RNK-'))).toBe(true);
     });
-    expect(usedAnnIndex).toBe(true);
-  });
-});
-
-describe('rankSimilar — the guarantee', () => {
-  it('returns a small project its FULL ranked set inside a large table', async () => {
-    const t = await makeTable(FILLER_ROWS);
-
-    const result = await workItemEmbeddingsService.rankSimilar({
-      workspaceId: t.fx.workspaceId,
-      projectId: t.targetProjectId,
-      model: MODEL,
-      queryEmbedding: uniform(0.5),
-      limit: 10,
-    });
-
-    expect(result.rankable).toBe(TARGET_ROWS);
-    expect(result.results).toHaveLength(TARGET_ROWS);
-    expect(result.results.map((r) => r.identifier).sort()).toEqual([...t.targetIdentifiers].sort());
-    // Never a filler row: the pre-filter is a filter, not a preference.
-    expect(result.results.every((r) => r.identifier.startsWith('RNK-'))).toBe(true);
-  });
-
-  it('takes the exact fallback — and recovers — when the approximate pass comes up short', async () => {
-    // The wiring, isolated from the planner. `rankByEmbedding` is made to
-    // under-return ONCE, exactly as the index does at scale; the service must
-    // notice (against `countRankable`), disable the ordered index, and re-run.
-    const t = await makeTable(0);
-    const real = workItemEmbeddingRepository.rankByEmbedding.bind(workItemEmbeddingRepository);
-    const disable = vi.spyOn(workItemEmbeddingRepository, 'disableOrderedIndexScan');
-    const rank = vi
-      .spyOn(workItemEmbeddingRepository, 'rankByEmbedding')
-      .mockImplementationOnce(async () => []);
-    rank.mockImplementation(real);
-
-    const result = await workItemEmbeddingsService.rankSimilar({
-      workspaceId: t.fx.workspaceId,
-      projectId: t.targetProjectId,
-      model: MODEL,
-      queryEmbedding: uniform(0.5),
-      limit: 10,
-    });
-
-    expect(result.exactFallbackUsed).toBe(true);
-    expect(disable).toHaveBeenCalledTimes(1);
-    expect(result.results).toHaveLength(TARGET_ROWS);
-    vi.restoreAllMocks();
-  });
-
-  it('does NOT pay for the fallback when the first pass was already complete', async () => {
-    const t = await makeTable(0);
-    const disable = vi.spyOn(workItemEmbeddingRepository, 'disableOrderedIndexScan');
-
-    const result = await workItemEmbeddingsService.rankSimilar({
-      workspaceId: t.fx.workspaceId,
-      projectId: t.targetProjectId,
-      model: MODEL,
-      queryEmbedding: uniform(0.5),
-      limit: 10,
-    });
-
-    expect(result.exactFallbackUsed).toBe(false);
-    expect(disable).not.toHaveBeenCalled();
-    vi.restoreAllMocks();
-  });
-
-  it('an EMPTY project is complete at zero rows — not an endless fallback', async () => {
-    const fx = await makeWorkItemFixture({ identifier: 'MT' });
-    const result = await workItemEmbeddingsService.rankSimilar({
-      workspaceId: fx.workspaceId,
-      projectId: fx.projectId,
-      model: MODEL,
-      queryEmbedding: uniform(0.5),
-      limit: 10,
-    });
-    expect(result).toMatchObject({ results: [], rankable: 0, exactFallbackUsed: false });
   });
 });
 
-describe('rankSimilar — ordering and the model filter', () => {
-  it('orders by cosine distance, nearest first', async () => {
-    const t = await makeTable(0);
-    // `uniform(0)` is orthogonal to every one-hot vector, so make the query
-    // match ONE of them exactly and assert it leads.
-    const result = await workItemEmbeddingsService.rankSimilar({
-      workspaceId: t.fx.workspaceId,
-      projectId: t.targetProjectId,
-      model: MODEL,
-      queryEmbedding: oneHot(1),
-      limit: 10,
-    });
-    expect(result.results[0]?.identifier).toBe('RNK-2');
-    expect(result.results[0]?.distance).toBeCloseTo(0, 5);
+// ─── SMALL TABLES — a fresh database for every case ─────────────────────────
+//
+// These cases build their own small fixture (`makeTable(0)`) and some of them
+// mutate it (a spied repository, a model swap), so each one starts from a
+// truncated database.
+describe('small tables — reset before every case', () => {
+  beforeEach(async () => {
+    await truncateAuthTables();
   });
 
-  it('EXCLUDES rows embedded with a different model — they are not comparable (§6.1)', async () => {
-    const t = await makeTable(0);
-    await adminDb.$executeRawUnsafe(
-      `UPDATE "work_item_embedding" SET "model" = $1 WHERE "work_item_id" = 'tgt-0'`,
-      OTHER_MODEL,
-    );
+  describe('rankSimilar — the guarantee', () => {
+    it('takes the exact fallback — and recovers — when the approximate pass comes up short', async () => {
+      // The wiring, isolated from the planner. `rankByEmbedding` is made to
+      // under-return ONCE, exactly as the index does at scale; the service must
+      // notice (against `countRankable`), disable the ordered index, and re-run.
+      const t = await makeTable(0);
+      const real = workItemEmbeddingRepository.rankByEmbedding.bind(workItemEmbeddingRepository);
+      const disable = vi.spyOn(workItemEmbeddingRepository, 'disableOrderedIndexScan');
+      const rank = vi
+        .spyOn(workItemEmbeddingRepository, 'rankByEmbedding')
+        .mockImplementationOnce(async () => []);
+      rank.mockImplementation(real);
 
-    const result = await workItemEmbeddingsService.rankSimilar({
-      workspaceId: t.fx.workspaceId,
-      projectId: t.targetProjectId,
-      model: MODEL,
-      queryEmbedding: uniform(0.5),
-      limit: 10,
+      const result = await workItemEmbeddingsService.rankSimilar({
+        workspaceId: t.fx.workspaceId,
+        projectId: t.targetProjectId,
+        model: MODEL,
+        queryEmbedding: uniform(0.5),
+        limit: 10,
+      });
+
+      expect(result.exactFallbackUsed).toBe(true);
+      expect(disable).toHaveBeenCalledTimes(1);
+      expect(result.results).toHaveLength(TARGET_ROWS);
+      vi.restoreAllMocks();
     });
 
-    // A model swap becomes a VISIBLE, rolling gap in `rankable` — not a silent
-    // collapse in result quality.
-    expect(result.rankable).toBe(TARGET_ROWS - 1);
-    expect(result.results.map((r) => r.identifier)).not.toContain('RNK-1');
+    it('does NOT pay for the fallback when the first pass was already complete', async () => {
+      const t = await makeTable(0);
+      const disable = vi.spyOn(workItemEmbeddingRepository, 'disableOrderedIndexScan');
+
+      const result = await workItemEmbeddingsService.rankSimilar({
+        workspaceId: t.fx.workspaceId,
+        projectId: t.targetProjectId,
+        model: MODEL,
+        queryEmbedding: uniform(0.5),
+        limit: 10,
+      });
+
+      expect(result.exactFallbackUsed).toBe(false);
+      expect(disable).not.toHaveBeenCalled();
+      vi.restoreAllMocks();
+    });
+
+    it('an EMPTY project is complete at zero rows — not an endless fallback', async () => {
+      const fx = await makeWorkItemFixture({ identifier: 'MT' });
+      const result = await workItemEmbeddingsService.rankSimilar({
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        model: MODEL,
+        queryEmbedding: uniform(0.5),
+        limit: 10,
+      });
+      expect(result).toMatchObject({ results: [], rankable: 0, exactFallbackUsed: false });
+    });
   });
 
-  it('respects the limit and still reports the full rankable count', async () => {
-    const t = await makeTable(0);
-    const result = await workItemEmbeddingsService.rankSimilar({
-      workspaceId: t.fx.workspaceId,
-      projectId: t.targetProjectId,
-      model: MODEL,
-      queryEmbedding: uniform(0.5),
-      limit: 1,
+  describe('rankSimilar — ordering and the model filter', () => {
+    it('orders by cosine distance, nearest first', async () => {
+      const t = await makeTable(0);
+      // `uniform(0)` is orthogonal to every one-hot vector, so make the query
+      // match ONE of them exactly and assert it leads.
+      const result = await workItemEmbeddingsService.rankSimilar({
+        workspaceId: t.fx.workspaceId,
+        projectId: t.targetProjectId,
+        model: MODEL,
+        queryEmbedding: oneHot(1),
+        limit: 10,
+      });
+      expect(result.results[0]?.identifier).toBe('RNK-2');
+      expect(result.results[0]?.distance).toBeCloseTo(0, 5);
     });
-    expect(result.results).toHaveLength(1);
-    expect(result.rankable).toBe(TARGET_ROWS);
-    expect(result.exactFallbackUsed).toBe(false);
+
+    it('EXCLUDES rows embedded with a different model — they are not comparable (§6.1)', async () => {
+      const t = await makeTable(0);
+      await adminDb.$executeRawUnsafe(
+        `UPDATE "work_item_embedding" SET "model" = $1 WHERE "work_item_id" = 'tgt-0'`,
+        OTHER_MODEL,
+      );
+
+      const result = await workItemEmbeddingsService.rankSimilar({
+        workspaceId: t.fx.workspaceId,
+        projectId: t.targetProjectId,
+        model: MODEL,
+        queryEmbedding: uniform(0.5),
+        limit: 10,
+      });
+
+      // A model swap becomes a VISIBLE, rolling gap in `rankable` — not a silent
+      // collapse in result quality.
+      expect(result.rankable).toBe(TARGET_ROWS - 1);
+      expect(result.results.map((r) => r.identifier)).not.toContain('RNK-1');
+    });
+
+    it('respects the limit and still reports the full rankable count', async () => {
+      const t = await makeTable(0);
+      const result = await workItemEmbeddingsService.rankSimilar({
+        workspaceId: t.fx.workspaceId,
+        projectId: t.targetProjectId,
+        model: MODEL,
+        queryEmbedding: uniform(0.5),
+        limit: 1,
+      });
+      expect(result.results).toHaveLength(1);
+      expect(result.rankable).toBe(TARGET_ROWS);
+      expect(result.exactFallbackUsed).toBe(false);
+    });
   });
 });
 

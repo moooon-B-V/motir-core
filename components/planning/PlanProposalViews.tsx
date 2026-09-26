@@ -118,6 +118,10 @@ export interface PlanProposalViewsProps {
    * wins the slot.
    */
   discarded?: boolean;
+  /** Forwarded verbatim to `PlanReviewCanvas` (bug MOTIR-6223): the planning
+   *  surface opts in to the *"Plan is in … · Go there"* offer when the plan sits
+   *  beside the reader's level. The plan page passes nothing and is unchanged. */
+  offerPlanElsewhere?: boolean;
 }
 
 export function PlanProposalViews({
@@ -138,6 +142,7 @@ export function PlanProposalViews({
   live = false,
   liveFailing = false,
   discarded = false,
+  offerPlanElsewhere = false,
 }: PlanProposalViewsProps) {
   const t = useTranslations('planReview');
   const showingList = view === 'list';
@@ -155,6 +160,7 @@ export function PlanProposalViews({
       readerHasNavigated={readerHasNavigated}
       onLevelChange={onCanvasLevelChange}
       live={live}
+      offerPlanElsewhere={offerPlanElsewhere}
     />
   );
   // THE DISCARDED BAND (§23.12) — the band idiom (`--el-surface-soft` +

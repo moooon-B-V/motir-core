@@ -19,7 +19,8 @@ import { spyOnJobDispatch } from '../helpers/jobs';
 // whether a sprint is FINISHABLE (the productized re-validate-the-active-sprint
 // rule, plan-rules.md #94). We assert the validity engine
 // (`sprintsService.validateSprint`) directly for the rule's branches — empty /
-// all-satisfied / direct violation / blocker parent-cascade / parent→child
+// all-satisfied / direct violation / an ancestor's blocker NOT gating (a soft
+// block, MOTIR-6354) / an in-sprint container's own blocker gating / parent→child
 // completion cascade (out-of-sprint child, in-sprint child, done child, done
 // parent ignored, recursive grandchild) / transitive / cross-project blocker /
 // active-default vs explicit id / the two typed errors — and then the MCP tool
@@ -137,7 +138,12 @@ describe('sprintsService.validateSprint — the finishability rule', () => {
     expect(result.valid).toBe(true);
   });
 
-  it('PARENT CASCADE — an in-sprint subtask whose out-of-sprint parent is blocked is INVALID', async () => {
+  // MOTIR-6354 / MOTIR-6368: validate_sprint checks HARD blockers only. This used
+  // to read INVALID (the ancestor-chain probe reported the parent's blocker
+  // against the in-sprint child). A parent's block reaches the child only through
+  // the readiness cascade — a SOFT block the run may override with
+  // `--allow-soft-block` — so it no longer makes the sprint unfinishable.
+  it('SOFT BLOCK — an in-sprint subtask whose out-of-sprint parent story is blocked by an open story is VALID (MOTIR-6354)', async () => {
     const fx = await makeWorkItemFixture();
     const sprintId = await planSprint(fx);
     const story = await workItemsService.createWorkItem(
@@ -145,17 +151,84 @@ describe('sprintsService.validateSprint — the finishability rule', () => {
       fx.ctx,
     );
     const child = await mk(fx, 'Child subtask', story.id);
-    const blocker = await mk(fx, 'Foundation B'); // out of sprint, todo
+    const blockerStory = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Foundation story (open, backlog)' },
+      fx.ctx,
+    );
     await putInSprint(child.id, sprintId); // only the child is in the sprint
-    await link(fx, story.id, blocker.id); // the PARENT is blocked
+    await link(fx, story.id, blockerStory.id); // the PARENT is blocked
+
+    const result = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx);
+    expect(result).toEqual({ sprintId, valid: true, blockers: [] });
+  });
+
+  it('HARD BLOCK — an in-sprint subtask with its OWN blocked_by to an out-of-sprint, not-done subtask is INVALID, naming that edge', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await planSprint(fx);
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Story (not in sprint)' },
+      fx.ctx,
+    );
+    const child = await mk(fx, 'In-sprint subtask', story.id);
+    const sibling = await mk(fx, 'Out-of-sprint subtask', story.id); // backlog, todo
+    await putInSprint(child.id, sprintId);
+    await link(fx, child.id, sibling.id); // the child's OWN edge
 
     const result = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx);
     expect(result.valid).toBe(false);
-    // The violation is attributed to the in-sprint child (gated via its parent).
     expect(result.blockers).toEqual([
       {
         item: child.identifier,
-        blockedBy: blocker.identifier,
+        blockedBy: sibling.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+  });
+
+  it('an in-sprint STORY blocked_by an out-of-sprint open story still gates — its own edge (MOTIR-6354)', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await planSprint(fx);
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Story in sprint' },
+      fx.ctx,
+    );
+    const blockerStory = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Open story (backlog)' },
+      fx.ctx,
+    );
+    await putInSprint(story.id, sprintId);
+    await link(fx, story.id, blockerStory.id);
+
+    const result = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx);
+    expect(result.valid).toBe(false);
+    expect(result.blockers).toEqual([
+      {
+        item: story.identifier,
+        blockedBy: blockerStory.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+  });
+
+  it('a member blocked_by its OWN out-of-sprint child is reported ONCE — the edge and the children rule name the same pair', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await planSprint(fx);
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Story in sprint' },
+      fx.ctx,
+    );
+    const child = await mk(fx, 'Child (backlog)', story.id);
+    await putInSprint(story.id, sprintId);
+    await link(fx, story.id, child.id);
+
+    const result = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx);
+    expect(result.valid).toBe(false);
+    expect(result.blockers).toEqual([
+      {
+        item: story.identifier,
+        blockedBy: child.identifier,
         blockerStatus: 'todo',
         blockerSprintId: null,
       },

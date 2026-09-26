@@ -29,6 +29,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type {
   WorkItemCoverageAdvisoryDto,
   WorkItemProseAdvisoryDto,
+  WorkItemSoftBlockDto,
   WorkItemValidityDto,
 } from '@/lib/dto/workItems';
 import type { PlanValidityDto } from '@/lib/dto/plans';
@@ -76,6 +77,62 @@ import { type ValidityCondition, DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sp
 // there, verbatim from here, and are unchanged by the move.
 
 /** Stable wire order: by gated item, then by blocker. */
+/**
+ * The PROJECTED twin of `workItemsService`'s `computeSoftBlocks` (MOTIR-6368):
+ * every open projected `blocked_by` edge owned by a projected ANCESTOR of
+ * `rootId` — a SOFT block, reported and never gating. "Open" = `!isDone` (the
+ * committed twin's not-in-its-project's-terminal-set). An ancestor or blocker
+ * may be a plan `add`: its key is the `planItem:<id>` temp-ref and its title the
+ * proposed one; a committed node's title is its stored one, read in ONE batch.
+ * A root the plan removes has no projected node and so no chain → `[]`.
+ */
+async function projectedSoftBlocks(
+  proj: Projection,
+  rootId: string,
+  ctx: ServiceContext,
+): Promise<WorkItemSoftBlockDto[]> {
+  const pairs: Array<{ via: ProjectedNode; blocker: ProjectedNode }> = [];
+  const guard = new Set<string>([rootId]); // cycle guard (parentId is acyclic, but be safe)
+  let cursor = proj.nodes.get(rootId)?.parentId ?? null;
+  while (cursor !== null && !guard.has(cursor)) {
+    guard.add(cursor);
+    const via = proj.nodes.get(cursor);
+    if (!via) break;
+    for (const blockerId of proj.blockedBy.get(cursor) ?? []) {
+      // Every projected edge target resolves (the MOTIR-3123 projection invariant).
+      const blocker = proj.nodes.get(blockerId)!;
+      if (!isDone(proj, blocker)) pairs.push({ via, blocker });
+    }
+    cursor = via.parentId;
+  }
+  if (pairs.length === 0) return [];
+  const realIds = [...new Set(pairs.flatMap((p) => [p.via.id, p.blocker.id]))].filter(
+    (id) => !id.startsWith(TEMP_REF_PREFIX),
+  );
+  const storedTitles = new Map(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findTitlesByIds(realIds, ctx.workspaceId, tx),
+      )
+    ).map((r) => [r.id, r.title]),
+  );
+  const ref = (node: ProjectedNode) => ({
+    key: node.identifier,
+    title:
+      proj.proposalByRef.get(node.id)?.proposedFields?.title ?? storedTitles.get(node.id) ?? '',
+  });
+  return pairs
+    .map(({ via, blocker }) => ({
+      via: ref(via),
+      blockedBy: ref(blocker),
+      blockerStatus: blocker.status,
+    }))
+    .sort(
+      (a, b) =>
+        a.via.key.localeCompare(b.via.key) || a.blockedBy.key.localeCompare(b.blockedBy.key),
+    );
+}
+
 function sortBlockers(blockers: SprintBlockerDto[]): SprintBlockerDto[] {
   return blockers.sort(
     (a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy),
@@ -444,7 +501,7 @@ export const planValidityService = {
         if (gatingItemSatisfied(memberIds.has(blockerId), isDone(proj, blocker), condition))
           continue;
         const key = `${member.identifier} ${blocker.identifier}`;
-        /* v8 ignore next -- UNREACHABLE: a member's blocker set is a `Set` of ids and every projected node's identifier is distinct, so one walk cannot produce the same `<item> <blocker>` key twice. Kept as the guard the SPRINT walk's `addBlocker` genuinely needs (there one member is reached through several probes). Invariant asserted in tests/integration/plans/planValidityService.test.ts — 'the projection invariant behind the walks' defensive arms' (MOTIR-3123). */
+        /* v8 ignore next -- UNREACHABLE: a member's blocker set is a `Set` of ids and every projected node's identifier is distinct, so one walk cannot produce the same `<item> <blocker>` key twice. Kept as the guard the SPRINT walk's `addBlocker` genuinely needs (there a member blocked_by its OWN out-of-sprint child is reached by both the edge and the children rule). Invariant asserted in tests/integration/plans/planValidityService.test.ts — 'the projection invariant behind the walks' defensive arms' (MOTIR-3123). */
         if (seen.has(key)) continue;
         seen.add(key);
         blockers.push({
@@ -464,6 +521,7 @@ export const planValidityService = {
       valid: blockers.length === 0,
       blockers,
       advisories: [...prose, ...coverage],
+      softBlocks: await projectedSoftBlocks(proj, root.id, ctx),
     };
   },
 
@@ -535,7 +593,7 @@ export const planValidityService = {
         if (gatingItemSatisfied(memberIds.has(blockerId), isDone(proj, blocker), condition))
           continue;
         const key = `${member.identifier} ${blocker.identifier}`;
-        /* v8 ignore next -- UNREACHABLE: a member's blocker set is a `Set` of ids and every projected node's identifier is distinct, so one walk cannot produce the same `<item> <blocker>` key twice. Kept as the guard the SPRINT walk's `addBlocker` genuinely needs (there one member is reached through several probes). Invariant asserted in tests/integration/plans/planValidityService.test.ts — 'the projection invariant behind the walks' defensive arms' (MOTIR-3123). */
+        /* v8 ignore next -- UNREACHABLE: a member's blocker set is a `Set` of ids and every projected node's identifier is distinct, so one walk cannot produce the same `<item> <blocker>` key twice. Kept as the guard the SPRINT walk's `addBlocker` genuinely needs (there a member blocked_by its OWN out-of-sprint child is reached by both the edge and the children rule). Invariant asserted in tests/integration/plans/planValidityService.test.ts — 'the projection invariant behind the walks' defensive arms' (MOTIR-3123). */
         if (seen.has(key)) continue;
         seen.add(key);
         blockers.push({
@@ -578,9 +636,11 @@ export const planValidityService = {
    * the PROJECTED graph. Members = the current active-sprint members minus any the
    * plan `remove`s (an `add` lands in the backlog, so it is NOT a member). A
    * not-done in-sprint item is gated by an unsatisfied projected `blocked_by` edge
-   * (its own, or an ancestor's — the cascade) OR a not-done child that is neither
-   * done nor in the sprint. "Satisfied" = the gating item is in the sprint, or
-   * (under `loose`) done.
+   * of its OWN (a HARD block — an ancestor's blocker is a SOFT block, overridable
+   * with `--allow-soft-block`, and is not reported against a descendant;
+   * MOTIR-6354 / MOTIR-6368) OR a not-done child that is neither done nor in the
+   * sprint (the parent-ready rule, kept as is). "Satisfied" = the gating item is
+   * in the sprint, or (under `loose`) done.
    *
    * Throws `NoActiveSprintError` (the project has no active sprint — nothing to
    * project a sprint over), plus the plan-read errors.
@@ -603,27 +663,6 @@ export const planValidityService = {
     const notDone = members.filter((m) => !isDone(proj, m));
     if (notDone.length === 0) return { sprintId: sprint.id, valid: true, blockers: [] };
 
-    // PROBE set = each not-done member ∪ its projected ancestor chain (a child
-    // inherits its ancestors' blockers). gatedMembersByProbe maps a probe id back
-    // to the in-sprint member(s) it gates, so a violation is attributed to the
-    // in-sprint item, not the ancestor.
-    const gatedMembersByProbe = new Map<string, Set<string>>();
-    const gate = (probeId: string, memberId: string) => {
-      const set = gatedMembersByProbe.get(probeId);
-      if (set) set.add(memberId);
-      else gatedMembersByProbe.set(probeId, new Set([memberId]));
-    };
-    for (const m of notDone) {
-      gate(m.id, m.id);
-      let cursor: string | null = m.parentId;
-      const guard = new Set<string>([m.id]); // cycle guard (parentId is acyclic, but be safe)
-      while (cursor != null && proj.nodes.has(cursor) && !guard.has(cursor)) {
-        guard.add(cursor);
-        gate(cursor, m.id);
-        cursor = proj.nodes.get(cursor)!.parentId;
-      }
-    }
-
     const blockers: SprintBlockerDto[] = [];
     const seen = new Set<string>();
     const addBlocker = (
@@ -645,16 +684,14 @@ export const planValidityService = {
       });
     };
 
-    // Gating via blocked_by edges over the probe set.
-    for (const probeId of gatedMembersByProbe.keys()) {
-      for (const blockerId of proj.blockedBy.get(probeId) ?? []) {
+    // Gating via each not-done member's OWN blocked_by edges (HARD blocks only).
+    for (const m of notDone) {
+      for (const blockerId of proj.blockedBy.get(m.id) ?? []) {
         const blocker = proj.nodes.get(blockerId);
         if (!blocker) continue;
         if (gatingItemSatisfied(memberIds.has(blockerId), isDone(proj, blocker), condition))
           continue;
-        for (const memberId of gatedMembersByProbe.get(probeId)!) {
-          addBlocker(memberId, blocker.identifier, blocker.status, blocker.sprintId);
-        }
+        addBlocker(m.id, blocker.identifier, blocker.status, blocker.sprintId);
       }
     }
     // The parent-ready cascade: a not-done in-sprint parent is gated by any child
