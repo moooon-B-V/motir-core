@@ -20,6 +20,7 @@ import {
 } from '../fixtures/designCardCriteria';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { seedBlockedBy } from '../helpers/seedBlockedBy';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 import { linkProjectRepo } from '../helpers/projectRepoLink';
@@ -62,8 +63,12 @@ const mk = (
   parentId?: string,
 ) => workItemsService.createWorkItem({ projectId: fx.projectId, kind, title, parentId }, fx.ctx);
 
+// Written BELOW the link door: this file tests the VALIDATOR over whatever edges
+// the tree carries, and most of its "outside the subtree" blockers are ROOT
+// tasks — a different depth from the members they gate, which the door now
+// refuses (MOTIR-6369 / 6411) while the tree still holds such edges.
 const link = (fx: Awaited<ReturnType<typeof makeWorkItemFixture>>, fromId: string, toId: string) =>
-  workItemsService.linkWorkItems({ fromId, toId, kind: 'is_blocked_by' }, fx.ctx);
+  seedBlockedBy(fx, fromId, toId);
 
 const markDone = (id: string) =>
   adminDb.workItem.update({ where: { id }, data: { status: 'done' } });
@@ -479,7 +484,9 @@ describe('workItemsService.validateWorkItem — the prose-vs-graph advisory', ()
     const story = await mk(fx, 'Parent story', 'story');
     const finished = await mk(fx, 'Already shipped', 'task');
     await markDone(finished.id);
-    const gate = await mk(fx, 'A real dependency', 'task');
+    // One level down under a root of its own, at the card's depth, so the real
+    // edge is same-level and raises no cross-level advisory (MOTIR-6411).
+    const gate = await mk(fx, 'A real dependency', 'task', (await mk(fx, 'Elsewhere', 'story')).id);
     const card = await mk(fx, 'The card', 'subtask', story.id);
     await link(fx, card.id, gate.id); // a REAL blocked_by edge
 
@@ -693,7 +700,9 @@ describe('validate_work_item MCP tool — advisories in the dual content', () =>
   it('an INVALID item ALSO reports its advisories — the two channels are independent', async () => {
     const fx = await makeWorkItemFixture();
     const story = await mk(fx, 'Story', 'story');
-    const external = await mk(fx, 'External gate', 'task'); // out of subtree, todo
+    // Out of subtree, todo — one level down under its own root, at the child's
+    // depth, so the edge is same-level (MOTIR-6411).
+    const external = await mk(fx, 'External gate', 'task', (await mk(fx, 'Elsewhere', 'story')).id);
     const named = await mk(fx, 'Named but unwired', 'task');
     const child = await mkBody(
       fx,

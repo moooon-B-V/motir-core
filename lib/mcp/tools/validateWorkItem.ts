@@ -113,11 +113,11 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
     lines.push(
       '',
       `Advisory (${unaffected}): these cards are blocked_by an item on ANOTHER LEVEL — a ` +
-        'dependency joins two items on the same level (epic · story · leaf):',
+        'dependency joins two items at the same depth below their nearest common ancestor:',
       ...crossLevel.map(
         (a) =>
-          `  ${a.item} (${a.itemKind}, ${a.itemLevel}) is blocked_by ${a.blockedBy} ` +
-          `(${a.blockedByKind}, ${a.blockedByLevel}) (${a.severity})`,
+          `  ${a.item} (depth ${a.itemDepth}) is blocked_by ${a.blockedBy} ` +
+          `(depth ${a.blockedByDepth}) (${a.severity})`,
       ),
       'Re-wire it to the same-level item really waited on — it may be under another parent — or ' +
         'between the two containers if the whole of one is needed. A new edge like this is ' +
@@ -493,7 +493,7 @@ export function registerValidateWorkItem(
         'blocker siblings disagrees with its current blocked_by edge count (with the exact ' +
         '`claim`, `claimedCount`, and `blockerCount`), or `cross-level-edge` when a subtree ' +
         'member ALREADY carries a blocked_by to an item on another LEVEL — epic, story, leaf — ' +
-        '(with `blockedBy`, `itemKind` / `itemLevel` and `blockedByKind` / `blockedByLevel`; a ' +
+        '(with `blockedBy`, `itemDepth` and `blockedByDepth` below the project root; a ' +
         'new such edge is refused CROSS_LEVEL_LINK). A `coverage` ' +
         'advisory (`kind: "coverage"`, `likely-unowned-criterion`) names a CONTAINER one of whose ' +
         "acceptance criteria no direct child's TITLE carries, reported only when a child was " +

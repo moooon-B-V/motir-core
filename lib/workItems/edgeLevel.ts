@@ -1,61 +1,65 @@
-// ── THE LEVEL A `blocked_by` EDGE JOINS (Story MOTIR-6015 · MOTIR-6367) ────────
+// ── THE LEVEL A `blocked_by` EDGE JOINS: POSITION, NOT KIND ────────────────────
+// (Story MOTIR-6015 · MOTIR-6367, re-based on the accepted decision MOTIR-6387 by
+// MOTIR-6411 — `docs/decisions/edge-level-is-position.md`.)
 //
-// A `blocked_by` joins two work items on the SAME LEVEL, wherever each sits in
-// the tree — a subtask may wait on a subtask in another story, a story on a
-// story in another epic. What it may never do is join two LEVELS: a subtask
-// waiting on a whole story, an epic waiting on one subtask.
+// A `blocked_by` joins two items on the SAME LEVEL, wherever each sits in the
+// tree — a subtask may wait on a subtask in another story, a story on a story in
+// another epic. What it may never do is join two levels.
 //
-// There are THREE levels, not five kinds. `task`, `bug` and `subtask` are all
-// LEAVES — the unit a run executes — so a bug may block a subtask and a subtask
-// may block a task. `epic` and `story` are each their own level.
+// An item's level is its POSITION: two items are on the same level when they sit
+// at the SAME DEPTH below their nearest common ancestor, where the project root is
+// the ancestor of every root item and a FOLDER adds no depth (a folder is a
+// placement, so a filed item is a root). No kind table is consulted: a validation
+// task under an epic beside its stories is on their level, and a subtask under a
+// task can be tied to a subtask under a story. Kind still bounds what can EXIST
+// (`lib/issues/parentRules.ts`); it no longer decides an edge.
 //
-// PURE and TOTAL over the five kinds (`IssueType`, identical to the schema's
-// `WorkItemKind`): the record below is compiler-checked against it, and an
-// unknown string throws rather than defaulting, so a kind added later cannot be
-// silently levelled.
-// The plan gate (`lib/plans/validateProposals.ts`) and the link door read it, so
-// the two cannot disagree about which edges are legal.
+// THE ONE HOME of the rule. The plan gate (over the PROJECTED chains), the link
+// door and the `cross-level-edge` advisory (over COMMITTED chains) and the
+// cross-parent coverage walk (`crossParentCoverage.ts`) all call
+// {@link isCrossLevelEdge}, so they cannot disagree about which edges are legal.
 
-import { isIssueType, type IssueType } from '@/lib/issues/parentRules';
 import { CrossLevelLinkError } from '@/lib/workItems/linkErrors';
 
-/** The three levels an edge may join within. */
-export type EdgeLevel = 'epic' | 'story' | 'leaf';
-
-const LEVEL_OF_KIND: Record<IssueType, EdgeLevel> = {
-  epic: 'epic',
-  story: 'story',
-  task: 'leaf',
-  bug: 'leaf',
-  subtask: 'leaf',
-};
-
-/** The level a work item of `kind` sits on. Throws on a kind that is not one. */
-export function edgeLevel(kind: string): EdgeLevel {
-  if (!isIssueType(kind)) {
-    throw new Error(`"${kind}" is not a work-item kind, so it has no edge level.`);
+/**
+ * True when a `blocked_by` between the two items would join two different
+ * levels. Each argument is the item's ANCESTOR CHAIN — its work-item ancestors,
+ * NEAREST FIRST (parent, grandparent, …), empty for a root or a filed item —
+ * the shape `workItemRepository.findAncestorIdsForItems` returns.
+ *
+ * Walk both up to their nearest common ancestor (the shared tail of the two
+ * chains, or the project root when they share none): the edge is same-level
+ * exactly when both walks take the same number of steps.
+ */
+export function isCrossLevelEdge(
+  ancestorsA: readonly string[],
+  ancestorsB: readonly string[],
+): boolean {
+  let shared = 0;
+  while (
+    shared < ancestorsA.length &&
+    shared < ancestorsB.length &&
+    ancestorsA[ancestorsA.length - 1 - shared] === ancestorsB[ancestorsB.length - 1 - shared]
+  ) {
+    shared += 1;
   }
-  return LEVEL_OF_KIND[kind];
-}
-
-/** True when a `blocked_by` between `a` and `b` would join two different levels. */
-export function isCrossLevelEdge(a: string, b: string): boolean {
-  return edgeLevel(a) !== edgeLevel(b);
+  return ancestorsA.length - shared !== ancestorsB.length - shared;
 }
 
 /**
- * The committed-edge half of the rule (MOTIR-6369): refuse a NEW directed
+ * The committed-edge door's use of the rule (MOTIR-6369): refuse a NEW directed
  * `is_blocked_by` between two levels. `from` is the blocked item, `to` its
- * blocker — the stored direction. Every other link kind passes untouched.
+ * blocker — the stored direction — each with its ancestor chain. Every other
+ * link kind passes untouched.
  */
 export function assertLinkSameLevel(
   kind: string,
-  from: { identifier: string; kind: string },
-  to: { identifier: string; kind: string },
+  from: { identifier: string; ancestors: readonly string[] },
+  to: { identifier: string; ancestors: readonly string[] },
 ): void {
-  if (kind !== 'is_blocked_by' || !isCrossLevelEdge(from.kind, to.kind)) return;
+  if (kind !== 'is_blocked_by' || !isCrossLevelEdge(from.ancestors, to.ancestors)) return;
   throw new CrossLevelLinkError(
-    { key: from.identifier, kind: from.kind, level: edgeLevel(from.kind) },
-    { key: to.identifier, kind: to.kind, level: edgeLevel(to.kind) },
+    { key: from.identifier, depth: from.ancestors.length },
+    { key: to.identifier, depth: to.ancestors.length },
   );
 }

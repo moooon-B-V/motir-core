@@ -187,9 +187,21 @@ describe('driven through the real transport with a workspace PAT', () => {
     const client = await connectClient(fx.ctx);
     const { planId, firstId, secondId } = await planWithTwoAdds(client, fx);
 
-    // A same-level blocker for the moved task: a task blocked_by its own parent
-    // story is cross-level, refused since MOTIR-6367.
-    const peer = await createTestWorkItem(fx, { kind: 'task', title: 'A peer task' });
+    // A same-level blocker for the moved task: its new parent is one level up
+    // (MOTIR-6367 / 6411), so the peer is a sibling proposed under that parent.
+    const peerAppend = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'A peer task', kind: 'task' },
+          parentRef: `${TEMP_REF_PREFIX}${firstId}`,
+        },
+      ],
+    });
+    const peer = `${TEMP_REF_PREFIX}${
+      (peerAppend.structuredContent as unknown as { planItemIds: string[] }).planItemIds[0]
+    }`;
 
     // Close it for review — the case the story exists for.
     await call(client, ADD_PLAN_ITEMS_TOOL_NAME, { planId, proposals: [], final: true });
@@ -198,20 +210,19 @@ describe('driven through the real transport with a workspace PAT', () => {
       planId,
       planItemId: secondId,
       parentRef: `${TEMP_REF_PREFIX}${firstId}`,
-      blockedByRefs: [peer.id],
+      blockedByRefs: [peer],
     });
     expect(corrected.isError, textOf(corrected)).toBeFalsy();
 
     const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: secondId } });
     expect(row.parentRef).toBe(`${TEMP_REF_PREFIX}${firstId}`);
-    expect(row.blockedByRefs).toEqual([peer.id]);
+    expect(row.blockedByRefs).toEqual([peer]);
   });
 
   it('corrects a `modify`’s patch — the shape the live artifact got wrong', async () => {
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);
-    // A STORY, on the story prerequisite's level (MOTIR-6367).
-    const target = await createTestWorkItem(fx, { kind: 'story', title: 'An existing card' });
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'An existing card' });
     const { planId, firstId } = await planWithTwoAdds(client, fx);
 
     const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
@@ -252,12 +263,9 @@ describe('driven through the real transport with a workspace PAT', () => {
     const client = await connectClient(fx.ctx);
     const { planId, firstId, secondId } = await planWithTwoAdds(client, fx);
 
-    // Re-kinded to a STORY in the same correction, so the edge to the story
-    // prerequisite is same-level (MOTIR-6367).
     await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
       planId,
       planItemId: secondId,
-      kind: 'story',
       blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`],
     });
 
@@ -505,16 +513,22 @@ describe('update_plan_proposal — a ref written as a `MOTIR-<n>` KEY (MOTIR-393
 
   it('is case-INSENSITIVE, and leaves an ID and a `planItem:` temp-ref UNTOUCHED', async () => {
     const fx = await makeWorkItemFixture();
-    // An EPIC parent, and the moved proposal re-kinded to a story, so its edge to
-    // the story prerequisite is same-level (MOTIR-6367).
-    const story = await createTestWorkItem(fx, { kind: 'epic', title: 'The story' });
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'The story' });
     const client = await connectClient(fx.ctx);
     const { planId, firstId, secondId } = await planWithTwoAdds(client, fx);
+    // Both proposals under the story, so the edge between them is same-level
+    // (MOTIR-6411: the level is position — a child and a root are not).
+    const placed = await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
+      planId,
+      planItemId: firstId,
+      kind: 'task',
+      parentRef: story.id,
+    });
+    expect(placed.isError, textOf(placed)).toBeFalsy();
 
     const lowercased = await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
       planId,
       planItemId: secondId,
-      kind: 'story',
       parentRef: story.identifier.toLowerCase(),
       blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`],
     });
@@ -642,7 +656,13 @@ describe('update_plan_proposal — a ref written as a `MOTIR-<n>` KEY (MOTIR-393
     // `planned` and then fail at the approve button with `dangling`.
     const fx = await makeWorkItemFixture();
     const story = await createTestWorkItem(fx, { kind: 'story', title: 'The story' });
-    const blocker = await createTestWorkItem(fx, { kind: 'task', title: 'The blocker' });
+    // Under the story, so the new subtask corrected under it is blocked_by an
+    // item on its own level (MOTIR-6411: the level is position).
+    const blocker = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'The blocker',
+      parentId: story.id,
+    });
     const dependent = await createTestWorkItem(fx, { kind: 'task', title: 'The dependent' });
     await createTestWorkItem(fx, { kind: 'task', title: 'Unused' });
     const client = await connectClient(fx.ctx);

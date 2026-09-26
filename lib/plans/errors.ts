@@ -566,9 +566,10 @@ export type PlanRefGraphViolation =
   /** A `parentRef` cycle among the plan's `add`s (no parent-before-child order
    *  exists), or a proposal blocking/parenting itself. */
   | 'cycle'
-  /** A `blocked_by` joining two different LEVELS — epic, story, leaf (a task,
-   *  a bug and a subtask are all leaves). A same-level edge may cross parents;
-   *  a cross-level one never may (Story MOTIR-6015 · MOTIR-6367). */
+  /** A `blocked_by` joining two different LEVELS — two items at different
+   *  depths below their nearest common ancestor (MOTIR-6387). A same-level
+   *  edge may cross parents; a cross-level one never may (Story MOTIR-6015 ·
+   *  MOTIR-6367 / 6411). */
   | 'cross_level';
 
 /**

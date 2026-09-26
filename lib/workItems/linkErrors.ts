@@ -164,29 +164,28 @@ export class WorkItemLinkNotFoundError extends WorkItemLinkError {
 }
 
 /**
- * A NEW `is_blocked_by` edge whose two ends sit on different LEVELS — epic,
- * story, leaf, where a task, a bug and a subtask are all leaves (Story
- * MOTIR-6015 · MOTIR-6369). A dependency joins two items on the same level and
- * may cross parents; it never joins a subtask to a story or an epic to a
- * subtask. Raised by the SERVICE before the insert, so no row is written.
- * `relates_to`, `duplicates` and `clones` are never judged, and an existing
- * cross-level edge is not refused — `validate_work_item` reports it as a
- * `cross-level-edge` advisory instead.
+ * A NEW `is_blocked_by` edge whose two ends sit on different LEVELS (Story
+ * MOTIR-6015 · MOTIR-6369; the level is POSITION, MOTIR-6387 — the two items
+ * are not at the same depth below their nearest common ancestor). A dependency
+ * joins two items on the same level and may cross parents. Raised by the SERVICE
+ * before the insert, so no row is written. `relates_to`, `duplicates` and
+ * `clones` are never judged, and an existing cross-level edge is not refused —
+ * `validate_work_item` reports it as a `cross-level-edge` advisory instead.
  *
- * Carries both ends' keys, kinds and levels so a caller can name the pair.
+ * Carries both ends' keys and depths below the project root.
  */
 export class CrossLevelLinkError extends WorkItemLinkError {
   readonly tag = 'CROSS_LEVEL_LINK' as const;
   readonly code = 'CROSS_LEVEL_LINK' as const;
   constructor(
-    readonly blocked: { key: string; kind: string; level: string },
-    readonly blocker: { key: string; kind: string; level: string },
+    readonly blocked: { key: string; depth: number },
+    readonly blocker: { key: string; depth: number },
   ) {
     super(
-      `${blocked.key} is a ${blocked.kind} (level: ${blocked.level}) and ${blocker.key} is a ` +
-        `${blocker.kind} (level: ${blocker.level}). A blocked_by joins two work items on the SAME ` +
-        `level — epic, story or leaf (a task, a bug and a subtask are all leaves). It may cross ` +
-        `parents; it may not cross levels.`,
+      `${blocked.key} sits ${blocked.depth} level(s) below the project root and ${blocker.key} ` +
+        `sits ${blocker.depth}, so they are not on the same level. A blocked_by joins two work ` +
+        `items at the SAME depth below their nearest common ancestor (a folder adds no depth). ` +
+        `It may cross parents; it may not cross levels.`,
     );
     this.name = 'CrossLevelLinkError';
   }

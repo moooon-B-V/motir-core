@@ -145,11 +145,7 @@ describe('sprintsService.validateSprint — the finishability rule', () => {
       fx.ctx,
     );
     const child = await mk(fx, 'Child subtask', story.id);
-    // A root STORY, on the blocked parent's level (MOTIR-6369). Out of sprint, todo.
-    const blocker = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'story', title: 'Foundation B' },
-      fx.ctx,
-    );
+    const blocker = await mk(fx, 'Foundation B'); // out of sprint, todo
     await putInSprint(child.id, sprintId); // only the child is in the sprint
     await link(fx, story.id, blocker.id); // the PARENT is blocked
 

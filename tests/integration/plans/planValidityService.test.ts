@@ -16,6 +16,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { NoActiveSprintError } from '@/lib/sprints/errors';
 import { makeWorkItemFixture, createTestProject, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
+import { seedBlockedBy } from '../../helpers/seedBlockedBy';
 import { truncateAuthTables } from '../../helpers/db';
 
 /**
@@ -61,6 +62,26 @@ const mk = (
   parentId?: string,
 ) => workItemsService.createWorkItem({ projectId: fx.projectId, kind, title, parentId }, fx.ctx);
 
+/**
+ * A TASK one level below a root of its own ("Elsewhere"), in `projectId` (the
+ * fixture's project by default). MOTIR-6411: a `blocked_by` joins two items at
+ * the same depth below their nearest common ancestor, so an "outside the
+ * subtree" blocker for a CHILD of a root story must itself sit one level down —
+ * an unrelated ROOT task is cross-level. The edge then crosses parents, so a case
+ * that expects `valid: true` also owes the parents' edge (MOTIR-6370).
+ */
+async function outsideTask(fx: WorkItemFixture, title: string, projectId = fx.projectId) {
+  const elsewhere = await workItemsService.createWorkItem(
+    { projectId, kind: 'story', title: `Elsewhere (${title})` },
+    fx.ctx,
+  );
+  const item = await workItemsService.createWorkItem(
+    { projectId, kind: 'task', title, parentId: elsewhere.id },
+    fx.ctx,
+  );
+  return Object.assign(item, { elsewhere });
+}
+
 const link = (fx: WorkItemFixture, fromId: string, toId: string) =>
   workItemsService.linkWorkItems({ fromId, toId, kind: 'is_blocked_by' }, fx.ctx);
 
@@ -97,7 +118,7 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
   it('an `add` blocked_by an item OUTSIDE the target subtree is INVALID (loose) and names the real blocker', async () => {
     const fx = await makeWorkItemFixture();
     const story = await mk(fx, 'Story', 'story');
-    const outside = await mk(fx, 'Outside', 'task'); // not in Story's subtree, not done
+    const outside = await outsideTask(fx, 'Outside'); // not in Story's subtree, not done
 
     const planId = await freshPlan(fx);
     const p = await addProposal(fx, planId, {
@@ -129,8 +150,12 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
   it('an out-of-subtree blocker that is DONE is satisfied under LOOSE but flagged under TIGHT', async () => {
     const fx = await makeWorkItemFixture();
     const story = await mk(fx, 'Story', 'story');
-    const outside = await mk(fx, 'Outside done', 'task');
+    const outside = await outsideTask(fx, 'Outside done');
     await markDone(outside.id);
+    // The parents carry the edge too (MOTIR-6370), and theirs is done as well —
+    // so the only question left is loose vs tight.
+    await link(fx, story.id, outside.elsewhere.id);
+    await markDone(outside.elsewhere.id);
 
     const planId = await freshPlan(fx);
     await addProposal(fx, planId, {
@@ -157,7 +182,7 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
       'tight',
     );
     expect(tight.valid).toBe(false);
-    expect(tight.blockers[0]?.blockedBy).toBe(outside.identifier);
+    expect(tight.blockers.map((b) => b.blockedBy)).toContain(outside.identifier);
   });
 
   it('an `add` whose blocker is ANOTHER add IN the subtree is VALID (temp-ref resolution, in-set)', async () => {
@@ -193,10 +218,13 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
     const story = await mk(fx, 'Story', 'story');
 
     const planId = await freshPlan(fx);
-    // A backlog add (no parent) — outside Story's subtree, not done.
+    // A backlog add outside Story's subtree, not done — one level down under a
+    // root of its own, at the gated child's depth (MOTIR-6411).
+    const elsewhere = await mk(fx, 'Elsewhere', 'story');
     const pDep = await addProposal(fx, planId, {
       op: 'add',
       proposedFields: { title: 'Backlog dep', kind: 'task' },
+      parentRef: elsewhere.id,
     });
     const depId = itemIdByTitle(pDep, 'Backlog dep');
     const pGated = await addProposal(fx, planId, {
@@ -228,7 +256,7 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
     const fx = await makeWorkItemFixture();
     const story = await mk(fx, 'Story', 'story');
     const child = await mk(fx, 'Child', 'subtask', story.id);
-    const outside = await mk(fx, 'Outside', 'task'); // real, not done, not in subtree
+    const outside = await outsideTask(fx, 'Outside'); // real, not done, not in subtree
 
     const planId = await freshPlan(fx);
     await addProposal(fx, planId, {
@@ -267,7 +295,7 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
     const fx = await makeWorkItemFixture();
     const story = await mk(fx, 'Story', 'story');
     const child = await mk(fx, 'Child', 'subtask', story.id);
-    const outside = await mk(fx, 'Outside', 'task');
+    const outside = await outsideTask(fx, 'Outside');
     await link(fx, child.id, outside.id); // LIVE: Child blocked_by Outside → live-invalid
 
     // Sanity: live (no plan) the story is invalid.
@@ -359,10 +387,13 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
       proposedFields: { title: 'New story', kind: 'story' },
     });
     const storyItemId = itemIdByTitle(pStory, 'New story');
-    // A backlog add OUTSIDE the new story's subtree (no parent), not done.
+    // A backlog add OUTSIDE the new story's subtree, not done — one level down
+    // under a root of its own, at the gated subtask's depth (MOTIR-6411).
+    const elsewhere = await mk(fx, 'Elsewhere', 'story');
     const pDep = await addProposal(fx, planId, {
       op: 'add',
       proposedFields: { title: 'Backlog dep', kind: 'task' },
+      parentRef: elsewhere.id,
     });
     const depId = itemIdByTitle(pDep, 'Backlog dep');
     const pGated = await addProposal(fx, planId, {
@@ -963,7 +994,7 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
     const fx = await makeWorkItemFixture();
     const story = await mk(fx, 'Story', 'story');
     const child = await mk(fx, 'Child', 'subtask', story.id);
-    const outside = await mk(fx, 'Outside', 'task'); // out of subtree, not done
+    const outside = await outsideTask(fx, 'Outside'); // out of subtree, not done
     await link(fx, child.id, outside.id);
 
     const planId = await freshPlan(fx);
@@ -1086,7 +1117,7 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
     const fx = await makeWorkItemFixture();
     const story = await mk(fx, 'Story', 'story');
     const child = await mk(fx, 'Child', 'subtask', story.id);
-    const outside = await mk(fx, 'Outside', 'task');
+    const outside = await outsideTask(fx, 'Outside');
     await link(fx, child.id, outside.id); // live-invalid before the plan
 
     const live = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
@@ -1119,10 +1150,8 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
       actorUserId: fx.ownerId,
       identifier: 'BETA',
     });
-    const qBlocker = await workItemsService.createWorkItem(
-      { projectId: projectQ.id, kind: 'task', title: 'Cross-project blocker' },
-      fx.ctx,
-    );
+    // One level down in project Q, at the child's depth (MOTIR-6411).
+    const qBlocker = await outsideTask(fx, 'Cross-project blocker', projectQ.id);
     const story = await mk(fx, 'Story', 'story');
     const child = await mk(fx, 'Child', 'subtask', story.id);
 
@@ -1221,21 +1250,12 @@ describe('planValidityService.validateProjectedSprint — the sprint rule’s qu
     const blockerTwo = await mk(fx, 'Blocker two', 'task'); // PROD-5 — backlog, not done
     await putInSprint(childA.id, sprintId);
     await putInSprint(childB.id, sprintId);
-    // The ANCESTOR's edge — cascades to A and B. A story blocked_by a task is
-    // CROSS-LEVEL, which every door now refuses (MOTIR-6369); it is seeded below
-    // them because this case is about the sprint walk's dedupe over an edge the
-    // tree can still carry from before the rule, not about how it got there.
-    await adminDb.workItemLink.create({
-      data: {
-        workspaceId: fx.workspaceId,
-        fromId: story.id,
-        toId: blockerOne.id,
-        kind: 'is_blocked_by',
-        createdById: fx.ctx.userId,
-      },
-    });
-    await link(fx, childA.id, blockerOne.id); // A's OWN edge to the SAME blocker
-    await link(fx, childA.id, blockerTwo.id); // A's second blocker
+    await link(fx, story.id, blockerOne.id); // the ANCESTOR's edge — cascades to A and B
+    // A's own edges run to ROOT tasks one level above it — cross-level, which the
+    // link door refuses (MOTIR-6369 / 6411). This case is about the sprint walk's
+    // dedupe over edges the tree can still carry, so they are seeded below the doors.
+    await seedBlockedBy(fx, childA.id, blockerOne.id); // A's OWN edge to the SAME blocker
+    await seedBlockedBy(fx, childA.id, blockerTwo.id); // A's second blocker
 
     const planId = await freshPlan(fx);
     await plansService.markPlanned(planId, fx.ctx);
@@ -1298,14 +1318,12 @@ describe('planValidityService — the projection invariant behind the walks’ d
       actorUserId: fx.ownerId,
       identifier: 'BETA',
     });
-    const qBlocker = await workItemsService.createWorkItem(
-      { projectId: projectQ.id, kind: 'task', title: 'Cross-project blocker' },
-      fx.ctx,
-    );
+    // One level down in project Q, at the child's depth (MOTIR-6411).
+    const qBlocker = await outsideTask(fx, 'Cross-project blocker', projectQ.id);
     const story = await mk(fx, 'Story', 'story');
     const child = await mk(fx, 'Child', 'subtask', story.id);
-    const doomed = await mk(fx, 'Doomed blocker', 'task');
-    const archived = await mk(fx, 'Archived blocker', 'task');
+    const doomed = await outsideTask(fx, 'Doomed blocker');
+    const archived = await outsideTask(fx, 'Archived blocker');
     await adminDb.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
     await link(fx, child.id, doomed.id);
     await link(fx, child.id, qBlocker.id);
@@ -2017,7 +2035,10 @@ describe("a `modify`'s `patch.parentRef` moves the card in the PROJECTION (MOTIR
     const leaf = await mk(fx, 'The leaf that moves', 'subtask', from.id);
     const outside = await mk(fx, 'Outside the project tree', 'task');
     await markDone(outside.id);
-    await link(fx, leaf.id, outside.id);
+    // Seeded below the doors: a leaf and a ROOT task sit at different depths,
+    // which the link door refuses (MOTIR-6369 / 6411). This case is about the
+    // walk's path after a move, not about the edge.
+    await seedBlockedBy(fx, leaf.id, outside.id);
 
     const planId = await freshPlan(fx);
     await reparent(fx, planId, leaf.id, to.id);
@@ -2292,7 +2313,7 @@ describe('planValidityService.validateProjectedWorkItem — the CONTAINER-COVERA
     const fx = await makeWorkItemFixture();
     const story = await storyWithCriteria(fx, 'Motir merges the pull request');
     const gate = await olderCard(fx, story);
-    const external = await mk(fx, 'Work outside the subtree', 'task');
+    const external = await outsideTask(fx, 'Work outside the subtree');
     await link(fx, gate.id, external.id);
 
     const planId = await freshPlan(fx);

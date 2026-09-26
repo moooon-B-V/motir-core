@@ -74,8 +74,7 @@ describe('the gates judge the MERGED patch — the one row approve will apply', 
       [
         {
           op: 'add',
-          // A STORY, on X's level (MOTIR-6367 refuses a task blocked_by a story).
-          proposedFields: { title: 'T', kind: 'story' },
+          proposedFields: { title: 'T', kind: 'task' },
           parentRef: epic,
           blockedByRefs: [x],
         },

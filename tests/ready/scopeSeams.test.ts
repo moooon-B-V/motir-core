@@ -7,6 +7,7 @@ import { backlogService } from '@/lib/services/backlogService';
 import { SPRINT_ACTIVE } from '@/lib/workItems/readyFilter';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { seedBlockedBy } from '../helpers/seedBlockedBy';
 import { truncateAuthTables } from '../helpers/db';
 
 // The STORY-LEVEL integration seams (Story MOTIR-3001 · MOTIR-3200) — the
@@ -83,7 +84,10 @@ describe('SEAM — the ancestor facet ↔ the parent-ready cascade', () => {
     // story blocked_by a task). A root has no parent, so the edge needs none.
     const gate = await make(fx, { title: 'Unfinished', kind: 'story' });
     const gatedStory = await make(fx, { title: 'Gated', kind: 'story', parentId: epic.id });
-    await block(fx, gatedStory.id, gate.id);
+    // Seeded below the doors: a story under the epic and a ROOT gate sit at
+    // different depths, a cross-level edge the link door refuses (MOTIR-6369 /
+    // 6411). This case is about the cascade the gate causes, not the edge.
+    await seedBlockedBy(fx, gatedStory.id, gate.id);
     const buried = await make(fx, { title: 'Buried', parentId: gatedStory.id });
     const openStory = await make(fx, { title: 'Open', kind: 'story', parentId: epic.id });
     const reachable = await make(fx, { title: 'Reachable', parentId: openStory.id });

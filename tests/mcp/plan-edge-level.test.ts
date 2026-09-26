@@ -105,8 +105,8 @@ describe('add_plan_items — a cross-LEVEL edge is refused where it is written',
     expect(text(refused)).toContain('cross_level');
     expect(text(refused)).toContain('Subtask X');
     expect(text(refused)).toContain(t.a.identifier);
-    expect(text(refused)).toMatch(/level: leaf/);
-    expect(text(refused)).toMatch(/level: story/);
+    expect(text(refused)).toContain('sits 2 level(s)');
+    expect(text(refused)).toMatch(/which sits 1/);
     expect(await adminDb.planItem.count({ where: { planId } })).toBe(0);
     await client.close();
   });
@@ -157,6 +157,14 @@ describe('add_plan_items — a SAME-level edge across parents is accepted', () =
           parentRef: t.c.id,
           blockedByRefs: [t.y.id],
         },
+        // Case 1 of MOTIR-6387: a validation TASK under the epic, blocked_by the
+        // story beside it — one level, whatever the kinds.
+        {
+          op: 'add',
+          proposedFields: { title: 'Validate epic one', kind: 'task' },
+          parentRef: t.e1.id,
+          blockedByRefs: [t.a.id],
+        },
       ],
     });
     expect(appended.isError, text(appended)).toBeFalsy();
@@ -205,8 +213,8 @@ describe('add_plan_items — a SAME-level edge across parents is accepted', () =
   });
 });
 
-describe('update_plan_proposal — re-kinding an `add` under an edge it carries', () => {
-  it('turning the blocked add into a STORY is refused cross_level, and the proposal is unchanged', async () => {
+describe('update_plan_proposal — re-PARENTING an `add` under an edge it carries', () => {
+  it('moving the blocked add one level down is refused cross_level, and the proposal is unchanged', async () => {
     const fx = await makeWorkItemFixture();
     const t = await tree(fx);
     const client = await connectClient(fx.ctx);
@@ -214,9 +222,7 @@ describe('update_plan_proposal — re-kinding an `add` under an edge it carries'
 
     const first = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,
-      proposals: [
-        { op: 'add', proposedFields: { title: 'Blocker', kind: 'task' }, parentRef: t.b.id },
-      ],
+      proposals: [{ op: 'add', proposedFields: { title: 'Blocker', kind: 'task' } }],
     });
     expect(first.isError, text(first)).toBeFalsy();
     const [blocker] = ids(first);
@@ -233,16 +239,17 @@ describe('update_plan_proposal — re-kinding an `add` under an edge it carries'
     expect(second.isError, text(second)).toBeFalsy();
     const [blocked] = ids(second);
 
+    // Two roots are one level; under story B the blocked task sits one deeper.
     const refused = await call(client, UPDATE_PLAN_PROPOSAL_TOOL_NAME, {
       planId,
       planItemId: blocked,
-      kind: 'story',
+      parentRef: t.b.id,
     });
     expect(refused.isError).toBe(true);
     expect(text(refused)).toContain('INVALID_PLAN_REF_GRAPH');
     expect(text(refused)).toContain('cross_level');
     const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: blocked } });
-    expect((row.proposedFields as { kind: string }).kind).toBe('task');
+    expect(row.parentRef).toBeNull();
     await client.close();
   });
 });

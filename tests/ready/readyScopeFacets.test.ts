@@ -7,6 +7,7 @@ import { InvalidReadyFilterError, SPRINT_ACTIVE } from '@/lib/workItems/readyFil
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { seedBlockedBy } from '../helpers/seedBlockedBy';
 import { truncateAuthTables } from '../helpers/db';
 
 // The two SCOPE facets on the ready read (Story MOTIR-3001 · MOTIR-3196) —
@@ -54,10 +55,6 @@ async function make(
     },
     fx.ctx,
   );
-}
-
-async function block(fx: WorkItemFixture, fromId: string, toId: string) {
-  await workItemsService.linkWorkItems({ fromId, toId, kind: 'is_blocked_by' }, fx.ctx);
 }
 
 /** An ACTIVE sprint holding `itemIds`. */
@@ -112,10 +109,12 @@ describe('the ANCESTOR facet', () => {
     // already excludes it; the facet must not resurrect it.
     const fx = await makeWorkItemFixture();
     const epic = await make(fx, { title: 'The epic', kind: 'epic' });
-    // A root STORY, on the gated story's level (MOTIR-6369).
-    const gate = await make(fx, { title: 'Not done yet', kind: 'story' });
+    const gate = await make(fx, { title: 'Not done yet' });
     const blockedStory = await make(fx, { title: 'Gated story', kind: 'story', parentId: epic.id });
-    await block(fx, blockedStory.id, gate.id);
+    // Seeded below the doors: a story under the epic and a ROOT gate sit at
+    // different depths, a cross-level edge the link door refuses (MOTIR-6369 /
+    // 6411). This case is about the cascade the gate causes, not the edge.
+    await seedBlockedBy(fx, blockedStory.id, gate.id);
     const leaf = await make(fx, {
       title: 'Under the gate',
       kind: 'subtask',

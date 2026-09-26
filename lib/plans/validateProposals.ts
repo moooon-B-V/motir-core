@@ -35,7 +35,7 @@ import { isWorkItemType, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
 import { isDifficultyRefusedOnKind } from '@/lib/plans/validateProposedDifficulty';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
-import { edgeLevel, isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
+import { isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
 import {
   FOLDER_REF_PREFIX,
   folderRefId,
@@ -204,6 +204,13 @@ export interface ValidatePlanProposalsInput {
    * one. The two inputs above would, missing, pass a cycle silently.
    */
   folderById?: ReadonlyMap<string, LiveFolderState>;
+  /**
+   * The COMMITTED ancestor chain (nearest first) of every live work item the
+   * plan's edges and placements name (MOTIR-6411) — what places a live end for
+   * the same-level check. OPTIONAL and permissive when absent: a live end with no
+   * chain is skipped, never guessed.
+   */
+  edgeAncestorsById?: ReadonlyMap<string, readonly string[]>;
 }
 
 /** One committed `is_blocked_by` edge: `blockedId` is blocked BY `blockerId`. */
@@ -1208,37 +1215,52 @@ function assertBlockedByGraphAcyclic(
   }
 }
 
-// ── THE LEVEL OF A `blocked_by` EDGE (Story MOTIR-6015 · MOTIR-6367) ─────────
+// ── THE LEVEL OF A `blocked_by` EDGE (Story MOTIR-6015 · MOTIR-6367 / 6411) ───
 //
-// A `blocked_by` joins two work items on the SAME LEVEL — epic, story or leaf
-// (`lib/workItems/edgeLevel.ts`). It may cross parents: a subtask waiting on a
-// subtask in another story, a story on a story in another epic, are both legal
-// and nothing below compares PARENTS. What it may not do is join two levels.
+// A `blocked_by` joins two work items on the SAME LEVEL — the same depth below
+// their nearest common ancestor (`lib/workItems/edgeLevel.ts`, the POSITION rule
+// of MOTIR-6387). It may cross parents: nothing below compares PARENTS. What it
+// may not do is join two levels.
 //
-// The kind of each end is read from the PROJECTION the plan would leave: an
-// `add` by its proposed kind (as corrected — a correction or a deepen can change
-// it after the append, and the gate reads the row as it stands), a `modify` by
-// its live target's kind (a patch carries no `kind`), a committed ref by its
-// live row. `blockedByRemove` is never judged, so a plan can always take a bad
-// edge away.
+// Each end's position is read from the PROJECTION the plan would leave: an
+// `add` sits under its `parentRef` (a proposal or a live row; a folder or none
+// makes it a root), a `modify` that re-parents (`patch.parentRef`) sits under its
+// new parent, and any other live row keeps its committed ancestor chain
+// (`ancestorsById`, one batched read by the caller). `blockedByRemove` is never
+// judged, so a plan can always take a bad edge away.
 //
-// An end whose kind is not known here is SKIPPED rather than guessed: an
-// unresolvable ref is `assertRefsResolvable`'s refusal, an out-of-enum proposed
-// kind is `unknown_kind`'s, and at the APPEND a committed row the caller did not
-// read is left to the close, which reads every one.
+// An end whose position is not known here is SKIPPED rather than guessed: an
+// unresolvable ref is `assertRefsResolvable`'s refusal, and a live row the caller
+// did not read is left to a gate that reads it.
 
-/** The kind of the node a `blocked_by` ref names, or null when unknown here. */
-function kindOfRef(
+/**
+ * The PROJECTED ancestor chain (nearest first) of the node a ref names, or
+ * `undefined` when it cannot be placed here. A proposal's chain element is its
+ * `planItem:` node id, a live row's its own id — the same node ids the cycle walk
+ * uses, so two chains through one proposed parent share it.
+ */
+function projectedChain(
   ref: string,
   addsById: ReadonlyMap<string, ProposalNode>,
-  liveById: ReadonlyMap<string, Pick<LiveWorkItemState, 'kind'>>,
-): string | null {
-  if (isFolderRef(ref)) return null;
+  reparentOf: ReadonlyMap<string, string | null>,
+  ancestorsById: ReadonlyMap<string, readonly string[]>,
+  visiting: Set<string> = new Set(),
+): readonly string[] | undefined {
+  if (isFolderRef(ref)) return undefined;
+  const node = edgeNodeOf(ref);
+  if (visiting.has(node)) return undefined; // a parent cycle is another check's refusal
+  visiting.add(node);
+  const under = (parent: string | null | undefined): readonly string[] | undefined => {
+    if (!parent || isFolderRef(parent)) return [];
+    const above = projectedChain(parent, addsById, reparentOf, ancestorsById, visiting);
+    return above === undefined ? undefined : [edgeNodeOf(parent), ...above];
+  };
   if (isTempRef(ref)) {
     const add = addsById.get(tempRefId(ref));
-    return add ? proposedKindOf(add) : null;
+    return add ? under(add.parentRef) : undefined;
   }
-  return liveById.get(ref)?.kind ?? null;
+  if (reparentOf.has(ref)) return under(reparentOf.get(ref));
+  return ancestorsById.get(ref);
 }
 
 /**
@@ -1248,32 +1270,41 @@ function kindOfRef(
  * `subjectIds`, when given, narrows WHICH proposals' edges are judged — the
  * append judges only what the batch writes, so a plan closed before this rule
  * existed is not locked out of an unrelated append. The refs still resolve
- * against every `add` in `items`.
+ * against every proposal in `items`.
  */
 export function assertBlockedByLevels(
   items: readonly ProposalNode[],
   liveById: ValidatePlanProposalsInput['liveById'],
+  ancestorsById: ReadonlyMap<string, readonly string[]>,
   subjectIds?: ReadonlySet<string>,
 ): void {
   const addsById = new Map(items.filter((i) => i.op === 'add').map((a) => [a.id, a]));
+  const reparentOf = new Map<string, string | null>();
+  for (const item of items) {
+    if (item.op === 'modify' && item.workItemId && item.patch && 'parentRef' in item.patch) {
+      reparentOf.set(item.workItemId, item.patch.parentRef ?? null);
+    }
+  }
+  const chain = (ref: string) => projectedChain(ref, addsById, reparentOf, ancestorsById);
   for (const item of items) {
     if (subjectIds && !subjectIds.has(item.id)) continue;
-    let subjectKind: string | null;
+    let subjectRef: string;
     let refs: readonly string[];
     if (item.op === 'add') {
-      subjectKind = proposedKindOf(item);
+      subjectRef = addNodeId(item.id);
       refs = item.blockedByRefs;
     } else if (item.op === 'modify' && item.workItemId) {
-      subjectKind = liveById.get(item.workItemId)?.kind ?? null;
+      subjectRef = item.workItemId;
       refs = item.patch?.blockedByAdd ?? [];
     } else {
       continue;
     }
-    if (subjectKind === null || !isIssueType(subjectKind)) continue;
+    if (refs.length === 0) continue;
+    const subjectChain = chain(subjectRef);
+    if (subjectChain === undefined) continue;
     for (const ref of refs) {
-      const blockerKind = kindOfRef(ref, addsById, liveById);
-      if (blockerKind === null || !isIssueType(blockerKind)) continue;
-      if (!isCrossLevelEdge(subjectKind, blockerKind)) continue;
+      const blockerChain = chain(ref);
+      if (blockerChain === undefined || !isCrossLevelEdge(subjectChain, blockerChain)) continue;
       const subject =
         item.op === 'add'
           ? `Proposal ${item.id} (${describeProposal(item)})`
@@ -1282,10 +1313,11 @@ export function assertBlockedByLevels(
       throw new PlanRefGraphError(
         'cross_level',
         item.id,
-        `cross_level: ${subject} is a ${subjectKind} (level: ${edgeLevel(subjectKind)}), and its ${where} "${ref}" names ` +
-          `${describeNode(edgeNodeOf(ref), items, liveById)}, a ${blockerKind} (level: ${edgeLevel(blockerKind)}). ` +
-          `A blocked_by joins two work items on the SAME level — epic, story or leaf (a task, a bug and a subtask are all leaves). ` +
-          `It may cross parents; it may not cross levels. Wire it to the ${edgeLevel(subjectKind)}-level item it really waits on.`,
+        `cross_level: ${subject} sits ${subjectChain.length} level(s) below the project root, and ` +
+          `its ${where} "${ref}" names ${describeNode(edgeNodeOf(ref), items, liveById)}, which ` +
+          `sits ${blockerChain.length}, so they are not on the same level. A blocked_by joins two ` +
+          `work items at the SAME depth below their nearest common ancestor (a folder adds no ` +
+          `depth). It may cross parents; it may not cross levels.`,
       );
     }
   }
@@ -1344,7 +1376,7 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   //     MOTIR-6015 · MOTIR-6367). After resolution, so a dangling ref is reported
   //     as dangling; before the cycle walk, because an edge that may not exist
   //     at all is the more specific reason than a ring it happens to close.
-  assertBlockedByLevels(items, liveById);
+  assertBlockedByLevels(items, liveById, input.edgeAncestorsById ?? new Map());
 
   assertBlockedByGraphAcyclic(items, liveById, existingBlockedByEdges);
 

@@ -1918,9 +1918,9 @@ export interface WorkItemProseBlockerCountAdvisoryDto extends WorkItemProseShape
 }
 
 /**
- * A `blocked_by` the card ALREADY carries that joins two different LEVELS —
- * epic, story, leaf (a task, a bug and a subtask are all leaves) — Story
- * MOTIR-6015 · MOTIR-6369. A new such edge is refused at every write door
+ * A `blocked_by` the card ALREADY carries that joins two different LEVELS — two
+ * items at different depths below their nearest common ancestor (Story
+ * MOTIR-6015 · MOTIR-6369; the POSITION rule of MOTIR-6387). A new such edge is refused at every write door
  * (`CROSS_LEVEL_LINK`, `INVALID_PLAN_REF_GRAPH` / `cross_level`); this reports
  * the ones drawn before the rule, or below the doors.
  *
@@ -1933,12 +1933,10 @@ export interface WorkItemProseCrossLevelEdgeAdvisoryDto extends WorkItemProseSha
   severity: 'cross-level-edge';
   /** The blocker's identifier — the far end of the edge `item` carries. */
   blockedBy: string;
-  /** `item`'s kind and level. */
-  itemKind: string;
-  itemLevel: string;
-  /** The blocker's kind and level. */
-  blockedByKind: string;
-  blockedByLevel: string;
+  /** How many levels below the project root `item` sits (a folder adds none). */
+  itemDepth: number;
+  /** How many levels below the project root the blocker sits. */
+  blockedByDepth: number;
 }
 
 /**

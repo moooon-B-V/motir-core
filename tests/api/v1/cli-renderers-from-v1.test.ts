@@ -429,8 +429,7 @@ describe('the shipped CLI renderers, driven from a v1 response', () => {
 
   it('renderReadinessLine prints `<key> — <title>` for a cascade-blocked item', async () => {
     const caller = await createV1ProjectCaller({ scopes: ['read'] });
-    // A root STORY: the parent's blocker must sit on its level (MOTIR-6369).
-    const blocker = await makeItem(caller, 'the thing in the way', { kind: 'story' });
+    const blocker = await makeItem(caller, 'the thing in the way');
     const parent = await makeItem(caller, 'the parent story', { kind: 'story' });
     const child = await makeItem(caller, 'the child', { parentId: parent.id, kind: 'subtask' });
     await blockedBy(caller, parent.id, blocker.id);

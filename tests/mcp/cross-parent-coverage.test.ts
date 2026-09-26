@@ -129,7 +129,7 @@ describe('validate_work_item — invalidEdges', () => {
     await client.close();
   });
 
-  it('siblings are never listed, and an edge to a ROOT or a FILED item is exempt', async () => {
+  it('siblings are never listed, and an edge between two ROOTS — one of them FILED — is exempt', async () => {
     const fx = await makeWorkItemFixture();
     const t = await tree(fx);
     const sib = await workItemsService.createWorkItem(
@@ -145,12 +145,15 @@ describe('validate_work_item — invalidEdges', () => {
       fx.ctx,
     );
     await link(fx, t.x.id, sib.id);
-    await link(fx, t.x.id, t.t.id);
-    await link(fx, t.x.id, filed.id);
+    // Two roots: the same level (both at the project root; a folder adds no
+    // depth), and neither has a work-item parent to owe an edge.
+    await link(fx, t.t.id, filed.id);
     const client = await connectClient(fx.ctx);
 
-    const verdict = verdictOf(await call(client, 'validate_work_item', { key: t.b.identifier }));
-    expect(verdict.invalidEdges).toEqual([]);
+    for (const key of [t.b.identifier, t.t.identifier]) {
+      const verdict = verdictOf(await call(client, 'validate_work_item', { key }));
+      expect(verdict.invalidEdges).toEqual([]);
+    }
     await client.close();
   });
 });

@@ -111,11 +111,17 @@ describe('a correction reaches the columns the deepen turn excludes', () => {
   it('changes parentRef, blockedByRefs, targetRepo and targetRepoRole on a `planned` plan', async () => {
     const fx = await makeWorkItemFixture();
     const { planId, firstId, secondId } = await planWithTwoAdds(fx);
-    // A same-level blocker for the moved task: a task blocked_by its own parent
-    // story is cross-level, refused since MOTIR-6367.
+    // A same-level blocker for the moved task: its own parent is one level up
+    // (MOTIR-6367 / 6411), so the peer is a sibling under the same parent.
     const peer = await plansService.addProposals(
       planId,
-      [{ op: 'add', proposedFields: { title: 'A peer task', kind: 'task' } }],
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'A peer task', kind: 'task' },
+          parentRef: `${TEMP_REF_PREFIX}${firstId}`,
+        },
+      ],
       fx.ctx,
     );
     const peerId = peer.appendedItemIds[0]!;
@@ -176,9 +182,7 @@ describe('a correction reaches the columns the deepen turn excludes', () => {
     await plansService.correctProposal(
       planId,
       secondId,
-      // Re-kinded to a STORY in the same correction, so the edge to the story
-      // prerequisite is same-level (MOTIR-6367).
-      { kind: 'story', blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`] },
+      { blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`] },
       fx.ctx,
     );
     expect((await row(secondId)).blockedByRefs).toEqual([`${TEMP_REF_PREFIX}${firstId}`]);
@@ -319,9 +323,7 @@ describe('the withdraw', () => {
     await plansService.correctProposal(
       planId,
       secondId,
-      // Re-kinded to a STORY in the same correction, so the edge to the story
-      // prerequisite is same-level (MOTIR-6367).
-      { kind: 'story', blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`] },
+      { blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`] },
       fx.ctx,
     );
 

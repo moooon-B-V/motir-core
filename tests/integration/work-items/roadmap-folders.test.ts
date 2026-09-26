@@ -305,9 +305,9 @@ describe('with the folder option — a FILED blocker is off the root level', () 
 describe('an OFF-level blocker names its folder (MOTIR-5739)', () => {
   it('a filed blocker carries its folder path, root first; an unfiled one carries null', async () => {
     const t = await tree();
-    // OFF-level on purpose: this block is about how the roadmap renders a blocker
-    // on another level, which every write door now refuses (MOTIR-6369) while the
-    // tree still carries such edges — so they are seeded below the doors.
+    // Seeded below the doors: this block is about how the roadmap RENDERS an
+    // off-level blocker, and some of these edges join two depths — which the
+    // link door refuses (MOTIR-6369 / 6411) while the tree still carries them.
     await seedBlockedBy(fx, t.e1.id, t.deepBug.id);
     const road = await make('story', 'Road story', t.e2.id);
     await seedBlockedBy(fx, t.e1.id, road.id);
@@ -327,9 +327,9 @@ describe('an OFF-level blocker names its folder (MOTIR-5739)', () => {
   it('a child of a filed epic carries the epic’s folder path', async () => {
     const t = await tree();
     const underFiled = await make('story', 'Under the filed epic', t.filedEpic.id);
-    // OFF-level on purpose: this block is about how the roadmap renders a blocker
-    // on another level, which every write door now refuses (MOTIR-6369) while the
-    // tree still carries such edges — so they are seeded below the doors.
+    // Seeded below the doors: this block is about how the roadmap RENDERS an
+    // off-level blocker, and some of these edges join two depths — which the
+    // link door refuses (MOTIR-6369 / 6411) while the tree still carries them.
     await seedBlockedBy(fx, t.e1.id, underFiled.id);
 
     const root = await read(null, { folders: true });
@@ -339,9 +339,9 @@ describe('an OFF-level blocker names its folder (MOTIR-5739)', () => {
 
   it('resolves every stub’s folder in a bounded number of reads, whatever the stub count', async () => {
     const t = await tree();
-    // OFF-level on purpose: this block is about how the roadmap renders a blocker
-    // on another level, which every write door now refuses (MOTIR-6369) while the
-    // tree still carries such edges — so they are seeded below the doors.
+    // Seeded below the doors: this block is about how the roadmap RENDERS an
+    // off-level blocker, and some of these edges join two depths — which the
+    // link door refuses (MOTIR-6369 / 6411) while the tree still carries them.
     for (const id of [t.filedBug.id, t.filedTask.id, t.deepBug.id]) {
       await seedBlockedBy(fx, t.e1.id, id);
     }

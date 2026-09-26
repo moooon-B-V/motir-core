@@ -197,8 +197,7 @@ describe('the seams between the children', () => {
         {
           op: 'add',
           parentRef: e.id,
-          // A STORY, on X's level (MOTIR-6367 refuses a task blocked_by a story).
-          proposedFields: { title: 'T', kind: 'story' },
+          proposedFields: { title: 'T', kind: 'task' },
           blockedByRefs: [x.id],
         },
       ],

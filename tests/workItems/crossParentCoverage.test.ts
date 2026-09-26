@@ -13,18 +13,26 @@ import {
 
 //   E1 ─ A ─ Y        E2 ─ C ─ Z        T (root task)
 //      └ B ─ X, W
-const tree: Record<string, CoverageNodeInfo> = {
-  E1: { kind: 'epic', parentId: null },
-  E2: { kind: 'epic', parentId: null },
-  A: { kind: 'story', parentId: 'E1' },
-  B: { kind: 'story', parentId: 'E1' },
-  C: { kind: 'story', parentId: 'E2' },
-  Y: { kind: 'subtask', parentId: 'A' },
-  X: { kind: 'subtask', parentId: 'B' },
-  W: { kind: 'bug', parentId: 'B' },
-  Z: { kind: 'subtask', parentId: 'C' },
-  T: { kind: 'task', parentId: null },
+const parentOfNode: Record<string, string | null> = {
+  E1: null,
+  E2: null,
+  A: 'E1',
+  B: 'E1',
+  C: 'E2',
+  Y: 'A',
+  X: 'B',
+  W: 'B',
+  Z: 'C',
+  T: null,
 };
+// Each node's POSITION (MOTIR-6411): its ancestor chain, nearest first.
+const tree: Record<string, CoverageNodeInfo> = Object.fromEntries(
+  Object.keys(parentOfNode).map((id) => {
+    const ancestors: string[] = [];
+    for (let p = parentOfNode[id]; p; p = parentOfNode[p] ?? null) ancestors.push(p);
+    return [id, { parentId: parentOfNode[id] ?? null, ancestors }];
+  }),
+);
 const parentOf = (id: string) => tree[id]?.parentId;
 const carrying =
   (...pairs: Array<[string, string]>) =>
@@ -84,14 +92,11 @@ describe('uncoveredCrossParentEdges', () => {
     ]);
   });
 
-  it('skips an end it cannot describe, or one whose kind is not a kind', () => {
+  it('skips an end it cannot describe', () => {
     expect(
       uncoveredCrossParentEdges(
-        [
-          { blockedId: 'X', blockerId: 'nowhere' },
-          { blockedId: 'X', blockerId: 'odd' },
-        ],
-        (id) => (id === 'odd' ? { kind: 'initiative', parentId: 'A' } : tree[id]),
+        [{ blockedId: 'X', blockerId: 'nowhere' }],
+        (id) => tree[id],
         carrying(),
       ),
     ).toEqual([]);

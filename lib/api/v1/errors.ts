@@ -269,7 +269,8 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // 11.2.9 (MOTIR-2051) — the link edges.
   SELF_LINK: 422,
   WORK_ITEM_LINK_CYCLE: 422,
-  // MOTIR-6369 — a blocked_by between two LEVELS (epic · story · leaf). A
+  // MOTIR-6369 — a blocked_by between two LEVELS (two depths below the ends'
+  // nearest common ancestor, MOTIR-6387). A
   // well-formed body naming an edge the rule forbids, like a self-link.
   CROSS_LEVEL_LINK: 422,
   // ⚠️ 409, a status ADR §4's table does not list either — appended with its

@@ -412,9 +412,27 @@ function projectedInvalidEdges(proj: Projection, memberIds: ReadonlySet<string>)
     }
   }
   const node = (id: string) => proj.nodes.get(id);
+  // Each end's PROJECTED position (MOTIR-6411): its ancestor chain up the
+  // projected parents. A carried-in cross-project node has no projected parent,
+  // which reads as a root — its edge is then cross-level or parent-exempt,
+  // never falsely reported uncovered.
+  const chainOf = (id: string): string[] => {
+    const up: string[] = [];
+    const seen = new Set<string>([id]);
+    let cur = node(id)?.parentId ?? null;
+    while (cur !== null && !seen.has(cur) && proj.nodes.has(cur)) {
+      up.push(cur);
+      seen.add(cur);
+      cur = node(cur)!.parentId;
+    }
+    return up;
+  };
   return uncoveredCrossParentEdges(
     edges,
-    (id) => node(id),
+    (id) => {
+      const n = node(id);
+      return n ? { parentId: n.parentId, ancestors: chainOf(id) } : undefined;
+    },
     (from, to) => proj.blockedBy.get(from)?.has(to) ?? false,
   )
     .map((e) => ({

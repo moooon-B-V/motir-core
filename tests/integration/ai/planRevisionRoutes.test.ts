@@ -362,22 +362,35 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
   it('carries the STRUCTURAL fields the deepen turn may not touch', async () => {
     const fx = await makeWorkItemFixture();
     const { planId, firstId, secondId } = await plannedPlan(fx, 'job-1');
-    // A same-level blocker for the moved task: a task blocked_by its own parent
-    // story is cross-level, refused since MOTIR-6367.
-    const peer = await createTestWorkItem(fx, { kind: 'task', title: 'A peer task' });
+    // A same-level blocker for the moved task: its new parent is one level up
+    // (MOTIR-6367 / 6411), so the peer is a sibling under that parent.
+    const peer = (
+      await plansService.addProposals(
+        planId,
+        [
+          {
+            op: 'add',
+            proposedFields: { title: 'A peer task', kind: 'task' },
+            parentRef: `planItem:${firstId}`,
+          },
+        ],
+        fx.ctx,
+        { revision: true },
+      )
+    ).appendedItemIds[0]!;
 
     const res = await patch(fx, secondId, {
       jobId: 'job-1',
       mode: 'correct',
       parentRef: `planItem:${firstId}`,
-      blockedByRefs: [peer.id],
+      blockedByRefs: [`planItem:${peer}`],
       patch: { title: 'The dependent, renamed' },
     });
     expect(res.status, await res.clone().text()).toBe(200);
 
     const stored = await adminDb.planItem.findUniqueOrThrow({ where: { id: secondId } });
     expect(stored.parentRef).toBe(`planItem:${firstId}`);
-    expect(stored.blockedByRefs).toEqual([peer.id]);
+    expect(stored.blockedByRefs).toEqual([`planItem:${peer}`]);
     // The CONTENT bag still rides `patch`, exactly as it does on the deepen path
     // — one key, one meaning, on both modes.
     expect((stored.proposedFields as { title?: string }).title).toBe('The dependent, renamed');
@@ -531,10 +544,23 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
 
   it('every key `UpdateProposalInput` declares SURVIVES from the request body into the proposal (MOTIR-3865)', async () => {
     const fx = await makeWorkItemFixture();
-    const { firstId, secondId } = await plannedPlan(fx, 'job-keys');
-    // A same-level blocker (MOTIR-6367): the corrected TASK moves under the story
-    // prerequisite, and may not also be blocked_by it.
-    const peer = await createTestWorkItem(fx, { kind: 'task', title: 'A peer task' });
+    const { planId, firstId, secondId } = await plannedPlan(fx, 'job-keys');
+    // A same-level blocker (MOTIR-6367 / 6411): the corrected TASK moves under the
+    // story prerequisite, so its blocker is a sibling under that parent.
+    const peer = (
+      await plansService.addProposals(
+        planId,
+        [
+          {
+            op: 'add',
+            proposedFields: { title: 'A peer task', kind: 'task' },
+            parentRef: `planItem:${firstId}`,
+          },
+        ],
+        fx.ctx,
+        { revision: true },
+      )
+    ).appendedItemIds[0]!;
     expect(Object.keys(CONTENT_SAMPLE).sort()).toEqual([...UPDATE_PROPOSAL_KEYS].sort());
     expect(Object.keys(STRUCTURAL_LANDS_IN).sort()).toEqual(
       [...CORRECT_PROPOSAL_KEYS].filter((k) => !UPDATE_PROPOSAL_KEYS.includes(k as never)).sort(),
@@ -545,7 +571,7 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
       mode: 'correct',
       patch: CONTENT_SAMPLE,
       parentRef: `planItem:${firstId}`,
-      blockedByRefs: [peer.id],
+      blockedByRefs: [`planItem:${peer}`],
       // A ROLE needs no repository to exist — the closed vocabulary is exactly
       // what makes it pinnable this early, and it is the pin an ONBOARDING plan
       // carries.
@@ -565,7 +591,7 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
       subject: 'jobs',
     });
     expect(stored.parentRef).toBe(`planItem:${firstId}`);
-    expect(stored.blockedByRefs).toEqual([peer.id]);
+    expect(stored.blockedByRefs).toEqual([`planItem:${peer}`]);
   });
 
   it('`explanationMd` reaches the proposal on the DEEPEN mode too, not only on `correct`', async () => {
@@ -724,9 +750,6 @@ describe('DELETE — the withdraw verb', () => {
         await patch(fx, secondId, {
           jobId: 'job-6',
           mode: 'correct',
-          // Re-kinded to a STORY, so the edge to the story prerequisite is
-          // same-level (MOTIR-6367).
-          patch: { kind: 'story' },
           blockedByRefs: [`planItem:${firstId}`],
         })
       ).status,

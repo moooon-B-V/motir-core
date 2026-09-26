@@ -93,6 +93,9 @@ function validate(
     existingBlockedByEdges?: Array<{ blockedId: string; blockerId: string }>;
     /** The folders a `folder:` placement names (MOTIR-5414). */
     folderById?: Map<string, { id: string; projectId: string; name: string }>;
+    /** Committed ancestor chains the same-level check places live ends with
+     *  (MOTIR-6411). Absent means no live end is placed, so it is skipped. */
+    edgeAncestorsById?: Map<string, readonly string[]>;
   } = {},
 ): void {
   validatePlanProposals({
@@ -103,6 +106,7 @@ function validate(
     ancestorIdsById: opts.ancestorIdsById ?? new Map(),
     existingBlockedByEdges: opts.existingBlockedByEdges ?? [],
     folderById: opts.folderById ?? new Map(),
+    edgeAncestorsById: opts.edgeAncestorsById ?? new Map(),
   });
 }
 
@@ -369,11 +373,7 @@ describe('validatePlanProposals — cross-project refs (MOTIR-3581)', () => {
 
   it("ACCEPTS an add's blockedByRefs naming a work item in another project of the workspace", () => {
     expect(() =>
-      // A `story` add, so the edge is SAME-LEVEL (MOTIR-6367) and the project is
-      // the only thing this case is about.
-      validate([add('p1', { blockedByRefs: [CROSS], proposedFields: { kind: 'story' } })], {
-        liveById: crossLive,
-      }),
+      validate([add('p1', { blockedByRefs: [CROSS] })], { liveById: crossLive }),
     ).not.toThrow();
   });
 
@@ -472,8 +472,7 @@ describe('validatePlanProposals — the intra-plan ref graph', () => {
   it('accepts modify patch refs that resolve (a null patch is a no-op)', () => {
     expect(() =>
       validate([
-        // A `story`, the same level as the live `story` target (MOTIR-6367).
-        add('a1', { proposedFields: { kind: 'story' } }),
+        add('a1'),
         modify('m1', {
           patch: { blockedByAdd: [`${TEMP_REF_PREFIX}a1`], blockedByRemove: [REAL_PARENT] },
         }),
@@ -1311,19 +1310,38 @@ describe('projectedParentChain / proposedParentAnchorIds', () => {
   });
 });
 
-describe('validatePlanProposals — a blocked_by joins two items on the SAME LEVEL (MOTIR-6367)', () => {
-  // Story MOTIR-6015: an edge may cross PARENTS, never LEVELS. The levels are
-  // epic, story and leaf — a task, a bug and a subtask are all leaves. Nothing
-  // here compares parents, so every "across parents" case below is legal.
-  const STORY_A = 'wi_story_a';
-  const SUBTASK_Y = 'wi_subtask_y';
-  const EPIC_E = 'wi_epic_e';
+describe('validatePlanProposals — a blocked_by joins two items on the SAME LEVEL: position (MOTIR-6411)', () => {
+  // The level is POSITION (MOTIR-6387): the same depth below the nearest common
+  // ancestor, in the tree the plan would leave. Live rows are placed by their
+  // committed chains; a proposal by its `parentRef`; a re-parented `modify` by
+  // its new parent. Nothing here compares KINDS.
+  //
+  //   E1 ─ S ─ Y          E2 ─ S2
+  //      └ T (a task)
+  const E1 = 'wi_e1';
+  const E2 = 'wi_e2';
+  const S = 'wi_s';
+  const T = 'wi_t';
+  const Y = 'wi_y';
+  const S2 = 'wi_s2';
   const levels = liveMap(
-    live({ id: STORY_A, kind: 'story' }),
-    live({ id: SUBTASK_Y, kind: 'subtask' }),
-    live({ id: EPIC_E, kind: 'epic' }),
-    live({ id: REAL_TARGET, kind: 'subtask' }),
+    live({ id: E1, kind: 'epic' }),
+    live({ id: E2, kind: 'epic' }),
+    live({ id: S, kind: 'story' }),
+    live({ id: T, kind: 'task' }),
+    live({ id: Y, kind: 'subtask' }),
+    live({ id: S2, kind: 'story' }),
   );
+  const chains = new Map<string, readonly string[]>([
+    [E1, []],
+    [E2, []],
+    [S, [E1]],
+    [T, [E1]],
+    [Y, [S, E1]],
+    [S2, [E2]],
+  ]);
+  const run = (items: ProposalNode[], extra: Parameters<typeof validate>[1] = {}) =>
+    validate(items, { liveById: levels, edgeAncestorsById: chains, ...extra });
 
   function crossLevel(fn: () => void): PlanRefGraphError {
     try {
@@ -1336,120 +1354,137 @@ describe('validatePlanProposals — a blocked_by joins two items on the SAME LEV
     return expect.unreachable('a cross-level blocked_by must be refused') as never;
   }
 
-  it("refuses an add's subtask blocked_by a committed STORY, naming both items and both levels", () => {
-    const err = crossLevel(() =>
-      validate(
-        [
-          add('x', {
-            proposedFields: { kind: 'subtask', title: 'Subtask X' },
-            blockedByRefs: [STORY_A],
-          }),
-        ],
-        { liveById: levels },
-      ),
-    );
-    expect(err.planItemId).toBe('x');
-    expect(err.message).toContain('Subtask X');
-    expect(err.message).toContain(`MOTIR-${STORY_A}`);
-    expect(err.message).toMatch(/subtask \(level: leaf\)/);
-    expect(err.message).toMatch(/story \(level: story\)/);
+  it('case 1 — a validation task proposed under an epic, blocked_by the story beside it, is accepted', () => {
+    expect(() =>
+      run([add('v', { proposedFields: { kind: 'task' }, parentRef: E1, blockedByRefs: [S] })]),
+    ).not.toThrow();
   });
 
-  it("refuses a modify's patch.blockedByAdd across levels, reading the TARGET's live kind", () => {
+  it('case 2 / 2b — a subtask under a task, blocked_by a subtask under a story (same epic, or another), is accepted', () => {
+    expect(() =>
+      run([
+        add('x', { proposedFields: { kind: 'subtask' }, parentRef: T, blockedByRefs: [Y] }),
+        add('s3', { proposedFields: { kind: 'story' }, parentRef: E2 }),
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      run([
+        add('y2', { proposedFields: { kind: 'subtask' }, parentRef: S2 }),
+        add('x', {
+          proposedFields: { kind: 'subtask' },
+          parentRef: T,
+          blockedByRefs: [`${TEMP_REF_PREFIX}y2`],
+        }),
+      ]),
+    ).not.toThrow();
+  });
+
+  it('case 3 — a subtask two levels under a story, blocked_by a subtask directly under one, is refused naming both depths', () => {
     const err = crossLevel(() =>
-      validate([modify('m', { patch: { blockedByAdd: [STORY_A] } })], { liveById: levels }),
+      run([
+        add('t1', { proposedFields: { kind: 'task', title: 'T1' }, parentRef: S }),
+        add('x1', {
+          proposedFields: { kind: 'subtask', title: 'X1' },
+          parentRef: `${TEMP_REF_PREFIX}t1`,
+          blockedByRefs: [Y],
+        }),
+      ]),
+    );
+    expect(err.planItemId).toBe('x1');
+    expect(err.message).toContain('X1');
+    expect(err.message).toContain('sits 3 level(s)');
+    expect(err.message).toContain(`MOTIR-${Y}`);
+    expect(err.message).toMatch(/which sits 2/);
+  });
+
+  it('case 4 — a root bug filed in a folder, blocked_by a subtask, is refused (a folder adds no depth)', () => {
+    crossLevel(() =>
+      run(
+        [add('b', { proposedFields: { kind: 'bug' }, parentRef: 'folder:f1', blockedByRefs: [Y] })],
+        {
+          folderById: new Map([['f1', { id: 'f1', projectId: PLAN_PROJECT, name: 'Bugs' }]]),
+        },
+      ),
+    );
+  });
+
+  it('case 4b — a subtask under a ROOT task, blocked_by a subtask under a story under an epic, is refused', () => {
+    crossLevel(() =>
+      run([
+        add('r', { proposedFields: { kind: 'task' } }),
+        add('xr', {
+          proposedFields: { kind: 'subtask' },
+          parentRef: `${TEMP_REF_PREFIX}r`,
+          blockedByRefs: [Y],
+        }),
+      ]),
+    );
+  });
+
+  it("refuses a modify's patch.blockedByAdd across levels, placing the target by its committed chain", () => {
+    const err = crossLevel(() =>
+      run([
+        {
+          ...add('m'),
+          op: 'modify',
+          workItemId: Y,
+          proposedFields: null,
+          patch: { blockedByAdd: [S2] },
+        },
+      ]),
     );
     expect(err.message).toContain('patch.blockedByAdd');
-    expect(err.message).toContain(`MOTIR-${REAL_TARGET}`);
   });
 
-  it('refuses a cross-level edge between two PROPOSALS, read from their proposed kinds', () => {
-    crossLevel(() =>
-      validate(
-        [
-          add('s', { proposedFields: { kind: 'story' } }),
-          add('x', {
-            proposedFields: { kind: 'subtask' },
-            parentRef: `${TEMP_REF_PREFIX}s`,
-            blockedByRefs: [`${TEMP_REF_PREFIX}s2`],
-          }),
-          add('s2', { proposedFields: { kind: 'story' } }),
-        ],
-        { liveById: levels },
-      ),
-    );
-  });
-
-  it('refuses an epic blocked_by a subtask — the rule is symmetric', () => {
-    crossLevel(() =>
-      validate([add('e', { proposedFields: { kind: 'epic' }, blockedByRefs: [SUBTASK_Y] })], {
-        liveById: levels,
-      }),
-    );
-  });
-
-  it('reads a KINDLESS add at its default kind (task — a leaf)', () => {
-    crossLevel(() =>
-      validate([add('k', { proposedFields: {}, blockedByRefs: [STORY_A] })], { liveById: levels }),
-    );
-  });
-
-  it('accepts a subtask blocked_by a subtask under ANOTHER story — parents are never compared', () => {
+  it('a modify that RE-PARENTS its target is placed under the new parent', () => {
+    // T moved under S (depth 2) is then on Y's level.
     expect(() =>
-      validate(
-        [
-          add('b', { proposedFields: { kind: 'story' } }),
-          add('x', {
-            proposedFields: { kind: 'subtask' },
-            parentRef: `${TEMP_REF_PREFIX}b`,
-            blockedByRefs: [SUBTASK_Y],
-          }),
-        ],
-        { liveById: levels },
-      ),
-    ).not.toThrow();
-  });
-
-  it('accepts a story blocked_by a story under ANOTHER epic, and an epic by an epic', () => {
-    expect(() =>
-      validate(
-        [
-          add('e2', { proposedFields: { kind: 'epic' }, blockedByRefs: [EPIC_E] }),
-          add('s', {
-            proposedFields: { kind: 'story' },
-            parentRef: `${TEMP_REF_PREFIX}e2`,
-            blockedByRefs: [STORY_A],
-          }),
-        ],
-        { liveById: levels },
-      ),
-    ).not.toThrow();
-  });
-
-  it('accepts a bug blocked_by a subtask, and a subtask blocked_by a task — all leaves', () => {
-    expect(() =>
-      validate(
-        [
-          add('bug', { proposedFields: { kind: 'bug' }, blockedByRefs: [SUBTASK_Y] }),
-          modify('m', { patch: { blockedByAdd: [`${TEMP_REF_PREFIX}t`] } }),
-          add('t', { proposedFields: { kind: 'task' } }),
-        ],
-        { liveById: levels },
-      ),
+      run([
+        {
+          ...add('m'),
+          op: 'modify',
+          workItemId: T,
+          proposedFields: null,
+          patch: { parentRef: S, blockedByAdd: [Y] },
+        },
+      ]),
     ).not.toThrow();
   });
 
   it('never refuses patch.blockedByRemove — a plan can always take a cross-level edge away', () => {
     expect(() =>
-      validate([modify('m', { patch: { blockedByRemove: [STORY_A] } })], { liveById: levels }),
+      run([
+        {
+          ...add('m'),
+          op: 'modify',
+          workItemId: Y,
+          proposedFields: null,
+          patch: { blockedByRemove: [S] },
+        },
+      ]),
+    ).not.toThrow();
+  });
+
+  it('a live end with no chain is skipped rather than guessed', () => {
+    expect(() =>
+      validate(
+        [add('x', { proposedFields: { kind: 'subtask' }, parentRef: T, blockedByRefs: [S] })],
+        {
+          liveById: levels,
+        },
+      ),
     ).not.toThrow();
   });
 
   it('reports a dangling ref as dangling, not as a level question', () => {
     try {
-      validate([add('x', { proposedFields: { kind: 'subtask' }, blockedByRefs: ['wi_nowhere'] })], {
-        liveById: levels,
-      });
+      run([
+        add('x', {
+          proposedFields: { kind: 'subtask' },
+          parentRef: T,
+          blockedByRefs: ['wi_nowhere'],
+        }),
+      ]);
       expect.unreachable('a dangling ref must be refused');
     } catch (err) {
       expect((err as PlanRefGraphError).reason).toBe('dangling');
@@ -1457,51 +1492,61 @@ describe('validatePlanProposals — a blocked_by joins two items on the SAME LEV
   });
 
   it('refuses the level BEFORE the cycle — the more specific reason wins', () => {
-    // x (subtask) blocked_by STORY_A and STORY_A committed-blocked_by x's own
-    // chain would be a ring; the edge that may not exist at all is reported.
     crossLevel(() =>
-      validate([modify('m', { patch: { blockedByAdd: [STORY_A] } })], {
-        liveById: levels,
-        existingBlockedByEdges: [{ blockedId: STORY_A, blockerId: REAL_TARGET }],
-      }),
+      run(
+        [
+          {
+            ...add('m'),
+            op: 'modify',
+            workItemId: Y,
+            proposedFields: null,
+            patch: { blockedByAdd: [S] },
+          },
+        ],
+        { existingBlockedByEdges: [{ blockedId: S, blockerId: Y }] },
+      ),
     );
   });
 });
 
 describe('assertBlockedByLevels — the APPEND narrows to the batch (MOTIR-6367)', () => {
-  const STORY_A = 'wi_story_a';
-  const levels = liveMap(live({ id: STORY_A, kind: 'story' }));
+  const S = 'wi_s';
+  const levels = liveMap(live({ id: S, kind: 'story' }));
+  const chains = new Map<string, readonly string[]>([[S, []]]);
 
   it('judges only the named subjects, while resolving refs against every add', () => {
     const items = [
-      add('old', { proposedFields: { kind: 'subtask' }, blockedByRefs: [STORY_A] }),
-      add('new', { proposedFields: { kind: 'subtask' }, blockedByRefs: [`${TEMP_REF_PREFIX}s`] }),
-      add('s', { proposedFields: { kind: 'story' } }),
+      add('p', { proposedFields: { kind: 'story' } }),
+      add('old', {
+        proposedFields: { kind: 'task' },
+        parentRef: `${TEMP_REF_PREFIX}p`,
+        blockedByRefs: [S],
+      }),
+      add('new', {
+        proposedFields: { kind: 'task' },
+        parentRef: `${TEMP_REF_PREFIX}p`,
+        blockedByRefs: [`${TEMP_REF_PREFIX}p`],
+      }),
     ];
-    // `old` is cross-level but not in the batch — left to the close.
-    expect(() => assertBlockedByLevels(items, levels, new Set(['s']))).not.toThrow();
-    // `new` is in the batch and names a proposed story.
-    expect(() => assertBlockedByLevels(items, levels, new Set(['new']))).toThrow(PlanRefGraphError);
+    // `old` is cross-level (depth 1 → 0) but not in the batch — left to the close.
+    expect(() => assertBlockedByLevels(items, levels, chains, new Set(['p']))).not.toThrow();
+    // `new` is in the batch and names its own parent: depth 1 → 0.
+    expect(() => assertBlockedByLevels(items, levels, chains, new Set(['new']))).toThrow(
+      PlanRefGraphError,
+    );
   });
 
-  it('skips an end whose kind it was not given — a committed row the append did not read', () => {
-    expect(() =>
-      assertBlockedByLevels(
-        [add('x', { proposedFields: { kind: 'subtask' }, blockedByRefs: ['wi_unread'] })],
-        new Map(),
-      ),
-    ).not.toThrow();
-  });
-
-  it('skips an out-of-enum kind and a folder ref — those are other refusals', () => {
+  it('skips a folder ref, a remove, and a proposal parent cycle — other checks refuse those', () => {
     expect(() =>
       assertBlockedByLevels(
         [
-          add('x', { proposedFields: { kind: 'initiative' }, blockedByRefs: [STORY_A] }),
           add('y', { proposedFields: { kind: 'subtask' }, blockedByRefs: ['folder:f1'] }),
-          { ...add('r'), op: 'remove', workItemId: STORY_A },
+          { ...add('r'), op: 'remove', workItemId: S },
+          add('c1', { parentRef: `${TEMP_REF_PREFIX}c2`, blockedByRefs: [S] }),
+          add('c2', { parentRef: `${TEMP_REF_PREFIX}c1` }),
         ],
         levels,
+        chains,
       ),
     ).not.toThrow();
   });

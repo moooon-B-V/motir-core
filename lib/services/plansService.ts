@@ -73,7 +73,6 @@ import {
   folderRefId,
   isFolderRef,
   isTempRef,
-  isWorkItemRef,
   tempRefsOf,
   type ProposalRefCarrier,
 } from '@/lib/plans/refs';
@@ -1086,6 +1085,9 @@ async function runPersistGate(
   // The FOLDERS its `folder:` placements name (MOTIR-5414) — skipped entirely
   // when the plan files nothing. Bound the same way the row read above is.
   const folderById = await resolveFolderById(nodes, ctx, tx);
+  // The COMMITTED ancestor chains the same-level check places live ends with
+  // (MOTIR-6411) — one batched read, skipped when the plan writes no edge.
+  const edgeAncestorsById = await resolveEdgeAncestors(nodes, ctx, tx);
   validatePlanProposals({
     items: nodes,
     liveById,
@@ -1094,7 +1096,42 @@ async function runPersistGate(
     ancestorIdsById,
     existingBlockedByEdges,
     folderById,
+    edgeAncestorsById,
   });
+}
+
+/**
+ * The committed ancestor chain of every live work item a plan's edges or
+ * placements name — the positions the same-level check reads (MOTIR-6411,
+ * `docs/decisions/edge-level-is-position.md`). One batched recursive read, and
+ * none for a plan that writes no `blocked_by`.
+ *
+ * ⚠️ A `tx`, when given, must already have the project narrowing lifted, for
+ * the reason the row read in `runPersistGate` states: an edge may cross projects.
+ */
+async function resolveEdgeAncestors(
+  nodes: readonly ProposalNode[],
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<ReadonlyMap<string, readonly string[]>> {
+  const writesEdge = nodes.some(
+    (n) =>
+      (n.op === 'add' && n.blockedByRefs.length > 0) ||
+      (n.op === 'modify' && (n.patch?.blockedByAdd?.length ?? 0) > 0),
+  );
+  if (!writesEdge) return new Map();
+  const ids = [
+    ...new Set([
+      ...collectReferencedWorkItemIds(nodes),
+      ...nodes.filter((n) => n.op === 'modify' && n.workItemId).map((n) => n.workItemId!),
+    ]),
+  ];
+  if (ids.length === 0) return new Map();
+  return tx
+    ? await workItemRepository.findAncestorIdsForItems(ids, ctx.workspaceId, tx)
+    : await withWorkspaceServiceContext(ctx.workspaceId, (t) =>
+        workItemRepository.findAncestorIdsForItems(ids, ctx.workspaceId, t),
+      );
 }
 
 /**
@@ -3437,21 +3474,23 @@ async function assertBlockedByLevelsAtAppend(
   tx: Prisma.TransactionClient,
 ): Promise<void> {
   const subjects = nodes.filter((n) => subjectIds.has(n.id));
-  const refs = subjects.flatMap((n) =>
-    n.op === 'add' ? n.blockedByRefs : n.op === 'modify' ? (n.patch?.blockedByAdd ?? []) : [],
+  const writesEdge = subjects.some(
+    (n) =>
+      (n.op === 'add' && n.blockedByRefs.length > 0) ||
+      (n.op === 'modify' && (n.patch?.blockedByAdd?.length ?? 0) > 0),
   );
-  if (refs.length === 0) return;
-  const realIds = [
-    ...new Set([
-      ...refs.filter((r) => isWorkItemRef(r)),
-      ...subjects.filter((n) => n.op === 'modify' && n.workItemId).map((n) => n.workItemId!),
-    ]),
-  ];
+  if (!writesEdge) return;
   await withProjectNarrowingSuspended(tx, planProjectId, async () => {
-    const rows =
-      realIds.length === 0
-        ? []
-        : await workItemRepository.findByIdsInWorkspace(realIds, ctx.workspaceId, tx);
+    const ids = [
+      ...new Set([
+        ...collectReferencedWorkItemIds(nodes),
+        ...nodes.filter((n) => n.op === 'modify' && n.workItemId).map((n) => n.workItemId!),
+      ]),
+    ];
+    const [rows, ancestors] = await Promise.all([
+      ids.length === 0 ? [] : workItemRepository.findByIdsInWorkspace(ids, ctx.workspaceId, tx),
+      workItemRepository.findAncestorIdsForItems(ids, ctx.workspaceId, tx),
+    ]);
     const liveById = new Map<string, LiveWorkItemState>(
       rows.map((r) => [
         r.id,
@@ -3465,7 +3504,9 @@ async function assertBlockedByLevelsAtAppend(
         },
       ]),
     );
-    assertBlockedByLevels(nodes, liveById, subjectIds);
+    // Only rows that exist are placed; an unknown id is the close's `dangling`.
+    const placed = new Map([...ancestors].filter(([id]) => liveById.has(id)));
+    assertBlockedByLevels(nodes, liveById, placed, subjectIds);
   });
 }
 

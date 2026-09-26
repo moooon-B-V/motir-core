@@ -739,8 +739,10 @@ describe('gate — coverage top-up: the detail presenter across every link group
       expect(res.status, await res.clone().text()).toBe(201);
     };
 
-    const blocker = await create('task', 'Blocks it');
-    const blocked = await create('task', 'Is blocked by it');
+    // Siblings of the item, so its blocked_by / blocks edges join one level
+    // (MOTIR-6411: the level is position — a ROOT task is one level up).
+    const blocker = await create('task', 'Blocks it', story.key);
+    const blocked = await create('task', 'Is blocked by it', story.key);
     const dup = await create('task', 'A duplicate');
     const clone = await create('task', 'A clone');
     const related = await create('task', 'Related');
@@ -752,8 +754,7 @@ describe('gate — coverage top-up: the detail presenter across every link group
     await link(item.key, clone.key, 'clones');
 
     // A blocker on the PARENT — the cascade arm `blockedByAncestorKey` reports.
-    // A root STORY, on the parent's level (MOTIR-6369).
-    const ancestorBlocker = await create('story', 'Blocks the parent');
+    const ancestorBlocker = await create('task', 'Blocks the parent');
     await link(story.key, ancestorBlocker.key, 'blocked_by');
 
     const GET = await route(STORY_ROUTES[1], 'GET');

@@ -5,7 +5,6 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
-import { seedBlockedBy } from '../helpers/seedBlockedBy';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
@@ -262,10 +261,10 @@ describe('computeExpansionNudge — the real service, over real Postgres', () =>
     const fx = await makeWorkItemFixture();
     const s = await stub(fx, { title: 'Last hope' });
     const blocker = await leaf(fx, 'In flight');
-    // A story blocked_by a LEAF is cross-level, which every door now refuses
-    // (MOTIR-6369). The case is about an in-flight leaf holding a stub out of the
-    // ready set, so the edge is seeded below the doors rather than re-levelled.
-    await seedBlockedBy(fx, s.id, blocker.id);
+    await workItemsService.linkWorkItems(
+      { fromId: s.id, toId: blocker.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
     // An in_progress blocker is itself not ready (category in_progress) and holds
     // the stub out of the ready set — nothing is startable.
     await setStatus(blocker.id, 'in_progress');

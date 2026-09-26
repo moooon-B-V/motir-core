@@ -18,7 +18,6 @@
 // PURE: the caller resolves parents and the parent-level edges it needs, in one
 // batched read, and hands them in.
 
-import { isIssueType } from '@/lib/issues/parentRules';
 import { isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
 
 /** One `blocked_by` edge: `blockedId` waits on `blockerId`. */
@@ -56,17 +55,20 @@ export function coveredByParents(
 
 /** What {@link uncoveredCrossParentEdges} needs to know about one end of an edge. */
 export interface CoverageNodeInfo {
-  kind: string;
   /** `null` = no work-item parent (a root, or filed in a folder). */
   parentId: string | null;
+  /** The item's ancestor chain, nearest first — its POSITION (MOTIR-6411). */
+  ancestors: readonly string[];
 }
 
 /**
- * Every edge in `edges` that is SAME-LEVEL, crosses parents, and is not covered
- * by a parent edge — the `invalidEdges` both validators report. A cross-LEVEL
- * edge is skipped: it is refused at every write door and reported by its own
- * advisory, and a parent edge between two different levels would mean nothing.
- * An end the caller cannot describe (`info` → undefined) is exempt.
+ * Every edge in `edges` that is SAME-LEVEL (the same depth below the nearest
+ * common ancestor — `edgeLevel.ts`), crosses parents, and is not covered by a
+ * parent edge — the `invalidEdges` both validators report. Walking both ends up
+ * one parent at a time, each pair of parents met is the edge the rule owes; this
+ * asks it of the first pair, and the same question asked of every edge carries it
+ * up. A cross-LEVEL edge is skipped: it is refused at every write door and
+ * reported by its own advisory. An end the caller cannot describe is exempt.
  */
 export function uncoveredCrossParentEdges(
   edges: readonly CoverageEdge[],
@@ -77,8 +79,7 @@ export function uncoveredCrossParentEdges(
     const blocked = info(edge.blockedId);
     const blocker = info(edge.blockerId);
     if (!blocked || !blocker) return false;
-    if (!isIssueType(blocked.kind) || !isIssueType(blocker.kind)) return false;
-    if (isCrossLevelEdge(blocked.kind, blocker.kind)) return false;
+    if (isCrossLevelEdge(blocked.ancestors, blocker.ancestors)) return false;
     return !coveredByParents(edge, (id) => info(id)?.parentId, parentBlockedBy);
   });
 }
