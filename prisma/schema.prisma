@@ -4748,6 +4748,19 @@ enum ApprovalGateDecisionSource {
   @@map("approval_gate_decision_source")
 }
 
+/// The VERDICT a Motir-pressed refusal of a `design_result` gate carries (Story
+/// MOTIR-6070 · MOTIR-6421; ADR `approval-gates.md` §10d). Required on that press
+/// and refused on every other kind, verb and source by the decide door.
+enum ApprovalGateRefusalVerdict {
+  /// Send it back to be REVISED — the card returns to To do for the next run.
+  revise
+  /// The plan around it is wrong — the card returns to To do, and the decided band
+  /// asks whether to open the planner seeded from this gate.
+  re_plan
+
+  @@map("approval_gate_refusal_verdict")
+}
+
 /// An APPROVAL GATE — one row per decision that holds work up, the
 /// human-in-the-loop evidence an agent-driven pipeline owes an auditor (ADR
 /// §6a). BASE record (MOTIR-4788): the subject, the kind, the state, who
@@ -4862,6 +4875,15 @@ model ApprovalGate {
   /// A page arm (MOTIR-5761) is a new `kind`, never a migration. Null on every
   /// other kind and on an undecided or overturned decision.
   confirmedRecord       Json?                       @map("confirmed_record")
+  /// WHAT A PERSON MEANT BY "NO" on a refused `design_result` gate (Story MOTIR-6070 ·
+  /// MOTIR-6421; ADR `approval-gates.md` §10d, amended by
+  /// `design-refusal-verdict.md`) — `revise` or `re_plan`, chosen at the press and
+  /// stamped IN the deciding write, so `trg_approval_gate_decided_immutable` holds it
+  /// with the rest of the row. ⚠️ A COLUMN OF ITS OWN, NOT `outcomeRef`: the surfaces
+  /// that repaint a card read `outcomeRef` as a status key. Null on every approval, on
+  /// every kind that offers no verdict, on a GitHub-synced refusal (nobody was asked),
+  /// and on every gate decided before this column existed.
+  refusalVerdict        ApprovalGateRefusalVerdict? @map("refusal_verdict")
 
   /// WHY this gate was superseded — null for every row that is not `superseded`,
   /// and `unknown` for a row superseded before the column existed (MOTIR-5659).

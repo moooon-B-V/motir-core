@@ -22,7 +22,8 @@ export type WorkItemLinkErrorTag =
   | 'WORKSPACE_MISMATCH_LINK'
   | 'SELF_LINK'
   | 'DUPLICATE_LINK'
-  | 'WORK_ITEM_LINK_NOT_FOUND';
+  | 'WORK_ITEM_LINK_NOT_FOUND'
+  | 'CROSS_LEVEL_LINK';
 
 /**
  * Base class for every work-item-link typed error. Concrete subclasses set a
@@ -159,5 +160,30 @@ export class WorkItemLinkNotFoundError extends WorkItemLinkError {
   constructor(id: string) {
     super(`Work item link ${id} not found.`);
     this.name = 'WorkItemLinkNotFoundError';
+  }
+}
+
+/**
+ * A NEW `is_blocked_by` edge whose two ends sit on different LEVELS (Story
+ * MOTIR-6015 · MOTIR-6369; the level is POSITION, MOTIR-6387 — the two items
+ * are not at the same depth below their nearest common ancestor). A dependency
+ * joins two items on the same level and may cross parents. Raised by the SERVICE
+ * before the insert, so no row is written. `relates_to`, `duplicates` and
+ * `clones` are never judged, and an existing cross-level edge is not refused —
+ * `validate_work_item` reports it as a `cross-level-edge` advisory instead.
+ *
+ * Carries both ends' keys and depths below the project root.
+ */
+export class CrossLevelLinkError extends WorkItemLinkError {
+  readonly tag = 'CROSS_LEVEL_LINK' as const;
+  readonly code = 'CROSS_LEVEL_LINK' as const;
+  constructor(
+    readonly blocked: { key: string; depth: number },
+    readonly blocker: { key: string; depth: number },
+    // The explanation, worded by `edgeLevel.ts` — the rule's one home.
+    message: string,
+  ) {
+    super(message);
+    this.name = 'CrossLevelLinkError';
   }
 }

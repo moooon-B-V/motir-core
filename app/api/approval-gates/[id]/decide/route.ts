@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { gateDecisionRefusalResponse } from '@/lib/approvalGates/decisionRefusalResponse';
 import type { GateDecision } from '@/lib/services/approvalGatesService';
+import {
+  APPROVAL_GATE_REFUSAL_VERDICTS,
+  type ApprovalGateRefusalVerdictDTO,
+} from '@/lib/dto/approvalGate';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
@@ -48,7 +52,11 @@ import { PlanNotInExpectedStatusError } from '@/lib/plans/errors';
 // MOTIR-5893), `stamp` (required — the `stamp` the gate read returned, MOTIR-5234)
 // and `noteMd` (free text — why they said yes, or what they sent back: optional on
 // `approve` / `choose`, REQUIRED on `request_changes` and `overturn`, which the door
-// refuses empty as `APPROVAL_GATE_VERB_NOT_OFFERED` — ADR §10a, MOTIR-6074).
+// refuses empty as `APPROVAL_GATE_VERB_NOT_OFFERED` — ADR §10a, MOTIR-6074) and
+// `refusalVerdict` (`revise` | `re_plan` — what a DESIGN refusal meant, ADR §10d,
+// MOTIR-6421: REQUIRED on `request_changes` of a `design_result` gate, refused
+// everywhere else; the door answers both as `APPROVAL_GATE_VERB_NOT_OFFERED` with
+// `reason` `refusal_verdict_required` / `refusal_verdict_not_offered`).
 //
 // ⚠️ WHICH VERB FITS WHICH KIND IS THE DOOR'S TO SAY, NOT THIS LAYER'S. `choose` is
 // the one verb of a `decision_choice` gate and `approve` is every other kind's; the
@@ -133,6 +141,25 @@ export async function POST(
   }
   const stamp = body.stamp;
 
+  // The verdict's SHAPE only (MOTIR-6421): absent or null is "none", anything else must
+  // be one of the two values. WHETHER this gate offers one is the door's to say, under
+  // its lock — the route cannot see the kind.
+  const rawVerdict = body.refusalVerdict;
+  if (
+    rawVerdict !== undefined &&
+    rawVerdict !== null &&
+    !(
+      typeof rawVerdict === 'string' &&
+      (APPROVAL_GATE_REFUSAL_VERDICTS as readonly string[]).includes(rawVerdict)
+    )
+  ) {
+    return NextResponse.json(
+      { code: 'BAD_REQUEST', error: '`refusalVerdict` must be `revise` or `re_plan`.' },
+      { status: 400 },
+    );
+  }
+  const refusalVerdict = (rawVerdict ?? null) as ApprovalGateRefusalVerdictDTO | null;
+
   try {
     const result = await pullRequestMergeService.decideGate(
       {
@@ -140,6 +167,7 @@ export async function POST(
         decision,
         optionId: decision === 'choose' ? optionId : null,
         noteMd: typeof body.noteMd === 'string' ? body.noteMd : null,
+        refusalVerdict,
         // `api` — a token called the REST API (ADR §6a). NOT `ui`, even though a
         // browser can reach this route: the record answers *how did the decision
         // arrive*, and this door authenticates a caller rather than witnessing a

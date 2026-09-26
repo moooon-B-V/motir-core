@@ -597,5 +597,19 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.39.0` at `b889f767a`, so this claims `1.40.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the PARAMETER.
+ *
+ * - `1.41.0` — MOTIR-6421 adds `refusalVerdict` (`revise` / `re_plan`, nullable) to the
+ *   `ApprovalGateDecision` component `getWorkItemApprovalGate` answers: what a person
+ *   meant by sending a `design_result` gate back from Motir (`approval-gates.md` §10d).
+ *   Null on every other kind, verb and source, and on every gate decided before the
+ *   column existed.
+ *
+ *   Additive: one new nullable field on an existing component (§8's allowed list); no
+ *   existing field changes meaning, and `outcomeRef` still carries the status written.
+ *   Still a READ — no v1 operation decides a gate.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.40.0` at `b4588d153`, so this claims `1.41.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.40.0';
+export const V1_CONTRACT_VERSION = '1.41.0';

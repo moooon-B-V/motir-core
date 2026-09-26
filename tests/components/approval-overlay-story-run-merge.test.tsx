@@ -115,7 +115,14 @@ function storyRunRead(
 ): ApprovalGateOverlayReadDTO {
   const gate = over.gate ?? ACCEPTANCE_AWAITING;
   return {
-    workItem: { id: 'wi-acme-20', identifier: 'ACME-20', title: 'Hold a basket' },
+    workItem: {
+      id: 'wi-acme-20',
+      identifier: 'ACME-20',
+      title: 'Hold a basket',
+      status: 'in_review',
+      parentIdentifier: null,
+    },
+    statuses: [],
     gate,
     canDecide: true,
     canReplan: false,
