@@ -82,7 +82,9 @@ async function openRun(
 }
 
 const list = (page: Parameters<typeof dispatchRunService.listRunsForProject>[1]) =>
-  dispatchRunService.listRunsForProject(fixture.projectIdentifier, page, fixture.ctx);
+  dispatchRunService
+    .listRunsForProject(fixture.projectIdentifier, page, fixture.ctx)
+    .then((result) => result.runs);
 
 describe('the project is the handle — every run, newest first', () => {
   it('returns the project’s runs with their set SUMMARISED, not listed', async () => {
@@ -140,7 +142,7 @@ describe('the narrowings are applied by the QUERY, never to the page', () => {
     // ⚠️ THE TWO READS MUST NOT DISAGREE ABOUT *LIVE*. `listActiveRunsForProject`
     // is a second answer to the same question, and the day they diverge one
     // surface says a run is going and another says it finished.
-    const active = await dispatchRunService.listActiveRunsForProject(
+    const { runs: active } = await dispatchRunService.listActiveRunsForProject(
       fixture.projectIdentifier,
       fixture.ctx,
     );

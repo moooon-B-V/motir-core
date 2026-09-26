@@ -10,6 +10,7 @@ import type { PlanSessionStateDto } from '@/lib/dto/planSessions';
 import { loadMoreSessionsAction } from '../_actions';
 import { SessionRow } from './SessionRow';
 import type { SessionRowView } from './types';
+import type { RoomView } from '@/lib/rooms/roomView';
 
 // The Plans list of planning CONVERSATIONS (MOTIR-6025, design Part XIX §19.1 /
 // §19.5), the successor of `PlansList`. Same scale shape (finding #57): the page
@@ -34,6 +35,9 @@ export interface SessionsListProps {
   /** The filter these rows came from; it travels with every streamed page, so a
    *  later page cannot arrive from a different predicate than the one that asked. */
   planState: PlanSessionStateDto | null;
+  /** The SERVED view (MOTIR-6334) — it travels with every streamed page like the
+   *  filter does, and the page keys this island on it so a switch remounts. */
+  view: RoomView;
   /** The `?session=<id>` row to highlight and scroll to, if any. */
   highlightId?: string | null;
 }
@@ -42,6 +46,7 @@ export function SessionsList({
   initialViews,
   initialCursor,
   planState,
+  view,
   highlightId = null,
 }: SessionsListProps) {
   const t = useTranslations('aiPlanning');
@@ -65,7 +70,7 @@ export function SessionsList({
     setFailed(false);
     startTransition(async () => {
       try {
-        const next = await loadMoreSessionsAction(cursor, planState);
+        const next = await loadMoreSessionsAction(cursor, planState, view);
         // A landed-on row may have been pinned to the top of the first page
         // from further down the list; when its own page arrives it is not
         // listed twice.
@@ -81,7 +86,7 @@ export function SessionsList({
         loadingRef.current = false;
       }
     });
-  }, [cursor, planState]);
+  }, [cursor, planState, view]);
 
   // Stream the next page as a bottom sentinel nears the viewport. Torn down at
   // the tail and while a failed page waits on Retry — the observer must not

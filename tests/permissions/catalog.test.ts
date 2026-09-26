@@ -314,6 +314,8 @@ const APPROVAL_ENFORCED: PermissionKey[] = ['approval:decide_any', 'approval:vie
  * was never a moment where the catalog advertised it and nothing consulted it.
  */
 const SAVED_FILTER_ANY_ENFORCED: PermissionKey[] = ['saved_filter:manage_any'];
+/** MOTIR-6330 · MOTIR-6331 — the Plans and Runs rooms' view keys, consulted by their reads' scope. */
+const ROOM_VIEW_ENFORCED: PermissionKey[] = ['plan:view_any', 'run:view_any'];
 
 // ⚠️ `MERGE_GATE_ENFORCED` WAS HERE — MOTIR-4793's `work_item:merge_pull_request`,
 // the floor the `pull_request_merge` handler named. Bug MOTIR-5603 · MOTIR-5616
@@ -334,6 +336,8 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     // SET rather than a count: a length constant would pass just as happily if a
     // key were deleted from the catalog as if its gate were wired. (MOTIR-5305
     // named `approval:view_any` `planned` for one commit; MOTIR-5301 wired it.)
+    // (MOTIR-6328 parked `plan:view_any` / `run:view_any` here for two commits;
+    // MOTIR-6330 and MOTIR-6331 wired them and emptied it.)
     expect([...PLANNED_PERMISSIONS]).toEqual([]);
     expect([...ENFORCED_PERMISSIONS].sort()).toEqual([...PERMISSIONS].sort());
   });
@@ -401,6 +405,10 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(
       ENFORCED_PERMISSIONS.filter((k) => SAVED_FILTER_ANY_ENFORCED.includes(k)).sort(),
     ).toEqual([...SAVED_FILTER_ANY_ENFORCED].sort());
+    // …and Story MOTIR-6179's room view keys, on the same terms again.
+    expect(ENFORCED_PERMISSIONS.filter((k) => ROOM_VIEW_ENFORCED.includes(k)).sort()).toEqual(
+      [...ROOM_VIEW_ENFORCED].sort(),
+    );
     expect(ENFORCED_PERMISSIONS).toHaveLength(
       shipped.length +
         ADMINISTRATIVE_ENFORCED.length +
@@ -410,7 +418,8 @@ describe('enforcement — the seam that lets naming and wiring land separately',
         REMOVAL_SPLIT_ENFORCED.length +
         INTEGRATION_ENFORCED.length +
         APPROVAL_ENFORCED.length +
-        SAVED_FILTER_ANY_ENFORCED.length,
+        SAVED_FILTER_ANY_ENFORCED.length +
+        ROOM_VIEW_ENFORCED.length,
     );
   });
 

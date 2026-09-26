@@ -8,6 +8,7 @@ import { db } from '@/lib/db';
 import type { Prisma } from '@/generated/prisma/client';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import { PUBLIC_PROJECT_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { runAsCloudBuild } from '../helpers/cloudBuild';
 
 // SEAM 5 loops over EVERY access level, `public` included — and publishing is a
@@ -429,7 +430,17 @@ describe('SEAM 5 · access level × custom role, against real Postgres', () => {
       // `public_request:*` keys on `public` — to everyone, by the level and not
       // by any role, which is exactly why the editor does not draw them. Asserting
       // the raw set would make this test fail for the one reason that is correct.
-      const roleGated = [...resolved].filter((key) => !key.startsWith('public_request:')).sort();
+      // MOTIR-6328: `public` also adds `plan:view_any` / `run:view_any` — the
+      // whole level-gated layer (`PUBLIC_PROJECT_PERMISSIONS`) is excluded unless
+      // the role itself listed the key.
+      const levelGated = new Set<string>(PUBLIC_PROJECT_PERMISSIONS);
+      const roleGated = [...resolved]
+        .filter(
+          (key) =>
+            !key.startsWith('public_request:') &&
+            !(level === 'public' && levelGated.has(key) && !composed.includes(key)),
+        )
+        .sort();
       expect({ level, permissions: roleGated }).toEqual({
         level,
         permissions: [...composed].sort(),

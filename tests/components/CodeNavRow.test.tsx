@@ -32,7 +32,13 @@ import { PROJECT_NAV_ACCESS, canOfferNavDestination } from '@/lib/settings/proje
 const MEMBER = new Set(['project:browse', 'ai:plan', 'item:write']);
 const VIEWER = new Set(['project:browse']);
 const ADMIN = new Set<string>(
-  PROJECT_NAV_ACCESS.map((e) => e.requires).filter((r) => r !== 'browse-only'),
+  PROJECT_NAV_ACCESS.flatMap((e) =>
+    e.requires === 'browse-only'
+      ? []
+      : typeof e.requires === 'object'
+        ? [...e.requires.anyOf]
+        : [e.requires],
+  ),
 );
 
 afterEach(cleanup);

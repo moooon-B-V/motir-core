@@ -187,11 +187,11 @@ vi.mock('@/lib/services/sprintsService', () => ({
   sprintsService: { listByProject: deferred('sprints', [], 'tierTwo') },
 }));
 // The PENDING-PLAN read (MOTIR-4197): tier two, in the group, CONDITIONAL on
-// `ai:view_plan` — the one member whose condition is a PERMISSION rather than
+// `plan:view_any` (MOTIR-6328; `ai:view_plan` until then) — the one member whose condition is a PERMISSION rather than
 // the item's shape, so both arms are asserted below.
 const pendingPlans = deferred('pendingPlans', [], 'tierTwo');
 // The PLAN HISTORY read (MOTIR-5547 · design MOTIR-5545 § Plan history 1): tier
-// two, the same group and the same `ai:view_plan` condition as the pending read.
+// two, the same group and the same `plan:view_any` condition as the pending read.
 const planHistory = deferred('planHistory', { items: [], nextCursor: null }, 'tierTwo');
 vi.mock('@/lib/services/plansService', () => ({
   plansService: {
@@ -436,7 +436,7 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
     getSession.mockResolvedValue({ user: { id: 'u1' } });
     getActiveProject.mockResolvedValue(PROJECT);
     getIssueDetail.mockResolvedValue(detailFor());
-    getPermissions.mockResolvedValue(new Set(['work_item:edit', 'ai:view_plan']));
+    getPermissions.mockResolvedValue(new Set(['work_item:edit', 'plan:view_any']));
 
     const pending = callPage();
     // A real macrotask, not a fixed number of microtask ticks: the page gate's
@@ -472,7 +472,7 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
       // and must not be the one that gets serialised back out of the group.
       'todoList',
       // The pending-plan read (MOTIR-4197) is a tier-two member for an actor
-      // holding `ai:view_plan`: it sits at the TOP of <main>, so it cannot be
+      // holding `plan:view_any`: it sits at the TOP of <main>, so it cannot be
       // late, and it costs the group max() rather than sum() only while it is
       // IN the group — a serial await here is the shape MOTIR-3435 removed.
       'pendingPlans',
@@ -522,7 +522,7 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
     // No children → no recursive-CTE roll-up. Parallelising this instead of
     // skipping it would make every leaf page pay for it.
     expect(rollupForParent).not.toHaveBeenCalled();
-    // No `ai:view_plan` → no pending-plan read AT ALL (MOTIR-4197 AC 4): an
+    // No `plan:view_any` → no pending-plan read AT ALL (MOTIR-4197 AC 4): an
     // indicator naming a plan the viewer cannot open is worse than none, and
     // the query is skipped rather than run-and-discarded, so the actor least
     // able to benefit from it never pays for it.
@@ -535,11 +535,13 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
     await pending.catch(() => undefined);
   });
 
-  it('runs the pending-plan read for an actor holding `ai:view_plan`, and only then', async () => {
+  it('runs the pending-plan read for an actor holding `plan:view_any`, and only then', async () => {
     getSession.mockResolvedValue({ user: { id: 'u1' } });
     getActiveProject.mockResolvedValue(PROJECT);
     getIssueDetail.mockResolvedValue(detailFor());
-    getPermissions.mockResolvedValue(new Set(['ai:view_plan']));
+    // The VIEW key alone — no `ai:view_plan` (MOTIR-6328): the indicator is a
+    // READ, so the authoring key is neither needed nor sufficient.
+    getPermissions.mockResolvedValue(new Set(['plan:view_any']));
 
     const pending = callPage();
     await new Promise((r) => setTimeout(r, 0));
@@ -550,6 +552,22 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
     // The plan-history read rides the same condition, once (MOTIR-5547).
     expect(planHistory).toHaveBeenCalledTimes(1);
     expect(started).toContain('planHistory');
+
+    releaseAll();
+    await pending.catch(() => undefined);
+  });
+
+  it('does NOT run the plan reads for an actor holding only the AUTHORING key `ai:view_plan` (MOTIR-6328)', async () => {
+    getSession.mockResolvedValue({ user: { id: 'u1' } });
+    getActiveProject.mockResolvedValue(PROJECT);
+    getIssueDetail.mockResolvedValue(detailFor());
+    getPermissions.mockResolvedValue(new Set(['ai:view_plan']));
+
+    const pending = callPage();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(pendingPlans).not.toHaveBeenCalled();
+    expect(planHistory).not.toHaveBeenCalled();
 
     releaseAll();
     await pending.catch(() => undefined);

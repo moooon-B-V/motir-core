@@ -352,7 +352,13 @@ describe('withV1Route — composition and route params', () => {
 
     await expect(res.json()).resolves.toEqual({
       id: 'MOTIR-42',
-      service: { userId: caller.user.id, workspaceId: caller.workspace.id },
+      service: {
+        userId: caller.user.id,
+        workspaceId: caller.workspace.id,
+        // The token's resolved grant rides the context (MOTIR-6330), for the
+        // record-view reads that consult a finer key after this door.
+        tokenGrant: ['project:browse'],
+      },
     });
   });
 

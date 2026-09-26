@@ -12,6 +12,7 @@ import type { DispatchRunListItemDto } from '@/lib/dto/dispatchRuns';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { legSummary } from '@/lib/runs/legSummary';
 import { runsHref } from '@/lib/runs/runsAddress';
+import type { RoomView } from '@/lib/rooms/roomView';
 import { formatRunInstant } from '@/lib/runs/runClock';
 import { RUN_STATUS_TONE } from '@/lib/runs/timeline';
 
@@ -46,6 +47,16 @@ export interface RunsIndexProps {
   projectKey: string;
   /** The work-item KEY this list is narrowed to, or null for the whole project. */
   scopeKey?: string | null;
+  /**
+   * WHOSE runs this list holds — the SERVED view (MOTIR-6335). Carried on EVERY
+   * client read (the poll, the settled re-read, *Show older runs*), exactly as
+   * `scopeKey` is: a read that dropped it would refill Mine with everyone's runs.
+   */
+  view?: RoomView;
+  /** Whether the reader has the switch — then every address written keeps `?view=`. */
+  viewInUrl?: boolean;
+  /** Whether the reader can start a run — picks the Project-empty copy. */
+  canRun?: boolean;
   /** `null` when the read FAILED — which is not the same as empty. */
   initialLive: DispatchRunListItemDto[] | null;
   initialPast: DispatchRunListItemDto[] | null;
@@ -55,6 +66,9 @@ export interface RunsIndexProps {
 export function RunsIndex({
   projectKey,
   scopeKey = null,
+  view = 'project',
+  viewInUrl = false,
+  canRun = true,
   initialLive,
   initialPast,
   pageSize,
@@ -74,7 +88,8 @@ export function RunsIndex({
   const base = `/api/projects/${encodeURIComponent(projectKey)}/dispatch-runs`;
   // ⚠️ ON EVERY FETCH, never only the first. A poll that dropped the narrowing
   // would refill a narrowed page with the whole project's runs.
-  const narrowing = scopeKey ? `&scope=${encodeURIComponent(scopeKey)}` : '';
+  const narrowing = `&view=${view}${scopeKey ? `&scope=${encodeURIComponent(scopeKey)}` : ''}`;
+  const addressView = viewInUrl ? view : null;
 
   // ⚠️ THE POLL RUNS ONLY WHILE SOMETHING IS LIVE, and stops the moment nothing
   // is. A list that re-reads for ever is the N+1 mistake the archived `/ready`
@@ -182,13 +197,13 @@ export function RunsIndex({
   // the first click.
   const onOpenRun = useCallback(
     (id: string) => {
-      shallowPush(runsHref({ scope: scopeKey, run: id }));
+      shallowPush(runsHref({ view: addressView, scope: scopeKey, run: id }));
     },
-    [scopeKey],
+    [addressView, scopeKey],
   );
   const onCloseRun = useCallback(() => {
-    shallowPush(runsHref({ scope: scopeKey }));
-  }, [scopeKey]);
+    shallowPush(runsHref({ view: addressView, scope: scopeKey }));
+  }, [addressView, scopeKey]);
 
   // ⚠️ RENDERED IN BOTH BRANCHES, and it must be. The empty-state return below
   // used to sit ABOVE the modal, so a list that went empty UNMOUNTED an open run
@@ -209,11 +224,21 @@ export function RunsIndex({
       <>
         {scopeKey ? (
           <EmptyState
-            title={t('scopeIndex.emptyTitle', { key: scopeKey })}
+            title={
+              view === 'mine'
+                ? t('scopeIndex.emptyMineTitle', { key: scopeKey })
+                : t('scopeIndex.emptyTitle', { key: scopeKey })
+            }
             description={t('scopeIndex.emptyBody', { key: scopeKey })}
           />
+        ) : view === 'mine' ? (
+          <EmptyState title={t('indexEmptyMineTitle')} description={t('indexEmptyMineBody')} />
         ) : (
-          <EmptyState title={t('indexEmptyTitle')} description={t('indexEmptyBody')} />
+          // A reader who cannot start a run is not told "when you dispatch work".
+          <EmptyState
+            title={t('indexEmptyTitle')}
+            description={canRun ? t('indexEmptyBody') : t('indexEmptyBodyRead')}
+          />
         )}
         {modal}
       </>
@@ -226,7 +251,7 @@ export function RunsIndex({
       <Section
         heading={t('sectionLive')}
         rows={live}
-        emptyLine={t('noneRunning')}
+        emptyLine={view === 'mine' ? t('noneRunningMine') : t('noneRunning')}
         t={t}
         showScope={showScope}
         onOpen={onOpenRun}
@@ -234,7 +259,7 @@ export function RunsIndex({
       <Section
         heading={t('sectionPast')}
         rows={past}
-        emptyLine={t('nonePast')}
+        emptyLine={view === 'mine' ? t('nonePastMine') : t('nonePast')}
         t={t}
         showScope={showScope}
         onOpen={onOpenRun}

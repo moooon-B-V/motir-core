@@ -966,6 +966,28 @@ export const approvalGateRepository = {
   },
 
   /**
+   * The PLANS routed to this reader and still awaiting a decision (Story
+   * MOTIR-6179 · MOTIR-6330) — the ids of the plans whose card-less
+   * `plan_approval` gate is waiting on them, the Plans room's third `mine` arm.
+   *
+   * ⚠️ THE ROUTING PREDICATE IS CALLED, NOT RESTATED — `awaitingRoutedToWhere`,
+   * the same builder the Workbench tab and the Approvals room read, narrowed to
+   * the plan kind. So a plan that is on the reader's To approve tab is in their
+   * Plans room's Mine view by construction, and the two cannot disagree about
+   * whose decision it is.
+   */
+  async findAwaitingRoutedPlanIds(
+    scope: AwaitingRoutingScope,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.approvalGate.findMany({
+      where: { AND: [awaitingRoutedToWhere(scope), { kind: 'plan_approval' }] },
+      select: { subjectId: true },
+    });
+    return rows.map((row) => row.subjectId);
+  },
+
+  /**
    * THE APPROVALS TAB'S WATERMARK (Story MOTIR-5238 · MOTIR-5240) — how many
    * gates are waiting on this reader, and the most recent `updatedAt` among
    * them, in ONE query.

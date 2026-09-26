@@ -58,6 +58,8 @@ describe('the catalog carries `ai:decide_plan` as an enforced `ai` key', () => {
   });
 
   it('leaves PLANNED_PERMISSIONS empty — the gate lands in the same change as the key', () => {
+    // (MOTIR-6328 parked `plan:view_any` / `run:view_any` here for two commits;
+    // MOTIR-6330 and MOTIR-6331 wired them and emptied it.)
     expect([...PLANNED_PERMISSIONS]).toEqual([]);
   });
 
@@ -242,6 +244,9 @@ describe('AC5 — built-in behaviour is unchanged: the same verdicts before and 
         'project:browse',
         'report:view',
         'work_item:edit',
+        // MOTIR-6328 — the Plans and Runs rooms' view keys.
+        'plan:view_any',
+        'run:view_any',
       ].sort(),
     );
   });

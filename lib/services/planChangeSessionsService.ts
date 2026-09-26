@@ -19,6 +19,7 @@ import { approvalGateRepository } from '@/lib/repositories/approvalGateRepositor
 import { isRefusalSeedGate, refusalSeedAnchorsOnParent } from '@/lib/planning/refusalSeed';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { planSessionsService } from '@/lib/services/planSessionsService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { toPlanChangeSessionDto } from '@/lib/mappers/planChangeMappers';
 import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
@@ -592,6 +593,25 @@ export const planChangeSessionsService = {
       viewerCanPlan,
       pendingPlanId: undecided,
     };
+  },
+
+  /**
+   * {@link getById} for a READER — the overlay's `GET /api/ai/plan-change/session`
+   * (Story MOTIR-6179 · MOTIR-6330). A session outside the reader's Plans-room
+   * scope (neither `plan:view_any` nor in their Mine view) is the same
+   * `PLAN_SESSION_NOT_FOUND` an unknown id is, so a pasted link confirms nothing.
+   * `getById` itself stays scope-free for its AUTHORING callers (the contextual
+   * planner and the ask door), which continue a conversation under `ai:plan`.
+   */
+  async getByIdForReader(pctx: ProjectContext, sessionId: string): Promise<PlanChangeSessionDto> {
+    const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
+    const inScope = await planSessionsService.isSessionInReaderScope(
+      pctx.projectId,
+      sessionId,
+      ctx,
+    );
+    if (!inScope) throw new PlanSessionNotFoundError(sessionId);
+    return this.getById(pctx, sessionId);
   },
 
   /**

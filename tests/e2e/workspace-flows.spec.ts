@@ -318,7 +318,10 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
   // "Side Project" still exists in the owner's list.
   await page.getByRole('button', { name: 'Switch workspace' }).click();
   await expect(page.getByRole('list').getByText('Side Project')).toBeVisible();
-  await expect(page.getByRole('list').getByText('Acme Renamed')).toHaveCount(0);
+  // EXACT, and it has to be: the removal's own toast ("Acme Renamed removed")
+  // renders inside the toaster's LIST, so a substring match counts the toast
+  // for as long as it is on screen and the assertion races its dismissal.
+  await expect(page.getByRole('list').getByText('Acme Renamed', { exact: true })).toHaveCount(0);
 
   await inviteeContext.close();
 });

@@ -1,10 +1,13 @@
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Sparkles } from 'lucide-react';
 
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { RoomViewSwitch } from '@/components/rooms/RoomViewSwitch';
+import { parseRoomView, pickRoomView, ROOM_VIEW_PARAM } from '@/lib/rooms/roomView';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planSessionsService } from '@/lib/services/planSessionsService';
@@ -14,7 +17,7 @@ import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 // one is `'use client'`, and importing even a pure function through a client
 // boundary hands this Server Component a client reference that throws on call
 // (MOTIR-3243).
-import { planStateFromParam } from '@/lib/planning/planSessionFilter';
+import { PLAN_SESSION_LANDING_PARAM, planStateFromParam } from '@/lib/planning/planSessionFilter';
 
 import { buildSessionRowViews } from './sessionRowView';
 import { SessionsList } from './_components/SessionsList';
@@ -27,6 +30,13 @@ import { PlanStatusTabs } from './_components/PlanStatusTabs';
 // proposed anything, was nowhere to be found. Each row now is one conversation:
 // what was asked, who started it, when it was last active, and its latest
 // plan's state. The ACCESS PATH is unchanged — the "Plans" left-nav entry.
+//
+// THE VIEW (Story MOTIR-6179 · MOTIR-6334, design MOTIR-6327
+// `plans-sessions--view-tabs.mock.html`): Mine / Project. The room's VIEWS come
+// from `planSessionsService.roomAccess` — Project on `plan:view_any`, Mine on
+// authoring or deciding a plan; both ⇒ the switch, one ⇒ that view alone, none ⇒
+// not-found. The plan-state filter works WITHIN the view and its counts are the
+// view's. A switch keeps `planState` and drops `session`.
 //
 // Server Component: resolve the active project, gate on `canBrowse`, read the
 // FIRST cursor page of the filter in view plus the filter's counts (services
@@ -44,16 +54,21 @@ export default async function PlansPage({
 } = {}) {
   // THE URL IS THE SINGLE SOURCE OF TRUTH for the filter (MOTIR-3241): derived on
   // every render, and an unknown value falls back to All rather than erroring.
-  const params = (await searchParams) ?? {};
+  //
+  // THE READS ARRIVE IN WAVES, not one await each — the serial-read ratchet
+  // (`tests/navigation/loading-boundary-guard.test.ts`, MOTIR-3449).
+  const [awaitedParams, session] = await Promise.all([searchParams, getSession()]);
+  const params = awaitedParams ?? {};
   const planState = planStateFromParam(firstParam(params.planState));
   // `?session=<id>` — the overlay's fresh-start notice lands here (MOTIR-6024).
   const landingId = firstParam(params.session) || null;
-  const session = await getSession();
   if (!session) redirect('/sign-in');
 
-  const t = await getTranslations('aiPlanning');
-
-  const ctx = await getActiveProject();
+  const [t, ta, ctx] = await Promise.all([
+    getTranslations('aiPlanning'),
+    getTranslations('projectAccess'),
+    getActiveProject(),
+  ]);
   // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
   // the WORKSPACE tier). The guard stays because the type does.
   if (!ctx) redirect('/sign-in');
@@ -62,9 +77,27 @@ export default async function PlansPage({
 
   // The active project may be one the actor can no longer browse (made private
   // while pinned) — render the no-access state rather than crashing.
-  const caps = await projectAccessService.getCapabilities(ctx.projectId, wsCtx);
+  //
+  // ONE WAVE: the browse check, the room's views and — on a clean URL, the one
+  // case the default rule consults it — the Mine probe. The room's access read is
+  // SETTLED, not caught into a default: an unbrowsable project still reaches the
+  // no-access state below, and any other failure is rethrown after it.
+  const requested = parseRoomView(params[ROOM_VIEW_PARAM]);
+  const sumCounts = (c: Record<string, number>) => Object.values(c).reduce((a, n) => a + n, 0);
+  const [caps, accessRead, mineHasRows] = await Promise.all([
+    projectAccessService.getCapabilities(ctx.projectId, wsCtx),
+    planSessionsService
+      .roomAccess(ctx.projectId, wsCtx)
+      .then((value) => ({ ok: true as const, value }))
+      .catch((error: unknown) => ({ ok: false as const, error })),
+    requested === null
+      ? planSessionsService
+          .countSessionsByPlanState(ctx.projectId, wsCtx, { view: 'mine' })
+          .then((counts) => sumCounts(counts) > 0)
+          .catch(() => false)
+      : null,
+  ]);
   if (!caps.canBrowse) {
-    const ta = await getTranslations('projectAccess');
     return (
       <div className="flex flex-col gap-6">
         <header className="flex flex-col gap-1">
@@ -80,11 +113,57 @@ export default async function PlansPage({
     );
   }
 
-  const [firstPage, counts, landing] = await Promise.all([
-    planSessionsService.listSessions(ctx.projectId, wsCtx, { planState }),
-    planSessionsService.countSessionsByPlanState(ctx.projectId, wsCtx),
-    landingId ? planSessionsService.getSessionRow(ctx.projectId, landingId, wsCtx) : null,
-  ]);
+  if (!accessRead.ok) throw accessRead.error;
+  const access = accessRead.value;
+  if (access.views.length === 0) notFound();
+  const view =
+    pickRoomView({ requested, available: access.views, mineHasRows }) ?? access.views[0]!;
+  const tv = (key: 'subtitle' | 'subtitleMine') =>
+    t(`sessions.${key}`, { project: ctx.project.name });
+  const header = (
+    <header className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex min-w-0 flex-col gap-1">
+        <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
+        <p className="text-sm text-(--el-text-muted)">
+          {view === 'mine' ? tv('subtitleMine') : tv('subtitle')}
+        </p>
+      </div>
+      {access.views.length > 1 ? (
+        // A switch keeps `planState` (the filter means the same in both views)
+        // and drops `session` — a landing is an arrival, not a filter.
+        <RoomViewSwitch
+          value={view}
+          label={t('sessions.viewAria')}
+          drop={[PLAN_SESSION_LANDING_PARAM]}
+        />
+      ) : null}
+    </header>
+  );
+
+  // A FAILED READ IS NOT AN EMPTY ONE (design MOTIR-6327 § the failed read): the
+  // first read is caught here and the shipped `ErrorState` renders under the
+  // header, the switch staying.
+  let reads;
+  try {
+    reads = await Promise.all([
+      planSessionsService.listSessions(ctx.projectId, wsCtx, { planState, view }),
+      planSessionsService.countSessionsByPlanState(ctx.projectId, wsCtx, { view }),
+      landingId
+        ? planSessionsService.getSessionRow(ctx.projectId, landingId, wsCtx, { view })
+        : null,
+    ]);
+  } catch {
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <ErrorState
+          title={t('sessions.readFailedTitle')}
+          description={t('sessions.readFailedBody')}
+        />
+      </div>
+    );
+  }
+  const [firstPage, counts, landing] = reads;
   // A landed-on session further down the list is PINNED to the top of the first
   // page so it is on screen; the list skips it when its own page streams in.
   // One outside the filter in view is not pinned — the filter is what the
@@ -103,30 +182,33 @@ export default async function PlansPage({
   // project-level one is a fact about the COUNTS — no conversation at all — and
   // it is the ONLY state that offers a fresh start (§19.3a). The filtered one
   // keeps the strip, so a reader is never stuck in a filter.
-  const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
+  const total = sumCounts(counts);
+  // The fresh start is offered only to a reader who can AUTHOR (design § Plans):
+  // a decide-only reader's Mine-empty and a Viewer's Project-empty have no action.
+  const launcher =
+    aiConfigured && access.canAuthor ? (
+      <PlanWithAILauncher context={{ kind: 'project', hasPlan: false }} />
+    ) : undefined;
 
   return (
     <div className="flex flex-col gap-6">
       {/* ONE Plan-with-AI entrance, and it is not this header (MOTIR-3237) —
           `TopNav` carries it on every authed screen. The EMPTY STATE's CTA below
           stays: it is a first-run call to action, as `/roadmap`'s is. */}
-      <header className="flex min-w-0 flex-col gap-1">
-        <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
-        <p className="text-sm text-(--el-text-muted)">
-          {t('sessions.subtitle', { project: ctx.project.name })}
-        </p>
-      </header>
+      {header}
 
       {total === 0 ? (
         <EmptyState
           icon={<Sparkles className="h-12 w-12" aria-hidden />}
-          title={t('sessions.emptyTitle')}
-          description={t('sessions.emptyDescription')}
-          action={
-            aiConfigured ? (
-              <PlanWithAILauncher context={{ kind: 'project', hasPlan: false }} />
-            ) : undefined
+          title={view === 'mine' ? t('sessions.emptyMineTitle') : t('sessions.emptyTitle')}
+          description={
+            view === 'mine'
+              ? t('sessions.emptyMineDescription')
+              : access.canAuthor
+                ? t('sessions.emptyDescription')
+                : t('sessions.emptyDescriptionRead')
           }
+          action={launcher}
         />
       ) : (
         <div className="flex flex-col gap-4">
@@ -137,15 +219,20 @@ export default async function PlansPage({
             // other conversations are.
             <EmptyState
               title={t('sessions.filteredEmptyTitle')}
-              description={t('sessions.filteredEmptyDescription')}
+              description={
+                view === 'mine'
+                  ? t('sessions.filteredEmptyDescriptionMine')
+                  : t('sessions.filteredEmptyDescription')
+              }
             />
           ) : (
-            // KEYED ON THE FILTER so React REMOUNTS rather than reconciling two
+            // KEYED ON THE VIEW AND THE FILTER so React REMOUNTS rather than reconciling two
             // result sets: the island seeds its rows and cursor from props in
             // `useState`, which a re-render cannot revisit.
             <SessionsList
-              key={`${planState ?? 'all'}|${landingId ?? ''}`}
+              key={`${view}|${planState ?? 'all'}|${landingId ?? ''}`}
               planState={planState}
+              view={view}
               initialViews={views}
               initialCursor={firstPage.nextCursor}
               highlightId={landing?.id ?? null}

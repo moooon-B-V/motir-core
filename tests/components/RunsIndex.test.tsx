@@ -320,3 +320,72 @@ describe('⚠️ a NARROWED list stays narrowed', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 });
+
+// ── THE VIEW (Story MOTIR-6179 · MOTIR-6335) — every client read carries it ──
+describe('⚠️ the view rides EVERY client read, and the empty lines speak for it', () => {
+  const mountMine = (
+    live: DispatchRunListItemDto[] | null,
+    past: DispatchRunListItemDto[] | null,
+  ) =>
+    render(
+      <RunsIndex
+        projectKey="PROD"
+        view="mine"
+        viewInUrl
+        initialLive={live}
+        initialPast={past}
+        pageSize={25}
+      />,
+    );
+
+  it('the live poll AND the past re-read it triggers carry `view=mine`', async () => {
+    vi.useFakeTimers();
+    try {
+      mountMine([run({ id: 'r_live', status: 'running' })], []);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000 + 50);
+      });
+      const reads = calls().filter((u) => u.includes('status='));
+      expect(reads.length).toBeGreaterThan(1);
+      expect(reads.every((u) => u.includes('view=mine'))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('Show more carries `view=mine`', async () => {
+    mountMine(
+      [],
+      Array.from({ length: 25 }, (_, i) => run({ id: `r_${i}` })),
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Show older runs' }));
+    });
+    const more = calls().filter((u) => u.includes('cursor='));
+    expect(more[0]).toContain('view=mine');
+  });
+
+  it('a section empty under Mine says so about the reader', () => {
+    mountMine([], [run()]);
+    expect(screen.getByText('Nothing you started is running.')).toBeTruthy();
+  });
+
+  it('everything empty under Mine is one EmptyState about the reader', () => {
+    mountMine([], []);
+    expect(screen.getByText('You haven’t started a run yet')).toBeTruthy();
+  });
+
+  it('a reader who cannot start a run is not told "when you dispatch work"', () => {
+    render(
+      <RunsIndex
+        projectKey="PROD"
+        view="project"
+        canRun={false}
+        initialLive={[]}
+        initialPast={[]}
+        pageSize={25}
+      />,
+    );
+    expect(screen.getByText(/When work in this project is dispatched/)).toBeTruthy();
+  });
+});
