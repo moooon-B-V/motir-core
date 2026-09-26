@@ -7,6 +7,7 @@
 import type { JobStatus } from '@/lib/ai/types';
 import type {
   ExecutorDto,
+  InvalidEdgeDto,
   WorkItemDifficultyDto,
   WorkItemPlanningSourceDto,
 } from '@/lib/dto/workItems';
@@ -1199,10 +1200,16 @@ export interface PlanApprovabilityRejectionDto {
  */
 export interface PlanValidityDto {
   planId: string;
-  /** True only when BOTH questions pass. */
+  /** True only when all THREE pass: finishable, approvable, every cross-parent edge covered. */
   valid: boolean;
   blockers: SprintBlockerDto[];
   rejections: PlanApprovabilityRejectionDto[];
+  /**
+   * Every same-level cross-parent `blocked_by` in the PROJECTION whose parents
+   * carry no matching edge (MOTIR-6370). A validation verdict only — neither the
+   * append nor approve refuses on it.
+   */
+  invalidEdges: InvalidEdgeDto[];
 }
 
 // --- Auto-plan PAUSE state (Story 7.13 · MOTIR-1740) ------------------------

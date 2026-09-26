@@ -1351,6 +1351,8 @@ describe('add_plan_items — a ref written as a `MOTIR-<n>` KEY (MOTIR-3576)', (
         {
           op: 'add',
           proposedFields: { title: 'By temp-ref', kind: 'subtask' },
+          // A sibling of the first — same depth, so a same-level edge (MOTIR-6411).
+          parentRef: story.id,
           blockedByRefs: [`${TEMP_REF_PREFIX}${parentProposalId}`],
         },
       ],
@@ -1391,7 +1393,12 @@ describe('add_plan_items — a ref written as a `MOTIR-<n>` KEY (MOTIR-3576)', (
     // used to fail — approved, materializing children under the right parent.
     const fx = await makeWorkItemFixture();
     const story = await createTestWorkItem(fx, { kind: 'story', title: 'The story' });
-    const blocker = await createTestWorkItem(fx, { kind: 'task', title: 'The blocker' });
+    // Under the same story — the adds' depth, so a same-level edge (MOTIR-6411).
+    const blocker = await createTestWorkItem(fx, {
+      kind: 'task',
+      title: 'The blocker',
+      parentId: story.id,
+    });
     const client = await connectClient(fx.ctx);
     const planId = await openPlan(client, fx);
 

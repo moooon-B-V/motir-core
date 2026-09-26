@@ -5,6 +5,7 @@ import { encodeCollectionCursor } from '@/lib/api/v1/pagination';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
+import { seedBlockedBy } from '../../helpers/seedBlockedBy';
 
 // GET /api/v1/projects/{projectKey}/ready (Story 11.3 · Subtask 11.3.9 —
 // MOTIR-2066) against real Postgres.
@@ -216,7 +217,13 @@ describe('GET /api/v1/projects/{projectKey}/ready', () => {
       kind: 'subtask',
       parentId: gatedStory.id,
     });
-    await blockedBy(caller, hard.id, gate.id);
+    // The leaf's OWN edge to a root item crosses levels, which the link door
+    // refuses (MOTIR-6411); readiness still meets such edges, so it is seeded.
+    await seedBlockedBy(
+      { workspaceId: caller.fixture.workspaceId, ctx: caller.ctx },
+      hard.id,
+      gate.id,
+    );
 
     const narrow = (await page(caller)).items.map((i) => i.key);
     expect(narrow).toEqual([gate.identifier]);

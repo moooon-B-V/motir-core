@@ -729,6 +729,8 @@ export function ApprovalRow({
             <RefusalReasonCell
               reason={record.row.refusalReason}
               version={record.row.subjectVersion}
+              // A design sent back LEADS with its verdict (MOTIR-6427; design 4e/4f).
+              verdict={record.row.refusalVerdict}
             />
           ) : record.section === 'decided' ? (
             <SubjectMeta

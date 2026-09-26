@@ -92,6 +92,7 @@ function decidedRow(over: Partial<ApprovalRecordDecidedRowDto> = {}): ApprovalRe
     },
     subject: SUBJECT,
     confirmedRecord: null,
+    refusalVerdict: null,
     refusalReason: null,
     chosenOption: null,
     ...over,

@@ -184,6 +184,11 @@ export const APPROVE_REFUSALS: Readonly<Record<string, RefusalClassification>> =
     justification:
       "The `work_item_link` no-cycle trigger, raised from inside `materialize`. The plan's OWN cycles are refused at the close by the edge-graph check; what survives is a ring closed by an edge somebody committed AFTER the plan closed — which is tree-caused by definition. It must still reach the caller as a typed 409, never a bare 500.",
   },
+  CROSS_LEVEL_LINK: {
+    cause: 'not-approve',
+    justification:
+      "Raised by the link SERVICE (`link_work_items`, create-with-links) before an insert (MOTIR-6369). `materialize` writes its edges through the repository and never reaches it; the plan's own cross-level edges are refused at the close as `INVALID_PLAN_REF_GRAPH` / `cross_level`.",
+  },
   SELF_LINK: {
     cause: 'tree-caused',
     justification:

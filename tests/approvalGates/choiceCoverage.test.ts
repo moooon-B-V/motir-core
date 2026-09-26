@@ -124,6 +124,7 @@ describe('the handler on a subject that is not a choice', () => {
       item: row,
       ctx: fx.ctx,
       resolvedStatusKey: 'done',
+      refusalVerdict: null,
     };
     await withWorkspaceContext(fx.ctx, async (tx) => {
       expect(await decisionChoiceGateHandler.resolveSubject({ ...args, tx })).toBeNull();
@@ -157,6 +158,7 @@ describe('the handler on a subject that is not a choice', () => {
           ctx: fx.ctx,
           tx,
           resolvedStatusKey: 'done',
+          refusalVerdict: null,
           choice: { optionId: 'per-year' },
         }),
       ).rejects.toBeInstanceOf(ApprovalGateStaleSubjectError);
@@ -181,6 +183,7 @@ describe('the handler on a subject that is not a choice', () => {
         ctx: fx.ctx,
         tx,
         resolvedStatusKey: null,
+        refusalVerdict: null,
         choice: { optionId: 'continuous' },
       }),
     );

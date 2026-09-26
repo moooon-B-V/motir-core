@@ -4,6 +4,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { seedBlockedBy } from '../helpers/seedBlockedBy';
 
 // `allowSoftBlock` on the ready READ (Story MOTIR-6354 · MOTIR-6366), at the
 // SERVICE tier, over real Postgres.
@@ -110,7 +111,9 @@ describe('listReady — allowSoftBlock', () => {
     // dispatchable leaf ("ready to plan"), so its own blocker is a HARD block.
     const { fx, openSubtask } = await buildFixture();
     const bareStory = await make(fx, 'story', 'Childless and blocked');
-    await block(fx, bareStory.id, openSubtask.id);
+    // A root story on a subtask crosses levels, which the link door refuses
+    // (MOTIR-6411); readiness still meets such edges, so it is seeded.
+    await seedBlockedBy(fx, bareStory.id, openSubtask.id);
 
     expect(await readyKeys(fx, { allowSoftBlock: true })).not.toContain(bareStory.identifier);
   });

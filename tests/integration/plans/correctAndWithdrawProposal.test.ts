@@ -111,6 +111,20 @@ describe('a correction reaches the columns the deepen turn excludes', () => {
   it('changes parentRef, blockedByRefs, targetRepo and targetRepoRole on a `planned` plan', async () => {
     const fx = await makeWorkItemFixture();
     const { planId, firstId, secondId } = await planWithTwoAdds(fx);
+    // A same-level blocker for the moved task: its own parent is one level up
+    // (MOTIR-6367 / 6411), so the peer is a sibling under the same parent.
+    const peer = await plansService.addProposals(
+      planId,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'A peer task', kind: 'task' },
+          parentRef: `${TEMP_REF_PREFIX}${firstId}`,
+        },
+      ],
+      fx.ctx,
+    );
+    const peerId = peer.appendedItemIds[0]!;
     await plansService.markPlanned(planId, fx.ctx);
 
     await plansService.correctProposal(
@@ -118,7 +132,7 @@ describe('a correction reaches the columns the deepen turn excludes', () => {
       secondId,
       {
         parentRef: `${TEMP_REF_PREFIX}${firstId}`,
-        blockedByRefs: [`${TEMP_REF_PREFIX}${firstId}`],
+        blockedByRefs: [`${TEMP_REF_PREFIX}${peerId}`],
         // BOTH halves of the repo pin. The NAME's `null` is the unpin, which
         // needs no repository domain to resolve; the ROLE (MOTIR-3865) is
         // validated against the closed vocabulary, which needs none either —
@@ -132,7 +146,7 @@ describe('a correction reaches the columns the deepen turn excludes', () => {
 
     const corrected = await row(secondId);
     expect(corrected.parentRef).toBe(`${TEMP_REF_PREFIX}${firstId}`);
-    expect(corrected.blockedByRefs).toEqual([`${TEMP_REF_PREFIX}${firstId}`]);
+    expect(corrected.blockedByRefs).toEqual([`${TEMP_REF_PREFIX}${peerId}`]);
     expect(corrected.proposedFields).toMatchObject({ targetRepo: null, targetRepoRole: 'api' });
   });
 

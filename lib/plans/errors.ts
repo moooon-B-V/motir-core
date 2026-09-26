@@ -565,7 +565,12 @@ export type PlanRefGraphViolation =
   | 'duplicate'
   /** A `parentRef` cycle among the plan's `add`s (no parent-before-child order
    *  exists), or a proposal blocking/parenting itself. */
-  | 'cycle';
+  | 'cycle'
+  /** A `blocked_by` joining two different LEVELS — two items at different
+   *  depths below their nearest common ancestor (MOTIR-6387). A same-level
+   *  edge may cross parents; a cross-level one never may (Story MOTIR-6015 ·
+   *  MOTIR-6367 / 6411). */
+  | 'cross_level';
 
 /**
  * Every {@link PlanRefGraphViolation} member, ENUMERABLE AT RUNTIME — the twin of
@@ -576,6 +581,7 @@ const PLAN_REF_GRAPH_VIOLATION_MEMBERS: Record<PlanRefGraphViolation, true> = {
   dangling: true,
   duplicate: true,
   cycle: true,
+  cross_level: true,
 };
 
 /** {@link PlanRefGraphViolation}'s members as an array — see the record above. */
