@@ -555,7 +555,7 @@ describe('guards', () => {
       project: other.project,
     } as unknown as ProjectContext;
     await expect(
-      planningSeedService.getRefusalSeed(v1.gate.id, otherPctx, 'en'),
+      planningSeedService.getPlanningSeed(v1.gate.id, otherPctx, 'en'),
     ).rejects.toBeInstanceOf(PlanningSeedNotFoundError);
     signIn(other);
     expect((await readSeed(v1.gate.id)).status).toBe(404);

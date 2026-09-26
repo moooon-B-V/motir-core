@@ -116,6 +116,7 @@ async function gate(
   noteMd: string | null = REASON,
   refusalVerdict: ApprovalGateRefusalVerdict | null = null,
   decisionSource: 'ui' | 'github' = 'ui',
+  chosenOption: Record<string, string> | null = null,
 ): Promise<string> {
   seq += 1;
   const decided = state !== 'awaiting' && state !== 'superseded';
@@ -137,6 +138,7 @@ async function gate(
             decisionSource,
           }
         : {}),
+      ...(chosenOption ? { chosenOption } : {}),
     },
   });
   return row.id;
@@ -192,6 +194,7 @@ describe('GET /api/approval-gates/[id]/planning-seed · 200', () => {
       expect(body.seed).toEqual({
         gateId,
         gateKind: kind,
+        intent: 'replan',
         anchorKey: card.identifier,
         firstTurn: expect.any(String),
         seededSessionId: null,
@@ -317,6 +320,7 @@ describe('a design Re-plan seed', () => {
     expect(seed).toEqual({
       gateId,
       gateKind: 'design_result',
+      intent: 'replan',
       anchorKey: card.identifier,
       firstTurn: expect.any(String),
       seededSessionId: null,
@@ -473,6 +477,162 @@ describe('seededSessionId — the viewer’s own recent seeded session', () => {
   });
 });
 
+// MOTIR-6433 — a PICKED option seeds a forward PLAN: `intent: 'plan'`, the turn
+// built from the stamped `chosenOption` (never the body), anchored on the choice's
+// PARENT, else the nearest not-done ancestor, else the project.
+const STAMP = {
+  optionId: 'managed-object-storage',
+  label: 'Managed object storage',
+  bestFor: 'less to operate',
+  followUp: 'Report exports — the storage adapter, the retention rule and the download page.',
+  situation: 'better_than_your_decision',
+};
+
+describe('GET /api/approval-gates/[id]/planning-seed · a PICK (intent plan)', () => {
+  async function choiceUnder(parentId: string | null): Promise<WorkItem> {
+    return createTestWorkItem(fx, {
+      kind: parentId ? 'subtask' : 'task',
+      type: 'choice',
+      title: 'Choose where exports live',
+      parentId,
+    });
+  }
+  async function setStatus(id: string, status: string) {
+    await adminDb.workItem.update({ where: { id }, data: { status } });
+  }
+  async function readPick(choice: WorkItem) {
+    const gateId = await gate(choice, 'decision_choice', 'approved', null, null, 'ui', STAMP);
+    signIn(owner());
+    const res = await readSeed(gateId);
+    expect(res.status).toBe(200);
+    return { gateId, seed: (await res.json()).seed };
+  }
+
+  it('anchors on the PARENT when it is open, and quotes the stamp — even after the body changed', async () => {
+    await setStatus(card.id, 'todo');
+    const choice = await choiceUnder(card.id);
+    await adminDb.workItem.update({
+      where: { id: choice.id },
+      data: { descriptionMd: '## Options\n- Something else entirely' },
+    });
+    const { gateId, seed } = await readPick(choice);
+    expect(seed).toEqual({
+      gateId,
+      gateKind: 'decision_choice',
+      intent: 'plan',
+      anchorKey: card.identifier,
+      firstTurn: [
+        `${choice.identifier} · Choose where exports live`,
+        'I just chose an option on this choice — this is the follow-up planning it was waiting for.',
+        `The option chosen: ${STAMP.label}\nBest if you want: ${STAMP.bestFor}`,
+        `What this choice gates:\n${STAMP.followUp}`,
+        'Plan this work with the option chosen.',
+      ].join('\n\n'),
+      seededSessionId: null,
+      // The rail's follow-up framing (MOTIR-6435): the choice and the STAMP, never the body.
+      pick: {
+        choiceKey: choice.identifier,
+        choiceTitle: 'Choose where exports live',
+        label: STAMP.label,
+        bestFor: STAMP.bestFor,
+        decidedAt: expect.any(String),
+        decidedByLabel: expect.any(String),
+      },
+    });
+  });
+
+  it('anchors on the GRANDPARENT when the parent is done', async () => {
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'Reporting' });
+    await setStatus(epic.id, 'in_progress');
+    const story = await createTestWorkItem(fx, {
+      kind: 'story',
+      title: 'Exports',
+      parentId: epic.id,
+    });
+    await setStatus(story.id, 'done');
+    const { seed } = await readPick(await choiceUnder(story.id));
+    expect(seed.anchorKey).toBe(epic.identifier);
+  });
+
+  it('reads the status CATEGORY — a custom done-category status is done too', async () => {
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'Reporting' });
+    await setStatus(epic.id, 'todo');
+    const story = await createTestWorkItem(fx, {
+      kind: 'story',
+      title: 'Exports',
+      parentId: epic.id,
+    });
+    await adminDb.workflowStatus.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        key: 'shipped',
+        label: 'Shipped',
+        category: 'done',
+        position: 'z9',
+      },
+    });
+    await setStatus(story.id, 'shipped');
+    const { seed } = await readPick(await choiceUnder(story.id));
+    expect(seed.anchorKey).toBe(epic.identifier);
+  });
+
+  it('walks past an ARCHIVED parent', async () => {
+    const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'Reporting' });
+    await setStatus(epic.id, 'todo');
+    const story = await createTestWorkItem(fx, {
+      kind: 'story',
+      title: 'Exports',
+      parentId: epic.id,
+    });
+    await adminDb.workItem.update({ where: { id: story.id }, data: { archivedAt: new Date() } });
+    const { seed } = await readPick(await choiceUnder(story.id));
+    expect(seed.anchorKey).toBe(epic.identifier);
+  });
+
+  it('a ROOT choice anchors at the PROJECT (anchorKey null), and the turn says so', async () => {
+    const { seed } = await readPick(await choiceUnder(null));
+    expect(seed.intent).toBe('plan');
+    expect(seed.anchorKey).toBeNull();
+    expect(seed.firstTurn.split('\n\n')[2]).toBe(
+      'This choice has no open container, so Motir AI opened on the project.',
+    );
+  });
+
+  it('an ALL-DONE chain anchors at the project', async () => {
+    await setStatus(card.id, 'done');
+    const { seed } = await readPick(await choiceUnder(card.id));
+    expect(seed.anchorKey).toBeNull();
+  });
+
+  it('renders the pick turn in zh', async () => {
+    requestLocale.current = 'zh';
+    await setStatus(card.id, 'todo');
+    const { seed } = await readPick(await choiceUnder(card.id));
+    expect(seed.firstTurn).toContain(zh.planningWorkspace.refusalSeed.pick.ask);
+    expect(seed.firstTurn).not.toContain(en.planningWorkspace.refusalSeed.pick.ask);
+  });
+
+  it('None of these on the same kind still re-plans on the choice card', async () => {
+    const choice = await choiceUnder(card.id);
+    const gateId = await gate(choice, 'decision_choice', 'changes_requested');
+    signIn(owner());
+    const seed = (await (await readSeed(gateId)).json()).seed;
+    expect(seed.intent).toBe('replan');
+    expect(seed.anchorKey).toBe(choice.identifier);
+    expect(seed.firstTurn).toContain('None of the options on this choice was picked.');
+  });
+
+  it('READING A PICK WRITES NOTHING', async () => {
+    const choice = await choiceUnder(card.id);
+    const gateId = await gate(choice, 'decision_choice', 'approved', null, null, 'ui', STAMP);
+    signIn(owner());
+    const before = await counts();
+    expect((await readSeed(gateId)).status).toBe(200);
+    expect(await counts()).toEqual(before);
+  });
+});
+
 describe('GET /api/approval-gates/[id]/planning-seed · the identical 404', () => {
   async function expectNotFound(gateId: string) {
     const res = await readSeed(gateId);
@@ -557,6 +717,30 @@ describe('GET /api/approval-gates/[id]/planning-seed · the identical 404', () =
     await expectNotFound(gateId);
   });
 
+  it('a choice still AWAITING, or WITHDRAWN (superseded), even with a stamp', async () => {
+    for (const state of ['awaiting', 'superseded'] as const) {
+      const gateId = await gate(card, 'decision_choice', state, null, null, 'ui', STAMP);
+      signIn(owner());
+      await expectNotFound(gateId);
+    }
+  });
+
+  it('a chosen gate whose stamp is MALFORMED', async () => {
+    const gateId = await gate(card, 'decision_choice', 'approved', null, null, 'ui', {
+      label: 'half a stamp',
+    });
+    signIn(owner());
+    await expectNotFound(gateId);
+  });
+
+  it('a PICK on a work item the viewer cannot BROWSE — the same body as an unknown id', async () => {
+    const gateId = await gate(card, 'decision_choice', 'approved', null, null, 'ui', STAMP);
+    const outsider = await plainMember();
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
+    signIn(outsider, fx, 'private');
+    expect(await expectNotFound(gateId)).toBe(await expectNotFound('no-such-gate'));
+  });
+
   it('a refused gate of a kind with NO composer (acceptance_result changes_requested)', async () => {
     const gateId = await gate(card, 'acceptance_result', 'changes_requested');
     signIn(owner());
@@ -592,7 +776,7 @@ describe('GET /api/approval-gates/[id]/planning-seed · the identical 404', () =
     const awaiting = await gate(card, 'decision_approval', 'awaiting');
     for (const id of ['', 'no-such-gate', awaiting]) {
       await expect(
-        planningSeedService.getRefusalSeed(id, pctxFor(owner()), 'en'),
+        planningSeedService.getPlanningSeed(id, pctxFor(owner()), 'en'),
       ).rejects.toBeInstanceOf(PlanningSeedNotFoundError);
     }
   });
@@ -683,6 +867,11 @@ describe('the catalogues and the route’s shape', () => {
         'ask',
         'heading',
         'keySeparator',
+        'pick.ask',
+        'pick.chosen',
+        'pick.followUp',
+        'pick.gates',
+        'pick.noContainer',
         'reason',
         'supersedes',
         'verb.decisionApproval',

@@ -415,6 +415,10 @@ export const approvalGateRepository = {
     /** WHY it was withdrawn, for the refusal's sentence (MOTIR-5667). Read-only:
      *  nothing writes from this snapshot. */
     supersededCause: ApprovalGateSupersedeCause | null;
+    /** The stamped option of a chosen `decision_choice` (MOTIR-4914), read so the
+     *  planning-session seed guard can tell a PICK under this lock (MOTIR-6434).
+     *  Read-only, like the rest of this snapshot. */
+    chosenOption: Prisma.JsonValue | null;
     /** The design verdict (MOTIR-6421) — read by the seed guard, which accepts a
      *  design refusal only with `re_plan` (MOTIR-6424). Never written from. */
     refusalVerdict: ApprovalGateRefusalVerdict | null;
@@ -433,6 +437,7 @@ export const approvalGateRepository = {
         decidedByLabel: string | null;
         subjectVersion: string | null;
         supersededCause: ApprovalGateSupersedeCause | null;
+        chosenOption: Prisma.JsonValue | null;
         refusalVerdict: ApprovalGateRefusalVerdict | null;
       }>
     >`
@@ -459,7 +464,10 @@ export const approvalGateRepository = {
              -- NAME the winner instead of reporting a bare conflict
              -- (MOTIR-4792). The id is a join key; the label is the only part
              -- of it a person can be shown.
-             "decided_by_label" AS "decidedByLabel"
+             "decided_by_label" AS "decidedByLabel",
+             -- READ for the planning-session seed guard (MOTIR-6434): a chosen
+             -- choice's stamp decides whether the gate is a PICK.
+             "chosen_option" AS "chosenOption"
       FROM "approval_gate"
       WHERE "id" = ${id}
       FOR UPDATE

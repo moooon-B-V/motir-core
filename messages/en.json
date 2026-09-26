@@ -6720,7 +6720,10 @@
           "decisionChoice": "None of these",
           "designResult": "Request changes"
         },
-        "aria": "Open {key}, the work item this conversation re-plans"
+        "aria": "Open {key}, the work item this conversation re-plans",
+        "pickLabel": "Follow-up to <mono>{key}</mono>",
+        "chose": "chose {label}",
+        "pickAria": "Open {key}, the choice this conversation is the follow-up to (chose {label})"
       }
     }
   },
@@ -6738,7 +6741,14 @@
       "keySeparator": ", ",
       "ask": "Re-plan this work item from that reason.",
       "blockedBy": "The work items waiting on this design: {keys}",
-      "askDesign": "Re-plan {parent} from that reason: this design and the work waiting on it."
+      "askDesign": "Re-plan {parent} from that reason: this design and the work waiting on it.",
+      "pick": {
+        "followUp": "I just chose an option on this choice — this is the follow-up planning it was waiting for.",
+        "noContainer": "This choice has no open container, so Motir AI opened on the project.",
+        "chosen": "The option chosen: {label}\nBest if you want: {bestFor}",
+        "gates": "What this choice gates:\n{gates}",
+        "ask": "Plan this work with the option chosen."
+      }
     },
     "noProjectTitle": "No project selected",
     "noProjectDescription": "Pick or create a project from the switcher to plan with Motir AI.",
@@ -6855,7 +6865,8 @@
           "web": "web",
           "lessons": "lessons"
         }
-      }
+      },
+      "openerFollowUp": "You just chose {label}. Motir AI is planning what it gates."
     },
     "targets": {
       "sectionLabel": "Work items",
@@ -6877,7 +6888,8 @@
       "generation": "first plan",
       "replan": "plan change",
       "contextual": "in context",
-      "roadmap": "roadmap"
+      "roadmap": "roadmap",
+      "followUp": "follow-up"
     },
     "lead": {
       "project": "Opened on {project}.",
@@ -6886,7 +6898,9 @@
       "contextual": "Opened in context on {project}.",
       "contextualItem": "Opened in the context of {item}.",
       "conventionRefine": "Opened to refine {repo}'s coding convention.",
-      "roadmap": "Opened from the roadmap."
+      "roadmap": "Opened from the roadmap.",
+      "followUp": "Opened to plan the follow-up to {choice}, on {item}.",
+      "followUpProject": "Opened on {project} to plan the follow-up to {choice}."
     },
     "searchLabel": "Search this project",
     "reading": {
@@ -6970,7 +6984,10 @@
         "added": "This level is proposed — nothing here exists yet"
       }
     },
-    "dividerAria": "Resize the conversation"
+    "dividerAria": "Resize the conversation",
+    "followUpCard": {
+      "label": "Follow-up to a choice"
+    }
   },
   "codeHealth": {
     "title": "Code health",
@@ -9031,14 +9048,14 @@
       },
       "consequence": {
         "pick": "Pick an option above to choose it. Choosing moves {key} to Done.",
-        "picked": "Choosing moves {key} to Done and leaves a follow-up planning pass owed."
+        "picked": "Choosing moves {key} to Done, then asks whether Motir AI should start planning what it gates."
       },
       "confirm": {
         "title": "Choosing this will:",
         "record": "Record {label} (best if you want {bestFor}) as the answer.",
         "done": "Move {key} to Done.",
-        "followUp": "Leave a follow-up planning pass owed: {gates}.",
-        "proceed": "Yes, choose {label}"
+        "proceed": "Yes, choose {label}",
+        "askPlan": "Ask whether to start planning the follow-up with Motir AI: {gates}."
       },
       "state": {
         "chosen": "Chosen"
@@ -9046,9 +9063,9 @@
       "record": {
         "lead": "Chosen by {name} · {when}",
         "chose": "Chose",
-        "followUp": "Follow-up planning owed — {gates}",
         "willRevise": "the options will be revised",
-        "askedBecause": "Asked because"
+        "askedBecause": "Asked because",
+        "gates": "<b>What this choice gates</b> — {gates}"
       },
       "cta": {
         "body": "Review the options full screen, then choose one.",
@@ -9255,6 +9272,17 @@
         "writing": "I have what I need — I’m writing the plan now. You don’t have to wait here: close this whenever you like, and the plan will be waiting for you in <link>To approve</link>.",
         "rewriting": "I’m writing a new version of this plan. You can close this — it stays in <link>To approve</link>, and you can decide once I’m done."
       }
+    },
+    "planAsk": {
+      "title": "Plan the follow-up with Motir AI?",
+      "opens": "Motir AI opens on {key} and starts planning the follow-up right away, from your choice.",
+      "opensProject": "Motir AI opens on your project and starts planning the follow-up right away, from your choice.",
+      "nothingToSend": "There is nothing to write or send — your choice is the first message.",
+      "yes": "Plan with AI"
+    },
+    "planDoor": {
+      "label": "Plan with AI",
+      "aria": "Plan the follow-up to {item} with AI"
     }
   },
   "approvalOverlay": {

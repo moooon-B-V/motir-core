@@ -165,7 +165,7 @@ export const aiAskService = {
   async submitTurn(
     body: string,
     ctx: ProjectContext,
-    opts: { isAnswer?: boolean; sessionId?: string } = {},
+    opts: { isAnswer?: boolean; sessionId?: string; seedGateId?: string } = {},
   ): Promise<AskSubmitResult | AskRedirectResult> {
     const trimmed = body.trim();
     if (!trimmed) throw new EmptyPlanChangeTurnError();
@@ -182,18 +182,29 @@ export const aiAskService = {
     // client holds, else the caller's own resumable project-wide session. With
     // neither, THIS turn starts one — the door stays self-sufficient, and a
     // session exists from its first turn, never from a look.
+    //
+    // A SEEDED first turn (a pick anchored at the project, MOTIR-6435) never joins
+    // the caller's resumable project conversation: it starts — or resumes — the
+    // session THIS gate seeded, under the seed guard (`startSeededWithFirstTurn`,
+    // which refuses a gate that may not seed the project scope).
+    const seeded = !opts.sessionId && opts.seedGateId ? opts.seedGateId : null;
     const current = opts.sessionId
       ? await planChangeSessionsService.getById(ctx, opts.sessionId)
-      : await planChangeSessionsService.findResumable(ctx, PROJECT_SCOPE_KEY);
+      : seeded
+        ? null
+        : await planChangeSessionsService.findResumable(ctx, PROJECT_SCOPE_KEY);
     if (!current) {
-      const started = await planChangeSessionsService.startWithFirstTurn(
-        ctx,
-        PROJECT_SCOPE,
-        trimmed,
-        {
-          isAnswer: opts.isAnswer === true,
-        },
-      );
+      const started = seeded
+        ? await planChangeSessionsService.startSeededWithFirstTurn(
+            ctx,
+            PROJECT_SCOPE,
+            trimmed,
+            seeded,
+            { isAnswer: opts.isAnswer === true },
+          )
+        : await planChangeSessionsService.startWithFirstTurn(ctx, PROJECT_SCOPE, trimmed, {
+            isAnswer: opts.isAnswer === true,
+          });
       const first = started.turns.at(-1);
       if (!first) throw new PlanChangeTurnNotFoundError('(the turn just appended)');
       // A fresh session has no pending question, so this is the ask branch.

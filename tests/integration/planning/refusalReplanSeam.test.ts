@@ -79,6 +79,7 @@ type Actor = { id: string; email: string; name: string };
 type Seed = {
   gateId: string;
   gateKind: ApprovalGateKind;
+  intent: 'plan' | 'replan';
   anchorKey: string;
   firstTurn: string;
   seededSessionId: string | null;
@@ -320,6 +321,7 @@ describe('the seam — refuse → door → seed read → seeded send → session
       expect(seed).toEqual({
         gateId,
         gateKind: kind,
+        intent: 'replan',
         anchorKey: card.identifier,
         firstTurn: expect.any(String),
         seededSessionId: null,
@@ -359,7 +361,12 @@ describe('the seam — refuse → door → seed read → seeded send → session
       // THE PLANS ROW names the refused card and the kind.
       const page = await planSessionsService.listSessions(fx.projectId, fx.ctx);
       const row = page.sessions.find((s) => s.id === sessionId);
-      expect(row?.seed).toEqual({ cardKey: card.identifier, gateKind: kind });
+      expect(row?.seed).toEqual({
+        cardKey: card.identifier,
+        gateKind: kind,
+        origin: 'refusal',
+        chosenLabel: null,
+      });
     });
   }
 });

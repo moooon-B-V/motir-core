@@ -281,6 +281,8 @@ export const planChangeSessionRepository = {
              lp."title" AS "planTitle", lp."summary" AS "planSummary",
              pc."n" AS "planCount",
              s."seed_gate_id" AS "seedGateId", sg."kind"::text AS "seedGateKind",
+             sg."state"::text AS "seedGateState",
+             sg."chosen_option"->>'label' AS "seedChosenLabel",
              sw."identifier" AS "seedCardKey",
              (sw."id" IS NOT NULL AND sw."projectId" = s."project_id") AS "seedCardInProject"
       FROM "plan_change_session" s
@@ -349,6 +351,11 @@ export interface PlanSessionListRow {
   seedGateId: string | null;
   /** The seeding gate's kind; null when the session is unseeded or the gate is gone. */
   seedGateKind: string | null;
+  /** The seeding gate's state — `approved` on a chosen `decision_choice` is a PICK
+   *  (MOTIR-6434), every other seeding state a refusal. */
+  seedGateState: string | null;
+  /** The chosen option's stamped label on a pick, else null. */
+  seedChosenLabel: string | null;
   /** The seeding gate's work item's identifier, when it still exists. */
   seedCardKey: string | null;
   /** Whether that work item is in the SESSION's project — the one the list is

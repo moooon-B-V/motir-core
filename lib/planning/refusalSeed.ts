@@ -1,4 +1,5 @@
 import type { ApprovalGate, ApprovalGateKind } from '@/generated/prisma/client';
+import type { ChosenOption } from '@/lib/approvalGates/choiceOptions';
 
 // The REFUSAL SEED — which decided approval gates may open (seed) a planning
 // session (story MOTIR-6068; `docs/decisions/approval-gates.md` §10f and
@@ -58,26 +59,158 @@ export function isRefusalSeedGate(gate: RefusalSeedGateFacts): boolean {
   }
 }
 
+// ── THE PICK SEED (story MOTIR-6069 · MOTIR-6433; `docs/decisions/picked-option-planning.md`) ──
+//
+// A PICKED option on a `decision_choice` seeds a planning session too — but it is
+// NOT a refusal, and `isRefusalSeedGate` keeps meaning refusal: the ask after a
+// press (`asksToReplanAfterPress`) and the Re-plan door read it, and a pick must
+// never reach either. So the pick gets its own predicate, and the seed read asks
+// the UMBRELLA of the two.
+
+/** The fields the pick predicate reads — a whole `ApprovalGate` row satisfies it. */
+/** `chosenOption` is read only for presence, so both the row's JSON and the DTO's
+ *  parsed stamp satisfy it (the band reads the DTO, the seed read the row). */
+export type PickSeedGateFacts = Pick<ApprovalGate, 'kind' | 'state'> & { chosenOption: unknown };
+
+/**
+ * Is this gate a PICK that may seed a planning session — an option chosen on a
+ * `decision_choice` (`approved`), with its `chosenOption` stamped? A choice
+ * decided before the stamp existed carries none, and has nothing to seed from.
+ */
+export function isPickSeedGate(gate: PickSeedGateFacts): boolean {
+  return gate.kind === 'decision_choice' && gate.state === 'approved' && gate.chosenOption !== null;
+}
+
+/** May this gate seed a planning session at all — a refusal OR a pick? */
+export function isPlanningSeedGate(
+  gate: RefusalSeedGateFacts & { chosenOption: unknown },
+): boolean {
+  return isRefusalSeedGate(gate) || isPickSeedGate(gate);
+}
+
+/** What the seeded turn asks for: `plan` forward after a pick, `replan` after a refusal. */
+export type PlanningSeedIntent = 'plan' | 'replan';
+
+/** The intent of a gate the umbrella accepts. */
+export function seedIntentOf(gate: PickSeedGateFacts): PlanningSeedIntent {
+  return isPickSeedGate(gate) ? 'plan' : 'replan';
+}
+
+/**
+ * The stamped `chosenOption` JSON, read DEFENSIVELY: the column is `Json`, so a
+ * row that does not carry the four string fields is treated as no stamp at all
+ * (the read then answers its ordinary no-leak 404) rather than composing a turn
+ * out of `undefined`.
+ */
+export function readChosenOption(value: unknown): ChosenOption | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (
+    typeof v.optionId !== 'string' ||
+    typeof v.label !== 'string' ||
+    typeof v.bestFor !== 'string' ||
+    typeof v.followUp !== 'string'
+  ) {
+    return null;
+  }
+  return value as ChosenOption;
+}
+
+/** One ancestor of the gate's work item, as the anchor walk reads it. */
+export interface SeedAncestor {
+  key: string;
+  /** The ancestor's status CATEGORY in its project's workflow — never the literal key. */
+  statusCategory: string | null;
+  archived: boolean;
+}
+
+/**
+ * The anchor walk's view of `workItemRepository.findAncestors` rows, mapped
+ * against the project's workflow statuses (key → CATEGORY). Shared by the seed
+ * read and the session's seed guard, so both resolve the SAME anchor for a gate.
+ */
+export function toSeedAncestors(
+  rows: readonly { identifier: string; status: string; archivedAt: Date | null }[],
+  statuses: readonly { key: string; category: string }[],
+): SeedAncestor[] {
+  const categoryOf = new Map(statuses.map((s) => [s.key, s.category]));
+  return rows.map((row) => ({
+    key: row.identifier,
+    statusCategory: categoryOf.get(row.status) ?? null,
+    archived: row.archivedAt !== null,
+  }));
+}
+
+/**
+ * WHERE the seeded planning surface anchors — a TOTAL per-kind resolver, pure.
+ *
+ *  - every refusal (and every other kind) anchors on the gate's OWN work item;
+ *  - a PICK anchors on the choice's PARENT: the nearest ancestor, walking UP from
+ *    the parent, that is neither in a `done`-category status nor archived. A done
+ *    card may not be given children, and the owed pass lays under the container
+ *    the level stopped at (`picked-option-planning.md` §2).
+ *
+ * `null` means THE PROJECT — a root choice, a folder-filed one, or a chain whose
+ * every ancestor is done. `ancestors` is ordered root → parent, as
+ * `workItemRepository.findAncestors` returns them.
+ *
+ * The switch is EXHAUSTIVE over `ApprovalGateKind`, so MOTIR-6424 moving the
+ * `design_result` arm to its parent is a one-arm change here.
+ */
+export function anchorOf(
+  gate: PickSeedGateFacts,
+  itemKey: string,
+  ancestors: readonly SeedAncestor[],
+): string | null {
+  const kind: ApprovalGateKind = gate.kind;
+  switch (kind) {
+    case 'decision_choice': {
+      if (!isPickSeedGate(gate)) return itemKey;
+      for (let i = ancestors.length - 1; i >= 0; i -= 1) {
+        const a = ancestors[i]!;
+        if (!a.archived && a.statusCategory !== 'done') return a.key;
+      }
+      return null;
+    }
+    case 'decision_approval':
+    case 'decision_confirmation':
+    case 'design_result':
+    case 'pull_request_approval':
+    case 'pull_request_merge':
+    case 'acceptance_result':
+    case 'plan_approval':
+      return itemKey;
+    default: {
+      const unreachable: never = kind;
+      void unreachable;
+      return itemKey;
+    }
+  }
+}
+
 // ── THE COMPOSER REGISTRY (MOTIR-6208; `approval-gates.md` §10f) ──────────────
 //
-// The seed read (`planningSeedService.getRefusalSeed`, behind `GET
+// The seed read (`planningSeedService.getPlanningSeed`, behind `GET
 // /api/approval-gates/[id]/planning-seed`) composes the planning surface's
 // pre-filled first turn ON THE SERVER, from the decided gate row — the link
 // carries the gate id only, never the reason's text. One composer per gate kind.
 
 /** What a composer reads: the gate's work item, the decided gate, and — on an
  *  overturn only — the keys its decision's `## Supersedes` names
- *  (`replanOwedOf`), else `[]`. A design Re-plan (MOTIR-6424) also reads the
- *  seed's ANCHOR (`anchorKey` — the design card's parent, §10h) and the keys of the
- *  not-`done` cards `blocked_by` the design (`waitingKeys`); the decision kinds
- *  ignore both. */
+ *  (`replanOwedOf`), else `[]`. A PICK also reads the stamped `chosenOption`
+ *  (never the current body); a design Re-plan (MOTIR-6424) reads the keys of the
+ *  not-`done` cards `blocked_by` the design (`waitingKeys`). Both read the seed's
+ *  resolved ANCHOR (`anchorKey`; `null` = the project, a pick only). */
 export interface SeedComposerInput {
   card: { key: string; title: string };
   gate: Pick<ApprovalGate, 'kind' | 'state' | 'noteMd'>;
   supersedesKeys: readonly string[];
+  chosenOption?: ChosenOption | null;
   /** The work item the seeded session anchors on — the card itself for the
-   *  decision kinds, the design card's parent for a design Re-plan. */
-  anchorKey: string;
+   *  refusals of the decision kinds, the design card's parent for a design
+   *  Re-plan, the choice's nearest open ancestor for a pick (`null` = the
+   *  project, a pick only). */
+  anchorKey: string | null;
   /** The open work waiting on the card (its `blocks` edges), in order. */
   waitingKeys: readonly string[];
 }
@@ -128,6 +261,33 @@ function composeRefusalTurn(
 }
 
 /**
+ * The first turn of a PICK (MOTIR-6433; design MOTIR-6432 sheet 1–2), in order:
+ *
+ *  1. the choice's key and title;
+ *  2. on a PROJECT anchor only, one line saying the choice had no open container;
+ *  3. the option chosen and its best-if line;
+ *  4. what the choice gates (`followUp`, verbatim);
+ *  5. one sentence asking to PLAN that work with the option.
+ *
+ * Every value is interpolated as a VALUE, so the stamped text's line breaks and
+ * braces survive, exactly as `composeRefusalTurn` does for `noteMd`.
+ */
+function composePickTurn(input: SeedComposerInput, t: SeedTranslator): string {
+  const chosen = input.chosenOption;
+  /* v8 ignore next -- the seed read never composes a pick without a stamp. */
+  if (!chosen) return t('heading', { key: input.card.key, title: input.card.title });
+  const parts = [t('heading', { key: input.card.key, title: input.card.title })];
+  // The line that tells the PLANNER this is the follow-up to a choice just made
+  // (MOTIR-6432's revised design); the rail's chip and card tell the person.
+  parts.push(t('pick.followUp'));
+  if (input.anchorKey === null) parts.push(t('pick.noContainer'));
+  parts.push(t('pick.chosen', { label: chosen.label, bestFor: chosen.bestFor }));
+  parts.push(t('pick.gates', { gates: chosen.followUp }));
+  parts.push(t('pick.ask'));
+  return parts.join('\n\n');
+}
+
+/**
  * A DESIGN sent back to Re-plan (MOTIR-6424; the MOTIR-6420 design's first-turn
  * contract) — the same shape with one new part:
  *
@@ -148,7 +308,7 @@ function composeDesignReplanTurn(input: SeedComposerInput, t: SeedTranslator): s
   if (input.waitingKeys.length > 0) {
     parts.push(t('blockedBy', { keys: input.waitingKeys.join(t('keySeparator')) }));
   }
-  parts.push(t('askDesign', { parent: input.anchorKey }));
+  parts.push(t('askDesign', { parent: input.anchorKey ?? input.card.key }));
   return parts.join('\n\n');
 }
 
@@ -172,8 +332,13 @@ export const REFUSAL_SEED_COMPOSERS: Partial<Record<ApprovalGateKind, SeedCompos
    *  names the supersedes keys. */
   decision_confirmation: (input, t) =>
     composeRefusalTurn('verb.decisionConfirmation', input, t, true),
-  /** None of these on a choice (`changes_requested`). */
-  decision_choice: (input, t) => composeRefusalTurn('verb.decisionChoice', input, t, false),
+  /** A choice holds TWO cases, dispatched on state: an option chosen
+   *  (`approved`) composes the PICK turn (MOTIR-6069), and None of these
+   *  (`changes_requested`) keeps the refusal turn byte-for-byte. */
+  decision_choice: (input, t) =>
+    input.gate.state === 'approved'
+      ? composePickTurn(input, t)
+      : composeRefusalTurn('verb.decisionChoice', input, t, false),
   /** A design sent back with the Re-plan verdict (`changes_requested` +
    *  `re_plan`) — anchored on the design card's parent. */
   design_result: composeDesignReplanTurn,

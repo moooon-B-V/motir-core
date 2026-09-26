@@ -39,12 +39,16 @@ export type PlanningMode = 'project' | 'generation' | 'replan' | 'contextual' | 
  * - `roadmap` — the Board↔Roadmap surface.
  * - `convention-refine` — refine a coding convention in the universal chat
  *   (MOTIR-1663: the Code-health page's "Refine with Motir" entry).
- * - `refused-gate` — re-plan the work item a REFUSED decision sits on (story
- *   MOTIR-6068 · MOTIR-6210; `approval-gates.md` §10f). It carries the GATE's id
- *   and nothing else: the overlay reads the seed (`GET /api/approval-gates/{id}/
- *   planning-seed`) and resolves it to a `work-item` re-plan on the refused card
- *   with the first turn written and unsent — or, for any gate it may not read, to
- *   a plain `project` launch. No reason text and no title ever ride the address.
+ * - `refused-gate` — open the planner SEEDED from a decided gate (story
+ *   MOTIR-6068 · MOTIR-6210; `approval-gates.md` §10f). The name predates the
+ *   pick and is kept because every shipped link carries it: since MOTIR-6435 it
+ *   seeds a PICKED option too. It carries the GATE's id and nothing else: the
+ *   overlay reads the seed (`GET /api/approval-gates/{id}/planning-seed`) and
+ *   resolves it by the seed's `intent` — a REFUSAL to a `work-item` re-plan on the
+ *   refused card with the first turn written and unsent; a PICK to a forward
+ *   launch on its anchor (or the project) with the first turn SENT once
+ *   (`picked-option-planning-starts.md`) — or, for any gate it may not read, to a
+ *   plain `project` launch. No reason text and no title ever ride the address.
  */
 export type PlanningLaunchContext =
   | { kind: 'project'; hasPlan?: boolean; sessionId?: string; via?: PlanningEntrance }
@@ -115,8 +119,11 @@ export function resolvePlanningMode(context: PlanningLaunchContext): PlanningMod
       return 'roadmap';
     case 'convention-refine':
       return 'contextual';
-    // A refusal is re-planned by definition: the card was decided, and the
-    // person said it was wrong. The seed resolves the anchor; the mode is known.
+    // The ADDRESS's mode only. The seed is not known until the overlay reads it,
+    // and the overlay resolves the workspace's real mode from the seed's
+    // `intent`: `replan` for a refusal, a forward launch for a pick (MOTIR-6435).
+    // `replan` stays here so every refusal link keeps writing the address it
+    // always wrote.
     case 'refused-gate':
       return 'replan';
     case 'project':
@@ -173,8 +180,9 @@ export interface PlanningLaunch {
   /** Where that named session was reopened FROM (`planVia`, MOTIR-6037) — present only
    *  with `sessionId`, and only for an entrance other than the Plans page. */
   via?: PlanningEntrance;
-  /** The REFUSED gate a `refused-gate` launch re-plans from (`planGate`, MOTIR-6210) —
-   *  present only for that origin, and only when the address carries one. */
+  /** The decided gate a `refused-gate` launch is seeded from (`planGate`, MOTIR-6210) —
+   *  a refusal or, since MOTIR-6435, a pick. Present only for that origin, and only
+   *  when the address carries one. */
   gateId?: string;
 }
 
@@ -276,7 +284,7 @@ export const OVERLAY_PARAM_NAMES = {
    */
   via: 'planVia',
   /**
-   * The REFUSED GATE a re-plan is seeded from (story MOTIR-6068 · MOTIR-6210; design
+   * The DECIDED GATE a seeded launch reads (a refusal, or since MOTIR-6435 a pick) (story MOTIR-6068 · MOTIR-6210; design
    * `design/ai-chat/design-notes.md` § *The SEEDED re-plan* → *The ADDRESS*). Written
    * ONLY for a `refused-gate` origin, as `plan=replan&planFrom=refused-gate&planGate=<id>`,
    * and read only for that origin. It is the gate's id and NOTHING else — the reason

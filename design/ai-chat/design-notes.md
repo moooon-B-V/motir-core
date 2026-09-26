@@ -3994,3 +3994,170 @@ Referenced for provenance only: MOTIR-6011, MOTIR-6019, MOTIR-6024, MOTIR-6067, 
 MOTIR-6073, MOTIR-6154, MOTIR-6156, MOTIR-6159, MOTIR-6207, MOTIR-6236, MOTIR-6238. `ACME-38`,
 `ACME-39`, `ACME-41`, `ACME-42`, `ACME-44` and `ACME-47` are sample keys. `cmg7k2q0` is a sample
 gate id.
+
+## ⭐ The picked option planned — the planner STARTED on a FOLLOW-UP, and the Plans row of a pick-seeded session (MOTIR-6432, 2026-09-26, revised twice the same day)
+
+**Asset:** `design/ai-chat/planning-workspace--pick-seed.mock.html`, a **DELTA** in three sheets. It
+amends MOTIR-6206's published `design/ai-chat/planning-workspace--refusal-seed.mock.html` (sheet 4,
+the choice-anchored composer) and `design/ai-planning/plans-sessions--seeded.mock.html` (panel 1, the
+seeded row), and **edits neither**. Its running state is lifted from
+`design/ai-chat/plan-change-run-live.mock.html` state A (_RUNNING — nothing said_). The ask and the door that open this surface, and the copy table for
+them, are `design/work-items/approval-control--pick-plan.mock.html` (§ _The picked option planned_ in
+`design/work-items/design-notes.md`).
+
+**The contract.** `docs/decisions/picked-option-planning.md` (MOTIR-6431), and
+`docs/decisions/picked-option-planning-starts.md` (MOTIR-6455), which supersedes its unsent turn: yes
+STARTS the planning, the turn is sent once, and the yes is the consent to spend. Specified by:
+**MOTIR-6431** (the anchor rule and its fall-backs), **MOTIR-6455** (the start and the send-once rule), **MOTIR-6433** (the first turn's parts), **MOTIR-6434** (the
+session stamp and the Plans row), **MOTIR-6435** (the start and the send), **MOTIR-6436** (the ask and the door).
+
+### Revision — 2026-09-26, after changes requested
+
+The design gate came back **changes requested**: _"The picked option planned UI is not good, the
+planner should know the choice has just been made and it's a follow-up planning."_ The first version
+opened the planner exactly like any work-item launch — the `contextual` mode's _in context_ chip, the
+lead _Opened in the context of ACME-40._ and the generic opener _What should change — or what would you
+like to know?_ — and its first turn named the option but never said it had just been chosen, or that
+this was the planning the choice was waiting for. Neither the person nor the planner could tell a
+follow-up from any other conversation on that card. **The revision says it on three surfaces at once:**
+
+1. **A FOLLOW-UP framing on the rail.** The chip reads **follow-up** — never _in context_ (a generic
+   launch) and never _plan change_ (a re-plan). The lead names the choice it follows, and the opener's
+   second line says what just happened and what to do, in place of the generic question.
+2. **A _Follow-up to a choice_ card** directly under the opener: the choice's key and title, what was
+   chosen and its best-if line (the chosen record's own chips, choice base panel 5a), and that it was
+   chosen just now. It is what the conversation is ABOUT, pinned where the conversation starts.
+3. **The first turn TELLS THE PLANNER.** Its second paragraph is now _I just chose an option on this
+   choice — this is the follow-up planning it was waiting for._ The planner reads the turn, so this is
+   the line that makes the model itself know; the chip and the card tell the person.
+
+**What this asks of the code cards** (each amends its criteria on the record when it runs, per the
+calendar check on a design newer than the card): **MOTIR-6433** adds the follow-up line to the pick
+composer, right after the heading; **MOTIR-6435** opens a `plan`-intent seed in the follow-up framing
+(the chip, the lead, the opener line and the card) rather than as a plain forward launch;
+**MOTIR-6434** writes the Plans row as **Follow-up to {KEY}**.
+
+### Revision 3 — 2026-09-26, after changes requested again
+
+The gate came back a second time: _"The planner doesn't need more input from the user, the planning can
+start. The user should not need to send an extra message."_ Revision 2 still opened the composer with
+the turn **pre-filled and unsent**, waiting for a Send the person had nothing to add to. That was
+MOTIR-6431's decision, so it was re-planned and recorded first:
+`docs/decisions/picked-option-planning-starts.md` (MOTIR-6455). **The planner is now drawn already
+started:**
+
+1. **The turn is SENT.** It shows as the person's first message — the shipped user bubble, labelled
+   `turn 1`, pre-wrapped as `PlanChangeRail.tsx` renders raw user text — followed by the shipped
+   _Sent to Motir AI_ marker.
+2. **The planner is WORKING.** The act rows accumulate with the spinner on the newest, and the running
+   bar with **Stop** sits above an empty composer: the rail's shipped running state, lifted from
+   `plan-change-run-live.mock.html` state A. No new state is drawn.
+3. **No pre-filled composer, no Send step, on a pick.** The composer is the running rail's own reply
+   field, empty.
+4. **The opener's second line no longer invites a send**: _You just chose {label}. Motir AI is planning
+   what it gates._
+5. **Answered.** The same session a moment later: the act rows complete, the planner's answer under
+   them, the running bar gone and the composer idle for a reply. Reopening the door returns to this and
+   sends nothing (the send-once rule, MOTIR-6455 §2).
+
+The follow-up framing of revision 2 (the chip, the lead, the card, and the turn's follow-up line) stays.
+A refusal is untouched: its turn stays pre-filled and unsent, as MOTIR-6206 drew it.
+
+**What this asks of the code cards:** **MOTIR-6435** sends a `plan`-intent seed's turn itself when the
+seed read reports no seeded session (`seededSessionId` null), and resumes that session otherwise;
+**MOTIR-6436**'s ask carries the new lines (`design/work-items/design-notes.md` § _The picked option
+planned_ → _Revision 3_); **MOTIR-6438**'s E2E has no manual send.
+
+**Composed from.** The stylesheet is lifted verbatim from `planning-workspace--refusal-seed.mock.html`,
+and the rail and composer are its sheet 4 markup with only the chip, the lead, the opener line, the
+placeholder and the turn changed, plus the card; revision 3 replaces the composer with
+`plan-change-run-live.mock.html` state A's markup from the user bubble to the end of its form (the turn,
+the act texts and the running bar's label are the only changes; the answered state drops the running
+bar and adds one assistant bubble in the rail's own AI-bubble markup). The card is composed from the chosen record's markup
+(`bg-(--el-surface-soft)` with `--el-text-secondary` ink, which clears AA there) and the mint / sky tint
+chips. The Plans rows are `plans-sessions--seeded.mock.html` panel 1's markup; that sheet is lifted too,
+with `.mk-page`, two decoration utilities and the two `sm:` variants re-emitted last so the seed sheet's
+`.w-full` / `.pl-11` cannot out-order them. The composer's auto-grow script is lifted verbatim.
+
+### The sheets
+
+1. **The planner STARTED, anchored on the choice's PARENT, right after yes (en and zh).** The follow-up
+   framing on ACME-40, the card, the sent turn, and the planner working.
+2. **The same session once the planner has answered, and a PROJECT anchor (en; zh answered below).** A
+   root choice, a folder-filed one, or a chain whose every ancestor is `done`: the same start on the
+   project, and the sent turn says why it opened there, right after the follow-up line.
+3. **The Plans row of a pick-seeded session, beside a refusal-seeded one.** The seed link reads
+   **Follow-up to {KEY} · chose {label}** and opens the CHOICE work item. The refusal row is
+   MOTIR-6206's, unchanged.
+
+### The decisions
+
+- **The turn is built from the stamp, never the body** (MOTIR-6433), so it says what was chosen even if
+  the options are edited afterwards.
+- **A FOLLOW-UP, never a re-plan and never a generic launch.** The chip, the lead, the card and the turn
+  all say so; none of them says re-plan, and none of them asks the generic "what should change".
+- **Yes STARTS it; nothing is left to send** (MOTIR-6455). The turn is wholly derived from the choice
+  the person just confirmed, so it is sent as their first message, and the planner works at once. A
+  refusal's turn carries their own reason, so it stays pre-filled and unsent.
+- **Sent once.** A reopen, a second press of the door or a reload resumes the session and never sends
+  the turn again.
+- **No placeholder flash.** The seed read shares the anchor read's skeleton, and the rail mounts with the
+  sent turn and the running state in its first render.
+- **A project anchor says so**, right after the follow-up line, so the person knows why the planner
+  opened on the whole project.
+- **The Plans row names the follow-up** — **Follow-up to … · chose …** — where a refusal's row reads
+  **Re-plan of … · {verb}**. The label truncates at `max-w-[10rem]`; the full label is on the link's
+  accessible name.
+
+### The copy (en first, then zh)
+
+The first turn, in order (parent anchor):
+
+```
+{KEY} · {title}
+
+I just chose an option on this choice — this is the follow-up planning it was waiting for.
+
+The option chosen: {label}
+Best if you want: {bestFor}
+
+What this choice gates:
+{followUp}
+
+Plan this work with the option chosen.
+```
+
+```
+{KEY} · {title}
+
+我刚在这个选择上选定了一个选项——这就是它在等的后续规划。
+
+选中的选项：{label}
+如果你更看重：{bestFor}
+
+这个选择决定的工作：
+{followUp}
+
+请按选中的选项规划这项工作。
+```
+
+On a project anchor, one paragraph follows the follow-up line — en: _This choice has no open container,
+so Motir AI opened on the project._ · zh: _这个选择没有未完成的上级工作项，所以 Motir AI 在项目上打开。_
+
+| where                                | key (suggested)                                 | en                                                                                         | zh                                                       |
+| ------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
+| first turn, follow-up line           | `planningWorkspace.refusalSeed.pick.followUp`   | I just chose an option on this choice — this is the follow-up planning it was waiting for. | 我刚在这个选择上选定了一个选项——这就是它在等的后续规划。 |
+| rail mode chip                       | `planningWorkspace.mode.followUp`               | follow-up                                                                                  | 后续规划                                                 |
+| rail lead, parent anchor             | `planningWorkspace.lead.followUp`               | Opened to plan the follow-up to {choice}, on {item}.                                       | 已在 {item} 上打开，规划 {choice} 的后续工作。           |
+| rail lead, project anchor            | `planningWorkspace.lead.followUpProject`        | Opened on {project} to plan the follow-up to {choice}.                                     | 已在 {project} 上打开，规划 {choice} 的后续工作。        |
+| opener, second line                  | `planningWorkspace.conversation.openerFollowUp` | You just chose {label}. Motir AI is planning what it gates.                                | 你刚选择了{label}。Motir AI 正在规划它决定的工作。       |
+| card label                           | `planningWorkspace.followUpCard.label`          | Follow-up to a choice                                                                      | 选择的后续规划                                           |
+| card, who and when                   | `planningWorkspace.followUpCard.chosen`         | Chosen by {name} · {when}                                                                  | 由 {name} 选择 · {when}                                  |
+| Plans row seed link                  | `aiPlanning.sessions.seed.pickLabel`            | Follow-up to <mono>{key}</mono>                                                            | <mono>{key}</mono> 的后续规划                            |
+| Plans row seed link, after the dot   | `aiPlanning.sessions.seed.chose`                | chose {label}                                                                              | 选择了 {label}                                           |
+| Plans row seed link, accessible name | `aiPlanning.sessions.seed.pickAria`             | Open {key}, the choice this conversation is the follow-up to (chose {label})               | 打开 {key}，这段对话是它的后续规划（选择了 {label}）     |
+
+The card's _{when}_ is the gate's `decidedAt` rendered relatively (_just now_ / _刚刚_ right after the
+press). Its other strings reuse `approvalGate.choice.record.chose` and
+`approvalGate.choice.bestIfYouWant`. The keys are suggestions; MOTIR-6433 owns the turn's catalogue
+keys, MOTIR-6435 the rail's and the card's, and MOTIR-6434 the Plans row's.

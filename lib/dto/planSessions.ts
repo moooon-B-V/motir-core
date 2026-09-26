@@ -42,11 +42,19 @@ export const PLAN_SESSION_SEED_GATE_KINDS = [
 
 export type PlanSessionSeedGateKindDto = (typeof PLAN_SESSION_SEED_GATE_KINDS)[number];
 
-/** Where a SEEDED session came from: the refused gate's work item and kind. */
+/** Whether a seeded session re-plans after a REFUSAL, or plans the follow-up to a PICK. */
+export type PlanSessionSeedOriginDto = 'refusal' | 'pick';
+
+/** Where a SEEDED session came from: the seeding gate's work item and kind. */
 export interface PlanSessionSeedDto {
-  /** The refused work item's identifier (`ACME-44`) — the row links to it. */
+  /** The seeding work item's identifier (`ACME-44`) — the row links to it. For a
+   *  pick it is the CHOICE card, not the session's anchor. */
   cardKey: string;
   gateKind: PlanSessionSeedGateKindDto;
+  /** A pick is never a refusal (MOTIR-6434): the row words them differently. */
+  origin: PlanSessionSeedOriginDto;
+  /** The chosen option's label on a pick; null on a refusal. */
+  chosenLabel: string | null;
 }
 
 /** One row of the list: one session, and the one plan it is known by. */

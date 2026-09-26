@@ -27,7 +27,19 @@ function isSeedGateKind(kind: string | null): kind is PlanSessionSeedGateKindDto
 function seedOf(row: PlanSessionListRow): PlanSessionSeedDto | null {
   if (!row.seedGateId || !row.seedCardInProject || !row.seedCardKey) return null;
   if (!isSeedGateKind(row.seedGateKind)) return null;
-  return { cardKey: row.seedCardKey, gateKind: row.seedGateKind };
+  // A PICK (MOTIR-6434): an approved choice with its stamped label. Anything else a
+  // seed can come from is a refusal.
+  const pick =
+    row.seedGateKind === 'decision_choice' &&
+    row.seedGateState === 'approved' &&
+    typeof row.seedChosenLabel === 'string' &&
+    row.seedChosenLabel !== '';
+  return {
+    cardKey: row.seedCardKey,
+    gateKind: row.seedGateKind,
+    origin: pick ? 'pick' : 'refusal',
+    chosenLabel: pick ? row.seedChosenLabel : null,
+  };
 }
 
 /**

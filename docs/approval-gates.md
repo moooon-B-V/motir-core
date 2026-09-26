@@ -86,7 +86,9 @@ requirement allows two workflows), the options and what the pick gates — and *
 choose**, which opens the full-screen view where you pick.
 
 **Select an option, then press _Choose {option}_**, and confirm. Choosing records your
-pick and moves the work item to **Done**; the planning the pick unblocks is owed next.
+pick and moves the work item to **Done**, and then asks whether Motir AI should start
+planning what the pick unblocks — see
+[After you pick an option, Motir AI offers to plan the follow-up](#after-you-pick-an-option-motir-ai-offers-to-plan-the-follow-up).
 _None of these — revise the options_ sends it back without moving anything, and the
 question is asked again once the options change.
 
@@ -280,6 +282,34 @@ keeps a **Re-plan with AI** button that opens the same thing later, as above.
 
 A design sent back on GitHub, rather than in Motir, carries no verdict: it records the
 review, and the card stays where it is.
+
+### After you pick an option, Motir AI offers to plan the follow-up
+
+A choice exists because the planning stopped until someone picked. Once you press
+**Choose {option}** and confirm, the decided record asks, right where you pressed:
+
+> **Plan the follow-up with Motir AI?** Motir AI opens on {key} and starts planning the
+> follow-up right away, from your choice. There is nothing to write or send — your
+> choice is the first message.
+
+- **Plan with AI** (Enter) opens Motir AI on the work item the choice sits under — or on
+  the project, when the choice has no open container — and **the planning starts at
+  once**. Your choice is sent for you as the first message (the option, what it is best
+  for, and what the choice gates), so there is nothing to type, review or send. Saying
+  yes is what spends the AI credits for that first message.
+- **Not now** (or Esc) opens nothing and keeps you on the decided record, which now
+  carries a **Plan with AI** button in place of the question.
+
+**The button stays on the record.** Where the record used to say _"Follow-up planning
+owed"_, it now shows what the choice gates and a **Plan with AI** button, for anyone who
+may plan on the work item — on its page and in the approval view. Pressing it starts the
+planning the same way; if you already started that conversation recently, it takes you
+back to it and sends nothing again. The Plans page lists the conversation as the
+**Follow-up to {key}**, with the option you chose.
+
+**None of these is different.** It is a refusal, so it offers **Re-plan with AI**
+instead, with your reason written into the message box and nothing sent until you send
+it, as above.
 
 ### One qualification on Approve
 
