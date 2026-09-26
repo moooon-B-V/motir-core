@@ -17,6 +17,20 @@ export interface UpsertGithubIdentityInput {
   githubLogin: string;
   avatarUrl: string | null;
   accessTokenEncrypted: string;
+  /** The expiring-token fields (MOTIR-6519) — null for a non-expiring token.
+   *  Optional so a seed can omit them; the OAuth callback always passes all
+   *  three, so a re-link with a non-expiring token CLEARS a stale pair. */
+  accessTokenExpiresAt?: Date | null;
+  refreshTokenEncrypted?: string | null;
+  refreshTokenExpiresAt?: Date | null;
+}
+
+/** A rotated token pair — what one refresh writes back (MOTIR-6519). */
+export interface UpdateGithubIdentityTokensInput {
+  accessTokenEncrypted: string;
+  accessTokenExpiresAt: Date | null;
+  refreshTokenEncrypted: string | null;
+  refreshTokenExpiresAt: Date | null;
 }
 
 export const githubIdentityRepository = {
@@ -73,6 +87,42 @@ export const githubIdentityRepository = {
       where: { userId },
       create: { userId, ...rest },
       update: rest,
+    });
+  },
+
+  /**
+   * The acting user's identity, LOCKED for the rest of the transaction — the
+   * read that guards a refresh (MOTIR-6519). GitHub rotates the refresh token on
+   * every use, so two concurrent refreshes with the same token leave the loser
+   * holding a dead one; the row lock serialises them, and the second caller
+   * reads the pair the first one persisted. Prisma's query builder cannot say
+   * `FOR UPDATE`, hence the raw lock followed by the typed read.
+   */
+  async findByUserIdForUpdate(
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubIdentity | null> {
+    const rows = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "github_identity" WHERE "user_id" = ${userId} FOR UPDATE`;
+    if (rows.length === 0) return null;
+    return tx.githubIdentity.findUnique({ where: { userId } });
+  },
+
+  /** Persist a refreshed (rotated) token pair (MOTIR-6519). */
+  async updateTokens(
+    userId: string,
+    input: UpdateGithubIdentityTokensInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubIdentity> {
+    return tx.githubIdentity.update({ where: { userId }, data: input });
+  },
+
+  /** Mark the stored pair unusable — GitHub refused the refresh token — so the
+   *  next read answers "expired" instead of spending a dead token again. */
+  async markTokensExpired(userId: string, at: Date, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.githubIdentity.update({
+      where: { userId },
+      data: { accessTokenExpiresAt: at, refreshTokenExpiresAt: at },
     });
   },
 

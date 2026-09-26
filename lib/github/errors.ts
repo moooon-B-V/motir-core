@@ -114,43 +114,28 @@ export class GithubRepoNotFoundError extends Error {
   }
 }
 
-// ── The Motir Agent authorization (Story MOTIR-683 · MOTIR-6519) ─────────────
+// ── The identity's user token (Story MOTIR-683 · MOTIR-6519) ─────────────────
 //
-// The Motir Agent is the opt-in writer App (MOTIR-1894). A person links their
-// GitHub account to it so a hosted run on a repository THEY own is authored as
-// them (`docs/decisions/hosted-agent-run.md` §4). Three typed answers, because
-// the three need three different sentences in front of a person.
+// Once the Motir Integration app expires its user tokens, "give me this
+// person's token" has two answers that are not a token, and they need two
+// different sentences in front of a person.
 
-/** `GITHUB_AGENT_APP_CLIENT_ID` / `GITHUB_AGENT_APP_CLIENT_SECRET` are not set on
- *  this deployment. Read at call time, so a deployment without the App simply
- *  cannot reach the flow rather than crashing on boot. */
-export class GithubAgentAppNotConfiguredError extends Error {
-  readonly code = 'GITHUB_AGENT_APP_NOT_CONFIGURED' as const;
+/** The person has no GitHub identity: they never connected, or disconnected. */
+export class GithubIdentityNotLinkedError extends Error {
+  readonly code = 'GITHUB_IDENTITY_NOT_LINKED' as const;
   constructor() {
-    super(
-      'The Motir Agent GitHub App is not configured. Set GITHUB_AGENT_APP_CLIENT_ID and GITHUB_AGENT_APP_CLIENT_SECRET.',
-    );
-    this.name = 'GithubAgentAppNotConfiguredError';
+    super('No GitHub account is connected for this member.');
+    this.name = 'GithubIdentityNotLinkedError';
   }
 }
 
-/** The person has not linked their GitHub account to the Motir Agent app. */
-export class GithubAgentNotLinkedError extends Error {
-  readonly code = 'GITHUB_AGENT_NOT_LINKED' as const;
-  constructor() {
-    super('This GitHub account is not linked to the Motir Agent app.');
-    this.name = 'GithubAgentNotLinkedError';
-  }
-}
-
-/** The person linked once, but the authorization can no longer be used: the
- *  refresh token expired or GitHub refused it (the person revoked the App, or
- *  it was rotated elsewhere). The remedy is the same as not linked — link again —
- *  and the surface says so in its own words. */
-export class GithubAgentAuthorizationExpiredError extends Error {
-  readonly code = 'GITHUB_AGENT_AUTHORIZATION_EXPIRED' as const;
+/** The person connected once, but the token can no longer be renewed: the
+ *  refresh token expired, or GitHub refused it (the person revoked the app, or
+ *  it was spent elsewhere). The remedy is to connect again. */
+export class GithubIdentityExpiredError extends Error {
+  readonly code = 'GITHUB_IDENTITY_EXPIRED' as const;
   constructor(detail: string) {
-    super(`The Motir Agent authorization can no longer be used: ${detail}`);
-    this.name = 'GithubAgentAuthorizationExpiredError';
+    super(`The connected GitHub account can no longer be used: ${detail}`);
+    this.name = 'GithubIdentityExpiredError';
   }
 }

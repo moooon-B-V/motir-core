@@ -263,9 +263,6 @@ model User {
   // (the apiTokens pattern). Modelled on both sides per the FK-`@relation`
   // rule so `migrate dev` reports no drift.
   githubIdentity                   GithubIdentity?
-  /// The member's Motir Agent authorization (MOTIR-6519) — the user token a hosted
-  /// run pushes with on a repository they own. Cascade on the FK.
-  githubAgentAuthorization         GithubAgentAuthorization?
   // The repositories this user has been invited to as a collaborator on the code
   // Motir made for their team (MOTIR-1910). Cascade: the record is about a person
   // reaching a repository, so it dies with the person (the githubIdentity
@@ -6564,40 +6561,21 @@ model PlanRevision {
 /// precedent): the OAuth callback persists under `withUserContext`, so a member
 /// only ever reads/writes their own identity.
 model GithubIdentity {
-  id                   String   @id @default(cuid())
-  userId               String   @unique @map("user_id")
-  githubUserId         String   @unique @map("github_user_id")
-  githubLogin          String   @map("github_login")
-  avatarUrl            String?  @map("avatar_url")
-  /// The GitHub user access token, encrypted at rest (never plaintext). Only
-  /// lib/github/tokenCrypto.ts + githubIdentityService ever read/write it.
-  accessTokenEncrypted String   @map("access_token_encrypted")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("github_identity")
-}
-
-/// A member's authorization of the Motir Agent GitHub App (Story MOTIR-683 ·
-/// MOTIR-6519): the EXPIRING user access token (8 h) and its refresh token
-/// (≈6 months) GitHub issues when a person links their account for hosted runs.
-/// A hosted run on a repository the person OWNS pushes and opens its pull request
-/// with this token, narrowed to that one repository (`docs/decisions/
-/// hosted-agent-run.md` §4). Its own table, not a column on `GithubIdentity`:
-/// that row holds the Motir INTEGRATION app's non-expiring token, and GitHub user
-/// tokens belong to the app that issued them. Both tokens are encrypted at rest
-/// by `lib/github/tokenCrypto.ts`; only `githubAgentAuthService` reads them.
-model GithubAgentAuthorization {
   id                    String    @id @default(cuid())
   userId                String    @unique @map("user_id")
-  githubUserId          String    @map("github_user_id")
+  githubUserId          String    @unique @map("github_user_id")
   githubLogin           String    @map("github_login")
+  avatarUrl             String?   @map("avatar_url")
+  /// The GitHub user access token, encrypted at rest (never plaintext). Only
+  /// lib/github/tokenCrypto.ts + githubIdentityService ever read/write it.
   accessTokenEncrypted  String    @map("access_token_encrypted")
-  /// Null when the App does not expire user tokens (then there is nothing to refresh).
+  /// When the access token dies (MOTIR-6519). Null for a NON-expiring token —
+  /// an identity linked before the App turned on "Expire user authorization
+  /// tokens" — which then has nothing to refresh and keeps working as it is.
   accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
+  /// The refresh token GitHub issues with an expiring user token, encrypted like
+  /// the access token. GitHub ROTATES it on every use, so only
+  /// `githubIdentityService.getUserToken` spends it, under a row lock.
   refreshTokenEncrypted String?   @map("refresh_token_encrypted")
   refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
   createdAt             DateTime  @default(now()) @map("created_at")
@@ -6605,7 +6583,8 @@ model GithubAgentAuthorization {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("github_agent_authorization")
+  @@index([userId])
+  @@map("github_identity")
 }
 
 /// A per-user OAuth identity for an EXTERNAL import source (Story 7.16 ·
