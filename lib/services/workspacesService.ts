@@ -26,7 +26,7 @@ import {
 import { readMembership, readReachRole } from '@/lib/workspaces/membershipGate';
 import { bindOrganizationContext, withOrgContext } from '@/lib/organizations/context';
 import { assertOrgCapability } from '@/lib/services/organizationAccessService';
-import { WORKSPACE_ROLE } from '@/lib/workspaces/roles';
+import { LEGACY_WORKSPACE_ROLE } from '@/lib/workspaces/roles';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { entitlementsService } from '@/lib/services/entitlementsService';
@@ -239,7 +239,7 @@ async function insertWorkspaceWithOwner(
   // promised; Story 1.2 wrote `member` here as a single-role shortcut, corrected
   // now — see lib/workspaces/roles.ts (PRODECT_FINDINGS #36).
   const membership = await workspaceMembershipRepository.create(
-    { userId: input.ownerUserId, workspaceId: workspace.id, role: WORKSPACE_ROLE.owner },
+    { userId: input.ownerUserId, workspaceId: workspace.id, role: LEGACY_WORKSPACE_ROLE.owner },
     tx,
   );
   return { workspace, membership };

@@ -1,28 +1,52 @@
-// Workspace membership roles (Story 1.2's `workspace_membership.role` column).
-//
-// Story 1.2 shipped the column with a single live value (`member`) and a
-// `member` default, leaving real RBAC to a future Story. Subtask 1.6.5 needs a
-// privileged tier for the operator dashboard's "Replay" gate (only a workspace
-// owner may replay a dead-lettered job), so it promotes the workspace CREATOR
-// to `owner` — the role `insertWorkspaceWithOwner` was always named for. This
-// file is the single source of truth for those role strings so the gate, the
-// creator assignment, and any future RBAC read the same constants instead of
-// scattering magic strings.
-//
-// NOTE (PRODECT_FINDINGS #36): this is the minimal two-tier model the dashboard
-// gate requires — creator = owner, everyone invited = member. A full
-// role-management surface (promote/demote UI, multiple admin tiers, per-action
-// permission matrix) is still future RBAC work; this only materializes the
-// owner tier the replay gate depends on.
+import type { WorkspaceRole } from '@/generated/prisma/client';
 
-export const WORKSPACE_ROLE = {
+// Workspace membership roles — TWO vocabularies, side by side, for one release.
+//
+// ── The WORKSPACE ROLE (Story MOTIR-6168 · MOTIR-6457) ──────────────────────
+// Roles live on the workspace (`docs/decisions/role-model.md` §2): each person
+// holds ONE role there — Manager · Member · Viewer — or a workspace custom role,
+// and it is their role in every project of the workspace. The values are the
+// Prisma `WorkspaceRole` enum, stored in `workspace_membership.workspace_role`
+// beside the legacy column below. This file is the single source of the strings
+// so a gate, a migration and a page read the same constants.
+//
+// ── The LEGACY `workspace_membership.role` (Story 1.2 · Subtask 1.6.5) ───────
+// Story 1.2 shipped the column with `member` only; Subtask 1.6.5 promoted the
+// workspace CREATOR to `owner` for the jobs dashboard's Replay gate. Those
+// exports are renamed `LEGACY_*` here because the new Prisma enum took the name
+// `WorkspaceRole`, and they are deleted once every reader has moved to the
+// workspace role (MOTIR-6462).
+
+/** The three built-in workspace roles, in the order every surface lists them. */
+export const WORKSPACE_ROLES = [
+  'manager',
+  'member',
+  'viewer',
+] as const satisfies readonly WorkspaceRole[];
+
+export type { WorkspaceRole };
+
+/**
+ * The tier a membership on a workspace CUSTOM role carries in `workspace_role`,
+ * beside the `role_definition_id` pointer — the workspace-tier twin of
+ * `CUSTOM_ROLE_TIER` in `lib/permissions/builtinRoles.ts`, and `member` for the
+ * same reason: the tier exists for the few questions a permission set cannot
+ * answer, and an access level's tier subtraction must take nothing away from a
+ * role whose set a Manager enumerated by hand. A custom role grants EXACTLY what
+ * it lists.
+ */
+export const CUSTOM_WORKSPACE_ROLE_TIER: WorkspaceRole = 'member';
+
+/** The legacy `workspace_membership.role` strings the Replay gate reads. */
+export const LEGACY_WORKSPACE_ROLE = {
   owner: 'owner',
   member: 'member',
 } as const;
 
-export type WorkspaceRole = (typeof WORKSPACE_ROLE)[keyof typeof WORKSPACE_ROLE];
+export type LegacyWorkspaceRole =
+  (typeof LEGACY_WORKSPACE_ROLE)[keyof typeof LEGACY_WORKSPACE_ROLE];
 
-/** True when the given role string is the privileged workspace-owner tier. */
-export function isOwnerRole(role: string | null | undefined): boolean {
-  return role === WORKSPACE_ROLE.owner;
+/** True when the given LEGACY role string is the privileged workspace-owner tier. */
+export function isLegacyOwnerRole(role: string | null | undefined): boolean {
+  return role === LEGACY_WORKSPACE_ROLE.owner;
 }

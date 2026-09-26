@@ -21,11 +21,11 @@
 import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
 import { db } from '@/lib/db';
 import { boardsService } from '@/lib/services/boardsService';
-import { WORKSPACE_ROLE } from '@/lib/workspaces/roles';
+import { LEGACY_WORKSPACE_ROLE } from '@/lib/workspaces/roles';
 
 async function resolveActorUserId(workspaceId: string): Promise<string | null> {
   const owner = await db.workspaceMembership.findFirst({
-    where: { workspaceId, role: WORKSPACE_ROLE.owner },
+    where: { workspaceId, role: LEGACY_WORKSPACE_ROLE.owner },
     orderBy: { createdAt: 'asc' },
   });
   if (owner) return owner.userId;

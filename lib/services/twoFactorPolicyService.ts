@@ -193,7 +193,7 @@ export const twoFactorPolicyService = {
    * Set the workspace's require-2FA policy. Workspace manager (`owner` /
    * `admin`) only — `isWorkspaceManager` from `lib/projects/roles.ts`.
    *
-   * ⚠️ NOT `lib/workspaces/roles.ts`'s `WORKSPACE_ROLE`, which carries only
+   * ⚠️ NOT `lib/workspaces/roles.ts`'s `LEGACY_WORKSPACE_ROLE`, which carries only
    * `owner` and `member` and predates the four-value `MemberRole` enum; gating
    * on it would refuse a workspace `admin`.
    *

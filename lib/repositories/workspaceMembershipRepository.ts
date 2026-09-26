@@ -4,6 +4,8 @@ import {
   type User,
   type Workspace,
   type WorkspaceMembership,
+  type WorkspaceRole,
+  type WorkspaceRoleDefinition,
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 
@@ -12,6 +14,11 @@ import { dbRead } from '@/lib/db';
 // data-access concern; the service maps it to a DTO.
 export type MembershipWithUser = WorkspaceMembership & {
   user: Pick<User, 'id' | 'name' | 'email'>;
+};
+
+/** A membership with the workspace CUSTOM role it points at (or null for a built-in). */
+export type MembershipWithRoleDefinition = WorkspaceMembership & {
+  roleDefinition: WorkspaceRoleDefinition | null;
 };
 
 // WorkspaceMembership repository — single Prisma operations on the
@@ -37,6 +44,67 @@ export const workspaceMembershipRepository = {
     return tx.workspaceMembership.findUnique({
       where: { userId_workspaceId: { userId, workspaceId } },
     });
+  },
+
+  /**
+   * The membership WITH the workspace custom role it points at, in ONE round
+   * trip (Story MOTIR-6168 · MOTIR-6457). The resolver (MOTIR-6459) needs both —
+   * the role tier and, for a custom role, its stored key set — for every
+   * permission check, so reading them apart would double the reads on the
+   * hottest path in the product. Requires `tx`: both tables are RLS-gated.
+   */
+  async findByUserAndWorkspaceWithRoleDefinition(
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<MembershipWithRoleDefinition | null> {
+    return tx.workspaceMembership.findUnique({
+      where: { userId_workspaceId: { userId, workspaceId } },
+      include: { roleDefinition: true },
+    });
+  },
+
+  /**
+   * Write a member's WORKSPACE ROLE — `workspace_role` and `role_definition_id`
+   * together, in ONE statement (MOTIR-6457). THE ONLY WRITER of the two columns:
+   * they move together (a custom role is `CUSTOM_WORKSPACE_ROLE_TIER` + its
+   * pointer; a built-in is its value + NULL), and a second writer is how they
+   * come apart. Which pairs are legal is the service's call; this writes what it
+   * is given. Targets the row by the `(userId, workspaceId)` unique.
+   */
+  async setWorkspaceRole(
+    userId: string,
+    workspaceId: string,
+    role: { workspaceRole: WorkspaceRole; roleDefinitionId: string | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkspaceMembership> {
+    return tx.workspaceMembership.update({
+      where: { userId_workspaceId: { userId, workspaceId } },
+      data: { workspaceRole: role.workspaceRole, roleDefinitionId: role.roleDefinitionId },
+    });
+  },
+
+  /**
+   * How many members of the workspace hold the MANAGER role — `workspace_role =
+   * 'manager'` rows only; a NULL (not-yet-migrated) row is not counted, because
+   * the mapping (MOTIR-6458) runs before any reader of this (MOTIR-6463).
+   *
+   * LOCKS those rows `FOR UPDATE`, because its reader is the last-Manager guard:
+   * a count-then-write that, unlocked, lets two concurrent demotions of a
+   * two-Manager workspace both read `2` and both commit, leaving none — the same
+   * race `countByWorkspaceForUpdate` closes for the last-member guard. `ORDER BY
+   * "id"` pins the lock order; Postgres forbids `count(*) … FOR UPDATE`, so the
+   * ids are selected under the lock and counted here. `tx` is REQUIRED — the
+   * lock lives only for its transaction, and the RLS policy needs its GUCs.
+   */
+  async countManagers(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "workspace_membership"
+      WHERE "workspaceId" = ${workspaceId} AND "workspace_role" = 'manager'
+      ORDER BY "id"
+      FOR UPDATE
+    `;
+    return rows.length;
   },
 
   /**

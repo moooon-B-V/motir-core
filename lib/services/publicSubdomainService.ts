@@ -55,7 +55,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //
 // ⚠️ The role test is written against `MemberRole` (`owner` | `admin` | `member`
 // | `viewer`, the schema's enum) rather than against `lib/workspaces/roles.ts`'s
-// `WORKSPACE_ROLE`, which is a NARROWER legacy constant carrying only
+// `LEGACY_WORKSPACE_ROLE`, which is a NARROWER legacy constant carrying only
 // `owner` / `member` — its own comment says it "only materializes the owner tier
 // the replay gate depends on". Using it here would silently refuse every
 // workspace `admin`.

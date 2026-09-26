@@ -148,7 +148,7 @@ const ALLOWED_DERIVATIONS: { file: string; why: string }[] = [
  */
 const DERIVATION_PATTERNS: { label: string; re: RegExp }[] = [
   { label: 'isWorkspaceManager(...) used as a gate', re: /\bisWorkspaceManager\s*\(/ },
-  { label: 'isOwnerRole(...) used as a gate', re: /\bisOwnerRole\s*\(/ },
+  { label: 'isOwnerRole(...) used as a gate', re: /\bis(?:Legacy)?OwnerRole\s*\(/ },
   {
     label: "the actor's own membership compared to 'admin'",
     re: /\b(?:ws|project|workspace)?[Mm]embership\??\.role\s*===\s*'admin'/,
@@ -283,7 +283,8 @@ describe('guard 1 — nothing derives an administrative answer for itself', () =
     // asked by `approvalGatesService` as the approval escape hatch, so the gate
     // decided on a ROLE while the guard saw only a call into the allowed file.
     // A caller that needs such an answer needs a permission key instead.
-    const ROLE_VERDICT = /\breturn\s+(?:await\s+)?(?:isWorkspaceManager|isOwnerRole)\s*\(/;
+    const ROLE_VERDICT =
+      /\breturn\s+(?:await\s+)?(?:isWorkspaceManager|is(?:Legacy)?OwnerRole)\s*\(/;
     const code = stripComments(
       readFileSync(join(ROOT, 'lib/services/projectAccessService.ts'), 'utf8'),
     );

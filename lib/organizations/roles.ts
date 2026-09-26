@@ -1,6 +1,6 @@
 // Organization membership roles (Story 6.10's `organization_membership.role`
 // column) — the org-scoped role set, DISTINCT from and sitting ABOVE the
-// workspace `WORKSPACE_ROLE` (lib/workspaces/roles.ts):
+// workspace `LEGACY_WORKSPACE_ROLE` (lib/workspaces/roles.ts):
 //   - owner  — the one root user; alone deletes or transfers the org.
 //   - admin  — runs the org: workspaces, settings, billing, members.
 //   - member — org-tier presence only; falls back to its per-workspace role.

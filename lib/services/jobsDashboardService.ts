@@ -5,7 +5,7 @@ import { toJobRunDTO, toJobRunDlqDTO } from '@/lib/mappers/jobMappers';
 import { emailDeliveryRepository } from '@/lib/repositories/emailDeliveryRepository';
 import { withWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { replayDLQ as replayDlqInTx, type ReplayDLQResult } from '@/lib/jobs/dlq';
-import { isOwnerRole } from '@/lib/workspaces/roles';
+import { isLegacyOwnerRole } from '@/lib/workspaces/roles';
 import { ReplayForbiddenError, DlqEntryNotFoundError } from '@/lib/jobs/errors';
 import type { JobRunDTO, JobRunDlqDTO, JobRunStatus } from '@/lib/dto/jobs';
 
@@ -169,7 +169,7 @@ export const jobsDashboardService = {
           input.workspaceId,
           tx,
         );
-        if (!isOwnerRole(membership?.role)) {
+        if (!isLegacyOwnerRole(membership?.role)) {
           throw new ReplayForbiddenError(input.userId, input.workspaceId);
         }
 

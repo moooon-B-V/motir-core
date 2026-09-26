@@ -338,7 +338,7 @@ describe('no SECOND policy path — every gate resolves through projectAccessSer
       'lib/services/twoFactorPolicyService.ts',
     ]);
     const DERIVATION =
-      /\bisOwnerRole\s*\(|\bisWorkspaceManager\s*\(|\b(?:ws|project|workspace)?[Mm]embership\??\.role\s*===\s*'admin'/;
+      /\bis(?:Legacy)?OwnerRole\s*\(|\bisWorkspaceManager\s*\(|\b(?:ws|project|workspace)?[Mm]embership\??\.role\s*===\s*'admin'/;
     const offenders = serviceFiles()
       .filter((f) => !ALLOWED.has(f.path))
       .filter((f) => DERIVATION.test(f.code))
@@ -360,7 +360,7 @@ describe('no SECOND policy path — every gate resolves through projectAccessSer
         },
       };`;
     const DERIVATION =
-      /\bisOwnerRole\s*\(|\bisWorkspaceManager\s*\(|\b(?:ws|project|workspace)?[Mm]embership\??\.role\s*===\s*'admin'/;
+      /\bis(?:Legacy)?OwnerRole\s*\(|\bisWorkspaceManager\s*\(|\b(?:ws|project|workspace)?[Mm]embership\??\.role\s*===\s*'admin'/;
     expect(DERIVATION.test(violation)).toBe(true);
     // …and a body that asks the model instead is NOT caught.
     expect(

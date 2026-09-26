@@ -1,6 +1,6 @@
 import type { JobRunStatus } from '@/lib/dto/jobs';
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
-import { isOwnerRole } from '@/lib/workspaces/roles';
+import { isLegacyOwnerRole } from '@/lib/workspaces/roles';
 import { jobsDashboardService, JOBS_PAGE_SIZE } from '@/lib/services/jobsDashboardService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { JobsDashboard, type JobsTab } from './JobsDashboard';
@@ -119,7 +119,7 @@ export async function JobsPane({
       page={page}
       hasNext={list.length > JOBS_PAGE_SIZE}
       dlqCount={dlqCount}
-      isOwner={isOwnerRole(role)}
+      isOwner={isLegacyOwnerRole(role)}
       showSystemTab={showSystemTab}
       runs={runs.slice(0, JOBS_PAGE_SIZE)}
       dlq={dlq.slice(0, JOBS_PAGE_SIZE)}
