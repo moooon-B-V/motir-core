@@ -20,6 +20,7 @@ import { ChoiceGateFrame } from '@/components/approvals/ChoiceGate';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import { DecisionConfirmGateFrame } from '@/components/approvals/DecisionConfirmGate';
 import { useRefusalVerb } from './RefusalReason';
+import { asksToReplanAfterPress } from './RefusalReplan';
 import { ApprovalGateControl, type GateVerb } from '@/components/approvals/ApprovalGateControl';
 import { DesignResultPanel } from '@/app/(authed)/items/[key]/_components/DesignResultPanel';
 import { AcceptanceDevelopmentSlot } from '@/components/acceptance/AcceptanceDevelopmentSlot';
@@ -389,6 +390,13 @@ export function ApprovalOverlay() {
 
   const [load, setLoad] = useState<Load | null>(null);
   const [decided, setDecided] = useState<Decided | null>(null);
+  // THE ASK (Story MOTIR-6068 · MOTIR-6211; `approval-control--replan-door.mock.html`
+  // panel 0): the gate whose refusal THIS reader just pressed here — an Overturn or None
+  // of these — so its decided band asks whether to re-plan with Motir AI before anything
+  // opens. Transient: a close, a reload or another address forgets it, and the record's
+  // door stands in its place. (A decision's Request changes is pressed inside the
+  // Development frame, which holds its own.)
+  const [replanAsk, setReplanAsk] = useState<string | null>(null);
   // *Show the current version* (MOTIR-5235) — bumping it re-runs THIS read, the one
   // the overlay opened with, so the current subject and a FRESH stamp arrive together.
   // The previous read stays on screen until the new one lands: re-read in place, never
@@ -429,6 +437,7 @@ export function ApprovalOverlay() {
     setLoad(null);
     setDecided(null);
     setPeek(null);
+    setReplanAsk(null);
     // Open means `?approval=` is in the query, so the query is never empty here.
     shallowPush(withoutApprovalOverlay(`${pathname}?${searchParams.toString()}`));
   }, [pathname, searchParams]);
@@ -739,8 +748,18 @@ export function ApprovalOverlay() {
           // this, never `outcomeRef`, which is a CHOICE's option id (MOTIR-5893).
           statusWritten: result.statusWritten,
         });
+        // A refusal that offers the seeded planner ASKS first (§10h; the design gate's
+        // amendment of 2026-09-25) — nothing opens until the reader says yes.
+        if (asksToReplanAfterPress(result.gate)) setReplanAsk(result.gate.id);
         router.refresh();
         return null;
+      };
+      // The decided record's Re-plan with AI door, and the ask in its place right after the
+      // press (MOTIR-6211). The door's condition is the read's; the ask is this reader's.
+      const replan = {
+        canReplan: read.canReplan,
+        asking: replanAsk === gate.id,
+        onAskDone: () => setReplanAsk(null),
       };
 
       body =
@@ -835,6 +854,7 @@ export function ApprovalOverlay() {
               ) : undefined
             }
             gateVerbsDisabled={withdrawn !== undefined && !decidedState}
+            canReplan={read.canReplan}
           />
         ) : subject.kind === 'acceptance_result' ? (
           // THE ACCEPTANCE PORT (MOTIR-4950) — the recording the gate asks about, read
@@ -891,7 +911,7 @@ export function ApprovalOverlay() {
             record={subject.confirm.record}
             recordCount={subject.confirm.recordCount}
             presentRecordIds={subject.confirm.presentRecordIds}
-            epic={subject.confirm.epic}
+            replan={replan}
             canDecide={read.canDecide && !decidedState}
             routedToLabel={read.routedToLabel}
             identifier={identifier}
@@ -912,6 +932,7 @@ export function ApprovalOverlay() {
             layout="fill"
             gate={gate}
             port={subject.choice}
+            replan={replan}
             canDecide={read.canDecide && !decidedState}
             routedToLabel={read.routedToLabel}
             identifier={identifier}

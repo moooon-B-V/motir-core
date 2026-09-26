@@ -7,6 +7,7 @@ import { MarkdownView } from '@/components/ui/MarkdownView';
 import type { ChoiceOption, ChoiceSituation, ChoiceWhy } from '@/lib/approvalGates/choiceOptions';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import { useNoneOfTheseVerb } from './RefusalReason';
+import { useRefusalReplanSlots, type RefusalReplanProps } from './RefusalReplan';
 import type { ApprovalGateDTO, ChoiceDefectDTO, GateDecision } from '@/lib/dto/approvalGate';
 import {
   ApprovalGateControl,
@@ -294,6 +295,11 @@ export interface ChoiceGateFrameProps {
   alert?: ReactNode;
   onShowCurrentVersion?: () => void;
   focusPortOnMount?: boolean;
+  /**
+   * THE RE-PLAN WITH AI DOOR on a None-of-these record, and the ask right after the press
+   * (Story MOTIR-6068 · MOTIR-6211). Omitted: no door.
+   */
+  replan?: RefusalReplanProps;
 }
 
 /**
@@ -311,6 +317,7 @@ export function ChoiceGateFrame({
   alert,
   onShowCurrentVersion,
   focusPortOnMount,
+  replan,
 }: ChoiceGateFrameProps) {
   const t = useTranslations('approvalGate.choice');
   const format = useFormatter();
@@ -325,6 +332,14 @@ export function ChoiceGateFrame({
   // the body may have changed since, and the record must say what was picked then.
   const chosen = gate.state === 'approved' ? gate.chosenOption : null;
   const gates = plain(port.followUpMd);
+  // None of these offers the seeded planner (§10h): the door on the record, or — for the
+  // reader who has just pressed it — the ask in its place.
+  const { door, ask } = useRefusalReplanSlots({
+    gate,
+    itemKey: identifier,
+    replan,
+    sectioned: layout === 'section',
+  });
 
   // THE VERB SET, derived — *None of these*, then ONE commit verb for the selection.
   // Before a pick the commit verb is drawn DISABLED with its reason as the
@@ -409,8 +424,11 @@ export function ChoiceGateFrame({
               {t('record.followUp', { gates: plain(chosen.followUp) })}
             </span>
           </>
-        ) : undefined
+        ) : (
+          door
+        )
       }
+      recordBand={ask}
       onDecide={onDecide}
       onShowCurrentVersion={onShowCurrentVersion}
       focusPortOnMount={focusPortOnMount}

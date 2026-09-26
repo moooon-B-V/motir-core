@@ -17,6 +17,8 @@ export type PlanChangeSessionUpdateInput = Prisma.PlanChangeSessionUncheckedUpda
 // gates the rows; the `workspaceId` argument is the belt-and-suspenders
 // app-level scope (a cross-tenant project id returns null → 404, never 403).
 export const planChangeSessionRepository = {
+  /** Create a session. `seedGateId` is set ONLY by a seeded first turn
+   *  (`planChangeSessionsService.startSeededWithFirstTurn`, AMENDMENT 17 §9). */
   async create(
     data: Prisma.PlanChangeSessionUncheckedCreateInput,
     tx: Prisma.TransactionClient,
@@ -96,6 +98,31 @@ export const planChangeSessionRepository = {
         workspaceId,
         createdById: userId,
         origin: 'conversation',
+        lastActivityAt: { gte: since },
+      },
+      orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
+    });
+  },
+
+  /** The SEEDED-session read (AMENDMENT 17 §9; MOTIR-6207): this member's OWN
+   *  most recent session seeded by `seedGateId` in this project, active at or
+   *  after `since`. Never another member's (sessions are per member), never an
+   *  unseeded session and never one seeded by a different gate. Served by the
+   *  `(seed_gate_id, created_by_id, last_activity_at)` index. */
+  async findSeededForUser(
+    projectId: string,
+    seedGateId: string,
+    userId: string,
+    workspaceId: string,
+    since: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanChangeSession | null> {
+    return tx.planChangeSession.findFirst({
+      where: {
+        projectId,
+        workspaceId,
+        seedGateId,
+        createdById: userId,
         lastActivityAt: { gte: since },
       },
       orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
@@ -222,6 +249,11 @@ export const planChangeSessionRepository = {
    *
    * `state` filters on the LATEST plan: `none` = no plan at all, otherwise that
    * plan's status. `sessionId` narrows to one row (the `?session=` landing).
+   *
+   * The SEED (MOTIR-6209) rides the same statement: `seed_gate_id → gate → work
+   * item`, two plain joins, so a seeded row costs no query of its own.
+   * `seedCardInProject` is the browse fact the mapper keys off — see
+   * `toPlanSessionRowDto`.
    */
   async listPageByProject(
     args: {
@@ -247,9 +279,16 @@ export const planChangeSessionRepository = {
              ft."body" AS "firstTurn",
              lp."id" AS "planId", lp."status"::text AS "planStatus",
              lp."title" AS "planTitle", lp."summary" AS "planSummary",
-             pc."n" AS "planCount"
+             pc."n" AS "planCount",
+             s."seed_gate_id" AS "seedGateId", sg."kind"::text AS "seedGateKind",
+             sw."identifier" AS "seedCardKey",
+             (sw."id" IS NOT NULL AND sw."projectId" = s."project_id") AS "seedCardInProject"
       FROM "plan_change_session" s
       LEFT JOIN "user" u ON u."id" = s."created_by_id"
+      LEFT JOIN "approval_gate" sg
+        ON sg."id" = s."seed_gate_id" AND sg."workspace_id" = s."workspace_id"
+      LEFT JOIN "work_item" sw
+        ON sw."id" = sg."work_item_id" AND sw."workspaceId" = s."workspace_id"
       LEFT JOIN LATERAL (
         SELECT t."body" FROM "plan_change_turn" t
         WHERE t."session_id" = s."id" AND t."role" = 'user'
@@ -306,6 +345,15 @@ export interface PlanSessionListRow {
   planTitle: string | null;
   planSummary: string | null;
   planCount: number;
+  /** MOTIR-6207's `seed_gate_id` — still set when the gate's work item moved away. */
+  seedGateId: string | null;
+  /** The seeding gate's kind; null when the session is unseeded or the gate is gone. */
+  seedGateKind: string | null;
+  /** The seeding gate's work item's identifier, when it still exists. */
+  seedCardKey: string | null;
+  /** Whether that work item is in the SESSION's project — the one the list is
+   *  browse-gated on. False when there is no such work item. */
+  seedCardInProject: boolean;
 }
 
 /** A session's LATEST plan — newest `created_at`, `id` breaking a tie. */

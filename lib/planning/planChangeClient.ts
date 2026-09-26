@@ -437,7 +437,12 @@ export async function resumeContextualSession(
 }
 
 /** Append the turn to the item's thread AND submit the accumulated intent — one
- *  call (the MOTIR-909 contract). The Re-plan "reason" IS this prompt. */
+ *  call (the MOTIR-909 contract). The Re-plan "reason" IS this prompt.
+ *
+ *  `seedGateId` (MOTIR-6210) is the REFUSED gate a seeded re-plan starts from. It
+ *  rides only when there is no `sessionId` — the first turn — and the server
+ *  ignores it otherwise; a gate that may not seed the scope answers
+ *  `422 SEED_NOT_APPLICABLE`. */
 export async function submitContextualPlan(
   anchorId: string,
   prompt: string,
@@ -445,10 +450,17 @@ export async function submitContextualPlan(
   signal?: AbortSignal,
   isAnswer = false,
   sessionId: string | null = null,
+  seedGateId: string | null = null,
 ): Promise<ContextualPlanResponse> {
   return post<ContextualPlanResponse>(
     anchorPath(anchorId),
-    { prompt, isAnswer, ...extra(targetKeys), ...withSession(sessionId) },
+    {
+      prompt,
+      isAnswer,
+      ...extra(targetKeys),
+      ...withSession(sessionId),
+      ...(seedGateId && !sessionId ? { seedGateId } : {}),
+    },
     signal,
   );
 }

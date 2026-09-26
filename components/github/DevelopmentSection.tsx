@@ -436,6 +436,7 @@ export function DevelopmentSectionBody({
   gateNotice,
   gateVerbsDisabled = false,
   handOver,
+  canReplan,
   cardTerminal = false,
   designResult = null,
   repair = null,
@@ -537,6 +538,12 @@ export function DevelopmentSectionBody({
    * call-to-action band into the approval overlay. The overlay and the peek omit it.
    */
   handOver?: { routedToViewer: boolean };
+  /**
+   * THE RE-PLAN WITH AI DOOR (Story MOTIR-6068 · MOTIR-6211) — passed straight to the frame:
+   * whether this reader may open the planner on the card (`WorkItemPlanEntrance`'s
+   * condition). Omitted, a decision sent back offers no door.
+   */
+  canReplan?: boolean;
   /**
    * The card sits in a DONE-category status (Bug MOTIR-5884; § 29's cite table). A
    * withdrawn merge question on such a card is never asked again, so its cite promises
@@ -764,6 +771,7 @@ export function DevelopmentSectionBody({
         notice={gateNotice}
         verbsDisabled={gateVerbsDisabled}
         handOver={handOver}
+        canReplan={canReplan}
       >
         {block}
       </DevelopmentGateFrame>

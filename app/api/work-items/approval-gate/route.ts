@@ -11,6 +11,7 @@ import { decisionConfirmationGateService } from '@/lib/services/decisionConfirma
 import { howToTestService } from '@/lib/services/howToTestService';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
@@ -332,14 +333,18 @@ export async function GET(req: Request): Promise<Response> {
     // (Story MOTIR-5238 · Subtask MOTIR-5243). Absent, the answer is empty and
     // this route behaves exactly as it did.
     const since = params.get('since');
-    const read = await approvalGatesService.getForWorkItem(
-      { workItemId: item.id, kind, since },
-      ctx,
-    );
+    const [read, held] = await Promise.all([
+      approvalGatesService.getForWorkItem({ workItemId: item.id, kind, since }, ctx),
+      // WHETHER A REFUSED DECISION'S RECORD OFFERS RE-PLAN WITH AI (MOTIR-6211): the item
+      // page's own `canEdit` (`work_item:edit`) and a card that is not archived — exactly
+      // what `WorkItemPlanEntrance` is drawn under, so the two doors cannot disagree.
+      projectAccessService.getPermissions(item.projectId, ctx),
+    ]);
     const body: ApprovalGateOverlayReadDTO = {
       workItem: { id: item.id, identifier: item.identifier, title: item.title },
       gate: read.gate,
       canDecide: read.canDecide,
+      canReplan: held.has('work_item:edit') && item.archivedAt === null,
       routedToLabel: read.routedToLabel,
       stamp: read.stamp,
       movedSince: read.movedSince,

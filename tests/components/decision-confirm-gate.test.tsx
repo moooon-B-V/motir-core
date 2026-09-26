@@ -137,7 +137,6 @@ function renderFrame(
       record={p.record}
       recordCount={p.recordCount}
       presentRecordIds={p.presentRecordIds}
-      epic={EPIC}
       canDecide
       routedToLabel="Yue"
       identifier="ACME-42"
@@ -265,25 +264,30 @@ describe('the decided bands — read from the STAMP (Panels 3–4)', () => {
     expect(screen.getByText(t.band.recordRemoved)).toBeTruthy();
   });
 
-  it('Overturned: its own pill, the note quoted, the owed re-plan chips and the Re-plan door', () => {
-    renderFrame({ gate: OVERTURNED, canDecide: false });
+  it('Overturned: its own pill, the note quoted, the owed re-plan chips and Re-plan with AI', () => {
+    renderFrame({ gate: OVERTURNED, canDecide: false, replan: { canReplan: true } });
     expect(screen.getByText(en.approvalGate.state.overturned)).toBeTruthy();
     expect(screen.queryByText(en.approvalGate.state.changesRequested)).toBeNull();
     expect(screen.getByText(/Overturned by Yue/)).toBeTruthy();
     expect(screen.getByText('“We agreed to keep Postgres and add a cache.”')).toBeTruthy();
     expect(screen.getByText(t.band.replanOwed)).toBeTruthy();
     expect(screen.getAllByText('ACME-9').length).toBeGreaterThan(0);
-    expect(screen.getByText('Exports (ACME-1)')).toBeTruthy();
+    // MOTIR-6211: the SEEDED door on this decision replaced the plain epic entrance.
+    expect(screen.getByTestId('refusal-replan-door').textContent).toBe(
+      en.approvalGate.replanDoor.label,
+    );
+    expect(screen.queryByTestId('work-item-plan-entrance')).toBeNull();
+    expect(screen.queryByText('Exports (ACME-1)')).toBeNull();
   });
 
-  it('Overturned with no epic draws no door, and no note when none was stored', () => {
+  it('Overturned for a reader who may not plan draws no door, and no note when none was stored', () => {
     renderFrame({
       gate: { ...OVERTURNED, noteMd: null, replanOwed: null },
       canDecide: false,
-      epic: null,
     });
     expect(screen.getByText(t.band.replanOwed)).toBeTruthy();
-    expect(screen.queryByText(/ACME-1\)/)).toBeNull();
+    expect(screen.queryByTestId('refusal-replan-door')).toBeNull();
+    expect(screen.queryByTestId('work-item-plan-entrance')).toBeNull();
   });
 });
 

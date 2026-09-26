@@ -452,6 +452,25 @@ export interface UsePlanChangeConversationOptions {
    * named session opens whatever its age or starter.
    */
   sessionId?: string | null;
+  /**
+   * The named `sessionId` is a RESUME, not a reopen (MOTIR-6210; design MOTIR-6206
+   * sheet 7): the refusal seed's `seededSessionId` names the viewer's OWN recent
+   * seeded conversation, returned to within the window — MOTIR-6019's resumed
+   * state. `reopened` stays `null`, so the rail claims no *Reopened from the
+   * Plans page* line it would be lying about.
+   */
+  sessionIsResume?: boolean;
+  /**
+   * The REFUSED gate a seeded re-plan starts from (story MOTIR-6068 · MOTIR-6210).
+   * Two effects, both once-only:
+   *  · the mount opens NOTHING — the caller's ordinary resumable conversation on
+   *    the card is not the one a refusal starts, and the seeded turn is unsent,
+   *    so the rail is empty until Send (design sheet 2);
+   *  · the FIRST anchored send — the one with no session yet — carries it, so
+   *    the session the server starts remembers the gate. Every later send has a
+   *    session and carries nothing.
+   */
+  seedGateId?: string | null;
 }
 
 /**
@@ -504,8 +523,16 @@ export function usePlanChangeConversation({
   onApproved,
   anchorId = null,
   sessionId = null,
+  sessionIsResume = false,
+  seedGateId = null,
 }: UsePlanChangeConversationOptions = {}) {
   const [state, setState] = useState<PlanChangeConversationState>(INITIAL);
+  // The seed the FIRST send carries (MOTIR-6210). Seeded once from the option —
+  // the host is keyed on its anchor, so it is fixed per mounted workspace — and
+  // DROPPED when the server answers `SEED_NOT_APPLICABLE`: that refusal is
+  // deterministic, so re-sending the same seed could only fail the same way, and
+  // the person's words should still be sendable as an ordinary re-plan.
+  const seedRef = useRef(seedGateId);
   const mountedRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
   // The entrance's anchor, read by callbacks that must not be re-created when it
@@ -657,31 +684,46 @@ export function usePlanChangeConversation({
               session: named,
               planId: named.pendingPlanId ?? null,
               earlier: null,
-              reopened: {
-                startedBy: named.startedBy ?? null,
-                mine: named.startedByViewer === true,
-                lastActivityAt: named.lastActivityAt,
-              },
+              // A seed's return is a RESUME (MOTIR-6210): no reopened line.
+              reopened: sessionIsResume
+                ? null
+                : {
+                    startedBy: named.startedBy ?? null,
+                    mine: named.startedByViewer === true,
+                    lastActivityAt: named.lastActivityAt,
+                  },
               readOnly: named.viewerCanPlan === false,
             }))
-          : anchorId
-            ? // Mount-time resume is the ENTRANCE's single anchor: the picker's set
-              // is seeded from that same item, and any target the user adds later
-              // starts a differently-scoped thread anyway.
-              await resumeContextualSession(anchorId, [], controller.signal).then((r) => ({
-                session: r.session,
-                planId: r.planId ?? null,
-                earlier: r.earlier ?? null,
-                reopened: null,
-                readOnly: false,
-              }))
-            : await findResumableSession(controller.signal).then((r) => ({
-                session: r.session,
+          : seedGateId
+            ? // A SEEDED re-plan opens EMPTY (MOTIR-6210): the first turn sits
+              // unsent in the composer, and no resumable conversation is read —
+              // the seeded send starts its own session, or returns to one of the
+              // same seed, server-side.
+              {
+                session: null,
                 planId: null,
-                earlier: r.earlier,
+                earlier: null,
                 reopened: null,
                 readOnly: false,
-              }));
+              }
+            : anchorId
+              ? // Mount-time resume is the ENTRANCE's single anchor: the picker's set
+                // is seeded from that same item, and any target the user adds later
+                // starts a differently-scoped thread anyway.
+                await resumeContextualSession(anchorId, [], controller.signal).then((r) => ({
+                  session: r.session,
+                  planId: r.planId ?? null,
+                  earlier: r.earlier ?? null,
+                  reopened: null,
+                  readOnly: false,
+                }))
+              : await findResumableSession(controller.signal).then((r) => ({
+                  session: r.session,
+                  planId: null,
+                  earlier: r.earlier,
+                  reopened: null,
+                  readOnly: false,
+                }));
         const { session, planId } = opened;
         if (!mountedRef.current) return;
         setState((s) => ({
@@ -728,7 +770,7 @@ export function usePlanChangeConversation({
       }
     })();
     return () => controller.abort();
-  }, [anchorId, sessionId]);
+  }, [anchorId, sessionId, sessionIsResume, seedGateId]);
 
   /**
    * STREAM a plan-edit job to its end, then file what it proposed — the tail of
@@ -1248,15 +1290,33 @@ export function usePlanChangeConversation({
           queued: [],
         }));
         stoppingRef.current = false;
+        const heldSession = stateRef.current.session?.id ?? null;
+        // The seed rides ONLY the send that has no session yet (MOTIR-6210).
+        const seed = heldSession ? null : seedRef.current;
         await run(anchor, (signal) =>
-          submitContextualPlan(
-            anchor.anchorId,
-            body,
-            anchor.targetKeys,
-            signal,
-            isAnswer,
-            stateRef.current.session?.id ?? null,
-          ),
+          seed
+            ? submitContextualPlan(
+                anchor.anchorId,
+                body,
+                anchor.targetKeys,
+                signal,
+                isAnswer,
+                heldSession,
+                seed,
+              ).catch((err: unknown) => {
+                if (err instanceof PlanEditsClientError && err.code === 'SEED_NOT_APPLICABLE') {
+                  seedRef.current = null;
+                }
+                throw err;
+              })
+            : submitContextualPlan(
+                anchor.anchorId,
+                body,
+                anchor.targetKeys,
+                signal,
+                isAnswer,
+                heldSession,
+              ),
         );
         return;
       }

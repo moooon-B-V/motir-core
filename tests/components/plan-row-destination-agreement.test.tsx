@@ -76,6 +76,7 @@ function sessionView(
     startedByName: 'Yue',
     latestPlan: status,
     planCount: 1,
+    seed: null,
   };
 }
 

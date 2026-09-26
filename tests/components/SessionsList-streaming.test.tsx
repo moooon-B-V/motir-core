@@ -70,6 +70,7 @@ function views(n: number, from = 0): SessionRowView[] {
     startedByName: 'Mara',
     latestPlan: null,
     planCount: 0,
+    seed: null,
   }));
 }
 

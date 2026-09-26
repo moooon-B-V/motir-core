@@ -2924,17 +2924,37 @@ row, no status write, and the rest of the batch parks normally.
 This was found by building it — `tests/planning/planTargetParkDoor.test.ts` failed on exactly this
 case, against MOTIR-5645's card, which asserted the inherited refusal.
 
-### D3 — the park does NOT withdraw an `awaiting` approval gate, and that needs no code
+### D3 — parking a card out of the review band CLOSES its `awaiting` approval gate
 
-`approval-gates.md` §6d rule 6 withdraws an item's `awaiting` gates when a **person** pulls work out
-of the review band. The park and the release are `{ system: true }` writes, and
-`withdrawsPendingQuestion` returns `false` for a system write before it reads anything else — so the
-gate survives the whole park-and-release cycle by construction.
+⚠️ **CORRECTED (bug MOTIR-6339, 2026-09-25).** D3 as first written said the opposite: that the park
+does NOT withdraw an `awaiting` gate, _"by construction"_, because the park and the release are
+`{ system: true }` writes. Both halves were false, and the shipped code was right. The owner ruled on
+2026-09-25 that the implementation stands and this record is corrected to it:
 
-That is also the right answer on the merits. §6d's own carve-out keeps the question through
-`→ blocked` because _"blocking pauses the work, it does not abandon the question"_, and a park is
-that case: the plan may be declined, and D8 then puts the card back exactly where it was. A plan
-that genuinely abandons the work `remove`s its target, and D7 archives it.
+> **The ruling:** a card that is no longer In Review has no open review question. When a plan parks a
+> card from In Review at `planning`, its `awaiting` gate closes. The person has to deal with the plan
+> first.
+
+**THE MECHANISM, as shipped.** `planTargetLockService`'s `acquireOne` parks with
+`workItemsService.applyStatusTransition(item.id, PLANNING_STATUS_KEY, ctx, tx)` and passes **no**
+`{ system: true }`. So `withdrawsPendingQuestion` (`lib/workItems/statusLadder.ts`) reads the park as
+what it is: a move from a status ranked at or above In Review to `planning`, which is ranked below it
+and is not `blocked`. `approval-gates.md` §6d rule 6 then supersedes every `awaiting` gate on the card
+in the park's own transaction, with `supersededCause: 'pulled_back'`. The status-change RE-ASK that
+follows a move is skipped for the same reason (it never runs on a move rule 6 has just withdrawn), so
+nothing raises the question again in that transaction. Only the RELEASE (D8) is a `{ system: true }`
+write.
+
+It holds for every rung at or above In Review that parks (D2): `in_review` and `approved`. A card
+parked from `todo`, `blocked`, `in_progress` or `implemented` is below the band and has nothing to
+withdraw on this rule.
+
+**Why a park is NOT §6d's `→ blocked` carve-out.** The carve-out keeps the question because
+_"blocking pauses the work, it does not abandon the question"_: the thing offered for review is still
+the thing that will ship. A park is not a pause of the question. It hands the card to a plan that is
+rewriting it, and the answer a reviewer would give is an answer about the shape being replaced. So the
+question closes, and the plan is decided first. `tests/integration/planning/planHoldMovers.test.ts`
+pins the supersede.
 
 ### D4 — one holder per item, and a second plan is REFUSED
 
@@ -3020,6 +3040,22 @@ the status it was parked from — the existing `releaseOne` behaviour, kept, and
 that never had a `sourceJobId` to resolve through. It stays CONDITIONAL on the card still sitting at
 `planning`: a person who moved it out by hand has released it themselves, and writing a remembered
 status over their move would undo a human decision.
+
+**⚠️ A CARD DECLINED BACK TO IN REVIEW COMES BACK WITH NO OPEN GATE — THE QUESTION IS RE-ASKED, NOT
+RESTORED** (bug MOTIR-6339, 2026-09-25). The park closed its gate (D3, as corrected), and a
+`superseded` gate is closed for good: nothing re-opens a row. What the restore does is ask again.
+The restore is a `{ system: true }` write through `applyStatusTransition`, and that funnel's
+status-change RE-ASK (MOTIR-5670) runs on every move into a rung at or above `implemented` that rule 6
+did not just withdraw, system writes included. So it calls `reconcileGatesFor` on the restored card,
+and that raises a NEW `awaiting` gate for every question the gate predicate (`resolveGateSet`) still
+owes. A `superseded` gate does not count as answered (only `approved`, `changes_requested` and
+`overturned` do), so a card whose design result, acceptance receipt, decision head or green delivery
+set is unchanged is asked the same question again, in the decline's own transaction. A question the
+predicate no longer owes (its subject withdrawn, its delivery set no longer green) is not raised, and
+the card sits in In Review with nothing to press until the next event that owes one raises it. That is
+the ordinary path for such an event, not a special case of the decline. APPROVE never re-asks,
+because D6 and D7 rest the card at `todo` or `blocked`, below the rungs the re-ask watches.
+`tests/integration/planning/planHoldMovers.test.ts` pins the decline's re-ask.
 
 **⚠️ D8 AS AMENDED (bug MOTIR-6066, 2026-09-22) — a target the plan ADOPTED is RESTED, not left
 parked.** D8 as first written had one arm D6 did not: a card that was ALREADY at `planning` with no
@@ -3282,6 +3318,21 @@ and its plan's state — the latest plan's `PlanStatus` on that session, or _non
 proposed nothing. A session with no plan IS listed. The list pages newest-activity first and filters
 on that plan state. What a row LOOKS like is the design's (MOTIR-6019); where a row opens is its
 conversation, with its plan one click away.
+
+### §9 — a session MAY remember the gate that SEEDED it (story MOTIR-6068 · MOTIR-6207, 2026-09-25)
+
+A session MAY carry the approval gate that seeded it: `PlanChangeSession.seedGateId`, a nullable FK
+to `ApprovalGate`. It is set **only at the session's creation, by a seeded first turn**
+(`planChangeSessionsService.startSeededWithFirstTurn`), and never changed afterwards. Only a refused
+gate may seed one: `decision_approval` / `decision_choice` in `changes_requested`, or
+`decision_confirmation` in `overturned` (`isRefusalSeedGate`, `lib/planning/refusalSeed.ts`), in the
+caller's workspace and project, on a work item the turn's scope anchors on; anything else is refused
+`PLAN_SEED_NOT_APPLICABLE` and nothing is written. **A seeded start resumes only a session of the
+SAME seed** — the caller's own, inside the §3 window — and otherwise creates a new one; it never
+lands on the caller's unseeded conversation of the scope, nor on one seeded by another gate, and it
+decides under the same per-member scope lock as §3. The column is `ON DELETE SET NULL`: if the gate
+row goes, the conversation stays and is merely unseeded. An unseeded session is unchanged in every
+respect.
 
 ---
 
@@ -3751,10 +3802,21 @@ hold will look for exactly this paragraph.
 
 ### §6 — AN APPROVAL GATE'S DECIDE DOOR ON A HELD CARD IS REFUSED
 
-AMENDMENT 16 D3 decided that the park does NOT withdraw an `awaiting` approval gate: the park and
-the release are system writes, so `withdrawsPendingQuestion` returns false and the gate survives the
-whole park-and-release cycle. That leaves one question D3 did not ask — what happens when somebody
-presses that surviving gate's decide button while the card is held.
+⚠️ **THE PREMISE IS CORRECTED (bug MOTIR-6339, 2026-09-25).** §6 was first written on AMENDMENT 16
+D3 as it then stood: that the park is a system write and a gate raised before it survives it. That was
+false, and D3 now records the shipped rule. **A gate raised BEFORE the park no longer exists by the
+time the card is held**: parking a card from In Review supersedes it as `pulled_back`.
+
+**So §6 covers only a gate raised WHILE the card is held, and that case is reachable.** The gate
+predicate (`resolveGateSet`) reads no status except whether the card is terminal, and a `superseded`
+gate does not count as answered. So any caller of `reconcileGatesFor` that does not filter by status
+raises the owed question on a card sitting at `planning`. The pull-request reconcile is one
+(`pullRequestReconcileService`'s `reconcileGatesForDeliveredCards`, every 30 minutes). It re-derives
+the gates of every card an open pull request delivers, and its only status filter is "not terminal",
+which `planning` passes. In the park case the gate it raises is the very question the park closed,
+asked again because its evidence still stands. `tests/integration/planning/planHoldMovers.test.ts`
+drives it (_"AMENDMENT 21 §6 is reachable"_). What happens when somebody presses that gate's decide
+button while the card is held is what this section decides.
 
 **It is REFUSED**, for the gate handlers' status effects:
 `lib/approvalGates/acceptanceResultHandler.ts` · `decisionChoiceHandler.ts` ·
@@ -3762,10 +3824,10 @@ presses that surviving gate's decide button while the card is held.
 
 **The reason is the hold's reason, one level up: the gate's decision is about the shape the plan is
 replacing.** A person approving a design, accepting a decision or approving a pull request against a
-card an undecided plan is rewriting is answering a question whose subject is about to change. D3
-kept the question alive precisely because the plan may be DECLINED, in which case the card comes
-back exactly as it was and the gate is still the right question — so the gate waits for the plan,
-as the card does.
+card an undecided plan is rewriting is answering a question whose subject is about to change. This
+is the same reason D3 closes a gate at the park: the plan is decided first. If the plan is DECLINED,
+the card comes back exactly as it was and a question raised while it was held is still the right
+question, so the gate waits for the plan, as the card does.
 
 **The decide door must then leave the gate `awaiting` rather than half-applying it.** A gate whose
 decision was recorded but whose status effect was refused is the worst of the three outcomes: it

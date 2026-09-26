@@ -213,11 +213,13 @@ function legacySearchParams(context: PlanningLaunchContext): Record<string, stri
           ? 'roadmap'
           : context.kind === 'convention-refine'
             ? 'contextual'
-            : context.hasPlan === undefined
-              ? 'project'
-              : context.hasPlan
-                ? 'replan'
-                : 'generation',
+            : context.kind === 'refused-gate'
+              ? 'replan'
+              : context.hasPlan === undefined
+                ? 'project'
+                : context.hasPlan
+                  ? 'replan'
+                  : 'generation',
     from: context.kind,
   });
   if (context.kind === 'work-item') params.set('item', context.itemKey);

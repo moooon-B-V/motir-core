@@ -36,6 +36,7 @@ function dto(over: Partial<PlanSessionRowDto> = {}): PlanSessionRowDto {
     firstTurn: 'What was asked',
     latestPlan: { id: 'p_1', status: 'planned', title: 'The plan' },
     planCount: 1,
+    seed: null,
     ...over,
   };
 }
@@ -58,7 +59,14 @@ describe('buildSessionRowViews', () => {
       startedByName: 'Mara',
       latestPlan: { id: 'p_1', status: 'planned' },
       planCount: 1,
+      seed: null,
     });
+  });
+
+  it('passes the seed through untouched (MOTIR-6209)', async () => {
+    const seed = { cardKey: 'ACME-44', gateKind: 'decision_choice' } as const;
+    const [view] = await buildSessionRowViews([dto({ seed })]);
+    expect(view!.seed).toEqual(seed);
   });
 
   it('falls back to the latest plan’s title, then to nothing', async () => {
