@@ -572,6 +572,169 @@ describe('fixed-window alignment lives in ONE place', () => {
     expect(buildsRateLimitBudget(sampling, budgets)).toBe(false);
   });
 
+  // ── THE FOURTH DERIVATION: A COUNT READ BACK WITH NO BUDGET BUILT (MOTIR-6418) ──
+  // The third derivation's subjects are files that BUILD a budget. A file can
+  // assert a limiter's accumulated count without building anything: it runs the
+  // real route under the SHIPPED budget and reads the `rate_limit_counter` rows
+  // back. `tests/mcp/sdkSseGetSettled.test.ts` did exactly that — three
+  // `mcp:call`s held 1.5 s each, then `[3]` asserted over every row for the key —
+  // and it matched none of the three predicates above, so it straddled the 60 s
+  // grid about one run in fourteen with this guard green over it. The fourth
+  // defect of the class, and the second to arrive through a gap in the SUBJECTS
+  // rather than in the pattern.
+  //
+  // So the subject set widens once more: a file that READS the counter — a query
+  // against its table, a Prisma read of its model, or a read method of its
+  // repository — must CALL `waitForWindowHeadroom` / `waitForWindowBoundary`. A
+  // call, not an import: a file can import `currentWindowStart` to know which row
+  // to read and still never make sure its calls land in that row. Opting out is
+  // `COUNTER_READ_EXEMPT`, with the reason.
+  //
+  // ⚠️ Matched over the WHOLE file with comments stripped, never line by line: a
+  // formatter wraps a long SQL string across lines, and the headers of these very
+  // suites name the table and the helper in prose.
+
+  /** `rateLimitCounterRepository`'s READ methods, derived from `lib/`. */
+  function counterReadMethods(): string[] {
+    const source = readFileSync(
+      join(REPO_ROOT, 'lib/repositories/rateLimitCounterRepository.ts'),
+      'utf8',
+    );
+    return [...source.matchAll(/^\s*async\s+((?:find|count)\w*)\s*\(/gm)]
+      .map(([, name]) => name as string)
+      .sort();
+  }
+
+  /** Source code only — block comments and whole-line `//` comments removed. */
+  function withoutComments(source: string): string {
+    return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  }
+
+  /**
+   * THE PREDICATE. A test file reads the counter when its CODE selects from the
+   * table (inside one string — a quote ends the match, so an unrelated SELECT
+   * cannot reach a table name further down), reads the Prisma model, or calls
+   * one of the repository's read methods.
+   */
+  function readsRateLimitCounter(source: string, readMethods: string[]): boolean {
+    const code = withoutComments(source);
+    const sql = /\bSELECT\b[^;`']*?\bFROM\s+"?rate_limit_counter\b/i;
+    const model = /\.rateLimitCounter\.(?:find\w*|count|aggregate|groupBy)\s*\(/;
+    const repo = new RegExp(
+      String.raw`\brateLimitCounterRepository\.(?:${readMethods.join('|')})\s*\(`,
+    );
+    return sql.test(code) || model.test(code) || repo.test(code);
+  }
+
+  /** A CALL of an alignment wait, in code. */
+  const CALLS_ALIGNMENT = /\b(?:waitForWindowHeadroom|waitForWindowBoundary)\s*\(/;
+
+  /**
+   * Files that read the counter and legitimately never depend on which cell
+   * their calls landed in. Empty is the honest state: every current reader aligns.
+   */
+  const COUNTER_READ_EXEMPT: ReadonlyMap<string, string> = new Map();
+
+  it('derives the counter read methods from lib/ (a guard over no readers proves nothing)', () => {
+    expect(counterReadMethods()).toEqual(['countAllUnsafe', 'findCountUnsafe']);
+  });
+
+  it('the predicate finds the suites that read the counter back', () => {
+    const methods = counterReadMethods();
+    const subjects = testSources().filter((file) =>
+      readsRateLimitCounter(readFileSync(join(REPO_ROOT, file), 'utf8'), methods),
+    );
+
+    // Each arm is represented: SQL, and the repository read.
+    expect(subjects).toContain('tests/mcp/sdkSseGetSettled.test.ts');
+    expect(subjects).toContain('tests/attachments/attachments-service.test.ts');
+    expect(subjects).toContain('tests/api/v1/shared-store.test.ts');
+    expect(subjects).toContain('tests/rateLimit/guard.test.ts');
+    // A TRUNCATE is not a read, and the RLS scanners name the methods in strings
+    // and comments without calling them.
+    expect(subjects).not.toContain('tests/helpers/db.ts');
+    expect(subjects).not.toContain('tests/rls/testCallSiteScan.ts');
+    expect(subjects).not.toContain('tests/rls/singleton-read-guard.test.ts');
+  });
+
+  it('every test file that READS the rate-limit counter calls an alignment wait', () => {
+    const methods = counterReadMethods();
+    const offenders: string[] = [];
+
+    for (const file of testSources()) {
+      if (file === HELPER || COUNTER_READ_EXEMPT.has(file)) continue;
+      const source = readFileSync(join(REPO_ROOT, file), 'utf8');
+      if (!readsRateLimitCounter(source, methods)) continue;
+      if (!CALLS_ALIGNMENT.test(withoutComments(source))) offenders.push(file);
+    }
+
+    expect(
+      offenders,
+      `these test files read \`rate_limit_counter\` back and never secure the window ` +
+        `their counted calls land in, so the calls can straddle an epoch-aligned ` +
+        `boundary and split across two rows. Before the first counted call, ` +
+        `\`await waitForWindowHeadroom(<the budget's windowMs>, <headroom sized from ` +
+        `the counted span>)\` from ${HELPER} — or, if the file's assertion cannot ` +
+        `straddle, add it to COUNTER_READ_EXEMPT with the reason. See MOTIR-6418`,
+    ).toEqual([]);
+  });
+
+  // Proven by DELIBERATELY introducing the violation: the pre-fix shape of
+  // `sdkSseGetSettled.test.ts`, planted. Interpolated so this file is not itself
+  // a reader of the counter.
+  it('fires on a suite that reads the counter back and never aligns', () => {
+    const methods = counterReadMethods();
+    const table = 'rate_limit' + '_counter';
+    const planted = [
+      `await connectWith(observing);`,
+      `const rows = await adminDb.$queryRawUnsafe(`,
+      `  \`SELECT count::int AS count`,
+      `   FROM "${table}" WHERE key = $1\`,`,
+      `  key,`,
+      `);`,
+      `expect(rows.map((r) => r.count)).toEqual([3]);`,
+    ].join('\n');
+
+    expect(readsRateLimitCounter(planted, methods)).toBe(true);
+    expect(CALLS_ALIGNMENT.test(withoutComments(planted))).toBe(false);
+    // The fix makes it compliant.
+    const fixed = `await waitForWindowHeadroom(mcpBudget().windowMs, 9_000);\n${planted}`;
+    expect(CALLS_ALIGNMENT.test(withoutComments(fixed))).toBe(true);
+  });
+
+  it('sees a repository read, and does NOT count a comment as a read or as a call', () => {
+    const methods = counterReadMethods();
+    const repo = 'rateLimitCounter' + 'Repository';
+    const read = `expect(await ${repo}.findCountUnsafe(key, BigInt(start))).toBe(2);`;
+    const commented = [
+      `// ${repo}.countAllUnsafe()  — pre-auth, leave`,
+      `/* SELECT key FROM "rate_limit${'_'}counter" */`,
+      `// await waitForWindowHeadroom(w, h);`,
+    ].join('\n');
+
+    expect(readsRateLimitCounter(read, methods)).toBe(true);
+    expect(readsRateLimitCounter(commented, methods)).toBe(false);
+    expect(CALLS_ALIGNMENT.test(withoutComments(commented))).toBe(false);
+  });
+
+  it('does NOT fire on a write or a truncate of the counter', () => {
+    const methods = counterReadMethods();
+    const table = 'rate_limit' + '_counter';
+    const writes = [
+      `await db.$executeRawUnsafe('TRUNCATE TABLE "${table}"');`,
+      `await rateLimitCounter${'Repository'}.increment(key, start, expiresAt, tx);`,
+    ].join('\n');
+
+    expect(readsRateLimitCounter(writes, methods)).toBe(false);
+  });
+
+  it('every COUNTER_READ_EXEMPT entry names a real file and says why', () => {
+    for (const [file, reason] of COUNTER_READ_EXEMPT) {
+      expect(testSources(), `${file} opts out but does not exist`).toContain(file);
+      expect(reason.length, `${file}'s opt-out needs a reason`).toBeGreaterThan(20);
+    }
+  });
+
   it('every NON_ACCUMULATING entry names a real file and says why', () => {
     for (const [file, reason] of NON_ACCUMULATING) {
       expect(testSources(), `${file} opts out but does not exist`).toContain(file);
