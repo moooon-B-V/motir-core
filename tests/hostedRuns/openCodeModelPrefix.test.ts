@@ -15,8 +15,10 @@ import { describe, expect, it } from 'vitest';
 // `packages/*` source file (the CLI and the hosted-agent image included) —
 // skipping `node_modules`, build output and tests (a test asserts the prefixed
 // value, which is not adding it). The tell is a STRING LITERAL that starts with
-// `anthropic/`: that is how a module writes the prefix, and it does not match
-// prose such as a comment naming the `anthropic` provider.
+// `anthropic/` and goes on to BUILD a value — an interpolation, a concatenation
+// or a literal model id. Comment lines are dropped first, and a placeholder such
+// as `anthropic/<model id>` in an error message documents the expected shape
+// rather than writing it, so neither counts.
 
 const ROOT = join(__dirname, '..', '..');
 const TREES = ['lib', 'app', 'components', 'packages'];
@@ -31,7 +33,15 @@ const SKIP_DIRS = new Set([
 ]);
 const SOURCE = /\.(ts|tsx|js|mjs|cjs|sh)$/;
 const THE_ONE_HOME = 'lib/services/hostedRunModelService.ts';
-const PREFIX_LITERAL = /['"`]anthropic\//;
+const PREFIX_LITERAL = /['"`]anthropic\/(?:\$\{|['"`]|[A-Za-z0-9])/;
+const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*)/;
+
+function codeOnly(source: string): string {
+  return source
+    .split('\n')
+    .filter((line) => !COMMENT_LINE.test(line))
+    .join('\n');
+}
 
 function* walk(dir: string): Generator<string> {
   let entries: string[];
@@ -57,7 +67,7 @@ describe('the anthropic/ model prefix', () => {
     for (const tree of TREES) {
       for (const file of walk(join(ROOT, tree))) {
         const rel = relative(ROOT, file);
-        if (!PREFIX_LITERAL.test(readFileSync(file, 'utf8'))) continue;
+        if (!PREFIX_LITERAL.test(codeOnly(readFileSync(file, 'utf8')))) continue;
         if (rel === THE_ONE_HOME) homeWritesIt = true;
         else offenders.push(rel);
       }
