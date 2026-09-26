@@ -588,6 +588,12 @@ export const organizationsService = {
         if (input.confirmName !== organization.name) {
           throw new OwnershipConfirmationMismatchError();
         }
+        // ⚠️ TRANSFER IS REFUSED WHILE THE ORG IS CLOSING, UNDER THE ORG ROW'S LOCK
+        // (MOTIR-6399; `organization-deletion.md` §1). Scheduling a deletion takes the
+        // same lock first, so the two cannot interleave: whichever commits first
+        // wins, and the person who can cancel cannot change during the window.
+        await organizationRepository.lockByIdForUpdate(input.organizationId, tx);
+        await assertOrgNotClosing(input.organizationId, tx);
 
         // Lock both rows in a stable order, then decide on what is COMMITTED.
         const locked = new Map<string, Awaited<ReturnType<typeof lockMembership>>>();

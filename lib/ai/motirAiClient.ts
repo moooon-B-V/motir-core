@@ -1746,3 +1746,47 @@ export function retireLesson(query: LessonWriteQuery): Promise<RawLesson> {
 export function applyLesson(query: LessonWriteQuery): Promise<RawLesson> {
   return lessonWrite(query, 'apply');
 }
+
+// ── Organization lifecycle (Story MOTIR-6306) ────────────────────────────────
+
+/** motir-ai's answer to a closing / reopen call: whether anything changed, and
+ *  whether the org now reads as closing. An org motir-ai has never seen answers
+ *  `{ changed: false }` with 200, never a 404. */
+export interface OrgClosingResult {
+  changed: boolean;
+  closing: boolean;
+}
+
+/**
+ * POST /v1/orgs/:id/closing — tell motir-ai the organization is closing, so every
+ * active subscription stops renewing (MOTIR-6392). Idempotent on motir-ai's side;
+ * the schedule service calls it after its commit and never un-schedules on a
+ * failure (it throws, and the caller logs).
+ */
+export async function markOrgClosing(
+  coreOrganizationId: string,
+  dueAt: Date,
+): Promise<OrgClosingResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/orgs/${encodeURIComponent(coreOrganizationId)}/closing`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify({ dueAt: dueAt.toISOString() }),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as OrgClosingResult;
+}
+
+/**
+ * DELETE /v1/orgs/:id/closing — a cancel: restore each subscription's own prior
+ * renewal (MOTIR-6392). Idempotent; called after the cancel commits.
+ */
+export async function reopenOrg(coreOrganizationId: string): Promise<OrgClosingResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/orgs/${encodeURIComponent(coreOrganizationId)}/closing`, {
+    method: 'DELETE',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as OrgClosingResult;
+}

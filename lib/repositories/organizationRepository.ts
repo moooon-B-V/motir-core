@@ -163,6 +163,8 @@ export const organizationRepository = {
       isMeta?: boolean;
       /** The org-tier require-2FA policy (Story MOTIR-1215 · MOTIR-3644). */
       requiresTwoFactor?: boolean;
+      /** Set when a deletion is scheduled, cleared by a cancel (MOTIR-6399). */
+      closingSince?: Date | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<Organization> {

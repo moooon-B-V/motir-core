@@ -46,6 +46,8 @@ export type RateLimitScope =
   | 'account:change-password'
   | 'account:set-password-link'
   | 'account:data-export'
+  // Scheduling an organization's deletion verifies a password (MOTIR-6399).
+  | 'account:org-deletion'
   | 'idea-draft'
   | 'upload';
 

@@ -170,3 +170,55 @@ export class OrganizationClosingError extends Error {
     this.name = 'OrganizationClosingError';
   }
 }
+
+/**
+ * The typed confirmation is not the organization's current name, exactly
+ * (MOTIR-6399; `organization-deletion.md` §1). → 422: a client-correctable input.
+ */
+export class OrganizationNameMismatchError extends Error {
+  readonly code = 'ORGANIZATION_NAME_MISMATCH' as const;
+  constructor() {
+    super('The confirmation does not match the organization name.');
+    this.name = 'OrganizationNameMismatchError';
+  }
+}
+
+/** Why a step-up failed: a wrong password, or a passwordless account whose
+ *  sign-in is older than the window and must sign in again. */
+export type StepUpFailureReason = 'wrong_password' | 'reauth_required';
+
+/**
+ * The fresh step-up failed (MOTIR-6399; `organization-deletion.md` §1): the
+ * password was wrong or missing, or a passwordless account has not signed in
+ * within the last 10 minutes. → 403 `STEP_UP_FAILED`, carrying `reason` so the
+ * dialog can send a passwordless Owner to sign in again.
+ */
+export class StepUpFailedError extends Error {
+  readonly code = 'STEP_UP_FAILED' as const;
+  constructor(readonly reason: StepUpFailureReason) {
+    super(
+      reason === 'reauth_required'
+        ? 'Sign in again to confirm it is you, then retry.'
+        : 'The password is not correct.',
+    );
+    this.name = 'StepUpFailedError';
+  }
+}
+
+/** A deletion is already scheduled (or erasing) for this organization. → 409. */
+export class OrganizationDeletionAlreadyScheduledError extends Error {
+  readonly code = 'ORGANIZATION_DELETION_ALREADY_SCHEDULED' as const;
+  constructor(readonly organizationId: string) {
+    super(`A deletion is already scheduled for organization ${organizationId}.`);
+    this.name = 'OrganizationDeletionAlreadyScheduledError';
+  }
+}
+
+/** The erasure has already started (or finished) — too late to cancel. → 409. */
+export class OrganizationDeletionAlreadyStartedError extends Error {
+  readonly code = 'ORGANIZATION_DELETION_ALREADY_STARTED' as const;
+  constructor(readonly organizationId: string) {
+    super(`The deletion of organization ${organizationId} has already started.`);
+    this.name = 'OrganizationDeletionAlreadyStartedError';
+  }
+}
