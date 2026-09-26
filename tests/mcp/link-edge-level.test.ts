@@ -5,21 +5,22 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import { foldersService } from '@/lib/services/foldersService';
+import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { CrossLevelLinkError } from '@/lib/workItems/linkErrors';
-import { linkErrorMessage } from '@/lib/workItems/linkErrorMessages';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { seedBlockedBy } from '../helpers/seedBlockedBy';
 
-// MOTIR-6369 / MOTIR-6411 (Story MOTIR-6015) — COMMITTED edges follow the same
-// rule as a plan's: a `blocked_by` joins two items on the SAME LEVEL — the same
-// depth below their nearest common ancestor (MOTIR-6387, a folder adding none) —
-// and may cross parents. A NEW cross-level edge is refused at the link door and
-// on the create-with-links path, writing nothing; an EXISTING one is reported by
-// `validate_work_item` as a `cross-level-edge` advisory that never moves `valid`.
+// MOTIR-6369 / MOTIR-6411 (Story MOTIR-6015), re-ruled by MOTIR-6509
+// (`edge-level-is-position.md` Amendment 2) — a `blocked_by` SHOULD join two
+// items on the SAME LEVEL — the same depth below their nearest common ancestor
+// (MOTIR-6387, a folder adding none) — and may cross parents. The rule is a
+// VALIDITY verdict on a committed edge, not a refusal at the link door: a
+// cross-level edge is WRITTEN (the dependency is real, and it holds the card out
+// of the ready set), and `validate_work_item` reports it INVALID in
+// `crossLevelEdges` ("blocked elsewhere"). Only the plan gate refuses one.
 //
 // The tree every case reads (the decision record's own shapes):
 //   epic E1 ─ story S ─ subtask Y
@@ -134,7 +135,7 @@ describe('link_work_items — the record’s ACCEPTED cases', () => {
   });
 });
 
-describe('link_work_items — the record’s REFUSED cases write nothing', () => {
+describe('link_work_items — the record’s CROSS-LEVEL cases are WRITTEN and reported INVALID', () => {
   it.each([
     ['case 3 · a subtask two levels under a story → a subtask under a story', 'x1', 'y', 3, 2],
     ['case 4 · a root bug filed in a folder → a subtask', 'b', 'y', 0, 2],
@@ -146,63 +147,142 @@ describe('link_work_items — the record’s REFUSED cases write nothing', () =>
       2,
     ],
     ['a subtask → a story (a child of an epic)', 'y', 's1', 2, 1],
-  ] as const)('%s → CROSS_LEVEL_LINK naming both depths', async (_label, from, to, dFrom, dTo) => {
+  ] as const)(
+    '%s → the edge is written, and validate names it with both depths',
+    async (_label, from, to, dFrom, dTo) => {
+      const fx = await makeWorkItemFixture();
+      const t = await tree(fx);
+      const client = await connectClient(fx.ctx);
+
+      const made = await call(client, 'link_work_items', {
+        fromKey: t[from].identifier,
+        toKey: t[to].identifier,
+        relationship: 'blocked_by',
+      });
+      expect(made.isError, text(made)).toBeFalsy();
+      expect(await linkCount()).toBe(1);
+
+      const res = await call(client, 'validate_work_item', { key: t[from].identifier });
+      const verdict = res.structuredContent as {
+        valid: boolean;
+        crossLevelEdges: Array<Record<string, unknown>>;
+      };
+      expect(verdict.valid).toBe(false);
+      expect(verdict.crossLevelEdges).toEqual([
+        expect.objectContaining({
+          item: t[from].identifier,
+          blockedBy: t[to].identifier,
+          itemDepth: dFrom,
+          blockedByDepth: dTo,
+          reason: 'blocked_elsewhere',
+        }),
+      ]);
+      expect(text(res)).toContain('blocked elsewhere');
+      expect(text(res)).toContain(
+        `${t[from].identifier} (depth ${dFrom}) is blocked by ${t[to].identifier} (depth ${dTo})`,
+      );
+      await client.close();
+    },
+  );
+
+  it('`blocks` is written in its stored direction, and judged there', async () => {
     const fx = await makeWorkItemFixture();
     const t = await tree(fx);
     const client = await connectClient(fx.ctx);
-
-    const refused = await call(client, 'link_work_items', {
-      fromKey: t[from].identifier,
-      toKey: t[to].identifier,
-      relationship: 'blocked_by',
-    });
-    expect(refused.isError).toBe(true);
-    expect(text(refused)).toContain('CROSS_LEVEL_LINK');
-    expect(text(refused)).toContain(`${t[from].identifier} sits ${dFrom} level(s)`);
-    expect(text(refused)).toContain(`${t[to].identifier} sits ${dTo}`);
-    expect(await linkCount()).toBe(0);
-    await client.close();
-  });
-
-  it('`blocks` is judged in its stored direction', async () => {
-    const fx = await makeWorkItemFixture();
-    const t = await tree(fx);
-    await expect(
-      workItemsService.linkWorkItems(
-        { fromId: t.y.id, toId: t.s1.id, kind: 'is_blocked_by' },
-        fx.ctx,
-      ),
-    ).rejects.toBeInstanceOf(CrossLevelLinkError);
-    const client = await connectClient(fx.ctx);
-    const refused = await call(client, 'link_work_items', {
+    const made = await call(client, 'link_work_items', {
       fromKey: t.s1.identifier,
       toKey: t.y.identifier,
       relationship: 'blocks',
     });
-    expect(text(refused)).toContain('CROSS_LEVEL_LINK');
-    expect(await linkCount()).toBe(0);
+    expect(made.isError, text(made)).toBeFalsy();
+    expect(
+      await adminDb.workItemLink.count({
+        where: { fromId: t.y.id, toId: t.s1.id, kind: 'is_blocked_by' },
+      }),
+    ).toBe(1);
+    const verdict = (await call(client, 'validate_work_item', { key: t.s.identifier }))
+      .structuredContent as { crossLevelEdges: Array<{ item: string; blockedBy: string }> };
+    expect(verdict.crossLevelEdges.map((e) => [e.item, e.blockedBy])).toEqual([
+      [t.y.identifier, t.s1.identifier],
+    ]);
     await client.close();
   });
 });
 
-describe('createWorkItem with links — the same rule on the create path', () => {
-  it('a new subtask under a task, created blocked_by a STORY, rolls the whole create back', async () => {
+describe('the MOTIR-6497 shape — a root folder-filed bug blocked_by a subtask under a story', () => {
+  it('the edge holds the bug out of the ready set and out of claim_next_ready until the subtask is done', async () => {
     const fx = await makeWorkItemFixture();
     const t = await tree(fx);
-    const before = await adminDb.workItem.count();
-    await expect(
-      workItemsService.createWorkItem(
-        {
-          projectId: fx.projectId,
-          kind: 'subtask',
-          title: 'Born cross-level',
-          parentId: t.t.id,
-          links: [{ targetId: t.s.id, relationship: 'blocked_by' }],
-        },
-        fx.ctx,
-      ),
-    ).rejects.toBeInstanceOf(CrossLevelLinkError);
-    expect(await adminDb.workItem.count()).toBe(before);
+    const client = await connectClient(fx.ctx);
+
+    const made = await call(client, 'link_work_items', {
+      fromKey: t.b.identifier,
+      toKey: t.y.identifier,
+      relationship: 'blocked_by',
+    });
+    expect(made.isError, text(made)).toBeFalsy();
+
+    const read = (await call(client, 'get_work_item', { key: t.b.identifier }))
+      .structuredContent as {
+      readiness: { ready: boolean; openBlockers: Array<{ identifier?: string; key?: string }> };
+    };
+    expect(read.readiness.ready).toBe(false);
+    expect(JSON.stringify(read.readiness.openBlockers)).toContain(t.y.identifier);
+
+    // Both leaves in the active sprint: the claim hands out the subtask, then nothing.
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Active' }, fx.ctx);
+    await adminDb.workItem.updateMany({
+      where: { id: { in: [t.b.id, t.y.id] } },
+      data: { sprintId: sprint.id },
+    });
+    await sprintsService.startSprint(sprint.id, {}, fx.ctx);
+    const claimed = new Set<string>();
+    for (;;) {
+      const res = await call(client, 'claim_next_ready', { projectKey: fx.projectIdentifier });
+      expect(res.isError, text(res)).toBeFalsy();
+      const item = (res.structuredContent as { item: { key: string } | null }).item;
+      if (!item) break;
+      claimed.add(item.key);
+    }
+    expect([...claimed]).toEqual([t.y.identifier]);
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: t.b.id } })).status).toBe(
+      'todo',
+    );
+
+    const verdict = (await call(client, 'validate_work_item', { key: t.b.identifier }))
+      .structuredContent as { valid: boolean; crossLevelEdges: Array<Record<string, unknown>> };
+    expect(verdict.valid).toBe(false);
+    expect(verdict.crossLevelEdges).toEqual([
+      expect.objectContaining({
+        item: t.b.identifier,
+        blockedBy: t.y.identifier,
+        itemDepth: 0,
+        blockedByDepth: 2,
+      }),
+    ]);
+    await client.close();
+  });
+});
+
+describe('createWorkItem with links — the create path writes a cross-level edge too', () => {
+  it('a new subtask under a task, created blocked_by a STORY, is created with its link', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await tree(fx);
+    const made = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'subtask',
+        title: 'Born cross-level',
+        parentId: t.t.id,
+        links: [{ targetId: t.s.id, relationship: 'blocked_by' }],
+      },
+      fx.ctx,
+    );
+    expect(
+      await adminDb.workItemLink.count({
+        where: { fromId: made.id, toId: t.s.id, kind: 'is_blocked_by' },
+      }),
+    ).toBe(1);
   });
 
   it('a new task under an epic, created blocked_by the story beside it (case 1), is created with its link', async () => {
@@ -225,74 +305,83 @@ describe('createWorkItem with links — the same rule on the create path', () =>
     ).toBe(1);
   });
 
-  it('a new ROOT story created as a blocker of a subtask (`blocks`) is refused in the stored direction', async () => {
+  it('a new ROOT story created as a blocker of a subtask (`blocks`) writes the stored direction', async () => {
     const fx = await makeWorkItemFixture();
     const t = await tree(fx);
-    await expect(
-      workItemsService.createWorkItem(
-        {
-          projectId: fx.projectId,
-          kind: 'story',
-          title: 'Blocks a leaf',
-          links: [{ targetId: t.y.id, relationship: 'blocks' }],
-        },
-        fx.ctx,
-      ),
-    ).rejects.toBeInstanceOf(CrossLevelLinkError);
+    const made = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'story',
+        title: 'Blocks a leaf',
+        links: [{ targetId: t.y.id, relationship: 'blocks' }],
+      },
+      fx.ctx,
+    );
+    expect(
+      await adminDb.workItemLink.count({
+        where: { fromId: t.y.id, toId: made.id, kind: 'is_blocked_by' },
+      }),
+    ).toBe(1);
   });
 });
 
-describe('validate_work_item — an EXISTING cross-level edge is an advisory, never a verdict', () => {
-  it('a story blocked_by an EPIC (seeded) yields one `cross-level-edge` advisory naming both depths', async () => {
+describe('validate_work_item — a cross-level edge is a VERDICT, and a same-level one is not', () => {
+  it('a story blocked_by an EPIC yields one `crossLevelEdges` entry and no advisory', async () => {
     const fx = await makeWorkItemFixture();
     const t = await tree(fx);
     const client = await connectClient(fx.ctx);
-    // Seeded below every door — the shape an edge drawn before the rule has.
     await seedBlockedBy(fx, t.s1.id, t.e2.id);
 
     const res = await call(client, 'validate_work_item', { key: t.e1.identifier });
     expect(res.isError, text(res)).toBeFalsy();
-    const verdict = res.structuredContent as { advisories: Array<Record<string, unknown>> };
-    expect(verdict.advisories.filter((a) => a.severity === 'cross-level-edge')).toEqual([
+    const verdict = res.structuredContent as {
+      valid: boolean;
+      crossLevelEdges: Array<Record<string, unknown>>;
+      invalidEdges: unknown[];
+      advisories: Array<Record<string, unknown>>;
+    };
+    expect(verdict.valid).toBe(false);
+    expect(verdict.crossLevelEdges).toEqual([
       {
-        kind: 'shape',
         item: t.s1.identifier,
-        severity: 'cross-level-edge',
         blockedBy: t.e2.identifier,
         itemDepth: 1,
         blockedByDepth: 0,
+        reason: 'blocked_elsewhere',
+        explanation: expect.stringContaining('An epic is blocked only by another epic'),
       },
     ]);
-    expect(text(res)).toContain('blocked_by an item on ANOTHER LEVEL');
+    // Never both: a cross-level edge is not ALSO an uncovered cross-parent one.
+    expect(verdict.invalidEdges).toEqual([]);
+    expect(verdict.advisories.filter((a) => a.severity === 'cross-level-edge')).toEqual([]);
     await client.close();
   });
 
-  it('`valid` does not move for an in-subtree cross-level edge, and case 1 raises no advisory', async () => {
+  it('an in-subtree cross-level edge makes `valid` false; a same-level edge (case 1) adds no entry', async () => {
     const fx = await makeWorkItemFixture();
     const t = await tree(fx);
-    await seedBlockedBy(fx, t.y.id, t.s1.id); // depth 2 → 1, inside E1
     await workItemsService.linkWorkItems(
       { fromId: t.t.id, toId: t.s.id, kind: 'is_blocked_by' },
       fx.ctx,
     );
     const client = await connectClient(fx.ctx);
-    const verdict = (await call(client, 'validate_work_item', { key: t.e1.identifier }))
-      .structuredContent as { valid: boolean; advisories: Array<Record<string, unknown>> };
-    expect(verdict.valid).toBe(true);
-    const flagged = verdict.advisories.filter((a) => a.severity === 'cross-level-edge');
-    expect(flagged.map((a) => a.item)).toEqual([t.y.identifier]);
-    await client.close();
-  });
-});
+    const clean = (await call(client, 'validate_work_item', { key: t.e1.identifier }))
+      .structuredContent as { valid: boolean; crossLevelEdges: unknown[] };
+    expect(clean).toMatchObject({ valid: true, crossLevelEdges: [] });
 
-describe('the link form copy', () => {
-  it('maps CROSS_LEVEL_LINK to its own catalog key', () => {
-    const t = (key: string) => key;
-    const err = new CrossLevelLinkError(
-      { key: 'ACME-2', depth: 3 },
-      { key: 'ACME-1', depth: 2 },
-      'ACME-2 and ACME-1 are not on the same level.',
-    );
-    expect(linkErrorMessage(err, t)).toBe('links.crossLevel');
+    await workItemsService.linkWorkItems(
+      { fromId: t.y.id, toId: t.s1.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    ); // depth 2 → 1, inside E1
+    const verdict = (await call(client, 'validate_work_item', { key: t.e1.identifier }))
+      .structuredContent as {
+      valid: boolean;
+      blockers: unknown[];
+      crossLevelEdges: Array<{ item: string }>;
+    };
+    expect(verdict.valid).toBe(false);
+    expect(verdict.blockers).toEqual([]);
+    expect(verdict.crossLevelEdges.map((e) => e.item)).toEqual([t.y.identifier]);
+    await client.close();
   });
 });

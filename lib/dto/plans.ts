@@ -6,6 +6,7 @@
 
 import type { JobStatus } from '@/lib/ai/types';
 import type {
+  CrossLevelEdgeDto,
   ExecutorDto,
   InvalidEdgeDto,
   WorkItemDifficultyDto,
@@ -1204,7 +1205,10 @@ export interface PlanApprovabilityRejectionDto {
  */
 export interface PlanValidityDto {
   planId: string;
-  /** True only when all THREE pass: finishable, approvable, every cross-parent edge covered. */
+  /**
+   * True only when all FOUR pass: finishable, approvable, every cross-parent edge
+   * covered, and no edge crossing levels.
+   */
   valid: boolean;
   blockers: SprintBlockerDto[];
   rejections: PlanApprovabilityRejectionDto[];
@@ -1214,6 +1218,13 @@ export interface PlanValidityDto {
    * append nor approve refuses on it.
    */
   invalidEdges: InvalidEdgeDto[];
+  /**
+   * Every `blocked_by` in the PROJECTION that joins two levels (MOTIR-6509). A
+   * proposed one is refused at the append (`INVALID_PLAN_REF_GRAPH` /
+   * `cross_level`), so what reaches here is a COMMITTED edge the plan leaves in
+   * place — a validation verdict, as on `validate_work_item`.
+   */
+  crossLevelEdges: CrossLevelEdgeDto[];
 }
 
 // --- Auto-plan PAUSE state (Story 7.13 · MOTIR-1740) ------------------------

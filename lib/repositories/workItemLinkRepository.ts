@@ -420,7 +420,7 @@ export const workItemLinkRepository = {
       blockerStatus: string;
       blockerSprintId: string | null;
       blockerProjectId: string;
-      /** The blocker's kind — the cross-level-edge advisory's far end (MOTIR-6369). */
+      /** The blocker's kind — the far end the `crossLevelEdges` verdict reads (MOTIR-6509). */
       blockerKind: string;
       /** The blocker's parent — the cross-parent coverage check's far end (MOTIR-6370). */
       blockerParentId: string | null;

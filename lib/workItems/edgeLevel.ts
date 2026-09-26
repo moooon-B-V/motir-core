@@ -21,12 +21,19 @@
 // sit one step below it, and the position rule alone would join them. Under an
 // epic, the position rule stands unchanged.
 //
-// THE ONE HOME of the rule. The plan gate (over the PROJECTED chains), the link
-// door and the `cross-level-edge` advisory (over COMMITTED chains) and the
-// cross-parent coverage walk (`crossParentCoverage.ts`) all call
+// AMENDMENT 2 (2026-09-26, the user; MOTIR-6509): THE RULE IS A VERDICT ON A
+// COMMITTED EDGE AND A REFUSAL ONLY AT THE PLAN GATE. A dependency is a fact
+// about the work, so the link doors WRITE a cross-level `blocked_by` — it holds
+// the card out of the ready set like any edge — and `validate_work_item` reports
+// it INVALID ("blocked elsewhere", `crossLevelEdges`). The planner still may not
+// author one: the plan gate refuses it (`INVALID_PLAN_REF_GRAPH` / `cross_level`).
+//
+// THE ONE HOME of the rule. The plan gate (over the PROJECTED chains), the
+// validators' `crossLevelEdges` verdict (over committed or projected chains) and
+// the cross-parent coverage walk (`crossParentCoverage.ts`) all call
 // {@link isCrossLevelEdge}, so they cannot disagree about which edges are legal.
 
-import { CrossLevelLinkError } from '@/lib/workItems/linkErrors';
+import type { CrossLevelEdgeDto } from '@/lib/dto/workItems';
 
 /** One end of a `blocked_by`, as the rule reads it. */
 export interface EdgeEnd {
@@ -40,7 +47,7 @@ export interface EdgeEnd {
   ancestors: readonly string[];
 }
 
-/** The refusal's reason, for the copy — both doors word it from here. */
+/** The epic tier's reason, for the copy — the gate and the verdict word it from here. */
 const EPIC_TIER = 'An epic is blocked only by another epic';
 
 /**
@@ -67,8 +74,9 @@ export function isCrossLevelEdge(a: EdgeEnd, b: EdgeEnd): boolean {
 }
 
 /**
- * The sentence that explains a refusal of `blocked` → `blocker`, each named by
- * the caller's own label. One wording for the plan gate and the link door.
+ * The sentence that explains why `blocked` → `blocker` crosses levels, each named
+ * by the caller's own label. One wording for the plan gate's refusal and the
+ * validators' verdict.
  */
 export function crossLevelReason(
   blocked: EdgeEnd & { label: string },
@@ -93,21 +101,36 @@ function article(kind: string): string {
   return `${/^[aeiou]/.test(kind) ? 'an' : 'a'} ${kind}`;
 }
 
+/** One end of a `blocked_by` the verdict names: its position, kind and label. */
+export interface LabelledEdgeEnd extends EdgeEnd {
+  /** The identifier the finding names this end by (`MOTIR-7`, or a temp-ref). */
+  label: string;
+}
+
 /**
- * The committed-edge door's use of the rule (MOTIR-6369): refuse a NEW directed
- * `is_blocked_by` between two levels. `from` is the blocked item, `to` its
- * blocker — the stored direction — each with its kind and ancestor chain. Every
- * other link kind passes untouched.
+ * The CROSS-LEVEL `blocked_by` edges among `edges` — the verdict both validators
+ * report as `crossLevelEdges` (MOTIR-6509, Amendment 2): the item, its blocker,
+ * both depths below the project root and the sentence that explains it. An edge
+ * with an end the caller cannot place (`end` answers `undefined`) is not judged.
+ * Sorted by item, then blocker, for a stable wire shape.
  */
-export function assertLinkSameLevel(
-  kind: string,
-  from: EdgeEnd & { identifier: string },
-  to: EdgeEnd & { identifier: string },
-): void {
-  if (kind !== 'is_blocked_by' || !isCrossLevelEdge(from, to)) return;
-  throw new CrossLevelLinkError(
-    { key: from.identifier, depth: from.ancestors.length },
-    { key: to.identifier, depth: to.ancestors.length },
-    crossLevelReason({ ...from, label: from.identifier }, { ...to, label: to.identifier }),
-  );
+export function crossLevelEdgeFindings(
+  edges: ReadonlyArray<{ blockedId: string; blockerId: string }>,
+  end: (id: string) => LabelledEdgeEnd | undefined,
+): CrossLevelEdgeDto[] {
+  const out: CrossLevelEdgeDto[] = [];
+  for (const edge of edges) {
+    const blocked = end(edge.blockedId);
+    const blocker = end(edge.blockerId);
+    if (!blocked || !blocker || !isCrossLevelEdge(blocked, blocker)) continue;
+    out.push({
+      item: blocked.label,
+      blockedBy: blocker.label,
+      itemDepth: blocked.ancestors.length,
+      blockedByDepth: blocker.ancestors.length,
+      reason: 'blocked_elsewhere',
+      explanation: crossLevelReason(blocked, blocker),
+    });
+  }
+  return out.sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));
 }

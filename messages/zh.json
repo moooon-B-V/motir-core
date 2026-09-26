@@ -652,7 +652,6 @@
       "selfLink": "工作项不能关联到自身。",
       "duplicate": "该关联已存在。",
       "cycle": "这会造成循环依赖。",
-      "crossLevel": "依赖只能连接同一层级的两个工作项：史诗只能与史诗相连，其他工作项须在它们共同上级之下深度相同。",
       "crossWorkspace": "该工作项属于另一个工作区。",
       "linkNotFound": "该关联已不存在。",
       "couldNotUpdate": "无法更新关联。"
