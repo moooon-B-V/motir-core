@@ -329,6 +329,7 @@ describe('GET /api/approval-gates/[id]/planning-seed · a PICK (intent plan)', (
       anchorKey: card.identifier,
       firstTurn: [
         `${choice.identifier} · Choose where exports live`,
+        'I just chose an option on this choice — this is the follow-up planning it was waiting for.',
         `The option chosen: ${STAMP.label}\nBest if you want: ${STAMP.bestFor}`,
         `What this choice gates:\n${STAMP.followUp}`,
         'Plan this work with the option chosen.',
@@ -390,7 +391,7 @@ describe('GET /api/approval-gates/[id]/planning-seed · a PICK (intent plan)', (
     const { seed } = await readPick(await choiceUnder(null));
     expect(seed.intent).toBe('plan');
     expect(seed.anchorKey).toBeNull();
-    expect(seed.firstTurn.split('\n\n')[1]).toBe(
+    expect(seed.firstTurn.split('\n\n')[2]).toBe(
       'This choice has no open container, so Motir AI opened on the project.',
     );
   });
@@ -638,6 +639,7 @@ describe('the catalogues and the route’s shape', () => {
         'keySeparator',
         'pick.ask',
         'pick.chosen',
+        'pick.followUp',
         'pick.gates',
         'pick.noContainer',
         'reason',

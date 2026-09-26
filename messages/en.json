@@ -6645,6 +6645,7 @@
       "keySeparator": ", ",
       "ask": "Re-plan this work item from that reason.",
       "pick": {
+        "followUp": "I just chose an option on this choice — this is the follow-up planning it was waiting for.",
         "noContainer": "This choice has no open container, so Motir AI opened on the project.",
         "chosen": "The option chosen: {label}\nBest if you want: {bestFor}",
         "gates": "What this choice gates:\n{gates}",

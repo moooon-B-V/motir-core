@@ -241,6 +241,9 @@ function composePickTurn(input: SeedComposerInput, t: SeedTranslator): string {
   /* v8 ignore next -- the seed read never composes a pick without a stamp. */
   if (!chosen) return t('heading', { key: input.card.key, title: input.card.title });
   const parts = [t('heading', { key: input.card.key, title: input.card.title })];
+  // The line that tells the PLANNER this is the follow-up to a choice just made
+  // (MOTIR-6432's revised design); the rail's chip and card tell the person.
+  parts.push(t('pick.followUp'));
   if (input.anchorKey === null) parts.push(t('pick.noContainer'));
   parts.push(t('pick.chosen', { label: chosen.label, bestFor: chosen.bestFor }));
   parts.push(t('pick.gates', { gates: chosen.followUp }));

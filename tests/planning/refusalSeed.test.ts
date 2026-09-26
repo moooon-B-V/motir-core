@@ -317,10 +317,11 @@ describe('the decision_choice composer — TWO cases, dispatched on state', () =
     anchorKey,
   });
 
-  it('a PICK on a parent anchor (en) — heading, option + best-if, what it gates (verbatim), the plan ask', () => {
+  it('a PICK on a parent anchor (en) — heading, the follow-up line, option + best-if, what it gates (verbatim), the plan ask', () => {
     expect(REFUSAL_SEED_COMPOSERS.decision_choice!(pickInput('ACME-40'), t('en'))).toBe(
       [
         'ACME-42 · Choose where exports live',
+        'I just chose an option on this choice — this is the follow-up planning it was waiting for.',
         `The option chosen: ${STAMP.label}\nBest if you want: ${STAMP.bestFor}`,
         `What this choice gates:\n${STAMP.followUp}`,
         'Plan this work with the option chosen.',
@@ -328,15 +329,16 @@ describe('the decision_choice composer — TWO cases, dispatched on state', () =
     );
   });
 
-  it('a PICK at the PROJECT anchor says so right after the heading (en + zh)', () => {
+  it('a PICK at the PROJECT anchor says so right after the follow-up line (en + zh)', () => {
     const en = REFUSAL_SEED_COMPOSERS.decision_choice!(pickInput(null), t('en'));
-    expect(en.split('\n\n')[1]).toBe(
+    expect(en.split('\n\n')[2]).toBe(
       'This choice has no open container, so Motir AI opened on the project.',
     );
     const zh = REFUSAL_SEED_COMPOSERS.decision_choice!(pickInput(null), t('zh'));
     expect(zh).toBe(
       [
         'ACME-42 · Choose where exports live',
+        '我刚在这个选择上选定了一个选项——这就是它在等的后续规划。',
         '这个选择没有未完成的上级工作项，所以 Motir AI 在项目上打开。',
         `选中的选项：${STAMP.label}\n如果你更看重：${STAMP.bestFor}`,
         `这个选择决定的工作：\n${STAMP.followUp}`,

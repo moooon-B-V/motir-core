@@ -6641,6 +6641,7 @@
       "keySeparator": "、",
       "ask": "请根据这个理由重新规划这个工作项。",
       "pick": {
+        "followUp": "我刚在这个选择上选定了一个选项——这就是它在等的后续规划。",
         "noContainer": "这个选择没有未完成的上级工作项，所以 Motir AI 在项目上打开。",
         "chosen": "选中的选项：{label}\n如果你更看重：{bestFor}",
         "gates": "这个选择决定的工作：\n{gates}",
