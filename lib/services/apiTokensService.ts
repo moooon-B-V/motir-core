@@ -14,7 +14,12 @@ import {
   InvalidTokenBindingError,
   InvalidTokenGrantError,
 } from '@/lib/apiTokens/errors';
-import { IRREVERSIBLE_PERMISSIONS, expandStoredGrant, grantableFor } from '@/lib/tokens/grant';
+import {
+  GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER,
+  IRREVERSIBLE_PERMISSIONS,
+  expandStoredGrant,
+  grantableFor,
+} from '@/lib/tokens/grant';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type {
@@ -209,7 +214,10 @@ export const apiTokensService = {
           expiresAt: input.expiresAt ?? null,
           // The column's name is historical; it stores the grant. See its
           // schema doc-comment and `docs/decisions/token-permissions.md` §5.
-          scopes: permissions,
+          // The marker records that this grant was chosen from an offer that
+          // held the room view keys, so it is read exactly as stored (MOTIR-6329,
+          // AMENDMENT 2).
+          scopes: [...permissions, GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER],
           projectId: input.projectId ?? null,
         },
         tx,
@@ -374,7 +382,7 @@ export const apiTokensService = {
       if (lastUsed === undefined || now.getTime() - lastUsed >= LAST_USED_THROTTLE_MS) {
         await apiTokenRepository.touchLastUsed(row.id, now, tx);
       }
-      const { grant, unrecognised } = expandStoredGrant(row.scopes);
+      const { grant, unrecognised } = expandStoredGrant(row.scopes, { projectId: row.projectId });
       if (unrecognised.length > 0) {
         console.warn(
           `[apiTokens] token ${row.id} carries ${unrecognised.length} unrecognised grant value(s); ignoring them: ${unrecognised.map((u) => JSON.stringify(u.value)).join(', ')}`,
@@ -385,7 +393,9 @@ export const apiTokensService = {
         workspaceId: row.workspaceId,
         projectId: row.projectId,
         grant,
-        scopes: row.scopes,
+        // The raw stored values, less the mint path's marker (MOTIR-6329), which is
+        // bookkeeping for `expandStoredGrant` and never a value a caller acts on.
+        scopes: row.scopes.filter((value) => value !== GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER),
       };
     });
   },

@@ -478,7 +478,9 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       input.hasChildren
         ? (async () => {
             try {
-              const [latest] = await dispatchRunService.listRunsForProject(
+              const {
+                runs: [latest],
+              } = await dispatchRunService.listRunsForProject(
                 input.projectKey,
                 { take: 1, scopeWorkItemKey: input.itemIdentifier },
                 ctx,

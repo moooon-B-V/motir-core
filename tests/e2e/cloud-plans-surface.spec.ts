@@ -236,6 +236,15 @@ test('Plans: the filter, ten at a time, who started a decided plan, the list vie
     expect(new URL(page.url()).search).toBe('');
     await beat();
 
+    // ⚠️ AMENDED 2026-09-26 (Story MOTIR-6179 · MOTIR-6334, design MOTIR-6327):
+    // a reader who can act lands on MINE when Mine has rows, and this surface's
+    // claims below are about the WHOLE project's conversations — a colleague's
+    // decided plan, the project's long Approved history. So the reader chooses
+    // Project, exactly as someone who wants every conversation does; the filter
+    // keeps `view` from here on, so every address below carries it.
+    await page.getByRole('button', { name: 'Project', exact: true }).click();
+    await page.waitForURL('**/plans?view=project');
+
     // ── RECIPE STEP 6 — ONE Plan-with-AI door, and it is the top bar's.
     // The page header used to render its own about 200px below the identical one
     // the shell puts on every authed screen (MOTIR-3237). Asserted as a COUNT
@@ -254,7 +263,7 @@ test('Plans: the filter, ten at a time, who started a decided plan, the list vie
   // ── 2 — TEN A PAGE, and the next ten arrive because you scrolled ──────────
   await chapter('Approved holds a long history — it arrives ten at a time', async () => {
     await tab(page, 'Approved').click();
-    await page.waitForURL('**/plans?planState=approved');
+    await page.waitForURL('**/plans?view=project&planState=approved');
 
     // The first cursor page, and only it. The read's own default is ten; the
     // page never states a number of its own — and the tab says how many there
@@ -321,7 +330,7 @@ test('Plans: the filter, ten at a time, who started a decided plan, the list vie
 
     // …and the UNDECIDED row names its starter too, with its own state.
     await tab(page, 'Waiting for approval').click();
-    await page.waitForURL('**/plans?planState=planned');
+    await page.waitForURL('**/plans?view=project&planState=planned');
     const waiting = rowCardFor(page, seed.detailPlanId);
     await expect(waiting).toContainText(seed.requesterName);
     await expect(rowFor(page, seed.detailPlanId)).toHaveAccessibleName(
@@ -375,7 +384,7 @@ test('Plans: the filter, ten at a time, who started a decided plan, the list vie
 
   // ── 5 — nothing is stranded mid-generation ────────────────────────────────
   await chapter('A plan stuck half-written can be ended, and says so', async () => {
-    await page.goto('/plans?planState=generating');
+    await page.goto('/plans?view=project&planState=generating');
     await expect(tab(page, 'Writing')).toHaveAttribute('aria-pressed', 'true');
     await rowFor(page, seed.generatingPlanId).click();
     await page.waitForURL(`**/plans/${seed.generatingPlanId}`);
@@ -416,7 +425,7 @@ test('Plans: the filter, ten at a time, who started a decided plan, the list vie
 
     // And it left the filter it was stuck in, which is the reader-visible half
     // of the same fact.
-    await page.goto('/plans?planState=declined');
+    await page.goto('/plans?view=project&planState=declined');
     await expect(rowFor(page, seed.generatingPlanId)).toBeVisible();
     await beat();
   });
@@ -430,7 +439,7 @@ test('Plans: the empty filter, an empty list view, a list that SHRINKS, and a pl
   await signIn(page, seed.email, PLANS_SURFACE_PASSWORD);
 
   // ── EMPTY: a tab with no plans is NOT an empty project ────────────────────
-  await page.goto('/plans?planState=declined');
+  await page.goto('/plans?view=project&planState=declined');
   // The strip STAYS. A reader whose tab is empty is one press from the plans,
   // and hiding the strip would strand them; the project-level empty state hides
   // it precisely because there is then nothing to press.
@@ -466,7 +475,7 @@ test('Plans: the empty filter, an empty list view, a list that SHRINKS, and a pl
   // comfortably shorter than 22 rows, so `useRowWindow` genuinely windows. That
   // it windows is not assumed: the DOM holds ~13 rows here while 22 are loaded,
   // which is exactly why `loadWholeHistory` cannot count them.
-  await page.goto('/plans?planState=approved');
+  await page.goto('/plans?view=project&planState=approved');
   await expect(planRows(page)).toHaveCount(10);
 
   await loadWholeHistory(page, seed.oldestApprovedPlanId);
@@ -475,19 +484,19 @@ test('Plans: the empty filter, an empty list view, a list that SHRINKS, and a pl
   // precondition. Then a tab with two rows.
   await scrollMainToBottom(page);
   await tab(page, 'Writing').click();
-  await page.waitForURL('**/plans?planState=generating');
+  await page.waitForURL('**/plans?view=project&planState=generating');
   await expect(planRows(page)).toHaveCount(3);
 
   // …and BACK the other way, because the bounds go stale in both directions: a
   // window sized for three rows, then ten.
   await tab(page, 'Approved').click();
-  await page.waitForURL('**/plans?planState=approved');
+  await page.waitForURL('**/plans?view=project&planState=approved');
   await expect(planRows(page)).toHaveCount(10);
 
   // One more shrink, from the freshly re-mounted long tab to the shortest tab
   // there is — the empty one, where the list is not rendered at all.
   await tab(page, 'Declined').click();
-  await page.waitForURL('**/plans?planState=declined');
+  await page.waitForURL('**/plans?view=project&planState=declined');
   // BY ROLE, for the same reason as the first Declined-tab assertion (MOTIR-4822).
   await expect(page.getByRole('heading', { name: 'No conversations in this state' })).toBeVisible();
 

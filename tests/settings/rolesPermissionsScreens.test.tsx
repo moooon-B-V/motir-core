@@ -6,7 +6,11 @@ import { renderWithIntl, enMessages } from '../helpers/renderWithIntl';
 import zhMessages from '@/messages/zh.json';
 import { toRoleCatalogDTO } from '@/lib/mappers/permissionMappers';
 import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
-import { PERMISSIONS } from '@/lib/permissions/catalog';
+import { PERMISSIONS, isEnforced } from '@/lib/permissions/catalog';
+
+/** The screens draw ENFORCED role-gated keys only (MOTIR-6328 parks the Plans /
+ *  Runs view keys as `planned` until MOTIR-6330 / MOTIR-6331 wire them). */
+const OFFERED_GATED = ROLE_GATED_PERMISSIONS.filter((key) => isEnforced(key));
 import { RoleList } from '@/app/(authed)/settings/project/roles/_components/RoleList';
 import { RoleDetail } from '@/app/(authed)/settings/project/roles/_components/RoleDetail';
 import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
@@ -58,9 +62,7 @@ describe('the role LIST (screen 1)', () => {
     // Admin holds the whole role-gated set — asserted against the constant, so
     // the expectation grows with the model instead of pinning a stale 28.
     expect(
-      within(admin).getByText(
-        `${ROLE_GATED_PERMISSIONS.length} of ${ROLE_GATED_PERMISSIONS.length} permissions`,
-      ),
+      within(admin).getByText(`${OFFERED_GATED.length} of ${OFFERED_GATED.length} permissions`),
     ).toBeTruthy();
     expect(within(admin).getByText('3 members')).toBeTruthy();
 
@@ -122,7 +124,7 @@ describe('the role DETAIL (screen 2)', () => {
 
   it('renders every role-gated permission, grouped under its domain heading', () => {
     renderWith(<RoleDetail role={member} catalog={CATALOG} projectName="motir" />);
-    for (const key of ROLE_GATED_PERMISSIONS) {
+    for (const key of OFFERED_GATED) {
       expect(document.querySelector(`[data-permission="${key}"]`), `${key} missing`).toBeTruthy();
     }
     const domainLabels = enMessages.permissions.domain as Record<string, string | undefined>;
@@ -135,7 +137,7 @@ describe('the role DETAIL (screen 2)', () => {
 
   it('marks exactly the permissions the role holds — the marks come from its set', () => {
     renderWith(<RoleDetail role={member} catalog={CATALOG} projectName="motir" />);
-    for (const key of ROLE_GATED_PERMISSIONS) {
+    for (const key of OFFERED_GATED) {
       const row = document.querySelector(`[data-permission="${key}"]`) as HTMLElement;
       const mark = within(row).getByRole('img').getAttribute('aria-label');
       expect(mark, `${key}`).toBe(member.permissions.includes(key) ? 'Held' : 'Not held');
@@ -145,7 +147,7 @@ describe('the role DETAIL (screen 2)', () => {
   it('never carries state by colour alone — every mark has an accessible name', () => {
     renderWith(<RoleDetail role={member} catalog={CATALOG} projectName="motir" />);
     const marks = screen.getAllByRole('img');
-    expect(marks.length).toBe(ROLE_GATED_PERMISSIONS.length);
+    expect(marks.length).toBe(OFFERED_GATED.length);
     for (const mark of marks) {
       expect(mark.getAttribute('aria-label')).toBeTruthy();
     }
@@ -153,7 +155,7 @@ describe('the role DETAIL (screen 2)', () => {
 
   it('leaves a withheld row fully legible — a mark, never a dimmed row', () => {
     renderWith(<RoleDetail role={member} catalog={CATALOG} projectName="motir" />);
-    const withheld = ROLE_GATED_PERMISSIONS.find((key) => !member.permissions.includes(key))!;
+    const withheld = OFFERED_GATED.find((key) => !member.permissions.includes(key))!;
     const row = document.querySelector(`[data-permission="${withheld}"]`) as HTMLElement;
     // The state lives on the MARK, not on the row's opacity.
     expect(row.className).not.toMatch(/opacity-|text-\(--el-text-faint\)/);
@@ -352,7 +354,7 @@ describe('a project`s OWN roles on the two screens', () => {
     };
     renderWith(<RoleDetail role={empty} catalog={CATALOG} projectName="motir" />);
     const marks = screen.getAllByRole('img');
-    expect(marks.length).toBe(ROLE_GATED_PERMISSIONS.length);
+    expect(marks.length).toBe(OFFERED_GATED.length);
     expect(marks.every((mark) => mark.getAttribute('aria-label') === 'Not held')).toBe(true);
   });
 });

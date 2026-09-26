@@ -4,6 +4,7 @@ import { getActiveProject } from '@/lib/projects';
 import { planSessionsService } from '@/lib/services/planSessionsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { PlanSessionStateDto } from '@/lib/dto/planSessions';
+import type { RoomView } from '@/lib/rooms/roomView';
 
 import { buildSessionRowViews } from './sessionRowView';
 import type { SessionRowView } from './_components/types';
@@ -19,6 +20,7 @@ import type { SessionRowView } from './_components/types';
 export async function loadMoreSessionsAction(
   cursor: string,
   planState: PlanSessionStateDto | null,
+  view: RoomView,
 ): Promise<{ views: SessionRowView[]; nextCursor: string | null }> {
   const ctx = await getActiveProject();
   // Signed out mid-scroll, or the project vanished → nothing more to stream.
@@ -28,11 +30,13 @@ export async function loadMoreSessionsAction(
   const caps = await projectAccessService.getCapabilities(ctx.projectId, wsCtx);
   if (!caps.canBrowse) return { views: [], nextCursor: null };
 
-  // The FILTER travels with the cursor: a cursor is only meaningful within the
-  // predicate that produced it.
+  // The FILTER and the VIEW (MOTIR-6334) travel with the cursor: a cursor is only
+  // meaningful within the predicate that produced it. The service still decides
+  // what the view may show.
   const page = await planSessionsService.listSessions(ctx.projectId, wsCtx, {
     cursor,
     planState,
+    view,
   });
   return { views: await buildSessionRowViews(page.sessions), nextCursor: page.nextCursor };
 }

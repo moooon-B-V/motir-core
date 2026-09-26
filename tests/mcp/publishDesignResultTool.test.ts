@@ -194,6 +194,10 @@ describe('the tool is reachable by the caller it was built for', () => {
       'lesson:reinforce',
       'work_item:edit',
       'comment:add',
+      // MOTIR-6329 — the Plans and Runs rooms' view keys; the argument is at
+      // the constant (a stated widening, not an unrelated one).
+      'plan:view_any',
+      'run:view_any',
       'ai:plan',
     ]);
   });

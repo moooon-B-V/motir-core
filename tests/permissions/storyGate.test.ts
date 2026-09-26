@@ -404,6 +404,8 @@ describe('the story leaves nothing behind', () => {
     // 2355/2357/2358/2359 with the flag flipped here. It is empty, and the
     // emptiness is the story's definition of done. (MOTIR-5305 parked
     // `approval:view_any` here for one commit; MOTIR-5301 wired it and emptied it.)
+    // (MOTIR-6328 parked `plan:view_any` / `run:view_any` here for two commits;
+    // MOTIR-6330 and MOTIR-6331 wired them and emptied it.)
     expect(stillPlanned).toEqual([]);
   });
 });

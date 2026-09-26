@@ -551,8 +551,9 @@ export const planValidityService = {
     planId: string,
     ctx: ServiceContext,
     condition: ValidityCondition = DEFAULT_VALIDITY_CONDITION,
+    opts: { caller?: 'actor' | 'system' } = {},
   ): Promise<PlanValidityDto> {
-    const proj = await buildProjection(planId, ctx);
+    const proj = await buildProjection(planId, ctx, opts);
 
     // The containing set S = the whole projected forest of the plan's project:
     // every node reachable DOWN from a forest root. A root is a plan-project node

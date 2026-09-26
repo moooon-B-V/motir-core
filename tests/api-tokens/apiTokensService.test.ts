@@ -11,7 +11,20 @@ import {
   InvalidApiTokenLabelError,
   InvalidTokenGrantError,
 } from '@/lib/apiTokens/errors';
-import { DEFAULT_TOKEN_GRANT } from '@/lib/tokens/grant';
+import {
+  DEFAULT_TOKEN_GRANT,
+  GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER,
+  ROOM_VIEW_FORWARD_KEYS,
+} from '@/lib/tokens/grant';
+
+/**
+ * The stored GRANT, less the mint path's marker (MOTIR-6329) — which every row
+ * minted from that change on carries exactly once, beside the keys.
+ */
+function granted(scopes: string[]): string[] {
+  expect(scopes.filter((v) => v === GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER)).toHaveLength(1);
+  return scopes.filter((v) => v !== GRANT_OFFERED_ROOM_VIEW_KEYS_MARKER);
+}
 import { LEGACY_SCOPE_PERMISSIONS } from '@/lib/mcp/scopes';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import { createTestWorkspace } from '../fixtures/workspaceFixtures';
@@ -453,7 +466,7 @@ describe('the GRANT — persist and read (MOTIR-2575)', () => {
       fixedGrant: DEFAULT_TOKEN_GRANT,
     });
     const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
-    expect([...row.scopes].sort()).toEqual([...DEFAULT_TOKEN_GRANT].sort());
+    expect(granted(row.scopes).sort()).toEqual([...DEFAULT_TOKEN_GRANT].sort());
     expect(row.scopes).not.toContain('work_item:delete');
   });
 
@@ -465,7 +478,7 @@ describe('the GRANT — persist and read (MOTIR-2575)', () => {
       projectId: project.id,
     });
     const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
-    expect([...row.scopes].sort()).toEqual(['project:browse', 'work_item:edit']);
+    expect(granted(row.scopes).sort()).toEqual(['project:browse', 'work_item:edit']);
   });
 
   it('can grant the irreversible key when explicitly requested', async () => {
@@ -487,7 +500,7 @@ describe('the GRANT — persist and read (MOTIR-2575)', () => {
       projectId: project.id,
     });
     const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
-    expect(row.scopes).toEqual([]);
+    expect(granted(row.scopes)).toEqual([]);
   });
 
   it('REFUSES an unknown permission and mints nothing', async () => {
@@ -582,6 +595,10 @@ describe('the compatibility promise — a row written BEFORE MOTIR-2572', () => 
       ...new Set([
         ...LEGACY_SCOPE_PERMISSIONS.read,
         ...LEGACY_SCOPE_PERMISSIONS['work_items:write'],
+        // A browsing row is read FORWARD into the Plans / Runs view keys, and a
+        // FIXED (device) grant always is (MOTIR-6329, `token-permissions.md`
+        // AMENDMENT 2) — carried, so the rooms take nothing from it.
+        ...ROOM_VIEW_FORWARD_KEYS,
       ]),
     ];
     expect([...resolved.grant].sort()).toEqual([...expected].sort());
@@ -607,7 +624,9 @@ describe('the compatibility promise — a row written BEFORE MOTIR-2572', () => 
     // The asymmetry that matters: a malformed row must degrade to LESS access.
     const { token } = await seedLegacyRow(['read', 'work_items:nuke', 'utter-nonsense']);
     const resolved = await apiTokensService.verify(token);
-    expect(resolved.grant).toEqual(['project:browse']);
+    // `read` → browse, read forward into the room view keys (MOTIR-6329); the two
+    // unrecognised values still contribute NOTHING.
+    expect(resolved.grant).toEqual(['project:browse', 'plan:view_any', 'run:view_any']);
   });
 
   it('a row that is ENTIRELY unrecognised verifies to an empty grant', async () => {
@@ -631,7 +650,9 @@ describe('the compatibility promise — a row written BEFORE MOTIR-2572', () => 
     // side by side, and nothing migrating between them.
     const { token } = await seedLegacyRow(['sprints:write', 'project:browse']);
     const resolved = await apiTokensService.verify(token);
-    expect([...resolved.grant].sort()).toEqual(['project:browse', 'sprint:manage'].sort());
+    expect([...resolved.grant].sort()).toEqual(
+      ['project:browse', 'sprint:manage', ...ROOM_VIEW_FORWARD_KEYS].sort(),
+    );
   });
 });
 
@@ -690,7 +711,7 @@ describe('the PROJECT binding and what a caller may confer (MOTIR-2606)', () => 
     });
     const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(row.projectId).toBe(fx.projectId);
-    expect([...row.scopes].sort()).toEqual(['project:browse', 'work_item:edit']);
+    expect(granted(row.scopes).sort()).toEqual(['project:browse', 'work_item:edit']);
     expect(dto.project?.id).toBe(fx.projectId);
   });
 
@@ -702,7 +723,7 @@ describe('the PROJECT binding and what a caller may confer (MOTIR-2606)', () => 
     });
     const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(row.projectId).toBeNull();
-    expect([...row.scopes].sort()).toEqual([...CLI_TOKEN_GRANT].sort());
+    expect(granted(row.scopes).sort()).toEqual([...CLI_TOKEN_GRANT].sort());
     expect(dto.project).toBeNull();
   });
 

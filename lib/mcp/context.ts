@@ -3,7 +3,7 @@ import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/proto
 import type { ServerRequest, ServerNotification } from '@modelcontextprotocol/sdk/types.js';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { isGrantable } from '@/lib/tokens/grant';
-import type { PermissionKey } from '@/lib/permissions/catalog';
+import { isPermissionKey, type PermissionKey } from '@/lib/permissions/catalog';
 
 // The MCP layer's actor plumbing (Story 7.8 · Subtask 7.8.4).
 //
@@ -120,6 +120,12 @@ export function contextFromAuthInfo(authInfo: AuthInfo | undefined): ServiceCont
     // Only when the token names one — an absent key means "no binding", which
     // is what every cookie-session caller and every device credential is.
     ...(authExtra.projectId ? { tokenProjectId: authExtra.projectId } : {}),
+    // The token's grant (MOTIR-6330), for the record-view reads that consult a
+    // finer key after the dispatch door (`holdsRecordView`). Only when the auth
+    // gate actually attached one — an absent grant is not an EMPTY grant.
+    ...(Array.isArray((authInfo?.extra as Record<string, unknown> | undefined)?.grant)
+      ? { tokenGrant: authExtra.grant.filter(isPermissionKey) }
+      : {}),
   };
 }
 

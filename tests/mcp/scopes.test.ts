@@ -114,6 +114,10 @@ describe('CLI_TOKEN_GRANT (the device-approval fixed grant)', () => {
         'lesson:reinforce',
         'project:browse',
         'work_item:edit',
+        // MOTIR-6329 — the Plans and Runs rooms' view keys, for the reads the CLI
+        // already performs on browse; the argument is on the constant.
+        'plan:view_any',
+        'run:view_any',
       ].sort(),
     );
   });
@@ -124,7 +128,7 @@ describe('CLI_TOKEN_GRANT (the device-approval fixed grant)', () => {
   });
 
   it('is entirely grantable', () => {
-    for (const key of CLI_TOKEN_GRANT) expect(isGrantable(key)).toBe(true);
+    for (const key of CLI_TOKEN_GRANT) expect(isGrantable(key), key).toBe(true);
   });
 });
 
@@ -196,6 +200,11 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       // MOTIR-3553. Same reason as its two lesson siblings: it did not exist
       // when the six strings were written, so no stale token may acquire it.
       'lesson:reinforce',
+      // MOTIR-6330 — not in the static map: a browsing row is read FORWARD into
+      // it at read time, from the token's provenance (`expandStoredGrant`,
+      // MOTIR-6329), which the forward map does not carry.
+      'plan:view_any',
+      'run:view_any',
     ];
     expect([...union].sort()).toEqual(
       GRANTABLE_PERMISSIONS.filter((k) => !POSTDATE_THE_SCOPES.includes(k)).sort(),

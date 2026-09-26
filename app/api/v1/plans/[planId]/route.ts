@@ -27,7 +27,9 @@ import { workItemsService } from '@/lib/services/workItemsService';
 export const GET = withV1Route<{ planId: string }>(
   { permission: 'project:browse' },
   async (ctx) => {
-    const plan = await plansService.getPlan(ctx.params.planId, ctx.service);
+    // The reader's door (MOTIR-6330): a plan outside the caller's Plans-room scope
+    // is not-found, exactly like an unknown id.
+    const plan = await plansService.getPlanForReader(ctx.params.planId, ctx.service);
 
     // Targets AND parents (MOTIR-4085) — `planReferenceIds` owns which refs are
     // ids, so the temp-ref form never reaches the read.

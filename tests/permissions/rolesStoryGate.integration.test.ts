@@ -8,7 +8,7 @@ import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { PERMISSIONS, type PermissionKey } from '@/lib/permissions/catalog';
+import { PERMISSIONS, isEnforced, type PermissionKey } from '@/lib/permissions/catalog';
 import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { toRoleCatalogDTO } from '@/lib/mappers/permissionMappers';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
@@ -230,8 +230,12 @@ describe('the widened DTO survives the round trip through real rows', () => {
     // The screens' own contract, read off the SERVICE rather than the mapper.
     const rows = catalog.domains.flatMap((group) => group.permissions.map((p) => p.key));
     const levelGated = catalog.levelGatedDomains.flatMap((g) => g.permissions.map((p) => p.key));
-    expect([...rows].sort()).toEqual([...ROLE_GATED_PERMISSIONS].sort());
-    expect([...rows, ...levelGated].sort()).toEqual([...PERMISSIONS].sort());
+    // Over the ENFORCED keys: the screens never draw a `planned` one (MOTIR-6328
+    // parks the Plans / Runs view keys until MOTIR-6330 / MOTIR-6331 wire them).
+    expect([...rows].sort()).toEqual(ROLE_GATED_PERMISSIONS.filter((k) => isEnforced(k)).sort());
+    expect([...rows, ...levelGated].sort()).toEqual(
+      PERMISSIONS.filter((k) => isEnforced(k)).sort(),
+    );
     expect(catalog.roleGatedPermissionCount).toBe(rows.length);
   });
 
@@ -243,7 +247,7 @@ describe('the widened DTO survives the round trip through real rows', () => {
     const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.member);
     const memberRole = catalog.roles.find((role) => role.key === 'member')!;
     const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.member);
-    for (const key of ROLE_GATED_PERMISSIONS) {
+    for (const key of ROLE_GATED_PERMISSIONS.filter((k) => isEnforced(k))) {
       expect(memberRole.permissions.includes(key), `member mark for ${key}`).toBe(held.has(key));
     }
   });
@@ -455,7 +459,7 @@ describe('guard — both i18n catalogs stay total over the ROLE-GATED keys', () 
 
   it('every row the screens draw has a label and a description in both locales', () => {
     const rows = toRoleCatalogDTO().domains.flatMap((group) => group.permissions);
-    expect(rows.length).toBe(ROLE_GATED_PERMISSIONS.length);
+    expect(rows.length).toBe(ROLE_GATED_PERMISSIONS.filter((k) => isEnforced(k)).length);
     for (const [locale, catalog] of Object.entries(CATALOGS)) {
       for (const row of rows) {
         expect(lookup(catalog, row.labelKey), `${locale} ${row.labelKey}`).toBeTruthy();

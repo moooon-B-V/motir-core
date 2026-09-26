@@ -216,12 +216,27 @@ test('a VIEWER loses the destinations that refuse them, and keeps every read', a
   // MOTIR-5278 had given a viewer the door and a disabled Approvals switch.
   await expect(settingsDoor(page)).toHaveCount(0);
 
-  // PANEL 4. The three rows whose destinations refuse a viewer outright are gone.
-  for (const gone of ['Plans', 'Triage', 'Code health']) {
+  // PANEL 4. The rows whose destinations refuse a viewer outright are gone.
+  // ⚠️ AMENDED 2026-09-25 (Story MOTIR-6179 · MOTIR-6332): `Plans` LEFT this list
+  // on purpose. The DECISION card MOTIR-6165 (Q2) gives every built-in role that
+  // browses the rooms' view-any keys, so a viewer now opens Plans on
+  // `plan:view_any` — the room's Project view, with nothing to author. It moved to
+  // the kept list below, with Approval records and Runs, which a viewer holds the same way.
+  for (const gone of ['Triage', 'Code health']) {
     await expect(rail(page).getByRole('link', { name: gone, exact: true }), gone).toHaveCount(0);
   }
   // Every read surface stays — the primary nav never renders empty.
-  for (const kept of ['Dashboard', 'Work Items', 'Boards', 'Roadmap', 'Backlog', 'Reports']) {
+  for (const kept of [
+    'Dashboard',
+    'Work Items',
+    'Boards',
+    'Roadmap',
+    'Backlog',
+    'Reports',
+    'Plans',
+    'Approval records',
+    'Runs',
+  ]) {
     await expect(rail(page).getByRole('link', { name: kept, exact: true }), kept).toBeVisible();
   }
 

@@ -14,7 +14,8 @@
   (`work_item:triage` + `work_item:delete`), MOTIR-2355 / MOTIR-2357 /
   MOTIR-2358 / MOTIR-2359 (`ai:plan`, in four parts), MOTIR-2362 (the
   coding-convention four), MOTIR-2363 (`ai:view_plan`), MOTIR-2356 (the model
-  fully enforced), MOTIR-2367 / MOTIR-2368 (the story's test gates).
+  fully enforced), MOTIR-2367 / MOTIR-2368 (the story's test gates); AMENDMENT 1:
+  MOTIR-6328 – MOTIR-6337 (Story MOTIR-6179, the rooms' view-any keys).
 
 > Structured **Context → Decision → Consequences → References**, the convention
 > the repo's ADRs set. No application behaviour ships in this subtask. What it
@@ -265,6 +266,41 @@ the outcome a loosening buried inside a tightening would have prevented.
 - **The refusal a user sees is a 403 the shipped client already renders**, except
   on a project they cannot browse, where the ordering rule makes it a 404. No UI
   work is implied here; what a permission-less actor SEES is MOTIR-2258's.
+
+---
+
+## AMENDMENT 1 (2026-09-25) — the three rooms' VIEW-ANY keys (MOTIR-6328, Story MOTIR-6179)
+
+**Source:** the DECISION card MOTIR-6165, Q2, confirmed by the owner on 2026-09-24: _the Viewer
+and Member roles hold every VIEW-ANY key by default, so Plans, Approvals and Runs are open to anyone
+in the workspace; a team that wants a room closed creates a custom role without that room's key._
+
+This record is the source `builtinRoles.ts` names, so the assignment is written here before it is
+typed there:
+
+| key                       | `admin`       | `member`  | `viewer`  | implicit workspace member | `PUBLIC_PROJECT_PERMISSIONS` |
+| ------------------------- | ------------- | --------- | --------- | ------------------------- | ---------------------------- |
+| `approval:view_any`       | ✓ (unchanged) | ✓ **new** | ✓ **new** | —                         | —                            |
+| `plan:view_any` (new key) | ✓             | ✓         | ✓         | ✓                         | ✓                            |
+| `run:view_any` (new key)  | ✓             | ✓         | ✓         | ✓                         | ✓                            |
+
+- **`approval:view_any` WIDENS `member` and `viewer`.** Before, both saw only the approval records
+  routed to them or decided by them — which, for a read-only viewer, was an empty room by
+  construction. The owner chose the widening; §2's rule that a workspace stranger takes no act of
+  ownership is untouched, because SEEING the trail is not acting on it. The implicit workspace
+  member and the public non-member do NOT gain it: neither has ever held it, and widening a
+  stranger's view of the approval trail is the workspace roles story's (MOTIR-6168) to decide.
+- **`plan:view_any` and `run:view_any` are behaviour-neutral for every built-in actor.** Every
+  actor listed above opens `/plans` and `/runs` on `project:browse` today, so holding the room's
+  key is what keeps that reach once the reads assert it (MOTIR-6330 / MOTIR-6331). `levelGrants`
+  does not name them, so each resolves exactly like `project:browse` on all four access levels and
+  both rails (`tests/permissions/accessParity.test.ts`).
+- **`ai:view_plan` is NOT renamed and NOT repurposed.** It keeps the AUTHOR meaning MOTIR-3188
+  gave it; `plan:view_any` is a new, separate VIEW key. So a viewer holding every plan to READ
+  holds nothing to WRITE — no `ai:plan`, `ai:view_plan`, `ai:decide_plan`, `approval:decide_any` or
+  `work_item:edit`.
+- **Persisted grants** — custom roles and API tokens stored before this amendment — are carried
+  forward by MOTIR-6329, so nobody loses a room they have today.
 
 ---
 

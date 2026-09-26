@@ -19,7 +19,7 @@ import { dispatchRunService } from '@/lib/services/dispatchRunService';
 // project has IN FLIGHT, which is a handful — unlike the history read beside it,
 // which is unbounded and is.
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ key: string }> },
 ): Promise<Response> {
   const gate = await requireCompliantWorkspaceContext();
@@ -27,9 +27,13 @@ export async function GET(
 
   const { key } = await params;
   try {
-    return NextResponse.json({
-      runs: await dispatchRunService.listActiveRunsForProject(key, gate.ctx),
+    // `view` asks WHOSE live runs (MOTIR-6331); the answer carries the SERVED scope.
+    const viewParam = new URL(req.url).searchParams.get('view');
+    const view = viewParam === 'mine' || viewParam === 'project' ? viewParam : undefined;
+    const { runs, scope } = await dispatchRunService.listActiveRunsForProject(key, gate.ctx, {
+      view,
     });
+    return NextResponse.json({ runs, scope });
   } catch (err) {
     if (err instanceof ProjectNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });

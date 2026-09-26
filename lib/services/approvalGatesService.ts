@@ -57,7 +57,13 @@ import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
+import {
+  holdsRecordView,
+  projectAccessService,
+  type AccessActorContext,
+} from '@/lib/services/projectAccessService';
+import { canActOnApprovals } from '@/lib/approvalGates/actPermissions';
+import { availableRoomViews, resolveRoomView, type RoomView } from '@/lib/rooms/roomView';
 import { workflowsService } from '@/lib/services/workflowsService';
 import {
   toApprovalGateDto,
@@ -654,6 +660,18 @@ function recordRoutedToId(row: {
   workItem: { assigneeId: string | null; reporterId: string | null } | null;
 }): string | null {
   return row.workItem ? routingTargetId(row.workItem) : row.routedToId;
+}
+
+/**
+ * The Approvals room's views for a reader (MOTIR-6333): `project` on
+ * `approval:view_any` (role ∩ token grant), `mine` on a way to act
+ * (`APPROVAL_ACT_PERMISSIONS`). The ONE place the service reads the view key.
+ */
+function approvalRoomViews(held: ReadonlySet<PermissionKey>, ctx: HomeActorContext): RoomView[] {
+  return availableRoomViews({
+    hasViewKey: holdsRecordView(held, ctx, 'approval:view_any'),
+    canAct: canActOnApprovals(held),
+  });
 }
 
 export const approvalGatesService = {
@@ -1315,6 +1333,13 @@ export const approvalGatesService = {
    * records of the ACTIVE project this reader may see, pending first then decided,
    * as ONE page over both sections.
    *
+   * ⚠️ AMENDED (Story MOTIR-6179 · MOTIR-6333, 2026-09-25): THE READER NOW CHOOSES
+   * A VIEW, AND THIS READ STILL DECIDES WHAT THAT CHOICE MAY SHOW. `view` is a
+   * REQUEST — `mine` or `project` — and the served scope rides the DTO. `project`
+   * is served only with `approval:view_any` (role ∩ token grant); `mine` is exactly
+   * the no-key predicate below. The paragraph that follows is still the rule it
+   * always was: no caller can widen what it may see, only narrow it.
+   *
    * ⚠️ ONE METHOD, AND THE SCOPE IS NOT A PARAMETER. The obvious shape is two reads
    * — everyone's records, and mine — with the page picking. That makes the PAGE a
    * policy path: a rule outside the catalog is invisible in the grid, un-grantable
@@ -1356,9 +1381,24 @@ export const approvalGatesService = {
    * `listAwaitingMe` does: without one the repository reads return `[]` on a
    * populated database and raise nothing.
    */
+  /**
+   * The views this reader HAS in the Approvals room (MOTIR-6333) — the same
+   * answer `listRecords` returns as `views`, for the one surface that needs it
+   * WITHOUT the records: the room's failed-read face keeps the switch, so the
+   * other view stays one press away.
+   */
+  async recordViews(ctx: HomeActorContext): Promise<RoomView[]> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const routing = await routingScope(ctx, tx);
+      if (routing.projectIds.length === 0) return [];
+      const held = await projectAccessService.getPermissions(ctx.projectId, ctx, tx);
+      return approvalRoomViews(held, ctx);
+    });
+  },
+
   async listRecords(
     ctx: HomeActorContext,
-    options: ApprovalQueueListOptions = {},
+    options: ApprovalQueueListOptions & { view?: RoomView | null } = {},
   ): Promise<ApprovalRecordsPageDto> {
     const pageSize = clampApprovalQueueLimit(options.limit);
     return withWorkspaceContext(ctx, async (tx) => {
@@ -1367,9 +1407,28 @@ export const approvalGatesService = {
       const held = browsable
         ? await projectAccessService.getPermissions(ctx.projectId, ctx, tx)
         : new Set<PermissionKey>();
+      // THE VIEW (MOTIR-6333): the reader ASKS, this read SERVES. `project` needs
+      // `approval:view_any`; `mine` needs a way to act (`APPROVAL_ACT_PERMISSIONS`).
+      // A view the reader lacks falls back to the one they have; a reader with
+      // neither is served `mine` — their own records, which the page answers with
+      // the room's not-found face because `views` is empty.
+      const views = browsable ? approvalRoomViews(held, ctx) : [];
+      const served =
+        (await resolveRoomView({
+          requested: options.view ?? null,
+          available: views,
+          mineHasRows: async () => {
+            const mine: ApprovalRecordsScope = { ...routing, fullView: false };
+            return (
+              (await approvalGateRepository.countRecordsAwaiting(mine, tx)) +
+                (await approvalGateRepository.countRecordsDecided(mine, tx)) >
+              0
+            );
+          },
+        })) ?? 'mine';
       const scope: ApprovalRecordsScope = {
         ...routing,
-        fullView: held.has('approval:view_any'),
+        fullView: served === 'project',
       };
 
       const awaitingTotal = await approvalGateRepository.countRecordsAwaiting(scope, tx);
@@ -1433,6 +1492,8 @@ export const approvalGatesService = {
 
       return {
         fullView: scope.fullView,
+        scope: served,
+        views,
         sections: {
           awaiting: { items: awaitingItems, total: awaitingTotal },
           decided: {

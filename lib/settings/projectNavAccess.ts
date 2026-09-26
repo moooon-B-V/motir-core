@@ -1,5 +1,7 @@
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
+import { APPROVAL_ACT_PERMISSIONS } from '@/lib/approvalGates/actPermissions';
+import { PLAN_ACT_PERMISSIONS, RUN_ACT_PERMISSIONS } from '@/lib/rooms/roomView';
 
 // THE PROJECT-NAV GATING MAP (Story MOTIR-2258 · Subtask MOTIR-2471).
 //
@@ -31,11 +33,22 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 // nothing beyond browse is recorded as `browse-only` and stays visible.
 
 /**
- * What a nav destination requires: a catalog key, or `browse-only` for a
+ * What a nav destination requires: a catalog key, `browse-only` for a
  * destination that asserts nothing past `project:browse` — which every actor who
- * reaches this shell already holds.
+ * reaches this shell already holds — or ANY ONE of several keys (Story MOTIR-6179
+ * · MOTIR-6332): a room whose door opens on its view-any key OR a way to act in
+ * it, because either one gives the reader something to see there.
  */
-export type NavRequirement = PermissionKey | 'browse-only';
+export type NavRequirement = PermissionKey | 'browse-only' | { anyOf: readonly PermissionKey[] };
+
+/**
+ * The ROOM door (MOTIR-6332): the room's view-any key OR any key that lets the
+ * reader act there. Deliberately WIDER than the room's Project view — an actor who
+ * can act but lacks the view key still has a Mine view to use.
+ */
+function roomDoor(viewAny: PermissionKey, act: readonly PermissionKey[]): NavRequirement {
+  return { anyOf: [viewAny, ...act] };
+}
 
 export interface NavAccessEntry {
   /** The route this row navigates to — the join key both surfaces resolve on. */
@@ -85,9 +98,13 @@ export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
   },
   {
     href: '/runs',
-    requires: 'browse-only',
+    requires: roomDoor('run:view_any', RUN_ACT_PERMISSIONS),
     evidence:
-      '`dispatchRunService.listRunsForProject` asserts `projectAccessService.assertCanBrowse` and nothing further; the page reads it directly and writes nothing.',
+      'MOTIR-6331 · MOTIR-6335: `dispatchRunService.listRunsForProject` serves Project on ' +
+      '`run:view_any` (`resolveRunScope`) and Mine to anyone, and `dispatchRunService.roomAccess` ' +
+      'offers Mine on `work_item:edit` — what `dispatchRunService.open` asserts to start a run ' +
+      '(`RUN_ACT_PERMISSIONS`). A reader with neither gets the page’s `notFound()`, so the door ' +
+      'opens on exactly those keys.',
   },
   {
     href: '/boards',
@@ -101,13 +118,13 @@ export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
   },
   {
     href: '/plans',
-    requires: 'ai:view_plan',
+    requires: roomDoor('plan:view_any', PLAN_ACT_PERMISSIONS),
     evidence:
-      '`plansService` asserts `ai:view_plan` on its AUTHOR writes and `ai:decide_plan` on ' +
-      'approve / decline (MOTIR-3188 split the two); the plan READ itself is `canBrowse`. ' +
-      'The row keeps `ai:view_plan` deliberately: both keys resolve to exactly the same ' +
-      'actors under every built-in role, so the offer is unchanged, and it is the WIDER of ' +
-      'the two — a custom role that can author but not decide still has a plans page to use.',
+      'MOTIR-6330 · MOTIR-6334: `planSessionsService` serves Project on `plan:view_any` ' +
+      '(`resolveScope`) and `planSessionsService.roomAccess` offers Mine on `ai:plan` or ' +
+      '`ai:decide_plan` (`PLAN_ACT_PERMISSIONS` — authoring and deciding a plan). It is no ' +
+      'longer `ai:view_plan`, the AUTHOR key (MOTIR-3188), which shut a Viewer out of a room ' +
+      'the plan read admits them to. A reader with none gets the page’s `notFound()`.',
   },
   {
     href: '/backlog',
@@ -128,20 +145,20 @@ export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
     evidence: '`reportsService` and `sprintsService` both assert `report:view`.',
   },
   {
-    // ⚠️ A ROOM EVERYONE MAY ENTER THAT SHOWS DIFFERENT READERS DIFFERENT THINGS
-    // (Story MOTIR-5299 · MOTIR-5302). Every other permission in this map decides
-    // whether a room OPENS; `approval:view_any` decides only how much of this one a
-    // reader SEES. Gating the row on the key would hide a reader's own decisions
-    // from them, so the requirement is `browse-only` and the key is named in the
-    // evidence instead — the next reader looking for it here will find it there.
+    // ⚠️ A ROOM THAT SHOWS DIFFERENT READERS DIFFERENT THINGS (Story MOTIR-5299 ·
+    // MOTIR-5302). It was `browse-only` because gating it on `approval:view_any`
+    // alone would hide a reader's OWN decisions from them. MOTIR-6332 keeps that
+    // property and closes the other gap: the door opens on the view key OR a way
+    // to act (be routed or decide a gate), so a reader with neither — whose room is
+    // empty by construction — is no longer offered it.
     href: '/approvals',
-    requires: 'browse-only',
+    requires: roomDoor('approval:view_any', APPROVAL_ACT_PERMISSIONS),
     evidence:
-      '`app/(authed)/approvals/page.tsx` calls `approvalGatesService.listRecords`, which floors on ' +
-      'browsing the active project and asserts nothing further to enter. `approval:view_any` is a ' +
-      'CONTENT-WIDENING key, not an entry key: the read resolves it from `getPermissions` and widens ' +
-      'the room from the reader’s own records (routed to them, or decided by them) to every record ' +
-      'of the project.',
+      'MOTIR-6333: `approvalGatesService.listRecords` serves Project on `approval:view_any` and ' +
+      'Mine to a reader who can act — `APPROVAL_ACT_PERMISSIONS` (lib/approvalGates/actPermissions.ts), ' +
+      'the decide door’s per-kind floors plus `approval:decide_any`, IMPORTED here so the door and ' +
+      'the page cannot disagree. A reader with neither gets the page’s `notFound()`; a reader with ' +
+      'either has something to see, so the door opens on any of them.',
   },
   {
     // ⚠️ BROWSE-ONLY, AND IT USED TO BE `ai:configure` (MOTIR-1768). The
@@ -196,8 +213,7 @@ const BY_HREF = new Map(PROJECT_NAV_ACCESS.map((entry) => [entry.href, entry]));
 export function canOfferNavDestination(href: string, held: ReadonlySet<PermissionKey>): boolean {
   const entry = BY_HREF.get(href);
   if (!entry) return false;
-  if (entry.requires === 'browse-only') return true;
-  return held.has(entry.requires);
+  return satisfiesRequirement(entry.requires, held);
 }
 
 /** Whether a requirement (e.g. {@link AI_PLANNING_REQUIREMENT}) is satisfied. */
@@ -205,5 +221,7 @@ export function satisfiesRequirement(
   requires: NavRequirement,
   held: ReadonlySet<PermissionKey>,
 ): boolean {
-  return requires === 'browse-only' || held.has(requires);
+  if (requires === 'browse-only') return true;
+  if (typeof requires === 'object') return requires.anyOf.some((key) => held.has(key));
+  return held.has(requires);
 }

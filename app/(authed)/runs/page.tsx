@@ -1,13 +1,21 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { ChevronLeft, SearchX } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import { getSession } from '@/lib/auth';
 import type { DispatchRunScopeDto } from '@/lib/dto/dispatchRuns';
 import { getActiveProject } from '@/lib/projects';
-import { RUNS_SCOPE_PARAM, parseRunsScope, runsHref } from '@/lib/runs/runsAddress';
+import {
+  RUNS_RUN_PARAM,
+  RUNS_SCOPE_PARAM,
+  RUNS_VIEW_PARAM,
+  parseRunsScope,
+  runsHref,
+} from '@/lib/runs/runsAddress';
+import { parseRoomView, pickRoomView, type RoomView } from '@/lib/rooms/roomView';
+import { RoomViewSwitch } from '@/components/rooms/RoomViewSwitch';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { DISPATCH_RUN_LIVE_STATUSES, DISPATCH_RUN_PAST_STATUSES } from '@/lib/runs/timeline';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -67,8 +75,13 @@ export default async function RunsPage({
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
-  const t = await getTranslations('runs');
-  const ctx = await getActiveProject();
+  // ONE WAVE, not three awaits — the serial-read ratchet
+  // (`tests/navigation/loading-boundary-guard.test.ts`, MOTIR-3449).
+  const [t, ctx, awaitedParams] = await Promise.all([
+    getTranslations('runs'),
+    getActiveProject(),
+    searchParams,
+  ]);
   // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
   // the WORKSPACE tier). The guard stays because the type does — the only null
   // left is a session-less request — and it redirects rather than rendering.
@@ -76,68 +89,122 @@ export default async function RunsPage({
 
   const projectKey = ctx.project.identifier;
   const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const scopeKey = parseRunsScope((await searchParams)?.[RUNS_SCOPE_PARAM]);
+  const params = awaitedParams ?? {};
+  const scopeKey = parseRunsScope(params[RUNS_SCOPE_PARAM]);
+  const requested = parseRoomView(params[RUNS_VIEW_PARAM]);
+
+  // THE VIEW (Story MOTIR-6179 · MOTIR-6335, design MOTIR-6327
+  // `runs-index--view-tabs.mock.html`): WHOSE runs — a different axis from
+  // `?scope=` (WHICH work item's). Project on `run:view_any`, Mine on starting a
+  // run; both ⇒ the switch, one ⇒ that view alone, none ⇒ not-found. The two
+  // headed sections stay, and the switch filters both.
+  //
+  // ONE WAVE: the access read, the Mine probe (only on a clean URL — the one case
+  // the default rule consults it) and the narrowed page's header all start
+  // together. A probe that fails reads as "no rows" rather than failing the page.
+  const [access, mineHasRows, scopeHeader] = await Promise.all([
+    dispatchRunService.roomAccess(projectKey, wsCtx),
+    requested === null
+      ? dispatchRunService
+          .listRunsForProject(
+            projectKey,
+            { take: 1, view: 'mine', ...(scopeKey ? { scopeWorkItemKey: scopeKey } : {}) },
+            wsCtx,
+          )
+          .then((page) => page.runs.length > 0)
+          .catch(() => false)
+      : null,
+    // The header's read — the design's one new read — is made only on a
+    // narrowed address, and only once: the list's poll and paging never ask again.
+    scopeKey ? readScopeHeader(projectKey, scopeKey, wsCtx) : null,
+  ]);
+  if (access.views.length === 0) notFound();
+  const view: RoomView =
+    pickRoomView({ requested, available: access.views, mineHasRows }) ?? access.views[0]!;
+  const hasSwitch = access.views.length > 1;
+  // A switch keeps `scope` and drops `run` — the modal covers the page, so an
+  // open run is never under the switch anyway.
+  const viewSwitch = hasSwitch ? (
+    <RoomViewSwitch value={view} label={t('viewAria')} drop={[RUNS_RUN_PARAM]} />
+  ) : null;
+  const indexData = (
+    <RunsIndexData
+      projectKey={projectKey}
+      ctx={wsCtx}
+      scopeKey={scopeKey}
+      view={view}
+      viewInUrl={hasSwitch}
+      canRun={access.canRun}
+    />
+  );
 
   if (!scopeKey) {
     return (
       <div className="flex flex-col gap-6">
-        <header className="flex flex-col gap-1">
-          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
-            {t('indexHeading')}
-          </h1>
-          <p className="text-sm text-(--el-text-secondary)">
-            {t('indexSubtitle', { project: ctx.project.name })}
-          </p>
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex min-w-0 flex-col gap-1">
+            <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
+              {t('indexHeading')}
+            </h1>
+            <p className="text-sm text-(--el-text-secondary)">
+              {view === 'mine'
+                ? t('indexSubtitleMine', { project: ctx.project.name })
+                : t('indexSubtitle', { project: ctx.project.name })}
+            </p>
+          </div>
+          {viewSwitch}
         </header>
-        <Suspense fallback={<RunsIndexSkeleton />}>
-          <RunsIndexData projectKey={projectKey} ctx={wsCtx} scopeKey={null} />
-        </Suspense>
+        <Suspense fallback={<RunsIndexSkeleton />}>{indexData}</Suspense>
       </div>
     );
   }
 
-  // The header's read — the design's one new read — is made only on a narrowed
-  // address, and only once: the list's poll and paging never ask for it again.
-  const header = await readScopeHeader(projectKey, scopeKey, wsCtx);
+  // Read in the wave above whenever `scopeKey` is set, which it is here.
+  const header = scopeHeader!;
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <Link
-          href={runsHref()}
-          className="inline-flex items-center gap-1 self-start text-sm text-(--el-link)"
-        >
-          <ChevronLeft className="size-4" aria-hidden="true" />
-          {t('scopeIndex.allRuns')}
-        </Link>
-        <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('indexHeading')}</h1>
-        <p className="flex flex-wrap items-center gap-x-2 text-sm text-(--el-text-secondary)">
-          {header.state === 'found' ? (
-            <>
-              <span>
-                {t.rich('scopeIndex.subtitle', {
-                  key: header.scope.key,
-                  title: header.scope.title,
-                  item: (chunks) => (
-                    <Link
-                      href={`/items/${encodeURIComponent(header.scope.key)}`}
-                      className="text-(--el-link) underline"
-                    >
-                      {chunks}
-                    </Link>
-                  ),
-                })}
-              </span>
-              {header.scope.archived ? (
-                <Pill tone="neutral">{t('scopeIndex.archived')}</Pill>
-              ) : null}
-            </>
-          ) : (
-            // Unresolved or unread: the key is PLAIN TEXT — there is nothing
-            // (known) for it to open.
-            <span>{t('scopeIndex.subtitleMissing', { key: scopeKey })}</span>
-          )}
-        </p>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-1">
+          <Link
+            href={runsHref({ view: hasSwitch ? view : null })}
+            className="inline-flex items-center gap-1 self-start text-sm text-(--el-link)"
+          >
+            <ChevronLeft className="size-4" aria-hidden="true" />
+            {t('scopeIndex.allRuns')}
+          </Link>
+          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
+            {t('indexHeading')}
+          </h1>
+          <p className="flex flex-wrap items-center gap-x-2 text-sm text-(--el-text-secondary)">
+            {header.state === 'found' ? (
+              <>
+                <span>
+                  {t.rich('scopeIndex.subtitle', {
+                    key: header.scope.key,
+                    title: header.scope.title,
+                    item: (chunks) => (
+                      <Link
+                        href={`/items/${encodeURIComponent(header.scope.key)}`}
+                        className="text-(--el-link) underline"
+                      >
+                        {chunks}
+                      </Link>
+                    ),
+                  })}
+                </span>
+                {header.scope.archived ? (
+                  <Pill tone="neutral">{t('scopeIndex.archived')}</Pill>
+                ) : null}
+              </>
+            ) : (
+              // Unresolved or unread: the key is PLAIN TEXT — there is nothing
+              // (known) for it to open.
+              <span>{t('scopeIndex.subtitleMissing', { key: scopeKey })}</span>
+            )}
+          </p>
+        </div>
+        {viewSwitch}
       </header>
       {header.state === 'missing' ? (
         <div
@@ -151,9 +218,7 @@ export default async function RunsPage({
           </div>
         </div>
       ) : (
-        <Suspense fallback={<RunsIndexSkeleton />}>
-          <RunsIndexData projectKey={projectKey} ctx={wsCtx} scopeKey={scopeKey} />
-        </Suspense>
+        <Suspense fallback={<RunsIndexSkeleton />}>{indexData}</Suspense>
       )}
     </div>
   );
@@ -200,12 +265,20 @@ async function RunsIndexData({
   projectKey,
   ctx,
   scopeKey,
+  view,
+  viewInUrl,
+  canRun,
 }: {
   projectKey: string;
   ctx: { userId: string; workspaceId: string };
   scopeKey: string | null;
+  /** The SERVED view — both reads ask for it, and the island carries it. */
+  view: RoomView;
+  /** Whether the reader has the switch, so every address the island writes keeps `?view=`. */
+  viewInUrl: boolean;
+  canRun: boolean;
 }) {
-  const narrowing = scopeKey ? { scopeWorkItemKey: scopeKey } : {};
+  const narrowing = { view, ...(scopeKey ? { scopeWorkItemKey: scopeKey } : {}) };
   const [live, past] = await Promise.all([
     dispatchRunService
       .listRunsForProject(
@@ -225,10 +298,19 @@ async function RunsIndexData({
 
   return (
     <RunsIndex
+      // ⚠️ KEYED ON WHAT THE ROWS WERE READ FOR (`CLAUDE.md` § page state, case 3):
+      // the island seeds `useState(initialLive / initialPast)` ONCE, so a Mine /
+      // Project switch — a real navigation that re-reads both sections — would
+      // otherwise hand it new props and keep the old rows until a poll, which
+      // runs only while something is live (MOTIR-6337's walk caught it).
+      key={`${view}|${scopeKey ?? ''}`}
       projectKey={projectKey}
       scopeKey={scopeKey}
-      initialLive={live}
-      initialPast={past}
+      view={view}
+      viewInUrl={viewInUrl}
+      canRun={canRun}
+      initialLive={live?.runs ?? null}
+      initialPast={past?.runs ?? null}
       pageSize={PAGE}
     />
   );
