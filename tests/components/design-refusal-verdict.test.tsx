@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import { AWAITING_MERGE_GATE, CORE_PR } from '../helpers/howToTestFixtures';
+import { AWAITING_MERGE_GATE, CORE_PR, recordDto } from '../helpers/howToTestFixtures';
 import type { DevelopmentGateActions } from '@/components/github/DevelopmentGateFrame';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
@@ -44,10 +44,13 @@ vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace }));
 const { fetchApprovalGateOverlay } = vi.hoisted(() => ({ fetchApprovalGateOverlay: vi.fn() }));
 vi.mock('@/lib/approvals/approvalOverlayClient', () => ({ fetchApprovalGateOverlay }));
 
-const { decideApprovalGateAction } = vi.hoisted(() => ({ decideApprovalGateAction: vi.fn() }));
+const { decideApprovalGateAction, approveAndMergeAction } = vi.hoisted(() => ({
+  decideApprovalGateAction: vi.fn(),
+  approveAndMergeAction: vi.fn(),
+}));
 vi.mock('@/app/(authed)/items/[key]/approvalGateActions', () => ({
   decideApprovalGateAction,
-  approveAndMergeAction: vi.fn(),
+  approveAndMergeAction,
   retryApproveAndMergeMemberAction: vi.fn(),
 }));
 
@@ -161,6 +164,7 @@ beforeEach(() => {
   shallowReplace.mockReset();
   fetchApprovalGateOverlay.mockReset();
   decideApprovalGateAction.mockReset();
+  approveAndMergeAction.mockReset();
   refresh.mockReset();
 });
 afterEach(cleanup);
@@ -640,5 +644,95 @@ describe('the item page with a refused design gate', () => {
       }),
     );
     expect(screen.getByTestId('rail').textContent).toBe('todo');
+  });
+});
+
+// ── Story gate MOTIR-6428 — the overlay's Development-frame arm repaints too ─────────────
+
+describe('the overlay’s Development frame repaints the header chip from what a press wrote', () => {
+  /** The overlay read for a card whose Development block holds the gate (Workflow B). */
+  function developmentRead(
+    gate: ApprovalGateDTO,
+    designLeads: boolean,
+  ): ApprovalGateOverlayReadDTO {
+    return read({
+      gate,
+      subject: {
+        state: 'resolved',
+        kind: 'pull_request_approval',
+        pullRequests: [CORE_PR],
+        repoDelivery: [],
+        deliveries: [],
+        howToTest: recordDto(),
+        acceptanceEvidence: null,
+        acceptanceGate: null,
+        designEvidence: designLeads ? ({ id: 'ev-1' } as never) : null,
+        isDesignCard: designLeads,
+        members: [],
+        mergeSubjectVersion: null,
+      },
+    });
+  }
+
+  it('a design leading the frame, sent back with Revise → the chip reads To Do', async () => {
+    decideApprovalGateAction.mockResolvedValue({
+      ok: true,
+      gate: sentBack('revise'),
+      filesKept: false,
+      statusWritten: 'todo',
+    });
+    const dialog = await openOverlay(developmentRead(GATE, true));
+    expect(headerChip(dialog, 'In Review')).toHaveLength(1);
+
+    await sendBack(dialog, verdict.revise.label);
+
+    expect(decideApprovalGateAction).toHaveBeenCalledWith(
+      expect.objectContaining({ decision: 'request_changes', refusalVerdict: 'revise' }),
+    );
+    expect(headerChip(dialog, 'To Do')).toHaveLength(1);
+  });
+
+  it('Approve and merge whose approval wrote a status → the chip reads it', async () => {
+    const merge: ApprovalGateDTO = { ...AWAITING_MERGE_GATE, workItemId: 'wi-51' };
+    approveAndMergeAction.mockResolvedValue({
+      ok: true,
+      gate: {
+        ...merge,
+        state: 'approved',
+        decidedById: 'user-1',
+        decidedByLabel: 'Yue',
+        decidedAt: '2026-09-26T10:14:00.000Z',
+        outcomeRef: 'done',
+      },
+      members: [],
+    });
+    const dialog = await openOverlay(developmentRead(merge, false));
+    const pra = en.approvalGate.pullRequestApproval;
+    fireEvent.click(within(dialog).getByRole('button', { name: pra.verb.approveAndMerge }));
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole('button', {
+          name: en.approvalGate.confirm.proceed.replace('{verb}', pra.verb.approveAndMerge),
+        }),
+      );
+    });
+    expect(approveAndMergeAction).toHaveBeenCalledTimes(1);
+    expect(headerChip(dialog, 'Done')).toHaveLength(1);
+  });
+
+  it('an APPROVE the door does not offer is the frame’s plain VERB_NOT_OFFERED refusal', async () => {
+    const onDecide = vi.fn(async () => ({ tag: 'APPROVAL_GATE_VERB_NOT_OFFERED' }) as GateRefusal);
+    renderWithIntl(<Frame onDecide={onDecide} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: en.approvalGate.confirm.proceed.replace('{verb}', 'Approve'),
+        }),
+      );
+    });
+    const alert = screen.getByRole('alert').textContent ?? '';
+    expect(alert).toContain(en.approvalGate.refusal.verbNotOffered.title);
+    expect(alert).not.toContain(en.approvalGate.refusal.verbNotOffered.verdict.title);
   });
 });
