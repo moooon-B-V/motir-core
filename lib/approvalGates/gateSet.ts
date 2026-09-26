@@ -88,6 +88,11 @@ export interface ExistingGate {
    *  only a decision made BEFORE it). Optional so a caller with no decision in hand
    *  need not spell one. */
   decidedAt?: Date | null;
+  /** WHAT A REFUSAL MEANT — `revise` / `re_plan` on a Motir-pressed design or story-run
+   *  acceptance refusal, else null (MOTIR-6501). The acceptance merge hold reads it: a
+   *  refusal carrying a verdict holds the story's merge, a verdict-less one (GitHub, or a
+   *  finished story) holds nothing. Optional; absent reads as no verdict. */
+  refusalVerdict?: string | null;
 }
 
 export interface GateSetInput {
@@ -362,6 +367,42 @@ export function designHoldsMerge(
 }
 
 /**
+ * Does a STORY RUN's refused acceptance hold its merge (Story MOTIR-6071 · MOTIR-6503;
+ * `acceptance-refusal-verdict.md` §3)? True while the story's latest acceptance gate is a
+ * `changes_requested` carrying a VERDICT, over the receipt that is CURRENT.
+ *
+ * ⚠️ WITHDRAWING THE MERGE GATE IS NOT ENOUGH, AND THIS IS WHY IT EXISTS. The refusal
+ * withdraws the story's waiting merge gate (`pulled_back`), but a withdrawn gate is not a
+ * decided one (`alreadyDecided`), so the next reconcile at a green set would ask the merge
+ * question again — alone, because the acceptance question is already answered over that
+ * receipt. That reconcile comes from `ciPromotion`, the reconcile sweep, a status move at
+ * or above `implemented`, and every push `motir fix` makes before the video is re-recorded.
+ * So while the refusal stands the merge is neither ASKED (`resolveGateSet`) nor PERFORMED
+ * by a manual-mode path (the approve press, the GitHub review sync). It is the rule a
+ * sent-back design already follows ({@link designHoldsMerge}).
+ *
+ * ⚠️ A NEWER RECEIPT RELEASES IT — the predicate reads the CURRENT receipt, so the video
+ * `motir fix` publishes after a Re-run asks the acceptance and the merge together again.
+ * A refusal with NO verdict — GitHub-sourced, or a finished story's — holds nothing: a
+ * finished story has no merge gate, and a GitHub refusal moves nothing (§2, §7).
+ */
+export function acceptanceRefusalHoldsMerge(
+  currentReceipt: { id: string } | null,
+  latestAcceptanceGate: {
+    state: string;
+    subjectId: string;
+    refusalVerdict?: string | null;
+  } | null,
+): boolean {
+  if (!currentReceipt || !latestAcceptanceGate) return false;
+  return (
+    latestAcceptanceGate.state === 'changes_requested' &&
+    latestAcceptanceGate.subjectId === currentReceipt.id &&
+    (latestAcceptanceGate.refusalVerdict ?? null) !== null
+  );
+}
+
+/**
  * Does a decided DECISION approval already authorise this card's merge (clause 5, the
  * design gate's Q4 carry one kind over)? True only when the card's latest decision
  * gate is `approved` over the version the card's pull requests carry NOW.
@@ -550,7 +591,21 @@ export function resolveGateSet(input: GateSetInput): GateSet {
     });
   }
 
-  if (input.prMergeMode === 'manual' && !answered && everyMemberMergeable && version !== null) {
+  // ⚠️ A STORY RUN'S REFUSED ACCEPTANCE HOLDS THE MERGE (MOTIR-6503;
+  // `acceptance-refusal-verdict.md` §3). The refusal withdrew the merge gate, and without
+  // this clause the very next green would ask it again, alone — so the refused code could
+  // be merged by one press. Held until a NEWER receipt is current.
+  const acceptanceHolds = acceptanceRefusalHoldsMerge(
+    input.currentReceipt,
+    input.latestAcceptanceGate,
+  );
+  if (
+    input.prMergeMode === 'manual' &&
+    !answered &&
+    !acceptanceHolds &&
+    everyMemberMergeable &&
+    version !== null
+  ) {
     awaited.push({
       kind: 'pull_request_approval',
       subjectId: input.workItemId,

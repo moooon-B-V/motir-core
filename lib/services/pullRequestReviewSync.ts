@@ -22,7 +22,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { approvalGatesService } from './approvalGatesService';
 import { resolveRunTargetFor } from './runTarget';
 import { runSyncedMerge } from './syncedMergeRunner';
-import { designResultHoldsMerge } from './mergeGates';
+import { acceptanceResultHoldsMerge, designResultHoldsMerge } from './mergeGates';
 import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 
 // A REVIEW DECIDES THE SET (Story MOTIR-4910 · MOTIR-5597;
@@ -72,7 +72,10 @@ export type ReviewEvaluationOutcome =
    *  nobody has accepted yet (MOTIR-5677; `approval-gates.md` §8's FIFTH AMENDMENT,
    *  clause 5). The reviews stay recorded; the decision's own press merges the set, and
    *  nobody is asked twice. */
-  | 'held_by_decision';
+  | 'held_by_decision'
+  /** A story run's refused acceptance holds the merge until a newer video is approved
+   *  (MOTIR-6503). */
+  | 'held_by_acceptance';
 
 export interface ReviewEvaluation {
   workItemId: string;
@@ -206,6 +209,11 @@ async function evaluateOne(workItemId: string, workspaceId: string): Promise<Rev
       if (item && (await decisionHoldsMerge(item, tx))) {
         return { set, verdict, actors: null, held: 'held_by_decision' as const };
       }
+    }
+    // ⚠️ …NOR THE CODE A REVIEWER SENT BACK FROM ITS ACCEPTANCE VIDEO (MOTIR-6503) — the
+    // same hold, read before the door would refuse it under its lock.
+    if (verdict.verdict === 'approved' && (await acceptanceResultHoldsMerge(workItemId, tx))) {
+      return { set, verdict, actors: null, held: 'held_by_acceptance' as const };
     }
     const actors = await resolveActors(verdict.decider.reviewerGithubUserId, set.workspaceId, tx);
     return { set, verdict, actors, held: false as const };

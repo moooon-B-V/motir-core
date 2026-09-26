@@ -8718,6 +8718,10 @@
         "decision": {
           "title": "Accept the decision before these pull requests merge.",
           "next": "Approve the decision document above. One press accepts it and merges them."
+        },
+        "acceptance": {
+          "title": "Approve a newer acceptance video before these pull requests merge.",
+          "next": "The story's video was sent back. Once a new one is recorded, approving it merges them."
         }
       },
       "alreadyAwaiting": {

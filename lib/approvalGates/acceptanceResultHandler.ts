@@ -7,6 +7,7 @@ import type {
 } from '@/lib/approvalGates/registry';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { hasOpenOwnDelivery } from './verdictOffer';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
@@ -201,13 +202,39 @@ export const acceptanceResultGateHandler: GateHandler<AcceptanceEvidence> = {
   },
 
   /**
-   * REQUEST CHANGES — stamp the receipt `changes_requested` and move nothing, as
-   * every kind does (§3). The retired path also moved the story
-   * `in_review → in_progress`; that write retires with it, so a request for changes
-   * is a record rather than a second status writer.
+   * REQUEST CHANGES — stamp the receipt `changes_requested`, and write NO status on any
+   * verdict (`acceptance-refusal-verdict.md` §2). The retired path also moved the story
+   * `in_review → in_progress`; that write retires with it.
+   *
+   * ⚠️ ON A STORY RUN, EITHER VERDICT WITHDRAWS THE STORY'S OTHER WAITING APPROVALS
+   * (MOTIR-6503; §3). The door offers a verdict exactly on a story run
+   * (`refusalVerdictOfferFor`), so a non-null `refusalVerdict` IS the story-run arm. The
+   * paired merge gate is the one that matters: left awaiting, one press on it would merge
+   * the code the reviewer just refused. It is superseded `pulled_back` in THIS
+   * transaction, the deciding gate excluded, and the children and their gates are not
+   * touched. Re-run and Re-plan make the SAME write — what differs is what comes next
+   * (`motir fix` or the planner). The gate set then HOLDS the merge until a newer receipt
+   * (`acceptanceRefusalHoldsMerge`), which is what keeps it withdrawn.
+   *
+   * `returnCardToTodo` is deliberately NOT used: nothing moves.
+   *
+   * A verdict-less refusal — a finished story's, or one synced from GitHub — withdraws
+   * nothing and holds nothing, as before.
    */
   async requestChanges(args: GateEffectArgs): Promise<GateEffect> {
     await stampReceipt(args, 'changes_requested');
-    return { statusWritten: null, statusDeferredReason: 'request_changes_moves_nothing' };
+    if (args.refusalVerdict === null || args.refusalVerdict === undefined) {
+      return { statusWritten: null, statusDeferredReason: 'request_changes_moves_nothing' };
+    }
+    await approvalGateRepository.supersedeOtherAwaitingByWorkItem(
+      requireGateCard(args.gate, 'acceptanceResultHandler'),
+      args.gate.id,
+      'pulled_back',
+      args.tx,
+    );
+    return {
+      statusWritten: null,
+      statusDeferredReason: 'acceptance_refusal_withdraws_merge_only',
+    };
   },
 };
