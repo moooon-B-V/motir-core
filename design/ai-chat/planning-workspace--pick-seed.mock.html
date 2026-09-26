@@ -16,7 +16,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>The picked option planned — the seeded PLAN turn and the Plans row (MOTIR-6432)</title>
+    <title>The picked option planned — the planner started, and the Plans row (MOTIR-6432)</title>
     <style>
       /*! tailwindcss v4.3.0 | MIT License | https://tailwindcss.com */
       @layer properties;
@@ -8533,7 +8533,10 @@
         (panel 1, the seeded row); it edits neither. The ask and the door that open this surface are
         <span class="ref">work-items/approval-control--pick-plan.mock.html</span>. The anchor rule
         and the turn&rsquo;s parts are
-        <code>docs/decisions/picked-option-planning.md</code> (MOTIR-6431).
+        <code>docs/decisions/picked-option-planning.md</code> (MOTIR-6431); that yes STARTS the
+        planning, with the turn sent once, is
+        <code>docs/decisions/picked-option-planning-starts.md</code> (MOTIR-6455). The running state
+        is lifted from <span class="ref">plan-change-run-live.mock.html</span> state A.
       </p>
     </div>
 
@@ -8542,35 +8545,32 @@
         <div class="snum">1</div>
         <div>
           <h2>
-            <code>decision_choice</code> · an option chosen — a FOLLOW-UP, anchored on the
-            choice&rsquo;s PARENT, en and zh <i>(revised 2026-09-26 after changes requested)</i>
+            <code>decision_choice</code> · an option chosen — the planner STARTED, anchored on the
+            choice&rsquo;s PARENT, right after yes (en and zh) <i>(revision 3, 2026-09-26)</i>
           </h2>
           <p>
-            The planner KNOWS the choice has just been made and that this is its follow-up planning
-            — on three surfaces at once. The chip is <b>follow-up</b> (never <i>in context</i>,
-            never <i>plan change</i>). The lead names the choice it follows (<i
-              >Opened to plan the follow-up to ACME-42, on ACME-40.</i
-            >) and the second line says what just happened and what to do, in place of the generic
-            <i>What should change — or what would you like to know?</i>. A
-            <b>Follow-up to a choice</b> card, composed from the chosen record&rsquo;s own chips,
-            shows what was chosen and that it was just now. And the unsent first turn itself opens
-            by telling the planner:
-            <i
-              >I just chose an option on this choice — this is the follow-up planning it was waiting
-              for.</i
-            >
-            Every value comes from the stamped <code>chosenOption</code>. The field opens at its
-            tail, and no empty placeholder flashes (the base&rsquo;s sheet 6).
+            The person pressed <b>Choose</b>, then yes on the ask. There is nothing left for them to
+            do: the pick&rsquo;s first turn is already <b>sent</b>, as their first message (<code
+              >turn 1</code
+            >, the shipped user bubble), and the planner is working on it — the rail&rsquo;s shipped
+            running state, lifted from <span class="ref">plan-change-run-live.mock.html</span> state
+            A: the <i>Sent to Motir AI</i> marker, the act rows with the spinner on the newest, and
+            the running bar with <b>Stop</b>. No pre-filled composer and no Send step. The follow-up
+            framing stays from revision 2: the <b>follow-up</b> chip, the lead naming the choice,
+            the <b>Follow-up to a choice</b> card, and a turn that tells the planner this is the
+            follow-up. The opener&rsquo;s second line now says the planner is on it (<i
+              >Motir AI is planning what it gates.</i
+            >), never an invitation to send.
           </p>
         </div>
       </div>
       <div class="sheetbody">
         <div class="row2">
           <div class="stack" style="flex: 1; min-width: var(--rail-w)">
-            <span class="shotcap">en · light</span>
+            <span class="shotcap">en · light · just after yes</span>
             <div
               class="anatbox railbox"
-              style="height: 560px; display: flex; flex-direction: column"
+              style="height: 940px; display: flex; flex-direction: column"
             >
               <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
                 <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
@@ -8607,8 +8607,8 @@
                   >
                     <span>Opened to plan the follow-up to ACME-42, on ACME-40.</span>
                     <span
-                      >You just chose Managed object storage. Send the message below to plan what it
-                      gates, or edit it first.</span
+                      >You just chose Managed object storage. Motir AI is planning what it
+                      gates.</span
                     >
                   </div>
                 </div>
@@ -8639,21 +8639,154 @@
                   </p>
                   <p class="mt-1.5 text-xs text-(--el-text-secondary)">Chosen by Yue · just now</p>
                 </div>
+                <div class="flex items-start gap-2 flex-row-reverse">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                    >·</span
+                  >
+                  <div
+                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text) wrap-anywhere"
+                    data-testid="pick-sent-turn"
+                  >
+                    <span
+                      class="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80"
+                      >turn 1</span
+                    >ACME-42 · Choose where exports live<br /><br />I just chose an option on this
+                    choice — this is the follow-up planning it was waiting for.<br /><br />The
+                    option chosen: Managed object storage<br />Best if you want: less to operate<br /><br />What
+                    this choice gates:<br />Report exports — the storage adapter, the retention rule
+                    and the download page.<br /><br />Plan this work with the option chosen.
+                  </div>
+                </div>
+                <p
+                  class="text-center text-xs text-(--el-text-secondary)"
+                  data-testid="plan-change-marker"
+                >
+                  Sent to Motir AI
+                </p>
+                <ol
+                  class="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+                  aria-live="polite"
+                  data-testid="plan-change-acts"
+                >
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-send size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >submit</span
+                    ><span class="min-w-0 flex-1">Sending the conversation to Motir AI</span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-book-open-text size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 7v14" />
+                        <path d="M16 12h2" />
+                        <path d="M16 8h2" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        />
+                        <path d="M6 12h2" />
+                        <path d="M6 8h2" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >retrieval</span
+                    ><span class="min-w-0 flex-1">Read the plan tree — <code>get_item</code></span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-(--el-text)">
+                    <span
+                      role="status"
+                      aria-label="Loading"
+                      class="inline-block animate-spin rounded-full border-current border-t-transparent h-3.5 w-3.5 border-[1.5px] shrink-0 mt-px"
+                      aria-hidden="true"
+                    ></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >drill</span
+                    ><span class="min-w-0 flex-1">Working through ACME-40…</span>
+                  </li>
+                </ol>
               </div>
               <form class="relative border-t border-(--el-border) px-3 py-3">
-                <div class="flex items-end gap-2">
+                <div
+                  class="mb-2 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+                  data-testid="plan-change-running-bar"
+                >
+                  <span class="shrink-0 text-(--el-text-secondary)"
+                    ><span
+                      role="status"
+                      aria-label="Loading"
+                      class="inline-block animate-spin rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px]"
+                      aria-hidden="true"
+                    ></span></span
+                  ><span class="min-w-0 flex-1 truncate text-xs text-(--el-text-secondary)"
+                    >Working through ACME-40…</span
+                  ><button
+                    type="button"
+                    data-variant="secondary"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 border border-(--el-border) bg-(--el-surface) text-(--el-text) hover:bg-(--el-surface-soft) h-(--height-btn-sm) px-3 text-xs shrink-0"
+                  >
+                    <span
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-circle-stop size-4"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <rect x="9" y="9" width="6" height="6" rx="1" /></svg></span
+                    >Stop
+                  </button>
+                </div>
+                <div class="flex items-center gap-2">
                   <div
                     role="combobox"
                     aria-expanded="false"
                     aria-haspopup="listbox"
                     aria-controls="planning-target-listbox"
-                    class="relative flex min-w-0 flex-1 items-end"
+                    class="relative flex min-w-0 flex-1 items-center"
                   >
                     <button
                       type="button"
                       aria-label="Add a work item to plan around"
                       data-testid="planning-target-trigger"
-                      class="absolute bottom-1.5 left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+                      class="absolute left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -8668,37 +8801,23 @@
                         class="lucide lucide-at-sign size-4"
                         aria-hidden="true"
                       >
-                        <circle cx="12" cy="12" r="4"></circle>
-                        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"></path>
+                        <circle cx="12" cy="12" r="4" />
+                        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
                       </svg></button
-                    ><textarea
+                    ><input
                       aria-autocomplete="list"
-                      rows="1"
                       placeholder="Reply, or refine further…"
                       aria-label="Reply, or refine further…"
-                      data-autogrow
-                      data-scroll-end
-                      class="min-h-(--height-input) resize-none overflow-y-hidden min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
-                      style="height: 44px; padding-block: 11px"
-                    >
-ACME-42 · Choose where exports live
-
-I just chose an option on this choice — this is the follow-up planning it was waiting for.
-
-The option chosen: Managed object storage
-Best if you want: less to operate
-
-What this choice gates:
-Report exports — the storage adapter, the retention rule and the download page.
-
-Plan this work with the option chosen.</textarea
-                    >
+                      class="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+                      type="text"
+                      value=""
+                    />
                   </div>
                   <button
                     type="submit"
                     data-variant="primary"
-                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
                     aria-label="Send"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
                   >
                     <span
                       ><svg
@@ -8716,8 +8835,8 @@ Plan this work with the option chosen.</textarea
                       >
                         <path
                           d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
-                        ></path>
-                        <path d="m21.854 2.147-10.94 10.939"></path></svg
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" /></svg
                     ></span>
                   </button>
                 </div>
@@ -8725,10 +8844,10 @@ Plan this work with the option chosen.</textarea
             </div>
           </div>
           <div class="stack" style="flex: 1; min-width: var(--rail-w)">
-            <span class="shotcap">zh · light</span>
+            <span class="shotcap">zh · light · just after yes</span>
             <div
               class="anatbox railbox"
-              style="height: 560px; display: flex; flex-direction: column"
+              style="height: 940px; display: flex; flex-direction: column"
             >
               <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
                 <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
@@ -8764,9 +8883,7 @@ Plan this work with the option chosen.</textarea
                     class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
                   >
                     <span>已在 ACME-40 上打开，规划 ACME-42 的后续工作。</span>
-                    <span
-                      >你刚选择了托管对象存储。发送下面的消息来规划它决定的工作，也可以先修改。</span
-                    >
+                    <span>你刚选择了托管对象存储。Motir AI 正在规划它决定的工作。</span>
                   </div>
                 </div>
                 <div
@@ -8796,21 +8913,150 @@ Plan this work with the option chosen.</textarea
                   </p>
                   <p class="mt-1.5 text-xs text-(--el-text-secondary)">由 Yue 选择 · 刚刚</p>
                 </div>
+                <div class="flex items-start gap-2 flex-row-reverse">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                    >·</span
+                  >
+                  <div
+                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text) wrap-anywhere"
+                    data-testid="pick-sent-turn"
+                  >
+                    <span
+                      class="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80"
+                      >turn 1</span
+                    >ACME-42 · 选择导出文件的存放位置<br /><br />我刚在这个选择上选定了一个选项——这就是它在等的后续规划。<br /><br />选中的选项：托管对象存储<br />如果你更看重：更少运维<br /><br />这个选择决定的工作：<br />报表导出——存储适配器、保留规则和下载页。<br /><br />请按选中的选项规划这项工作。
+                  </div>
+                </div>
+                <p
+                  class="text-center text-xs text-(--el-text-secondary)"
+                  data-testid="plan-change-marker"
+                >
+                  已发送给 Motir AI
+                </p>
+                <ol
+                  class="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+                  aria-live="polite"
+                  data-testid="plan-change-acts"
+                >
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-send size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >submit</span
+                    ><span class="min-w-0 flex-1">正在把对话发送给 Motir AI</span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-book-open-text size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 7v14" />
+                        <path d="M16 12h2" />
+                        <path d="M16 8h2" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        />
+                        <path d="M6 12h2" />
+                        <path d="M6 8h2" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >retrieval</span
+                    ><span class="min-w-0 flex-1">读取了计划树 — <code>get_item</code></span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-(--el-text)">
+                    <span
+                      role="status"
+                      aria-label="Loading"
+                      class="inline-block animate-spin rounded-full border-current border-t-transparent h-3.5 w-3.5 border-[1.5px] shrink-0 mt-px"
+                      aria-hidden="true"
+                    ></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >drill</span
+                    ><span class="min-w-0 flex-1">正在梳理 ACME-40…</span>
+                  </li>
+                </ol>
               </div>
               <form class="relative border-t border-(--el-border) px-3 py-3">
-                <div class="flex items-end gap-2">
+                <div
+                  class="mb-2 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+                  data-testid="plan-change-running-bar"
+                >
+                  <span class="shrink-0 text-(--el-text-secondary)"
+                    ><span
+                      role="status"
+                      aria-label="Loading"
+                      class="inline-block animate-spin rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px]"
+                      aria-hidden="true"
+                    ></span></span
+                  ><span class="min-w-0 flex-1 truncate text-xs text-(--el-text-secondary)"
+                    >正在梳理 ACME-40…</span
+                  ><button
+                    type="button"
+                    data-variant="secondary"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 border border-(--el-border) bg-(--el-surface) text-(--el-text) hover:bg-(--el-surface-soft) h-(--height-btn-sm) px-3 text-xs shrink-0"
+                  >
+                    <span
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-circle-stop size-4"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <rect x="9" y="9" width="6" height="6" rx="1" /></svg></span
+                    >停止
+                  </button>
+                </div>
+                <div class="flex items-center gap-2">
                   <div
                     role="combobox"
                     aria-expanded="false"
                     aria-haspopup="listbox"
                     aria-controls="planning-target-listbox"
-                    class="relative flex min-w-0 flex-1 items-end"
+                    class="relative flex min-w-0 flex-1 items-center"
                   >
                     <button
                       type="button"
-                      aria-label="添加要围绕规划的工作项"
+                      aria-label="Add a work item to plan around"
                       data-testid="planning-target-trigger"
-                      class="absolute bottom-1.5 left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+                      class="absolute left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -8825,37 +9071,23 @@ Plan this work with the option chosen.</textarea
                         class="lucide lucide-at-sign size-4"
                         aria-hidden="true"
                       >
-                        <circle cx="12" cy="12" r="4"></circle>
-                        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"></path>
+                        <circle cx="12" cy="12" r="4" />
+                        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
                       </svg></button
-                    ><textarea
+                    ><input
                       aria-autocomplete="list"
-                      rows="1"
                       placeholder="回复，或继续细化…"
                       aria-label="回复，或继续细化…"
-                      data-autogrow
-                      data-scroll-end
-                      class="min-h-(--height-input) resize-none overflow-y-hidden min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
-                      style="height: 44px; padding-block: 11px"
-                    >
-ACME-42 · 选择导出文件的存放位置
-
-我刚在这个选择上选定了一个选项——这就是它在等的后续规划。
-
-选中的选项：托管对象存储
-如果你更看重：更少运维
-
-这个选择决定的工作：
-报表导出——存储适配器、保留规则和下载页。
-
-请按选中的选项规划这项工作。</textarea
-                    >
+                      class="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+                      type="text"
+                      value=""
+                    />
                   </div>
                   <button
                     type="submit"
                     data-variant="primary"
+                    aria-label="Send"
                     class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
-                    aria-label="发送"
                   >
                     <span
                       ><svg
@@ -8873,8 +9105,8 @@ ACME-42 · 选择导出文件的存放位置
                       >
                         <path
                           d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
-                        ></path>
-                        <path d="m21.854 2.147-10.94 10.939"></path></svg
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" /></svg
                     ></span>
                   </button>
                 </div>
@@ -8888,25 +9120,329 @@ ACME-42 · 选择导出文件的存放位置
       <div class="sheethead">
         <div class="snum">2</div>
         <div>
-          <h2>
-            <code>decision_choice</code> · an option chosen — no open container, so the follow-up
-            opens at the PROJECT
-          </h2>
+          <h2>The SAME session once the planner has answered — and a project anchor</h2>
           <p>
-            A root choice, a folder-filed one, or a chain whose every ancestor is <code>done</code>:
-            the same follow-up framing, on the project (<i
-              >Opened on Acme to plan the follow-up to ACME-42.</i
-            >), and the turn says why it opened there right after the follow-up line.
+            Left: the session of sheet 1 a moment later. The act rows are complete, the
+            planner&rsquo;s answer sits under them, the running bar is gone and the composer is idle
+            for a reply. Reopening the door returns here and sends nothing (the turn is sent once,
+            <code>picked-option-planning-starts.md</code> §2). Right: a root choice, a folder-filed
+            one, or a chain whose every ancestor is <code>done</code> — the same start, on the
+            project (<i>Opened on Acme to plan the follow-up to ACME-42.</i>), and the sent turn
+            says why it opened there, right after the follow-up line.
           </p>
         </div>
       </div>
       <div class="sheetbody">
         <div class="row2">
           <div class="stack" style="flex: 1; min-width: var(--rail-w)">
-            <span class="shotcap">en · light · project anchor</span>
+            <span class="shotcap">en · light · answered</span>
             <div
               class="anatbox railbox"
-              style="height: 560px; display: flex; flex-direction: column"
+              style="height: 940px; display: flex; flex-direction: column"
+            >
+              <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
+                <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
+                ><span
+                  class="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                  >Motir AI</span
+                ><span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) ml-auto"
+                  data-testid="planning-mode-chip"
+                  >follow-up</span
+                >
+              </div>
+              <div class="railscroll" role="log" style="flex: 1; min-height: 0">
+                <div class="flex items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <span>Opened to plan the follow-up to ACME-42, on ACME-40.</span>
+                    <span
+                      >You just chose Managed object storage. Motir AI is planning what it
+                      gates.</span
+                    >
+                  </div>
+                </div>
+                <div
+                  data-testid="pick-followup-card"
+                  class="mt-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2"
+                >
+                  <p
+                    class="text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
+                  >
+                    Follow-up to a choice
+                  </p>
+                  <p class="mt-1.5 text-[13px] font-medium text-(--el-text)">
+                    <span class="font-mono">ACME-42</span> · Choose where exports live
+                  </p>
+                  <p
+                    class="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-(--el-text-secondary)"
+                  >
+                    <span class="text-(--el-text)">Chose</span
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent"
+                      >Managed object storage</span
+                    ><span>best if you want</span
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-sky) text-(--el-text-strong) border-transparent"
+                      >less to operate</span
+                    >
+                  </p>
+                  <p class="mt-1.5 text-xs text-(--el-text-secondary)">Chosen by Yue · just now</p>
+                </div>
+                <div class="flex items-start gap-2 flex-row-reverse">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                    >·</span
+                  >
+                  <div
+                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text) wrap-anywhere"
+                    data-testid="pick-sent-turn"
+                  >
+                    <span
+                      class="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80"
+                      >turn 1</span
+                    >ACME-42 · Choose where exports live<br /><br />I just chose an option on this
+                    choice — this is the follow-up planning it was waiting for.<br /><br />The
+                    option chosen: Managed object storage<br />Best if you want: less to operate<br /><br />What
+                    this choice gates:<br />Report exports — the storage adapter, the retention rule
+                    and the download page.<br /><br />Plan this work with the option chosen.
+                  </div>
+                </div>
+                <p
+                  class="text-center text-xs text-(--el-text-secondary)"
+                  data-testid="plan-change-marker"
+                >
+                  Sent to Motir AI
+                </p>
+                <ol
+                  class="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+                  aria-live="polite"
+                  data-testid="plan-change-acts"
+                >
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-send size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >submit</span
+                    ><span class="min-w-0 flex-1">Sending the conversation to Motir AI</span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-book-open-text size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 7v14" />
+                        <path d="M16 12h2" />
+                        <path d="M16 8h2" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        />
+                        <path d="M6 12h2" />
+                        <path d="M6 8h2" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >retrieval</span
+                    ><span class="min-w-0 flex-1">Read the plan tree — <code>get_item</code></span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-list-tree size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M8 5h13" />
+                        <path d="M13 12h8" />
+                        <path d="M13 19h8" />
+                        <path d="M3 10a2 2 0 0 0 2 2h3" />
+                        <path d="M3 5v12a2 2 0 0 0 2 2h3" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >drill</span
+                    ><span class="min-w-0 flex-1">Worked through ACME-40</span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-list-tree size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M8 5h13" />
+                        <path d="M13 12h8" />
+                        <path d="M13 19h8" />
+                        <path d="M3 10a2 2 0 0 0 2 2h3" />
+                        <path d="M3 5v12a2 2 0 0 0 2 2h3" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >proposed</span
+                    ><span class="min-w-0 flex-1">4 items proposed</span>
+                  </li>
+                </ol>
+                <div class="flex items-start gap-2" data-testid="pick-planner-answer">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    Here is the follow-up for <b>Managed object storage</b>, under ACME-40: four new
+                    items — the storage adapter, the retention rule, the download page, and their
+                    test. They are on the canvas for you to review.
+                  </div>
+                </div>
+              </div>
+              <form class="relative border-t border-(--el-border) px-3 py-3">
+                <div class="flex items-center gap-2">
+                  <div
+                    role="combobox"
+                    aria-expanded="false"
+                    aria-haspopup="listbox"
+                    aria-controls="planning-target-listbox"
+                    class="relative flex min-w-0 flex-1 items-center"
+                  >
+                    <button
+                      type="button"
+                      aria-label="Add a work item to plan around"
+                      data-testid="planning-target-trigger"
+                      class="absolute left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-at-sign size-4"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="4" />
+                        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+                      </svg></button
+                    ><input
+                      aria-autocomplete="list"
+                      placeholder="Reply, or refine further…"
+                      aria-label="Reply, or refine further…"
+                      class="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+                      type="text"
+                      value=""
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    data-variant="primary"
+                    aria-label="Send"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                  >
+                    <span
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-send size-4"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" /></svg
+                    ></span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
+            <span class="shotcap">en · light · project anchor, just after yes</span>
+            <div
+              class="anatbox railbox"
+              style="height: 940px; display: flex; flex-direction: column"
             >
               <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
                 <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
@@ -8943,8 +9479,8 @@ ACME-42 · 选择导出文件的存放位置
                   >
                     <span>Opened on Acme to plan the follow-up to ACME-42.</span>
                     <span
-                      >You just chose Managed object storage. Send the message below to plan what it
-                      gates, or edit it first.</span
+                      >You just chose Managed object storage. Motir AI is planning what it
+                      gates.</span
                     >
                   </div>
                 </div>
@@ -8975,21 +9511,155 @@ ACME-42 · 选择导出文件的存放位置
                   </p>
                   <p class="mt-1.5 text-xs text-(--el-text-secondary)">Chosen by Yue · just now</p>
                 </div>
+                <div class="flex items-start gap-2 flex-row-reverse">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                    >·</span
+                  >
+                  <div
+                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text) wrap-anywhere"
+                    data-testid="pick-sent-turn"
+                  >
+                    <span
+                      class="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80"
+                      >turn 1</span
+                    >ACME-42 · Choose where exports live<br /><br />I just chose an option on this
+                    choice — this is the follow-up planning it was waiting for.<br /><br />This
+                    choice has no open container, so Motir AI opened on the project.<br /><br />The
+                    option chosen: Managed object storage<br />Best if you want: less to operate<br /><br />What
+                    this choice gates:<br />Report exports — the storage adapter, the retention rule
+                    and the download page.<br /><br />Plan this work with the option chosen.
+                  </div>
+                </div>
+                <p
+                  class="text-center text-xs text-(--el-text-secondary)"
+                  data-testid="plan-change-marker"
+                >
+                  Sent to Motir AI
+                </p>
+                <ol
+                  class="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+                  aria-live="polite"
+                  data-testid="plan-change-acts"
+                >
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-send size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >submit</span
+                    ><span class="min-w-0 flex-1">Sending the conversation to Motir AI</span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-book-open-text size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 7v14" />
+                        <path d="M16 12h2" />
+                        <path d="M16 8h2" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        />
+                        <path d="M6 12h2" />
+                        <path d="M6 8h2" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >retrieval</span
+                    ><span class="min-w-0 flex-1">Read the plan tree — <code>get_item</code></span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-(--el-text)">
+                    <span
+                      role="status"
+                      aria-label="Loading"
+                      class="inline-block animate-spin rounded-full border-current border-t-transparent h-3.5 w-3.5 border-[1.5px] shrink-0 mt-px"
+                      aria-hidden="true"
+                    ></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >drill</span
+                    ><span class="min-w-0 flex-1">Working through ACME-40…</span>
+                  </li>
+                </ol>
               </div>
               <form class="relative border-t border-(--el-border) px-3 py-3">
-                <div class="flex items-end gap-2">
+                <div
+                  class="mb-2 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+                  data-testid="plan-change-running-bar"
+                >
+                  <span class="shrink-0 text-(--el-text-secondary)"
+                    ><span
+                      role="status"
+                      aria-label="Loading"
+                      class="inline-block animate-spin rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px]"
+                      aria-hidden="true"
+                    ></span></span
+                  ><span class="min-w-0 flex-1 truncate text-xs text-(--el-text-secondary)"
+                    >Working through ACME-40…</span
+                  ><button
+                    type="button"
+                    data-variant="secondary"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 border border-(--el-border) bg-(--el-surface) text-(--el-text) hover:bg-(--el-surface-soft) h-(--height-btn-sm) px-3 text-xs shrink-0"
+                  >
+                    <span
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-circle-stop size-4"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <rect x="9" y="9" width="6" height="6" rx="1" /></svg></span
+                    >Stop
+                  </button>
+                </div>
+                <div class="flex items-center gap-2">
                   <div
                     role="combobox"
                     aria-expanded="false"
                     aria-haspopup="listbox"
                     aria-controls="planning-target-listbox"
-                    class="relative flex min-w-0 flex-1 items-end"
+                    class="relative flex min-w-0 flex-1 items-center"
                   >
                     <button
                       type="button"
                       aria-label="Add a work item to plan around"
                       data-testid="planning-target-trigger"
-                      class="absolute bottom-1.5 left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+                      class="absolute left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -9004,39 +9674,23 @@ ACME-42 · 选择导出文件的存放位置
                         class="lucide lucide-at-sign size-4"
                         aria-hidden="true"
                       >
-                        <circle cx="12" cy="12" r="4"></circle>
-                        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"></path>
+                        <circle cx="12" cy="12" r="4" />
+                        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
                       </svg></button
-                    ><textarea
+                    ><input
                       aria-autocomplete="list"
-                      rows="1"
                       placeholder="Reply, or refine further…"
                       aria-label="Reply, or refine further…"
-                      data-autogrow
-                      data-scroll-end
-                      class="min-h-(--height-input) resize-none overflow-y-hidden min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
-                      style="height: 44px; padding-block: 11px"
-                    >
-ACME-42 · Choose where exports live
-
-I just chose an option on this choice — this is the follow-up planning it was waiting for.
-
-This choice has no open container, so Motir AI opened on the project.
-
-The option chosen: Managed object storage
-Best if you want: less to operate
-
-What this choice gates:
-Report exports — the storage adapter, the retention rule and the download page.
-
-Plan this work with the option chosen.</textarea
-                    >
+                      class="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+                      type="text"
+                      value=""
+                    />
                   </div>
                   <button
                     type="submit"
                     data-variant="primary"
-                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
                     aria-label="Send"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
                   >
                     <span
                       ><svg
@@ -9054,19 +9708,21 @@ Plan this work with the option chosen.</textarea
                       >
                         <path
                           d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
-                        ></path>
-                        <path d="m21.854 2.147-10.94 10.939"></path></svg
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" /></svg
                     ></span>
                   </button>
                 </div>
               </form>
             </div>
           </div>
+        </div>
+        <div class="row2">
           <div class="stack" style="flex: 1; min-width: var(--rail-w)">
-            <span class="shotcap">en · light · parent anchor, for comparison</span>
+            <span class="shotcap">zh · light · answered</span>
             <div
               class="anatbox railbox"
-              style="height: 560px; display: flex; flex-direction: column"
+              style="height: 940px; display: flex; flex-direction: column"
             >
               <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
                 <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
@@ -9076,7 +9732,7 @@ Plan this work with the option chosen.</textarea
                 ><span
                   class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) ml-auto"
                   data-testid="planning-mode-chip"
-                  >follow-up</span
+                  >后续规划</span
                 >
               </div>
               <div class="railscroll" role="log" style="flex: 1; min-height: 0">
@@ -9101,11 +9757,8 @@ Plan this work with the option chosen.</textarea
                   <div
                     class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
                   >
-                    <span>Opened to plan the follow-up to ACME-42, on ACME-40.</span>
-                    <span
-                      >You just chose Managed object storage. Send the message below to plan what it
-                      gates, or edit it first.</span
-                    >
+                    <span>已在 ACME-40 上打开，规划 ACME-42 的后续工作。</span>
+                    <span>你刚选择了托管对象存储。Motir AI 正在规划它决定的工作。</span>
                   </div>
                 </div>
                 <div
@@ -9115,41 +9768,196 @@ Plan this work with the option chosen.</textarea
                   <p
                     class="text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
                   >
-                    Follow-up to a choice
+                    选择的后续规划
                   </p>
                   <p class="mt-1.5 text-[13px] font-medium text-(--el-text)">
-                    <span class="font-mono">ACME-42</span> · Choose where exports live
+                    <span class="font-mono">ACME-42</span> · 选择导出文件的存放位置
                   </p>
                   <p
                     class="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-(--el-text-secondary)"
                   >
-                    <span class="text-(--el-text)">Chose</span
+                    <span class="text-(--el-text)">选择了</span
                     ><span
                       class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent"
-                      >Managed object storage</span
-                    ><span>best if you want</span
+                      >托管对象存储</span
+                    ><span>如果你更看重</span
                     ><span
                       class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-sky) text-(--el-text-strong) border-transparent"
-                      >less to operate</span
+                      >更少运维</span
                     >
                   </p>
-                  <p class="mt-1.5 text-xs text-(--el-text-secondary)">Chosen by Yue · just now</p>
+                  <p class="mt-1.5 text-xs text-(--el-text-secondary)">由 Yue 选择 · 刚刚</p>
+                </div>
+                <div class="flex items-start gap-2 flex-row-reverse">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                    >·</span
+                  >
+                  <div
+                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text) wrap-anywhere"
+                    data-testid="pick-sent-turn"
+                  >
+                    <span
+                      class="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80"
+                      >turn 1</span
+                    >ACME-42 · 选择导出文件的存放位置<br /><br />我刚在这个选择上选定了一个选项——这就是它在等的后续规划。<br /><br />选中的选项：托管对象存储<br />如果你更看重：更少运维<br /><br />这个选择决定的工作：<br />报表导出——存储适配器、保留规则和下载页。<br /><br />请按选中的选项规划这项工作。
+                  </div>
+                </div>
+                <p
+                  class="text-center text-xs text-(--el-text-secondary)"
+                  data-testid="plan-change-marker"
+                >
+                  已发送给 Motir AI
+                </p>
+                <ol
+                  class="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+                  aria-live="polite"
+                  data-testid="plan-change-acts"
+                >
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-send size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >submit</span
+                    ><span class="min-w-0 flex-1">正在把对话发送给 Motir AI</span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-book-open-text size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 7v14" />
+                        <path d="M16 12h2" />
+                        <path d="M16 8h2" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        />
+                        <path d="M6 12h2" />
+                        <path d="M6 8h2" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >retrieval</span
+                    ><span class="min-w-0 flex-1">读取了计划树 — <code>get_item</code></span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-list-tree size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M8 5h13" />
+                        <path d="M13 12h8" />
+                        <path d="M13 19h8" />
+                        <path d="M3 10a2 2 0 0 0 2 2h3" />
+                        <path d="M3 5v12a2 2 0 0 0 2 2h3" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >drill</span
+                    ><span class="min-w-0 flex-1">已梳理 ACME-40</span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-list-tree size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M8 5h13" />
+                        <path d="M13 12h8" />
+                        <path d="M13 19h8" />
+                        <path d="M3 10a2 2 0 0 0 2 2h3" />
+                        <path d="M3 5v12a2 2 0 0 0 2 2h3" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >proposed</span
+                    ><span class="min-w-0 flex-1">已提出 4 个工作项</span>
+                  </li>
+                </ol>
+                <div class="flex items-start gap-2" data-testid="pick-planner-answer">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    这是 <b>托管对象存储</b> 的后续规划，位于 ACME-40
+                    下：四个新工作项——存储适配器、保留规则、下载页及其测试。它们已在画布上，等你审阅。
+                  </div>
                 </div>
               </div>
               <form class="relative border-t border-(--el-border) px-3 py-3">
-                <div class="flex items-end gap-2">
+                <div class="flex items-center gap-2">
                   <div
                     role="combobox"
                     aria-expanded="false"
                     aria-haspopup="listbox"
                     aria-controls="planning-target-listbox"
-                    class="relative flex min-w-0 flex-1 items-end"
+                    class="relative flex min-w-0 flex-1 items-center"
                   >
                     <button
                       type="button"
                       aria-label="Add a work item to plan around"
                       data-testid="planning-target-trigger"
-                      class="absolute bottom-1.5 left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+                      class="absolute left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -9164,37 +9972,23 @@ Plan this work with the option chosen.</textarea
                         class="lucide lucide-at-sign size-4"
                         aria-hidden="true"
                       >
-                        <circle cx="12" cy="12" r="4"></circle>
-                        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"></path>
+                        <circle cx="12" cy="12" r="4" />
+                        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
                       </svg></button
-                    ><textarea
+                    ><input
                       aria-autocomplete="list"
-                      rows="1"
-                      placeholder="Reply, or refine further…"
-                      aria-label="Reply, or refine further…"
-                      data-autogrow
-                      data-scroll-end
-                      class="min-h-(--height-input) resize-none overflow-y-hidden min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
-                      style="height: 44px; padding-block: 11px"
-                    >
-ACME-42 · Choose where exports live
-
-I just chose an option on this choice — this is the follow-up planning it was waiting for.
-
-The option chosen: Managed object storage
-Best if you want: less to operate
-
-What this choice gates:
-Report exports — the storage adapter, the retention rule and the download page.
-
-Plan this work with the option chosen.</textarea
-                    >
+                      placeholder="回复，或继续细化…"
+                      aria-label="回复，或继续细化…"
+                      class="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+                      type="text"
+                      value=""
+                    />
                   </div>
                   <button
                     type="submit"
                     data-variant="primary"
-                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
                     aria-label="Send"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
                   >
                     <span
                       ><svg
@@ -9212,8 +10006,278 @@ Plan this work with the option chosen.</textarea
                       >
                         <path
                           d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
-                        ></path>
-                        <path d="m21.854 2.147-10.94 10.939"></path></svg
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" /></svg
+                    ></span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+          <div class="stack" style="flex: 1; min-width: var(--rail-w)">
+            <span class="shotcap">zh · light · just after yes (for comparison)</span>
+            <div
+              class="anatbox railbox"
+              style="height: 940px; display: flex; flex-direction: column"
+            >
+              <div class="flex items-center gap-2 border-b border-(--el-border-soft) px-4 py-3">
+                <span class="size-2 rounded-full bg-(--el-success)" aria-hidden="true"></span
+                ><span
+                  class="font-mono text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+                  >Motir AI</span
+                ><span
+                  class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) ml-auto"
+                  data-testid="planning-mode-chip"
+                  >后续规划</span
+                >
+              </div>
+              <div class="railscroll" role="log" style="flex: 1; min-height: 0">
+                <div class="flex items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-accent) text-(--el-accent-text)"
+                    ><span class="brand-inv"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        class="brand-glyph"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                          fill="currentColor"
+                        ></path></svg></span
+                  ></span>
+                  <div
+                    class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
+                  >
+                    <span>已在 ACME-40 上打开，规划 ACME-42 的后续工作。</span>
+                    <span>你刚选择了托管对象存储。Motir AI 正在规划它决定的工作。</span>
+                  </div>
+                </div>
+                <div
+                  data-testid="pick-followup-card"
+                  class="mt-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2"
+                >
+                  <p
+                    class="text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
+                  >
+                    选择的后续规划
+                  </p>
+                  <p class="mt-1.5 text-[13px] font-medium text-(--el-text)">
+                    <span class="font-mono">ACME-42</span> · 选择导出文件的存放位置
+                  </p>
+                  <p
+                    class="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-(--el-text-secondary)"
+                  >
+                    <span class="text-(--el-text)">选择了</span
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent"
+                      >托管对象存储</span
+                    ><span>如果你更看重</span
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-sky) text-(--el-text-strong) border-transparent"
+                      >更少运维</span
+                    >
+                  </p>
+                  <p class="mt-1.5 text-xs text-(--el-text-secondary)">由 Yue 选择 · 刚刚</p>
+                </div>
+                <div class="flex items-start gap-2 flex-row-reverse">
+                  <span
+                    aria-hidden="true"
+                    class="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-(--el-muted) text-(--el-text-secondary)"
+                    >·</span
+                  >
+                  <div
+                    class="min-w-0 rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text) wrap-anywhere"
+                    data-testid="pick-sent-turn"
+                  >
+                    <span
+                      class="mb-0.5 flex items-center gap-1 font-mono text-[10px] font-semibold tracking-wide uppercase opacity-80"
+                      >turn 1</span
+                    >ACME-42 · 选择导出文件的存放位置<br /><br />我刚在这个选择上选定了一个选项——这就是它在等的后续规划。<br /><br />选中的选项：托管对象存储<br />如果你更看重：更少运维<br /><br />这个选择决定的工作：<br />报表导出——存储适配器、保留规则和下载页。<br /><br />请按选中的选项规划这项工作。
+                  </div>
+                </div>
+                <p
+                  class="text-center text-xs text-(--el-text-secondary)"
+                  data-testid="plan-change-marker"
+                >
+                  已发送给 Motir AI
+                </p>
+                <ol
+                  class="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+                  aria-live="polite"
+                  data-testid="plan-change-acts"
+                >
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-send size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >submit</span
+                    ><span class="min-w-0 flex-1">正在把对话发送给 Motir AI</span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-(--el-text-secondary)">
+                    <span class="shrink-0 text-(--el-text-secondary) mt-px"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-book-open-text size-3.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 7v14" />
+                        <path d="M16 12h2" />
+                        <path d="M16 8h2" />
+                        <path
+                          d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                        />
+                        <path d="M6 12h2" />
+                        <path d="M6 8h2" /></svg></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >retrieval</span
+                    ><span class="min-w-0 flex-1">读取了计划树 — <code>get_item</code></span>
+                  </li>
+                  <li class="flex items-start gap-2 text-xs text-(--el-text)">
+                    <span
+                      role="status"
+                      aria-label="Loading"
+                      class="inline-block animate-spin rounded-full border-current border-t-transparent h-3.5 w-3.5 border-[1.5px] shrink-0 mt-px"
+                      aria-hidden="true"
+                    ></span
+                    ><span
+                      class="w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide uppercase text-(--el-text-secondary) mt-px"
+                      >drill</span
+                    ><span class="min-w-0 flex-1">正在梳理 ACME-40…</span>
+                  </li>
+                </ol>
+              </div>
+              <form class="relative border-t border-(--el-border) px-3 py-3">
+                <div
+                  class="mb-2 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+                  data-testid="plan-change-running-bar"
+                >
+                  <span class="shrink-0 text-(--el-text-secondary)"
+                    ><span
+                      role="status"
+                      aria-label="Loading"
+                      class="inline-block animate-spin rounded-full border-current border-t-transparent h-4 w-4 border-[1.5px]"
+                      aria-hidden="true"
+                    ></span></span
+                  ><span class="min-w-0 flex-1 truncate text-xs text-(--el-text-secondary)"
+                    >正在梳理 ACME-40…</span
+                  ><button
+                    type="button"
+                    data-variant="secondary"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 border border-(--el-border) bg-(--el-surface) text-(--el-text) hover:bg-(--el-surface-soft) h-(--height-btn-sm) px-3 text-xs shrink-0"
+                  >
+                    <span
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-circle-stop size-4"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <rect x="9" y="9" width="6" height="6" rx="1" /></svg></span
+                    >停止
+                  </button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div
+                    role="combobox"
+                    aria-expanded="false"
+                    aria-haspopup="listbox"
+                    aria-controls="planning-target-listbox"
+                    class="relative flex min-w-0 flex-1 items-center"
+                  >
+                    <button
+                      type="button"
+                      aria-label="Add a work item to plan around"
+                      data-testid="planning-target-trigger"
+                      class="absolute left-1.5 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-at-sign size-4"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="4" />
+                        <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+                      </svg></button
+                    ><input
+                      aria-autocomplete="list"
+                      placeholder="回复，或继续细化…"
+                      aria-label="回复，或继续细化…"
+                      class="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+                      type="text"
+                      value=""
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    data-variant="primary"
+                    aria-label="Send"
+                    class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-sm) px-3 text-xs"
+                  >
+                    <span
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-send size-4"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"
+                        />
+                        <path d="m21.854 2.147-10.94 10.939" /></svg
                     ></span>
                   </button>
                 </div>

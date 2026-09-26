@@ -4361,7 +4361,9 @@
         and the door) and MOTIR-4914&rsquo;s <code>approval-control--choice.mock.html</code> (the
         chosen record, panel 5a; the confirm band, panel 2a; the access path, panel 6). A pick PLANS
         FORWARD, so every string here is a plan word — nothing on a pick says re-plan. The behaviour
-        is <code>docs/decisions/picked-option-planning.md</code> (MOTIR-6431). Lines that CHANGE
+        is <code>docs/decisions/picked-option-planning.md</code> (MOTIR-6431), and its yes STARTS
+        the planning with nothing to send, per
+        <code>docs/decisions/picked-option-planning-starts.md</code> (MOTIR-6455). Lines that CHANGE
         from the base are underlined. <i>None of these</i> keeps MOTIR-6206&rsquo;s Re-plan ask and
         door unchanged, and is not redrawn. Built by MOTIR-6436.
       </p>
@@ -4433,21 +4435,21 @@
                 </div>
                 <div
                   role="group"
-                  aria-labelledby="ask-x799377"
+                  aria-labelledby="ask-x273647"
                   data-testid="pick-plan-ask"
                   class="border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3"
                 >
-                  <p id="ask-x799377" class="text-[13px] font-semibold text-(--el-text)">
+                  <p id="ask-x273647" class="text-[13px] font-semibold text-(--el-text)">
                     Plan the follow-up with Motir AI?
                   </p>
                   <ul
                     class="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)"
                   >
                     <li>
-                      Motir AI opens on ACME-40 to plan the follow-up, with your choice already
-                      written as the first message.
+                      Motir AI opens on ACME-40 and starts planning the follow-up right away, from
+                      your choice.
                     </li>
-                    <li>Nothing is sent until you send it — you can edit it first.</li>
+                    <li>There is nothing to write or send — your choice is the first message.</li>
                   </ul>
                   <div class="mt-3 flex flex-wrap justify-end gap-2">
                     <button
@@ -4550,21 +4552,21 @@
                 </div>
                 <div
                   role="group"
-                  aria-labelledby="ask-x136444"
+                  aria-labelledby="ask-x986952"
                   data-testid="pick-plan-ask"
                   class="border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3"
                 >
-                  <p id="ask-x136444" class="text-[13px] font-semibold text-(--el-text)">
+                  <p id="ask-x986952" class="text-[13px] font-semibold text-(--el-text)">
                     Plan the follow-up with Motir AI?
                   </p>
                   <ul
                     class="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)"
                   >
                     <li>
-                      Motir AI opens on your project to plan the follow-up, with your choice already
-                      written as the first message.
+                      Motir AI opens on your project and starts planning the follow-up right away,
+                      from your choice.
                     </li>
-                    <li>Nothing is sent until you send it — you can edit it first.</li>
+                    <li>There is nothing to write or send — your choice is the first message.</li>
                   </ul>
                   <div class="mt-3 flex flex-wrap justify-end gap-2">
                     <button
@@ -4880,8 +4882,8 @@
               class="mt-3 border-t border-(--el-border-soft) pt-3 text-xs text-(--el-text-secondary)"
             >
               <span class="changed"
-                >Choosing moves ACME-42 to Done, then offers to plan what it gates with Motir
-                AI.</span
+                >Choosing moves ACME-42 to Done, then asks whether Motir AI should start planning
+                what it gates.</span
               >
             </p>
           </div>
@@ -4916,8 +4918,8 @@
                 </li>
                 <li>Move ACME-42 to Done.</li>
                 <li class="changed">
-                  Offer to plan the follow-up with Motir AI: Report exports — the storage adapter,
-                  the retention rule and the download page.
+                  Ask whether to start planning the follow-up with Motir AI: Report exports — the
+                  storage adapter, the retention rule and the download page.
                 </li>
               </ul>
               <div class="mt-3 flex flex-wrap justify-end gap-2">
@@ -4992,16 +4994,16 @@
             </div>
             <div
               role="group"
-              aria-labelledby="ask-x107900"
+              aria-labelledby="ask-x503282"
               data-testid="pick-plan-ask"
               class="border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3"
             >
-              <p id="ask-x107900" class="text-[13px] font-semibold text-(--el-text)">
+              <p id="ask-x503282" class="text-[13px] font-semibold text-(--el-text)">
                 用 Motir AI 规划后续工作？
               </p>
               <ul class="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)">
-                <li>Motir AI 会在 ACME-40 上打开来规划后续工作，并已把你的选择写成第一条消息。</li>
-                <li>在你发送之前不会发出任何内容——你可以先修改。</li>
+                <li>Motir AI 会在 ACME-40 上打开，并立即根据你的选择开始规划后续工作。</li>
+                <li>无需填写或发送任何内容——你的选择就是第一条消息。</li>
               </ul>
               <div class="mt-3 flex flex-wrap justify-end gap-2">
                 <button
@@ -5172,21 +5174,21 @@
               </div>
               <div
                 role="group"
-                aria-labelledby="ask-x799377"
+                aria-labelledby="ask-x273647"
                 data-testid="pick-plan-ask"
                 class="border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3"
               >
-                <p id="ask-x799377" class="text-[13px] font-semibold text-(--el-text)">
+                <p id="ask-x273647" class="text-[13px] font-semibold text-(--el-text)">
                   Plan the follow-up with Motir AI?
                 </p>
                 <ul
                   class="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)"
                 >
                   <li>
-                    Motir AI opens on ACME-40 to plan the follow-up, with your choice already
-                    written as the first message.
+                    Motir AI opens on ACME-40 and starts planning the follow-up right away, from
+                    your choice.
                   </li>
-                  <li>Nothing is sent until you send it — you can edit it first.</li>
+                  <li>There is nothing to write or send — your choice is the first message.</li>
                 </ul>
                 <div class="mt-3 flex flex-wrap justify-end gap-2">
                   <button
