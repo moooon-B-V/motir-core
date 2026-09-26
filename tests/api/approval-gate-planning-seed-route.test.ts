@@ -335,6 +335,15 @@ describe('GET /api/approval-gates/[id]/planning-seed · a PICK (intent plan)', (
         'Plan this work with the option chosen.',
       ].join('\n\n'),
       seededSessionId: null,
+      // The rail's follow-up framing (MOTIR-6435): the choice and the STAMP, never the body.
+      pick: {
+        choiceKey: choice.identifier,
+        choiceTitle: 'Choose where exports live',
+        label: STAMP.label,
+        bestFor: STAMP.bestFor,
+        decidedAt: expect.any(String),
+        decidedByLabel: expect.any(String),
+      },
     });
   });
 

@@ -146,6 +146,18 @@ export const planningSeedService = {
       anchorKey,
       firstTurn,
       seededSessionId,
+      ...(chosenOption
+        ? {
+            pick: {
+              choiceKey: item.identifier,
+              choiceTitle: item.title,
+              label: chosenOption.label,
+              bestFor: chosenOption.bestFor,
+              decidedAt: gate.decidedAt ? gate.decidedAt.toISOString() : null,
+              decidedByLabel: gate.decidedByLabel ?? null,
+            },
+          }
+        : {}),
     };
   },
 };

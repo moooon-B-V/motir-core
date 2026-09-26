@@ -23,6 +23,25 @@ export interface PlanningSeedDTO {
   anchorKey: string | null;
   firstTurn: string;
   seededSessionId: string | null;
+  /** ONLY on a pick (`intent: 'plan'`): what the rail's follow-up framing shows
+   *  (MOTIR-6435; design MOTIR-6432). Absent on every refusal. */
+  pick?: PlanningSeedPickDTO;
+}
+
+/**
+ * The choice a pick-seeded conversation is the FOLLOW-UP to — the rail's
+ * *Follow-up to a choice* card and its lead (design MOTIR-6432, revision 2). The
+ * label and best-for come from the gate's stamped `chosenOption`, never the body.
+ */
+export interface PlanningSeedPickDTO {
+  /** The choice card's identifier and title. */
+  choiceKey: string;
+  choiceTitle: string;
+  label: string;
+  bestFor: string;
+  /** When, and by whom, the option was chosen — the gate's decision record. */
+  decidedAt: string | null;
+  decidedByLabel: string | null;
 }
 
 /** The route's 200 body. */

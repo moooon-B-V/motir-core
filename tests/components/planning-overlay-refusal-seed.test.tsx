@@ -273,31 +273,6 @@ describe('the UNSEEDED fall-back — silent, and indistinguishable from Plan wit
       () => fetchPlanningSeed.mockResolvedValue(null),
     ],
     ['a failed read', () => fetchPlanningSeed.mockRejectedValue(new Error('500'))],
-    // A PICK's seed is a forward plan, which this overlay does not open yet: until
-    // MOTIR-6435 resolves a plan-intent seed, it falls back rather than
-    // re-planning the choice's parent (MOTIR-6433).
-    [
-      'a PICK seed anchored on the parent (intent plan)',
-      () =>
-        fetchPlanningSeed.mockResolvedValue({
-          ...SEED,
-          gateKind: 'decision_choice',
-          intent: 'plan',
-          anchorKey: 'ACME-40',
-          firstTurn: 'ACME-42 · Choose where exports live',
-        }),
-    ],
-    [
-      'a PICK seed anchored at the project (anchorKey null)',
-      () =>
-        fetchPlanningSeed.mockResolvedValue({
-          ...SEED,
-          gateKind: 'decision_choice',
-          intent: 'plan',
-          anchorKey: null,
-          firstTurn: 'ACME-42 · Choose where exports live',
-        }),
-    ],
   ] as const) {
     it(`${label} opens a PROJECT launch — no draft, no error, no gate id, no reason`, async () => {
       arrange();

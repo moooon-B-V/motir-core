@@ -43,6 +43,7 @@ import {
   type PlanningTarget,
 } from '@/lib/planning/planningTargets';
 import type { PlanningLaunch } from '@/lib/planning/launcher';
+import type { PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { fetchPlanningAnchor } from '@/lib/planning/planningAnchorClient';
 import {
@@ -195,9 +196,17 @@ export interface PlanningWorkspaceHostProps {
    * may send, edit or clear it (design MOTIR-6206 sheets 2–5).
    */
   initialDraft?: string;
-  /** The REFUSED gate the first send carries, so the session it starts
-   *  remembers it (MOTIR-6207's stamp). Paired with `initialDraft`. */
+  /** The seeding gate the first send carries, so the session it starts
+   *  remembers it (MOTIR-6207's stamp). Paired with `initialDraft`, or with
+   *  `autoSendTurn` for a pick. */
   seedGateId?: string | null;
+  /** A PICK's first turn, SENT once for the person rather than pre-filled
+   *  (MOTIR-6435; `picked-option-planning-starts.md`). Passed to the rail, which
+   *  sends it the first moment the conversation is idle and empty. */
+  autoSendTurn?: string;
+  /** The choice a pick-seeded conversation follows up — the rail's follow-up
+   *  framing (design MOTIR-6432). Set on a pick's first open AND its resume. */
+  followUp?: PlanningSeedPickDTO | null;
   /** `launch.sessionId` is the seed's `seededSessionId` — a RESUME of the
    *  viewer's own recent seeded conversation, not a Plans-row reopen, so the rail
    *  draws no reopened line (design MOTIR-6206 sheet 7). */
@@ -218,6 +227,8 @@ export function PlanningWorkspaceHost({
   justReturnedFromOnboarding,
   initialDraft,
   seedGateId = null,
+  autoSendTurn,
+  followUp = null,
   sessionIsResume = false,
 }: PlanningWorkspaceHostProps) {
   const t = useTranslations('planningWorkspace');
@@ -811,6 +822,8 @@ export function PlanningWorkspaceHost({
           projectName={projectName}
           {...(justReturnedFromOnboarding ? { justReturnedFromOnboarding: true } : {})}
           {...(initialDraft ? { initialDraft } : {})}
+          {...(autoSendTurn ? { autoSendTurn, autoSendKey: seedGateId } : {})}
+          {...(followUp ? { followUp } : {})}
           state={state}
           index={index}
           targets={targets}

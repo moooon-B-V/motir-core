@@ -6770,7 +6770,8 @@
           "web": "web",
           "lessons": "lessons"
         }
-      }
+      },
+      "openerFollowUp": "You just chose {label}. Motir AI is planning what it gates."
     },
     "targets": {
       "sectionLabel": "Work items",
@@ -6792,7 +6793,8 @@
       "generation": "first plan",
       "replan": "plan change",
       "contextual": "in context",
-      "roadmap": "roadmap"
+      "roadmap": "roadmap",
+      "followUp": "follow-up"
     },
     "lead": {
       "project": "Opened on {project}.",
@@ -6801,7 +6803,9 @@
       "contextual": "Opened in context on {project}.",
       "contextualItem": "Opened in the context of {item}.",
       "conventionRefine": "Opened to refine {repo}'s coding convention.",
-      "roadmap": "Opened from the roadmap."
+      "roadmap": "Opened from the roadmap.",
+      "followUp": "Opened to plan the follow-up to {choice}, on {item}.",
+      "followUpProject": "Opened on {project} to plan the follow-up to {choice}."
     },
     "searchLabel": "Search this project",
     "reading": {
@@ -6885,7 +6889,10 @@
         "added": "This level is proposed — nothing here exists yet"
       }
     },
-    "dividerAria": "Resize the conversation"
+    "dividerAria": "Resize the conversation",
+    "followUpCard": {
+      "label": "Follow-up to a choice"
+    }
   },
   "codeHealth": {
     "title": "Code health",

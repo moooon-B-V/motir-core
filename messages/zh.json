@@ -6766,7 +6766,8 @@
           "web": "网页",
           "lessons": "经验教训"
         }
-      }
+      },
+      "openerFollowUp": "你刚选择了{label}。Motir AI 正在规划它决定的工作。"
     },
     "targets": {
       "sectionLabel": "工作项",
@@ -6788,7 +6789,8 @@
       "generation": "首版计划",
       "replan": "调整计划",
       "contextual": "上下文",
-      "roadmap": "路线图"
+      "roadmap": "路线图",
+      "followUp": "后续规划"
     },
     "lead": {
       "project": "已在 {project} 上打开。",
@@ -6797,7 +6799,9 @@
       "contextual": "已在 {project} 的上下文中打开。",
       "contextualItem": "已在 {item} 的上下文中打开。",
       "conventionRefine": "已打开，用于完善 {repo} 的编码规范。",
-      "roadmap": "已从路线图打开。"
+      "roadmap": "已从路线图打开。",
+      "followUp": "已在 {item} 上打开，规划 {choice} 的后续工作。",
+      "followUpProject": "已在 {project} 上打开，规划 {choice} 的后续工作。"
     },
     "searchLabel": "搜索本项目",
     "reading": {
@@ -6881,7 +6885,10 @@
         "added": "当前层级为提案 — 此处尚无任何内容"
       }
     },
-    "dividerAria": "调整对话窗口宽度"
+    "dividerAria": "调整对话窗口宽度",
+    "followUpCard": {
+      "label": "选择的后续规划"
+    }
   },
   "codeHealth": {
     "title": "代码健康度",

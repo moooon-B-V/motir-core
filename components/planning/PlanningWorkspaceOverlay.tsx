@@ -26,6 +26,7 @@ import {
 import { resolvePlanningHostGate } from '@/lib/planning/workspaceHost';
 import { fetchPlanningAnchor } from '@/lib/planning/planningAnchorClient';
 import { fetchPlanningSeed } from '@/lib/planning/planningSeedClient';
+import type { PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { surfaceArrivalTrail } from '@/lib/planning/surfaceArrival';
@@ -156,15 +157,36 @@ interface AnchorLoad {
  * MOTIR-6210). Pending is DERIVED (`seed.gateId !== gateId`), exactly as the
  * anchor read's is, so nothing is written synchronously in the effect.
  *
- *  · `seeded`   — a refused gate the viewer may read, with no recent seeded
- *                 session: a `work-item` re-plan on the card, the turn unsent;
+ *  · `seeded`   — a gate the viewer may read, with no recent seeded session. A
+ *                 REFUSAL (`intent: 'replan'`) opens a `work-item` re-plan on its
+ *                 card with the turn pre-filled and unsent; a PICK (`intent:
+ *                 'plan'`, MOTIR-6435) opens forward on its anchor — the
+ *                 project when `anchorKey` is null — and its turn is SENT once
+ *                 for the person (`picked-option-planning-starts.md`);
  *  · `resume`   — the viewer's own recent seeded session: that conversation,
- *                 resumed, with no draft (design MOTIR-6206 sheet 7);
+ *                 resumed, with nothing drafted and nothing sent (design MOTIR-6206
+ *                 sheet 7);
  *  · `fallback` — a 404 or any failure: a plain `project` launch, silently.
+ *
+ * `pick` rides both seeded kinds of a pick: the rail's follow-up framing.
  */
 type SeedLoad =
-  | { gateId: string; kind: 'seeded'; anchorKey: string; firstTurn: string }
-  | { gateId: string; kind: 'resume'; anchorKey: string; sessionId: string }
+  | {
+      gateId: string;
+      kind: 'seeded';
+      intent: 'plan' | 'replan';
+      anchorKey: string | null;
+      firstTurn: string;
+      pick: PlanningSeedPickDTO | null;
+    }
+  | {
+      gateId: string;
+      kind: 'resume';
+      intent: 'plan' | 'replan';
+      anchorKey: string | null;
+      sessionId: string;
+      pick: PlanningSeedPickDTO | null;
+    }
   | { gateId: string; kind: 'fallback' };
 
 /** The unseeded fall-back — exactly what *Plan with AI* on the project opens. */
@@ -229,27 +251,30 @@ export function PlanningWorkspaceOverlay({
       try {
         const found = await fetchPlanningSeed(gateId, controller.signal);
         if (controller.signal.aborted) return;
-        // A PICK's seed (`intent: 'plan'`, possibly anchored at the project —
-        // `anchorKey: null`) is not a re-plan, and this overlay only knows how to
-        // open a re-plan on a card. Until MOTIR-6435 resolves a plan-intent seed to
-        // a forward launch, it opens the same silent fall-back as an unreadable
-        // gate, rather than re-planning the choice's parent.
-        const anchorKey = found?.intent === 'replan' ? found.anchorKey : null;
+        // A REFUSAL always anchors on its own card; a null anchor on one is a
+        // seed this overlay cannot place, so it falls back silently. A PICK may
+        // anchor at the project (`anchorKey: null`, MOTIR-6433) and opens there.
+        const placeable = found !== null && (found.intent === 'plan' || found.anchorKey !== null);
+        const pick = found?.intent === 'plan' ? (found.pick ?? null) : null;
         setSeed(
-          found === null || anchorKey === null
+          !placeable
             ? { gateId, kind: 'fallback' }
             : found.seededSessionId
               ? {
                   gateId,
                   kind: 'resume',
-                  anchorKey,
+                  intent: found.intent,
+                  anchorKey: found.anchorKey,
                   sessionId: found.seededSessionId,
+                  pick,
                 }
               : {
                   gateId,
                   kind: 'seeded',
-                  anchorKey,
+                  intent: found.intent,
+                  anchorKey: found.anchorKey,
                   firstTurn: found.firstTurn,
+                  pick,
                 },
         );
       } catch {
@@ -272,12 +297,26 @@ export function PlanningWorkspaceOverlay({
   const workspaceLaunch = useMemo<PlanningLaunch | null>(() => {
     if (launch === null || launch.from !== 'refused-gate') return launch;
     if (settledSeed === null || settledSeed.kind === 'fallback') return PROJECT_LAUNCH;
+    const resumed = settledSeed.kind === 'resume' ? { sessionId: settledSeed.sessionId } : {};
+    // A PICK plans FORWARD (MOTIR-6435): on its anchor as an ordinary item
+    // launch, or on the project — never the re-plan posture.
+    if (settledSeed.intent === 'plan') {
+      return settledSeed.anchorKey === null
+        ? { ...PROJECT_LAUNCH, ...resumed }
+        : {
+            mode: 'contextual',
+            from: 'work-item',
+            itemKey: settledSeed.anchorKey,
+            repoKey: null,
+            ...resumed,
+          };
+    }
     return {
       mode: 'replan',
       from: 'work-item',
       itemKey: settledSeed.anchorKey,
       repoKey: null,
-      ...(settledSeed.kind === 'resume' ? { sessionId: settledSeed.sessionId } : {}),
+      ...resumed,
     };
   }, [launch, settledSeed]);
   const anchorKey = workspaceLaunch?.itemKey ?? null;
@@ -586,8 +625,21 @@ export function PlanningWorkspaceOverlay({
   // The seed reaches the host only once its card RESOLVED for this viewer: a card
   // the anchor read cannot see degrades to the project conversation, and a draft
   // about it there would be a turn about nothing on screen.
-  const seededDraft = settledSeed?.kind === 'seeded' && settled?.target ? settledSeed : null;
+  // A pick at the PROJECT has no card to resolve, so its seed reaches the host as
+  // soon as the seed read settles.
+  const seededFirst =
+    settledSeed?.kind === 'seeded' && (settledSeed.anchorKey === null || settled?.target)
+      ? settledSeed
+      : null;
+  // A REFUSAL pre-fills its turn, unsent; a PICK's turn is SENT once for the person.
+  const seededDraft = seededFirst?.intent === 'replan' ? seededFirst : null;
+  const seededSend = seededFirst?.intent === 'plan' ? seededFirst : null;
   const resumedSeed = settledSeed?.kind === 'resume';
+  // The follow-up framing rides a pick's first open AND its resume.
+  const followUp =
+    settledSeed !== null && settledSeed.kind !== 'fallback' && settledSeed.intent === 'plan'
+      ? settledSeed.pick
+      : null;
 
   return (
     <Modal
@@ -702,6 +754,10 @@ export function PlanningWorkspaceOverlay({
           {...(seededDraft
             ? { initialDraft: seededDraft.firstTurn, seedGateId: seededDraft.gateId }
             : {})}
+          {...(seededSend
+            ? { autoSendTurn: seededSend.firstTurn, seedGateId: seededSend.gateId }
+            : {})}
+          {...(followUp ? { followUp } : {})}
           {...(resumedSeed ? { sessionIsResume: true } : {})}
           initialCanvasTrail={settled?.trail}
         />
