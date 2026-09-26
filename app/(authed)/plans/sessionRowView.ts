@@ -27,5 +27,6 @@ export async function buildSessionRowViews(
       ? { id: session.latestPlan.id, status: session.latestPlan.status }
       : null,
     planCount: session.planCount,
+    seed: session.seed,
   }));
 }

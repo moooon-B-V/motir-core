@@ -1363,14 +1363,15 @@ collide outright. So the overlay's parameters are **NAMESPACED**, and they are r
 the way `design/runs/design-notes.md` records `/runs?run=<id>` — rather than in whichever of the
 three files is written first.
 
-| parameter         | carries                                                                                                                                                                                                                                                                              | values                                                         | read by                               |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- | ------------------------------------- |
-| **`plan`**        | **the presence switch AND the mode.** Its presence is what opens the overlay — one `has('plan')` test, the way `?run=` and `?peek=` each own one word. Total: an unrecognised value degrades to `project`, never an error                                                            | `project` · `generation` · `replan` · `contextual` · `roadmap` | the overlay                           |
-| **`planFrom`**    | the ORIGIN kind. It is what decides which of the two below may be READ, so a hand-edited `?planFrom=roadmap&planItem=X` cannot smuggle a target                                                                                                                                      | `project` · `work-item` · `roadmap` · `convention-refine`      | the overlay · the rail's opening line |
-| **`planItem`**    | the ANCHOR's work-item key. Written **only** when `planFrom=work-item`; the overlay hands it to `GET /api/work-items/planning-anchor` (MOTIR-4727)                                                                                                                                   | `MOTIR-<n>`                                                    | the overlay                           |
-| **`planRepo`**    | the repository key. Written **only** when `planFrom=convention-refine`                                                                                                                                                                                                               | a repo key                                                     | the overlay                           |
-| **`planSession`** | a SESSION's id — reopens that planning conversation by id, the window notwithstanding (MOTIR-6019's published design, §19.8; built by MOTIR-6024). Read only when `plan` is present and `planFrom` is `project` or `work-item`                                                       | a session id                                                   | the overlay                           |
-| **`planVia`**     | the ENTRANCE a named session was reopened from, so the rail's reopened line tells the truth (MOTIR-6033's landed design — `design/ai-planning/design-notes.md` Part XXII §22.2; built by MOTIR-6037). Read only with `planSession`; absent, or any other value, means the Plans page | `plans` · `approvals`                                          | the rail's reopened line              |
+| parameter         | carries                                                                                                                                                                                                                                                                                                                                                                                                       | values                                                                     | read by                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------- |
+| **`plan`**        | **the presence switch AND the mode.** Its presence is what opens the overlay — one `has('plan')` test, the way `?run=` and `?peek=` each own one word. Total: an unrecognised value degrades to `project`, never an error                                                                                                                                                                                     | `project` · `generation` · `replan` · `contextual` · `roadmap`             | the overlay                           |
+| **`planFrom`**    | the ORIGIN kind. It is what decides which of the two below may be READ, so a hand-edited `?planFrom=roadmap&planItem=X` cannot smuggle a target                                                                                                                                                                                                                                                               | `project` · `work-item` · `roadmap` · `convention-refine` · `refused-gate` | the overlay · the rail's opening line |
+| **`planItem`**    | the ANCHOR's work-item key. Written **only** when `planFrom=work-item`; the overlay hands it to `GET /api/work-items/planning-anchor` (MOTIR-4727)                                                                                                                                                                                                                                                            | `MOTIR-<n>`                                                                | the overlay                           |
+| **`planRepo`**    | the repository key. Written **only** when `planFrom=convention-refine`                                                                                                                                                                                                                                                                                                                                        | a repo key                                                                 | the overlay                           |
+| **`planSession`** | a SESSION's id — reopens that planning conversation by id, the window notwithstanding (MOTIR-6019's published design, §19.8; built by MOTIR-6024). Read only when `plan` is present and `planFrom` is `project` or `work-item`                                                                                                                                                                                | a session id                                                               | the overlay                           |
+| **`planVia`**     | the ENTRANCE a named session was reopened from, so the rail's reopened line tells the truth (MOTIR-6033's landed design — `design/ai-planning/design-notes.md` Part XXII §22.2; built by MOTIR-6037). Read only with `planSession`; absent, or any other value, means the Plans page                                                                                                                          | `plans` · `approvals`                                                      | the rail's reopened line              |
+| **`planGate`**    | a REFUSED GATE's id — opens the SEEDED re-plan (story MOTIR-6068; MOTIR-6206's design, § _The SEEDED re-plan_ → _The ADDRESS_; built by MOTIR-6210). Written **only** when `planFrom=refused-gate`, as `plan=replan&planFrom=refused-gate&planGate=<id>`; the overlay hands it to `GET /api/approval-gates/{id}/planning-seed` (MOTIR-6208). The gate's id and nothing else — never the reason, never a title | a gate id                                                                  | the overlay                           |
 
 **Why the mode rides on `plan` rather than on a fifth name.** The overlay needs ONE parameter
 whose mere presence means _open_, exactly as `?run=` and `?peek=` do; the mode is already total
@@ -1384,7 +1385,7 @@ the launcher module WRITES and PARSES them, the overlay READS them off `useSearc
 retiring `/planning` forward REWRITES the old `mode` / `from` / `item` / `repo` onto them.
 Renaming one is a change to this section first.
 
-**Close strips exactly these six (four until MOTIR-6024 added `planSession`, five until MOTIR-6037 added `planVia`) and leaves every other parameter byte-identical** — that is what
+**Close strips exactly these seven (four until MOTIR-6024 added `planSession`, five until MOTIR-6037 added `planVia`, six until MOTIR-6210 added `planGate`) — eight with the `planReturned` marker — and leaves every other parameter byte-identical** — that is what
 makes "back to exactly where you were" true of a filtered, scrolled list rather than only of a
 bare route. `withPlanningOverlay('/roadmap?item=MOTIR-12', …)` keeps `item=MOTIR-12`;
 `withoutPlanningOverlay` of the result returns it unchanged, with no dangling `?`.
@@ -3734,3 +3735,262 @@ pointer in `design/ai-planning/design-notes.md` Part XII. **A DELTA, per `CLAUDE
 base assets it amends are records of their own moment and are not edited, and there is no `.png`
 (AMENDMENT 4 retired the export). Published as MOTIR-6236's design result, which is what MOTIR-6238 is
 `blocked_by`.
+
+## ⭐ The SEEDED re-plan — a refusal OFFERS the planner, with the first turn written and unsent (MOTIR-6206, 2026-09-25)
+
+**Asset:** `design/ai-chat/planning-workspace--refusal-seed.mock.html` — a **DELTA**, ten sheets,
+en + zh, light + dark, the conversation at MOTIR-6236's 480px (`defaultRailWidth(1440)`). It amends
+`planning-workspace.mock.html` (the overlay, the rail and the composer) and MOTIR-6019's published
+`ai-chat/planning-workspace--resume.mock.html` (the resumed state). **Neither is edited.** The
+record band's door is drawn in `design/work-items/approval-control--replan-door.mock.html`, and the
+Plans row in `design/ai-planning/plans-sessions--seeded.mock.html` (their own sections, in those
+areas' notes).
+
+**Story MOTIR-6068.** Contract: `docs/decisions/approval-gates.md` §10f and the three §10h rows for
+`decision_approval` (Request changes), `decision_confirmation` (Overturn) and `decision_choice` (None
+of these). Every one of them reads _"opens the planner: **always** — anchored on the decision/choice
+card, seeded to re-plan from the reason"_.
+
+Paths to published results that are not in this checkout are given relative to `design/` (for example `ai-chat/planning-workspace--resume.mock.html`). They are the results' `sourcePath`s and have not landed here.
+
+**Composed from, not redrawn.** The stylesheet is lifted verbatim from MOTIR-6236's published
+`design/ai-chat/planning-workspace--multiline-composer.mock.html`. The utilities that sheet never
+needed are copied verbatim from MOTIR-6073's `work-items/approval-control--refusal-reason.mock.html`
+and MOTIR-6019's `ai-planning/plans-sessions--list.mock.html`. The rail, the opener, the bubbles
+and the composer mirror `components/planning/PlanChangeRail.tsx` and `PlanChangeComposer.tsx` class
+for class. The loading frame is `components/planning/PlanningWorkspaceSkeleton.tsx` as it ships. The
+confirm band in sheet 1 is MOTIR-6073's panel 2b. The decided band and its door are the
+`approval-control--replan-door` delta's. `components/ui/*` primitives and `--el-*` tokens only.
+
+### The sheets
+
+1. **The hand-off, ASKING FIRST (amended 2026-09-25).** In the approval overlay: A, the refusal is
+   pressed; B, it commits and the decided band ASKS, with nothing opened; C, yes (**Re-plan with AI**)
+   does one `shallowReplace` from the approval address to the planning address, and the seeded planner
+   rises; D, **Not now** or Esc leaves the overlay on the decided record, with focus on its door. On the
+   item page: B′ is the same ask in place (en and zh); C′ is yes, the same planner over the item page;
+   D′ is Not now, the decided record with its door, which is also where Close from the planner lands.
+2. **`decision_approval` · Request changes**, seeded, en and zh.
+3. **`decision_confirmation` · Overturn**, with three supersedes keys and with none, en and zh.
+4. **`decision_choice` · None of these**, en and zh.
+5. **A long reason** at the 8-row cap: as it opens (caret at the end, the tail showing) and scrolled up
+   (the quote whole).
+6. **Loading**: the whole-frame skeleton.
+7. **Returning to the seeded session**: the resumed transcript, with no draft.
+8. **The unseeded fall-back**: a plain project launch.
+9. **Dark parity.**
+10. **The first-turn contract** as a table, for all three kinds in both languages.
+
+### The decisions
+
+- **The planner does NOT open when the decision is recorded. The band ASKS first (amended
+  2026-09-25).** The design gate came back CHANGES REQUESTED, and the reviewer's note, verbatim, is:
+  _"Let the user confirm he wants to go to motir AI to replan the work item."_ After Request changes,
+  Overturn or None of these commits, the just-decided band shows the ask in the place where the door
+  will sit: _"Re-plan {key} with Motir AI?"_, two consequence lines, **Not now** and **Re-plan with
+  AI**. That state is drawn once, in `design/work-items/approval-control--replan-door.mock.html`
+  panel 0. Sheet 1 here shows the flow around it.
+- **Why an inline ask and not a dialog.** `components/ui` has no confirm-dialog primitive; it has
+  only `Modal`. The approval surfaces confirm with the inline band, and `ApprovalGateControl`'s
+  `confirming` phase states the rule: _"an inline band over the verbs, never a modal"_. In the
+  approval overlay, a dialog would stack a modal on a full-screen modal. The inline ask sits exactly
+  where the door will sit, so declining only turns the question into the door.
+- **Keyboard and focus.** When the ask appears, focus moves to **Re-plan with AI**, so Enter means
+  yes. **Esc means Not now.** In the approval overlay, Esc inside the ask declines and does not also
+  close the overlay. After Not now, focus goes to the **Re-plan with AI** door that replaces the ask.
+  The ask is shown once, to the person who pressed the refusal, right after it commits. It is client
+  state and is never stored, so a reload, another viewer or a later visit sees only the record and
+  its door.
+- **Yes is ONE address REPLACE, and the approval overlay is never left underneath.**
+  `useOpenRefusalReplan().open(gateId)` (MOTIR-6211) does what `usePlanGateForward.ts` already does.
+  It strips `approval` / `approvalKind`, writes `plan=replan&planFrom=refused-gate&planGate=<id>`,
+  and replaces the history entry. The approval overlay's question has been answered, so there is
+  nothing to go Back to. Close strips the planning params and lands on the host page, whose decided
+  band carries the door. **The address carries the gate id and nothing else.** No reason text and no
+  work-item title go in the URL (§10f). The door itself is a yes, so pressing it opens the planner
+  directly, with no second ask.
+- **The turn is in the COMPOSER, unsent.** The transcript is empty. The opener bubble is not a turn,
+  and it reads _"Opened in the context of {item}."_ because the launch resolves to a `work-item`
+  re-plan on `anchorKey`. The mode chip reads **plan change**. The field is focused, sized to its
+  content (to the cap), with the caret at the END, so what shows first is the tail and the ask.
+  **Send is enabled.** The person can send, edit or clear it. Nothing is billed and no session exists
+  until they press Send.
+- **No starter chips while the rail holds a seed.** A starter `setDraft`s its own text, so pressing
+  one would silently throw the seed away. The seed is the start. If the person clears the field, the
+  rail is an ordinary item re-plan again, placeholder included.
+- **The placeholder.** `planningWorkspace.conversation.composerPlaceholderReplan` (_"What's wrong? What
+  should change?"_ / _"哪里有问题？想怎么改？"_) is unchanged and still passed. The seeded turn takes its
+  place as the field's CONTENT, so it is seen only after the draft is cleared. The turn's copy lives in
+  `planningWorkspace.refusalSeed.*` (MOTIR-6208), composed on the server in the viewer's locale.
+- **Loading is the anchor read's skeleton, extended.** The seed read
+  (`GET /api/approval-gates/{id}/planning-seed`) runs first and the anchor read second, inside the one
+  `PlanningWorkspaceSkeleton` window a `work-item` launch already shows. No live composer exists while
+  the seed is read. The rail is a skeleton block with no text, so the empty re-plan placeholder
+  cannot flash. The host then mounts once, with `initialDraft` already in its first render.
+- **A long reason is quoted whole.** Line breaks are kept and nothing is clipped on the server. The
+  field stops at MOTIR-6236's 8-row / 184px cap and scrolls inside itself.
+- **Returning within the window is MOTIR-6019's RESUMED state.** The seed read's `seededSessionId`
+  names the viewer's own recent seeded session, and the overlay opens that transcript. The first turn
+  is the seeded text as sent, the composer is ordinary and empty, and **no draft is added** (a second
+  seed would repeat the question). **The rail draws no "Reopened from the Plans page" line.** The
+  conversation was resumed, not picked from a list (MOTIR-6019 panel 2).
+- **The unseeded fall-back is silent.** An unknown, unreadable, foreign, not-refused or
+  kind-without-composer gate, and any failure of the read, all open the overlay as a plain `project`
+  launch: the **plan** chip, _"Opened on {project}."_, the starter chips, and the ordinary
+  placeholder. There is no toast, no error, and no gate id or reason anywhere in the DOM. Saying "that
+  refusal isn't available" would confirm to someone who cannot see it that the gate exists.
+- **No close guard for an unsent seed.** The draft can be rebuilt by pressing the door again, so
+  closing with it unsent discards nothing that cannot be had back. The shipped close guard still
+  covers proposed work items only.
+
+### The FIRST-TURN CONTRACT — what MOTIR-6208 composes
+
+**The seed card MOTIR-6208 builds this contract, and the drawn text above is exactly its output.** The
+turn is composed on the server from the decided gate row, in the request's locale, as **five parts in
+this order, joined by one blank line (`\n\n`)**:
+
+1. the work item's key and title: `{key} · {title}`;
+2. the verb, in plain words (one line per kind, below);
+3. the reason, **quoted verbatim with its line breaks kept**, under a label;
+4. **overturn only:** the keys `replanOwedOf` derives from `## Supersedes`, as plain keys. The part
+   is **omitted entirely** when there are none, and no empty line is left in its place;
+5. one sentence asking the planner to re-plan from the reason.
+
+**Catalogue keys, namespace `planningWorkspace.refusalSeed`.**
+
+| part                               | en                                               | zh                                   |
+| ---------------------------------- | ------------------------------------------------ | ------------------------------------ |
+| 1 · heading                        | `{key} · {title}`                                | `{key} · {title}`                    |
+| 2 · verb, `decision_approval`      | `Changes were requested on this decision.`       | `这个决策被要求修改。`               |
+| 2 · verb, `decision_confirmation`  | `This decision was overturned.`                  | `这个决策已被推翻。`                 |
+| 2 · verb, `decision_choice`        | `None of the options on this choice was picked.` | `这个选择的选项都没有被选中。`       |
+| 3 · reason                         | `The reason given:\n“{reason}”`                  | `给出的理由：\n“{reason}”`           |
+| 4 · supersedes (overturn, ≥ 1 key) | `The work items it superseded: {keys}`           | `它曾取代的工作项：{keys}`           |
+| 4 · key separator                  | `, `                                             | `、`                                 |
+| 5 · the ask                        | `Re-plan this work item from that reason.`       | `请根据这个理由重新规划这个工作项。` |
+
+**The whole turn, en** (overturn with keys; the other two kinds drop part 4 and swap part 2):
+
+```text
+{key} · {title}
+
+This decision was overturned.
+
+The reason given:
+“{reason}”
+
+The work items it superseded: {key1}, {key2}, {key3}
+
+Re-plan this work item from that reason.
+```
+
+**The whole turn, zh:**
+
+```text
+{key} · {title}
+
+这个决策已被推翻。
+
+给出的理由：
+“{reason}”
+
+它曾取代的工作项：{key1}、{key2}、{key3}
+
+请根据这个理由重新规划这个工作项。
+```
+
+The quote marks are the typographic `“ ”` in both languages, matching the decided record's quote
+(MOTIR-6073 panel 4). `{reason}` is `ApprovalGate.noteMd` as stored, and a multi-line reason stays
+multi-line inside the quotes. The key and title are the anchor's, which for all three kinds is the
+refused work item itself.
+
+### The ADDRESS
+
+`plan=replan&planFrom=refused-gate&planGate=<gate id>`. `planGate` is the eighth owned name, and
+MOTIR-6210 adds its row to §"The ADDRESS" above together with `launcher.test.ts`. This section does not
+edit that table. The address is **kept** while the seeded planner is open, so a reload before Send
+seeds the draft again and a reload after Send resumes the session through `seededSessionId`. Close
+strips it with the other seven.
+
+### GIVES / TAKES
+
+- **MOTIR-6208 (the seed read)** — GIVES the contract above as the drawn text, already implemented in
+  its catalogue. TAKES nothing.
+- **MOTIR-6210 (the overlay)** — GIVES the loading shape (the seed read inside the existing
+  `PlanningWorkspaceSkeleton` window, so there is no live composer to disable), the seeded rail, the
+  resumed return and the silent fall-back. It also asks for **two things its criteria do not yet
+  name.** (1) The starter chips are hidden while an `initialDraft` is present. (2) A session opened
+  through the seed's `seededSessionId` is a RESUME: `state.reopened` stays `null`, so the rail does
+  not claim _"Reopened from the Plans page"_. Its criterion _"while the seed loads, the composer is
+  disabled"_ is met by the skeleton, where no enabled composer exists. A component test can assert
+  that no textbox and no re-plan placeholder render while the fetch is pending.
+- **MOTIR-6211 (the hand-off and the door)** — GIVES the ask and the yes / Not now paths, drawn on
+  both hosts. **TAKES _"open it the moment the decision commits"_.** The amended wording is in
+  §"The amendment of 2026-09-25" below.
+- **MOTIR-6209 (the Plans row)** — nothing on this surface. See `design/ai-planning/design-notes.md`.
+- **MOTIR-6068 (the story)** and **MOTIR-6213 (its E2E)** — the amendment below TAKES _"as soon as the
+  decision is recorded"_ from the story's first criterion, and changes the E2E's first step.
+
+### The amendment of 2026-09-25 — confirm before the seeded planner opens
+
+**The design gate came back CHANGES REQUESTED on 2026-09-25.** The reviewer's note, verbatim: _"Let the
+user confirm he wants to go to motir AI to replan the work item."_ Every sheet except sheet 1 is
+unchanged. The seeded composer, loading, return, fall-back and contract are all as before, because the
+ask sits in front of them. The copy for the ask:
+
+| key (suggested; MOTIR-6211 owns the namespace) | en                                                                               | zh                                                         |
+| ---------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `approvalGate.replanAsk.title`                 | `Re-plan {key} with Motir AI?`                                                   | `用 Motir AI 重新规划 {key}？`                             |
+| `approvalGate.replanAsk.opens`                 | `Motir AI opens on {key} with your reason already written as the first message.` | `Motir AI 会在 {key} 上打开，并把你的理由写成第一条消息。` |
+| `approvalGate.replanAsk.unsent`                | `Nothing is sent until you send it — you can edit it first.`                     | `在你发送之前不会发出任何内容——你可以先修改。`             |
+| `approvalGate.replanAsk.yes`                   | `Re-plan with AI` (the door's own label)                                         | `用 AI 重新规划`                                           |
+| `approvalGate.replanAsk.no`                    | `Not now`                                                                        | `暂时不用`                                                 |
+
+_Not now_ / _暂时不用_ is the planning surface's existing decline (`planningWorkspace.handoff.notNow`).
+
+**The wording proposed for the consumer cards.** This design edits no card; the orchestrator amends
+them on the record.
+
+- **MOTIR-6068, acceptance criterion 1.** Replace it with: _"Refusing a `decision_approval` with a
+  reason, overturning a `decision_confirmation` with a note, and pressing *None of these* on a
+  `decision_choice` with a reason each, once the decision is recorded, ASK the person in the decided
+  band whether to re-plan the work item with Motir AI. Only **Re-plan with AI** opens the planning
+  surface over the current page. **Not now** (or Esc) opens nothing and leaves them on the decided
+  record, with its Re-plan with AI door."_ In the journey, "Right after the press, the planning
+  surface opens…" becomes "Right after the press, they are asked whether to re-plan with Motir AI;
+  on yes, the planning surface opens…". Verification steps 1, 4 and 5 gain "the band asks; press
+  **Re-plan with AI**" before "the planning surface opens". Add a step: _"Press Not now instead:
+  nothing opens, and the record shows Re-plan with AI."_
+- **MOTIR-6211.** Title: _"A REFUSAL ASKS, THEN HANDS OFF to the seeded planner — after Request
+  changes on a decision, Overturn or None of these commits, the decided band asks to re-plan with
+  Motir AI and opens the planner on yes; the three decided record bands carry Re-plan with AI in
+  place of the overturned band's plain epic entrance (+ user doc, en + zh)"_.
+  - Deliver 2 becomes: _"After a successful refusal of one of the three kinds (`isRefusalSeedGate`),
+    render the ASK in the just-decided band, in the place of the door. Use the confirm-band grammar:
+    a title, two consequence lines, **Not now** (ghost) and **Re-plan with AI** (primary). Focus goes
+    to Re-plan with AI. Esc means Not now and stops propagation, so the approval overlay stays open.
+    Re-plan with AI calls `open(gate.id)`. Not now removes the ask and shows the door, with focus on
+    it. The ask is transient client state for the person who pressed, and is never persisted."_
+  - Criteria 1–2 become: _"Pressing Request changes with a reason on a `decision_approval` (overlay or
+    item page), Overturn with a note, or None of these with a reason (overlay) shows the ask in the
+    decided band and opens nothing. Re-plan with AI closes the approval overlay's address and opens
+    the planning overlay at `planFrom=refused-gate&planGate=<id>`. Not now or Esc opens nothing,
+    leaves the approval overlay open on the decided record where it applies, and shows Re-plan with
+    AI with focus on it."_
+  - Add: _"A reload after the press shows the door, never the ask."_ Criterion 3 reads _"No other
+    outcome shows the ask or opens the planner…"_. The user-doc section says the planner is
+    **offered** after these refusals, not opened.
+- **MOTIR-6213.** Title: _"…Request changes on a decision ASKS, then Re-plan with AI opens the seeded
+  planner, close and reopen from the door, send and return to the session, then Overturn (Not now,
+  then the door) and None of these"_. The E2E's first step becomes: _"press Request changes with a
+  reason → assert the band asks 'Re-plan {key} with Motir AI?' and no planning overlay is open → press
+  Re-plan with AI → the seeded planner opens."_ The Overturn leg first presses **Not now** and asserts
+  that nothing opened, the approval overlay is still open, and the door has focus. Then it presses the
+  door. The None of these leg answers the ask with Enter.
+- **MOTIR-6210, MOTIR-6208, MOTIR-6209** — unaffected. The ask sits before the `planGate` address is
+  written.
+
+Referenced for provenance only: MOTIR-6011, MOTIR-6019, MOTIR-6024, MOTIR-6067, MOTIR-6072,
+MOTIR-6073, MOTIR-6154, MOTIR-6156, MOTIR-6159, MOTIR-6207, MOTIR-6236, MOTIR-6238. `ACME-38`,
+`ACME-39`, `ACME-41`, `ACME-42`, `ACME-44` and `ACME-47` are sample keys. `cmg7k2q0` is a sample
+gate id.

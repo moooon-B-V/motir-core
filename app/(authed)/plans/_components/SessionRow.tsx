@@ -24,7 +24,11 @@ import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { planRowDestination, type PlanRowDestination } from '@/lib/planning/planDestination';
 import type { PlanningLaunchContext } from '@/lib/planning/launcher';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
-import type { PlanSessionStateDto } from '@/lib/dto/planSessions';
+import type {
+  PlanSessionSeedDto,
+  PlanSessionSeedGateKindDto,
+  PlanSessionStateDto,
+} from '@/lib/dto/planSessions';
 
 import type { SessionRowView } from './types';
 
@@ -147,6 +151,43 @@ function Starter({ view }: { view: SessionRowView }) {
   );
 }
 
+/** The refusal's own button word, one catalogue key per seeding kind — TOTAL
+ *  over `PlanSessionSeedGateKindDto`, so widening the union fails the type-check
+ *  here (MOTIR-6206 design § "A Plans row names the refused work item"). */
+const SEED_VERB_KEY: Record<PlanSessionSeedGateKindDto, string> = {
+  decision_approval: 'seed.verb.decisionApproval',
+  decision_confirmation: 'seed.verb.decisionConfirmation',
+  decision_choice: 'seed.verb.decisionChoice',
+};
+
+/** Meta 5 (MOTIR-6209) — `Re-plan of {KEY} · {verb}`, a link to the refused work
+ *  item. Raised above the stretched title link (`relative z-10`, as the chip
+ *  is), so pressing it opens the work item and anywhere else reopens the
+ *  conversation. Never truncated: the meta line wraps and it moves as one unit.
+ *  A null seed draws nothing — not dimmed, not labelled. */
+function SeedLink({ seed }: { seed: PlanSessionSeedDto }) {
+  const t = useTranslations('aiPlanning.sessions');
+  return (
+    <Link
+      href={`/items/${seed.cardKey}`}
+      aria-label={t('seed.aria', { key: seed.cardKey })}
+      data-testid="plan-session-seed"
+      className="relative z-10 inline-flex items-center gap-1 rounded-(--radius-control) text-(--el-text-secondary) underline decoration-(--el-border-strong) underline-offset-2 hover:text-(--el-text) hover:decoration-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+    >
+      <span>
+        {t.rich('seed.label', {
+          key: seed.cardKey,
+          mono: (chunks) => <span className="font-mono">{chunks}</span>,
+        })}
+      </span>
+      <span className="text-(--el-text-faint)" aria-hidden>
+        ·
+      </span>
+      <span>{t(SEED_VERB_KEY[seed.gateKind])}</span>
+    </Link>
+  );
+}
+
 export function SessionRow({
   view,
   highlighted = false,
@@ -230,6 +271,7 @@ export function SessionRow({
           {destination ? (
             <PlanDestinationTag destination={destination} className="shrink-0" />
           ) : null}
+          {view.seed ? <SeedLink seed={view.seed} /> : null}
         </div>
       </div>
 
