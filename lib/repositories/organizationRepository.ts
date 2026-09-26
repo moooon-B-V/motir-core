@@ -200,6 +200,18 @@ export const organizationRepository = {
   },
 
   /**
+   * Delete an erased organization's TOMBSTONE row — the retention purge's
+   * (Story MOTIR-6306 · MOTIR-6401), seven years after the erasure. Its billing
+   * rows (`CiPeriodCharge`) cascade with it; the caller has already removed the
+   * deletion requests, whose FK is `Restrict`. Requires `app.organization_id`
+   * bound. Returns whether a row was deleted.
+   */
+  async deleteErasedById(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    const result = await tx.organization.deleteMany({ where: { id, erasedAt: { not: null } } });
+    return result.count > 0;
+  },
+
+  /**
    * Row-lock the organization `FOR UPDATE` inside the caller's transaction — the
    * serialization anchor for the §4 count-guarded creates (8.1.11). The work-item
    * / project / workspace caps read a count then create; without a shared lock

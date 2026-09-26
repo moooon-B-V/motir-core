@@ -446,6 +446,10 @@ export interface JobEventDataMap {
   /** The ORGANIZATION ERASURE sweep (Story MOTIR-6306 · MOTIR-6400) — erases every
    *  organization whose deletion window has ended, resumably. Cron triggered. */
   'system.organization-erasure-sweep': SystemScheduledData;
+  /** The ORGANIZATION RETENTION purge (Story MOTIR-6306 · MOTIR-6401) — removes an
+   *  erased organization's tombstone and billing record seven years after the
+   *  erasure, in both repositories. Cron triggered. */
+  'system.organization-retention-purge': SystemScheduledData;
   /** The code-graph OFFBOARDING sweep (Story MOTIR-2192 · MOTIR-2168) — drains
    *  due `code_graph_offboarding` rows through motir-ai's offboard seam, which is
    *  what makes §14's retention window real. Cron triggered, so it carries no

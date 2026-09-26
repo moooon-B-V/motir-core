@@ -186,6 +186,17 @@ export const organizationDeletionRequestRepository = {
     });
   },
 
+  /** Remove every deletion request of an organization — the retention purge's
+   *  (MOTIR-6401), which must clear them before the org row because the FK is
+   *  `Restrict`. Their notices cascade. Write → `tx` required. */
+  async deleteAllByOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.organizationDeletionRequest.deleteMany({ where: { organizationId } });
+    return result.count;
+  },
+
   /** One request by id, or null. */
   async findById(
     id: string,

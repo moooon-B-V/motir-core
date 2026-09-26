@@ -49,6 +49,7 @@ import { dataExportService } from '@/lib/services/dataExportService';
 import { accountErasureSweepService } from '@/lib/services/accountErasureSweepService';
 import { organizationDeletionNotifier } from '@/lib/services/organizationDeletionNotifier';
 import { organizationErasureSweepService } from '@/lib/services/organizationErasureSweepService';
+import { organizationRetentionPurgeService } from '@/lib/services/organizationRetentionPurgeService';
 import { supervisionSweepService } from '@/lib/services/supervisionSweepService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
@@ -122,6 +123,8 @@ export const jobServices = {
   organizationDeletionNotifier,
   // The erasure of organizations whose 30-day window has ended (MOTIR-6400).
   organizationErasureSweep: organizationErasureSweepService,
+  // The seven-year purge of an erased organization's tombstone (MOTIR-6401).
+  organizationRetentionPurge: organizationRetentionPurgeService,
   // The dispatch-run housekeeping (Story MOTIR-1789 · MOTIR-1792): the 30-day
   // log-body retention window, and the reap that closes a run nothing is
   // holding. One service because they share a cadence and a tenancy shape.

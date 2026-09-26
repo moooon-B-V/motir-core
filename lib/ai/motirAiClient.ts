@@ -1811,3 +1811,28 @@ export async function offboardOrg(coreOrganizationId: string): Promise<OrgOffboa
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as OrgOffboardResult;
 }
+
+/** motir-ai's answer to a retained-ledger purge: whether it removed a tombstone
+ *  this call (`false` for an org it never saw, or one already purged). */
+export interface OrgPurgeRetainedResult {
+  purged: boolean;
+}
+
+/**
+ * POST /v1/orgs/:id/purge-retained — remove an erased organization's tombstone,
+ * credit ledger and Stripe ids once its seven-year retention has run
+ * (MOTIR-6394). Idempotent; motir-ai refuses (409) an org that is not a
+ * tombstone. The retention purge calls it FIRST and retries on the next run when
+ * it throws.
+ */
+export async function purgeOrgRetained(
+  coreOrganizationId: string,
+): Promise<OrgPurgeRetainedResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(
+    `${url}/v1/orgs/${encodeURIComponent(coreOrganizationId)}/purge-retained`,
+    { method: 'POST', headers: authHeaders(serviceToken) },
+  );
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as OrgPurgeRetainedResult;
+}
