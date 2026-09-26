@@ -256,11 +256,19 @@ describe('what the refusal must NOT close', () => {
         decision: 'request_changes',
         source: 'ui',
         noteMd: 'the fold is wrong',
+        // A Motir-pressed design refusal carries its verdict (MOTIR-6421).
+        refusalVerdict: 'revise',
       },
       fx.ctx,
     );
 
-    await expect(publish('v2')).resolves.toMatchObject({ workItemId: card.id });
+    // The refusal sends the card back to To do (MOTIR-6423) — and that is exactly the
+    // state a revised publish must still land in, raising a FRESH question on it.
+    const v2 = await publish('v2');
+    expect(v2).toMatchObject({ workItemId: card.id });
+    expect(v2.id).not.toBe(v1.id);
+    expect(await gateFor(v2.id)).toMatchObject({ state: 'awaiting' });
+    expect(await gateFor(v1.id)).toMatchObject({ state: 'changes_requested' });
   });
 
   it('an approval of v1 closes nothing once v2 is current', async () => {
