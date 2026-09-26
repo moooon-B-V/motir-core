@@ -1093,7 +1093,7 @@ describe('MOTIR-5664 — ONE APPROVAL, TWO GATES: pressing the PRIMARY design ga
     expect(host).not.toHaveBeenCalled();
   });
 
-  it('decideGate REQUEST CHANGES on the design gate decides only the design — nothing is merged', async () => {
+  it('decideGate REQUEST CHANGES on the design gate decides only the design — nothing is merged, and the merge question is withdrawn', async () => {
     const { item, approval } = await pressable();
     const { gate: design } = await withDesignGate(item);
     const host = stubHost({});
@@ -1111,7 +1111,13 @@ describe('MOTIR-5664 — ONE APPROVAL, TWO GATES: pressing the PRIMARY design ga
     );
 
     expect((await gateRow(design.id)).state).toBe('changes_requested');
-    expect((await gateRow(approval.id)).state).toBe('awaiting');
+    // The design goes back to To do, and the approve-to-merge question over commits that
+    // are about to change is withdrawn with it (`design-refusal-verdict.md` §2, MOTIR-6423).
+    expect(await gateRow(approval.id)).toMatchObject({
+      state: 'superseded',
+      supersededCause: 'pulled_back',
+    });
+    expect(await statusOf(item.id)).toBe('todo');
     expect(result.members).toEqual([]);
     expect(host).not.toHaveBeenCalled();
   });

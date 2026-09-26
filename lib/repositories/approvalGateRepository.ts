@@ -718,6 +718,33 @@ export const approvalGateRepository = {
     return result.count;
   },
 
+  /**
+   * RETIRE every `awaiting` gate on one work item EXCEPT ONE — the withdraw a
+   * gate-owned return to To do performs (Story MOTIR-6070 · MOTIR-6423;
+   * `docs/decisions/design-refusal-verdict.md` §2).
+   *
+   * The sibling of {@link supersedeAllAwaitingByWorkItem}, and the exclusion is the
+   * whole reason it exists: a handler that returns the card to To do runs INSIDE the
+   * decide door, BEFORE the door's deciding write, so the gate being decided is still
+   * `awaiting` while this runs. The all-gates form would supersede the very decision
+   * being made — and the door's deciding write would then land on a `superseded` row.
+   * `id: { not: exceptGateId }` keeps that one row out; every other awaiting question
+   * about the card is withdrawn with the caller's cause, writing `state` and `cause`
+   * and nothing else, exactly as the pull-back rule does.
+   */
+  async supersedeOtherAwaitingByWorkItem(
+    workItemId: string,
+    exceptGateId: string,
+    cause: LiveSupersedeCause,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.approvalGate.updateMany({
+      where: { workItemId, state: 'awaiting', id: { not: exceptGateId } },
+      data: { state: 'superseded', supersededCause: cause },
+    });
+    return result.count;
+  },
+
   // ⚠️ `findByWorkItemAndKind`, `findAwaitingBySubject` AND `supersedeAwaitingBySubject`
   // WERE ALL HERE, and all three retired with the kind they were written for
   // (MOTIR-5611 · MOTIR-5613 · MOTIR-5616). Each read or wrote gates BY SUBJECT rather
