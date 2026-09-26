@@ -1,5 +1,12 @@
 # @motir/brand
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [0edb859]
+  - @motir/design-system@0.6.0
+
 ## 0.3.0
 
 ### Minor Changes
