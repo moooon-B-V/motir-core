@@ -1,3 +1,4 @@
+import { assertWorkspaceOrgNotClosing } from '@/lib/organizations/closingGuard';
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
@@ -107,6 +108,11 @@ export const gitlabConnectionService = {
     workspaceId: string;
     userId: string;
   }): Promise<GithubInstallationDTO> {
+    // Refused before the code is spent (MOTIR-6396): no new connection in an org
+    // scheduled for deletion.
+    await withWorkspaceContext({ userId: args.userId, workspaceId: args.workspaceId }, (tx) =>
+      assertWorkspaceOrgNotClosing(args.workspaceId, tx),
+    );
     const tokens = await exchangeCodeForToken(args.code);
     const gitlabUser = await fetchGitlabUser(tokens.accessToken);
 
@@ -287,8 +293,14 @@ export const gitlabConnectionService = {
   ): Promise<void> {
     const conn = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      (tx) =>
-        githubInstallationRepository.findByWorkspaceAndProvider(ctx.workspaceId, 'gitlab', tx),
+      async (tx) => {
+        await assertWorkspaceOrgNotClosing(ctx.workspaceId, tx);
+        return githubInstallationRepository.findByWorkspaceAndProvider(
+          ctx.workspaceId,
+          'gitlab',
+          tx,
+        );
+      },
     );
     if (!conn) throw new GitlabConnectionNotFoundError();
 
@@ -383,6 +395,7 @@ export const gitlabConnectionService = {
     const disconnected = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
+        await assertWorkspaceOrgNotClosing(ctx.workspaceId, tx);
         const conn = await githubInstallationRepository.findByWorkspaceAndProvider(
           ctx.workspaceId,
           'gitlab',
@@ -432,6 +445,7 @@ export const gitlabConnectionService = {
     const before = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
+        await assertWorkspaceOrgNotClosing(ctx.workspaceId, tx);
         const conn = await githubInstallationRepository.findByWorkspaceAndProvider(
           ctx.workspaceId,
           'gitlab',

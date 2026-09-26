@@ -48,6 +48,22 @@ import {
   ownershipTransferredEmail,
   type OwnershipTransferredEmailProps,
 } from '@/lib/emailTemplates/ownershipTransferred';
+import {
+  organizationDeletionScheduledEmail,
+  type OrganizationDeletionScheduledEmailProps,
+} from '@/lib/emailTemplates/organizationDeletionScheduled';
+import {
+  organizationDeletionCancelledEmail,
+  type OrganizationDeletionCancelledEmailProps,
+} from '@/lib/emailTemplates/organizationDeletionCancelled';
+import {
+  organizationDeletionReminderEmail,
+  type OrganizationDeletionReminderEmailProps,
+} from '@/lib/emailTemplates/organizationDeletionReminder';
+import {
+  organizationErasedEmail,
+  type OrganizationErasedEmailProps,
+} from '@/lib/emailTemplates/organizationErased';
 
 // The execution-side email service (Story 1.6 · Subtask 1.6.3). This is the
 // ONE place a transactional email is rendered and handed to the provider:
@@ -96,7 +112,23 @@ export type TransactionalEmail =
   | { to: string; template: 'two-factor-otp'; data: TwoFactorOtpEmailProps }
   | { to: string; template: 'follow-confirm'; data: FollowConfirmEmailProps }
   | { to: string; template: 'follow-digest'; data: FollowDigestEmailProps }
-  | { to: string; template: 'ownership-transferred'; data: OwnershipTransferredEmailProps };
+  | { to: string; template: 'ownership-transferred'; data: OwnershipTransferredEmailProps }
+  | {
+      to: string;
+      template: 'organization-deletion-scheduled';
+      data: OrganizationDeletionScheduledEmailProps;
+    }
+  | {
+      to: string;
+      template: 'organization-deletion-cancelled';
+      data: OrganizationDeletionCancelledEmailProps;
+    }
+  | {
+      to: string;
+      template: 'organization-deletion-reminder';
+      data: OrganizationDeletionReminderEmailProps;
+    }
+  | { to: string; template: 'organization-erased'; data: OrganizationErasedEmailProps };
 
 /** Every template discriminant — handy for exhaustiveness + tests. */
 export type EmailTemplate = TransactionalEmail['template'];
@@ -149,6 +181,12 @@ export const EMAIL_TEMPLATE_CLASS: Record<EmailTemplate, EmailTemplateClass> = {
   // Who controls an organization changed — a security-relevant fact about the
   // reader's own account, never budgeted away (MOTIR-6310).
   'ownership-transferred': 'essential',
+  // Organization deletion (MOTIR-6395): a person loses their work if they miss one
+  // of these, and none of them is visible anywhere else once the org is gone.
+  'organization-deletion-scheduled': 'essential',
+  'organization-deletion-cancelled': 'essential',
+  'organization-deletion-reminder': 'essential',
+  'organization-erased': 'essential',
   'mention-notification': 'notification',
   'watcher-comment-notification': 'notification',
   'watcher-transition-notification': 'notification',
@@ -279,6 +317,14 @@ async function renderTemplate(message: TransactionalEmail) {
       return twoFactorOtpEmail(message.data);
     case 'ownership-transferred':
       return ownershipTransferredEmail(message.data);
+    case 'organization-deletion-scheduled':
+      return organizationDeletionScheduledEmail(message.data);
+    case 'organization-deletion-cancelled':
+      return organizationDeletionCancelledEmail(message.data);
+    case 'organization-deletion-reminder':
+      return organizationDeletionReminderEmail(message.data);
+    case 'organization-erased':
+      return organizationErasedEmail(message.data);
     default: {
       // Exhaustiveness guard: a new template arm without a case here is a
       // compile error, not a silent fall-through.

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { OrganizationNotFoundError } from '@/lib/organizations/errors';
+import { OrganizationClosingError, OrganizationNotFoundError } from '@/lib/organizations/errors';
 import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
 import {
   BillingForbiddenError,
@@ -45,6 +45,10 @@ export function mapBillingError(err: unknown): NextResponse | null {
       { code: err.code, error: err.message, entitlement: err.entitlement, detail: err.detail },
       { status: 402 },
     );
+  }
+  if (err instanceof OrganizationClosingError) {
+    // No checkout, portal or seat change while the org closes (MOTIR-6396).
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
   if (err instanceof OrganizationNotFoundError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });

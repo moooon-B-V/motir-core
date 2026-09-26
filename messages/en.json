@@ -645,7 +645,8 @@
       "couldNotLink": "Could not link the selected work items.",
       "orgSecurityForbidden": "Only owners and admins of an organization can change its security settings.",
       "workspaceSecurityForbidden": "Only owners and admins of a workspace can change its security settings.",
-      "refused": "That didn’t go through: {reason}"
+      "refused": "That didn’t go through: {reason}",
+      "organizationClosing": "This organization is scheduled for deletion and is read-only. Only its Owner can cancel the deletion."
     },
     "links": {
       "notFound": "That work item no longer exists.",
@@ -857,6 +858,46 @@
       "viewAll": "See the full changelog",
       "unsubscribe": "Unsubscribe",
       "why": "You're getting this because you follow this project on Motir. One click above stops it."
+    },
+    "organizationDeletionScheduled": {
+      "subject": "{organization} is scheduled for deletion on {date}",
+      "preview": "{organization} will be erased on {date}",
+      "greeting": "Hi {name},",
+      "ledeOwner": "You scheduled {organization} for deletion. It will be erased on {date}.",
+      "ledeMember": "{scheduledBy} scheduled {organization} for deletion. It will be erased on {date}.",
+      "readOnly": "Until then the organization is read-only: you can still read everything and download your own data, but nothing can be changed.",
+      "cancelOwner": "You can cancel the deletion at any time before then, from the organization settings.",
+      "cancelMember": "If this is a mistake, ask {scheduledBy}, the organization's Owner, to cancel it before {date}.",
+      "openSettings": "Open organization settings",
+      "downloadData": "Download your data",
+      "footer": "You are receiving this because you are a member of the organization."
+    },
+    "organizationDeletionCancelled": {
+      "subject": "The deletion of {organization} was cancelled",
+      "preview": "{organization} will not be deleted",
+      "greeting": "Hi {name},",
+      "lede": "{cancelledBy} cancelled the deletion of {organization}.",
+      "detail": "Everything is back to normal: you can edit again, and nothing will be erased.",
+      "open": "Open Motir",
+      "footer": "You are receiving this because you are a member of the organization."
+    },
+    "organizationDeletionReminder": {
+      "subject": "{organization} will be deleted in {daysLeft, plural, one {# day} other {# days}}",
+      "preview": "{organization} will be erased on {date}",
+      "greeting": "Hi {name},",
+      "lede": "{organization} is scheduled for deletion on {date}, {daysLeft, plural, one {# day} other {# days}} from now. It is read-only until then.",
+      "cancelOwner": "You can still cancel the deletion from the organization settings.",
+      "cancelAdmin": "Only {owner}, the organization's Owner, can cancel it.",
+      "openSettings": "Open organization settings",
+      "footer": "You are receiving this because you are the Owner or an Admin of the organization."
+    },
+    "organizationErased": {
+      "subject": "{organization} has been deleted",
+      "preview": "{organization} and everything in it has been erased",
+      "greeting": "Hi {name},",
+      "lede": "{organization} has been deleted. Its workspaces, projects, members, and the repositories Motir hosted for it have been erased.",
+      "kept": "Motir keeps only its billing records, as the law requires, until {year}. They are deleted then too.",
+      "footer": "You are receiving this because you were the Owner or an Admin of the organization."
     }
   },
   "auth": {
@@ -3220,7 +3261,8 @@
         "planHeldAgo": "Held by a plan · {time}",
         "autoDisabled": "Auto-disabled · {count} failures",
         "actionsAria": "Actions for {name}",
-        "reEnable": "Re-enable"
+        "reEnable": "Re-enable",
+        "orgClosingAgo": "Paused · {time}"
       },
       "triggerSummary": {
         "created": "When created",
@@ -3326,7 +3368,8 @@
           "success": "Success",
           "failure": "Failure",
           "no_actions": "No actions",
-          "plan_held": "Held by a plan"
+          "plan_held": "Held by a plan",
+          "org_closing": "Paused"
         },
         "conditionNotMet": "Condition not met",
         "planHeldNote": "A plan is rewriting this item",
@@ -3344,7 +3387,8 @@
         "empty": {
           "title": "No runs yet",
           "description": "This rule hasn't fired. When an item matches its trigger and conditions, each run appears here with its result, duration and the item that triggered it."
-        }
+        },
+        "orgClosingNote": "The organization is scheduled for deletion"
       }
     },
     "aiPlanning": {
@@ -4922,8 +4966,8 @@
       "transferDesc": "Hand the organization to another member. They become the Owner — the only person who can transfer or delete it — and you become an Admin.",
       "transferCta": "Transfer ownership…",
       "deleteOrg": "Delete organization",
-      "deleteOrgNote": "Deleting the organization removes all its workspaces and data. This cannot be undone.",
-      "deleteUnavailable": "Organization deletion isn’t available yet."
+      "deleteOrgNoteLive": "Schedules {org} for deletion in 30 days. Everyone is told, it becomes read-only, and you can cancel until then.",
+      "deleteOrgCta": "Delete organization…"
     },
     "transfer": {
       "title": "Transfer ownership of {org}",
@@ -5070,6 +5114,52 @@
       "readOnlyNote": "Only an owner or an admin of {tier} can change this.",
       "cardBodyWorkspace": "Additionally require a second factor for everyone in this workspace. Your organization’s setting applies on top of this one and cannot be lowered here.",
       "stateOnWorkspace": "Required for every member of {workspace}"
+    },
+    "delete": {
+      "title": "Delete {org}?",
+      "step1Sub": "This schedules the whole organization for deletion. Here is what goes.",
+      "step1Label": "Step 1 of 2 · What will be deleted",
+      "workspaces": "<b>{workspaces, plural, one {# workspace} other {# workspaces}}, {projects, plural, one {# project} other {# projects}}</b> and everything in them — work items, boards, sprints, comments, attachments.",
+      "members": "<b>{count, plural, one {# member} other {# members}}</b> lose access. Each is emailed today and can download their own data until {date}.",
+      "exportLink": "Download your data",
+      "hostedRepos": "<b>{count, plural, one {# repository Motir hosts} other {# repositories Motir hosts}}</b> {count, plural, one {is} other {are}} deleted. Take one over to keep its code.",
+      "takeOver": "Take over",
+      "connectedRepos": "Repositories you connected from GitHub or GitLab are never deleted — Motir only disconnects from them.",
+      "subscription": "<b>Your subscription won’t renew.</b> The current period runs to its end; nothing more is charged.",
+      "billingKept": "Billing records are kept for seven years, as the law requires.",
+      "dateTitle": "Everything is erased on {date}.",
+      "dateSub": "Until then {org} is read-only for everyone and you can cancel. There is no way to erase it sooner.",
+      "continue": "Continue",
+      "step2Sub": "Everything is erased on {date}. Until then it is read-only, and you can cancel.",
+      "step2Label": "Step 2 of 2 · Confirm it’s you",
+      "confirmLabel": "Type {org} to confirm",
+      "nameMismatch": "That isn’t this organization’s name.",
+      "passwordLabel": "Your password",
+      "passwordHint": "Confirms it’s really you. Motir asks for it only for actions like this.",
+      "reauthTitle": "Sign in again to confirm.",
+      "reauthBody": "Your account has no password, so Motir asks for a recent sign-in instead — within the last 10 minutes. You’ll come straight back here.",
+      "reauthCta": "Sign in again",
+      "back": "Back",
+      "confirm": "Schedule deletion",
+      "pending": "Scheduling…",
+      "errorPassword": "That password isn’t right. Nothing was scheduled — try again.",
+      "errorAlreadyScheduled": "A deletion is already scheduled for {org}.",
+      "errorGeneric": "Something went wrong and nothing was scheduled — try again."
+    },
+    "scheduled": {
+      "title": "Scheduled for deletion on {date}",
+      "body": "{name} scheduled this on {scheduledAt}. <b>{daysLeft, plural, one {# day left} other {# days left}}.</b> Until then {org} is read-only for everyone, its subscription won’t renew, and you can cancel at any time.",
+      "someone": "Someone",
+      "cancel": "Cancel deletion",
+      "transferBlocked": "Cancel the deletion to transfer ownership."
+    },
+    "cancel": {
+      "title": "Cancel the deletion of {org}?",
+      "body": "Everything returns as it was: editing, automations and agents, and the subscription renews as before. Every member is told.",
+      "keep": "Keep it scheduled",
+      "confirm": "Cancel deletion",
+      "success": "Deletion cancelled. {org} is back to normal, and everyone has been told.",
+      "error": "Something went wrong and the deletion is still scheduled — try again."
     }
   },
   "triage": {
@@ -7246,7 +7336,8 @@
         "not_found": "That project isn't among your GitLab memberships anymore.",
         "unavailable": "Couldn't reach GitLab — your authorization may have been revoked. Reconnect GitLab and try again.",
         "webhook_not_configured": "This Motir server has no GitLab webhook secret configured, so it can't receive project events. Ask whoever runs it to set GITLAB_WEBHOOK_SECRET.",
-        "webhook_failed": "Couldn't add Motir's webhook to that project. Adding a webhook needs the Maintainer role on the project in GitLab."
+        "webhook_failed": "Couldn't add Motir's webhook to that project. Adding a webhook needs the Maintainer role on the project in GitLab.",
+        "organization_closing": "This organization is scheduled for deletion, so no project can be connected."
       }
     }
   },
@@ -9498,6 +9589,15 @@
     "plan": "Opens the plan",
     "noConversation": "no conversation",
     "noConversationWhy": "There is no conversation on record for this plan."
+  },
+  "orgClosing": {
+    "banner": {
+      "owner": "{org} is scheduled for deletion on {date}. It is read-only until then.",
+      "member": "{name} scheduled {org} for deletion on {date}. The organization is read-only.",
+      "someone": "Someone",
+      "export": "Download your data"
+    },
+    "readOnlyNote": "Read-only while {org} closes"
   },
   "roomView": {
     "mine": "Mine",

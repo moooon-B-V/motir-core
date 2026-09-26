@@ -338,6 +338,17 @@ export const organizationMembershipRepository = {
     }
   },
 
+  /** Remove EVERY membership of an organization — the erasure tombstone's
+   *  (MOTIR-6400). Requires `app.organization_id` bound
+   *  (`org_membership_delete_active_or_self`). Returns the delete count. */
+  async deleteAllByOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.organizationMembership.deleteMany({ where: { organizationId } });
+    return result.count;
+  },
+
   /**
    * Drop every organization membership this user holds — the erasure sweep's
    * org arm (MOTIR-3702).

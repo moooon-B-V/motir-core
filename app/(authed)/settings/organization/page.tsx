@@ -5,6 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { organizationDeletionService } from '@/lib/services/organizationDeletionService';
 import {
   isWorkspaceTierRevealed,
   preferredOrganizationId,
@@ -22,6 +23,7 @@ import { BillingCard } from './_components/BillingCard';
 import { WorkspaceFoldInSection } from './_components/WorkspaceFoldInSection';
 import { JobRunsFoldInSection } from './_components/JobRunsFoldInSection';
 import { DangerZoneCard } from './_components/DangerZoneCard';
+import { DELETE_ORGANIZATION_DIALOG } from './_components/deleteOrganizationDialogParam';
 import { OrgWorkspacesCard } from './_components/OrgWorkspacesCard';
 import { ORG_WORKSPACES_PAGE_SIZE } from './_components/workspacesPageSize';
 
@@ -49,7 +51,8 @@ export default async function OrganizationSettingsPage({
      *  viewer belongs to — `resolveActiveOrganization` checks membership. */
     org?: string;
     /** `transfer-ownership` opens the Owner's transfer dialog on arrival
-     *  (MOTIR-6313). Ignored for a viewer without `transferOwnership`. */
+     *  (MOTIR-6313); `delete-organization` opens the Delete organization dialog
+     *  (MOTIR-6402). Both ignored for a viewer without `transferOwnership`. */
     dialog?: string;
   }>;
 }) {
@@ -176,6 +179,8 @@ export default async function OrganizationSettingsPage({
           isAdmin={isAdmin}
           canTransfer={canTransfer}
           openTransfer={canTransfer && jobsParams.dialog === 'transfer-ownership'}
+          openDelete={canTransfer && jobsParams.dialog === DELETE_ORGANIZATION_DIALOG}
+          sessionSignedInAt={new Date(session.session.createdAt).toISOString()}
           canManageWorkspaces={canManageWorkspaces}
           activeWorkspaceId={ctx?.workspaceId ?? null}
           actorUserId={session.user.id}
@@ -203,6 +208,8 @@ async function OrgPaneBody({
   isAdmin,
   canTransfer,
   openTransfer,
+  openDelete,
+  sessionSignedInAt,
   canManageWorkspaces,
   activeWorkspaceId,
   actorUserId,
@@ -217,6 +224,9 @@ async function OrgPaneBody({
   isAdmin: boolean;
   canTransfer: boolean;
   openTransfer: boolean;
+  openDelete: boolean;
+  /** When the viewer's session was created — the passwordless step-up's proof. */
+  sessionSignedInAt: string;
   canManageWorkspaces: boolean;
   activeWorkspaceId: string | null;
   actorUserId: string;
@@ -241,6 +251,22 @@ async function OrgPaneBody({
           : Promise.resolve(null),
       ])
     : [null, null];
+
+  // The Owner's Danger zone reads (Story MOTIR-6306 · MOTIR-6402): the open
+  // deletion request, and — only while there is none — the dialog's step-1
+  // consequences. Sequential, not parallel: the second is not needed once the
+  // first answers "scheduled".
+  const deletionState = canTransfer
+    ? await organizationDeletionService.getOrganizationDeletion(orgId, actorUserId)
+    : null;
+  const consequences =
+    canTransfer && !deletionState?.request
+      ? await organizationDeletionService.getConsequences(
+          orgId,
+          actorUserId,
+          new Date(sessionSignedInAt),
+        )
+      : null;
 
   return (
     <>
@@ -301,7 +327,15 @@ async function OrgPaneBody({
       ) : null}
 
       {canTransfer ? (
-        <DangerZoneCard orgId={orgId} orgName={orgName} openTransfer={openTransfer} />
+        <DangerZoneCard
+          orgId={orgId}
+          orgName={orgName}
+          openTransfer={openTransfer}
+          openDelete={openDelete}
+          deletion={deletionState?.request ?? null}
+          scheduledByName={deletionState?.scheduledByName ?? null}
+          consequences={consequences}
+        />
       ) : null}
     </>
   );

@@ -645,7 +645,8 @@
       "couldNotLink": "无法关联所选工作项。",
       "orgSecurityForbidden": "只有组织的所有者或管理员才能更改其安全设置。",
       "workspaceSecurityForbidden": "只有工作区的所有者或管理员才能更改其安全设置。",
-      "refused": "操作未完成：{reason}"
+      "refused": "操作未完成：{reason}",
+      "organizationClosing": "该组织已计划删除，目前为只读状态。只有组织所有者可以取消删除。"
     },
     "links": {
       "notFound": "该工作项已不存在。",
@@ -857,6 +858,46 @@
       "viewAll": "查看完整更新日志",
       "unsubscribe": "退订",
       "why": "你收到这封邮件是因为你在 Motir 上关注了该项目。点击上方链接即可停止接收。"
+    },
+    "organizationDeletionScheduled": {
+      "subject": "{organization} 已计划于 {date} 删除",
+      "preview": "{organization} 将于 {date} 被清除",
+      "greeting": "{name}，你好：",
+      "ledeOwner": "你已计划删除 {organization}，它将于 {date} 被清除。",
+      "ledeMember": "{scheduledBy} 已计划删除 {organization}，它将于 {date} 被清除。",
+      "readOnly": "在此之前，该组织为只读：你仍可查看所有内容并下载自己的数据，但无法做任何修改。",
+      "cancelOwner": "在此之前，你可以随时在组织设置中取消删除。",
+      "cancelMember": "如果这是误操作，请在 {date} 之前联系组织所有者 {scheduledBy} 取消。",
+      "openSettings": "打开组织设置",
+      "downloadData": "下载你的数据",
+      "footer": "你收到这封邮件，是因为你是该组织的成员。"
+    },
+    "organizationDeletionCancelled": {
+      "subject": "{organization} 的删除已取消",
+      "preview": "{organization} 不会被删除",
+      "greeting": "{name}，你好：",
+      "lede": "{cancelledBy} 已取消删除 {organization}。",
+      "detail": "一切已恢复正常：你可以继续编辑，不会有任何内容被清除。",
+      "open": "打开 Motir",
+      "footer": "你收到这封邮件，是因为你是该组织的成员。"
+    },
+    "organizationDeletionReminder": {
+      "subject": "{organization} 将在 {daysLeft} 天后删除",
+      "preview": "{organization} 将于 {date} 被清除",
+      "greeting": "{name}，你好：",
+      "lede": "{organization} 已计划于 {date} 删除，距今还有 {daysLeft} 天。在此之前它为只读状态。",
+      "cancelOwner": "你仍可在组织设置中取消删除。",
+      "cancelAdmin": "只有组织所有者 {owner} 可以取消删除。",
+      "openSettings": "打开组织设置",
+      "footer": "你收到这封邮件，是因为你是该组织的所有者或管理员。"
+    },
+    "organizationErased": {
+      "subject": "{organization} 已被删除",
+      "preview": "{organization} 及其全部内容已被清除",
+      "greeting": "{name}，你好：",
+      "lede": "{organization} 已被删除。它的工作区、项目、成员，以及 Motir 为它托管的代码仓库均已清除。",
+      "kept": "按照法律要求，Motir 仅保留其账单记录至 {year} 年，届时也将一并删除。",
+      "footer": "你收到这封邮件，是因为你曾是该组织的所有者或管理员。"
     }
   },
   "auth": {
@@ -3220,7 +3261,8 @@
         "planHeldAgo": "计划占用 · {time}",
         "autoDisabled": "已自动停用 · {count}次失败",
         "actionsAria": "{name}的操作",
-        "reEnable": "重新启用"
+        "reEnable": "重新启用",
+        "orgClosingAgo": "已暂停 · {time}"
       },
       "triggerSummary": {
         "created": "创建时",
@@ -3326,7 +3368,8 @@
           "success": "成功",
           "failure": "失败",
           "no_actions": "无操作",
-          "plan_held": "计划占用"
+          "plan_held": "计划占用",
+          "org_closing": "已暂停"
         },
         "conditionNotMet": "条件未满足",
         "planHeldNote": "计划正在重写此工作项",
@@ -3344,7 +3387,8 @@
         "empty": {
           "title": "暂无运行记录",
           "description": "此规则尚未触发。当某个工作项匹配其触发器和条件时，每次运行都会显示在此处，包含运行结果、耗时以及触发该次运行的工作项。"
-        }
+        },
+        "orgClosingNote": "该组织已计划删除"
       }
     },
     "aiPlanning": {
@@ -4922,8 +4966,8 @@
       "transferDesc": "将组织交给另一位成员。对方成为所有者——唯一可以转让或删除组织的人——你将成为管理员。",
       "transferCta": "转让所有权…",
       "deleteOrg": "删除组织",
-      "deleteOrgNote": "删除组织会移除其所有工作区和数据。此操作无法撤销。",
-      "deleteUnavailable": "暂不支持删除组织。"
+      "deleteOrgNoteLive": "将 {org} 安排在 30 天后删除。所有人都会收到通知，组织变为只读，在此之前你可以随时取消。",
+      "deleteOrgCta": "删除组织…"
     },
     "transfer": {
       "title": "转让 {org} 的所有权",
@@ -5070,6 +5114,52 @@
       "readOnlyNote": "只有 {tier} 的所有者或管理员才能更改此设置。",
       "cardBodyWorkspace": "在此工作区额外要求第二重验证。组织的设置在此之上仍然适用，且无法在这里降低。",
       "stateOnWorkspace": "{workspace} 的所有成员均需启用"
+    },
+    "delete": {
+      "title": "删除 {org}？",
+      "step1Sub": "这会安排删除整个组织。以下是将被删除的内容。",
+      "step1Label": "第 1 步，共 2 步 · 将被删除的内容",
+      "workspaces": "<b>{workspaces} 个工作区、{projects} 个项目</b>及其中的一切——工作项、看板、迭代、评论、附件。",
+      "members": "<b>{count} 位成员</b>将失去访问权限。每人今天都会收到邮件，并可在 {date} 前下载自己的数据。",
+      "exportLink": "下载你的数据",
+      "hostedRepos": "<b>{count} 个由 Motir 托管的代码仓库</b>将被删除。接管仓库即可保留其代码。",
+      "takeOver": "接管",
+      "connectedRepos": "你从 GitHub 或 GitLab 连接的代码仓库永远不会被删除——Motir 只会断开与它们的连接。",
+      "subscription": "<b>你的订阅不会续订。</b>当前计费周期会持续到结束；不会再产生任何费用。",
+      "billingKept": "账单记录将依法保留七年。",
+      "dateTitle": "所有内容将于 {date} 被清除。",
+      "dateSub": "在此之前，{org} 对所有人只读，你可以随时取消。无法提前清除。",
+      "continue": "继续",
+      "step2Sub": "所有内容将于 {date} 被清除。在此之前组织只读，你可以随时取消。",
+      "step2Label": "第 2 步，共 2 步 · 确认是你本人",
+      "confirmLabel": "输入 {org} 以确认",
+      "nameMismatch": "这不是该组织的名称。",
+      "passwordLabel": "你的密码",
+      "passwordHint": "用于确认是你本人。Motir 只会在此类操作时要求输入密码。",
+      "reauthTitle": "请重新登录以确认。",
+      "reauthBody": "你的账户没有密码，因此 Motir 改为要求最近一次登录——在过去 10 分钟内。登录后你会直接回到这里。",
+      "reauthCta": "重新登录",
+      "back": "返回",
+      "confirm": "安排删除",
+      "pending": "正在安排…",
+      "errorPassword": "密码不正确。未安排任何操作——请重试。",
+      "errorAlreadyScheduled": "{org} 已经安排了删除。",
+      "errorGeneric": "出现问题，未安排任何操作——请重试。"
+    },
+    "scheduled": {
+      "title": "已安排于 {date} 删除",
+      "body": "{name} 于 {scheduledAt} 安排了此操作。<b>还剩 {daysLeft} 天。</b>在此之前，{org} 对所有人只读，订阅不会续订，你可以随时取消。",
+      "someone": "某位成员",
+      "cancel": "取消删除",
+      "transferBlocked": "取消删除后才能转让所有权。"
+    },
+    "cancel": {
+      "title": "取消删除 {org}？",
+      "body": "一切都会恢复原样：编辑、自动化和智能体，订阅也会照常续订。所有成员都会收到通知。",
+      "keep": "保持已安排",
+      "confirm": "取消删除",
+      "success": "已取消删除。{org} 已恢复正常，所有人都已收到通知。",
+      "error": "出现问题，删除仍在安排中——请重试。"
     }
   },
   "triage": {
@@ -7242,7 +7332,8 @@
         "not_found": "该项目已不在你的 GitLab 成员项目中。",
         "unavailable": "无法连接到 GitLab——你的授权可能已被撤销。请重新连接 GitLab 后再试。",
         "webhook_not_configured": "此 Motir 服务器未配置 GitLab Webhook 密钥，因此无法接收项目事件。请联系服务器管理员设置 GITLAB_WEBHOOK_SECRET。",
-        "webhook_failed": "无法为该项目添加 Motir 的 Webhook。在 GitLab 中添加 Webhook 需要该项目的 Maintainer 角色。"
+        "webhook_failed": "无法为该项目添加 Motir 的 Webhook。在 GitLab 中添加 Webhook 需要该项目的 Maintainer 角色。",
+        "organization_closing": "该组织已计划删除，因此无法连接项目。"
       }
     }
   },
@@ -9494,6 +9585,15 @@
     "plan": "打开计划",
     "noConversation": "无对话",
     "noConversationWhy": "此计划没有对话记录。"
+  },
+  "orgClosing": {
+    "banner": {
+      "owner": "{org} 已安排于 {date} 删除。在此之前它是只读的。",
+      "member": "{name} 已安排于 {date} 删除 {org}。该组织现为只读。",
+      "someone": "某位成员",
+      "export": "下载你的数据"
+    },
+    "readOnlyNote": "{org} 关闭期间只读"
   },
   "roomView": {
     "mine": "我的",

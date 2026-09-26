@@ -45,6 +45,7 @@ import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';
 import { PlanningWorkspaceOverlay } from '@/components/planning/PlanningWorkspaceOverlay';
 import { ApprovalOverlay } from '@/components/approvals/ApprovalOverlay';
 import { AccountDeletionBanner } from './_components/AccountDeletionBanner';
+import { OrganizationClosingBanner } from './_components/OrganizationClosingBanner';
 import {
   isWorkspaceTierRevealed,
   scopeWorkspacesToActiveOrg,
@@ -418,8 +419,25 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                      requests (no open deletion request), and it is a SERVER
                      component so that a cancel from EITHER door clears it on a
                      `router.refresh()` — see its own file for why an island
-                     seeded at mount could not do that. */
-                    banner={<AccountDeletionBanner userId={session.user.id} />}
+                     seeded at mount could not do that.
+
+                     THE ORGANIZATION CLOSING BAR (MOTIR-6403) sits beneath it —
+                     both may show, account bar first, two lines never merged
+                     (design MOTIR-6390 panel 5). It renders `null` unless the
+                     active organization is closing. */
+                    banner={
+                      <>
+                        <AccountDeletionBanner userId={session.user.id} />
+                        {activeOrg ? (
+                          <OrganizationClosingBanner
+                            userId={session.user.id}
+                            organizationId={activeOrg.id}
+                            orgName={activeOrg.name}
+                            isOwner={orgCan(activeOrg.role, 'deleteOrganization')}
+                          />
+                        ) : null}
+                      </>
+                    }
                     topNav={
                       <TopNav
                         activeOrg={activeOrg}

@@ -10,6 +10,11 @@ import {
   OrgSlugCollisionError,
   OwnerMembershipLockedError,
   OwnerOnlyByTransferError,
+  OrganizationClosingError,
+  OrganizationDeletionAlreadyScheduledError,
+  OrganizationDeletionAlreadyStartedError,
+  OrganizationNameMismatchError,
+  StepUpFailedError,
 } from '@/lib/organizations/errors';
 
 // Typed-error → HTTP-status mapper for the organization routes (Story 6.10.5),
@@ -56,6 +61,27 @@ export function mapOrgError(err: unknown): NextResponse | null {
   }
   if (err instanceof OwnershipConfirmationMismatchError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+  }
+  if (err instanceof OrganizationNameMismatchError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+  }
+  if (err instanceof StepUpFailedError) {
+    // 403, carrying WHY — a passwordless Owner is sent to sign in again.
+    return NextResponse.json(
+      { code: err.code, reason: err.reason, error: err.message },
+      { status: 403 },
+    );
+  }
+  if (
+    err instanceof OrganizationDeletionAlreadyScheduledError ||
+    err instanceof OrganizationDeletionAlreadyStartedError
+  ) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  if (err instanceof OrganizationClosingError) {
+    // Read-only while the org is scheduled for deletion (MOTIR-6396) — a state a
+    // cancel undoes, so a conflict rather than a permission refusal.
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
   }
   if (err instanceof OrgSlugCollisionError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });

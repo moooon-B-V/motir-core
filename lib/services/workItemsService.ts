@@ -1,3 +1,4 @@
+import { isWorkspaceOrgClosing } from '@/lib/organizations/closingGuard';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import {
@@ -6962,6 +6963,15 @@ export const workItemsService = {
     // transaction, not inside it: a refusal must not consume a candidate, and
     // flipping an item to `in_progress` and then refusing would strand it.
     await ciAllowanceService.assertDispatchAllowed(ctx);
+    // A CLOSING organization dispatches nothing (MOTIR-6396; `organization-
+    // deletion.md` §3): no card is claimed and nothing is locked. Read per claim,
+    // so a cancel resumes dispatch on the next call with nothing to restart.
+    if (await isWorkspaceOrgClosing(project.workspaceId)) {
+      console.warn('[dispatch] no claim: the organization is scheduled for deletion', {
+        projectId,
+      });
+      return null;
+    }
     // The claim ASSIGNS (MOTIR-4996), and an assignee must be a workspace member
     // — the same pre-flight `claimWorkItem` runs, in the same place: ahead of the
     // transaction so a refusal never takes a lock, and ahead of the ready-set
