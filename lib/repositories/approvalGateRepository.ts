@@ -416,6 +416,9 @@ export const approvalGateRepository = {
     /** WHY it was withdrawn, for the refusal's sentence (MOTIR-5667). Read-only:
      *  nothing writes from this snapshot. */
     supersededCause: ApprovalGateSupersedeCause | null;
+    /** The design verdict (MOTIR-6421) — read by the seed guard, which accepts a
+     *  design refusal only with `re_plan` (MOTIR-6424). Never written from. */
+    refusalVerdict: ApprovalGateRefusalVerdict | null;
   } | null> {
     const rows = await tx.$queryRaw<
       Array<{
@@ -431,6 +434,7 @@ export const approvalGateRepository = {
         decidedByLabel: string | null;
         subjectVersion: string | null;
         supersededCause: ApprovalGateSupersedeCause | null;
+        refusalVerdict: ApprovalGateRefusalVerdict | null;
       }>
     >`
       SELECT "id",
@@ -443,6 +447,9 @@ export const approvalGateRepository = {
              "decided_by_id" AS "decidedById",
              "decided_at"    AS "decidedAt",
              "superseded_cause" AS "supersededCause",
+             -- READ for the seed guard (MOTIR-6424): a design refusal seeds a
+             -- re-plan only with the re_plan verdict.
+             "refusal_verdict" AS "refusalVerdict",
              -- READ for the stale check (MOTIR-5234): what the question was asked
              -- about, compared with the stamp the reader pressed with.
              "subject_version" AS "subjectVersion",

@@ -6608,7 +6608,8 @@
         "verb": {
           "decisionApproval": "Request changes",
           "decisionConfirmation": "Overturn",
-          "decisionChoice": "None of these"
+          "decisionChoice": "None of these",
+          "designResult": "Request changes"
         },
         "aria": "Open {key}, the work item this conversation re-plans"
       }
@@ -6620,12 +6621,15 @@
       "verb": {
         "decisionApproval": "Changes were requested on this decision.",
         "decisionConfirmation": "This decision was overturned.",
-        "decisionChoice": "None of the options on this choice was picked."
+        "decisionChoice": "None of the options on this choice was picked.",
+        "designResult": "Changes were requested on this design."
       },
       "reason": "The reason given:\n“{reason}”",
       "supersedes": "The work items it superseded: {keys}",
       "keySeparator": ", ",
-      "ask": "Re-plan this work item from that reason."
+      "ask": "Re-plan this work item from that reason.",
+      "blockedBy": "The work items waiting on this design: {keys}",
+      "askDesign": "Re-plan {parent} from that reason: this design and the work waiting on it."
     },
     "noProjectTitle": "No project selected",
     "noProjectDescription": "Pick or create a project from the switcher to plan with Motir AI.",
