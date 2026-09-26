@@ -90,7 +90,13 @@ describe('findMalformedIntraPlanRefs', () => {
 
 describe('findMalformedIntraPlanRefs — linear on hostile input (CodeQL js/polynomial-redos)', () => {
   it('scans a body repeating an unclosed `[](motir-ref:` opener in linear time and finds no link', () => {
-    const hostile = '[](motir-ref:'.repeat(200_000);
+    // The pre-fix regex (`/\[[^\]\[]*\]\(motir-ref:[^)\n]*\)/g`) re-scanned the
+    // rest of the line from every opener: 8.7 s on this 508 KB input on a dev
+    // box. The linear scan takes ~15 ms there. The bound is generous (a CI
+    // runner under coverage is ~10–20× slower than a dev box) and still well
+    // under the defect, so it cannot pass by accident (MOTIR-6511: 2.6 MB
+    // against the same bound left ~1.07× headroom on CI and flaked).
+    const hostile = '[](motir-ref:'.repeat(40_000);
     const started = performance.now();
     expect(findMalformedIntraPlanRefs(hostile)).toEqual([]);
     expect(performance.now() - started).toBeLessThan(1_000);
