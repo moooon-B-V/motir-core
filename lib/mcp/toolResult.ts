@@ -29,7 +29,6 @@ import { NotAMemberError } from '@/lib/workspaces/errors';
 import {
   CrossWorkspaceLinkError,
   SelfLinkError,
-  CrossLevelLinkError,
   WorkItemLinkCycleError,
   WorkItemLinkNotFoundError,
 } from '@/lib/workItems/linkErrors';
@@ -405,9 +404,6 @@ export function toToolError(err: unknown): CallToolResult {
   if (
     err instanceof SelfLinkError ||
     err instanceof WorkItemLinkCycleError ||
-    // CROSS_LEVEL_LINK (MOTIR-6369): a blocked_by between two levels. Its
-    // message names both keys, kinds and levels, so the agent can re-wire.
-    err instanceof CrossLevelLinkError ||
     err instanceof CrossWorkspaceLinkError ||
     err instanceof WorkItemLinkNotFoundError
   ) {
