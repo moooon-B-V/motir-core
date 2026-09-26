@@ -13,6 +13,7 @@ import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { createTestUser, makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { setProjectRoleDefinitionFor } from '../../helpers/workspaceRoleFixtures';
 
 // The DIRECTION SWITCHES write and the room's SYNC STATE (Story MOTIR-4931 ·
 // Subtask MOTIR-5706) — `setSyncDirections` under `integration:manage`, the
@@ -128,10 +129,9 @@ async function customMember(fx: WorkItemFixture, permissions: string[]) {
     name: 'Custom',
   });
   await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-  const definition = await adminDb.projectRoleDefinition.create({
+  const definition = await adminDb.workspaceRoleDefinition.create({
     data: {
       workspaceId: fx.workspaceId,
-      projectId: fx.projectId,
       name: `Custom ${permissions.join('+')}`,
       permissions,
     },
@@ -146,7 +146,7 @@ async function customMember(fx: WorkItemFixture, permissions: string[]) {
       },
       tx,
     );
-    await projectMembershipRepository.setRoleDefinition(
+    await setProjectRoleDefinitionFor(
       user.id,
       fx.projectId,
       { roleDefinitionId: definition.id, role: CUSTOM_ROLE_TIER },

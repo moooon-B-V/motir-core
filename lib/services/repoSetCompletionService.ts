@@ -172,7 +172,10 @@ export const repoSetCompletionService = {
               ),
             );
 
-      const owner = await workspaceMembershipRepository.findOwnerByWorkspace(workspaceId, tx);
+      const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(
+        workspaceId,
+        tx,
+      );
       return {
         kind: 'resolved' as const,
         workspaceId,

@@ -9,6 +9,7 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // MOTIR-5320 — a project looked up BY KEY answers a non-browser exactly as it
 // answers a key that does not exist.
@@ -92,7 +93,7 @@ async function seed(slug: string): Promise<Seeded> {
 
   const memberUser = await user(`member-${slug}@ex.com`, 'Member');
   await workspacesService.addMember({ userId: memberUser.id, workspaceId: workspace.id });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: project.identifier,
     actorUserId: ownerUser.id,
     ctx: owner,

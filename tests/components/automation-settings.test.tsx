@@ -95,8 +95,20 @@ const STATUSES: WorkflowStatusDto[] = [
   },
 ];
 const MEMBERS: WorkspaceMemberDTO[] = [
-  { userId: 'u1', name: 'Zhu Yue', email: 'zhuyue@motir.co', role: 'admin' },
-  { userId: 'u2', name: 'Bo Philips', email: 'bo@motir.co', role: 'member' },
+  {
+    userId: 'u1',
+    name: 'Zhu Yue',
+    email: 'zhuyue@motir.co',
+    workspaceRole: 'manager',
+    customRole: null,
+  },
+  {
+    userId: 'u2',
+    name: 'Bo Philips',
+    email: 'bo@motir.co',
+    workspaceRole: 'member',
+    customRole: null,
+  },
 ];
 
 function rule(over: Partial<AutomationRuleSummaryDto> = {}): AutomationRuleSummaryDto {

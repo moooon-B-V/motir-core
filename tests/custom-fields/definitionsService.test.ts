@@ -35,6 +35,7 @@ import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // Service-layer tests for customFieldsService — the DEFINITIONS half (Story
 // 5.3 · Subtask 5.3.2): field CRUD (slug key generation + immutability, the
@@ -277,7 +278,7 @@ describe('listFields', () => {
       workspaceId: fx.workspaceId,
       role: 'member',
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       ...actorInput(fx),
       targetUserId: viewer.id,
       role: 'viewer',
@@ -575,7 +576,7 @@ describe('the 6.4 two-tier admin gate', () => {
       role: wsRole,
     });
     if (projectRole) {
-      await projectMembersService.addMember({
+      await addToProjectAs({
         ...actorInput(fx),
         targetUserId: user.id,
         role: projectRole,

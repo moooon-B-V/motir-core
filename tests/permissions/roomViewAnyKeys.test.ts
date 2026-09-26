@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   BUILTIN_ROLE_PERMISSIONS,
-  IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS,
   PUBLIC_PROJECT_PERMISSIONS,
   ROLE_GATED_PERMISSIONS,
 } from '@/lib/permissions/builtinRoles';
@@ -99,13 +98,10 @@ describe('every built-in role that browses holds the three view-any keys', () =>
   });
 });
 
-describe('the two implicit grants gain exactly the Plans and Runs view keys', () => {
-  it('the implicit workspace member gains plan:view_any and run:view_any — not approval:view_any', () => {
-    expect(IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS.has('plan:view_any')).toBe(true);
-    expect(IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS.has('run:view_any')).toBe(true);
-    expect(IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS.has('approval:view_any')).toBe(false);
-  });
-
+describe('the implicit grant gains exactly the Plans and Runs view keys', () => {
+  // The implicit WORKSPACE-member set this block also covered retired with
+  // project roles (MOTIR-6459): every workspace member now holds a workspace
+  // role, and all three built-ins carry all three view-any keys (above).
   it('the public level gains plan:view_any and run:view_any — not approval:view_any', () => {
     expect([...PUBLIC_PROJECT_PERMISSIONS].sort()).toEqual(
       [

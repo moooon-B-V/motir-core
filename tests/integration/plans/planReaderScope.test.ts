@@ -7,8 +7,6 @@ import { PlanNotFoundError } from '@/lib/plans/errors';
 import { plansService } from '@/lib/services/plansService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
@@ -16,6 +14,7 @@ import { isEnforced } from '@/lib/permissions/catalog';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs, setProjectRoleDefinitionFor } from '../../helpers/workspaceRoleFixtures';
 
 // Story MOTIR-6179 · MOTIR-6330 — the plan reads take a SCOPE. `project` is
 // served to a reader holding `plan:view_any` (and, on a token, a grant that holds
@@ -56,7 +55,7 @@ async function seat(role: 'member' | 'viewer'): Promise<ServiceContext> {
     name: `Reader ${role}`,
   });
   await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,
@@ -69,16 +68,15 @@ async function seat(role: 'member' | 'viewer'): Promise<ServiceContext> {
 /** A project member on a CUSTOM role listing exactly `permissions`. */
 async function seatCustom(permissions: PermissionKey[]): Promise<ServiceContext> {
   const ctx = await seat('member');
-  const role = await adminDb.projectRoleDefinition.create({
+  const role = await adminDb.workspaceRoleDefinition.create({
     data: {
       workspaceId: fx.workspaceId,
-      projectId: fx.projectId,
       name: `Custom ${seq++}`,
       permissions,
     },
   });
   await adminDb.$transaction((tx) =>
-    projectMembershipRepository.setRoleDefinition(
+    setProjectRoleDefinitionFor(
       ctx.userId,
       fx.projectId,
       { roleDefinitionId: role.id, role: CUSTOM_ROLE_TIER },

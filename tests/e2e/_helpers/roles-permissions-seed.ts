@@ -3,6 +3,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
+import { addToProjectAs, setProjectRoleAs } from '../../helpers/workspaceRoleFixtures';
 
 // Seed for the Roles & permissions E2E (Story MOTIR-2282 · Subtask MOTIR-2265).
 //
@@ -20,6 +21,18 @@ export const ROLES_E2E_PASSWORD = 'roles-permissions-e2e-pass-7';
 
 /** How many project memberships each built-in role gets. Distinct on purpose. */
 export const ROLE_HEADCOUNT = { admin: 1, member: 3, viewer: 2 } as const;
+
+/**
+ * What the WORKSPACE Roles list counts (Story MOTIR-6168 · MOTIR-6466): each
+ * member of the workspace under their one role. The project `admin` is the
+ * Manager, and the no-access outsider is a workspace Member too — so the three
+ * numbers stay distinct: 1 Manager, 4 Members, 2 Viewers.
+ */
+export const WORKSPACE_ROLE_HEADCOUNT = {
+  manager: ROLE_HEADCOUNT.admin,
+  member: ROLE_HEADCOUNT.member + 1,
+  viewer: ROLE_HEADCOUNT.viewer,
+} as const;
 
 export interface RolesPermissionsSeed {
   adminEmail: string;
@@ -68,7 +81,7 @@ export async function seedRolesPermissions(prefix: string): Promise<RolesPermiss
       name,
     });
     await workspacesService.addMember({ userId: user.id, workspaceId: workspace.id });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
@@ -89,7 +102,7 @@ export async function seedRolesPermissions(prefix: string): Promise<RolesPermiss
   // assertions would be checking a fixture nobody meant to build. The promotion
   // goes through the shipped service rather than a DB poke, so the membership it
   // produces is the same row the product would produce.
-  await projectMembersService.setRole({
+  await setProjectRoleAs({
     key: project.identifier,
     actorUserId: owner.id,
     ctx: ownerCtx,
@@ -136,16 +149,18 @@ export async function seedRolesPermissions(prefix: string): Promise<RolesPermiss
   // Assert the seed produced the counts the spec asserts against, HERE — a
   // silently mis-seeded fixture would turn the spec's headcount check into a
   // test of the fixture rather than of the page.
-  const counts = await db.projectMembership.groupBy({
-    by: ['role'],
-    where: { projectId: project.id },
+  const counts = await db.workspaceMembership.groupBy({
+    by: ['workspaceRole'],
+    where: { workspaceId: workspace.id },
     _count: { _all: true },
   });
-  const actual = Object.fromEntries(counts.map((row) => [row.role, row._count._all]));
-  for (const [role, expected] of Object.entries(ROLE_HEADCOUNT)) {
+  const actual = Object.fromEntries(
+    counts.map((row) => [row.workspaceRole ?? 'null', row._count._all]),
+  );
+  for (const [role, expected] of Object.entries(WORKSPACE_ROLE_HEADCOUNT)) {
     if (actual[role] !== expected) {
       throw new Error(
-        `roles-permissions-seed: expected ${expected} ${role} membership(s), got ${actual[role] ?? 0}`,
+        `roles-permissions-seed: expected ${expected} workspace ${role}(s), got ${actual[role] ?? 0}`,
       );
     }
   }

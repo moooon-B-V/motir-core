@@ -6,7 +6,6 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { buildScope, PROJECT_SCOPE } from '@/lib/planChange/scope';
 import { EmptyPlanChangeTurnError, PlanSeedNotApplicableError } from '@/lib/planChange/errors';
 import { usersService } from '@/lib/services/usersService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { createTestProject } from '../fixtures/projectFixtures';
 import {
   createTestWorkItem,
@@ -15,6 +14,7 @@ import {
 } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // MOTIR-6207 — a planning SESSION REMEMBERS the gate that seeded it (story
 // MOTIR-6068; `agent-authored-plans.md` AMENDMENT 17 §9), against a REAL
@@ -95,7 +95,7 @@ async function teammate(): Promise<ProjectContext> {
   await adminDb.workspaceMembership.create({
     data: { userId: u.id, workspaceId: fx.workspaceId, role: 'member' },
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.project.identifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

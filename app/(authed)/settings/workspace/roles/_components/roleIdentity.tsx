@@ -1,6 +1,6 @@
-import { Eye, Shield, UserRound, Users } from 'lucide-react';
+import { Eye, KeyRound, Shield, Users } from 'lucide-react';
+import type { WorkspaceRole } from '@/generated/prisma/client';
 import type { RoleDTO } from '@/lib/dto/permissions';
-import type { ProjectRole } from '@/lib/projects/roles';
 
 // The ONE place the widened `RoleDTO`'s built-in-vs-custom split is resolved
 // (Story MOTIR-2257 · Subtask MOTIR-2478). Both screens render a role's glyph,
@@ -10,14 +10,18 @@ import type { ProjectRole } from '@/lib/projects/roles';
 //
 // ⚠️ `ROLE_ICON` IS INDEXED WITH `builtInRole`, NEVER WITH `key`. `key` is the
 // URL segment — an enum value for a built-in and a cuid for a custom role — so
-// indexing a `Record<ProjectRole, …>` with it is exactly the totality hole the
+// indexing a `Record<WorkspaceRole, …>` with it is exactly the totality hole the
 // DTO widening was shaped to close. A custom role has NO enum value, so it takes
-// the `user-round` glyph the design gives its tile (panel 0 of
-// `design/projects/roles-permissions.mock.html`) rather than a fresh choice.
+// the `key-round` glyph the design gives its tile (panel 2 of
+// `design/workspaces/workspace-roles.mock.html`).
 
-/** The tile glyph per built-in role — the mock's shield / users / eye. */
-const ROLE_ICON: Record<ProjectRole, typeof Shield> = {
-  admin: Shield,
+/**
+ * The tile glyph per built-in WORKSPACE role — shield / users / eye, the glyphs
+ * the project built-ins had, moved up a tier with their meaning (design
+ * `workspace-roles.mock.html` panel 2).
+ */
+const ROLE_ICON: Record<WorkspaceRole, typeof Shield> = {
+  manager: Shield,
   member: Users,
   viewer: Eye,
 };
@@ -32,21 +36,25 @@ const ROLE_ICON: Record<ProjectRole, typeof Shield> = {
 export function RoleGlyph({ role, className }: { role: RoleDTO; className?: string }) {
   const Icon = role.builtInRole
     ? ROLE_ICON[role.builtInRole]
-    : /* a custom role's tile, from panel 0 of the mock */ UserRound;
+    : /* a custom role's tile, from panel 2 of the workspace mock */ KeyRound;
   return <Icon className={className} aria-hidden="true" />;
 }
 
 /**
- * The tile's tint. A BUILT-IN takes `--el-tint-lavender` and a CUSTOM role
- * `--el-tint-sky` — the pairing `design/projects/roles-permissions.mock.html`
- * fixes, and the one place on this surface where the tint carries KIND (the
- * `Built-in` / `Custom` chip states it in words beside it, so nothing rests on
- * the hue alone).
+ * The tile's tint: each built-in on its member-role hue (Manager lavender, Member
+ * sky, Viewer mint) and a custom role on `--el-role-custom` (peach) — the hues
+ * the Members page's pills use, so a role reads the same on both screens
+ * (workspace mock panel 2). The kind is stated in words beside it (`Built-in` /
+ * `Custom`), so nothing rests on the hue alone.
  */
+const ROLE_TINT: Record<WorkspaceRole, string> = {
+  manager: 'bg-(--el-role-admin)',
+  member: 'bg-(--el-role-member)',
+  viewer: 'bg-(--el-role-viewer)',
+};
+
 export function roleTileTint(role: RoleDTO): string {
-  return role.builtIn
-    ? 'bg-(--el-tint-lavender) text-(--el-text-strong)'
-    : 'bg-(--el-tint-sky) text-(--el-text-strong)';
+  return `${role.builtInRole ? ROLE_TINT[role.builtInRole] : 'bg-(--el-role-custom)'} text-(--el-text-strong)`;
 }
 
 /**

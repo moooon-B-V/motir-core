@@ -421,11 +421,13 @@ describe('the script', () => {
     expect(c.lines.join('\n')).toContain('no `planned` plans in scope.');
   });
 
-  it('flags a gate routed to NOBODY when the workspace has no owner', async () => {
+  it('flags a gate routed to NOBODY when the workspace has no Manager', async () => {
     const id = await seedPlan(fx, { origin: 'cadence' });
+    // No Manager to stand in (MOTIR-6462): the workspace role decides, and the
+    // legacy column follows so neither reads as one.
     await adminDb.workspaceMembership.updateMany({
       where: { workspaceId: fx.workspaceId },
-      data: { role: 'member' },
+      data: { role: 'member', workspaceRole: 'member' },
     });
     const c = capture();
     expect(await run(['--dry-run'], { out: c.out })).toBe(0);

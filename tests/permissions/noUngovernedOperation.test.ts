@@ -66,7 +66,7 @@ const DOC = join(ROOT, 'docs', 'decisions', 'permission-inventory.md');
 // other five rows in its half of the bucket turned out to be the second, and got
 // gates.
 const GATE =
-  /assertCan[A-Za-z]+|assertPermission\(|get[A-Za-z]*Capabilities|hasPermission\(|canManageProject\(|canBrowse\(|canEdit\(|isOwnerRole\(|isWorkspaceManager\(|filterBrowsable\(/;
+  /assertCan[A-Za-z]+|assertPermission\(|get[A-Za-z]*Capabilities|hasPermission\(|canManageProject\(|canBrowse\(|canEdit\(|is(?:Legacy)?OwnerRole\(|isWorkspaceManager\(|filterBrowsable\(/;
 /**
  * Every `someService.someMethod(` call in `source`.
  *

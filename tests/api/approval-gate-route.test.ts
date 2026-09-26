@@ -13,6 +13,7 @@ import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { ensureWorkWaitsOn } from '@/tests/helpers/designWaits';
 import { truncateAuthTables } from '../helpers/db';
+import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
 
 // MOTIR-5223 — `GET /api/work-items/approval-gate?key=&kind=`, the read the
 // approval OVERLAY (MOTIR-5214) makes from the browser.
@@ -809,6 +810,7 @@ describe('GET /api/work-items/approval-gate · the permission floor (MOTIR-5445)
         role: 'viewer',
       },
     });
+    await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
     await adminDb.workItem.update({ where: { id: card.id }, data: { assigneeId: viewer.id } });
     signIn(viewer);
 

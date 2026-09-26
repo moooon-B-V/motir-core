@@ -23,6 +23,7 @@ import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
 
 // CONNECT and DISCONNECT (Story MOTIR-4926 · Subtask MOTIR-5260) — the grant
 // exchange, the connection service, and the `integration:manage` permission that
@@ -100,6 +101,7 @@ describe('the PERMISSION is part of this card, and it governs every method', () 
         role: 'viewer',
       },
     });
+    await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
     const viewerCtx = { userId: viewer.id, workspaceId: fx.workspaceId };
 
     // Each method, because a gate added to three of four is the shape that ships.
@@ -151,6 +153,7 @@ describe('the PERMISSION is part of this card, and it governs every method', () 
         role: 'viewer',
       },
     });
+    await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
 
     try {
       await monitorConnectionService.getView(fx.projectId, {

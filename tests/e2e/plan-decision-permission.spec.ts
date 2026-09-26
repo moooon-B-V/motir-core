@@ -33,14 +33,16 @@ const DECIDE_LABEL = 'Approve or decline AI plans';
 
 const ROLE_NAME = 'Plan follower';
 
-const railEntry = (page: Page) => page.getByRole('link', { name: 'Roles & permissions' });
+// The Roles room lives on the WORKSPACE since Story MOTIR-6168 (MOTIR-6466); with
+// one workspace its door is the organisation page's "Open roles" card.
+const rolesDoor = (page: Page) => page.getByRole('link', { name: 'Open roles' });
 
 async function openRolesList(page: Page): Promise<void> {
-  await page.goto('/settings/project');
-  await expect(railEntry(page)).toBeVisible();
-  await railEntry(page).click();
-  await page.waitForURL('**/settings/project/roles');
-  await expect(page.getByRole('heading', { name: 'Roles & permissions' })).toBeVisible();
+  await page.goto('/settings/organization');
+  await expect(rolesDoor(page)).toBeVisible();
+  await rolesDoor(page).click();
+  await page.waitForURL('**/settings/workspace/roles');
+  await expect(page.getByRole('heading', { name: 'Roles & permissions', level: 1 })).toBeVisible();
 }
 
 /** Sign in AND wait for the shell to settle — `signIn` resolves on the URL
@@ -72,7 +74,7 @@ test('the AI group carries both plan keys, and a role can hold author without de
   // ── 1 · THE GRID DRAWS BOTH ────────────────────────────────────────────────
   await openRolesList(page);
   await page.locator('[data-role-row="member"]').click();
-  await page.waitForURL('**/settings/project/roles/member');
+  await page.waitForURL('**/settings/workspace/roles/member');
 
   const authorRow = page.locator('[data-permission="ai:view_plan"]');
   const decideRow = page.locator('[data-permission="ai:decide_plan"]');
@@ -100,7 +102,7 @@ test('the AI group carries both plan keys, and a role can hold author without de
   // ── 2 · AUTHOR A ROLE THAT HOLDS ONE AND NOT THE OTHER ─────────────────────
   await openRolesList(page);
   await page.getByTestId('create-role').click();
-  await page.waitForURL('**/settings/project/roles/new');
+  await page.waitForURL('**/settings/workspace/roles/new');
   await page.getByRole('textbox', { name: 'Name' }).fill(ROLE_NAME);
   await page.getByRole('combobox', { name: 'Start from' }).selectOption('member');
 

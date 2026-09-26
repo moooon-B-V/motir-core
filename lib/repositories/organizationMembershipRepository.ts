@@ -79,20 +79,22 @@ export const organizationMembershipRepository = {
   },
 
   /**
-   * Is `userId` the OWNER of the organization that owns `workspaceId`? One
-   * round trip — the project permission gate asks it on every resolution for an
-   * actor who is not already a workspace manager (MOTIR-6308: the org Owner acts
-   * with full rights in every project of the org, member or not).
+   * Is `userId` the OWNER or an ADMIN of the organization that owns
+   * `workspaceId`? — the org roles that reach every workspace of the org as its
+   * Manager, member or not (Story MOTIR-6168; `role-model.md` AMENDMENT
+   * 2026-09-26, which overturned reading R1 at the MOTIR-6456 design gate). Same
+   * one round trip — the project permission gate asks it on every resolution
+   * for an actor who is not already a Manager.
    *
    * ⚠️ BINDING: the caller's `tx` must bind `app.workspace_id` to `workspaceId`
    * (a `withWorkspaceContext` body). The `workspace` row is admitted by
-   * `workspace_active` off that GUC — a non-member Owner has no
+   * `workspace_active` off that GUC — a non-member has no
    * `workspace_membership_visible` arm to fall back on — and the membership row
    * by the "or your own" arm of `org_membership_visible_active_or_own`, keyed on
    * `app.user_id`. Unbound, the join sees no workspace and answers `false`,
-   * which fails CLOSED (the Owner is treated as a non-member), never open.
+   * which fails CLOSED (treated as a non-member), never open.
    */
-  async isOwnerOfWorkspaceOrg(
+  async isOrgManagerOfWorkspaceOrg(
     userId: string,
     workspaceId: string,
     tx: Prisma.TransactionClient,
@@ -103,7 +105,7 @@ export const organizationMembershipRepository = {
       JOIN "organization_membership" om ON om."organizationId" = w."organizationId"
       WHERE w."id" = ${workspaceId}
         AND om."userId" = ${userId}
-        AND om."role" = 'owner'
+        AND om."role" IN ('owner', 'admin')
       LIMIT 1
     `;
     return rows.length > 0;
@@ -186,6 +188,40 @@ export const organizationMembershipRepository = {
     filter: OrgMemberPageFilter = {},
   ): Promise<number> {
     return tx.organizationMembership.count({ where: memberPageWhere(organizationId, filter) });
+  },
+
+  /**
+   * The user ids holding the OWNER or an ADMIN role in `organizationId` — each a
+   * Manager of every workspace of the org (MOTIR-6168), whose workspace role the
+   * Members page shows locked (MOTIR-6456 panel 6a). The caller's `tx` must bind
+   * `app.organization_id` to this org: these are other people's rows.
+   */
+  async findManagerUserIdsByOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.organizationMembership.findMany({
+      where: { organizationId, role: { in: ['owner', 'admin'] } },
+      select: { userId: true },
+    });
+    return rows.map((r) => r.userId);
+  },
+
+  /**
+   * The organizations `userId` is the OWNER or an ADMIN of — the org roles that
+   * reach every workspace of the org (MOTIR-6168). Oldest membership first; the
+   * workspace switcher lists each one's workspaces.
+   */
+  async findManagedOrganizationsByUser(
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Organization[]> {
+    const rows = await tx.organizationMembership.findMany({
+      where: { userId, role: { in: [ORGANIZATION_ROLE.owner, ORGANIZATION_ROLE.admin] } },
+      orderBy: { createdAt: 'asc' },
+      include: { organization: true },
+    });
+    return rows.map((r) => r.organization);
   },
 
   /**

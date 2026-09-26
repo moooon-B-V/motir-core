@@ -161,7 +161,10 @@ export const mergeQueueExitService = {
       );
       if (!repo) return 'unknown_repo';
       await bindWorkspaceContext(tx, repo.workspaceId);
-      const owner = await workspaceMembershipRepository.findOwnerByWorkspace(repo.workspaceId, tx);
+      const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(
+        repo.workspaceId,
+        tx,
+      );
       return { workspaceId: repo.workspaceId, repoId: repo.id, ownerUserId: owner?.userId ?? null };
     });
     if (typeof found === 'string') return { ...base, outcome: found };

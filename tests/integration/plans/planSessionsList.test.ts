@@ -5,13 +5,13 @@ import { buildScope, PROJECT_SCOPE } from '@/lib/planChange/scope';
 import { InvalidPlanSessionCursorError } from '@/lib/planChange/errors';
 import { plansService } from '@/lib/services/plansService';
 import { usersService } from '@/lib/services/usersService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { PLAN_SESSION_STATE_VALUES } from '@/lib/dto/planSessions';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // MOTIR-6025 — the Plans page lists planning SESSIONS (`agent-authored-plans.md`
 // AMENDMENT 17 §8). Real Postgres, the real service and repository; only the
@@ -314,7 +314,7 @@ describe('browse is the permission', () => {
     await adminDb.workspaceMembership.create({
       data: { userId: viewer.id, workspaceId: fx.workspaceId, role: 'member' },
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.project.identifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

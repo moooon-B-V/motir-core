@@ -62,7 +62,13 @@ const workflow: WorkflowDto = {
 };
 
 const members: WorkspaceMemberDTO[] = [
-  { userId: 'u_dana', name: 'Dana Kim', email: 'dana@example.com', role: 'member' },
+  {
+    userId: 'u_dana',
+    name: 'Dana Kim',
+    email: 'dana@example.com',
+    workspaceRole: 'member',
+    customRole: null,
+  },
 ];
 
 describe('ParentBreadcrumb (2.4.3)', () => {

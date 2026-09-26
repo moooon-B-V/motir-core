@@ -3,7 +3,6 @@ import { db } from '@/lib/db';
 import { APPROVED_SHAPE_VERDICT_MAX_IDS, plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { ApprovedShapeVerdictTooManyIdsError } from '@/lib/plans/errors';
 import { PermissionDeniedError } from '@/lib/projects/errors';
@@ -11,6 +10,7 @@ import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // THE APPROVED-SHAPE VERDICT (Story MOTIR-5544 · Subtask MOTIR-6225) over real
 // Postgres — `plansService.resolveApprovedShapeVerdict`: is this card still what
@@ -315,7 +315,7 @@ describe('the gate and the bound', () => {
     const born = await planBorn(fx);
     const user = await createTestUser({ name: 'Viewer' });
     await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

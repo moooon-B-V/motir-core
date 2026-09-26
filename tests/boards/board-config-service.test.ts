@@ -19,6 +19,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
 
 // boardsService.setSwimlaneGroupBy / setColumnWipLimit (Story 3.3 · Subtask
 // 3.3.3) — the board-config write path. Real Postgres (no mocks), per CLAUDE.md.
@@ -237,6 +238,11 @@ describe('the MOTIR-2296 WIDENING — who may configure a board, before and afte
       data: { userId: user.id, workspaceId: fx.workspaceId, role: roles.workspaceRole ?? 'member' },
     });
     if (roles.projectRole) {
+      // The tier lives on the WORKSPACE role since Story MOTIR-6168: the project
+      // role maps to it (a workspace admin already is the Manager).
+      if (roles.workspaceRole !== 'admin') {
+        await setWorkspaceRoleFor(user.id, fx.workspaceId, roles.projectRole);
+      }
       await adminDb.projectMembership.create({
         data: {
           userId: user.id,

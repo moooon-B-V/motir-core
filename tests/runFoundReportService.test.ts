@@ -10,8 +10,6 @@ import { PermissionDeniedError } from '@/lib/projects/errors';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { foldersService } from '@/lib/services/foldersService';
 import { plansService } from '@/lib/services/plansService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import {
   runFoundReportService,
   type RunFoundReportAcknowledgement,
@@ -24,6 +22,11 @@ import { seedSystemPrincipal } from '@/scripts/plan-seed/systemPrincipal';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from './fixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import {
+  addToProjectAs,
+  createCustomRoleAs,
+  setProjectRoleAs,
+} from './helpers/workspaceRoleFixtures';
 
 // THE RUN-FOUND REPORT SERVICE (Story MOTIR-5544 · Subtask MOTIR-6285) against a
 // real Postgres — `runFoundReportService.reportUnbuildableTarget`, the arms of
@@ -87,21 +90,21 @@ async function memberWithRole(
 ): Promise<ServiceContext> {
   const user = await createTestUser({ name });
   await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-  const role = await projectRoleDefinitionService.create({
+  const role = await createCustomRoleAs({
     projectId: fx.projectId,
     ctx: fx.ctx,
     name,
     permissions: [...permissions],
   });
   const key = fx.projectIdentifier;
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,
     targetUserId: user.id,
     role: 'member',
   });
-  await projectMembersService.setRole({
+  await setProjectRoleAs({
     key,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

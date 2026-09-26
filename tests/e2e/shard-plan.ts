@@ -838,6 +838,9 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'workflow-flow.spec.ts': 6.0,
   'workflow-settings.spec.ts': 6.4,
   'workspace-flows.spec.ts': 7.5,
+  // MOTIR-6465 — ESTIMATED from `workspace-flows.spec.ts` (one sign-up, one
+  // settings render, the same shape); replace with its measured CI time.
+  'workspace-members-roles.spec.ts': 7.5,
 };
 
 /**

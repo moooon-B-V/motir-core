@@ -23,6 +23,7 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
 
 // The FOLDER SERVICE (Story MOTIR-5308 · MOTIR-5313) on a REAL Postgres, through
 // the service with the ordinary workspace context — so every read and write runs
@@ -515,6 +516,7 @@ describe('the gate', () => {
         tx,
       ),
     );
+    await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
     const ctx = { userId: viewer.id, workspaceId: fx.workspaceId };
     const projectId = fx.projectId;
 

@@ -8,7 +8,6 @@ import { db } from '@/lib/db';
 import { bugDestinationService } from '@/lib/services/bugDestinationService';
 import { foldersService } from '@/lib/services/foldersService';
 import { readOnboardingSubstrate } from '@/lib/services/onboardingSubstrateService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -18,6 +17,7 @@ import { seedSystemPrincipal } from '@/scripts/plan-seed/systemPrincipal';
 import { seededBugsFolderId } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // The STORY GATE for "every project has a Bugs folder" — Story MOTIR-4927 ·
 // Subtask MOTIR-4939. The ASSEMBLED seam, on a real Postgres: a pointer written
@@ -107,7 +107,7 @@ async function addProject(t: Tenant, identifier: string): Promise<Tenant> {
     name: `Gate ${identifier}`,
     identifier,
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: project.identifier,
     actorUserId: t.ctx.userId,
     ctx: t.ctx,

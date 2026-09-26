@@ -5,6 +5,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // THE STORY'S motir-core GATE (Story MOTIR-4914 · Subtask MOTIR-5898) — the seam the
 // per-subtask suites each saw only a slice of, run whole on real Postgres with no
@@ -23,7 +24,6 @@ vi.mock('@/lib/jobs/sendEvent', () => ({ sendEvent: async () => {} }));
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
-const { projectMembersService } = await import('@/lib/services/projectMembersService');
 const { POST: decideRoute } = await import('@/app/api/approval-gates/[id]/decide/route');
 
 let fx: WorkItemFixture;
@@ -184,7 +184,7 @@ describe('the GUARDS coverage cannot see', () => {
     const item = await createChoice();
     const member = await createTestUser({ email: 'member@ex.com', name: 'Member' });
     await workspacesService.addMember({ userId: member.id, workspaceId: fx.workspaceId });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

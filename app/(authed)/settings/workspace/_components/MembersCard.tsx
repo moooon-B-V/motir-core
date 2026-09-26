@@ -1,23 +1,34 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Mail } from 'lucide-react';
+import { ChevronsUpDown, Info, Lock, Mail } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Pill } from '@/components/ui/Pill';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
-import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
-import { removeMemberAction } from '../actions';
+import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
+import { Tooltip } from '@/components/ui/Tooltip';
+import type { WorkspaceRole } from '@/generated/prisma/client';
+import { WORKSPACE_ROLES } from '@/lib/workspaces/roles';
+import type { MemberRoleContextDTO, WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import { removeMemberAction, setMemberRoleAction } from '../actions';
 
 export interface MembersCardProps {
   workspaceId: string;
   workspaceName: string;
   members: WorkspaceMemberDTO[];
   currentUserId: string;
+  /**
+   * The role column's context, decided on the SERVER (Story MOTIR-6168 ·
+   * MOTIR-6465): whether the viewer is a Manager, which members the org makes a
+   * Manager, and the workspace's custom roles. The client never decides who is
+   * a Manager.
+   */
+  roleContext: MemberRoleContextDTO;
 }
 
 export function MembersCard({
@@ -25,11 +36,49 @@ export function MembersCard({
   workspaceName,
   members,
   currentUserId,
+  roleContext,
 }: MembersCardProps) {
   const t = useTranslations('settings');
   const { toast } = useToast();
   const router = useRouter();
   const [inviteOpen, setInviteOpen] = useState(false);
+
+  // The picker's options: the three built-ins, then this workspace's custom
+  // roles under a heading that names the kind (design panel 1b). A custom
+  // role's name is its author's text and never goes through `t()`.
+  const roleOptions = useMemo<ComboboxOption<string>[]>(
+    () => [
+      ...WORKSPACE_ROLES.map((role) => ({
+        value: role,
+        label: t(`members.role.${role}`),
+        description: t(`members.roleDesc.${role}`),
+        group: t('members.roleGroupBuiltIn'),
+      })),
+      ...roleContext.customRoles.map((role) => ({
+        value: role.id,
+        label: role.name,
+        description: t('members.customRoleOption'),
+        group: t('members.roleGroupCustom'),
+      })),
+    ],
+    [roleContext.customRoles, t],
+  );
+
+  // The only STORED Manager is locked (panel 1c) — the server refuses the change
+  // anyway (LastManagerError), and the reason names what unlocks it. An org
+  // Owner / Admin is locked at Manager by their org role (panel 6a).
+  const storedManagers = members.filter(
+    (m) => m.workspaceRole === 'manager' && m.customRole === null,
+  );
+  function lockReason(m: WorkspaceMemberDTO): string | null {
+    if (roleContext.orgManagedUserIds.includes(m.userId)) {
+      return t('members.orgAdminRole', { org: roleContext.organizationName });
+    }
+    if (storedManagers.length === 1 && storedManagers[0]!.userId === m.userId) {
+      return t('members.onlyManager');
+    }
+    return null;
+  }
 
   return (
     <Card
@@ -56,13 +105,31 @@ export function MembersCard({
         </div>
       }
     >
+      {roleContext.canManageRoles ? null : (
+        <p className="border-(--el-info) bg-(--el-tint-sky) text-(--el-text-strong) rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) mb-3 flex items-center gap-2 border-l-2 font-sans text-xs">
+          <Info className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {t('members.rolesManagerOnly')}
+        </p>
+      )}
+      <div
+        className="border-(--el-border-soft) text-(--el-text-secondary) flex items-center justify-between border-b pb-2 font-mono text-[11px] uppercase tracking-wider"
+        aria-hidden
+      >
+        <span>{t('members.personColumn')}</span>
+        <span className="mr-[4.75rem] w-[8.5rem]">{t('members.roleColumn')}</span>
+      </div>
       <ul role="list" className="flex flex-col">
         {members.map((m) => (
           <MemberRow
             key={m.userId}
             member={m}
             isSelf={m.userId === currentUserId}
+            workspaceName={workspaceName}
+            roleContext={roleContext}
+            roleOptions={roleOptions}
+            locked={lockReason(m)}
             onRemoved={() => router.refresh()}
+            onRoleChanged={() => router.refresh()}
           />
         ))}
       </ul>
@@ -84,17 +151,90 @@ export function MembersCard({
 function MemberRow({
   member,
   isSelf,
+  workspaceName,
+  roleContext,
+  roleOptions,
+  locked,
   onRemoved,
+  onRoleChanged,
 }: {
   member: WorkspaceMemberDTO;
   isSelf: boolean;
+  workspaceName: string;
+  roleContext: MemberRoleContextDTO;
+  roleOptions: ComboboxOption<string>[];
+  /** Why this row's picker is locked, or null when it is operable. */
+  locked: string | null;
   onRemoved: () => void;
+  onRoleChanged: () => void;
 }) {
   const t = useTranslations('settings');
-  const tl = useTranslations('labels');
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const [rolePending, startRoleTransition] = useTransition();
   const initial = (member.name || member.email).charAt(0).toUpperCase();
+
+  // The role the row SHOWS. An org Owner / Admin is a Manager whatever their
+  // stored workspace role (MOTIR-6456 panel 6a); a custom-role holder shows the
+  // custom role. Held locally so a change repaints at once (the page-state
+  // contract's case 1) and reverts on a refusal.
+  const orgManaged = roleContext.orgManagedUserIds.includes(member.userId);
+  const serverKey = orgManaged ? 'manager' : (member.customRole?.id ?? member.workspaceRole);
+  const [roleKey, setRoleKey] = useState(serverKey);
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
+
+  const labelOf = (key: string) =>
+    roleOptions.find((o) => o.value === key)?.label ?? t('members.role.member');
+
+  function commit(nextKey: string) {
+    const previous = roleKey;
+    setRoleKey(nextKey);
+    const builtIn = (WORKSPACE_ROLES as readonly string[]).includes(nextKey);
+    startRoleTransition(async () => {
+      const result = await setMemberRoleAction(
+        member.userId,
+        builtIn ? (nextKey as WorkspaceRole) : 'member',
+        builtIn ? null : nextKey,
+      );
+      if (result.ok) {
+        toast({
+          variant: 'success',
+          title: t('members.roleChanged', {
+            name: member.name,
+            role: labelOf(nextKey),
+            workspace: workspaceName,
+          }),
+        });
+        onRoleChanged();
+        return;
+      }
+      setRoleKey(previous);
+      toast(
+        result.code === 'LAST_MANAGER'
+          ? {
+              variant: 'error',
+              title: t('members.lastManagerTitle'),
+              description: t('members.lastManagerBody', { name: member.name }),
+            }
+          : {
+              variant: 'error',
+              title: t('members.roleChangeErrorTitle', { name: member.name }),
+              description: t('members.roleChangeErrorBody', { role: labelOf(previous) }),
+            },
+      );
+    });
+  }
+
+  function handlePick(nextKey: string) {
+    if (nextKey === roleKey) return;
+    // A Manager stepping down on their OWN row is asked first (panel 6c): once
+    // they are not a Manager they cannot put themselves back.
+    if (isSelf && roleKey === 'manager' && nextKey !== 'manager') {
+      setConfirmKey(nextKey);
+      return;
+    }
+    commit(nextKey);
+  }
 
   function handleRemove() {
     startTransition(async () => {
@@ -112,28 +252,100 @@ function MemberRow({
     });
   }
 
+  const roleLabel = t('members.roleSelectLabel', { name: member.name });
+
   return (
-    <li className="border-(--el-border-soft) flex items-center gap-3 border-b py-3 last:border-b-0">
-      <span className="bg-(--el-text) text-(--el-text-inverted) inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-sans text-xs font-semibold">
-        {initial}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-sans text-sm font-medium text-(--el-text)">
-          {member.name}
-          {isSelf ? (
-            <span className="text-(--el-text-muted) font-normal">{t('members.youSuffix')}</span>
-          ) : null}
-        </p>
-        <p className="text-(--el-text-muted) truncate font-sans text-xs">{member.email}</p>
+    <li className="border-(--el-border-soft) flex flex-col gap-1 border-b py-3 last:border-b-0">
+      <div className="flex items-center gap-3">
+        <span className="bg-(--el-text) text-(--el-text-inverted) inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-sans text-xs font-semibold">
+          {initial}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-sans text-sm font-medium text-(--el-text)">
+            {member.name}
+            {isSelf ? (
+              <span className="text-(--el-text-secondary) font-normal">
+                {t('members.youSuffix')}
+              </span>
+            ) : null}
+          </p>
+          <p className="text-(--el-text-secondary) truncate font-sans text-xs">{member.email}</p>
+        </div>
+        <div className="w-[8.5rem] shrink-0" data-testid={`member-role-${member.userId}`}>
+          {roleContext.canManageRoles ? (
+            <Combobox
+              options={roleOptions}
+              value={roleKey}
+              onChange={handlePick}
+              label={roleLabel}
+              loading={rolePending}
+              disabled={rolePending || locked !== null}
+            />
+          ) : (
+            // Read-only for a non-Manager: the role as TEXT in the disabled
+            // trigger's shape, so the column keeps its line (MOTIR-2462's
+            // treatment) without putting a control in the DOM.
+            <Tooltip content={t('members.rolesManagerOnly')}>
+              <span
+                tabIndex={0}
+                aria-label={`${roleLabel}: ${labelOf(roleKey)}`}
+                className="border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) h-(--height-control) rounded-(--radius-input) px-(--spacing-control-x) flex w-full items-center justify-between gap-1 border font-sans text-sm"
+              >
+                <span className="truncate">{labelOf(roleKey)}</span>
+                <ChevronsUpDown
+                  className="text-(--el-text-faint) h-3.5 w-3.5 shrink-0"
+                  aria-hidden
+                />
+              </span>
+            </Tooltip>
+          )}
+        </div>
+        {isSelf ? (
+          // The self row has no Remove (as shipped); an invisible twin keeps the
+          // pickers in one column (design panel 1a).
+          <span aria-hidden className="invisible">
+            <Button variant="ghost" size="sm" tabIndex={-1}>
+              {t('members.remove')}
+            </Button>
+          </span>
+        ) : (
+          <Button variant="ghost" size="sm" onClick={handleRemove} loading={isPending}>
+            {t('members.remove')}
+          </Button>
+        )}
       </div>
-      {/* A role is a category label, not an "info" severity — neutral tone
-          (AA-contrast-safe; see finding #35). */}
-      <Pill tone="neutral">{tl('role.' + member.role)}</Pill>
-      {isSelf ? null : (
-        <Button variant="ghost" size="sm" onClick={handleRemove} loading={isPending}>
-          {t('members.remove')}
-        </Button>
-      )}
+      {locked && roleContext.canManageRoles ? (
+        <p className="text-(--el-text-secondary) flex items-center gap-1.5 pl-11 font-sans text-xs">
+          <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {locked}
+        </p>
+      ) : null}
+
+      <Modal
+        open={confirmKey !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmKey(null);
+        }}
+        title={t('members.selfDemoteTitle', { role: labelOf(confirmKey ?? 'member') })}
+        description={t('members.selfDemoteBody', { workspace: workspaceName })}
+        size="md"
+      >
+        <Modal.Footer>
+          <Button variant="ghost" onClick={() => setConfirmKey(null)}>
+            {t('members.selfDemoteKeep')}
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              const next = confirmKey;
+              setConfirmKey(null);
+              if (next) commit(next);
+            }}
+          >
+            {t('members.selfDemoteConfirm', { role: labelOf(confirmKey ?? 'member') })}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </li>
   );
 }

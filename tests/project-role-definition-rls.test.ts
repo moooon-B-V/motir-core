@@ -1,8 +1,6 @@
 import { Prisma } from '@/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
-import { projectRoleDefinitionRepository } from '@/lib/repositories/projectRoleDefinitionRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { CUSTOM_ROLE_TIER } from '@/lib/permissions/builtinRoles';
@@ -151,15 +149,14 @@ describe('project_role_definition — round-trip + constraints', () => {
     let caught: unknown;
     try {
       await adminDb.$transaction((tx) =>
-        projectRoleDefinitionRepository.create(
-          {
+        tx.projectRoleDefinition.create({
+          data: {
             workspaceId: fx.workspaceW1Id,
             projectId: fx.projectP1Id,
             name: 'Contractor',
             permissions: [],
           },
-          tx,
-        ),
+        }),
       );
     } catch (err) {
       caught = err;
@@ -233,15 +230,14 @@ describe('project_role_definition — RLS isolation', () => {
   it('a tenant CAN insert a role definition for its OWN workspace', async () => {
     const fx = await makeRoleTenants();
     const created = await asAppRole({ workspaceId: fx.workspaceW1Id }, (tx) =>
-      projectRoleDefinitionRepository.create(
-        {
+      tx.projectRoleDefinition.create({
+        data: {
           workspaceId: fx.workspaceW1Id,
           projectId: fx.projectP1Id,
           name: 'Reporter',
           permissions: ['project:browse'],
         },
-        tx,
-      ),
+      }),
     );
     expect(created.workspaceId).toBe(fx.workspaceW1Id);
   });
@@ -250,15 +246,14 @@ describe('project_role_definition — RLS isolation', () => {
     const fx = await makeRoleTenants();
     await expect(
       asAppRole({ workspaceId: fx.workspaceW1Id }, (tx) =>
-        projectRoleDefinitionRepository.create(
-          {
+        tx.projectRoleDefinition.create({
+          data: {
             workspaceId: fx.workspaceW2Id,
             projectId: fx.projectP2Id,
             name: 'Smuggled',
             permissions: [],
           },
-          tx,
-        ),
+        }),
       ),
     ).rejects.toThrow();
   });
@@ -302,7 +297,7 @@ describe('project_membership.role_definition_id — the deploy backfill and the 
     });
 
     const heldRoleDelete = adminDb.$transaction((tx) =>
-      projectRoleDefinitionRepository.delete(fx.roleW1Id, tx),
+      tx.projectRoleDefinition.delete({ where: { id: fx.roleW1Id } }),
     );
     await expect(heldRoleDelete).rejects.toThrow();
 
@@ -321,330 +316,22 @@ describe('project_membership.role_definition_id — the deploy backfill and the 
 
   it('a role definition nobody holds deletes cleanly', async () => {
     const fx = await makeRoleTenants();
-    await adminDb.$transaction((tx) => projectRoleDefinitionRepository.delete(fx.roleW1Id, tx));
+    await adminDb.$transaction((tx) =>
+      tx.projectRoleDefinition.delete({ where: { id: fx.roleW1Id } }),
+    );
     const deleted = await adminDb.projectRoleDefinition.findUnique({ where: { id: fx.roleW1Id } });
     expect(deleted).toBeNull();
   });
 });
 
-describe('projectRoleDefinitionRepository — the leaves', () => {
-  it('findManyByProject returns the project’s roles ordered by name', async () => {
-    const fx = await makeRoleTenants();
-    await adminDb.projectRoleDefinition.createMany({
-      data: [
-        {
-          workspaceId: fx.workspaceW1Id,
-          projectId: fx.projectP1Id,
-          name: 'Auditor',
-          permissions: [],
-        },
-        {
-          workspaceId: fx.workspaceW1Id,
-          projectId: fx.projectP1Id,
-          name: 'Reporter',
-          permissions: [],
-        },
-      ],
-    });
-    const rows = await adminDb.$transaction((tx) =>
-      projectRoleDefinitionRepository.findManyByProject(fx.projectP1Id, tx),
-    );
-    expect(rows.map((r) => r.name)).toEqual(['Auditor', 'Contractor', 'Reporter']);
-  });
+// `projectRoleDefinitionRepository` was deleted with the project Roles pages
+// (Story MOTIR-6168 · MOTIR-6466): nothing in the application reads or writes a
+// project role any more. The TABLE stays until the contract story drops it, so its
+// constraints and RLS are still asserted above, through the client directly.
 
-  it('findById / findManyByIds read back what was written; findManyByIds([]) makes no query', async () => {
-    const fx = await makeRoleTenants();
-    const found = await adminDb.$transaction((tx) =>
-      projectRoleDefinitionRepository.findById(fx.roleW1Id, tx),
-    );
-    expect(found?.name).toBe('Contractor');
-    const missing = await adminDb.$transaction((tx) =>
-      projectRoleDefinitionRepository.findById('no-such-id', tx),
-    );
-    expect(missing).toBeNull();
-    const many = await adminDb.$transaction((tx) =>
-      projectRoleDefinitionRepository.findManyByIds([fx.roleW1Id, fx.roleW2Id], tx),
-    );
-    expect(many.map((r) => r.id).sort()).toEqual([fx.roleW1Id, fx.roleW2Id].sort());
-    const none = await adminDb.$transaction((tx) =>
-      projectRoleDefinitionRepository.findManyByIds([], tx),
-    );
-    expect(none).toEqual([]);
-  });
-
-  it('countByProject counts only THAT project’s roles', async () => {
-    const fx = await makeRoleTenants();
-    const count = await adminDb.$transaction((tx) =>
-      projectRoleDefinitionRepository.countByProject(fx.projectP1Id, tx),
-    );
-    expect(count).toBe(1);
-  });
-
-  it('update patches name + permissions, and there is nothing else to patch', async () => {
-    const fx = await makeRoleTenants();
-    const updated = await adminDb.$transaction((tx) =>
-      projectRoleDefinitionRepository.update(
-        fx.roleW1Id,
-        { name: 'External', permissions: ['project:browse'] },
-        tx,
-      ),
-    );
-    expect(updated.name).toBe('External');
-    expect(updated.permissions).toEqual(['project:browse']);
-    expect('basedOn' in updated).toBe(false); // nothing records the seed
-  });
-});
-
-describe('projectMembershipRepository — the paired-column invariant', () => {
-  /**
-   * Read every membership back with the role it points at, and assert the
-   * invariant the whole model rests on: a non-null `role_definition_id` always
-   * comes with `role = CUSTOM_ROLE_TIER` (`member`). This is the check that
-   * keeps `levelGrants` in `lib/permissions/resolve.ts` correct for a custom
-   * role WITHOUT a custom-role branch — at that tier the access level subtracts
-   * nothing, so a custom role grants exactly what it lists.
-   */
-  async function assertPairedColumns(projectId: string): Promise<number> {
-    const memberships = await adminDb.projectMembership.findMany({
-      where: { projectId },
-      include: { roleDefinition: true },
-    });
-    let paired = 0;
-    for (const m of memberships) {
-      if (m.roleDefinitionId === null) {
-        expect(m.roleDefinition).toBeNull();
-        continue;
-      }
-      expect(m.roleDefinition).not.toBeNull();
-      expect(m.role).toBe(CUSTOM_ROLE_TIER);
-      paired += 1;
-    }
-    return paired;
-  }
-
-  it('setRoleDefinition onto a CUSTOM role writes the pointer AND the tier in one statement', async () => {
-    const fx = await makeRoleTenants();
-    await adminDb.projectMembership.create({
-      data: {
-        workspaceId: fx.workspaceW1Id,
-        projectId: fx.projectP1Id,
-        userId: fx.userA1Id,
-        role: 'admin',
-      },
-    });
-
-    const updated = await adminDb.$transaction((tx) =>
-      projectMembershipRepository.setRoleDefinition(
-        fx.userA1Id,
-        fx.projectP1Id,
-        { roleDefinitionId: fx.roleW1Id, role: CUSTOM_ROLE_TIER },
-        tx,
-      ),
-    );
-    expect(updated.roleDefinitionId).toBe(fx.roleW1Id);
-    expect(updated.role).toBe(CUSTOM_ROLE_TIER); // NOT the stale 'admin'
-    expect(await assertPairedColumns(fx.projectP1Id)).toBe(1);
-  });
-
-  it('setRoleDefinition back onto a BUILT-IN clears the pointer AND sets `role` to that built-in', async () => {
-    const fx = await makeRoleTenants();
-    await adminDb.projectMembership.create({
-      data: {
-        workspaceId: fx.workspaceW1Id,
-        projectId: fx.projectP1Id,
-        userId: fx.userA1Id,
-        role: CUSTOM_ROLE_TIER,
-        roleDefinitionId: fx.roleW1Id,
-      },
-    });
-
-    const updated = await adminDb.$transaction((tx) =>
-      projectMembershipRepository.setRoleDefinition(
-        fx.userA1Id,
-        fx.projectP1Id,
-        { roleDefinitionId: null, role: 'member' },
-        tx,
-      ),
-    );
-    expect(updated.roleDefinitionId).toBeNull();
-    expect(updated.role).toBe('member');
-    expect(await assertPairedColumns(fx.projectP1Id)).toBe(0);
-  });
-
-  it('reassignRoleDefinition moves EVERY holder onto the destination, both columns together', async () => {
-    const fx = await makeRoleTenants();
-    const destination = await adminDb.projectRoleDefinition.create({
-      data: {
-        workspaceId: fx.workspaceW1Id,
-        projectId: fx.projectP1Id,
-        name: 'Reporter',
-        permissions: ['project:browse'],
-      },
-    });
-    // Two holders of roleW1 plus one member on a built-in that
-    // must NOT move.
-    const other = await usersService.createUser({
-      email: 'prd-holder-2@example.com',
-      password: 'hunter2hunter2',
-      name: 'PRD Holder 2',
-    });
-    const untouched = await usersService.createUser({
-      email: 'prd-builtin@example.com',
-      password: 'hunter2hunter2',
-      name: 'PRD Builtin',
-    });
-    await adminDb.projectMembership.createMany({
-      data: [
-        {
-          workspaceId: fx.workspaceW1Id,
-          projectId: fx.projectP1Id,
-          userId: fx.userA1Id,
-          role: CUSTOM_ROLE_TIER,
-          roleDefinitionId: fx.roleW1Id,
-        },
-        {
-          workspaceId: fx.workspaceW1Id,
-          projectId: fx.projectP1Id,
-          userId: other.id,
-          role: CUSTOM_ROLE_TIER,
-          roleDefinitionId: fx.roleW1Id,
-        },
-        {
-          workspaceId: fx.workspaceW1Id,
-          projectId: fx.projectP1Id,
-          userId: untouched.id,
-          role: 'admin',
-        },
-      ],
-    });
-
-    const moved = await adminDb.$transaction((tx) =>
-      projectMembershipRepository.reassignRoleDefinition(
-        fx.roleW1Id,
-        { roleDefinitionId: destination.id, role: CUSTOM_ROLE_TIER },
-        tx,
-      ),
-    );
-    expect(moved).toBe(2);
-    expect(await assertPairedColumns(fx.projectP1Id)).toBe(2);
-
-    // The built-in membership is untouched — the move is scoped to holders.
-    const builtIn = await adminDb.projectMembership.findUnique({
-      where: { userId_projectId: { userId: untouched.id, projectId: fx.projectP1Id } },
-    });
-    expect(builtIn?.roleDefinitionId).toBeNull();
-    expect(builtIn?.role).toBe('admin');
-
-    // And with no holders left, the role now deletes cleanly — the shape the
-    // service's reassign-then-delete relies on.
-    await adminDb.$transaction((tx) => projectRoleDefinitionRepository.delete(fx.roleW1Id, tx));
-    const deleted = await adminDb.projectRoleDefinition.findUnique({ where: { id: fx.roleW1Id } });
-    expect(deleted).toBeNull();
-  });
-
-  it('reassignRoleDefinition to a BUILT-IN destination clears every pointer and sets `role`', async () => {
-    const fx = await makeRoleTenants();
-    await adminDb.projectMembership.create({
-      data: {
-        workspaceId: fx.workspaceW1Id,
-        projectId: fx.projectP1Id,
-        userId: fx.userA1Id,
-        role: CUSTOM_ROLE_TIER,
-        roleDefinitionId: fx.roleW1Id,
-      },
-    });
-    const moved = await adminDb.$transaction((tx) =>
-      projectMembershipRepository.reassignRoleDefinition(
-        fx.roleW1Id,
-        { roleDefinitionId: null, role: 'member' },
-        tx,
-      ),
-    );
-    expect(moved).toBe(1);
-    expect(await assertPairedColumns(fx.projectP1Id)).toBe(0);
-    const row = await adminDb.projectMembership.findUnique({
-      where: { userId_projectId: { userId: fx.userA1Id, projectId: fx.projectP1Id } },
-    });
-    expect(row?.role).toBe('member');
-  });
-
-  it('countByRoleDefinition groups holders per custom role and EXCLUDES built-in memberships', async () => {
-    const fx = await makeRoleTenants();
-    const second = await adminDb.projectRoleDefinition.create({
-      data: {
-        workspaceId: fx.workspaceW1Id,
-        projectId: fx.projectP1Id,
-        name: 'Reporter',
-        permissions: [],
-      },
-    });
-    const u2 = await usersService.createUser({
-      email: 'prd-count-2@example.com',
-      password: 'hunter2hunter2',
-      name: 'PRD Count 2',
-    });
-    const u3 = await usersService.createUser({
-      email: 'prd-count-3@example.com',
-      password: 'hunter2hunter2',
-      name: 'PRD Count 3',
-    });
-    await adminDb.projectMembership.createMany({
-      data: [
-        {
-          workspaceId: fx.workspaceW1Id,
-          projectId: fx.projectP1Id,
-          userId: fx.userA1Id,
-          role: CUSTOM_ROLE_TIER,
-          roleDefinitionId: fx.roleW1Id,
-        },
-        {
-          workspaceId: fx.workspaceW1Id,
-          projectId: fx.projectP1Id,
-          userId: u2.id,
-          role: CUSTOM_ROLE_TIER,
-          roleDefinitionId: fx.roleW1Id,
-        },
-        {
-          workspaceId: fx.workspaceW1Id,
-          projectId: fx.projectP1Id,
-          userId: u3.id,
-          role: 'member',
-          roleDefinitionId: second.id,
-        },
-      ],
-    });
-    // A membership on a BUILT-IN — countByRole's, never this one's.
-    await adminDb.projectMembership.create({
-      data: {
-        workspaceId: fx.workspaceW1Id,
-        projectId: fx.projectP1Id,
-        userId: fx.userB1Id,
-        role: 'admin',
-      },
-    });
-
-    const counts = await adminDb.$transaction((tx) =>
-      projectMembershipRepository.countByRoleDefinition(fx.projectP1Id, tx),
-    );
-    expect(counts.sort((a, b) => a.roleDefinitionId.localeCompare(b.roleDefinitionId))).toEqual(
-      [
-        { roleDefinitionId: fx.roleW1Id, count: 2 },
-        { roleDefinitionId: second.id, count: 1 },
-      ].sort((a, b) => a.roleDefinitionId.localeCompare(b.roleDefinitionId)),
-    );
-
-    // A role nobody holds is simply absent — zero-filling is the mapper's job.
-    const unheld = await adminDb.projectRoleDefinition.create({
-      data: {
-        workspaceId: fx.workspaceW1Id,
-        projectId: fx.projectP1Id,
-        name: 'Unheld',
-        permissions: [],
-      },
-    });
-    const after = await adminDb.$transaction((tx) =>
-      projectMembershipRepository.countByRoleDefinition(fx.projectP1Id, tx),
-    );
-    expect(after.map((c) => c.roleDefinitionId)).not.toContain(unheld.id);
-  });
-});
+// `projectMembershipRepository`'s paired-column writers (`setRoleDefinition`,
+// `reassignRoleDefinition`) and its holder counts retired with the project roles
+// (Story MOTIR-6168 · MOTIR-6464) — a project membership carries no role, and the
+// workspace membership's `setWorkspaceRole` is the one writer now
+// (`tests/workspace-role-storage.test.ts`). The table and its RLS stay until the
+// contract story drops them, and are still covered above.

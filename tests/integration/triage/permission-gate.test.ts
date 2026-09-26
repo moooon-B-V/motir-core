@@ -5,11 +5,11 @@ import { triageService } from '@/lib/services/triageService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { PermissionDeniedError, ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // `work_item:triage` + `work_item:delete` (Story MOTIR-2291 · Subtask MOTIR-2354).
 //
@@ -60,7 +60,7 @@ async function makeFixture(label: string): Promise<Fixture> {
     await adminDb.workspaceMembership.create({
       data: { userId: u.id, workspaceId, role: 'member' },
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,

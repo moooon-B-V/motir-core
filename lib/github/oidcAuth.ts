@@ -125,7 +125,7 @@ export async function authenticateGithubOidc(req: Request): Promise<OidcAuthResu
   // Userless by construction (there is no actor yet — this read IS how one is
   // chosen), so the service context, not the user one.
   const ownerMembership = await withWorkspaceServiceContext(workspaceId, (tx) =>
-    workspaceMembershipRepository.findOwnerByWorkspace(workspaceId, tx),
+    workspaceMembershipRepository.findStandInManagerByWorkspace(workspaceId, tx),
   );
   if (!ownerMembership) {
     return { ok: false, status: 403, reason: 'workspace_owner_missing' };

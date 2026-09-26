@@ -166,7 +166,13 @@ async function makeHarness(): Promise<Harness> {
   );
   const workflow = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
   const members: WorkspaceMemberDTO[] = [
-    { userId: fx.ownerId, name: fx.owner.name, email: fx.owner.email, role: 'owner' },
+    {
+      userId: fx.ownerId,
+      name: fx.owner.name,
+      email: fx.owner.email,
+      workspaceRole: 'manager',
+      customRole: null,
+    },
   ];
   const snapshot = async () => {
     const [a2, b2] = await Promise.all([
