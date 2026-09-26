@@ -251,6 +251,7 @@ export async function LateUpperSections({
   repoDelivery,
   deliveries,
   statusCategory,
+  canReplan = false,
 }: LateProps & {
   /** The session's user — only to say whether the design gate is ROUTED to the
    *  reader (the band's sentence, MOTIR-5229). Authority stays `canDecide`. */
@@ -258,6 +259,10 @@ export async function LateUpperSections({
   /** The card's status CATEGORY — a withdrawn merge question on a done-category card
    *  promises no re-ask (MOTIR-5884, § 29's cite table). */
   statusCategory?: string | null;
+  /** `WorkItemPlanEntrance`'s condition for this reader on this card — may plan, and the
+   *  card is not archived. A refused decision's record offers Re-plan with AI when true
+   *  (Story MOTIR-6068 · MOTIR-6211). Omitted, no door. */
+  canReplan?: boolean;
 }) {
   const r = await reads;
   const [tGithub, tAcceptance, tDesignResult, tRuns, tChoice, tConfirm] = await Promise.all([
@@ -460,6 +465,7 @@ export async function LateUpperSections({
               // host passes neither `decide` nor `approveAndMerge`. `retryMember` stays: on a
               // decided gate *Retry merge* / *Queue again* carry out the decision already made.
               handOver={{ routedToViewer: developmentFrame?.gate.routedToId === currentUserId }}
+              canReplan={canReplan}
               gateActions={{ retryMember: retryApproveAndMergeMemberAction }}
               // An `auto` card's exits (MOTIR-5635): Queue again for a reader who may edit.
               autoQueueExits={{
@@ -520,6 +526,7 @@ export async function LateUpperSections({
             routedToLabel={r.choiceGate.routedToLabel}
             routedToViewer={r.choiceGate.gate?.routedToId === currentUserId}
             itemIdentifier={itemIdentifier}
+            canReplan={canReplan}
           />
         </ContentSectionCard>
       ) : null}
@@ -539,6 +546,7 @@ export async function LateUpperSections({
             routedToLabel={r.confirmGate.routedToLabel}
             routedToViewer={r.confirmGate.gate?.routedToId === currentUserId}
             itemIdentifier={itemIdentifier}
+            canReplan={canReplan}
           />
         </ContentSectionCard>
       ) : null}

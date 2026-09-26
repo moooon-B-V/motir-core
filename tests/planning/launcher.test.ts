@@ -190,8 +190,17 @@ describe('the overlay address — the parameter NAMES are the design contract', 
   // when either home is renamed without the other, which is the whole reason the
   // design records them rather than whichever file was written first.
   // `planSession` joined with MOTIR-6024 (MOTIR-6019's design, §19.8), and `planVia`
-  // with MOTIR-6037 (MOTIR-6033's design, Part XXII §22.2).
-  const DESIGN_NAMES = ['plan', 'planFrom', 'planItem', 'planRepo', 'planSession', 'planVia'];
+  // with MOTIR-6037 (MOTIR-6033's design, Part XXII §22.2), and `planGate` with
+  // MOTIR-6210 (MOTIR-6206's design, § *The SEEDED re-plan* → *The ADDRESS*).
+  const DESIGN_NAMES = [
+    'plan',
+    'planFrom',
+    'planItem',
+    'planRepo',
+    'planSession',
+    'planVia',
+    'planGate',
+  ];
 
   it('emits exactly the names the design records, and no others', () => {
     expect(Object.values(OVERLAY_PARAM_NAMES).sort()).toEqual([...DESIGN_NAMES].sort());
@@ -423,5 +432,66 @@ describe('planVia — the entrance a NAMED session was reopened from (MOTIR-6037
     });
     expect(opened).toContain('planVia=approvals');
     expect(withoutPlanningOverlay(opened)).toBe('/workbench?tab=approvals');
+  });
+});
+
+describe('planGate — a REFUSED gate opens the seeded re-plan (MOTIR-6210, §10f)', () => {
+  const gate: PlanningLaunchContext = { kind: 'refused-gate', gateId: 'cmg7k2q0' };
+
+  it('resolves to re-plan — a refusal is re-planned by definition', () => {
+    expect(resolvePlanningMode(gate)).toBe('replan');
+  });
+
+  it('writes plan=replan&planFrom=refused-gate&planGate=<id> and nothing else', () => {
+    const params = planningOverlaySearch(gate);
+    expect(params.toString()).toBe('plan=replan&planFrom=refused-gate&planGate=cmg7k2q0');
+  });
+
+  it('keeps the host page’s own params, and round-trips through the parse', () => {
+    const opened = withPlanningOverlay('/items/MOTIR-44?tab=activity&peek=MOTIR-9', gate);
+    expect(opened).toContain('tab=activity');
+    expect(opened).toContain('peek=MOTIR-9');
+    const parsed = parsePlanningOverlay(new URLSearchParams(opened.split('?')[1]));
+    expect(parsed).toEqual({
+      mode: 'replan',
+      from: 'refused-gate',
+      itemKey: null,
+      repoKey: null,
+      gateId: 'cmg7k2q0',
+    });
+    // The record form a Server Component hands over reads the same.
+    expect(
+      parsePlanningOverlay({ plan: 'replan', planFrom: 'refused-gate', planGate: 'cmg7k2q0' }),
+    ).toMatchObject({ from: 'refused-gate', gateId: 'cmg7k2q0' });
+  });
+
+  it('is read ONLY for its own origin, and an origin without it carries none', () => {
+    expect(
+      parsePlanningOverlay(new URLSearchParams('plan=project&planFrom=project&planGate=g-1')),
+    ).not.toHaveProperty('gateId');
+    expect(
+      parsePlanningOverlay(
+        new URLSearchParams('plan=replan&planFrom=work-item&planItem=A-1&planGate=g-1'),
+      ),
+    ).not.toHaveProperty('gateId');
+    expect(
+      parsePlanningOverlay(new URLSearchParams('plan=replan&planFrom=refused-gate')),
+    ).not.toHaveProperty('gateId');
+    // …and no other context writes it.
+    expect(planningOverlaySearch({ kind: 'work-item', itemKey: 'A-1' }).has('planGate')).toBe(
+      false,
+    );
+  });
+
+  it('Close strips all EIGHT owned params and leaves the host query byte-identical', () => {
+    const host = '/items/MOTIR-44?tab=activity&peek=MOTIR-9';
+    const loaded = `${host}&plan=replan&planFrom=refused-gate&planItem=X&planRepo=r&planSession=s&planVia=approvals&planGate=g&planReturned=1`;
+    expect(withoutPlanningOverlay(loaded)).toBe(host);
+    expect(withoutPlanningOverlay(withPlanningOverlay(host, gate))).toBe(host);
+  });
+
+  it('carries the gate id and NOTHING else — no reason, no title', () => {
+    const params = planningOverlaySearch(gate);
+    expect([...params.keys()]).toEqual(['plan', 'planFrom', 'planGate']);
   });
 });

@@ -1,7 +1,49 @@
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
 import type { PlanStatusDto } from '@/lib/dto/plans';
-import type { PlanSessionRowDto } from '@/lib/dto/planSessions';
+import {
+  PLAN_SESSION_SEED_GATE_KINDS,
+  type PlanSessionRowDto,
+  type PlanSessionSeedDto,
+  type PlanSessionSeedGateKindDto,
+} from '@/lib/dto/planSessions';
 import type { PlanSessionListRow } from '@/lib/repositories/planChangeSessionRepository';
+
+function isSeedGateKind(kind: string | null): kind is PlanSessionSeedGateKindDto {
+  return (PLAN_SESSION_SEED_GATE_KINDS as readonly (string | null)[]).includes(kind);
+}
+
+/**
+ * The row's SEED (MOTIR-6209), or null.
+ *
+ * ⚠️ THE BROWSE CHECK IS THE LIST'S OWN ACCESS SCOPE. The list is gated on
+ * browsing the session's project (`planSessionsService.listSessions`), and a
+ * work item is browsable exactly when its project is (`workItemsService
+ * .getWorkItem`). So a seed resolves only when the gate's work item is still in
+ * the SESSION's project — the one this viewer was already cleared for. A work
+ * item that has left the project is treated as unbrowsable, never checked
+ * against a second project here, so the seed can never name a key the viewer
+ * could not open. The gate row gone (`SetNull`) reads the same: no seed.
+ */
+function seedOf(row: PlanSessionListRow): PlanSessionSeedDto | null {
+  if (!row.seedGateId || !row.seedCardInProject || !row.seedCardKey) return null;
+  if (!isSeedGateKind(row.seedGateKind)) return null;
+  return { cardKey: row.seedCardKey, gateKind: row.seedGateKind };
+}
+
+/**
+ * The session's first turn, as THIS viewer may read it.
+ *
+ * ⚠️ PRIVACY (MOTIR-6209, the MOTIR-6206 design's flag). A seeded session's first
+ * turn opens with the refused work item's `{key} · {title}` (MOTIR-6208's
+ * composer), and the Plans list shows every session of the project to every
+ * member who can browse it — it is NOT per member. So when the session was
+ * seeded but its work item is out of this viewer's reach, the turn is withheld
+ * and the row is known by its plan instead, exactly as a turn-less session is.
+ */
+function firstTurnOf(row: PlanSessionListRow): string | null {
+  if (row.seedGateId && !row.seedCardInProject) return null;
+  return row.firstTurn?.trim() || null;
+}
 
 /**
  * One raw session-list row → the row DTO (MOTIR-6025). The latest plan's title
@@ -16,7 +58,7 @@ export function toPlanSessionRowDto(row: PlanSessionListRow): PlanSessionRowDto 
     lastActivityAt: row.lastActivityAt.toISOString(),
     startedBy:
       row.starterId && row.starterName ? { id: row.starterId, name: row.starterName } : null,
-    firstTurn: row.firstTurn?.trim() || null,
+    firstTurn: firstTurnOf(row),
     latestPlan: row.planId
       ? {
           id: row.planId,
@@ -25,5 +67,6 @@ export function toPlanSessionRowDto(row: PlanSessionListRow): PlanSessionRowDto 
         }
       : null,
     planCount: row.planCount,
+    seed: seedOf(row),
   };
 }

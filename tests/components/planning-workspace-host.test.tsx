@@ -103,6 +103,7 @@ const { conversation } = vi.hoisted(() => ({
     dismissError: vi.fn(),
     onApproved: null as ((r: unknown) => void) | null,
     anchorId: null as string | null,
+    seedGateId: null as string | null,
   },
 }));
 
@@ -110,9 +111,15 @@ vi.mock('@/lib/hooks/usePlanChangeConversation', () => ({
   usePlanChangeConversation: ({
     onApproved,
     anchorId,
-  }: { onApproved?: (r: unknown) => void; anchorId?: string | null } = {}) => {
+    seedGateId,
+  }: {
+    onApproved?: (r: unknown) => void;
+    anchorId?: string | null;
+    seedGateId?: string | null;
+  } = {}) => {
     conversation.onApproved = onApproved ?? null;
     conversation.anchorId = anchorId ?? null;
+    conversation.seedGateId = seedGateId ?? null;
     return conversation;
   },
 }));
@@ -1082,6 +1089,28 @@ describe('PlanningWorkspaceHost — the follow-move request', () => {
       expect(fetchPlanningAnchor).toHaveBeenCalledWith('MOTIR-9', expect.anything()),
     );
     expect(canvas().getAttribute('data-follow-key')).toBe('');
+  });
+});
+
+describe('coverage · a SEEDED re-plan (MOTIR-6210 · MOTIR-6212)', () => {
+  it('the composer holds the seed unsent, and the conversation carries the gate for the first send', () => {
+    const turn = 'ACME-44 · Where exports live\n\nRe-plan this work item from that reason.';
+    conversation.state = { ...IDLE, session: null };
+    renderWithIntl(
+      <PlanningWorkspaceHost
+        projectKey="ACME"
+        projectName="Acme"
+        launch={parsePlanningLaunch({ mode: 'replan', from: 'work-item', item: 'ACME-44' })}
+        anchorId="wi_44"
+        onClose={noop}
+        initialTarget={null}
+        initialDraft={turn}
+        seedGateId="gate-44"
+      />,
+    );
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(turn);
+    expect(conversation.seedGateId).toBe('gate-44');
+    expect(conversation.send).not.toHaveBeenCalled();
   });
 });
 

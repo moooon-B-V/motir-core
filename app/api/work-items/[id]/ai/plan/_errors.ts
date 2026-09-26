@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { mapPlanChangeError } from '@/app/api/ai/plan-change/_errors';
-import { TooManyPlanChangeTargetsError } from '@/lib/planChange/errors';
+import { PlanSeedNotApplicableError, TooManyPlanChangeTargetsError } from '@/lib/planChange/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 
 // Typed-error → HTTP mapping for the contextual-planning routes (7.12.3 ·
@@ -23,6 +23,13 @@ export function mapContextualPlanError(err: unknown): NextResponse | null {
   // will never succeed on retry.
   if (err instanceof TooManyPlanChangeTargetsError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+  }
+  // A seeded first turn whose gate may not seed this scope (MOTIR-6210; the error
+  // is MOTIR-6207's). One body for every reason — missing, foreign, no longer a
+  // refusal, another card — so the refusal never tells a hidden gate from an
+  // absent one. 422: the request is well-formed, the seed is not applicable.
+  if (err instanceof PlanSeedNotApplicableError) {
+    return NextResponse.json({ code: 'SEED_NOT_APPLICABLE' }, { status: 422 });
   }
   return mapPlanChangeError(err);
 }

@@ -1005,6 +1005,12 @@ export interface ApprovalGateOverlayReadDTO {
   gate: ApprovalGateDTO | null;
   /** The AUTHORITY answer (`approvalGatesService.getForWorkItem`), never the routing one. */
   canDecide: boolean;
+  /**
+   * May this reader open the planner on the card — `WorkItemPlanEntrance`'s condition: the
+   * project's `work_item:edit` and a card that is not archived (Story MOTIR-6068 ·
+   * MOTIR-6211). A refused decision's record offers **Re-plan with AI** only when true.
+   */
+  canReplan: boolean;
   /** Whose decision it is waiting on, as a name — the frame's state `B` line. */
   routedToLabel: string | null;
   /**

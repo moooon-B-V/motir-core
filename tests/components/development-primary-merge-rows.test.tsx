@@ -352,6 +352,7 @@ function primaryRead(gate: ApprovalGateDTO): ApprovalGateOverlayReadDTO {
     workItem: { id: 'wi-acme-12', identifier: 'ACME-12', title: 'Throttle the public API' },
     gate,
     canDecide: true,
+    canReplan: false,
     routedToLabel: 'Ada L.',
     stamp: 'v1.stamp-on-screen',
     movedSince: [],

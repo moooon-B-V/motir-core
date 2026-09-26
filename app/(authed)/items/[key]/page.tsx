@@ -650,6 +650,7 @@ export default async function IssueDetailPage({
                       repoDelivery={deliveryView.repos}
                       deliveries={deliveryView.deliveries}
                       statusCategory={statusCategory}
+                      canReplan={canEdit && !isArchived}
                     />
                   </Suspense>
                   <ChildPanel

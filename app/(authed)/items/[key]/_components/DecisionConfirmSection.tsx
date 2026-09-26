@@ -39,6 +39,7 @@ export function DecisionConfirmSection({
   routedToLabel,
   routedToViewer,
   itemIdentifier,
+  canReplan = false,
 }: {
   body: DecisionConfirmationBodyDTO;
   gate: ApprovalGateDTO | null;
@@ -46,6 +47,10 @@ export function DecisionConfirmSection({
   routedToLabel: string | null;
   routedToViewer: boolean;
   itemIdentifier: string;
+  /** May this reader open the planner on the card — `WorkItemPlanEntrance`'s condition
+   *  (MOTIR-6211). The decided refusal's record carries Re-plan with AI when true;
+   *  omitted, it carries none. */
+  canReplan?: boolean;
 }) {
   const t = useTranslations('approvalGate.decisionConfirm');
   const decided = gate !== null && (gate.state === 'approved' || gate.state === 'overturned');
@@ -101,13 +106,13 @@ export function DecisionConfirmSection({
       record={shared.record}
       recordCount={shared.recordCount}
       presentRecordIds={shared.presentRecordIds}
-      epic={shared.epic}
       // Nothing is pressed on the page: a decided or withdrawn gate is pressable by
       // nobody, and a reader who may not decide sees who it waits on (state B).
       canDecide={false}
       routedToLabel={routedToLabel}
       identifier={itemIdentifier}
       onDecide={decideNothing}
+      replan={{ canReplan }}
     />
   );
 }
