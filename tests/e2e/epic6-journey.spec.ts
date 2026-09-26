@@ -41,13 +41,13 @@ import { emailsTo } from './_helpers/email-capture';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { customFieldsService } from '@/lib/services/customFieldsService';
 import { customFieldValuesService } from '@/lib/services/customFieldValuesService';
 import { watchersService } from '@/lib/services/watchersService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { automationRulesService } from '@/lib/services/automationRulesService';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 const PWD = 'epic6-journey-e2e-pass-123';
 const PROJECT_NAME = 'Epic-6 Journey Project';
@@ -162,7 +162,7 @@ test('@smoke the combined Epic-6 journey: build → save → widget → rule →
     workspaceId: tenant.workspaceId,
     role: 'member',
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: tenant.key,
     actorUserId: tenant.owner.id,
     ctx: ownerCtx(tenant),

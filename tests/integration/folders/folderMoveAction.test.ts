@@ -20,6 +20,7 @@ import { listProjectFoldersAction, moveFolderAction } from '@/app/(authed)/items
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
 
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe(
@@ -143,6 +144,7 @@ describe('moveFolderAction', () => {
         tx,
       ),
     );
+    await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
     actAs(fx, viewer.id);
 
     await expect(

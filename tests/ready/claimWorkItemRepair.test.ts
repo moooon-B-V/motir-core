@@ -2,8 +2,6 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { User } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { usersService } from '@/lib/services/usersService';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
@@ -16,6 +14,11 @@ import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 import { connectRepairRepo, deliveredPr, setStatus } from '../helpers/repairFixtures';
 import { warmPool } from '../helpers/warmPool';
+import {
+  addToProjectAs,
+  createCustomRoleAs,
+  setProjectRoleAs,
+} from '../helpers/workspaceRoleFixtures';
 
 // The REPAIR CLAIM (Story MOTIR-5460 · MOTIR-5464) — `POST
 // /api/v1/work-items/{key}/repair`, over real Postgres.
@@ -373,20 +376,20 @@ describe('claimRepair — access', () => {
     const fx = await makeWorkItemFixture();
     const { card } = await redCard(fx);
     const reader = await member(fx, 'Read Only');
-    const role = await projectRoleDefinitionService.create({
+    const role = await createCustomRoleAs({
       projectId: fx.projectId,
       ctx: fx.ctx,
       name: 'Browse only',
       permissions: ['project:browse'],
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
       targetUserId: reader.user.id,
       role: 'member',
     });
-    await projectMembersService.setRole({
+    await setProjectRoleAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

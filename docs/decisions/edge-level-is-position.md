@@ -1,7 +1,8 @@
 # What "the same level" means for a `blocked_by`: the item's position, not its kind
 
 **Status:** proposed · **MOTIR-6387** (the level-model decision of Story **MOTIR-6015**) ·
-consumed by MOTIR-6356, MOTIR-6357, MOTIR-6360, MOTIR-6367, MOTIR-6369, MOTIR-6370
+consumed by MOTIR-6356, MOTIR-6357, MOTIR-6360, MOTIR-6367, MOTIR-6369, MOTIR-6370 ·
+amended by MOTIR-6443 (Amendment 1) and MOTIR-6509 (Amendment 2)
 
 ## Context
 
@@ -48,15 +49,15 @@ kind table is consulted.
 
 The cases the story needs answered, each by one walk:
 
-| case                                      | edge                                                           | same level?                              | parents' edge owed                                                                             |
-| ----------------------------------------- | -------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 1 · validation task T under epic E        | T `blocked_by` story S under E                                 | **yes** — both depth 1 under E, siblings | none                                                                                           |
-| 2 · subtask X under task T under E1       | X `blocked_by` subtask Y under story S under E1                | **yes** — depth 2 / 2 under E1           | T `blocked_by` S                                                                               |
-| 2b · the same, S under another epic E2    | X `blocked_by` Y                                               | **yes** — depth 3 / 3 under the root     | T → S and E1 → E2                                                                              |
-| 3 · subtask X under task T under story S1 | X `blocked_by` subtask Y under story S2 (same epic)            | **no** — depth 3 / 2                     | — the need is T `blocked_by` Y (depth 2 / 2), or X is re-filed                                 |
-| 4 · a root bug B in a folder              | B `blocked_by` subtask Y                                       | **no** — depth 1 / 3 under the root      | — per `log-bug.md` an edged bug is filed in Y's runnable container, where B and Y are siblings |
-| 4b · a root task R holding subtasks       | subtask X under R `blocked_by` subtask Y under story S under E | **no** — depth 2 / 3 under the root      | — file R under E (then it is case 2)                                                           |
-| 5 · a root task R (Amendment 1)           | R `blocked_by` epic E                                          | **no** — an epic pairs only with an epic | — file R under E, or wire it to the item under E it really waits on                            |
+| case                                      | edge                                                           | same level?                              | parents' edge owed                                                             |
+| ----------------------------------------- | -------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------ |
+| 1 · validation task T under epic E        | T `blocked_by` story S under E                                 | **yes** — both depth 1 under E, siblings | none                                                                           |
+| 2 · subtask X under task T under E1       | X `blocked_by` subtask Y under story S under E1                | **yes** — depth 2 / 2 under E1           | T `blocked_by` S                                                               |
+| 2b · the same, S under another epic E2    | X `blocked_by` Y                                               | **yes** — depth 3 / 3 under the root     | T → S and E1 → E2                                                              |
+| 3 · subtask X under task T under story S1 | X `blocked_by` subtask Y under story S2 (same epic)            | **no** — depth 3 / 2                     | — the need is T `blocked_by` Y (depth 2 / 2), or X is re-filed                 |
+| 4 · a root bug B in a folder              | B `blocked_by` subtask Y                                       | **no** — depth 1 / 3 under the root      | — Amendment 2: the edge is accepted and reported invalid ("blocked elsewhere") |
+| 4b · a root task R holding subtasks       | subtask X under R `blocked_by` subtask Y under story S under E | **no** — depth 2 / 3 under the root      | — file R under E (then it is case 2)                                           |
+| 5 · a root task R (Amendment 1)           | R `blocked_by` epic E                                          | **no** — an epic pairs only with an epic | — file R under E, or wire it to the item under E it really waits on            |
 
 Case 4b's remedy once also offered _"R `blocked_by` E"_; Amendment 1 below refuses
 that edge, so the remedy is to file R under E.
@@ -81,10 +82,65 @@ rule above stands unchanged.**
 | root bug `blocked_by` a root task     | **yes** — neither end is an epic; depth 0 / 0   |
 
 In motir-core the check sits in `isCrossLevelEdge` (`lib/workItems/edgeLevel.ts`),
-ahead of the depth comparison, so the plan gate (`cross_level`), `link_work_items`
-(`CROSS_LEVEL_LINK`), the `cross-level-edge` advisory and `invalidEdges` all apply
-it. Each end's kind comes from the reads those callers already make. Walking up
-through `invalidEdges`' parents always stops at an epic ↔ epic pair.
+ahead of the depth comparison, so the plan gate (`cross_level`), the validators'
+`crossLevelEdges` verdict and `invalidEdges` all apply it. Each end's kind comes
+from the reads those callers already make. Walking up through `invalidEdges`'
+parents always stops at an epic ↔ epic pair. (Before Amendment 2 the link door's
+`CROSS_LEVEL_LINK` and a `cross-level-edge` advisory applied it too; both are
+gone.)
+
+## Amendment 2 (2026-09-26, the user; MOTIR-6509)
+
+**The level rule is a VALIDITY rule on a committed edge, and a REFUSAL only at the
+plan gate.** A `blocked_by` may join any two levels. The link doors write it, and
+`validate_work_item` declares the item INVALID, with the reason _"blocked
+elsewhere"_. The planner should not author such an edge, but the tool must not
+make a real dependency unrecordable.
+
+**Why.** A dependency is a fact about the work, and the tree's shape does not
+change it. When the link door refused an edge because its ends sat at different
+depths, the fact was not prevented; it was only left unrecorded. The card then
+read `ready: true`, both claim doors handed it out, and the dependency survived as
+prose in a comment. The run that found this (MOTIR-6497, a root bug in `Bugs`
+that could not be built until a subtask under another epic's story merged) had
+no legal edge at all:
+
+- The only depth-0 item on the blocker's side was an epic, and Amendment 1 lets
+  only an epic block an epic.
+- Case 4's remedy, re-filing the bug in the blocker's runnable container, makes it
+  that story's child. When the story merges, `childStatusCascadeService` closes
+  every child, so the bug would close unfixed.
+
+Parked at Blocked with no edge, the card was claimable and invisible to readiness.
+
+**What changed, in motir-core:**
+
+| surface                                                    | before                                           | after                                                                                                                                    |
+| ---------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `link_work_items`, the REST link route, create-with-links  | refused `CROSS_LEVEL_LINK`, nothing written      | **written**; the edge holds the item out of the ready set like any `blocked_by`                                                          |
+| `validate_work_item` (committed and `planId`-projected)    | a `cross-level-edge` ADVISORY, `valid` unmoved   | a `crossLevelEdges` entry `{ item, blockedBy, itemDepth, blockedByDepth, reason: "blocked_elsewhere", explanation }`, and `valid: false` |
+| `validate_plan`                                            | not reported                                     | the same `crossLevelEdges` entry for a COMMITTED cross-level edge the plan leaves in place, and `valid: false`                           |
+| the plan gate (`add_plan_items`, `validate_plan`, approve) | refused `INVALID_PLAN_REF_GRAPH` / `cross_level` | **unchanged** — the planner still may not author one                                                                                     |
+
+`crossLevelEdges` is a sibling of `invalidEdges`, not a member of it, because the
+two carry different remedies: an `invalidEdges` entry names the parents' edge
+that is owed, and a cross-level edge has no such edge to owe. A cross-level edge
+is never reported in both. An edge to a blocker in another project is judged on
+the committed verdict only; a projection carries such a blocker without its
+ancestors, so it would read a false depth.
+
+**Case 4 changes** from _"no — re-file"_ to _"accepted, reported invalid"_. The
+table above still says which edges are same-level. What moved is what happens to
+an edge that is not: it is recorded and flagged, never refused, outside a plan.
+
+**The proposal/commit asymmetry is deliberate.** A plan may not propose what the
+link door accepts. The plan gate is where _"the planner should not do that"_ is
+enforced, and a person linking two cards by hand, or a run recording a real
+dependency it found, is not planning. The verdict keeps every such edge visible
+until somebody re-wires it or accepts it. What a planner does when its own
+validation reports a committed cross-level edge it cannot re-wire is not decided
+here; the edge-check in the motir-ai planner (MOTIR-6412) is out of this
+amendment's scope.
 
 ## Options rejected
 

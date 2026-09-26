@@ -9,6 +9,7 @@ import { adminDb } from '../../helpers/adminDb';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { createTestWorkItem, makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { setProjectRoleDefinitionFor } from '../../helpers/workspaceRoleFixtures';
 
 // Shared set-up for the Errors-section read and the hand-made link (Story
 // MOTIR-4932 · Subtasks MOTIR-5730 / MOTIR-5731): a project with TWO monitored
@@ -97,10 +98,9 @@ export async function memberWithPermissions(
 ): Promise<ServiceContext> {
   const user = await createTestUser({ email, name: email.split('@')[0] });
   await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-  const definition = await adminDb.projectRoleDefinition.create({
+  const definition = await adminDb.workspaceRoleDefinition.create({
     data: {
       workspaceId: fx.workspaceId,
-      projectId: fx.projectId,
       name: `Custom ${email}`,
       permissions,
     },
@@ -117,7 +117,7 @@ export async function memberWithPermissions(
       },
       tx,
     );
-    await projectMembershipRepository.setRoleDefinition(
+    await setProjectRoleDefinitionFor(
       user.id,
       fx.projectId,
       { roleDefinitionId: definition.id, role: CUSTOM_ROLE_TIER },

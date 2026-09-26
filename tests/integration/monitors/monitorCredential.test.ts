@@ -21,6 +21,7 @@ import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
 
 // The CREDENTIAL LIFECYCLE (Story MOTIR-4926 · Subtask MOTIR-5261) — the
 // eight-hourly refresh, the on-demand probe, and the stored `degraded` verdict.
@@ -369,6 +370,7 @@ describe('the PROBE is on demand, and the verdict is PERSISTED', () => {
         role: 'viewer',
       },
     });
+    await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
 
     await expect(
       monitorCredentialService.probeHealth(fx.projectId, grant.id, {

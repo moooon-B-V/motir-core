@@ -856,7 +856,7 @@ describe('10 · the ejection arm’s edges, through the real handler', () => {
     const { s, item } = await approvedIntoTheQueue('ownerless@example.com');
     await adminDb.workspaceMembership.updateMany({
       where: { workspaceId: s.workspace.id },
-      data: { role: 'member' },
+      data: { role: 'member', workspaceRole: 'member' },
     });
 
     expect(await eject('web', 7, 'sha-web')).toMatchObject({

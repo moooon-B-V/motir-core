@@ -13,6 +13,7 @@ import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // The CLAIMED-BUT-UNVERIFIED sweep, work-item half (Story MOTIR-2291 · Subtask
 // MOTIR-2365).
@@ -74,7 +75,7 @@ async function makeFixture(label: string): Promise<Fixture> {
       data: { userId: u.id, workspaceId, role: 'member' },
     });
     if (role) {
-      await projectMembersService.addMember({
+      await addToProjectAs({
         key: project.identifier,
         actorUserId: owner.id,
         ctx: ownerCtx,
@@ -171,7 +172,7 @@ describe('the five holes the bucket was hiding', () => {
       data: { userId: viewer.id, workspaceId: fx.ownerCtx.workspaceId, role: 'member' },
     });
     const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: project.identifier,
       actorUserId: fx.ownerCtx.userId,
       ctx: fx.ownerCtx,
@@ -238,7 +239,7 @@ describe('the second half — the ready nudge and the editor upload', () => {
       data: { userId: viewer.id, workspaceId: fx.ownerCtx.workspaceId, role: 'member' },
     });
     const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: project.identifier,
       actorUserId: fx.ownerCtx.userId,
       ctx: fx.ownerCtx,

@@ -103,9 +103,12 @@ export default async function ProjectPublicAddressPage() {
     );
   }
 
-  const [subdomain, membership, addresses] = await Promise.all([
+  const [subdomain, role, addresses] = await Promise.all([
     publicSubdomainService.getForWorkspace(ctx.workspaceId, ctx.userId),
-    workspacesService.findMembership(ctx.userId, ctx.workspaceId),
+    // The COMPOSED workspace role, so the org Owner / an org Admin — a Manager in
+    // every workspace of the org with or without a membership — sees the controls
+    // the write path already lets them use (MOTIR-6462).
+    workspacesService.getMemberRole(ctx.userId, ctx.workspaceId),
     customDomainService.list({ key: ctx.project.identifier, actorUserId: ctx.userId, ctx }),
   ]);
 
@@ -128,7 +131,7 @@ export default async function ProjectPublicAddressPage() {
           ctx.project.identifier,
         )}`}
         subdomain={subdomain}
-        canManage={membership ? roleMayManageAddress(membership.role) : false}
+        canManage={roleMayManageAddress(role)}
       />
       {/* MOTIR-4229's half. ⚠️ `canManage` IS `true` BY CONSTRUCTION HERE and is
           passed anyway: the destination guard above already refused anyone

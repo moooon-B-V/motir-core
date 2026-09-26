@@ -3,7 +3,6 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { NotEpicError, WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -12,6 +11,7 @@ import { createTestWorkItem, makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // Service-layer tests for workItemsService.setEpicPrivacy (Story 6.14 · Subtask
 // 6.14.7 — the project-admin write that sets/unsets an epic's
@@ -55,7 +55,7 @@ async function addUser(
   const user = await usersService.createUser({ email, password: 'hunter2hunter2', name: email });
   await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId, role: wsRole });
   if (projectRole) {
-    await projectMembersService.addMember({
+    await addToProjectAs({
       ...actorInput(fx),
       targetUserId: user.id,
       role: projectRole,

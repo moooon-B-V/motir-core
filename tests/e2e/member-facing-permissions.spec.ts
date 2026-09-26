@@ -31,6 +31,7 @@
 import { expect, test, type APIResponse, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -98,6 +99,8 @@ async function seedTenant(slug: string): Promise<Tenant> {
       await db.projectMembership.create({
         data: { userId: u.id, projectId: project.id, workspaceId: workspace.id, role },
       });
+      // Roles live on the workspace since MOTIR-6168.
+      await setWorkspaceRoleFor(u.id, workspace.id, role);
     }
     await pinActiveProject(u.id, { workspaceId: workspace.id, projectId: project.id });
     return u.id;
@@ -333,19 +336,17 @@ test.describe('MOTIR-2291 — the member-facing permissions, end to end', () => 
     ).toBe(0);
   });
 
-  test('a WORKSPACE MEMBER with no project membership still edits, and cannot plan', async ({
+  test('a WORKSPACE MEMBER with no project membership holds the Member role on an open project', async ({
     page,
   }) => {
-    // The actor the UI cannot represent and the decision record's §2 is about.
-    // They hold `work_item:edit` through the implicit grant — which is what these
-    // AI paths used to ask for — and deliberately NOT `ai:plan`, so they could
-    // spend the workspace's credits on a project nobody put them on.
+    // The actor the decision record's §2 is about: a workspace member never added
+    // to this `open` project. They hold their WORKSPACE role's keys here.
     const t = await seedTenant('outsider');
     await signIn(page, t.outsiderEmail, PWD);
 
     // Still a full participant on an `open` project…
     const board = await page.request.get('/api/board');
-    expect(board.status(), 'the implicit grant still browses').toBe(200);
+    expect(board.status(), 'the Member role browses').toBe(200);
     // `work_item:edit`, through the route that actually carries it: authoring an
     // issue into the backlog. (A field edit is a Server Action, not a REST PATCH —
     // `PATCH /api/work-items/[id]` is a 405, which is what this assertion first
@@ -353,18 +354,16 @@ test.describe('MOTIR-2291 — the member-facing permissions, end to end', () => 
     const authored = await page.request.post('/api/backlog', {
       data: { title: 'Authored by a non-member', kind: 'task' },
     });
-    expect(authored.status(), 'the implicit grant still holds work_item:edit').toBeLessThan(300);
+    expect(authored.status(), 'the Member role holds work_item:edit').toBeLessThan(300);
     const charts = await page.request.get(`/api/projects/${PROJECT_KEY}/velocity`);
-    expect(charts.status(), 'report:view is the ONE of the eight they take').toBe(200);
+    expect(charts.status(), 'the Member role holds report:view').toBe(200);
 
-    // …and cannot run the planner.
-    const planning = await page.request.post('/api/ai/plan-change/session', {
-      data: { body: 'Plan the billing epic' },
-    });
-    expect(planning.status(), 'ai:plan is NOT in the implicit grant').toBe(403);
-    expect(
-      await db.planChangeSession.count({ where: { projectId: t.projectId } }),
-      'no thread was opened',
-    ).toBe(0);
+    // (They used to be refused the planner: the retired implicit grant withheld
+    // `ai:plan`. Since roles moved to the workspace (Story MOTIR-6168 ·
+    // MOTIR-6459) a workspace Member holds the Member role's keys — `ai:plan`
+    // among them — in every `open` project, added or not; the role × project
+    // matrix in `tests/permissions/workspaceRolesStoryGate.integration.test.ts`
+    // is where that is pinned. A planner turn would reach motir-ai, which this
+    // lane does not run, so it is not driven here.)
   });
 });

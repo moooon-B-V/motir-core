@@ -425,9 +425,10 @@ export const DATABASE_BOUND_GUARDS: Readonly<Record<string, string>> = {
   'tests/rls/other-context-arm-guard.test.ts':
     'imports ../helpers/adminDb — the workspace / user / org-user descriptors, ' +
     'adjudicated against the same live pg_policies inventory (MOTIR-2959).',
-  'tests/permissions/roleAssignment.test.ts':
-    'imports @/lib/db and ../helpers/adminDb — it checks the role-assignment ' +
-    'matrix against real rows, not only against source.',
+  'tests/permissions/projectRolesRetired.test.ts':
+    'imports @/lib/db and ../helpers/adminDb — it pairs the no-project-role-writer ' +
+    'scan (MOTIR-6464, which retired roleAssignment.test.ts) with the retired ' +
+    'routes driven against real rows.',
   // ── The two planning-envelope gates (MOTIR-4343, MOTIR-4736) ──────────────
   //
   // Both are HYBRIDS, and the reasons below say so rather than claiming they are

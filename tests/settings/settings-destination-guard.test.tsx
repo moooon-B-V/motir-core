@@ -6,9 +6,10 @@ import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import {
   PROJECT_SETTINGS_NAV,
+  PROJECT_SETTINGS_RETIRED_ROUTES,
   PROJECT_SETTINGS_ROOT,
-  visibleSettingsNav,
   toSettingsNavPermissions,
+  visibleSettingsNav,
 } from '@/lib/settings/projectSettingsNav';
 import { PERMISSIONS } from '@/lib/permissions/catalog';
 import { BUILTIN_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
@@ -46,7 +47,11 @@ function collectPages(dir: string, base: string): [string, string][] {
   return found;
 }
 
-const PAGES = collectPages(SETTINGS_DIR, PROJECT_SETTINGS_ROOT);
+// The retired Roles routes only redirect to workspace settings (MOTIR-6466), so
+// there is no destination to guard.
+const PAGES = collectPages(SETTINGS_DIR, PROJECT_SETTINGS_ROOT).filter(
+  ([urlPath]) => !PROJECT_SETTINGS_RETIRED_ROUTES.includes(urlPath),
+);
 
 describe('every settings destination is guarded (MOTIR-2469)', () => {
   it('found the settings pages at all — the enumeration is not vacuously empty', () => {
@@ -87,14 +92,16 @@ describe('every settings destination is guarded (MOTIR-2469)', () => {
     }
   });
 
-  it('the drill-down inherits its parent entry’s key', () => {
-    const detail = PAGES.find(([p]) => p.includes('[roleKey]'));
-    expect(detail, 'the roles drill-down is missing').toBeTruthy();
-    const source = readFileSync(detail![1], 'utf8');
-    expect(source).toContain("await guardSettingsPage('roles'");
-    // …and the registry agrees that is where it hangs.
-    const roles = PROJECT_SETTINGS_NAV.find((e) => e.id === 'roles')!;
-    expect(roles.nestedRoutes).toContain('/settings/project/roles/[roleKey]');
+  it('every drill-down page inherits its parent entry’s key', () => {
+    // The Roles room — the drill-down this test was written for — moved to
+    // workspace settings (MOTIR-6466); the rule holds for every drill-down left.
+    for (const entry of PROJECT_SETTINGS_NAV) {
+      for (const nested of entry.nestedRoutes ?? []) {
+        const page = PAGES.find(([p]) => p === nested);
+        expect(page, `${nested} has no page`).toBeTruthy();
+        expect(readFileSync(page![1], 'utf8')).toContain(`await guardSettingsPage('${entry.id}'`);
+      }
+    }
   });
 
   it('every REGISTRY entry has a guarded page, and vice versa', () => {

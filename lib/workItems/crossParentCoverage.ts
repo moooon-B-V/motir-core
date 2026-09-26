@@ -69,8 +69,8 @@ export interface CoverageNodeInfo {
  * parent edge — the `invalidEdges` both validators report. Walking both ends up
  * one parent at a time, each pair of parents met is the edge the rule owes; this
  * asks it of the first pair, and the same question asked of every edge carries it
- * up. A cross-LEVEL edge is skipped: it is refused at every write door and
- * reported by its own advisory. An end the caller cannot describe is exempt.
+ * up. A cross-LEVEL edge is skipped: it is its own finding (MOTIR-6509),
+ * reported in the validators' `crossLevelEdges`. An end the caller cannot describe is exempt.
  */
 export function uncoveredCrossParentEdges(
   edges: readonly CoverageEdge[],

@@ -5,14 +5,10 @@ import { projectMemberErrorResponse } from '@/lib/projects/memberErrorResponse';
 import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 
 // /api/projects/[key]/members/[userId] (Story 6.4 · Subtask 6.4.4)
-//   PATCH  — put a member on a role. Body: { role }, carrying a `RoleDTO.key` —
-//            a built-in's enum value, or one of the project's own custom role
-//            definitions' ids (MOTIR-2485). The service decides which it is and
-//            404s a definition belonging to another project or workspace, under
-//            the same no-existence-leak posture the key resolution takes.
-//            Project-admin gated; guards the last admin.
-//   DELETE — remove a member from the project. Project-admin gated; guards the
-//            last admin.
+//   PATCH  — RETIRED, 410 Gone: roles live on the workspace (Story MOTIR-6168 ·
+//            MOTIR-6464), so a project membership has no role to set.
+//   DELETE — remove a member from the project (`member:manage` gated). There is
+//            no last-admin guard any more: there is no project admin to protect.
 //
 // A per-member sub-resource (the userId in the path) addresses the target
 // unambiguously, which is the idiomatic REST + App-Router shape — the card's
@@ -24,50 +20,21 @@ interface RouteParams {
   params: Promise<{ key: string; userId: string }>;
 }
 
-export async function PATCH(req: Request, { params }: RouteParams): Promise<Response> {
-  const ctx = await getWorkspaceContext();
-  if (!ctx) {
-    return NextResponse.json({ error: 'Not signed in', code: 'UNAUTHENTICATED' }, { status: 401 });
-  }
-  // The 2FA hold (MOTIR-3653) — inserted after this route's own no-context
-  // arm rather than folded into `requireCompliantWorkspaceContext`, because
-  // that arm carries a body of its own that must not change.
-  const hold = await refuseIfNonCompliant(ctx.userId);
-  if (hold) return hold;
-
-  const { key, userId } = await params;
-
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON body', code: 'BAD_REQUEST' }, { status: 400 });
-  }
-  const role =
-    body && typeof body === 'object' && 'role' in body && typeof body.role === 'string'
-      ? body.role
-      : null;
-  if (!role) {
-    return NextResponse.json(
-      { error: 'A "role" is required.', code: 'BAD_REQUEST' },
-      { status: 400 },
-    );
-  }
-
-  try {
-    const member = await projectMembersService.setRole({
-      key,
-      actorUserId: ctx.userId,
-      ctx,
-      targetUserId: userId,
-      role,
-    });
-    return NextResponse.json({ member });
-  } catch (err) {
-    const mapped = projectMemberErrorResponse(err);
-    if (mapped) return mapped;
-    throw err;
-  }
+/**
+ * Retired (Story MOTIR-6168 · MOTIR-6464): a project membership carries no role,
+ * so there is nothing to set here. Kept as a 410 rather than deleted so a stale
+ * client learns where the role went instead of reading a 404.
+ */
+export async function PATCH(): Promise<Response> {
+  return NextResponse.json(
+    {
+      error:
+        "Project roles are retired: a person's role is set once, on the workspace, and holds in " +
+        'every project. Change it with PATCH /api/workspaces/{workspaceId}/members/{userId}.',
+      code: 'role_retired',
+    },
+    { status: 410 },
+  );
 }
 
 export async function DELETE(_req: Request, { params }: RouteParams): Promise<Response> {

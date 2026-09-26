@@ -92,7 +92,7 @@ test('an ADMIN keeps the whole shell — nothing was taken away', async ({ page 
   for (const label of [
     'Details',
     'Members & access',
-    'Roles & permissions',
+    // No 'Roles & permissions' row: roles live at /settings/workspace/roles since MOTIR-6168.
     'Boards',
     'Workflow',
     'Estimation',

@@ -13,7 +13,7 @@ import {
   PERMISSION_DOMAINS,
   isEnforced,
 } from '@/lib/permissions/catalog';
-import { PROJECT_ASSIGNABLE_ROLES } from '@/lib/projects/roles';
+import { WORKSPACE_ROLES } from '@/lib/workspaces/roles';
 
 // The widened role-catalog mapping (Subtask MOTIR-2439) — the three values the
 // designed role LIST row draws and the shipped DTO could not express: the
@@ -90,9 +90,9 @@ describe('toBuiltinRoleDTO carries the headcount alongside the set', () => {
 
 describe('toRoleCatalogDTO', () => {
   it('zero-fills a role nobody holds rather than omitting the key', () => {
-    const catalog = toRoleCatalogDTO({ admin: 2 });
-    expect(catalog.roles.map((r) => r.key)).toEqual([...PROJECT_ASSIGNABLE_ROLES]);
-    expect(catalog.roles.find((r) => r.key === 'admin')?.memberCount).toBe(2);
+    const catalog = toRoleCatalogDTO({ manager: 2 });
+    expect(catalog.roles.map((r) => r.key)).toEqual([...WORKSPACE_ROLES]);
+    expect(catalog.roles.find((r) => r.key === 'manager')?.memberCount).toBe(2);
     for (const role of catalog.roles) {
       expect(typeof role.memberCount, `${role.key} must carry a number`).toBe('number');
     }
@@ -121,13 +121,13 @@ describe('toRoleCatalogDTO', () => {
     }
     // Admin holds the whole role-gated set, which is what makes `M` the right
     // denominator rather than the catalog's own length.
-    expect(catalog.roles.find((r) => r.key === 'admin')?.permissions.length).toBe(
+    expect(catalog.roles.find((r) => r.key === 'manager')?.permissions.length).toBe(
       catalog.roleGatedPermissionCount,
     );
   });
 
   it('stays JSON-serialisable — no Set crosses the boundary', () => {
-    const catalog = toRoleCatalogDTO({ admin: 1, member: 3, viewer: 5 });
+    const catalog = toRoleCatalogDTO({ manager: 1, member: 3, viewer: 5 });
     expect(JSON.parse(JSON.stringify(catalog))).toEqual(catalog);
   });
 });
@@ -223,7 +223,7 @@ describe('toRoleCatalogDTO with a project`s own roles', () => {
   it('puts the three built-ins FIRST, then the custom roles BY NAME — deterministically', () => {
     const catalog = toRoleCatalogDTO({}, rows, {});
     expect(catalog.roles.map((r) => r.key)).toEqual([
-      ...PROJECT_ASSIGNABLE_ROLES,
+      ...WORKSPACE_ROLES,
       'r_contractor', // Contractor sorts before Reporter
       'r_reporter',
     ]);
@@ -242,7 +242,7 @@ describe('toRoleCatalogDTO with a project`s own roles', () => {
   it('a project with NO custom roles returns EXACTLY what it returned before', () => {
     // The regression that matters: the widening must not change the shipped
     // answer for a project that has no roles of its own.
-    expect(toRoleCatalogDTO({ admin: 2 }, [], {})).toEqual(toRoleCatalogDTO({ admin: 2 }));
+    expect(toRoleCatalogDTO({ manager: 2 }, [], {})).toEqual(toRoleCatalogDTO({ manager: 2 }));
   });
 
   it('`roleGatedPermissionCount` is unaffected by how many roles exist', () => {

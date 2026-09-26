@@ -9,6 +9,7 @@ import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
 
 // The per-connection MINIMUM LEVEL write and the room's INGESTION STATE (Story
 // MOTIR-4929 · Subtask MOTIR-5579) — `setMinimumLevel`, its PATCH route under
@@ -168,6 +169,7 @@ describe('PATCH /api/projects/[key]/monitors/[connectionId]', () => {
         role: 'viewer',
       },
     });
+    await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
     signInAs(viewer, fx.workspaceId);
 
     const res = await patch(fx, connectionId, { minimumLevel: 'error' });

@@ -6,10 +6,10 @@ import { signIn } from './_helpers/shell-session';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { foldersService } from '@/lib/services/foldersService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // A FILED WORK ITEM IS PLACED CORRECTLY EVERYWHERE ELSE — THE ACCEPTANCE RECEIPT
 // (Story MOTIR-5309 · Subtask MOTIR-5380). The story's verification recipe, in a
@@ -349,7 +349,7 @@ test('a viewer without work_item:edit sees the folder on the page but cannot cha
     name: 'Vic Viewer',
   });
   await workspacesService.addMember({ userId: viewer.id, workspaceId: seed.workspaceId });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: seed.projectIdentifier,
     actorUserId: seed.ctx.userId,
     ctx: seed.ctx,

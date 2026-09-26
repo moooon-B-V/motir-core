@@ -48,7 +48,13 @@ const EMPTY = <p>Nothing is waiting</p>;
 afterEach(cleanup);
 
 const MEMBERS: WorkspaceMemberDTO[] = [
-  { userId: 'u1', name: 'Zhu Yue', email: 'yue@example.com', role: 'owner' },
+  {
+    userId: 'u1',
+    name: 'Zhu Yue',
+    email: 'yue@example.com',
+    workspaceRole: 'manager',
+    customRole: null,
+  },
 ];
 
 const WORKFLOW = {

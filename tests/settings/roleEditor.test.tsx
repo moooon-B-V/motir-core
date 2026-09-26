@@ -5,16 +5,16 @@ import { renderWithIntl, enMessages } from '../helpers/renderWithIntl';
 import zhMessages from '@/messages/zh.json';
 import { toRoleCatalogDTO } from '@/lib/mappers/permissionMappers';
 import { MAX_CUSTOM_ROLES_PER_PROJECT } from '@/lib/permissions/limits';
-import { ROLE_GATED_PERMISSIONS, BUILTIN_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { ROLE_GATED_PERMISSIONS, WORKSPACE_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { isEnforced, type PermissionKey } from '@/lib/permissions/catalog';
 
 /** The editor offers ENFORCED keys only — a `planned` one (MOTIR-6328's Plans /
  *  Runs view keys, until their reads land) is never a switch. */
 const offered = (keys: Iterable<PermissionKey>): PermissionKey[] =>
   [...keys].filter((key) => isEnforced(key));
-import { RoleEditor } from '@/app/(authed)/settings/project/roles/_components/RoleEditor';
-import { RoleList } from '@/app/(authed)/settings/project/roles/_components/RoleList';
-import { RoleDetail } from '@/app/(authed)/settings/project/roles/_components/RoleDetail';
+import { RoleEditor } from '@/app/(authed)/settings/workspace/roles/_components/RoleEditor';
+import { RoleList } from '@/app/(authed)/settings/workspace/roles/_components/RoleList';
+import { RoleDetail } from '@/app/(authed)/settings/workspace/roles/_components/RoleDetail';
 import type { CustomRoleRow } from '@/lib/mappers/permissionMappers';
 
 // The role EDITOR and its two doors (Story MOTIR-2257 · Subtask MOTIR-2483),
@@ -41,7 +41,7 @@ vi.mock('@/components/ui/Toast', async (importOriginal) => {
   return { ...actual, useToast: () => ({ toast: toastMock }) };
 });
 
-const CATALOG = toRoleCatalogDTO({ admin: 1, member: 2, viewer: 0 });
+const CATALOG = toRoleCatalogDTO({ manager: 1, member: 2, viewer: 0 });
 
 function catalogWith(rows: CustomRoleRow[]) {
   return toRoleCatalogDTO({}, rows, {});
@@ -71,7 +71,7 @@ afterEach(() => {
 
 describe('the grid — one layout for one catalog', () => {
   it('renders every ROLE-GATED permission under the same domain headings, in catalog order', () => {
-    render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
+    render(<RoleEditor workspaceId="ws1" domains={CATALOG.domains} catalog={CATALOG} />);
     for (const key of offered(ROLE_GATED_PERMISSIONS)) {
       expect(document.querySelector(`[data-permission="${key}"]`), key).toBeTruthy();
     }
@@ -87,7 +87,7 @@ describe('the grid — one layout for one catalog', () => {
   });
 
   it('every row is a Checkbox with ONE checked state — held or not held', () => {
-    render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
+    render(<RoleEditor workspaceId="ws1" domains={CATALOG.domains} catalog={CATALOG} />);
     const boxes = screen.getAllByRole('checkbox');
     expect(boxes).toHaveLength(offered(ROLE_GATED_PERMISSIONS).length);
     for (const box of boxes) {
@@ -99,7 +99,7 @@ describe('the grid — one layout for one catalog', () => {
   });
 
   it('starts EMPTY on the new route, and the count says so', () => {
-    render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
+    render(<RoleEditor workspaceId="ws1" domains={CATALOG.domains} catalog={CATALOG} />);
     expect(
       screen.getAllByRole('checkbox').every((b) => b.getAttribute('aria-checked') === 'false'),
     ).toBe(true);
@@ -111,10 +111,10 @@ describe('the grid — one layout for one catalog', () => {
 
 describe('`Start from` — a SEED, and only on the new route', () => {
   it('pre-ticks the chosen role`s grants, and the running count follows', () => {
-    render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
+    render(<RoleEditor workspaceId="ws1" domains={CATALOG.domains} catalog={CATALOG} />);
     fireEvent.change(screen.getByLabelText('Start from'), { target: { value: 'member' } });
 
-    const memberSet = offered(BUILTIN_ROLE_PERMISSIONS.member);
+    const memberSet = offered(WORKSPACE_ROLE_PERMISSIONS.member);
     const checked = screen
       .getAllByRole('checkbox')
       .filter((b) => b.getAttribute('aria-checked') === 'true');
@@ -125,25 +125,25 @@ describe('`Start from` — a SEED, and only on the new route', () => {
   });
 
   it('switching the base REPLACES the pre-ticked set — the label says "start from", not "add"', () => {
-    render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
+    render(<RoleEditor workspaceId="ws1" domains={CATALOG.domains} catalog={CATALOG} />);
     const picker = screen.getByLabelText('Start from');
-    fireEvent.change(picker, { target: { value: 'admin' } });
+    fireEvent.change(picker, { target: { value: 'manager' } });
     expect(
       screen.getAllByRole('checkbox').filter((b) => b.getAttribute('aria-checked') === 'true'),
-    ).toHaveLength(offered(BUILTIN_ROLE_PERMISSIONS.admin).length);
+    ).toHaveLength(offered(WORKSPACE_ROLE_PERMISSIONS.manager).length);
 
     fireEvent.change(picker, { target: { value: 'viewer' } });
     expect(
       screen.getAllByRole('checkbox').filter((b) => b.getAttribute('aria-checked') === 'true'),
-    ).toHaveLength(offered(BUILTIN_ROLE_PERMISSIONS.viewer).length);
+    ).toHaveLength(offered(WORKSPACE_ROLE_PERMISSIONS.viewer).length);
   });
 
   it('offers EXACTLY the three built-ins', () => {
-    render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
+    render(<RoleEditor workspaceId="ws1" domains={CATALOG.domains} catalog={CATALOG} />);
     const options = [...screen.getByLabelText('Start from').querySelectorAll('option')]
       .map((o) => o.getAttribute('value'))
       .filter((v) => v !== '');
-    expect(options).toEqual(['admin', 'member', 'viewer']);
+    expect(options).toEqual(['manager', 'member', 'viewer']);
   });
 
   it('is ABSENT on the EDIT route — nothing was stored, so there is nothing to show', () => {
@@ -151,7 +151,7 @@ describe('`Start from` — a SEED, and only on the new route', () => {
     const cat = catalogWith([{ id: 'r1', name: 'Contractor', permissions: ['project:browse'] }]);
     render(
       <RoleEditor
-        projectKey="MOTIR"
+        workspaceId="ws1"
         domains={cat.domains}
         catalog={cat}
         role={{ id: 'r1', name: 'Contractor', permissions: ['project:browse'] }}
@@ -167,7 +167,7 @@ describe('`Start from` — a SEED, and only on the new route', () => {
     ]);
     render(
       <RoleEditor
-        projectKey="MOTIR"
+        workspaceId="ws1"
         domains={cat.domains}
         catalog={cat}
         role={{ id: 'r1', name: 'Contractor', permissions: ['project:browse', 'comment:add'] }}
@@ -186,7 +186,7 @@ describe('the pinned action bar', () => {
     // ancestor and says nothing about it. So build the shipped arrangement — a
     // scrolling `<main>` — scroll it, and read the bar's own geometry back.
     const { container } = render(
-      <RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />,
+      <RoleEditor workspaceId="ws1" domains={CATALOG.domains} catalog={CATALOG} />,
     );
     const bar = screen.getByTestId('role-editor-actionbar');
 
@@ -215,7 +215,7 @@ describe('the pinned action bar', () => {
   });
 
   it('carries the running count, and it updates as boxes are ticked', () => {
-    render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
+    render(<RoleEditor workspaceId="ws1" domains={CATALOG.domains} catalog={CATALOG} />);
     const count = () => screen.getByTestId('role-editor-count').textContent;
     const total = CATALOG.roleGatedPermissionCount;
     expect(count()).toBe(`0 of ${total} permissions`);
@@ -233,10 +233,10 @@ describe('save', () => {
     return { ok: true, status: 201, json: async () => ({ role: { id } }) } as unknown as Response;
   }
 
-  it('POSTs `{ name, permissions }` ONCE on the new route — and NO `basedOn`', async () => {
+  it('POSTs `{ name, basedOn, permissions }` ONCE on the new route — the base the workspace route requires', async () => {
     const fetchMock = vi.fn().mockResolvedValue(okResponse());
     vi.stubGlobal('fetch', fetchMock);
-    render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
+    render(<RoleEditor workspaceId="ws1" domains={CATALOG.domains} catalog={CATALOG} />);
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Contractor' } });
     fireEvent.change(screen.getByLabelText('Start from'), { target: { value: 'viewer' } });
@@ -244,16 +244,18 @@ describe('save', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/api/projects/MOTIR/roles');
+    expect(url).toBe('/api/workspaces/ws1/roles');
     expect(init.method).toBe('POST');
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
-    expect(Object.keys(body).sort()).toEqual(['name', 'permissions']);
+    // `basedOn` is validated and NOT stored — the set sent is what the author
+    // composed (MOTIR-6466: the workspace create names its base).
+    expect(Object.keys(body).sort()).toEqual(['basedOn', 'name', 'permissions']);
     expect(body['name']).toBe('Contractor');
     expect([...(body['permissions'] as string[])].sort()).toEqual(
-      offered(BUILTIN_ROLE_PERMISSIONS.viewer).sort(),
+      offered(WORKSPACE_ROLE_PERMISSIONS.viewer).sort(),
     );
     // Lands on what was just saved.
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/settings/project/roles/r_new'));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/settings/workspace/roles/r_new'));
   });
 
   it('PATCHes on the edit route, to that role`s id', async () => {
@@ -266,7 +268,7 @@ describe('save', () => {
     const cat = catalogWith([{ id: 'r1', name: 'Contractor', permissions: ['project:browse'] }]);
     render(
       <RoleEditor
-        projectKey="MOTIR"
+        workspaceId="ws1"
         domains={cat.domains}
         catalog={cat}
         role={{ id: 'r1', name: 'Contractor', permissions: ['project:browse'] }}
@@ -275,12 +277,12 @@ describe('save', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/api/projects/MOTIR/roles/r1');
+    expect(url).toBe('/api/workspaces/ws1/roles/r1');
     expect(init.method).toBe('PATCH');
   });
 
   it('cannot be submitted with a blank name', () => {
-    render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
+    render(<RoleEditor workspaceId="ws1" domains={CATALOG.domains} catalog={CATALOG} />);
     const submit = screen.getByRole('button', { name: 'Create role' }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: '   ' } });
@@ -293,9 +295,9 @@ describe('save', () => {
     // The editor is a PAGE, not a dialog, so its Cancel has somewhere to go and
     // has to actually go there. A Cancel that only cleared local state would look
     // identical in a screenshot and strand the author on a form they abandoned.
-    render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
+    render(<RoleEditor workspaceId="ws1" domains={CATALOG.domains} catalog={CATALOG} />);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(pushMock).toHaveBeenCalledWith('/settings/project/roles');
+    expect(pushMock).toHaveBeenCalledWith('/settings/workspace/roles');
   });
 });
 
@@ -309,7 +311,7 @@ describe('every refusal has a drawn outcome — none is a silent no-op', () => {
         json: async () => ({ code, ...extra }),
       } as unknown as Response),
     );
-    render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
+    render(<RoleEditor workspaceId="ws1" domains={CATALOG.domains} catalog={CATALOG} />);
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Contractor' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create role' }));
   }
@@ -348,37 +350,22 @@ describe('the two doors', () => {
   it('`Create role` renders for an admin, is ABSENT for everyone else', () => {
     render(<RoleList catalog={CATALOG} canManage />);
     expect(screen.getByTestId('create-role').getAttribute('href')).toBe(
-      '/settings/project/roles/new',
+      '/settings/workspace/roles/new',
     );
     cleanup();
     render(<RoleList catalog={CATALOG} />);
     expect(screen.queryByTestId('create-role')).toBeNull();
   });
 
-  it('AT THE CAP it is visible and DISABLED — never hidden', () => {
-    // A missing button reads as "this project cannot have custom roles"; a
-    // disabled one reads as "you have used them all". The cap and the count both
-    // come from the shared constant and the catalog, so this needs no literal.
-    const rows: CustomRoleRow[] = Array.from({ length: MAX_CUSTOM_ROLES_PER_PROJECT }, (_, i) => ({
+  it('Create role is a live link whatever the count — a workspace has no per-project cap (MOTIR-6466)', () => {
+    const rows: CustomRoleRow[] = Array.from({ length: 30 }, (_, i) => ({
       id: `r${i}`,
       name: `Role ${i}`,
       permissions: [],
     }));
     render(<RoleList catalog={catalogWith(rows)} canManage />);
-    const door = screen.getByTestId('create-role');
-    expect(door.tagName).toBe('BUTTON');
-    expect((door as HTMLButtonElement).disabled).toBe(true);
-    expect(door.getAttribute('href')).toBeNull();
-  });
-
-  it('one BELOW the cap it is still a live link — the boundary is `>=`, not `>`', () => {
-    const rows: CustomRoleRow[] = Array.from(
-      { length: MAX_CUSTOM_ROLES_PER_PROJECT - 1 },
-      (_, i) => ({ id: `r${i}`, name: `Role ${i}`, permissions: [] }),
-    );
-    render(<RoleList catalog={catalogWith(rows)} canManage />);
     expect(screen.getByTestId('create-role').getAttribute('href')).toBe(
-      '/settings/project/roles/new',
+      '/settings/workspace/roles/new',
     );
   });
 
@@ -387,18 +374,18 @@ describe('the two doors', () => {
     const custom = cat.roles.find((r) => r.key === 'r1')!;
     const builtIn = cat.roles.find((r) => r.key === 'member')!;
 
-    render(<RoleDetail role={custom} catalog={cat} projectName="motir" canManage />);
+    render(<RoleDetail role={custom} catalog={cat} workspaceName="motir" canManage />);
     expect(screen.getByTestId('edit-role').getAttribute('href')).toBe(
-      '/settings/project/roles/r1/edit',
+      '/settings/workspace/roles/r1/edit',
     );
     cleanup();
 
-    render(<RoleDetail role={builtIn} catalog={cat} projectName="motir" canManage />);
+    render(<RoleDetail role={builtIn} catalog={cat} workspaceName="motir" canManage />);
     expect(screen.queryByTestId('edit-role')).toBeNull();
     cleanup();
 
     // …and not for a non-admin, on either.
-    render(<RoleDetail role={custom} catalog={cat} projectName="motir" />);
+    render(<RoleDetail role={custom} catalog={cat} workspaceName="motir" />);
     expect(screen.queryByTestId('edit-role')).toBeNull();
   });
 });
@@ -406,7 +393,7 @@ describe('the two doors', () => {
 describe('i18n', () => {
   it('renders no raw message key, and the zh catalog carries every string the editor uses', () => {
     const { container } = render(
-      <RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />,
+      <RoleEditor workspaceId="ws1" domains={CATALOG.domains} catalog={CATALOG} />,
       zhMessages as unknown as Record<string, unknown>,
     );
     expect(container.textContent).not.toMatch(/settings\.rolesPage\./);

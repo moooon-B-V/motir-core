@@ -1,4 +1,4 @@
-import { Boxes, ListChecks, ShieldCheck } from 'lucide-react';
+import { Boxes, ListChecks, Shield, ShieldCheck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // The WORKSPACE-settings navigation REGISTRY (Story MOTIR-4843 · MOTIR-4846).
@@ -82,6 +82,8 @@ export interface WorkspaceSettingsNavEntry {
   labelKey: string;
   /** Active ONLY on an exact pathname match — the area root needs this. */
   exact?: true;
+  /** Drill-down routes reached FROM this row, which keep it active (the Roles room). */
+  nestedRoutes?: string[];
 }
 
 /** The workspace-settings area root — a real page, not a redirect. */
@@ -117,6 +119,26 @@ export const WORKSPACE_SETTINGS_NAV: WorkspaceSettingsNavEntry[] = [
     href: '/settings/workspace/security',
     icon: ShieldCheck,
     labelKey: 'security',
+  },
+  {
+    // Story MOTIR-6168 · MOTIR-6466 — the Roles room, moved up from project
+    // settings with the roles themselves. `Shield` is the glyph the project rail
+    // gave the same room, so the two doors agree (design panel 4a). A drill-down:
+    // the detail, the editor and New role keep this row active.
+    //
+    // ⚠️ ITS ROUTES ANSWER AT EVERY WORKSPACE COUNT (the design's one reveal
+    // carve-out, panel 4b) — the ROW follows the reveal like its siblings, and
+    // below it the org page's fold-in carries a door card instead.
+    id: 'roles',
+    group: 'access',
+    href: '/settings/workspace/roles',
+    icon: Shield,
+    labelKey: 'roles',
+    nestedRoutes: [
+      '/settings/workspace/roles/[roleKey]',
+      '/settings/workspace/roles/[roleKey]/edit',
+      '/settings/workspace/roles/new',
+    ],
   },
   {
     id: 'jobs',

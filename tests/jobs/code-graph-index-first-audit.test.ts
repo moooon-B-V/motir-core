@@ -369,7 +369,7 @@ describe('firstAuditTriggerService — the verdicts that derive nothing', () => 
     const membershipRepository = await import('@/lib/repositories/workspaceMembershipRepository');
     vi.spyOn(
       membershipRepository.workspaceMembershipRepository,
-      'findOwnerByWorkspace',
+      'findStandInManagerByWorkspace',
     ).mockRejectedValue(new Error('the connection pool is gone'));
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 

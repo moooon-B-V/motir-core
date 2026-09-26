@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 // can't supply) — the single allowed mock, per CLAUDE.md. Service-level tests
 // pass `ctx` explicitly; the route transport tests drive `wsCtx.current`.
 import type { WorkspaceContext } from '@/lib/workspaces';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 const wsCtx = { current: null as WorkspaceContext | null };
 vi.mock('@/lib/workspaces', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/workspaces')>();
@@ -13,7 +14,6 @@ vi.mock('@/lib/workspaces', async (importOriginal) => {
 import { db } from '@/lib/db';
 import { adminDb } from '../../helpers/adminDb';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
@@ -100,7 +100,7 @@ async function makeTeam(): Promise<Team> {
       workspaceId: fx.workspaceId,
       role: 'member',
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
