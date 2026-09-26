@@ -430,7 +430,7 @@ describe('motir fix — an acceptance sent back with Re-run (MOTIR-6502)', () =>
     const base = deps.runAgentFn;
     deps.runAgentFn = async (input: { prompt: string; cwd: string }) => {
       n += 1;
-      const result = await base(input);
+      const result = (await base(input)) as { exitCode: number; signal: null; model: null };
       return (n === 2 ? { ...result, exitCode: 1 } : result) as never;
     };
 
