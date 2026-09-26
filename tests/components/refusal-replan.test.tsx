@@ -965,7 +965,9 @@ describe('who asks a PICK — `asksToPlanAfterPress` (MOTIR-6436)', () => {
   ] as const)(
     '%s · %s · %s · stamp %# → %s',
     (kind, state, decisionSource, chosenOption, expected) => {
-      expect(asksToPlanAfterPress({ kind, state, decisionSource, chosenOption })).toBe(expected);
+      expect(
+        asksToPlanAfterPress({ kind, state, decisionSource, chosenOption, refusalVerdict: null }),
+      ).toBe(expected);
     },
   );
 });
