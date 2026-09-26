@@ -2,12 +2,12 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApprovalGateKind, WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { createTestWorkItem } from '../../fixtures/workItemFixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // STORY GATE — A PICKED OPTION IS PLANNED (Story MOTIR-6069 · Subtask MOTIR-6437;
 // `picked-option-planning.md`, `picked-option-planning-starts.md`). Harness lifted
@@ -131,7 +131,7 @@ async function member(inProject: boolean): Promise<Actor> {
     data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
   });
   if (inProject) {
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.project.identifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

@@ -477,9 +477,10 @@ test.describe('a picked option is planned', () => {
     // Chosen by the owner, off camera.
     await chooseOption(page, choice.identifier);
     const viewer = await adminDb.user.findUniqueOrThrow({ where: { email: seed.viewerEmail } });
-    await adminDb.projectMembership.updateMany({
-      where: { userId: viewer.id, projectId: seed.projectId },
-      data: { role: 'viewer' },
+    // Roles live on the WORKSPACE since MOTIR-6168 (`plan-history-seed.ts`).
+    await adminDb.workspaceMembership.update({
+      where: { userId_workspaceId: { userId: viewer.id, workspaceId: seed.workspaceId } },
+      data: { workspaceRole: 'viewer', roleDefinitionId: null },
     });
     const context = await browser.newContext({ baseURL: page.url().split('/workbench')[0] });
     const viewerPage = await context.newPage();
