@@ -9,10 +9,8 @@ import { routingTargetId } from '@/lib/approvalGates/routing';
 import type {
   DecisionConfirmationBodyDTO,
   DecisionConfirmationPortDTO,
-  DecisionEpicDTO,
   SupersededItemDTO,
 } from '@/lib/dto/approvalGate';
-import { projectAccessService } from './projectAccessService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -66,7 +64,6 @@ export function decisionConfirmationBodyOf(
   item: { type: string | null; executor: string | null; descriptionMd: string | null },
   records: DecisionRecordsNow,
   titleOf: (key: string) => string | null,
-  epic: DecisionEpicDTO | null = null,
 ): DecisionConfirmationBodyDTO | null {
   if (!asksTheConfirmQuestion(item)) return null;
   const parse = parseDecisionRecord(item.descriptionMd);
@@ -76,30 +73,10 @@ export function decisionConfirmationBodyOf(
     recordCount: records.count,
     presentRecordIds: records.presentIds,
     supersedesItems: keys.map((key): SupersededItemDTO => ({ key, title: titleOf(key) })),
-    epic,
   };
   if (!parse.ok) return { ok: false, defect: parse.defect, draft: parse.draft, ...shared };
   const { ok: _ok, ...sections } = parse;
   return { ok: true, port: { ...sections, ...shared } };
-}
-
-/**
- * The decision's NEAREST `epic` ancestor — normally its own parent (a decision hangs
- * under the epic it governs, ADR point 11), walked up otherwise. Bounded, and a cycle
- * is impossible (the parent write refuses one).
- */
-async function nearestEpic(
-  parentId: string | null,
-  tx: Prisma.TransactionClient,
-): Promise<WorkItem | null> {
-  let at = parentId;
-  for (let hops = 0; at && hops < 16; hops += 1) {
-    const row = await workItemRepository.findById(at, tx);
-    if (!row) return null;
-    if (row.kind === 'epic') return row;
-    at = row.parentId;
-  }
-  return null;
 }
 
 export const decisionConfirmationGateService = {
@@ -201,7 +178,7 @@ export const decisionConfirmationGateService = {
     workItemId: string,
     ctx: ServiceContext,
   ): Promise<DecisionConfirmationBodyDTO | null> {
-    const read = await withWorkspaceContext(ctx, async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const item = await workItemRepository.findById(workItemId, tx);
       if (!item || item.workspaceId !== ctx.workspaceId) return null;
       if (!asksTheConfirmQuestion(item)) return null;
@@ -212,33 +189,12 @@ export const decisionConfirmationGateService = {
       const keys = parse.ok ? parse.supersedes : parse.draft.supersedes;
       const found = await workItemRepository.findByIdentifiers(item.projectId, keys, tx);
       const titles = new Map(found.map((row) => [row.identifier, row.title]));
-      const body = decisionConfirmationBodyOf(
+      return decisionConfirmationBodyOf(
         item,
         await readDecisionRecords(item.id, tx),
         (key) => titles.get(key) ?? null,
       );
-      return { body, epicRow: await nearestEpic(item.parentId, tx), projectId: item.projectId };
     });
-    if (!read?.body) return null;
-    if (!read.epicRow) return read.body;
-    // Read AFTER the transaction: both open their own (a permission set, a workflow's
-    // statuses), and neither guards a write.
-    const [held, statuses] = await Promise.all([
-      projectAccessService.getPermissions(read.projectId, ctx),
-      workflowsService.listStatusesByProject(read.projectId, ctx.workspaceId),
-    ]);
-    const row = read.epicRow;
-    const epic: DecisionEpicDTO = {
-      key: row.identifier,
-      title: row.title,
-      hasDescription: (row.descriptionMd ?? '').trim().length > 0,
-      archived: row.archivedAt !== null,
-      statusCategory: statuses.find((status) => status.key === row.status)?.category ?? null,
-      canPlan: held.has('work_item:edit'),
-    };
-    return read.body.ok
-      ? { ...read.body, port: { ...read.body.port, epic } }
-      : { ...read.body, epic };
   },
 
   /** The overlay's port for a `decision_confirmation` gate — null when the body no longer parses. */

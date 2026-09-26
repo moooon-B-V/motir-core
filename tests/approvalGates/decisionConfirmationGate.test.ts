@@ -25,6 +25,8 @@ const { ApprovalGateVerbNotOfferedError, ApprovalGateStaleSubjectError } =
 const { ApprovalGatePendingError } = await import('@/lib/workItems/errors');
 const { summarizeGateSubjects } = await import('@/lib/approvalGates/subjectSummary');
 const { withWorkspaceContext } = await import('@/lib/workspaces/context');
+const { projectAccessService } = await import('@/lib/services/projectAccessService');
+const { workflowsService } = await import('@/lib/services/workflowsService');
 
 let fx: WorkItemFixture;
 let seq = 0;
@@ -163,7 +165,7 @@ describe('the raise — a complete, unblocked `human` decision is asked', () => 
     });
   });
 
-  it('the body read resolves superseded TITLES, the record count and the governing EPIC', async () => {
+  it('the body read resolves superseded TITLES and the record count, and reads no EPIC', async () => {
     const epic = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'epic', title: 'Exports', descriptionMd: 'The capability.' },
       fx.ctx,
@@ -190,45 +192,41 @@ describe('the raise — a complete, unblocked `human` decision is asked', () => 
       createdAt: new Date('2026-09-02T00:00:00Z'),
     });
 
-    const port = await decisionConfirmationGateService.readPort(item.id, fx.ctx);
-    expect(port?.supersedesItems).toEqual([
-      { key: story.identifier, title: 'Export page' },
-      { key: 'NOPE-404', title: null },
-    ]);
-    expect(port?.recordCount).toBe(2);
-    expect(port?.presentRecordIds[0]).toBe(newest.id);
-    expect(port?.epic).toEqual({
-      key: epic.identifier,
-      title: 'Exports',
-      hasDescription: true,
-      archived: false,
-      statusCategory: 'todo',
-      canPlan: true,
-    });
+    // MOTIR-6350: nothing renders the governing epic since MOTIR-6211 replaced the
+    // overturned band's plain epic entrance with the seeded Re-plan door, so the read
+    // neither walks up to it nor pays for the viewer's permissions and the statuses.
+    const permissions = vi.spyOn(projectAccessService, 'getPermissions');
+    const statuses = vi.spyOn(workflowsService, 'listStatusesByProject');
+    try {
+      const port = await decisionConfirmationGateService.readPort(item.id, fx.ctx);
+      expect(port?.supersedesItems).toEqual([
+        { key: story.identifier, title: 'Export page' },
+        { key: 'NOPE-404', title: null },
+      ]);
+      expect(port?.recordCount).toBe(2);
+      expect(port?.presentRecordIds[0]).toBe(newest.id);
+      expect(port).not.toHaveProperty('epic');
+      expect(permissions).not.toHaveBeenCalled();
+      expect(statuses).not.toHaveBeenCalled();
 
-    // A DEFECTIVE body carries the epic too, and a decision with no epic carries none.
-    await workItemsService.updateWorkItem(item.id, { descriptionMd: '## Decision\nOnly.' }, fx.ctx);
-    const defective = await decisionConfirmationGateService.readBody(item.id, fx.ctx);
-    expect(defective).toMatchObject({ ok: false, epic: { key: epic.identifier } });
-    const loose = await createDecision(COMPLETE);
-    expect((await decisionConfirmationGateService.readPort(loose.id, fx.ctx))?.epic).toBeNull();
-    // Filed below a STORY, the epic is still found — by walking up.
-    seq += 1;
-    const deeper = await workItemsService.createWorkItem(
-      {
-        projectId: fx.projectId,
-        kind: 'task',
-        parentId: story.id,
-        title: `Decide ${seq}`,
-        type: 'decision',
-        executor: 'human',
-        descriptionMd: COMPLETE,
-      },
-      fx.ctx,
-    );
-    expect((await decisionConfirmationGateService.readPort(deeper.id, fx.ctx))?.epic?.key).toBe(
-      epic.identifier,
-    );
+      // A DEFECTIVE body carries no epic either. (The edit itself may read both.)
+      await workItemsService.updateWorkItem(
+        item.id,
+        { descriptionMd: '## Decision\nOnly.' },
+        fx.ctx,
+      );
+      permissions.mockClear();
+      statuses.mockClear();
+      const defective = await decisionConfirmationGateService.readBody(item.id, fx.ctx);
+      expect(defective).toMatchObject({ ok: false });
+      expect(defective).not.toHaveProperty('epic');
+
+      expect(permissions).not.toHaveBeenCalled();
+      expect(statuses).not.toHaveBeenCalled();
+    } finally {
+      permissions.mockRestore();
+      statuses.mockRestore();
+    }
   });
 
   it('the body read is null for a work item that is not a `human` decision', async () => {
