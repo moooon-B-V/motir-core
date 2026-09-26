@@ -122,14 +122,14 @@ async function openRoadmapLevel(page: Page, item: { id: string; identifier: stri
   const loaded = levelLoad(page, item.id);
   await page.goto(`/roadmap?item=${item.identifier}`);
   await loaded;
-  await expect(page.getByTestId('planning-canvas')).toBeVisible({ timeout: FIRST_PAINT_MS });
+  await expect(page.getByRole('application')).toBeVisible({ timeout: FIRST_PAINT_MS });
 }
 
 /** On a canvas already showing `parent`'s level, drill into `child`. */
 async function drillInto(page: Page, child: { id: string }) {
   await node(page, child.id).click();
   const loaded = levelLoad(page, child.id);
-  await page.getByTestId('drill-button').click();
+  await page.getByRole('button', { name: en.roadmap.canvas.openChildren, exact: true }).click();
   await loaded;
 }
 
@@ -168,7 +168,7 @@ test('a cross-story blocker is flagged until the stories carry the edge — on t
     await expect(node(page, y.id)).toContainText(y.identifier);
     await expect(node(page, y.id)).toContainText('in Payments API');
     // The legend names the remedy.
-    await expect(page.getByTestId('edge-legend')).toContainText(LEGEND_MEANING);
+    await expect(page.getByRole('main').getByTestId('edge-legend')).toContainText(LEGEND_MEANING);
     await beat();
   });
 
