@@ -365,8 +365,36 @@ describe('the per-agent layer seam', () => {
     // it. Now every arm must actually fetch something — an arm that only echoes
     // would produce an image advertising an agent that is not in it.
     for (const id of PROFILE_IDS) {
-      expect(armOf(id), `install source for ${id}`).toMatch(/npm_agent |curl |pip install/);
+      expect(armOf(id), `install source for ${id}`).toMatch(
+        /npm_agent |fetch_installer |pip install/,
+      );
     }
+  });
+
+  it('never pipes a remote installer into a shell — each is fetched, checked, then run (MOTIR-6495)', () => {
+    // A pipe executes whatever arrives. A vendor cache once answered the
+    // antigravity arm with a 200 gzip body, and bash "ran" it as
+    // `syntax error near unexpected token ')'`. `fetch_installer` decodes,
+    // shebang-checks, `bash -n`-checks and retries instead (its behaviour is
+    // driven for real in `fetchInstaller.test.ts`; this guards the WIRING).
+    const directives = directivesOf(installAgent);
+    expect(directives).not.toMatch(/\|\s*(\w+=\S+\s+)*(ba)?sh\b/);
+    expect(directives).not.toMatch(/\bcurl\b/);
+    for (const id of ['antigravity', 'cursor', 'goose']) {
+      expect(armOf(id), `vendor script for ${id}`).toMatch(
+        /fetch_installer https:\/\/\S+ "\$INSTALLER"/,
+      );
+      expect(armOf(id), `runs the checked file for ${id}`).toMatch(/bash "\$INSTALLER"/);
+    }
+    // The helper ships beside the script that sources it, before that RUN.
+    const copyAt = dockerfile.indexOf(
+      'packages/cli/sandbox/fetch-installer.sh /usr/local/lib/motir-sandbox/fetch-installer.sh',
+    );
+    expect(copyAt).toBeGreaterThan(-1);
+    expect(copyAt).toBeLessThan(
+      dockerfile.indexOf('RUN /usr/local/lib/motir-sandbox/install-agent.sh "${AGENT}"'),
+    );
+    expect(installAgent).toContain('. "$(dirname "${BASH_SOURCE[0]}")/fetch-installer.sh"');
   });
 
   it('installs claude from the `stable` dist-tag, not `latest` (MOTIR-3192)', () => {
@@ -404,7 +432,7 @@ describe('the per-agent layer seam', () => {
     // invisible to the unprivileged user that actually runs it.
     for (const id of PROFILE_IDS) {
       const arm = armOf(id);
-      if (!arm.includes('curl ')) continue;
+      if (!arm.includes('fetch_installer ')) continue;
       expect(arm, `global install for ${id}`).toMatch(/AGENT_PREFIX/);
     }
     // Under the node-owned agent prefix (MOTIR-6183), never root-owned
