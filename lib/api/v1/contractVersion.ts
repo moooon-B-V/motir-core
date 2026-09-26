@@ -610,6 +610,20 @@
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.40.0` at `b4588d153`, so this claims `1.41.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the FIELD. *
+ * - `1.42.0` — MOTIR-6501 adds `offersRefusalVerdict` (boolean) to the
+ *   `ApprovalGateDecision` component `getWorkItemApprovalGate` answers: whether a refusal
+ *   of this gate, pressed in Motir, must carry a verdict. True on an awaiting
+ *   `design_result`, and on an awaiting `acceptance_result` whose story has an open
+ *   delivery of its own (a story run, `acceptance-refusal-verdict.md` §1); false on every
+ *   other kind and state. `refusalVerdict` may now be set on a story run's
+ *   `acceptance_result` as well.
+ *
+ *   Additive: one new field on an existing component (§8's allowed list); no existing
+ *   field changes meaning. Still a READ — no v1 operation decides a gate.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.41.0` at `70c845f0a`, so this claims `1.42.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.41.0';
+export const V1_CONTRACT_VERSION = '1.42.0';

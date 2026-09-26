@@ -554,6 +554,8 @@ describe('the DTO carries the audit set, and no Prisma model crosses the boundar
       'confirmedRecord',
       // What a DESIGN refusal meant (MOTIR-6421) — null on every other decision.
       'refusalVerdict',
+      // Whether a refusal must carry a verdict (MOTIR-6501) — computed, false once decided.
+      'offersRefusalVerdict',
       // The re-plan an OVERTURN owes (MOTIR-5956) — derived, null on every other gate.
       'replanOwed',
       'createdAt',

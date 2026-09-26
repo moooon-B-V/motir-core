@@ -1602,6 +1602,7 @@ export interface components {
             supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded") | null;
             outcomeRef: string | null;
             refusalVerdict: ("revise" | "re_plan") | null;
+            offersRefusalVerdict: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -5259,6 +5260,7 @@ export interface operations {
                             supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded") | null;
                             outcomeRef: string | null;
                             refusalVerdict: ("revise" | "re_plan") | null;
+                            offersRefusalVerdict: boolean;
                             /** Format: date-time */
                             createdAt: string;
                             /** Format: date-time */

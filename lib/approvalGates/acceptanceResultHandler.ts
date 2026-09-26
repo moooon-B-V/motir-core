@@ -7,7 +7,7 @@ import type {
 } from '@/lib/approvalGates/registry';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
-import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { hasOpenOwnDelivery } from './verdictOffer';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -67,11 +67,12 @@ async function nothingLeftForTheCascade(
 > {
   const { gate, tx } = args;
   const item = requireArgsCard(args, 'acceptance_result', 'acceptanceResultHandler');
-  const openOwn = await workItemDeliveryRepository.countOpenByWorkItem(
-    requireGateCard(gate, 'acceptanceResultHandler'),
-    tx,
-  );
-  if (openOwn > 0) return { terminal: false, reason: 'merge_writes_done' };
+  // The RUN SHAPE, read through the one function the verdict offer reads too
+  // (`verdictOffer.ts`, MOTIR-6501), so the door that asks for a verdict and this
+  // handler never disagree about whether the story is a story run.
+  if (await hasOpenOwnDelivery(requireGateCard(gate, 'acceptanceResultHandler'), tx)) {
+    return { terminal: false, reason: 'merge_writes_done' };
+  }
 
   const [members, terminalByProject] = await Promise.all([
     workItemRepository.findSubtreeMembersForValidity(
