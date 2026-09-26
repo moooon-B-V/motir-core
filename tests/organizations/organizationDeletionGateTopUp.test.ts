@@ -165,6 +165,10 @@ beforeEach(async () => {
   await truncateJobRuns();
   await adminDb.githubInstallation.deleteMany({});
   vi.clearAllMocks();
+  // motir-ai is CONFIGURED for this file (its client is mocked above); the
+  // unconfigured deployment has its own case below.
+  vi.stubEnv('MOTIR_AI_URL', 'http://motir-ai.test');
+  vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc');
   org = await makeOrg();
 });
 
@@ -240,6 +244,29 @@ describe('the LIVE dependency bags', () => {
     expect(
       await adminDb.githubInstallation.count({ where: { organizationId: org.organizationId } }),
     ).toBe(0);
+  });
+
+  it('with NO motir-ai configured the AI steps are skipped, and the org is still erased', async () => {
+    vi.stubEnv('MOTIR_AI_URL', '');
+    vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', '');
+    const id = await scheduleDue(org);
+    const pending = await makeOrg();
+    await schedule(pending);
+    ai.markOrgClosing.mockClear();
+
+    const summary = await organizationErasureSweepService.runDue();
+    expect(summary).toMatchObject({ erased: 1, failed: 0, reconciled: 1 });
+    expect(ai.offboardOrg).not.toHaveBeenCalled();
+    expect(ai.markOrgClosing).not.toHaveBeenCalled();
+
+    const longAgo = new Date(Date.now() - 8 * 365 * DAY_MS);
+    await adminDb.organizationDeletionRequest.update({
+      where: { id },
+      data: { erasedAt: longAgo },
+    });
+    const purge = await organizationRetentionPurgeService.runDue();
+    expect(purge).toMatchObject({ purged: 1, failed: 0 });
+    expect(ai.purgeOrgRetained).not.toHaveBeenCalled();
   });
 
   it('Git offboarding with its default deps and no provisioning login deletes nothing remote', async () => {

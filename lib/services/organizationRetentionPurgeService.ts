@@ -1,3 +1,4 @@
+import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { purgeOrgRetained } from '@/lib/ai/motirAiClient';
 import { retentionCutoff } from '@/lib/organizations/deletion';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
@@ -33,8 +34,10 @@ export interface RetentionPurgeDeps {
   purgeAi: (organizationId: string) => Promise<unknown>;
 }
 
+// With no motir-ai configured there is no retained ledger to purge — the same
+// rule, and the same switch, as the erasure sweep's AI step.
 const LIVE_DEPS: RetentionPurgeDeps = {
-  purgeAi: (id) => purgeOrgRetained(id),
+  purgeAi: async (id) => (isMotirAiConfigured() ? purgeOrgRetained(id) : { skipped: true }),
 };
 
 export interface RetentionPurgeSummary {

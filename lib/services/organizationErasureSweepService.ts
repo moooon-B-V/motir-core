@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { OrganizationErasureStep } from '@/generated/prisma/client';
+import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { markOrgClosing, offboardOrg } from '@/lib/ai/motirAiClient';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { organizationDeletionRequestRepository } from '@/lib/repositories/organizationDeletionRequestRepository';
@@ -91,11 +92,18 @@ export interface ErasureSweepDeps {
   notifyErased: typeof organizationDeletionNotifier.notifyErased;
 }
 
+// ⚠️ A DEPLOYMENT WITH NO MOTIR-AI (self-hosted, or any process without
+// `MOTIR_AI_URL` + `MOTIR_AI_SERVICE_TOKEN`) HAS NO AI TENANT TO OFFBOARD. Calling
+// the client there throws `MotirAiConfigError` on every run, so the org would sit
+// at `erasureStep = workspaces` for ever and never be erased — the DPA §10 promise
+// broken by a configuration that is legitimate. The step is SKIPPED instead, by
+// the product's one switch for "is motir-ai here?" (`isMotirAiConfigured`).
 const LIVE_DEPS: ErasureSweepDeps = {
   offboardGit: (id) => organizationGitOffboardingService.offboardGit(id),
   deleteWorkspace: (input) => workspacesService.deleteWorkspaceForOrganizationErasure(input),
-  offboardAi: (id) => offboardOrg(id),
-  markClosing: (id, dueAt) => markOrgClosing(id, dueAt),
+  offboardAi: async (id) => (isMotirAiConfigured() ? offboardOrg(id) : { skipped: true }),
+  markClosing: async (id, dueAt) =>
+    isMotirAiConfigured() ? markOrgClosing(id, dueAt) : { skipped: true },
   notifyErased: (input) => organizationDeletionNotifier.notifyErased(input),
 };
 
