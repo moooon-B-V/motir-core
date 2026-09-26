@@ -1,3 +1,4 @@
+import { assertOrgNotClosing } from '@/lib/organizations/closingGuard';
 import { withOrgContext } from '@/lib/organizations/context';
 import { orgCan } from '@/lib/organizations/capabilities';
 import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
@@ -136,6 +137,7 @@ export const twoFactorPolicyService = {
         if (!orgCan(membership.role, 'manageOrgSettings')) {
           throw new OrgForbiddenError(input.actorUserId, input.organizationId);
         }
+        await assertOrgNotClosing(input.organizationId, tx);
         return organizationRepository.update(
           input.organizationId,
           { requiresTwoFactor: input.requiresTwoFactor },
@@ -221,6 +223,7 @@ export const twoFactorPolicyService = {
         if (!isWorkspaceManager(access.effectiveRole)) {
           throw new WorkspaceForbiddenError(input.actorUserId, input.workspaceId);
         }
+        await assertOrgNotClosing(access.organizationId, tx);
 
         const workspace = await workspaceRepository.update(
           input.workspaceId,

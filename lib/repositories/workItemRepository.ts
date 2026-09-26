@@ -2393,6 +2393,7 @@ export const workItemRepository = {
       parentId: string | null;
       sprintId: string | null;
       projectId: string;
+      kind: string;
     }>
   > {
     const client = tx ?? dbRead;
@@ -2405,6 +2406,7 @@ export const workItemRepository = {
         parentId: true,
         sprintId: true,
         projectId: true,
+        kind: true,
       },
     });
   },
@@ -2677,27 +2679,35 @@ export const workItemRepository = {
     rootId: string,
     workspaceId: string,
     tx?: Prisma.TransactionClient,
-  ): Promise<Array<{ id: string; identifier: string; status: string; parentId: string | null }>> {
+  ): Promise<
+    Array<{ id: string; identifier: string; status: string; parentId: string | null; kind: string }>
+  > {
     const client = tx ?? dbRead;
     return client.$queryRaw<
-      Array<{ id: string; identifier: string; status: string; parentId: string | null }>
+      Array<{
+        id: string;
+        identifier: string;
+        status: string;
+        parentId: string | null;
+        kind: string;
+      }>
     >`
       WITH RECURSIVE subtree AS (
-        SELECT w."id", w."parentId", w."identifier", w."status"
+        SELECT w."id", w."parentId", w."identifier", w."status", w."kind"::text AS "kind"
           FROM "work_item" w
           WHERE w."id" = ${rootId}
             AND w."workspaceId" = ${workspaceId}
             AND w."archivedAt" IS NULL
             AND w."triagedAt" IS NULL
         UNION ALL
-        SELECT w."id", w."parentId", w."identifier", w."status"
+        SELECT w."id", w."parentId", w."identifier", w."status", w."kind"::text AS "kind"
           FROM "work_item" w
           JOIN subtree s ON w."parentId" = s."id"
           WHERE w."workspaceId" = ${workspaceId}
             AND w."archivedAt" IS NULL
             AND w."triagedAt" IS NULL
       )
-      SELECT "id", "identifier", "status", "parentId" FROM subtree`;
+      SELECT "id", "identifier", "status", "parentId", "kind" FROM subtree`;
   },
 
   /**

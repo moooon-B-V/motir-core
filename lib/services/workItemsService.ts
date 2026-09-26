@@ -1,3 +1,4 @@
+import { isWorkspaceOrgClosing } from '@/lib/organizations/closingGuard';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import {
@@ -132,6 +133,11 @@ import {
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
 import { WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
+import { assertLinkSameLevel, isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
+import {
+  uncoveredCrossParentEdges,
+  type CoverageNodeInfo,
+} from '@/lib/workItems/crossParentCoverage';
 import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/components/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
@@ -233,6 +239,8 @@ import type {
   WorkItemSoftBlockDto,
   WorkItemCoverageAdvisoryDto,
   WorkItemProseAdvisoryDto,
+  WorkItemProseCrossLevelEdgeAdvisoryDto,
+  InvalidEdgeDto,
   WorkItemImplementationProvenanceInput,
   WorkItemRepositoryDto,
   WorkItemPlacementDto,
@@ -1950,6 +1958,16 @@ export const workItemsService = {
       // separate link revision is recorded — they're part of creation, not a
       // later edit.
       if (input.links?.length) {
+        // The positions the same-level rule reads (MOTIR-6411): the new row sits
+        // under its parent, every target at its committed chain — ONE read.
+        const chains = await workItemRepository.findAncestorIdsForItems(
+          [...(row.parentId ? [row.parentId] : []), ...input.links.map((l) => l.targetId)],
+          workspaceId,
+          tx,
+        );
+        const rowAncestors = row.parentId
+          ? [row.parentId, ...(chains.get(row.parentId) ?? [])]
+          : [];
         for (const pending of input.links) {
           const target = await workItemRepository.findById(pending.targetId, tx);
           if (!target) throw new WorkItemNotFoundError(pending.targetId);
@@ -1959,6 +1977,19 @@ export const workItemsService = {
           if (target.workspaceId !== workspaceId) throw new WorkItemNotFoundError(pending.targetId);
 
           const directed = relationshipToLink(pending.relationship, row.id, pending.targetId);
+          // The same-level rule, on the create path too (MOTIR-6369) — a
+          // refusal rolls the whole create back, like every bad link here.
+          const rowEnd = { identifier: row.identifier, kind: row.kind, ancestors: rowAncestors };
+          const targetEnd = {
+            identifier: target.identifier,
+            kind: target.kind,
+            ancestors: chains.get(target.id) ?? [],
+          };
+          assertLinkSameLevel(
+            directed.kind,
+            directed.fromId === row.id ? rowEnd : targetEnd,
+            directed.fromId === row.id ? targetEnd : rowEnd,
+          );
           await workItemLinkRepository.create(
             {
               workspaceId,
@@ -5230,6 +5261,31 @@ export const workItemsService = {
       // editor only needs edit rights on the item they're linking FROM.
       await projectAccessService.assertCanEdit(fromItem.projectId, ctx, tx);
 
+      // A dependency joins two items on the SAME LEVEL (MOTIR-6369): refused
+      // before the insert, so nothing is written. `blocks` arrives here already
+      // flipped to its stored `is_blocked_by` direction.
+      if (input.kind === 'is_blocked_by') {
+        // ONE read for both ends' positions (MOTIR-6411: the level is POSITION).
+        const chains = await workItemRepository.findAncestorIdsForItems(
+          [fromItem.id, toItem.id],
+          fromItem.workspaceId,
+          tx,
+        );
+        assertLinkSameLevel(
+          input.kind,
+          {
+            identifier: fromItem.identifier,
+            kind: fromItem.kind,
+            ancestors: chains.get(fromItem.id) ?? [],
+          },
+          {
+            identifier: toItem.identifier,
+            kind: toItem.kind,
+            ancestors: chains.get(toItem.id) ?? [],
+          },
+        );
+      }
+
       // The forward edge + the `relates_to` reciprocal + the `links.added`
       // revision, via the shared write-core (extracted in 5.8.3 so the
       // auto-relate-on-mention path reuses the exact same logic). `idempotent:
@@ -6907,6 +6963,15 @@ export const workItemsService = {
     // transaction, not inside it: a refusal must not consume a candidate, and
     // flipping an item to `in_progress` and then refusing would strand it.
     await ciAllowanceService.assertDispatchAllowed(ctx);
+    // A CLOSING organization dispatches nothing (MOTIR-6396; `organization-
+    // deletion.md` §3): no card is claimed and nothing is locked. Read per claim,
+    // so a cancel resumes dispatch on the next call with nothing to restart.
+    if (await isWorkspaceOrgClosing(project.workspaceId)) {
+      console.warn('[dispatch] no claim: the organization is scheduled for deletion', {
+        projectId,
+      });
+      return null;
+    }
     // The claim ASSIGNS (MOTIR-4996), and an assignee must be a workspace member
     // — the same pre-flight `claimWorkItem` runs, in the same place: ahead of the
     // transaction so a refusal never takes a lock, and ahead of the ready-set
@@ -7765,7 +7830,14 @@ async function computeWorkItemValidity(
   // The NON-gating soft blocks (MOTIR-6368) — read whatever the verdict.
   const softBlocks = await computeSoftBlocks(root, ctx);
   if (notDone.length === 0) {
-    return { key: root.identifier, valid: true, blockers: [], advisories: [], softBlocks };
+    return {
+      key: root.identifier,
+      valid: true,
+      blockers: [],
+      invalidEdges: [],
+      advisories: [],
+      softBlocks,
+    };
   }
 
   const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -7810,6 +7882,9 @@ async function computeWorkItemValidity(
     edges,
     ctx,
   );
+  const chains = await subtreeChains(root.id, membersById, edges, ctx);
+  const crossLevel = crossLevelEdgeAdvisories(edges, membersById, chains);
+  const invalidEdges = await computeInvalidEdges(edges, membersById, chains, ctx);
   const coverage = await computeSubtreeCoverageAdvisories(notDone, members, ctx);
   // The PATH-REFERENCE family (MOTIR-5424), off the SAME scanned bodies the prose
   // family read — `subjects` is `notDone` mapped in order, so the two zip.
@@ -7826,11 +7901,193 @@ async function computeWorkItemValidity(
   );
   return {
     key: root.identifier,
-    valid: blockers.length === 0,
+    // Finishable AND every cross-parent edge covered (MOTIR-6370). A gate that
+    // asks only "can this be finished?" reads `blockers` (the scope claim does).
+    valid: blockers.length === 0 && invalidEdges.length === 0,
     blockers,
-    advisories: [...prose, ...coverage, ...pathReferences],
+    invalidEdges,
+    advisories: [...prose, ...crossLevel, ...coverage, ...pathReferences],
     softBlocks,
   };
+}
+
+/**
+ * The UNCOVERED CROSS-PARENT edges of a validated subtree (Story MOTIR-6015 ·
+ * MOTIR-6370) — every same-level `blocked_by` FROM a not-done member whose two
+ * ends sit under different parents that carry no matching edge. The rule is
+ * `lib/workItems/crossParentCoverage.ts`; this gathers its rows.
+ *
+ * Two reads at most, and none for a subtree whose edges all stay under one
+ * parent: the parent-pair edges (ONE batched `findBlockedByAmong`), then the
+ * identifiers of the parents a finding names that the subtree walk did not
+ * already carry. An edge whose parent row is not readable here (an out-of-subtree
+ * blocker whose parent is in another project the caller cannot see) still has
+ * its parent id from the edge read, so it is judged; only its NAME falls back to
+ * the id.
+ */
+async function computeInvalidEdges(
+  edges: ReadonlyArray<{
+    fromId: string;
+    blockerId: string;
+    blockerKey: string;
+    blockerKind: string;
+    blockerParentId: string | null;
+  }>,
+  membersById: ReadonlyMap<
+    string,
+    { id: string; identifier: string; kind: string; parentId: string | null }
+  >,
+  chains: ReadonlyMap<string, readonly string[]>,
+  ctx: ServiceContext,
+): Promise<InvalidEdgeDto[]> {
+  const info = new Map<string, CoverageNodeInfo>();
+  for (const m of membersById.values()) {
+    info.set(m.id, { parentId: m.parentId, ancestors: chains.get(m.id) ?? [], kind: m.kind });
+  }
+  for (const e of edges) {
+    if (!info.has(e.blockerId)) {
+      info.set(e.blockerId, {
+        parentId: e.blockerParentId,
+        ancestors: chains.get(e.blockerId) ?? [],
+        kind: e.blockerKind,
+      });
+    }
+  }
+  const coverage = edges.map((e) => ({ blockedId: e.fromId, blockerId: e.blockerId }));
+  // The parent pairs a cross-parent edge could need — read once, then answered.
+  const pairs = coverage.flatMap((e) => {
+    const from = info.get(e.blockedId)?.parentId;
+    const to = info.get(e.blockerId)?.parentId;
+    return from && to && from !== to ? [[from, to] as const] : [];
+  });
+  if (pairs.length === 0) return [];
+  const carried = new Set(
+    (
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemLinkRepository.findBlockedByAmong(
+          [...new Set(pairs.map(([from]) => from))],
+          [...new Set(pairs.map(([, to]) => to))],
+          ctx.workspaceId,
+          tx,
+        ),
+      )
+    ).map((l) => `${l.fromId}\u0000${l.toId}`),
+  );
+  const uncovered = uncoveredCrossParentEdges(
+    coverage,
+    (id) => info.get(id),
+    (from, to) => carried.has(`${from}\u0000${to}`),
+  );
+  if (uncovered.length === 0) return [];
+
+  // Name every parent a finding cites: from the subtree walk where it can, one
+  // read for the rest.
+  const keyOf = new Map<string, string>();
+  for (const m of membersById.values()) keyOf.set(m.id, m.identifier);
+  for (const e of edges) keyOf.set(e.blockerId, e.blockerKey);
+  const unnamed = [
+    ...new Set(
+      uncovered.flatMap((e) => [
+        info.get(e.blockedId)!.parentId!,
+        info.get(e.blockerId)!.parentId!,
+      ]),
+    ),
+  ].filter((id) => !keyOf.has(id));
+  if (unnamed.length > 0) {
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdsInWorkspace(unnamed, ctx.workspaceId, tx),
+    );
+    for (const r of rows) keyOf.set(r.id, r.identifier);
+  }
+  const name = (id: string): string => keyOf.get(id) ?? id;
+  return uncovered
+    .map((e) => ({
+      item: name(e.blockedId),
+      blockedBy: name(e.blockerId),
+      itemParent: name(info.get(e.blockedId)!.parentId!),
+      blockerParent: name(info.get(e.blockerId)!.parentId!),
+    }))
+    .sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));
+}
+
+/**
+ * The ANCESTOR CHAIN (nearest first) of every subtree member and every blocker
+ * its edges reach — the POSITIONS the same-level rule reads (MOTIR-6411,
+ * `docs/decisions/edge-level-is-position.md`). A member's chain is walked up the
+ * subtree read already in hand and finished with the root's own chain; ONE
+ * batched read covers the root and every out-of-subtree blocker.
+ */
+async function subtreeChains(
+  rootId: string,
+  membersById: ReadonlyMap<string, { id: string; parentId: string | null }>,
+  edges: ReadonlyArray<{ blockerId: string }>,
+  ctx: ServiceContext,
+): Promise<Map<string, readonly string[]>> {
+  const outside = [...new Set(edges.map((e) => e.blockerId))].filter((id) => !membersById.has(id));
+  const read = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findAncestorIdsForItems([rootId, ...outside], ctx.workspaceId, tx),
+  );
+  const rootChain = read.get(rootId) ?? [];
+  const chains = new Map<string, readonly string[]>();
+  for (const id of outside) chains.set(id, read.get(id) ?? []);
+  for (const m of membersById.values()) {
+    const up: string[] = [];
+    let cur = m.id === rootId ? null : m.parentId;
+    while (cur !== null && membersById.has(cur)) {
+      up.push(cur);
+      cur = cur === rootId ? null : (membersById.get(cur)!.parentId ?? null);
+    }
+    chains.set(m.id, [...up, ...rootChain]);
+  }
+  return chains;
+}
+
+/**
+ * The CROSS-LEVEL-EDGE advisories for a validated subtree (Story MOTIR-6015 ·
+ * MOTIR-6369 / 6411): one per `blocked_by` a not-done member ALREADY carries to an
+ * item on another level — a different depth below their nearest common ancestor,
+ * or an epic paired with a non-epic (Amendment 1).
+ * A new such edge is refused at every write door; this surfaces the ones drawn
+ * before the rule. Pure over the chains `subtreeChains` read.
+ *
+ * ⚠️ ADVISORY, NEVER A BLOCKER — `valid` / `blockers` are computed without it.
+ */
+function crossLevelEdgeAdvisories(
+  edges: ReadonlyArray<{
+    fromId: string;
+    blockerId: string;
+    blockerKey: string;
+    blockerKind: string;
+  }>,
+  membersById: ReadonlyMap<string, { identifier: string; kind: string }>,
+  chains: ReadonlyMap<string, readonly string[]>,
+): WorkItemProseCrossLevelEdgeAdvisoryDto[] {
+  const out: WorkItemProseCrossLevelEdgeAdvisoryDto[] = [];
+  for (const edge of edges) {
+    const member = membersById.get(edge.fromId);
+    const from = chains.get(edge.fromId);
+    const to = chains.get(edge.blockerId);
+    if (
+      !member ||
+      !from ||
+      !to ||
+      !isCrossLevelEdge(
+        { kind: member.kind, ancestors: from },
+        { kind: edge.blockerKind, ancestors: to },
+      )
+    ) {
+      continue;
+    }
+    out.push({
+      kind: 'shape',
+      item: member.identifier,
+      severity: 'cross-level-edge',
+      blockedBy: edge.blockerKey,
+      itemDepth: from.length,
+      blockedByDepth: to.length,
+    });
+  }
+  return out.sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));
 }
 
 /**

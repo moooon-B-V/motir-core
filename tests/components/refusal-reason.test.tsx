@@ -48,6 +48,7 @@ const GATE: ApprovalGateDTO = {
   decisionSource: null,
   outcomeRef: null,
   confirmedRecord: null,
+  refusalVerdict: null,
   replanOwed: null,
   chosenOption: null,
   createdAt: '2026-09-23T09:00:00.000Z',
@@ -338,6 +339,7 @@ describe('ApprovalRow — the reason REPLACES the details on a refused row only'
     subject: { kind: 'design_result' } as ApprovalRecordDecidedRowDto['subject'],
     chosenOption: null,
     confirmedRecord: null,
+    refusalVerdict: null,
     refusalReason: 'Needs the illustration.\nAnd a heading.',
     ...over,
   });

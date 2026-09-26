@@ -163,7 +163,12 @@ describe('POST /api/v1/scope-claims', () => {
 
   it('an UNFINISHABLE scope is a 200 carrying the blockers that gate it', async () => {
     const { story, kids } = await seedStory(caller, 2);
-    const outsider = await seed(caller.fixture, 'work outside the scope', { kind: 'task' });
+    // One level down under a root of its own — the kid's depth (MOTIR-6411).
+    const elsewhere = await seed(caller.fixture, 'elsewhere', { kind: 'story' });
+    const outsider = await seed(caller.fixture, 'work outside the scope', {
+      kind: 'task',
+      parentId: elsewhere.id,
+    });
     await workItemsService.linkWorkItems(
       { fromId: kids[0]!.id, toId: outsider.id, kind: 'is_blocked_by' },
       caller.ctx,

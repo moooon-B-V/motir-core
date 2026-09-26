@@ -17,6 +17,11 @@
 //   - POST /v1/stripe/checkout-session → a synthetic hosted Checkout URL
 //   - POST /v1/stripe/portal-session   → a synthetic hosted Portal URL
 //   - POST /v1/stripe/seat-quantity    → an applied seat-sync result
+//   - POST/DELETE /v1/orgs/:id/closing  → an organization's billing pauses / resumes
+//   - POST /v1/orgs/:id/offboard        → the AI tenant erased to its billing tombstone
+//   - POST /v1/orgs/:id/purge-retained  → the retained ledger purged
+//     (Story MOTIR-6306 — organization deletion. The shapes are motir-ai's own,
+//     recorded in tests/fixtures/motirAiOrgLifecycleContract.ts.)
 //
 // PER-ORG state comes from a JSON FIXTURE FILE (MOTIR_AI_BILLING_FIXTURE_PATH),
 // re-read on EVERY request — so a spec can REWRITE it mid-test to simulate the
@@ -265,5 +270,44 @@ export function installBillingBoundaryMock(agent: MockAgent): void {
   pool
     .intercept({ path: '/v1/stripe/seat-quantity', method: 'POST' })
     .reply(200, { applied: true, outcome: 'updated' }, json)
+    .persist();
+
+  // The organization-deletion lifecycle (Story MOTIR-6306): scheduling pauses the
+  // org's billing, a cancel resumes it, the erasure sweep offboards the AI tenant
+  // and the seven-year purge removes its ledger. Every route is idempotent in
+  // motir-ai and answers 200, so the boundary answers the success shape.
+  const orgRoute = (suffix: string) => (p: string) =>
+    new RegExp(`^/v1/orgs/[^/?]+/${suffix}$`).test(p.split('?')[0]!);
+  pool
+    .intercept({ path: orgRoute('closing'), method: 'POST' })
+    .reply(200, { changed: true, closing: true }, json)
+    .persist();
+  pool
+    .intercept({ path: orgRoute('closing'), method: 'DELETE' })
+    .reply(200, { changed: true, closing: false }, json)
+    .persist();
+  pool
+    .intercept({ path: orgRoute('offboard'), method: 'POST' })
+    .reply(
+      200,
+      {
+        erased: true,
+        subscriptionsCancelled: 0,
+        codeGraph: {
+          snapshotObjectsDeleted: 0,
+          localRootRemoved: false,
+          coordinationRowsDeleted: 0,
+        },
+        projectsDeleted: 0,
+        indexAllowanceRowsDeleted: 0,
+        indexRunVerdictsDeleted: 0,
+        agentRunsDeleted: 0,
+      },
+      json,
+    )
+    .persist();
+  pool
+    .intercept({ path: orgRoute('purge-retained'), method: 'POST' })
+    .reply(200, { purged: true }, json)
     .persist();
 }

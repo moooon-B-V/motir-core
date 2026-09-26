@@ -579,6 +579,16 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // `playwright-report-bulk-*` artifact that includes them.
   'approval-overlay-walk.spec.ts': 21.0,
   'approvals-tab.spec.ts': 16.0,
+  // Story MOTIR-6070 — PROMOTED out of the acceptance lane (it was
+  // `acceptance-refusal-reason.spec.ts`, MOTIR-6067's receipt; the disposition is in
+  // docs/acceptance-lane-triage.md). One test: a design, a choice and a set of pull
+  // requests sent back with a reason, read back on the overlay, the item page and the
+  // Approvals room. MEASURED locally on 2026-09-26 against a production build in THIS
+  // lane (list reporter, `1 passed`): **28.7 s**, cold — much of it the three reasons
+  // typed at 12 ms a key. Recorded at the ~1.5x this file's calibration note puts
+  // between a local reading and the CI cost: **43.0**. RE-MEASURE from the first green
+  // `playwright-report-bulk-*` artifact that includes it.
+  'refusal-reason.spec.ts': 43.0,
   // MOTIR-5306. Promoted from the acceptance lane (it was
   // `acceptance-design-approval.spec.ts`). Measured LOCALLY (4.2 s, one test,
   // against a production build), not from a green CI run — there is none in this
@@ -651,6 +661,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'onboarding-ran-gate.spec.ts': 14.1,
   'pages-stream.spec.ts': 12.0,
   'org-admin.spec.ts': 8.6,
+  // MOTIR-6405 — measured LOCALLY in one run (47.0 s wall, which includes the
+  // server's first compile of the routes it opens), so an upper bound:
+  // re-measure from its first green CI leg.
+  'org-deletion.spec.ts': 47.0,
   'per-domain-admin-permissions.spec.ts': 12.4,
   'permission-gated-surfaces.spec.ts': 18.0,
   'permission-gated-ui.spec.ts': 14.0,

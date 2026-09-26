@@ -317,6 +317,28 @@ export default defineConfig({
         'lib/users/accountErasure.ts',
         'lib/services/accountErasureSweepService.ts',
         'lib/jobs/definitions/accountErasureSweep.ts',
+        // Story MOTIR-6306 · MOTIR-6404 — the ORGANIZATION-DELETION lifecycle, the
+        // org-tier twin of the account erasure above and gated for the same
+        // reason: it is the only code that makes the DPA §10 thirty-day promise
+        // and the seven-year billing retention true. MEASURED on this branch
+        // against the story's own specs (tests/organizations/organization*,
+        // tests/permissions/closingOrganization.test.ts and
+        // tests/integration/organizations/organizationDeletionLifecycle.test.ts)
+        // before being pinned below; two branch floors sit under 90 with their
+        // reasons stated at the pin.
+        'lib/organizations/deletion.ts',
+        'lib/organizations/closingGuard.ts',
+        'lib/repositories/organizationDeletionRequestRepository.ts',
+        'lib/mappers/organizationDeletionMappers.ts',
+        'lib/services/organizationDeletionService.ts',
+        'lib/services/organizationDeletionNotifier.ts',
+        'lib/services/organizationGitOffboardingService.ts',
+        'lib/services/organizationErasureSweepService.ts',
+        'lib/services/organizationRetentionPurgeService.ts',
+        'lib/jobs/definitions/organizationDeletionReminders.ts',
+        'lib/jobs/definitions/organizationErasureSweep.ts',
+        'lib/jobs/definitions/organizationRetentionPurge.ts',
+        'app/api/organizations/**/deletion/route.ts',
         'lib/repositories/publicFollowRepository.ts',
         'lib/services/publicFollowService.ts',
         'lib/services/publicFollowDigestService.ts',
@@ -3551,6 +3573,99 @@ export default defineConfig({
           lines: 90,
           functions: 90,
           branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-6306 · MOTIR-6404 — measured on this branch against the
+        // story's specs (see the `include` note): every file at 100 on every axis
+        // except organizationDeletionService (branches 91.1) and the two below.
+        'lib/organizations/deletion.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/organizations/closingGuard.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/organizationDeletionRequestRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/organizationDeletionMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/organizationDeletionService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/organizationGitOffboardingService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/organizationRetentionPurgeService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/organizationDeletionReminders.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/organizationErasureSweep.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/organizationRetentionPurge.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/organizations/**/deletion/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ⚠️ BRANCH floor 88, not 90 — measured 88.64. The five uncovered arms are
+        // the claim's two `skip` returns for a row that vanished or is no longer
+        // the org's open request between `listDue` and the lock, the tombstone's
+        // `organization ?? ERASED_ORGANIZATION_NAME` for an org row that cannot
+        // vanish (its request's FK is `Restrict`), and `todo('tombstone')` /
+        // `if (notice)` false — states no persisted row can reach, since the
+        // tombstone step and `erased` commit together.
+        'lib/services/organizationErasureSweepService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 88,
+          statements: 90,
+        },
+        // ⚠️ BRANCH floor 81, not 90 — measured 81.4. The uncovered arms are all
+        // unreachable by construction: `orgSnapshot` / `loadContext` returning
+        // null for an org that cannot vanish under its request (FK `Restrict`),
+        // the reminder's `threshold === undefined` (the read's horizon IS the
+        // largest threshold), and `record`'s non-P2002 rethrow.
+        'lib/services/organizationDeletionNotifier.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 81,
           statements: 90,
         },
         // ⚠️ This one's BRANCH floor is 78, not 90, and the reason is stated

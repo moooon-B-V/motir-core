@@ -129,8 +129,14 @@ export async function seedPlansReview(email: string): Promise<PlansReviewSeed> {
   );
   // A committed card the first proposal declares a dependency on, archived below
   // after `plannedAt` — the surviving reason that keeps a badge on the canvas.
+  // It hangs one level down under a story of its own — the proposal's depth, since
+  // a blocked_by never crosses levels (MOTIR-6411).
+  const blockerHome = await workItemsService.createWorkItem(
+    { projectId, kind: 'story', title: 'Design epic' },
+    ctx,
+  );
   const doomedBlocker = await workItemsService.createWorkItem(
-    { projectId, kind: 'task', title: 'Design spike' },
+    { projectId, kind: 'task', title: 'Design spike', parentId: blockerHome.id },
     ctx,
   );
 

@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { ApprovalGateControl } from '@/components/approvals/ApprovalGateControl';
 import { GateCallToActionBand } from '@/components/approvals/GateCallToActionBand';
+import { useRefusalReplanSlots } from '@/components/approvals/RefusalReplan';
 import { useDecidedGate } from '@/lib/approvals/decidedGates';
 import { DesignResultPanel } from './DesignResultPanel';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
@@ -69,7 +70,24 @@ export interface DesignResultSectionProps {
    * (`docs/decisions/approval-gates.md` §2).
    */
   routedToViewer: boolean;
+  /**
+   * `WorkItemPlanEntrance`'s condition for this reader on this card (Story MOTIR-6070 ·
+   * MOTIR-6427). A design sent back with **Re-plan** keeps a Re-plan with AI door on its
+   * record when true; omitted, no door.
+   */
+  canReplan?: boolean;
+  /** Where that door opens the planner — the card's PARENT (§10h), or the card itself
+   *  when it has none. Defaults to the card. */
+  replanKey?: string;
 }
+
+/** The slot hook needs a gate on every render; a section with none offers no door. */
+const NO_GATE = {
+  id: '',
+  kind: 'design_result',
+  state: 'awaiting',
+  refusalVerdict: null,
+} as const;
 
 export function DesignResultSection({
   evidence,
@@ -80,6 +98,8 @@ export function DesignResultSection({
   itemIdentifier,
   routedToLabel,
   routedToViewer,
+  canReplan = false,
+  replanKey,
 }: DesignResultSectionProps) {
   const tDesign = useTranslations('approvalGate.designResult');
 
@@ -87,6 +107,16 @@ export function DesignResultSection({
   // not yet caught up. A hook must run unconditionally, and no gate id is empty.
   const announced = useDecidedGate(gate?.id ?? '');
   const shown = gate?.state === 'awaiting' && announced ? announced.gate : gate;
+  // THE RE-PLAN WITH AI DOOR on a design sent back with Re-plan (MOTIR-6427; design 4a) —
+  // the record's own line. Never the ask: that is the presser's, in the overlay, and a
+  // reload or another reader sees only the door. Null for a Revise (4b) and a GitHub or
+  // pre-verdict refusal (4d).
+  const { door: replanDoor } = useRefusalReplanSlots({
+    gate: shown ?? NO_GATE,
+    itemKey: replanKey ?? itemIdentifier,
+    replan: { canReplan },
+    sectioned: true,
+  });
 
   // ⚠️ WHICH BYTES THE PORT SHOWS IS DECIDED HERE, AND THE ANSWER IS NOT
   // ALWAYS `evidence` (MOTIR-5033; ADR §6c).
@@ -179,6 +209,7 @@ export function DesignResultSection({
       // server's `design_evidence.pinned_at`, or what the overlay's decide
       // response said until that render arrives (MOTIR-5265's in-browser half).
       filesKept={subject ? subject.filesKept : (announced?.filesKept ?? null)}
+      recordDetail={replanDoor}
       onDecide={noDecisionHere}
     />
   );

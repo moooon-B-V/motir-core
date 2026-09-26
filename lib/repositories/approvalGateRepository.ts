@@ -3,6 +3,7 @@ import {
   type ApprovalGate,
   type ApprovalGateAuthority,
   type ApprovalGateDecisionSource,
+  type ApprovalGateRefusalVerdict,
   type ApprovalGateKind,
   type ApprovalGateState,
   type ApprovalGateSupersedeCause,
@@ -301,6 +302,28 @@ export const approvalGateRepository = {
   },
 
   /**
+   * The most recently DECIDED gate on one work item, of ANY kind (Story MOTIR-6070 ·
+   * MOTIR-6422) — the read the CHANGES REQUESTED prompt section and `get_work_item`'s
+   * `latestRefusal` answer from. The caller keeps it only when its state is
+   * `changes_requested`.
+   *
+   * ⚠️ DELIBERATELY NOT {@link findLatestByWorkItem}: that one is per-KIND and prefers
+   * an AWAITING row (the live question). This question is *what was the last thing a
+   * person decided about this card*, across kinds — so awaiting and superseded rows
+   * (whose `decidedAt` is NULL) are not candidates, and the order is over DECISIONS
+   * (`decidedAt`), with `createdAt`/`id` only as deterministic tie-breaks.
+   */
+  async findLatestDecidedByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<ApprovalGate | null> {
+    return tx.approvalGate.findFirst({
+      where: { workItemId, decidedAt: { not: null }, state: { notIn: ['awaiting', 'superseded'] } },
+      orderBy: [{ decidedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
+  /**
    * The most recently DECIDED `approved` gate of one kind, for MANY work items
    * — arm (a) of `design-result.md` AMENDMENT 5 Q2's ladder (Story MOTIR-5553 ·
    * Subtask MOTIR-5557). Returned as a MAP keyed by work-item id.
@@ -392,6 +415,9 @@ export const approvalGateRepository = {
     /** WHY it was withdrawn, for the refusal's sentence (MOTIR-5667). Read-only:
      *  nothing writes from this snapshot. */
     supersededCause: ApprovalGateSupersedeCause | null;
+    /** The design verdict (MOTIR-6421) — read by the seed guard, which accepts a
+     *  design refusal only with `re_plan` (MOTIR-6424). Never written from. */
+    refusalVerdict: ApprovalGateRefusalVerdict | null;
   } | null> {
     const rows = await tx.$queryRaw<
       Array<{
@@ -407,6 +433,7 @@ export const approvalGateRepository = {
         decidedByLabel: string | null;
         subjectVersion: string | null;
         supersededCause: ApprovalGateSupersedeCause | null;
+        refusalVerdict: ApprovalGateRefusalVerdict | null;
       }>
     >`
       SELECT "id",
@@ -419,6 +446,9 @@ export const approvalGateRepository = {
              "decided_by_id" AS "decidedById",
              "decided_at"    AS "decidedAt",
              "superseded_cause" AS "supersededCause",
+             -- READ for the seed guard (MOTIR-6424): a design refusal seeds a
+             -- re-plan only with the re_plan verdict.
+             "refusal_verdict" AS "refusalVerdict",
              -- READ for the stale check (MOTIR-5234): what the question was asked
              -- about, compared with the stamp the reader pressed with.
              "subject_version" AS "subjectVersion",
@@ -510,6 +540,10 @@ export const approvalGateRepository = {
       /** What a CONFIRMED decision's record was (MOTIR-5954) — null on every other
        *  decision. */
       confirmedRecord: ConfirmedRecord | null;
+      /** What a Motir-pressed `design_result` REFUSAL meant (MOTIR-6421; ADR §10d) —
+       *  null on every other decision. Written HERE, in the deciding write, because the
+       *  decided-row trigger refuses any later amendment. */
+      refusalVerdict: ApprovalGateRefusalVerdict | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<ApprovalGate> {
@@ -685,6 +719,33 @@ export const approvalGateRepository = {
   ): Promise<number> {
     const result = await tx.approvalGate.updateMany({
       where: { workItemId, state: 'awaiting' },
+      data: { state: 'superseded', supersededCause: cause },
+    });
+    return result.count;
+  },
+
+  /**
+   * RETIRE every `awaiting` gate on one work item EXCEPT ONE — the withdraw a
+   * gate-owned return to To do performs (Story MOTIR-6070 · MOTIR-6423;
+   * `docs/decisions/design-refusal-verdict.md` §2).
+   *
+   * The sibling of {@link supersedeAllAwaitingByWorkItem}, and the exclusion is the
+   * whole reason it exists: a handler that returns the card to To do runs INSIDE the
+   * decide door, BEFORE the door's deciding write, so the gate being decided is still
+   * `awaiting` while this runs. The all-gates form would supersede the very decision
+   * being made — and the door's deciding write would then land on a `superseded` row.
+   * `id: { not: exceptGateId }` keeps that one row out; every other awaiting question
+   * about the card is withdrawn with the caller's cause, writing `state` and `cause`
+   * and nothing else, exactly as the pull-back rule does.
+   */
+  async supersedeOtherAwaitingByWorkItem(
+    workItemId: string,
+    exceptGateId: string,
+    cause: LiveSupersedeCause,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.approvalGate.updateMany({
+      where: { workItemId, state: 'awaiting', id: { not: exceptGateId } },
       data: { state: 'superseded', supersededCause: cause },
     });
     return result.count;
@@ -1295,6 +1356,8 @@ const RECORD_GATE_SELECT = {
   chosenOption: true,
   // What a CONFIRMED decision's record was (MOTIR-5961) — its row says with or without.
   confirmedRecord: true,
+  // What a design REFUSAL meant (MOTIR-6421) — the mapper keeps it on `changes_requested`.
+  refusalVerdict: true,
 } as const satisfies Prisma.ApprovalGateSelect;
 
 /** One row of the Approvals room's read, as Prisma returns it. */

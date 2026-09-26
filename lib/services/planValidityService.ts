@@ -25,8 +25,10 @@ import {
   type CoverageChild,
 } from '@/lib/workItems/containerCoverage';
 import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
+import { uncoveredCrossParentEdges, type CoverageEdge } from '@/lib/workItems/crossParentCoverage';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type {
+  InvalidEdgeDto,
   WorkItemCoverageAdvisoryDto,
   WorkItemProseAdvisoryDto,
   WorkItemSoftBlockDto,
@@ -444,6 +446,61 @@ async function projectedCoverageAdvisories(
   return advisories;
 }
 
+/**
+ * The UNCOVERED CROSS-PARENT edges over a projection (Story MOTIR-6015 ·
+ * MOTIR-6370) — the committed walk's twin (`workItemsService`'s
+ * `computeInvalidEdges`), asked of the tree the plan would leave: proposed
+ * parents, proposed kinds, and every way a plan adds or removes an edge (an
+ * `add`'s `blockedByRefs`, a `modify`'s `blockedByAdd` / `blockedByRemove`, on a
+ * child or on a parent) are already folded into `proj.blockedBy` and
+ * `proj.nodes`. No read: the projection holds the whole project.
+ *
+ * A carried-in cross-project blocker has no projected parent, so its edge is
+ * exempt — there is no parent edge the plan could be asked for. A proposal is
+ * named by its temp-ref, as everywhere else in this service.
+ */
+function projectedInvalidEdges(proj: Projection, memberIds: ReadonlySet<string>): InvalidEdgeDto[] {
+  const edges: CoverageEdge[] = [];
+  for (const memberId of memberIds) {
+    const member = proj.nodes.get(memberId)!;
+    if (isDone(proj, member)) continue;
+    for (const blockerId of proj.blockedBy.get(memberId) ?? []) {
+      if (proj.nodes.has(blockerId)) edges.push({ blockedId: memberId, blockerId });
+    }
+  }
+  const node = (id: string) => proj.nodes.get(id);
+  // Each end's PROJECTED position (MOTIR-6411): its ancestor chain up the
+  // projected parents. A carried-in cross-project node has no projected parent,
+  // which reads as a root — its edge is then cross-level or parent-exempt,
+  // never falsely reported uncovered.
+  const chainOf = (id: string): string[] => {
+    const up: string[] = [];
+    const seen = new Set<string>([id]);
+    let cur = node(id)?.parentId ?? null;
+    while (cur !== null && !seen.has(cur) && proj.nodes.has(cur)) {
+      up.push(cur);
+      seen.add(cur);
+      cur = node(cur)!.parentId;
+    }
+    return up;
+  };
+  return uncoveredCrossParentEdges(
+    edges,
+    (id) => {
+      const n = node(id);
+      return n ? { parentId: n.parentId, ancestors: chainOf(id), kind: n.kind } : undefined;
+    },
+    (from, to) => proj.blockedBy.get(from)?.has(to) ?? false,
+  )
+    .map((e) => ({
+      item: node(e.blockedId)!.identifier,
+      blockedBy: node(e.blockerId)!.identifier,
+      itemParent: node(node(e.blockedId)!.parentId!)?.identifier ?? node(e.blockedId)!.parentId!,
+      blockerParent: node(node(e.blockerId)!.parentId!)?.identifier ?? node(e.blockerId)!.parentId!,
+    }))
+    .sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));
+}
+
 export const planValidityService = {
   /**
    * Is the PROJECTED subtree of `targetKey` finishable, once `planId` materializes?
@@ -516,10 +573,12 @@ export const planValidityService = {
     // Prose families first, then COVERAGE — the committed verdict's order.
     const prose = await projectedProseAdvisories(proj, memberIds, ctx);
     const coverage = await projectedCoverageAdvisories(proj, memberIds, ctx);
+    const invalidEdges = projectedInvalidEdges(proj, memberIds);
     return {
       key: root.identifier,
-      valid: blockers.length === 0,
+      valid: blockers.length === 0 && invalidEdges.length === 0,
       blockers,
+      invalidEdges,
       advisories: [...prose, ...coverage],
       softBlocks: await projectedSoftBlocks(proj, root.id, ctx),
     };
@@ -621,13 +680,19 @@ export const planValidityService = {
     // SAME `runPersistGate` `approvePlan` runs, as a read.
     const rejections = await plansService.checkApprovability(planId, ctx);
 
+    // THE THIRD (MOTIR-6370): every same-level cross-parent edge the projected
+    // parents do not carry. A validation verdict only — neither the append nor
+    // approve refuses on it, because a titles-first pass appends children before
+    // it may have drawn every parent edge.
+    const invalidEdges = projectedInvalidEdges(proj, memberIds);
     return {
       planId,
-      // Both halves, so a caller reading only `valid` cannot get a false green —
+      // Every half, so a caller reading only `valid` cannot get a false green —
       // which is exactly the reading that failed here.
-      valid: blockers.length === 0 && rejections.length === 0,
+      valid: blockers.length === 0 && rejections.length === 0 && invalidEdges.length === 0,
       blockers,
       rejections,
+      invalidEdges,
     };
   },
 

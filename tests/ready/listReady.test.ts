@@ -480,7 +480,11 @@ describe('getNextReady — single dispatch', () => {
       },
       fx.ctx,
     );
-    const blocker = await make(fx, { title: 'gate' });
+    // The item's sibling — same depth, so the edge is same-level (MOTIR-6411).
+    const blocker = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'gate', parentId: parent.id },
+      fx.ctx,
+    );
     await block(fx, item.id, blocker.id);
     await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
 

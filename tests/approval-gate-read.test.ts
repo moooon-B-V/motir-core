@@ -191,6 +191,7 @@ describe('approvalGatesService.getAwaitingForWorkItem', () => {
         stamp: DECIDED_WITHOUT_A_READER,
         gateId: gate.id,
         decision: 'request_changes',
+        refusalVerdict: 'revise',
         noteMd: 'Needs changes.',
         source: 'ui',
       },
@@ -374,6 +375,7 @@ describe('canDecide AGREES WITH THE DOOR over the whole authority matrix (MOTIR-
             decision: verb,
             source: 'ui',
             noteMd: verb === 'request_changes' ? 'Needs changes.' : null,
+            refusalVerdict: verb === 'request_changes' ? 'revise' : null,
           },
           ctx,
         );

@@ -1,4 +1,10 @@
-import type { ApprovalGate, ApprovalGateKind, Prisma, WorkItem } from '@/generated/prisma/client';
+import type {
+  ApprovalGate,
+  ApprovalGateKind,
+  ApprovalGateRefusalVerdict,
+  Prisma,
+  WorkItem,
+} from '@/generated/prisma/client';
 import type { ChosenOption } from '@/lib/approvalGates/choiceOptions';
 import type { ConfirmedRecord } from '@/lib/approvalGates/decisionConfirmationRecord';
 import type { PermissionKey } from '@/lib/permissions/catalog';
@@ -253,6 +259,15 @@ export interface GateEffectArgs extends GateRoutingArgs {
    * hold, so an absent or stale one can never record a pick.
    */
   choice?: { optionId: string };
+  /**
+   * WHAT THE REFUSAL MEANT (Story MOTIR-6070 · MOTIR-6421; ADR `approval-gates.md` §10d)
+   * — `revise` or `re_plan`, on a `request_changes` a person pressed in Motir on a
+   * `design_result` gate, where the door REQUIRES one. Null on every other verb, kind
+   * and source: the door refuses a verdict anywhere else (`refusal_verdict_not_offered`),
+   * so a handler that branches on it only ever sees one the design refusal carried.
+   * The door writes it onto the row in the deciding write; a handler only reads it.
+   */
+  refusalVerdict: ApprovalGateRefusalVerdict | null;
   /**
    * What the kind's {@link GateHandler.beforeTransaction} read before the door's
    * transaction opened (MOTIR-6035), passed back untouched. Absent for a kind without

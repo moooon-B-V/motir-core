@@ -22,6 +22,7 @@ import type {
 import { splitPlanBody } from '@/lib/markdown/planBody';
 import type { DesignVerdictDto } from '@/lib/dto/designAccess';
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
+import type { LatestRefusalDTO } from '@/lib/dto/approvalGate';
 
 // The canonical DISPATCH-PROMPT grammar (Story 7.9 · MOTIR-1802) — the
 // open-core, deterministic rebuild of the cancelled 7.7.2 `generate_prompt` job.
@@ -288,6 +289,15 @@ export interface ConfirmedDecisionForPrompt {
   resultingDirectionMd: string;
 }
 
+/**
+ * One LATEST REFUSAL as the prompt renders it (Story MOTIR-6070 · MOTIR-6422) —
+ * `approvalGatesService.latestRefusalFor`'s answer, plus the KEY of the card it hangs
+ * on, because a run's leg can be handed its run target's refusal as well as its own.
+ */
+export interface ChangesRequestedForPrompt extends LatestRefusalDTO {
+  key: string;
+}
+
 export interface DispatchPromptSource {
   /** The `PROD-<n>` identifier. */
   key: string;
@@ -347,6 +357,15 @@ export interface DispatchPromptSource {
    * to one without the field, which is every card that is not a monitor bug.
    */
   errorEvidence?: MonitorIssueLinkDto[];
+  /**
+   * The LATEST REFUSALS this run must answer (Story MOTIR-6070 · MOTIR-6422; ADR
+   * `approval-gates.md` §10h note 4) — for this card, and for its run target when the
+   * run was launched against another item — each present only when that card's most
+   * recently DECIDED gate, of ANY kind, is `changes_requested`. Rendered as the
+   * CHANGES REQUESTED section. Omitted or EMPTY renders nothing: a card nobody sent
+   * back gets byte-identically the prompt it got before the field existed.
+   */
+  changesRequested?: ChangesRequestedForPrompt[];
   parent: { key: string; title: string } | null;
   projectName: string;
   /** The project key, e.g. `PROD` — the identifier prefix. */
@@ -1247,9 +1266,77 @@ function contextSection(
   // take is something the agent must know BEFORE it starts.
   facts.push(...confirmedDecisionsSection(src.confirmedDecisions ?? []));
 
+  // The REASON the last attempt was sent back (MOTIR-6422) — the last gate-derived
+  // block, directly above the card body it changes how to read.
+  facts.push(...changesRequestedSection(src.changesRequested ?? []));
+
   facts.push('', 'CARD DESCRIPTION');
   facts.push('', narrative.length > 0 ? narrative : '(The card carries no description body.)');
   return facts;
+}
+
+/** How the prompt names the surface a refusal arrived through. */
+const REFUSAL_SOURCE_LABEL: Record<NonNullable<LatestRefusalDTO['decisionSource']>, string> = {
+  ui: 'in Motir',
+  api: 'through the Motir API',
+  mcp: 'through Motir MCP',
+  github: 'in a GitHub review',
+};
+
+/** What each design verdict tells the next run (MOTIR-6421; `design-refusal-verdict.md`). */
+const REFUSAL_VERDICT_LINE: Record<NonNullable<LatestRefusalDTO['refusalVerdict']>, string> = {
+  revise: 'Revise — the reviewer asked for this work to be revised.',
+  re_plan: 'Re-plan — the reviewer judged the plan around this work wrong.',
+};
+
+/**
+ * CHANGES REQUESTED (Story MOTIR-6070 · Subtask MOTIR-6422; ADR `approval-gates.md`
+ * §10h note 4) — the reason the last attempt was sent back, handed to the next one.
+ *
+ * Keyed on "the latest DECISION on the card was a refusal", never on a gate kind: a
+ * design sent back and a story's acceptance sent back (MOTIR-6071) render the same
+ * block. An approval after the refusal removes it — the service answers null — so
+ * it is never shown for a question that has since been answered yes.
+ *
+ * ⚠️ THE REASON IS QUOTED VERBATIM. A GitHub review submitted with no body has no
+ * reason, and says so in §10b's words — never a blank, and never the Motir wording,
+ * because nobody in Motir was asked.
+ *
+ * EMPTY renders nothing: almost every card was never sent back.
+ */
+function changesRequestedSection(refusals: readonly ChangesRequestedForPrompt[]): string[] {
+  if (refusals.length === 0) return [];
+  const lines: string[] = ['', 'CHANGES REQUESTED — the last attempt was sent back, and why'];
+  for (const refusal of refusals) {
+    const who = refusal.decidedByLabel ?? 'somebody no longer resolvable';
+    const where = refusal.decisionSource ? ` ${REFUSAL_SOURCE_LABEL[refusal.decisionSource]}` : '';
+    lines.push(
+      '',
+      `  ${refusal.key} — its ${refusal.kind} gate was refused`,
+      `    by ${who}${where}, on ${refusal.decidedAt}`,
+      `    refused version: ${refusal.subjectVersion ?? 'not recorded'}`,
+    );
+    if (refusal.refusalVerdict) {
+      lines.push(`    verdict: ${REFUSAL_VERDICT_LINE[refusal.refusalVerdict]}`);
+    }
+    lines.push('    reason (verbatim):');
+    if (refusal.noteMd !== null && refusal.noteMd.trim().length > 0) {
+      lines.push(...indent(refusal.noteMd, '      '));
+    } else {
+      lines.push(
+        refusal.decisionSource === 'github'
+          ? '      (no reason given on GitHub)'
+          : '      (no reason was recorded)',
+      );
+    }
+  }
+  lines.push(
+    '',
+    '  ADDRESS THIS REASON IN THIS ATTEMPT. Do not hand back the refused version',
+    '  unchanged: change what the reason names, and say in your outcome report how',
+    '  you answered it.',
+  );
+  return lines;
 }
 
 /**

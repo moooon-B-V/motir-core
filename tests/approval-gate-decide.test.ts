@@ -292,8 +292,8 @@ describe('approvalGatesService.decide — the DISCRIMINATOR: `done` has exactly 
   });
 });
 
-describe('approvalGatesService.decide — request_changes records and moves NOTHING (ADR §3)', () => {
-  it('records the decision and changes no work item status', async () => {
+describe('approvalGatesService.decide — request_changes records the decision and returns the design to To do (design-refusal-verdict.md §1)', () => {
+  it('records the decision and writes the project’s initial To-do status', async () => {
     const { item, gate } = await designSubtaskWithGate();
 
     const result = await approvalGatesService.decide(
@@ -301,6 +301,7 @@ describe('approvalGatesService.decide — request_changes records and moves NOTH
         stamp: DECIDED_WITHOUT_A_READER,
         gateId: gate.id,
         decision: 'request_changes',
+        refusalVerdict: 'revise',
         source: 'ui',
         noteMd: 'The port is too short.',
       },
@@ -309,11 +310,14 @@ describe('approvalGatesService.decide — request_changes records and moves NOTH
 
     expect(result.gate.state).toBe('changes_requested');
     expect(result.gate.noteMd).toBe('The port is too short.');
-    expect(result.effect.statusWritten).toBeNull();
-    expect(result.effect.statusDeferredReason).toBe('request_changes_moves_nothing');
+    // MOTIR-6423: a design sent back goes to To do on either verdict, and the decided
+    // row names it — the ADR §3 "moves nothing" rule is amended by
+    // `design-refusal-verdict.md` §1.
+    expect(result.effect).toEqual({ statusWritten: 'todo' });
+    expect(result.gate.outcomeRef).toBe('todo');
 
-    const unmoved = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
-    expect(unmoved.status).toBe('in_review');
+    const moved = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(moved.status).toBe('todo');
   });
 });
 
@@ -335,6 +339,7 @@ describe('approvalGatesService.decide — CONCURRENCY: two presses, one decision
           stamp: DECIDED_WITHOUT_A_READER,
           gateId: gate.id,
           decision: 'request_changes',
+          refusalVerdict: 'revise',
           noteMd: 'Needs changes.',
           source: 'ui',
         },
@@ -378,6 +383,7 @@ describe('approvalGatesService.decide — state refusals', () => {
           stamp: DECIDED_WITHOUT_A_READER,
           gateId: gate.id,
           decision: 'request_changes',
+          refusalVerdict: 'revise',
           noteMd: 'Needs changes.',
           source: 'ui',
         },
@@ -393,6 +399,7 @@ describe('approvalGatesService.decide — state refusals', () => {
         stamp: DECIDED_WITHOUT_A_READER,
         gateId: gate.id,
         decision: 'request_changes',
+        refusalVerdict: 'revise',
         noteMd: 'Needs changes.',
         source: 'ui',
       },
@@ -472,6 +479,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
           decision: verb,
           source: 'ui',
           noteMd: verb === 'request_changes' ? 'Needs changes.' : null,
+          refusalVerdict: verb === 'request_changes' ? 'revise' : null,
         },
         { userId: reporter.id, workspaceId: fx.workspaceId },
       );
@@ -498,6 +506,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
             decision: verb,
             source: 'ui',
             noteMd: verb === 'request_changes' ? 'Needs changes.' : null,
+            refusalVerdict: verb === 'request_changes' ? 'revise' : null,
           },
           { userId: reporter.id, workspaceId: fx.workspaceId },
         ),
@@ -519,6 +528,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
           decision: verb,
           source: 'ui',
           noteMd: verb === 'request_changes' ? 'Needs changes.' : null,
+          refusalVerdict: verb === 'request_changes' ? 'revise' : null,
         },
         { userId: assignee.id, workspaceId: fx.workspaceId },
       );
@@ -545,6 +555,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
           decision: verb,
           source: 'ui',
           noteMd: verb === 'request_changes' ? 'Needs changes.' : null,
+          refusalVerdict: verb === 'request_changes' ? 'revise' : null,
         },
         { userId: admin.id, workspaceId: fx.workspaceId },
       );
@@ -758,6 +769,7 @@ describe('the ESCAPE HATCH is the `approval:decide_any` PERMISSION, never a work
           decision: verb,
           source: 'ui',
           noteMd: verb === 'request_changes' ? 'Needs changes.' : null,
+          refusalVerdict: verb === 'request_changes' ? 'revise' : null,
         },
         ctx,
       );

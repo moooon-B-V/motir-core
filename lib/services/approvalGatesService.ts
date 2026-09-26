@@ -3,16 +3,19 @@ import type {
   ApprovalGateAuthorityDTO,
   ApprovalGateDTO,
   ApprovalGateDecisionSourceDTO,
+  ApprovalGateRefusalVerdictDTO,
   ApprovalGateKindDTO,
   ApprovalGatePendingPayloadDTO,
   EarlierApprovalDTO,
   HeldTransitionDTO,
+  LatestRefusalDTO,
   ApprovalQueueDto,
   ApprovalQueueRowDto,
   ApprovalRecordsPageDto,
   GateDecision,
   PendingDecisionDTO,
 } from '@/lib/dto/approvalGate';
+import { APPROVAL_GATE_REFUSAL_VERDICTS } from '@/lib/dto/approvalGate';
 import type { GateEffect } from '@/lib/approvalGates/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PermissionKey } from '@/lib/permissions/catalog';
@@ -122,6 +125,8 @@ const CHOICE_KIND = 'decision_choice';
 /** The one kind whose refusal is OVERTURN rather than `request_changes` (ADR §1's
  *  MOTIR-5952 amendment, point 6). */
 const CONFIRMATION_KIND = 'decision_confirmation';
+/** The one kind whose Motir-pressed refusal carries a VERDICT (ADR §10d, MOTIR-6421). */
+const VERDICT_KIND = 'design_result';
 /** The one kind that offers no `request_changes` because a plan is changed by TALKING
  *  to the planner (ADR §11.4, MOTIR-6035). */
 const PLAN_KIND = 'plan_approval';
@@ -137,6 +142,14 @@ export interface DecideGateInput {
   optionId?: string | null;
   /** Why they said yes, or what they sent back. Free text, optional. */
   noteMd?: string | null;
+  /**
+   * WHAT THE REFUSAL MEANT (Story MOTIR-6070 · MOTIR-6421; ADR `approval-gates.md` §10d) —
+   * `revise` or `re_plan`. REQUIRED on a `request_changes` a person presses on a
+   * `design_result` gate (`refusal_verdict_required`), and REFUSED on every other kind,
+   * verb and source (`refusal_verdict_not_offered`) — a GitHub-synced refusal carries
+   * none, because nobody was asked. Stored in the deciding write beside `noteMd`.
+   */
+  refusalVerdict?: ApprovalGateRefusalVerdictDTO | null;
   /**
    * THROUGH WHICH SURFACE this decision arrived — ADR §6a, *"a human click must
    * be distinguishable from a programmatic call"*.
@@ -914,6 +927,46 @@ export const approvalGatesService = {
         routedToLabel: routedToDisplayName(routedTo),
         earlierApproval: null,
         settingsDoor: null,
+      };
+    });
+  },
+
+  /**
+   * THE LATEST REFUSAL on one work item, or null (Story MOTIR-6070 · MOTIR-6422; ADR
+   * `approval-gates.md` §10h note 4) — the ONE read both the dispatched prompt's
+   * CHANGES REQUESTED section and `get_work_item`'s `latestRefusal` answer from.
+   *
+   * The item's most recently DECIDED gate of ANY kind (by `decidedAt`); kept only when
+   * its state is `changes_requested`. So an approval after a refusal answers null, a
+   * refusal after an approval answers the refusal, and of two refusals the later wins.
+   * An `awaiting` gate is not a decision: a design republished after a refusal still
+   * carries that refusal until the new gate is decided.
+   *
+   * Keyed on the KIND-LESS question on purpose: a story's acceptance refusal
+   * (MOTIR-6071) is handed to its re-run through this same read.
+   *
+   * Tenant-scoped like every gate read: an item outside the caller's workspace
+   * answers null, indistinguishable from one with no refusal. A render read — no
+   * lock, one transaction.
+   */
+  async latestRefusalFor(
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<LatestRefusalDTO | null> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const item = await workItemRepository.findById(workItemId, tx);
+      if (!item || item.workspaceId !== ctx.workspaceId) return null;
+      const gate = await approvalGateRepository.findLatestDecidedByWorkItem(workItemId, tx);
+      if (!gate || gate.state !== 'changes_requested' || gate.decidedAt === null) return null;
+      return {
+        gateId: gate.id,
+        kind: gate.kind,
+        noteMd: gate.noteMd,
+        decidedByLabel: gate.decidedByLabel,
+        decidedAt: gate.decidedAt.toISOString(),
+        decisionSource: gate.decisionSource,
+        refusalVerdict: gate.refusalVerdict,
+        subjectVersion: gate.subjectVersion,
       };
     });
   },
@@ -1925,6 +1978,9 @@ export const approvalGatesService = {
         resolvedStatusKey,
         prepared,
         effectOptions: options.effectOptions,
+        // Validated in step 3c below, BEFORE any handler seam that acts reads it; the
+        // version seam ignores it.
+        refusalVerdict: input.refusalVerdict ?? null,
       };
       // §6a's first row — the subject's version AS DECIDED, answered by the KIND and read
       // under the lock BEFORE the effect runs. ⚠️ BEFORE, not after (MOTIR-6035): a plan's
@@ -1996,6 +2052,28 @@ export const approvalGatesService = {
         !input.noteMd?.trim()
       ) {
         throw new ApprovalGateVerbNotOfferedError(input.gateId, 'request_changes_needs_a_note');
+      }
+      // A DESIGN REFUSAL IS A VERDICT (ADR §10d, MOTIR-6421; `design-refusal-verdict.md`) —
+      // `revise` or `re_plan`, and the ONE place one is offered is a `request_changes` a
+      // person pressed on a `design_result` gate. Total over kind × verb × source: that
+      // case REQUIRES one, and every other case that names one is refused, so a verdict
+      // never lands on a row that did not ask for it. Keyed on the source exactly as the
+      // reason is — a `github` refusal was never asked, so it is recorded verdict-less
+      // rather than refused, and a verdict SENT with one is refused as not offered.
+      const refusalVerdict = input.refusalVerdict ?? null;
+      const offersVerdict =
+        input.decision === 'request_changes' &&
+        locked.kind === VERDICT_KIND &&
+        input.source !== 'github';
+      if (
+        refusalVerdict !== null &&
+        (!offersVerdict ||
+          !(APPROVAL_GATE_REFUSAL_VERDICTS as readonly string[]).includes(refusalVerdict))
+      ) {
+        throw new ApprovalGateVerbNotOfferedError(input.gateId, 'refusal_verdict_not_offered');
+      }
+      if (offersVerdict && refusalVerdict === null) {
+        throw new ApprovalGateVerbNotOfferedError(input.gateId, 'refusal_verdict_required');
       }
 
       // 4 · RETENTION — an APPROVAL PINS the version it was given on
@@ -2115,6 +2193,10 @@ export const approvalGatesService = {
           // What a CONFIRMED decision's written record was — or that there was none
           // (ADR §1's MOTIR-5952 amendment, point 8). Null on every other kind.
           confirmedRecord: effect.confirmedRecord ?? null,
+          // WHAT THE REFUSAL MEANT (ADR §10d, MOTIR-6421) — validated in step 3c, so it is
+          // non-null only on a Motir-pressed `design_result` refusal. HERE, in the deciding
+          // write, because the decided-row trigger refuses any later amendment.
+          refusalVerdict,
         },
         tx,
       );

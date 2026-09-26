@@ -561,8 +561,9 @@ describe('the confirmation gate — done-work immutability', () => {
 describe('the confirmation gate — unconditional, and non-regressive', () => {
   it('a valid approve still materializes exactly as before (adds, edges, revisions)', async () => {
     const fx = await makeWorkItemFixture();
-    const blockerId = await seedItem(fx, 'Existing blocker');
     const storyId = await seedItem(fx, 'Existing story', 'story');
+    // A sibling of the new subtask — same depth, so the edge is same-level (MOTIR-6411).
+    const blockerId = await seedItem(fx, 'Existing blocker', 'task', storyId);
     const planId = await plannedPlan(fx, [
       {
         op: 'add',

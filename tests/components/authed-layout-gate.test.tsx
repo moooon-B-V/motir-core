@@ -105,6 +105,9 @@ vi.mock('@/components/ui/AppLayout', () => ({ AppLayout: () => null }));
 vi.mock('@/app/(authed)/_components/AccountDeletionBanner', () => ({
   AccountDeletionBanner: () => null,
 }));
+vi.mock('@/app/(authed)/_components/OrganizationClosingBanner', () => ({
+  OrganizationClosingBanner: () => null,
+}));
 vi.mock('@/components/ui/SidebarDrawer', () => ({ SidebarDrawer: () => null }));
 vi.mock('@/components/planning/PlanWithAIFab', () => ({ PlanWithAIFab: () => null }));
 vi.mock('@/app/(authed)/_components/TopNav', () => ({ TopNav: () => null }));
@@ -212,15 +215,15 @@ describe('the authed layout gate (MOTIR-3433)', () => {
 
     // The layout is CALLED, not rendered (this file's own preamble), so the
     // property lives in the element tree it returned rather than in a render.
-    const shell = findFirst<{ banner?: { type?: unknown; props?: { userId?: string } } }>(
-      await pending,
-      AppLayout,
-    );
+    const shell = findFirst<{ banner?: React.ReactNode }>(await pending, AppLayout);
     expect(shell).toBeTruthy();
-    expect(shell!.props.banner?.type).toBe(AccountDeletionBanner);
+    // The slot holds the account bar FIRST, then the organization closing bar
+    // (MOTIR-6403) — a fragment of the two.
+    const account = findFirst<{ userId?: string }>(shell!.props.banner, AccountDeletionBanner);
+    expect(account).toBeTruthy();
     // It is given the SIGNED-IN reader's id — a banner resolved for anybody
     // else would show one person's deletion to another.
-    expect(shell!.props.banner?.props?.userId).toBe('u1');
+    expect(account!.props.userId).toBe('u1');
   });
 
   it('⚠️ the 2FA gate does NOT run for a request with no session', async () => {

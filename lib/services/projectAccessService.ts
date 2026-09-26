@@ -1,4 +1,5 @@
 import type { Prisma } from '@/generated/prisma/client';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -156,7 +157,19 @@ async function resolveInputs(
     workspaceRole,
     customRolePermissions: customRolePermissionsOf(workspaceRole, workspaceMembership),
     addedToProject: projectMembership != null,
+    // A CLOSING organization is read-only for every actor (MOTIR-6396). Read at
+    // request time and never stored on a membership, so a cancel reopens every
+    // write on the next request with nothing to restore.
+    organizationClosing: await isWorkspaceOrgClosing(project.workspaceId, tx),
   };
+}
+
+/** Whether the org owning `workspaceId` is closing — see `resolvePermissions`. */
+async function isWorkspaceOrgClosing(
+  workspaceId: string,
+  tx?: Prisma.TransactionClient,
+): Promise<boolean> {
+  return (await organizationRepository.findClosingSinceByWorkspaceId(workspaceId, tx)) !== null;
 }
 
 /**
@@ -190,7 +203,14 @@ async function resolvePublicInputs(
     throw new ProjectNotFoundError(projectId);
   }
   if (!actorUserId) {
-    return { accessLevel: project.accessLevel, workspaceRole: null, addedToProject: false };
+    // Unbound: `organization_public_project_read` admits the org of a public
+    // project, so an anonymous visitor's public-request writes close too.
+    return {
+      accessLevel: project.accessLevel,
+      workspaceRole: null,
+      addedToProject: false,
+      organizationClosing: await isWorkspaceOrgClosing(project.workspaceId, tx),
+    };
   }
   // Every read here runs under the PROJECT'S OWN workspace binding. MOTIR-2684:
   // `project_membership_active_workspace` (and, since MOTIR-6457,
@@ -232,6 +252,7 @@ async function resolvePublicInputs(
     workspaceRole,
     customRolePermissions: customRolePermissionsOf(workspaceRole, workspaceMembership),
     addedToProject: added,
+    organizationClosing: await isWorkspaceOrgClosing(project.workspaceId, tx),
   };
 }
 
@@ -459,12 +480,15 @@ export const projectAccessService = {
         if (!project || project.workspaceId !== ctx.workspaceId) {
           throw new ProjectNotFoundError(projectId);
         }
-        const [workspaceMembers, projectMembers] = await Promise.all([
+        const [workspaceMembers, projectMembers, organizationClosing] = await Promise.all([
           workspaceMembershipRepository.findMembersByWorkspaceWithRoleDefinition(
             ctx.workspaceId,
             tx,
           ),
           projectMembershipRepository.findMembersByProject(projectId, tx),
+          // Nobody edits a closing org's projects, so nobody is handed its code
+          // (MOTIR-6396).
+          isWorkspaceOrgClosing(ctx.workspaceId, tx),
         ]);
         const byUser = new Map(workspaceMembers.map((m) => [m.userId, m]));
         const added = new Set(projectMembers.map((m) => m.userId));
@@ -479,6 +503,7 @@ export const projectAccessService = {
               workspaceRole,
               customRolePermissions: customRolePermissionsOf(workspaceRole, membership),
               addedToProject: added.has(userId),
+              organizationClosing,
             }),
           );
         }

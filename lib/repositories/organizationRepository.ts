@@ -54,6 +54,88 @@ export const organizationRepository = {
   },
 
   /**
+   * When organization `id` started CLOSING, or null when it is not closing
+   * (MOTIR-6396) — the org-tier write guard's read (`lib/organizations/closingGuard.ts`).
+   * Takes `tx`: it guards a write, and the caller's context admits the row.
+   */
+  async findClosingSinceById(id: string, tx: Prisma.TransactionClient): Promise<Date | null> {
+    const row = await tx.organization.findUnique({ where: { id }, select: { closingSince: true } });
+    return row?.closingSince ?? null;
+  },
+
+  /**
+   * The CLOSING organization that owns `workspaceId`, or null when that org is
+   * open (MOTIR-6396) — the workspace-addressed twin of {@link findClosingSinceById},
+   * returning the org id the refusal names.
+   */
+  async findClosingByWorkspaceId(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ organizationId: string } | null> {
+    const rows = await tx.$queryRaw<Array<{ organizationId: string }>>`
+      SELECT o."id" AS "organizationId"
+      FROM "workspace" w
+      JOIN "organization" o ON o."id" = w."organizationId"
+      WHERE w."id" = ${workspaceId}
+        AND o."closing_since" IS NOT NULL
+      LIMIT 1
+    `;
+    return rows[0] ?? null;
+  },
+
+  /**
+   * The NAME of the closing organization that owns `workspaceId`, or null when it
+   * is open (Story MOTIR-6306 · MOTIR-6403) — the read-only note a page header
+   * shows while the org closes.
+   */
+  async findClosingNameByWorkspaceId(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const rows = await tx.$queryRaw<Array<{ name: string }>>`
+      SELECT o."name" AS "name"
+      FROM "workspace" w
+      JOIN "organization" o ON o."id" = w."organizationId"
+      WHERE w."id" = ${workspaceId}
+        AND o."closing_since" IS NOT NULL
+        AND o."erased_at" IS NULL
+      LIMIT 1
+    `;
+    return rows[0]?.name ?? null;
+  },
+
+  /**
+   * When the organization that owns `workspaceId` started CLOSING, or null when it
+   * is not closing (Story MOTIR-6306 · MOTIR-6396) — the one read the permission
+   * resolution adds, so that every actor in every workspace of a closing org
+   * resolves to read-only.
+   *
+   * Through the workspace, in ONE statement, because the resolver is handed a
+   * workspace and never an org. Takes `tx`: both rows are RLS-gated, and the
+   * caller's transaction is the one binding the GUCs that admit them — a workspace
+   * member is always an org member (`organization-tier.md`, the upward invariant),
+   * so `organization_membership_visible` admits the org; an unbound public read is
+   * admitted by `organization_public_project_read`. A row that is not visible
+   * reads as not closing — the answer for a workspace the caller cannot see is
+   * decided by the gates around this read, not by it. `tx` is optional ONLY for
+   * that unbound public path (`dbRead`, the MOTIR-4295 rule).
+   */
+  async findClosingSinceByWorkspaceId(
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Date | null> {
+    const client = tx ?? dbRead;
+    const rows = await client.$queryRaw<Array<{ closingSince: Date | null }>>`
+      SELECT o."closing_since" AS "closingSince"
+      FROM "workspace" w
+      JOIN "organization" o ON o."id" = w."organizationId"
+      WHERE w."id" = ${workspaceId}
+      LIMIT 1
+    `;
+    return rows[0]?.closingSince ?? null;
+  },
+
+  /**
    * Of the organisation ids given, which still have a row — the liveness read
    * motir-ai's code-graph reconciler subtracts from its own bucket enumeration
    * (MOTIR-4647). Answers about the ids it is GIVEN and never enumerates, so a
@@ -102,10 +184,52 @@ export const organizationRepository = {
       isMeta?: boolean;
       /** The org-tier require-2FA policy (Story MOTIR-1215 · MOTIR-3644). */
       requiresTwoFactor?: boolean;
+      /** Set when a deletion is scheduled, cleared by a cancel (MOTIR-6399). */
+      closingSince?: Date | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<Organization> {
     return tx.organization.update({ where: { id }, data });
+  },
+
+  /**
+   * Scrub the organization to its TOMBSTONE (Story MOTIR-6306 · MOTIR-6400;
+   * `organization-deletion.md` §6.4): the erased label, a random slug, `erasedAt`
+   * set, `closingSince` cleared, and every flag it carried reset. The row itself
+   * stays: it is what the seven-year billing record (`CiPeriodCharge`) hangs off.
+   * Requires `app.organization_id` bound (`organization_mutate_active`).
+   */
+  async scrubToTombstone(
+    id: string,
+    data: { name: string; slug: string; erasedAt: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.organization.update({
+      where: { id },
+      data: {
+        name: data.name,
+        slug: data.slug,
+        erasedAt: data.erasedAt,
+        closingSince: null,
+        requiresTwoFactor: false,
+        isMeta: false,
+        internalBilling: false,
+        aiIncludedSeat: false,
+        scaledTrackerSubscription: Prisma.DbNull,
+      },
+    });
+  },
+
+  /**
+   * Delete an erased organization's TOMBSTONE row — the retention purge's
+   * (Story MOTIR-6306 · MOTIR-6401), seven years after the erasure. Its billing
+   * rows (`CiPeriodCharge`) cascade with it; the caller has already removed the
+   * deletion requests, whose FK is `Restrict`. Requires `app.organization_id`
+   * bound. Returns whether a row was deleted.
+   */
+  async deleteErasedById(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    const result = await tx.organization.deleteMany({ where: { id, erasedAt: { not: null } } });
+    return result.count > 0;
   },
 
   /**
