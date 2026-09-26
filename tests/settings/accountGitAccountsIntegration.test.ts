@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -139,17 +139,7 @@ describe('DISCONNECT leaves the ORGANISATION`s installation untouched', () => {
     await bindIdentity(fx.ownerId);
     await bindInstallation();
 
-    // Disconnect now revokes the token at GitHub (MOTIR-6519) — answered here so
-    // the suite never reaches github.com.
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(null, { status: 204 })),
-    );
-    try {
-      await githubIdentityService.disconnect(fx.ownerId);
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    await githubIdentityService.disconnect(fx.ownerId);
 
     expect(await githubIdentityService.getIdentityForUser(fx.ownerId)).toBeNull();
     const installation = await githubInstallationService.getWorkspaceInstallation({
@@ -170,5 +160,41 @@ describe('DISCONNECT leaves the ORGANISATION`s installation untouched', () => {
     await githubInstallationService.removeInstallation(`inst-${fx.workspaceId}`);
 
     expect(await githubIdentityService.getIdentityForUser(fx.ownerId)).not.toBeNull();
+  });
+});
+
+describe('⚠️ REVOKED has no producer, and the schema is the evidence', () => {
+  it('`GithubIdentity` carries no revocation column', async () => {
+    // The pane renders three states, not the design's four. This is the
+    // measurement behind that: there is nothing to read. The service's own
+    // comment says a GitHub App user-to-server token "does not expire unless the
+    // App enables 'Expire user authorization tokens'", and that were it turned
+    // on, "the fix is a substrate change HERE (persist an expiry + refresh
+    // token), not at a call site".
+    //
+    // Rendering `Needs re-auth` today would mean inventing the signal rather than
+    // reporting it. The substrate is proposed, not improvised.
+    //
+    // This case deletes itself in the commit that adds the column.
+    const columns = await adminDb.$queryRawUnsafe<{ column_name: string }[]>(
+      `select column_name from information_schema.columns where table_name = 'github_identity'`,
+    );
+    const names = columns.map((c) => c.column_name);
+    expect(names).not.toContain('revoked_at');
+    expect(names).not.toContain('token_expires_at');
+    // …and the columns that DO exist are the three the pane reads plus its keys,
+    // so this is a statement about the whole table rather than two guesses.
+    expect(names.sort()).toEqual(
+      [
+        'access_token_encrypted',
+        'avatar_url',
+        'created_at',
+        'github_login',
+        'github_user_id',
+        'id',
+        'updated_at',
+        'user_id',
+      ].sort(),
+    );
   });
 });

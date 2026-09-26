@@ -48,11 +48,6 @@ function mockGithub(opts: {
         headers: { 'content-type': 'application/json' },
       });
     }
-    // Disconnect revokes the token at GitHub (MOTIR-6519); the revoke itself is
-    // pinned in githubIdentityTokens.test.ts.
-    if (url.includes('/applications/') && url.endsWith('/token')) {
-      return new Response(null, { status: 204 });
-    }
     throw new Error(`unexpected fetch in test: ${url}`);
   });
   vi.stubGlobal('fetch', fetchMock);

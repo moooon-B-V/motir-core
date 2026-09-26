@@ -2,11 +2,12 @@ import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 
 // Story MOTIR-683 · MOTIR-6519 (AC4) — the separate "Motir Agent" link is gone.
-// `docs/decisions/hosted-run-one-github-app.md` settled on ONE GitHub App: the
-// Motir Integration identity (`GithubIdentity`) carries the expiring user token
-// a hosted run writes with. So no second authorization table, service, route,
-// error or env name may creep back. The decision records keep the history and
-// are not scanned; neither is this file.
+// `docs/decisions/hosted-run-one-github-app.md` settled on ONE GitHub App per
+// repository, and `docs/decisions/hosted-run-runs-the-cli-as-the-app.md` has a
+// hosted run write with that App's installation token, never a person's. So no
+// second authorization table, service, route, error or env name may creep back.
+// The decision records keep the history and are not scanned; neither is this
+// file.
 
 const FORBIDDEN = [
   'GithubAgentAuthorization',

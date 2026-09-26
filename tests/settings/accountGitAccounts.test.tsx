@@ -177,10 +177,7 @@ describe('⚠️ the fourth state is NOT rendered, and that is deliberate', () =
     // with no organisation installation — are all rendered. The fourth is
     // proposed as a precondition rather than improvised.
     //
-    // MOTIR-6519 has since added the substrate — `GithubIdentity` now stores the
-    // token's expiry and refresh token, and `getUserToken` answers
-    // GithubIdentityExpiredError — but the pane still draws nothing for it; the
-    // rendering is MOTIR-1895's, and this case deletes itself in that commit.
+    // This case deletes itself in the commit that adds the substrate.
     expect(PAGE).not.toMatch(/revoked|needsReauth|Needs re-auth/i);
   });
 });

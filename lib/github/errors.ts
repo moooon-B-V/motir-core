@@ -113,29 +113,3 @@ export class GithubRepoNotFoundError extends Error {
     this.name = 'GithubRepoNotFoundError';
   }
 }
-
-// ── The identity's user token (Story MOTIR-683 · MOTIR-6519) ─────────────────
-//
-// Once the Motir Integration app expires its user tokens, "give me this
-// person's token" has two answers that are not a token, and they need two
-// different sentences in front of a person.
-
-/** The person has no GitHub identity: they never connected, or disconnected. */
-export class GithubIdentityNotLinkedError extends Error {
-  readonly code = 'GITHUB_IDENTITY_NOT_LINKED' as const;
-  constructor() {
-    super('No GitHub account is connected for this member.');
-    this.name = 'GithubIdentityNotLinkedError';
-  }
-}
-
-/** The person connected once, but the token can no longer be renewed: the
- *  refresh token expired, or GitHub refused it (the person revoked the app, or
- *  it was spent elsewhere). The remedy is to connect again. */
-export class GithubIdentityExpiredError extends Error {
-  readonly code = 'GITHUB_IDENTITY_EXPIRED' as const;
-  constructor(detail: string) {
-    super(`The connected GitHub account can no longer be used: ${detail}`);
-    this.name = 'GithubIdentityExpiredError';
-  }
-}

@@ -6674,25 +6674,16 @@ model PlanRevision {
 /// precedent): the OAuth callback persists under `withUserContext`, so a member
 /// only ever reads/writes their own identity.
 model GithubIdentity {
-  id                    String    @id @default(cuid())
-  userId                String    @unique @map("user_id")
-  githubUserId          String    @unique @map("github_user_id")
-  githubLogin           String    @map("github_login")
-  avatarUrl             String?   @map("avatar_url")
+  id                   String   @id @default(cuid())
+  userId               String   @unique @map("user_id")
+  githubUserId         String   @unique @map("github_user_id")
+  githubLogin          String   @map("github_login")
+  avatarUrl            String?  @map("avatar_url")
   /// The GitHub user access token, encrypted at rest (never plaintext). Only
   /// lib/github/tokenCrypto.ts + githubIdentityService ever read/write it.
-  accessTokenEncrypted  String    @map("access_token_encrypted")
-  /// When the access token dies (MOTIR-6519). Null for a NON-expiring token —
-  /// an identity linked before the App turned on "Expire user authorization
-  /// tokens" — which then has nothing to refresh and keeps working as it is.
-  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
-  /// The refresh token GitHub issues with an expiring user token, encrypted like
-  /// the access token. GitHub ROTATES it on every use, so only
-  /// `githubIdentityService.getUserToken` spends it, under a row lock.
-  refreshTokenEncrypted String?   @map("refresh_token_encrypted")
-  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
+  accessTokenEncrypted String   @map("access_token_encrypted")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
