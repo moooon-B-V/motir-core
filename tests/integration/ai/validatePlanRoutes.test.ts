@@ -138,7 +138,9 @@ describe('POST /api/internal/ai/validate-plan', () => {
     const fx = await makeWorkItemFixture();
     const story = await mk(fx, 'Story', 'story');
     const child = await mk(fx, 'Child', 'subtask', story.id);
-    const outside = await mk(fx, 'Outside', 'task');
+    // One level down under its own root — the child's depth (MOTIR-6411).
+    const elsewhere = await mk(fx, 'Elsewhere', 'story');
+    const outside = await mk(fx, 'Outside', 'task', elsewhere.id);
     const planId = await planBlocking(fx, child.id, outside.id);
 
     const invalid = await validatePlanPOST(
@@ -160,8 +162,16 @@ describe('POST /api/internal/ai/validate-plan', () => {
           blockerSprintId: null,
         },
       ],
-      // The cross-parent half (MOTIR-6370), carried verbatim like the rest.
-      invalidEdges: [],
+      // The cross-parent half (MOTIR-6370), carried verbatim like the rest: the
+      // child's parent does not block the outsider's, so the edge is uncovered.
+      invalidEdges: [
+        {
+          item: child.identifier,
+          blockedBy: outside.identifier,
+          itemParent: story.identifier,
+          blockerParent: elsewhere.identifier,
+        },
+      ],
       advisories: [],
     });
 
