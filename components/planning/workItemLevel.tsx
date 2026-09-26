@@ -267,6 +267,7 @@ export function ghostAnchorNode(
     id,
     parentId: null,
     drillable: false,
+    anchor: true,
     searchText: label?.searchText ?? id,
     crumbLabel: label?.crumbLabel,
     // The off-level blocker is a REAL work item with a valid identifier

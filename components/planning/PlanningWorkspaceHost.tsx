@@ -703,6 +703,7 @@ export function PlanningWorkspaceHost({
                 // the one that shows the proposed plan (§23.13).
                 key={paneReview.id}
                 items={paneReview.items}
+                edgeCoverage={paneReview.edgeCoverage}
                 outcome={paneLive ? null : state.decided}
                 projectKey={projectKey}
                 version={treeVersion + paneTick.tick}

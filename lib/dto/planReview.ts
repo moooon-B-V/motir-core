@@ -20,6 +20,7 @@
 // no longer on the canvas once that item materialized; a real work-item ref
 // stays as-is.
 
+import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { ApprovalGateStateDTO, PlanGateHeldDTO } from '@/lib/dto/approvalGate';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ExecutorDto, WorkItemDifficultyDto } from '@/lib/dto/workItems';
@@ -358,6 +359,15 @@ export interface PlanBlockerStubDto {
    * the capped read did not carry (bug MOTIR-5043).
    */
   parentNodeId: string | null;
+  /**
+   * What the canvas draws for this edge once the plan is approved (MOTIR-6362) —
+   * the proposal's edge to THIS blocker, judged over the PROJECTED tree by the
+   * same `edgeDisposition` the roadmap read uses: `covered` draws nothing,
+   * `exempt` a neutral anchor, `uncovered` / `cross_level` the flag. Absent on a
+   * decided plan and on an end the projection cannot place, where the canvas
+   * keeps the pre-MOTIR-6362 flag.
+   */
+  coverage?: EdgeDisposition;
 }
 
 /** A proposed operation, enriched for the canvas + review rail. */
@@ -905,6 +915,18 @@ export interface PlanConversationDto {
   targetKeys: string[];
 }
 
+/**
+ * A COMMITTED edge whose disposition this plan changes (MOTIR-6362): its parents'
+ * edge is one a `modify` adds (`blockedByAdd`) or removes (`blockedByRemove`), so
+ * the roadmap read's verdict on it is stale for the level the plan leaves behind.
+ * The review canvas overrides the committed edge's `coverage` with this one.
+ */
+export interface PlanEdgeCoverageDto {
+  blockedId: string;
+  blockerId: string;
+  coverage: EdgeDisposition;
+}
+
 export interface PlanReviewDto {
   id: string;
   projectId: string;
@@ -997,6 +1019,10 @@ export interface PlanReviewDto {
   conversation?: PlanConversationDto | null;
 
   items: PlanReviewItemDto[];
+  /** The committed edges this plan re-judges (MOTIR-6362) — see
+   *  {@link PlanEdgeCoverageDto}. Optional: absent from an older server, and empty
+   *  on a decided plan. */
+  edgeCoverage?: PlanEdgeCoverageDto[];
   /** Roll-up: any item is stale (the plan-level "N may be out of date"). */
   stale: boolean;
   /** How many items are stale (the summary count). */

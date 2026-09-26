@@ -15,6 +15,7 @@ import {
 } from '@/lib/planChange/revisionLease';
 
 import { plansService } from '@/lib/services/plansService';
+import { buildProjection, projectedEdgeDisposition } from '@/lib/services/planProjectionService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { planStalenessService } from '@/lib/services/planStalenessService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -37,6 +38,7 @@ import { PLAN_ITEM_SETTABLE_RAIL_FIELDS } from '@/lib/dto/planReview';
 import type {
   PlanBlockerStubDto,
   PlanCommittedBlockerDto,
+  PlanEdgeCoverageDto,
   PlanFolderCrumbDto,
   PlanHistoryEventDto,
   PlanItemChangeDto,
@@ -1465,6 +1467,82 @@ export const planReviewService = {
         .filter((stub): stub is PlanBlockerStubDto => stub !== null);
     }
 
+    // ── WHAT EACH OFF-LEVEL EDGE DRAWS AFTER APPROVE (MOTIR-6362) ──────────────
+    //
+    // The committed roadmap draws an off-level edge by its DISPOSITION (MOTIR-6359:
+    // `covered` draws nothing, `exempt` a neutral anchor, `uncovered` / `cross_level`
+    // the "blocked elsewhere" flag), and the review canvas must show the level the
+    // reviewer gets once they approve. So the question is asked of the PROJECTION —
+    // the tree this plan leaves behind — not of the committed tree, in two places:
+    //
+    //  - every blocker a proposal carries (its stub), because a plan that adds X →
+    //    Y may also wire X's parent to Y's parent, and then the edge is covered;
+    //  - the COMMITTED edges whose parents' edge this plan adds or removes (a
+    //    `modify`'s `blockedByAdd` / `blockedByRemove` on the parent), because the
+    //    committed level the canvas reads was judged against a parent edge the
+    //    plan is changing. Those arrive as `edgeCoverage` overrides.
+    //
+    // A DECIDED plan is not projected: its proposals have materialized or never
+    // will, and the canvas keeps the roadmap read's own dispositions for it.
+    let edgeCoverage: PlanEdgeCoverageDto[] = [];
+    if (plan.status === 'generating' || plan.status === 'planned') {
+      const proj = await buildProjection(planId, ctx);
+      const projIdOf = (nodeId: string): string => {
+        const proposal = itemByNodeId.get(nodeId);
+        return proposal && proposal.op === 'add' && proposal.nodeId === proposal.planItemId
+          ? `${TEMP_REF_PREFIX}${proposal.planItemId}`
+          : nodeId;
+      };
+      const nodeIdOfProj = (projId: string): string =>
+        projId.startsWith(TEMP_REF_PREFIX)
+          ? (nodeIdByPlanItemId.get(projId.slice(TEMP_REF_PREFIX.length)) ??
+            projId.slice(TEMP_REF_PREFIX.length))
+          : projId;
+      for (const item of items) {
+        for (const stub of item.blockerStubs) {
+          const coverage = projectedEdgeDisposition(
+            proj,
+            projIdOf(item.nodeId),
+            projIdOf(stub.nodeId),
+          );
+          if (coverage !== undefined) stub.coverage = coverage;
+        }
+      }
+      // The parent pairs this plan's `modify`s link or unlink, and every projected
+      // child edge running between them.
+      const seenEdge = new Set<string>();
+      for (const planItem of plan.items) {
+        if (planItem.op !== 'modify' || !planItem.workItemId) continue;
+        const refs = [
+          ...(planItem.patch?.blockedByAdd ?? []),
+          ...(planItem.patch?.blockedByRemove ?? []),
+        ];
+        for (const ref of refs) {
+          // The projection keys an `add` by its `planItem:` temp-ref, exactly as the
+          // ref is written — so the ref is used as-is, never through `resolveRef`.
+          const blockerParent = ref;
+          for (const child of proj.childrenByParent.get(planItem.workItemId) ?? []) {
+            for (const blocker of proj.blockedBy.get(child) ?? []) {
+              if (proj.nodes.get(blocker)?.parentId !== blockerParent) continue;
+              const key = `${child} ${blocker}`;
+              if (seenEdge.has(key)) continue;
+              seenEdge.add(key);
+              const coverage = projectedEdgeDisposition(proj, child, blocker);
+              if (coverage === undefined) continue;
+              edgeCoverage.push({
+                blockedId: nodeIdOfProj(child),
+                blockerId: nodeIdOfProj(blocker),
+                coverage,
+              });
+            }
+          }
+        }
+      }
+      edgeCoverage = edgeCoverage.sort(
+        (a, b) => a.blockedId.localeCompare(b.blockedId) || a.blockerId.localeCompare(b.blockerId),
+      );
+    }
+
     const decidedByName = plan.decidedById
       ? ((await userRepository.findById(plan.decidedById))?.name ?? null)
       : null;
@@ -1597,6 +1675,7 @@ export const planReviewService = {
       conversation,
       history,
       items,
+      edgeCoverage,
       stale: staleCount > 0,
       staleCount,
       arrivalLevelSize,
