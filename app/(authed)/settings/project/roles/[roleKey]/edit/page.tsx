@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
-import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { RoleEditor } from '../../_components/RoleEditor';
 import { guardSettingsPage } from '../../../_guard';
 
@@ -43,7 +43,7 @@ export default async function EditProjectRolePage({
 
   const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   const { roleKey } = await params;
-  const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, actor);
+  const catalog = await projectRoleDefinitionService.getRoleCatalog(ctx.projectId, actor);
   const role = catalog.roles.find((candidate) => candidate.key === roleKey);
   // Unknown segment, or a BUILT-IN: neither has an editor.
   if (!role || role.builtIn || role.name === null) notFound();

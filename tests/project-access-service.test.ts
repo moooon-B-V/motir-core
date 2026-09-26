@@ -135,9 +135,17 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   await workspacesService.addMember({ userId: plainMember.id, workspaceId: workspace.id });
 
   // Three project-role actors — workspace members with an explicit project role.
+  // Roles live on the WORKSPACE (MOTIR-6459): the Viewer actor is a workspace
+  // Viewer, and the other two are workspace Members whose PROJECT role is left
+  // on the legacy column — which grants nothing any more, so the `admin` actor
+  // is the proof that a project admin role no longer manages the project.
   async function projectActor(name: string, role: 'viewer' | 'member' | 'admin') {
     const u = await makeUser(`${role}-${slug}@ex.com`, name);
-    await workspacesService.addMember({ userId: u.id, workspaceId: workspace.id });
+    await workspacesService.addMember({
+      userId: u.id,
+      workspaceId: workspace.id,
+      ...(role === 'viewer' ? { role: 'viewer' as const } : {}),
+    });
     await projectMembersService.addMember({
       key: project.identifier,
       actorUserId: owner.id,
@@ -185,6 +193,8 @@ const EXPECTED: Record<
     admin: { browse: true, edit: true },
     nonMember: { browse: false, edit: false },
   },
+  // `plainMember` is a workspace Member NEVER ADDED to the project: on `limited`
+  // they browse and do not edit; on `private` they do not browse.
   limited: {
     owner: { browse: true, edit: true },
     wsAdmin: { browse: true, edit: true },
@@ -251,7 +261,9 @@ describe('projectAccessService — browse/edit matrix (level × role)', () => {
           // getSettingsCapabilities (6.5.2) — the same browse/edit verdicts plus
           // the manage tier (workspace owner/admin or project admin) in ONE
           // round-trip; drives the settings-area nav filter + edit affordances.
-          const wantManage = role === 'owner' || role === 'wsAdmin' || role === 'admin';
+          // Only a workspace Manager manages a project — a PROJECT admin role no
+          // longer grants it (`role-model.md` §3, MOTIR-6459).
+          const wantManage = role === 'owner' || role === 'wsAdmin';
           const settingsCaps = await projectAccessService.getSettingsCapabilities(s.projectId, ctx);
           expect(settingsCaps).toEqual({
             canBrowse: want.browse,
@@ -298,23 +310,19 @@ describe('projectAccessService — resolution + leak safety', () => {
 });
 
 describe('canBrowse / canEdit — pure policy', () => {
-  it('workspace owner/admin always pass regardless of level or project role', () => {
+  it('a workspace Manager always passes regardless of level or whether they were added', () => {
     for (const accessLevel of LEVELS) {
-      for (const workspaceRole of ['owner', 'admin'] as const) {
-        const inputs = { accessLevel, workspaceRole, projectRole: null };
+      for (const addedToProject of [false, true]) {
+        const inputs = { accessLevel, workspaceRole: 'manager' as const, addedToProject };
         expect(canBrowse(inputs)).toBe(true);
         expect(canEdit(inputs)).toBe(true);
       }
     }
   });
 
-  it('a project viewer can browse but never edit', () => {
+  it('a workspace Viewer added to the project can browse but never edit', () => {
     for (const accessLevel of LEVELS) {
-      const inputs = {
-        accessLevel,
-        workspaceRole: 'member' as const,
-        projectRole: 'viewer' as const,
-      };
+      const inputs = { accessLevel, workspaceRole: 'viewer' as const, addedToProject: true };
       expect(canBrowse(inputs)).toBe(true);
       expect(canEdit(inputs)).toBe(false);
     }
@@ -324,7 +332,7 @@ describe('canBrowse / canEdit — pure policy', () => {
     // Excludes `public` — its read semantics (the cross-org exception) admit a
     // non-member, asserted separately below.
     for (const accessLevel of LEVELS) {
-      const inputs = { accessLevel, workspaceRole: null, projectRole: null };
+      const inputs = { accessLevel, workspaceRole: null, addedToProject: false };
       expect(canBrowse(inputs)).toBe(false);
       expect(canEdit(inputs)).toBe(false);
     }
@@ -334,24 +342,26 @@ describe('canBrowse / canEdit — pure policy', () => {
 // Story 6.12 — the `public` access level: the cross-org READ exception + the
 // three public-viewer WRITE grants, and `canEdit` staying closed to non-members.
 describe('public access level (Story 6.12)', () => {
+  const anon = { accessLevel: 'public' as const, workspaceRole: null, addedToProject: false };
+
   it('canBrowse admits ANYONE on a public project — incl. a null-role / anonymous actor', () => {
-    // The leading public branch returns true regardless of workspace/project role,
-    // so a logged-out / cross-org viewer (both roles null) reads a public project.
-    expect(canBrowse({ accessLevel: 'public', workspaceRole: null, projectRole: null })).toBe(true);
+    // The leading public branch returns true regardless of role, so a logged-out /
+    // cross-org viewer (no workspace role) reads a public project.
+    expect(canBrowse(anon)).toBe(true);
     expect(
-      canBrowse({ accessLevel: 'public', workspaceRole: 'member', projectRole: 'viewer' }),
+      canBrowse({ accessLevel: 'public', workspaceRole: 'viewer', addedToProject: false }),
     ).toBe(true);
   });
 
   it('canEdit stays CLOSED to a public non-member, OPEN to an internal member', () => {
     // A public VIEWER (non-member) never edits — the null-deny rail, unchanged.
-    expect(canEdit({ accessLevel: 'public', workspaceRole: null, projectRole: null })).toBe(false);
-    // A public project's internal workspace member edits like `open` (most-open rung).
-    expect(canEdit({ accessLevel: 'public', workspaceRole: 'member', projectRole: null })).toBe(
+    expect(canEdit(anon)).toBe(false);
+    // A public project's internal workspace Member edits like `open` (most-open rung).
+    expect(canEdit({ accessLevel: 'public', workspaceRole: 'member', addedToProject: false })).toBe(
       true,
     );
-    // A project viewer is still read-only on a public project.
-    expect(canEdit({ accessLevel: 'public', workspaceRole: 'member', projectRole: 'viewer' })).toBe(
+    // A workspace Viewer is still read-only on a public project.
+    expect(canEdit({ accessLevel: 'public', workspaceRole: 'viewer', addedToProject: true })).toBe(
       false,
     );
   });
@@ -360,13 +370,13 @@ describe('public access level (Story 6.12)', () => {
     for (const grant of [canSubmitToTriage, canUpvotePublicRequest, canCommentPublicRequest]) {
       // true on public for any role (a non-member included — authentication is
       // enforced upstream, not by these pure predicates).
-      expect(grant({ accessLevel: 'public', workspaceRole: null, projectRole: null })).toBe(true);
-      expect(grant({ accessLevel: 'public', workspaceRole: 'member', projectRole: 'member' })).toBe(
+      expect(grant(anon)).toBe(true);
+      expect(grant({ accessLevel: 'public', workspaceRole: 'member', addedToProject: true })).toBe(
         true,
       );
       // false on every non-public level — no other write path keys off "public".
       for (const accessLevel of LEVELS) {
-        expect(grant({ accessLevel, workspaceRole: 'admin', projectRole: 'admin' })).toBe(false);
+        expect(grant({ accessLevel, workspaceRole: 'manager', addedToProject: true })).toBe(false);
       }
     }
   });

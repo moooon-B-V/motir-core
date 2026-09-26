@@ -1,49 +1,40 @@
-import type { MemberRole, ProjectAccessLevel } from '@/generated/prisma/client';
+import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
 import { describe, expect, it } from 'vitest';
 import { hasPermission, resolvePermissions } from '@/lib/permissions/resolve';
-import {
-  BUILTIN_ROLE_PERMISSIONS,
-  IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS,
-  ROLE_GATED_PERMISSIONS,
-} from '@/lib/permissions/builtinRoles';
+import { ROLE_GATED_PERMISSIONS, WORKSPACE_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { ProjectAccessInputs } from '@/lib/projects/access';
 
-// The CUSTOM-ROLE RESOLUTION (Story MOTIR-2257 · Subtask MOTIR-2470). One arm in
-// `resolvePermissions`: a membership on a custom role resolves THAT role's set
-// as its base, instead of its built-in's.
+// The CUSTOM-ROLE RESOLUTION — a WORKSPACE custom role since Story MOTIR-6168 ·
+// MOTIR-6459 (it was a project one, Story MOTIR-2257 · Subtask MOTIR-2470). One
+// arm in `resolvePermissions`: a membership on a custom role resolves THAT role's
+// set as its base, instead of its tier's.
 //
-// `tests/permissions/accessParity.test.ts` proves the OTHER half and is
-// deliberately UNCHANGED by this card — with no custom role in play the answer
-// for all 64 actors is byte-identical. This file proves what the new arm adds,
-// and — the larger half — what it must NOT disturb:
+// `tests/permissions/accessParity.test.ts` is the truth table for the built-ins.
+// This file proves what the custom arm adds, and — the larger half — what it
+// must NOT disturb:
 //
 //   * the LEVEL-GATED layer stays above every role;
-//   * the workspace-manager RAIL stays above the custom set (an admin cannot be
-//     narrowed by a role somebody authored — including one they put themselves
-//     on, which is how you would otherwise lock yourself out of your own
-//     project's members page);
-//   * the null-deny RAIL stays below it (a project role is never a way INTO a
-//     workspace);
-//   * `levelGrants` is not touched AT ALL, and the truth table below is what
-//     proves it did not need to be: a custom role is subtracted by `limited` /
-//     `private` at exactly the tier its BASE sits at, because the membership
-//     carries `role = definition.basedOn` (the paired-column invariant
-//     MOTIR-2467 enforces in the repository).
+//   * the Manager RAIL stays above the custom set (a custom role is never a
+//     Manager, so no role somebody authored can narrow one — which is how you
+//     would otherwise lock yourself out of your own workspace's Roles page);
+//   * the null-deny RAIL stays below it (a role is never a way INTO a workspace);
+//   * `levelGrants` reads only whether the actor was ADDED, never the role, so a
+//     custom role is subtracted by `limited` / `private` exactly as a built-in is.
 
 const ALL_LEVELS: ProjectAccessLevel[] = ['open', 'limited', 'private', 'public'];
 
-/** A membership on a CUSTOM role: `projectRole` is the definition's `basedOn`. */
+/** A membership on a workspace CUSTOM role — held at the `member` tier. */
 function onCustomRole(args: {
   accessLevel: ProjectAccessLevel;
-  workspaceRole: MemberRole | null;
-  basedOn: MemberRole | null;
+  workspaceRole?: WorkspaceRole | null;
+  addedToProject?: boolean;
   permissions: readonly string[];
 }): ProjectAccessInputs {
   return {
     accessLevel: args.accessLevel,
-    workspaceRole: args.workspaceRole,
-    projectRole: args.basedOn,
+    workspaceRole: args.workspaceRole === undefined ? 'member' : args.workspaceRole,
+    addedToProject: args.addedToProject ?? true,
     customRolePermissions: args.permissions,
   };
 }
@@ -53,96 +44,82 @@ function sorted(set: ReadonlySet<PermissionKey>): PermissionKey[] {
 }
 
 describe('the custom set REPLACES the base — and only the base', () => {
-  it('a membership on a custom role resolves that role`s set, not its base`s', () => {
-    // Based on `viewer` (whose set is `project:browse` + `report:view`) but
-    // granted two things a viewer does not have.
+  it('a membership on a custom role resolves that role`s set, not its tier`s', () => {
     const held = resolvePermissions(
       onCustomRole({
         accessLevel: 'open',
-        workspaceRole: 'member',
-        basedOn: 'viewer',
         permissions: ['project:browse', 'comment:add', 'attachment:create'],
       }),
     );
     expect(sorted(held)).toEqual(['attachment:create', 'comment:add', 'project:browse']);
-    // Not the built-in's set — the point of the whole story.
-    expect(sorted(held)).not.toEqual(sorted(BUILTIN_ROLE_PERMISSIONS.viewer));
+    // Not the tier's set — the point of the whole story.
+    expect(sorted(held)).not.toEqual(sorted(WORKSPACE_ROLE_PERMISSIONS.member));
   });
 
-  it('with NO custom role the built-in set is the base, exactly as before', () => {
-    for (const role of ['admin', 'member', 'viewer'] as const) {
+  it('with NO custom role the built-in set is the base, null and absent alike', () => {
+    for (const role of ['member', 'viewer'] as const) {
       const withNull = resolvePermissions({
         accessLevel: 'open',
-        workspaceRole: 'member',
-        projectRole: role,
+        workspaceRole: role,
+        addedToProject: true,
         customRolePermissions: null,
       });
       const withAbsent = resolvePermissions({
         accessLevel: 'open',
-        workspaceRole: 'member',
-        projectRole: role,
+        workspaceRole: role,
+        addedToProject: true,
       });
-      const expected = sorted(BUILTIN_ROLE_PERMISSIONS[role]);
+      const expected = sorted(WORKSPACE_ROLE_PERMISSIONS[role]);
       expect(sorted(withNull)).toEqual(expected);
       expect(sorted(withAbsent)).toEqual(expected);
     }
   });
 
-  it('a workspace member with NO project membership still gets the implicit set', () => {
+  it('a workspace member NEVER ADDED to an open project holds their role`s normal set', () => {
+    // The implicit workspace-member set this used to assert retired with project
+    // roles (MOTIR-6459): a person has the same role in every project they can
+    // enter (`role-model.md`).
     const held = resolvePermissions({
       accessLevel: 'open',
       workspaceRole: 'member',
-      projectRole: null,
+      addedToProject: false,
       customRolePermissions: null,
     });
-    expect(sorted(held)).toEqual(sorted(IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS));
+    expect(sorted(held)).toEqual(sorted(WORKSPACE_ROLE_PERMISSIONS.member));
   });
 
-  it('an EMPTY custom set grants nothing — it does NOT fall back to the base', () => {
-    // The distinction that a `?? ` on the array's LENGTH would get wrong. A role
+  it('an EMPTY custom set grants nothing — it does NOT fall back to the tier', () => {
+    // The distinction that a `??` on the array's LENGTH would get wrong. A role
     // that grants nothing is a legitimate role somebody authored on purpose.
-    const held = resolvePermissions(
-      onCustomRole({
-        accessLevel: 'open',
-        workspaceRole: 'member',
-        basedOn: 'admin',
-        permissions: [],
-      }),
-    );
+    const held = resolvePermissions(onCustomRole({ accessLevel: 'open', permissions: [] }));
     expect(sorted(held)).toEqual([]);
     expect(held.size).toBe(0);
   });
 });
 
 describe('the two RAILS stay above and below the custom set', () => {
-  it('a workspace OWNER resolves the full role-gated catalog even on a near-empty custom role', () => {
+  it('a Manager resolves the full role-gated catalog on every level, whatever custom array is passed', () => {
     for (const level of ALL_LEVELS) {
-      const held = resolvePermissions(
-        onCustomRole({
-          accessLevel: level,
-          workspaceRole: 'owner',
-          basedOn: 'viewer',
-          permissions: [], // a role that grants nothing at all
-        }),
-      );
-      for (const key of ROLE_GATED_PERMISSIONS) {
-        expect(held.has(key), `${level} · owner · ${key}`).toBe(true);
+      for (const addedToProject of [false, true]) {
+        const held = resolvePermissions(
+          onCustomRole({
+            accessLevel: level,
+            workspaceRole: 'manager',
+            addedToProject,
+            permissions: [], // a role that grants nothing at all
+          }),
+        );
+        for (const key of ROLE_GATED_PERMISSIONS) {
+          expect(held.has(key), `${level} · manager · added=${addedToProject} · ${key}`).toBe(true);
+        }
       }
     }
-  });
-
-  it('a workspace ADMIN likewise — a role somebody authored can never narrow them', () => {
-    const held = resolvePermissions(
-      onCustomRole({
-        accessLevel: 'private',
-        workspaceRole: 'admin',
-        basedOn: 'viewer',
-        permissions: ['project:browse'],
-      }),
-    );
-    expect(sorted(held)).toEqual(sorted(new Set(ROLE_GATED_PERMISSIONS)));
     // Specifically: they keep the key that lets them FIX a bad role.
-    expect(held.has('project:manage_access')).toBe(true);
+    expect(
+      resolvePermissions(
+        onCustomRole({ accessLevel: 'private', workspaceRole: 'manager', permissions: [] }),
+      ).has('project:manage_access'),
+    ).toBe(true);
   });
 
   it('an actor with NO workspace membership holds nothing beyond the level-gated layer, custom role or not', () => {
@@ -151,7 +128,6 @@ describe('the two RAILS stay above and below the custom set', () => {
       onCustomRole({
         accessLevel: 'private',
         workspaceRole: null,
-        basedOn: 'admin',
         permissions: [...ROLE_GATED_PERMISSIONS],
       }),
     );
@@ -163,7 +139,6 @@ describe('the two RAILS stay above and below the custom set', () => {
       onCustomRole({
         accessLevel: 'public',
         workspaceRole: null,
-        basedOn: 'admin',
         permissions: [...ROLE_GATED_PERMISSIONS],
       }),
     );
@@ -185,8 +160,6 @@ describe('the two RAILS stay above and below the custom set', () => {
     const naming = resolvePermissions(
       onCustomRole({
         accessLevel: 'open',
-        workspaceRole: 'member',
-        basedOn: 'admin',
         permissions: ['public_request:submit', 'public_request:upvote', 'public_request:comment'],
       }),
     );
@@ -194,12 +167,7 @@ describe('the two RAILS stay above and below the custom set', () => {
 
     // …and omitting them does not take them away on a public one.
     const omitting = resolvePermissions(
-      onCustomRole({
-        accessLevel: 'public',
-        workspaceRole: 'member',
-        basedOn: 'viewer',
-        permissions: ['project:browse'],
-      }),
+      onCustomRole({ accessLevel: 'public', permissions: ['project:browse'] }),
     );
     expect(omitting.has('public_request:submit')).toBe(true);
     expect(omitting.has('public_request:upvote')).toBe(true);
@@ -212,8 +180,6 @@ describe('the CATALOG is the source of truth over a stored array', () => {
     const held = resolvePermissions(
       onCustomRole({
         accessLevel: 'open',
-        workspaceRole: 'member',
-        basedOn: 'viewer',
         permissions: [
           'project:browse',
           // A key RETIRED from the catalog after the role was authored — the
@@ -231,14 +197,9 @@ describe('the CATALOG is the source of truth over a stored array', () => {
   });
 
   it('the filter is derived from the constant, not a hardcoded deny-list', () => {
-    // Every role-gated key survives the filter; nothing outside it does. Stated
-    // over the WHOLE constant so a key joining or leaving it is covered without
-    // an edit here.
     const held = resolvePermissions(
       onCustomRole({
         accessLevel: 'open',
-        workspaceRole: 'member',
-        basedOn: 'admin',
         permissions: [...ROLE_GATED_PERMISSIONS, 'synthetic:not-in-the-catalog'],
       }),
     );
@@ -247,139 +208,74 @@ describe('the CATALOG is the source of truth over a stored array', () => {
   });
 });
 
-describe('the ACCESS-LEVEL truth table — a custom role is subtracted at its BASE`s tier', () => {
-  // The parity claim this card actually has to make: `levelGrants` was not
-  // touched, and did not need to be. A custom role based on `viewer` must be
-  // subtracted by `limited` / `private` exactly as `viewer` is, and one based on
-  // `member` exactly as `member` is — which holds ONLY because the membership
-  // carries `role = definition.basedOn`.
-  //
-  // ⚠️ The expectations are LITERAL, transcribed from `levelGrants`' three
-  // branches by hand — not computed from the code under test, for the same
-  // reason accessParity's are not. The permission set is held CONSTANT across
-  // both bases so the only variable is the base tier.
+describe('the ACCESS-LEVEL truth table — a custom role is subtracted by whether the actor was ADDED', () => {
+  // ⚠️ The expectations are LITERAL, transcribed from `levelGrants`' branches by
+  // hand — not computed from the code under test, for the same reason
+  // accessParity's are not. The permission set is held CONSTANT, so the only
+  // variables are the level and whether the actor was added.
   const GRANTED = ['project:browse', 'work_item:edit', 'comment:add', 'attachment:create'] as const;
-
   type Expectation = Record<(typeof GRANTED)[number], boolean>;
+  const ALL: Expectation = {
+    'project:browse': true,
+    'work_item:edit': true,
+    'comment:add': true,
+    'attachment:create': true,
+  };
+  const NONE: Expectation = {
+    'project:browse': false,
+    'work_item:edit': false,
+    'comment:add': false,
+    'attachment:create': false,
+  };
 
-  const TABLE: Array<{
-    level: ProjectAccessLevel;
-    basedOn: 'viewer' | 'member';
-    expected: Expectation;
-  }> = [
-    // `open` / `public` — the base set survives intact at BOTH tiers.
-    {
-      level: 'open',
-      basedOn: 'viewer',
-      expected: {
-        'project:browse': true,
-        'work_item:edit': true,
-        'comment:add': true,
-        'attachment:create': true,
-      },
-    },
-    {
-      level: 'open',
-      basedOn: 'member',
-      expected: {
-        'project:browse': true,
-        'work_item:edit': true,
-        'comment:add': true,
-        'attachment:create': true,
-      },
-    },
-    {
-      level: 'public',
-      basedOn: 'viewer',
-      expected: {
-        'project:browse': true,
-        'work_item:edit': true,
-        'comment:add': true,
-        'attachment:create': true,
-      },
-    },
-    // `limited` — only a project MEMBER edits. A viewer-based role loses
-    // `work_item:edit` and keeps the rest; a member-based role keeps everything.
-    {
-      level: 'limited',
-      basedOn: 'viewer',
-      expected: {
-        'project:browse': true,
-        'work_item:edit': false,
-        'comment:add': true,
-        'attachment:create': true,
-      },
-    },
-    {
-      level: 'limited',
-      basedOn: 'member',
-      expected: {
-        'project:browse': true,
-        'work_item:edit': true,
-        'comment:add': true,
-        'attachment:create': true,
-      },
-    },
-    // `private` — a viewer browses and no more; a member keeps all three writes.
-    {
-      level: 'private',
-      basedOn: 'viewer',
-      expected: {
-        'project:browse': true,
-        'work_item:edit': false,
-        'comment:add': false,
-        'attachment:create': false,
-      },
-    },
-    {
-      level: 'private',
-      basedOn: 'member',
-      expected: {
-        'project:browse': true,
-        'work_item:edit': true,
-        'comment:add': true,
-        'attachment:create': true,
-      },
-    },
+  const TABLE: Array<{ level: ProjectAccessLevel; added: boolean; expected: Expectation }> = [
+    // `open` / `public` — the set survives intact, added or not.
+    { level: 'open', added: false, expected: ALL },
+    { level: 'open', added: true, expected: ALL },
+    { level: 'public', added: false, expected: ALL },
+    { level: 'public', added: true, expected: ALL },
+    // `limited` — everything but EDIT for someone not added.
+    { level: 'limited', added: false, expected: { ...ALL, 'work_item:edit': false } },
+    { level: 'limited', added: true, expected: ALL },
+    // `private` — nothing for someone not added; everything for someone added.
+    { level: 'private', added: false, expected: NONE },
+    { level: 'private', added: true, expected: ALL },
   ];
 
-  it.each(TABLE)(
-    '$level · a custom role based on $basedOn is subtracted like its base',
-    ({ level, basedOn, expected }) => {
-      const inputs = onCustomRole({
-        accessLevel: level,
-        workspaceRole: 'member',
-        basedOn,
-        permissions: [...GRANTED],
-      });
-      for (const key of GRANTED) {
-        expect(hasPermission(inputs, key), `${level} · ${basedOn} · ${key}`).toBe(expected[key]);
-      }
-    },
-  );
+  it.each(TABLE)('$level · added=$added', ({ level, added, expected }) => {
+    const inputs = onCustomRole({
+      accessLevel: level,
+      addedToProject: added,
+      permissions: [...GRANTED],
+    });
+    for (const key of GRANTED) {
+      expect(hasPermission(inputs, key), `${level} · added=${added} · ${key}`).toBe(expected[key]);
+    }
+  });
 
   it('and the SAME subtraction lands on the corresponding BUILT-IN — the parity itself', () => {
-    // The claim above is only interesting if the custom answer MATCHES the
-    // built-in one for the keys they share. Compare directly, per level.
+    // A custom role holding EXACTLY a built-in's set must resolve to exactly what
+    // that built-in resolves to, on every level, added or not — any difference
+    // could only come from the level layer treating the two differently.
     for (const level of ALL_LEVELS) {
-      for (const basedOn of ['viewer', 'member'] as const) {
-        const builtIn = resolvePermissions({
-          accessLevel: level,
-          workspaceRole: 'member',
-          projectRole: basedOn,
-        });
-        const custom = resolvePermissions(
-          onCustomRole({
+      for (const role of ['viewer', 'member'] as const) {
+        for (const addedToProject of [false, true]) {
+          const builtIn = resolvePermissions({
             accessLevel: level,
-            workspaceRole: 'member',
-            basedOn,
-            // The custom role holds EXACTLY its base's set — so any difference
-            // in the resolved answer can only come from the level layer
-            // treating the two differently, which is what must not happen.
-            permissions: [...BUILTIN_ROLE_PERMISSIONS[basedOn]],
-          }),
-        );
-        expect(sorted(custom), `${level} · ${basedOn}`).toEqual(sorted(builtIn));
+            workspaceRole: role,
+            addedToProject,
+          });
+          const custom = resolvePermissions(
+            onCustomRole({
+              accessLevel: level,
+              addedToProject,
+              permissions: [...WORKSPACE_ROLE_PERMISSIONS[role]],
+            }),
+          );
+          expect(sorted(custom), `${level} · ${role} · added=${addedToProject}`).toEqual(
+            sorted(builtIn),
+          );
+        }
       }
     }
   });
@@ -404,6 +300,6 @@ describe('resolve.ts stays PURE', () => {
     // erases at compile time.
     const prismaImports = source.match(/from '@\/generated\/prisma\/client'/g) ?? [];
     expect(prismaImports).toHaveLength(1);
-    expect(source).toMatch(/import type \{ MemberRole, ProjectAccessLevel \}/);
+    expect(source).toMatch(/import type \{ ProjectAccessLevel, WorkspaceRole \}/);
   });
 });

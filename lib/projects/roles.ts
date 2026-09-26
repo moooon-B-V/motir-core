@@ -1,4 +1,5 @@
-import type { MemberRole, ProjectAccessLevel } from '@/generated/prisma/client';
+import type { MemberRole, ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
+import { legacyToWorkspaceRole } from '@/lib/workspaces/roles';
 
 // Project + workspace role helpers for the Story 6.4 access model. The
 // `MemberRole` enum (owner / admin / member / viewer) is shared by
@@ -34,11 +35,20 @@ export type ProjectRole = (typeof PROJECT_ASSIGNABLE_ROLES)[number];
 export const PROJECT_ACCESS_LEVELS = ['public', 'open', 'limited', 'private'] as const;
 
 /**
- * True when `role` is a workspace manager (owner or admin) — the tier that
- * always passes the project-management gate regardless of project membership.
+ * True when `role` is a workspace MANAGER — the tier that always passes the
+ * project-management gate regardless of project membership.
+ *
+ * Roles live on the workspace now (Story MOTIR-6168 · MOTIR-6459), so the answer
+ * is `manager`. It also answers true for the LEGACY `owner` / `admin`, normalised
+ * through the DECISION's mapping (`legacyToWorkspaceRole`), so every caller that
+ * still hands it a legacy `MemberRole` keeps working unchanged until MOTIR-6462
+ * moves it to the workspace role and narrows this type.
  */
-export function isWorkspaceManager(role: MemberRole | string | null | undefined): boolean {
-  return role === 'owner' || role === 'admin';
+export function isWorkspaceManager(
+  role: WorkspaceRole | MemberRole | string | null | undefined,
+): boolean {
+  if (role === 'manager') return true;
+  return (role === 'owner' || role === 'admin') && legacyToWorkspaceRole(role) === 'manager';
 }
 
 /** Narrow an arbitrary string to a project-assignable `ProjectRole`, or null. */

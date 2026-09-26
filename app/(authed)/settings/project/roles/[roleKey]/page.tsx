@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
-import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { RoleDetail } from '../_components/RoleDetail';
 import { guardSettingsPage } from '../../_guard';
 
@@ -41,7 +41,7 @@ export default async function ProjectRoleDetailPage({
 
   const { roleKey } = await params;
   const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, actor);
+  const catalog = await projectRoleDefinitionService.getRoleCatalog(ctx.projectId, actor);
   // MOTIR-2483 — the WRITE affordances. `true` past the guard, and that is the
   // point of MOTIR-2469's model: this destination's key IS `project:manage_access`
   // (the registry entry says so, and the service asserts the same key on every

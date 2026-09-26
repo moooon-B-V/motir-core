@@ -4,7 +4,9 @@ import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
+import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -14,16 +16,21 @@ import {
   isEnforced,
   type PermissionKey,
 } from '@/lib/permissions/catalog';
-import { CUSTOM_ROLE_TIER, ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { CUSTOM_WORKSPACE_ROLE_TIER } from '@/lib/workspaces/roles';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { grantablePermissionKeys } from '@/lib/services/projectRoleDefinitionService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `projectAccessService.getPermissions` / `getRoleCatalog` (Story MOTIR-2255 ·
-// Subtask MOTIR-2262) against REAL Postgres — actual `ProjectMembership` rows at
-// each of the three roles, resolved through the real service, never a mocked
-// `resolveInputs`. The pure resolution already has an exhaustive truth table
+// Subtask MOTIR-2262) against REAL Postgres — real membership rows, resolved
+// through the real service, never a mocked `resolveInputs`.
+//
+// ⚠️ ROLES ARE THE WORKSPACE'S since Story MOTIR-6168 · MOTIR-6459. The scenario
+// below still writes a legacy PROJECT role on three actors, and that is on
+// purpose: the `admin` actor is a workspace Member holding a project `admin` row,
+// and the table proves it grants nothing — they resolve as the Member they are. The pure resolution already has an exhaustive truth table
 // (`accessParity.test.ts`); what this file proves is the OTHER half — that the
 // three facts the service reads out of the database are the three facts the
 // policy expects, and that the DTO boundary is deterministic.
@@ -106,13 +113,19 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   });
   await workspacesService.addMember({ userId: plainMember.id, workspaceId: workspace.id });
 
+  // The Viewer actor is a workspace VIEWER; the other two are workspace Members
+  // whose project role is legacy data the resolver no longer reads.
   async function projectActor(role: 'viewer' | 'member' | 'admin') {
     const u = await usersService.createUser({
       email: `${role}-${slug}@ex.com`,
       password: PASSWORD,
       name: role,
     });
-    await workspacesService.addMember({ userId: u.id, workspaceId: workspace.id });
+    await workspacesService.addMember({
+      userId: u.id,
+      workspaceId: workspace.id,
+      ...(role === 'viewer' ? { role: 'viewer' as const } : {}),
+    });
     await projectMembersService.addMember({
       key: project.identifier,
       actorUserId: owner.id,
@@ -165,136 +178,72 @@ function MEMBER_FACING_AT_MEMBER(): PermissionKey[] {
   ];
 }
 
-/** The permissions each role holds, per access level — read off real DB rows. */
+/** The Member set, written out (the old project `member` set, carried over). */
+function MEMBER_SET(): PermissionKey[] {
+  return [
+    'project:browse',
+    'work_item:edit',
+    'comment:add',
+    'attachment:create',
+    ...MEMBER_FACING_AT_MEMBER(),
+    // MOTIR-3188 — the DECIDE half, split out of `ai:view_plan`.
+    'ai:decide_plan',
+    // MOTIR-3629 — the REVERSIBLE removal, split out of `work_item:delete`.
+    'work_item:archive',
+    // MOTIR-6328 — the three rooms' view-any keys.
+    ...ROOM_VIEW_KEYS(),
+  ];
+}
+
+/** The Viewer set, written out. */
+function VIEWER_SET(): PermissionKey[] {
+  return ['project:browse', 'report:view', ...ROOM_VIEW_KEYS()];
+}
+
+/**
+ * The permissions each actor holds, per access level — read off real DB rows.
+ *
+ * Since MOTIR-6459 the key is the WORKSPACE role, and the project records only
+ * whether the actor was ADDED: `plainMember` is a workspace Member never added;
+ * `viewer` a workspace Viewer who was; `member` and `admin` workspace Members who
+ * were (the `admin` actor's project admin row grants nothing).
+ */
 const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], PermissionKey[]>> = {
   open: {
     owner: [...ROLE_GATED_PERMISSIONS],
     wsAdmin: [...ROLE_GATED_PERMISSIONS],
-    // + report:view (MOTIR-2349): the implicit workspace-member grant takes
-    // exactly one of the eight — charts of a project they can already read.
-    plainMember: [
-      'project:browse',
-      'work_item:edit',
-      'comment:add',
-      'attachment:create',
-      'report:view',
-      // MOTIR-6328 — the Plans and Runs rooms' view keys (not Approvals').
-      ...PLAN_RUN_VIEW_KEYS(),
-    ],
-    viewer: ['project:browse', 'report:view', ...ROOM_VIEW_KEYS()],
-    member: [
-      'project:browse',
-      'work_item:edit',
-      'comment:add',
-      'attachment:create',
-      ...MEMBER_FACING_AT_MEMBER(),
-      // MOTIR-3188 — the DECIDE half, split out of `ai:view_plan`. Listed
-      // beside `MEMBER_FACING_AT_MEMBER()` rather than inside it: that helper
-      // is MOTIR-2291's six, and folding a later key in would make membership
-      // of it stop meaning anything.
-      'ai:decide_plan',
-      // MOTIR-3629 — the REVERSIBLE removal, split out of `work_item:delete`.
-      // Listed here for the same reason, and note what it is NOT beside: the
-      // helper's own header says `work_item:delete` is deliberately absent
-      // because a delete cascade belongs at admin. That stays true — this is the
-      // other operation the one key was carrying.
-      'work_item:archive',
-      // MOTIR-6328 — the three rooms' view-any keys.
-      ...ROOM_VIEW_KEYS(),
-    ],
-    admin: [...ROLE_GATED_PERMISSIONS],
+    // A Member not added holds their role's normal keys — the one widening the
+    // model decides (it used to be the implicit workspace-member set).
+    plainMember: MEMBER_SET(),
+    viewer: VIEWER_SET(),
+    member: MEMBER_SET(),
+    admin: MEMBER_SET(),
   },
   limited: {
     owner: [...ROLE_GATED_PERMISSIONS],
     wsAdmin: [...ROLE_GATED_PERMISSIONS],
-    // view + comment, but NOT edit — the level subtracts it from a non-member.
-    // `report:view` survives: `levelGrants` names only the three edit-ish keys
-    // (MOTIR-2347 §3 added no branch), so every other key takes the default arm.
-    plainMember: [
-      'project:browse',
-      'comment:add',
-      'attachment:create',
-      'report:view',
-      ...PLAN_RUN_VIEW_KEYS(),
-    ],
-    viewer: ['project:browse', 'report:view', ...ROOM_VIEW_KEYS()],
-    member: [
-      'project:browse',
-      'work_item:edit',
-      'comment:add',
-      'attachment:create',
-      ...MEMBER_FACING_AT_MEMBER(),
-      // MOTIR-3188 — the DECIDE half, split out of `ai:view_plan`. Listed
-      // beside `MEMBER_FACING_AT_MEMBER()` rather than inside it: that helper
-      // is MOTIR-2291's six, and folding a later key in would make membership
-      // of it stop meaning anything.
-      'ai:decide_plan',
-      // MOTIR-3629 — the REVERSIBLE removal, split out of `work_item:delete`.
-      // Listed here for the same reason, and note what it is NOT beside: the
-      // helper's own header says `work_item:delete` is deliberately absent
-      // because a delete cascade belongs at admin. That stays true — this is the
-      // other operation the one key was carrying.
-      'work_item:archive',
-      // MOTIR-6328 — the three rooms' view-any keys.
-      ...ROOM_VIEW_KEYS(),
-    ],
-    admin: [...ROLE_GATED_PERMISSIONS],
+    // Not added: everything but EDIT.
+    plainMember: MEMBER_SET().filter((k) => k !== 'work_item:edit'),
+    viewer: VIEWER_SET(),
+    member: MEMBER_SET(),
+    admin: MEMBER_SET(),
   },
   private: {
     owner: [...ROLE_GATED_PERMISSIONS],
     wsAdmin: [...ROLE_GATED_PERMISSIONS],
-    // Invisible without a project membership — including for `report:view`.
+    // Invisible to anyone not added — including for `report:view`.
     plainMember: [],
-    viewer: ['project:browse', 'report:view', ...ROOM_VIEW_KEYS()],
-    member: [
-      'project:browse',
-      'work_item:edit',
-      'comment:add',
-      'attachment:create',
-      ...MEMBER_FACING_AT_MEMBER(),
-      // MOTIR-3188 — the DECIDE half, split out of `ai:view_plan`. Listed
-      // beside `MEMBER_FACING_AT_MEMBER()` rather than inside it: that helper
-      // is MOTIR-2291's six, and folding a later key in would make membership
-      // of it stop meaning anything.
-      'ai:decide_plan',
-      // MOTIR-3629 — the REVERSIBLE removal, split out of `work_item:delete`.
-      // Listed here for the same reason, and note what it is NOT beside: the
-      // helper's own header says `work_item:delete` is deliberately absent
-      // because a delete cascade belongs at admin. That stays true — this is the
-      // other operation the one key was carrying.
-      'work_item:archive',
-      // MOTIR-6328 — the three rooms' view-any keys.
-      ...ROOM_VIEW_KEYS(),
-    ],
-    admin: [...ROLE_GATED_PERMISSIONS],
+    viewer: VIEWER_SET(),
+    member: MEMBER_SET(),
+    admin: MEMBER_SET(),
   },
   public: {
     owner: [...ROLE_GATED_PERMISSIONS, ...PUBLIC_KEYS()],
     wsAdmin: [...ROLE_GATED_PERMISSIONS, ...PUBLIC_KEYS()],
-    plainMember: [
-      'project:browse',
-      'work_item:edit',
-      'comment:add',
-      'attachment:create',
-      'report:view',
-      ...PLAN_RUN_VIEW_KEYS(),
-      ...PUBLIC_KEYS(),
-    ],
-    viewer: ['project:browse', 'report:view', ...ROOM_VIEW_KEYS(), ...PUBLIC_KEYS()],
-    member: [
-      'project:browse',
-      'work_item:edit',
-      'comment:add',
-      'attachment:create',
-      ...MEMBER_FACING_AT_MEMBER(),
-      // MOTIR-3188 — see the note on the `open` row above.
-      'ai:decide_plan',
-      // MOTIR-3629 — see the note on the `open` row above.
-      'work_item:archive',
-      ...ROOM_VIEW_KEYS(),
-      ...PUBLIC_KEYS(),
-    ],
-    admin: [...ROLE_GATED_PERMISSIONS, ...PUBLIC_KEYS()],
+    plainMember: [...MEMBER_SET(), ...PUBLIC_KEYS()],
+    viewer: [...VIEWER_SET(), ...PUBLIC_KEYS()],
+    member: [...MEMBER_SET(), ...PUBLIC_KEYS()],
+    admin: [...MEMBER_SET(), ...PUBLIC_KEYS()],
   },
 };
 
@@ -359,7 +308,7 @@ describe('the rails, resolved through the database', () => {
       );
     expect(await holds('owner'), 'workspace owner, through the always-pass rail').toBe(true);
     expect(await holds('wsAdmin'), 'workspace admin, through the always-pass rail').toBe(true);
-    expect(await holds('admin'), 'the built-in project admin set').toBe(true);
+    expect(await holds('admin'), 'a Member with a legacy project admin row').toBe(true);
     expect(await holds('member'), 'every built-in role that browses holds it').toBe(true);
     expect(await holds('viewer'), 'every built-in role that browses holds it').toBe(true);
   });
@@ -367,7 +316,7 @@ describe('the rails, resolved through the database', () => {
   it('`approval:view_any` is OFFERED once enforced — on the role screens, and grantable to a custom role (MOTIR-5301)', async () => {
     const s = await buildScenario('open', 'view-any-offered');
     expect(ENFORCED_PERMISSIONS).toContain('approval:view_any');
-    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
     const rows = catalog.domains.flatMap((d) => d.permissions.map((p) => p.key));
     expect(rows).toContain('approval:view_any');
     expect(catalog.roles.find((r) => r.key === 'admin')?.permissions).toContain(
@@ -408,7 +357,7 @@ describe('the cross-workspace posture is preserved — 404, never 403', () => {
     const mine = await buildScenario('open', 'leak2-mine');
     const theirs = await buildScenario('open', 'leak2-theirs');
     await expect(
-      projectAccessService.getRoleCatalog(theirs.projectId, mine.ctxs.owner),
+      projectRoleDefinitionService.getRoleCatalog(theirs.projectId, mine.ctxs.owner),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 
@@ -418,7 +367,7 @@ describe('the cross-workspace posture is preserved — 404, never 403', () => {
       projectAccessService.getPermissions('does-not-exist', s.ctxs.owner),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
     await expect(
-      projectAccessService.getRoleCatalog('does-not-exist', s.ctxs.owner),
+      projectRoleDefinitionService.getRoleCatalog('does-not-exist', s.ctxs.owner),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 });
@@ -437,7 +386,7 @@ describe('the DTO boundary is serialisable and deterministic', () => {
 
   it('getRoleCatalog returns the three built-in roles, each with its set in catalog order', async () => {
     const s = await buildScenario('open', 'dto-catalog');
-    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.member);
+    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.member);
 
     expect(catalog.roles.map((r) => r.key)).toEqual(['admin', 'member', 'viewer']);
     for (const role of catalog.roles) {
@@ -503,7 +452,7 @@ describe('the DTO boundary is serialisable and deterministic', () => {
 
   it('groups every ROLE-GATED permission under a labelled, non-empty domain', async () => {
     const s = await buildScenario('open', 'dto-domains');
-    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.member);
+    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.member);
     const flattened = catalog.domains.flatMap((d) => d.permissions.map((p) => p.key));
     // ⚠️ NARROWED BY MOTIR-2439, and the narrowing is the point. This used to
     // assert the WHOLE catalog, on the reasoning that the settings page must show
@@ -554,7 +503,7 @@ describe('getRoleCatalog reports each role`s member count from real memberships'
     });
     const expected = new Map(seeded.map((row) => [row.role, row._count._all]));
 
-    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
     for (const role of catalog.roles) {
       // `expected` is keyed by the `MemberRole` enum; only a BUILT-IN has one
       // (`builtInRole` is null for a custom role — MOTIR-2478), and this project
@@ -577,12 +526,12 @@ describe('getRoleCatalog reports each role`s member count from real memberships'
       ).id,
       role: 'member',
     });
-    const again = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    const again = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
     expect(again.roles.map((r) => r.memberCount)).toEqual([1, 1, 1]);
     expect(
-      (await projectAccessService.getRoleCatalog(other.projectId, other.ctxs.owner)).roles.find(
-        (r) => r.key === 'member',
-      )?.memberCount,
+      (
+        await projectRoleDefinitionService.getRoleCatalog(other.projectId, other.ctxs.owner)
+      ).roles.find((r) => r.key === 'member')?.memberCount,
     ).toBe(2);
   });
 
@@ -603,7 +552,7 @@ describe('getRoleCatalog reports each role`s member count from real memberships'
       actorUserId: owner.id,
       name: 'Solo Project',
     });
-    const catalog = await projectAccessService.getRoleCatalog(
+    const catalog = await projectRoleDefinitionService.getRoleCatalog(
       project.id,
       ctxFor(owner.id, workspace.id),
     );
@@ -619,42 +568,41 @@ describe('getRoleCatalog reports each role`s member count from real memberships'
     // The membership rows exist and are non-zero; the guard is what stops the
     // read, not an empty result.
     expect(
-      (await projectAccessService.getRoleCatalog(theirs.projectId, theirs.ctxs.owner)).roles.some(
-        (r) => r.memberCount > 0,
-      ),
+      (
+        await projectRoleDefinitionService.getRoleCatalog(theirs.projectId, theirs.ctxs.owner)
+      ).roles.some((r) => r.memberCount > 0),
     ).toBe(true);
     await expect(
-      projectAccessService.getRoleCatalog(theirs.projectId, mine.ctxs.owner),
+      projectRoleDefinitionService.getRoleCatalog(theirs.projectId, mine.ctxs.owner),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 });
 
-describe('a membership on a CUSTOM role, resolved through the database (MOTIR-2470)', () => {
+describe('a membership on a WORKSPACE custom role, resolved through the database (MOTIR-6459)', () => {
   /**
-   * Put `ctx`'s user on a brand-new custom role in `projectId`, writing BOTH
-   * columns through the repository — the only sanctioned write path, and the
-   * one that holds `role = CUSTOM_ROLE_TIER`. Returns the role's id.
+   * Put `userId` on a brand-new WORKSPACE custom role, writing BOTH columns
+   * through `setWorkspaceRole` — the only sanctioned writer, which holds
+   * `workspace_role = CUSTOM_WORKSPACE_ROLE_TIER`. Returns the role's id.
+   * (Through the admin client: the workspace role service is MOTIR-6460's.)
    */
   async function putOnCustomRole(args: {
     workspaceId: string;
-    projectId: string;
     userId: string;
     name: string;
     permissions: string[];
+    workspaceRole?: 'manager' | 'member';
   }): Promise<string> {
-    const definition = await adminDb.projectRoleDefinition.create({
-      data: {
-        workspaceId: args.workspaceId,
-        projectId: args.projectId,
-        name: args.name,
-        permissions: args.permissions,
-      },
+    const definition = await adminDb.workspaceRoleDefinition.create({
+      data: { workspaceId: args.workspaceId, name: args.name, permissions: args.permissions },
     });
     await adminDb.$transaction((tx) =>
-      projectMembershipRepository.setRoleDefinition(
+      workspaceMembershipRepository.setWorkspaceRole(
         args.userId,
-        args.projectId,
-        { roleDefinitionId: definition.id, role: CUSTOM_ROLE_TIER },
+        args.workspaceId,
+        {
+          workspaceRole: args.workspaceRole ?? CUSTOM_WORKSPACE_ROLE_TIER,
+          roleDefinitionId: definition.id,
+        },
         tx,
       ),
     );
@@ -667,7 +615,6 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     // comments and attachments — the epic's own motivating gap.
     await putOnCustomRole({
       workspaceId: s.workspaceId,
-      projectId: s.projectId,
       userId: s.ctxs.member.userId,
       name: 'Contractor',
       permissions: ['project:browse', 'comment:add', 'attachment:create'],
@@ -684,14 +631,17 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     expect(untouched.has('comment:add')).toBe(false);
   });
 
-  it('the workspace-manager RAIL wins over a custom role the OWNER is on', async () => {
+  it('the Manager RAIL wins over a custom role a Manager row happens to point at', async () => {
     const s = await buildScenario('private', 'custom-rail');
+    // A Manager is never ON a custom role, but a row carrying both is the shape
+    // a bad write would leave — and the rail must still win, so no role
+    // somebody authored can lock a Manager out.
     await putOnCustomRole({
       workspaceId: s.workspaceId,
-      projectId: s.projectId,
       userId: s.ctxs.owner.userId,
       name: 'Nearly nothing',
       permissions: [], // grants absolutely nothing
+      workspaceRole: 'manager',
     });
     const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.owner);
     for (const key of ROLE_GATED_PERMISSIONS) {
@@ -711,18 +661,14 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     'the access LEVEL subtracts NOTHING — a custom role grants exactly what it lists',
     { timeout: 60_000 },
     async () => {
-      // Yue, 2026-08-09, and it is the behaviour change the decision to drop
-      // `based_on` produced. Before, a role's tier was its seed built-in, so two
-      // roles holding the SAME set resolved differently on a `limited` project.
-      // Now every custom-role membership sits at `CUSTOM_ROLE_TIER`, and the
-      // level's subtraction — which exists to narrow the COARSE built-ins — takes
-      // nothing from a set an admin enumerated by hand.
+      // The actor was ADDED to the project, and the level reads only that — so a
+      // custom role grants exactly what it lists on every level (MOTIR-6459; the
+      // `based_on` decision of 2026-08-09 carried to the workspace).
       const permissions = ['project:browse', 'work_item:edit', 'comment:add', 'attachment:create'];
       for (const level of ['open', 'limited', 'private', 'public'] as const) {
         const s = await buildScenario(level, `custom-level-${level}`);
         await putOnCustomRole({
           workspaceId: s.workspaceId,
-          projectId: s.projectId,
           userId: s.ctxs.viewer.userId,
           name: 'Contractor',
           permissions,
@@ -755,7 +701,6 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     const s = await buildScenario('open', 'custom-stale');
     await putOnCustomRole({
       workspaceId: s.workspaceId,
-      projectId: s.projectId,
       userId: s.ctxs.member.userId,
       name: 'Stale',
       // `repository:connect` is the real shape: MOTIR-2294 retired it. A row
@@ -771,20 +716,18 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     const other = await buildScenario('open', 'custom-rls-other');
     const roleId = await putOnCustomRole({
       workspaceId: s.workspaceId,
-      projectId: s.projectId,
       userId: s.ctxs.member.userId,
       name: 'Contractor',
       permissions: ['project:browse', 'comment:add'],
     });
 
     // Under the OTHER workspace's GUC, dropped to the non-bypass app role, the
-    // membership's own row is hidden too (project_membership carries the same
-    // policy) — so the join returns nothing and there is no way to read the
-    // role's set across the tenant boundary.
+    // role row is hidden — so there is no way to read its set across the tenant
+    // boundary.
     const leaked = await adminDb.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${other.workspaceId}, true)`;
       await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
-      return tx.projectRoleDefinition.findMany({ where: { id: roleId } });
+      return tx.workspaceRoleDefinition.findMany({ where: { id: roleId } });
     });
     expect(leaked).toEqual([]);
 
@@ -793,7 +736,7 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     const visible = await adminDb.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${s.workspaceId}, true)`;
       await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
-      return tx.projectRoleDefinition.findMany({ where: { id: roleId } });
+      return tx.workspaceRoleDefinition.findMany({ where: { id: roleId } });
     });
     expect(visible.map((r) => r.id)).toEqual([roleId]);
   });
@@ -802,7 +745,6 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     const s = await buildScenario('open', 'custom-onetrip');
     await putOnCustomRole({
       workspaceId: s.workspaceId,
-      projectId: s.projectId,
       userId: s.ctxs.member.userId,
       name: 'Contractor',
       permissions: ['project:browse', 'comment:add'],
@@ -839,7 +781,6 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     const s = await buildScenario('open', 'custom-back');
     await putOnCustomRole({
       workspaceId: s.workspaceId,
-      projectId: s.projectId,
       userId: s.ctxs.member.userId,
       name: 'Contractor',
       permissions: ['project:browse'],
@@ -849,16 +790,91 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     ]);
 
     await adminDb.$transaction((tx) =>
-      projectMembershipRepository.setRoleDefinition(
+      workspaceMembershipRepository.setWorkspaceRole(
         s.ctxs.member.userId,
-        s.projectId,
-        { roleDefinitionId: null, role: 'member' },
+        s.workspaceId,
+        { workspaceRole: 'member', roleDefinitionId: null },
         tx,
       ),
     );
     const restored = await projectAccessService.getPermissions(s.projectId, s.ctxs.member);
     expect(restored.has('work_item:edit')).toBe(true);
     expect(restored.has('comment:add')).toBe(true);
+  });
+});
+
+describe('the workspace role decides every project at once (MOTIR-6459)', () => {
+  it("changing one person's workspace_role member → viewer changes their keys in TWO projects, with no per-project write", async () => {
+    const s = await buildScenario('open', 'two-projects');
+    const second = await projectsService.createProject({
+      workspaceId: s.workspaceId,
+      actorUserId: s.ctxs.owner.userId,
+      name: 'Second project',
+    });
+    const who = s.ctxs.plainMember;
+    for (const projectId of [s.projectId, second.id]) {
+      expect(
+        (await projectAccessService.getPermissions(projectId, who)).has('work_item:edit'),
+      ).toBe(true);
+    }
+    const projectRowsBefore = await adminDb.projectMembership.count({
+      where: { userId: who.userId },
+    });
+
+    await adminDb.$transaction((tx) =>
+      workspaceMembershipRepository.setWorkspaceRole(
+        who.userId,
+        s.workspaceId,
+        { workspaceRole: 'viewer', roleDefinitionId: null },
+        tx,
+      ),
+    );
+
+    for (const projectId of [s.projectId, second.id]) {
+      const held = await projectAccessService.getPermissions(projectId, who);
+      expect([...held].sort()).toEqual(VIEWER_SET().sort());
+    }
+    // Nothing per project was written to get there.
+    expect(await adminDb.projectMembership.count({ where: { userId: who.userId } })).toBe(
+      projectRowsBefore,
+    );
+  });
+
+  it('a NULL workspace_role resolves by the legacy mapping — the deploy-window fallback', async () => {
+    const s = await buildScenario('open', 'null-fallback');
+    // Every fixture row here is written with workspace_role NULL (the service
+    // writes only the legacy column until MOTIR-6462), which is exactly the row
+    // the still-serving old build writes during a deploy.
+    const row = await adminDb.workspaceMembership.findUniqueOrThrow({
+      where: { userId_workspaceId: { userId: s.ctxs.wsAdmin.userId, workspaceId: s.workspaceId } },
+    });
+    expect([row.role, row.workspaceRole]).toEqual(['admin', null]);
+    const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.wsAdmin);
+    expect([...held].sort()).toEqual([...ROLE_GATED_PERMISSIONS].sort());
+  });
+
+  it('the org Owner with NO workspace membership still passes every role-gated key in a private project (MOTIR-6308)', async () => {
+    const s = await buildScenario('private', 'owner-reach');
+    const org = await adminDb.workspace.findUniqueOrThrow({ where: { id: s.workspaceId } });
+    const orgOwner = await usersService.createUser({
+      email: 'org-owner-reach@ex.com',
+      password: PASSWORD,
+      name: 'Org Owner',
+    });
+    await adminDb.organizationMembership.updateMany({
+      where: { organizationId: org.organizationId, role: 'owner' },
+      data: { role: 'admin' },
+    });
+    await adminDb.organizationMembership.create({
+      data: { organizationId: org.organizationId, userId: orgOwner.id, role: 'owner' },
+    });
+    const ctx = ctxFor(orgOwner.id, s.workspaceId);
+    for (const key of ROLE_GATED_PERMISSIONS) {
+      await expect(
+        projectAccessService.assertPermission(s.projectId, ctx, key),
+        `org Owner refused ${key}`,
+      ).resolves.toBeUndefined();
+    }
   });
 });
 
@@ -874,7 +890,7 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
     await seedRole(s, 'Reporter', ['project:browse', 'work_item:triage']);
     await seedRole(s, 'Contractor', ['project:browse', 'comment:add']);
 
-    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
     expect(catalog.roles.map((r) => r.name)).toEqual([null, null, null, 'Contractor', 'Reporter']);
     expect(catalog.roles.slice(0, 3).map((r) => r.key)).toEqual(['admin', 'member', 'viewer']);
 
@@ -890,7 +906,7 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
     // Asserted against the EXISTING expectations rather than rewritten ones —
     // the widening must be invisible to a project that has no roles of its own.
     const s = await buildScenario('open', 'cat-none');
-    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
     expect(catalog.roles).toHaveLength(3);
     expect(catalog.roles.every((r) => r.builtIn)).toBe(true);
   });
@@ -934,12 +950,12 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
         },
       });
       await (client as unknown as typeof db).$transaction(async (tx) => {
-        await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner, tx);
+        await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner, tx);
       });
       return reads;
     }
 
-    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
     expect(catalog.roles.find((r) => r.name === 'A role')?.memberCount).toBe(2);
     expect(catalog.roles.find((r) => r.name === 'B role')?.memberCount).toBe(1);
     expect(catalog.roles.find((r) => r.name === 'C role')?.memberCount).toBe(0);
@@ -950,7 +966,7 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
     await seedRole(s, 'E role', ['project:browse']);
     expect(await countReads()).toBe(withThree);
     expect(
-      (await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner)).roles,
+      (await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner)).roles,
     ).toHaveLength(3 + 5);
     expect(c.id).toBeTruthy();
   });
@@ -961,13 +977,13 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
     await seedRole(theirs, 'Theirs', ['project:browse']);
     // It really is there for its own workspace…
     expect(
-      (await projectAccessService.getRoleCatalog(theirs.projectId, theirs.ctxs.owner)).roles.some(
-        (r) => r.name === 'Theirs',
-      ),
+      (
+        await projectRoleDefinitionService.getRoleCatalog(theirs.projectId, theirs.ctxs.owner)
+      ).roles.some((r) => r.name === 'Theirs'),
     ).toBe(true);
     // …and unreachable from mine.
     await expect(
-      projectAccessService.getRoleCatalog(theirs.projectId, mine.ctxs.owner),
+      projectRoleDefinitionService.getRoleCatalog(theirs.projectId, mine.ctxs.owner),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 
@@ -989,7 +1005,7 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
       'project:browse',
       'repository:connect', // retired by MOTIR-2294
     ]);
-    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
     expect(catalog.roles.find((r) => r.name === 'Stale')?.permissions).toEqual(['project:browse']);
   });
 });

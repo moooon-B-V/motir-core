@@ -5,7 +5,7 @@ import { getActiveProject } from '@/lib/projects';
 import { isCloud } from '@/lib/billing/availability';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { projectRepoAccessService } from '@/lib/services/projectRepoAccessService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { teamAccessSummary } from '@/lib/projectRepos/teamAccessView';
@@ -56,7 +56,7 @@ export default async function ProjectMembersPage() {
       // read the Roles & permissions screen uses, joining this batch rather than
       // opening a second round trip, so the picker's list and that screen's list
       // can never disagree.
-      projectAccessService.getRoleCatalog(ctx.projectId, ctx),
+      projectRoleDefinitionService.getRoleCatalog(ctx.projectId, ctx),
       workspacesService.listMembers(ctx.workspaceId, ctx.userId),
       workspacesService.getWorkspaceSummary(ctx.workspaceId, ctx.userId),
       // Door 2's count (MOTIR-1945) — read here rather than inside the card so

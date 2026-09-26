@@ -65,6 +65,23 @@ export const workspaceMembershipRepository = {
   },
 
   /**
+   * Every membership of a workspace WITH the custom role each points at, in ONE
+   * query (MOTIR-6459) — the many-actor twin of
+   * {@link findByUserAndWorkspaceWithRoleDefinition}, for
+   * `projectAccessService.resolveCanEditForUsers`, which answers "who may edit
+   * this project?" for a whole team without a round trip per person.
+   */
+  async findMembersByWorkspaceWithRoleDefinition(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<MembershipWithRoleDefinition[]> {
+    return tx.workspaceMembership.findMany({
+      where: { workspaceId },
+      include: { roleDefinition: true },
+    });
+  },
+
+  /**
    * Write a member's WORKSPACE ROLE — `workspace_role` and `role_definition_id`
    * together, in ONE statement (MOTIR-6457). THE ONLY WRITER of the two columns:
    * they move together (a custom role is `CUSTOM_WORKSPACE_ROLE_TIER` + its

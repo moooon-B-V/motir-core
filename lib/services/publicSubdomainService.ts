@@ -74,8 +74,13 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // see (two different workspaces claiming one label lock two different rows).
 // Both are needed and neither is redundant.
 
-/** Roles that may change a workspace's public address. */
-const ADDRESS_ADMIN_ROLES = new Set(['owner', 'admin']);
+/**
+ * Roles that may change a workspace's public address — a workspace MANAGER
+ * (`readReachRole` answers a workspace role since MOTIR-6459), and the legacy
+ * `owner` / `admin` a page still reads off `membership.role` until MOTIR-6462
+ * moves it.
+ */
+const ADDRESS_ADMIN_ROLES = new Set(['manager', 'owner', 'admin']);
 
 /**
  * Whether a workspace ROLE may change the address — the predicate the settings

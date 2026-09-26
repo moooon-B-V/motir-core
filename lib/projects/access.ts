@@ -9,17 +9,15 @@ import type { ProjectPermissionInputs } from '@/lib/permissions/resolve';
 // MOTIR-2261). Each predicate is now a membership test against the actor's
 // resolved PERMISSION SET: `lib/permissions/catalog.ts` names the permissions,
 // `lib/permissions/builtinRoles.ts` expresses each built-in role as a set over
-// them, and `lib/permissions/resolve.ts` turns the three resolved facts into the
-// actor's effective set — including both shipped rails (workspace owner/admin
-// always passes; a non-workspace-member never does) and the per-level
-// subtraction. Read those three files for the semantics; this file is the
+// them, and `lib/permissions/resolve.ts` turns the resolved facts — the access
+// level, the actor's WORKSPACE role (Story MOTIR-6168) and whether they were added
+// to the project — into the actor's effective set, including both shipped rails
+// (a workspace Manager always passes; a non-workspace-member never does) and the
+// per-level subtraction. Read those three files for the semantics; this file is the
 // vocabulary the rest of the codebase speaks.
 //
-// The move is deliberately BEHAVIOUR-NEUTRAL — the built-in role sets are
-// defined as exactly the sets that reproduce the previous decision tables, and
-// `tests/permissions/accessParity.test.ts` drives all 64 combinations of access
-// level × workspace role × project role through all eleven predicates against
-// expectations transcribed as literal booleans from the pre-change policy.
+// `tests/permissions/accessParity.test.ts` is the truth table: every access level
+// × workspace role × added-or-not, each row's expected set written out.
 //
 // Still pure (no Prisma client, no IO), so it stays trivially unit-testable and
 // importable from anywhere; the IO half (resolving the inputs from the DB, then
@@ -42,7 +40,7 @@ export type ProjectAccessInputs = ProjectPermissionInputs;
  * read, the board projection, the issue list/detail). `public` admits ANYONE,
  * including an unauthenticated / cross-org actor — the single cross-org read
  * exception (Story 6.12); `open`/`limited` admit any workspace member; `private`
- * requires an explicit project membership. Workspace owner/admin always pass.
+ * requires the actor to have been added. A workspace Manager always passes.
  */
 export function canBrowse(i: ProjectAccessInputs): boolean {
   return hasPermission(i, 'project:browse');
@@ -118,7 +116,7 @@ export function canCommentPublicRequest(i: ProjectAccessInputs): boolean {
 /**
  * Whether the actor may MODERATE comments — Jira's "Edit all / Delete all
  * comments" permissions (Story 5.1): the project `admin` tier, plus the
- * workspace owner/admin always-pass rail. Authors edit/delete their OWN
+ * workspace Manager always-pass rail. Authors edit/delete their OWN
  * comments regardless of this (the service checks authorship first).
  */
 export function canModerateComments(i: ProjectAccessInputs): boolean {

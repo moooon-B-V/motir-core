@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
-import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { RoleEditor } from '../_components/RoleEditor';
 import { guardSettingsPage } from '../../_guard';
 
@@ -42,7 +42,7 @@ export default async function NewProjectRolePage() {
   if (refused) return refused;
 
   const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, actor);
+  const catalog = await projectRoleDefinitionService.getRoleCatalog(ctx.projectId, actor);
 
   return (
     <RoleEditor projectKey={ctx.project.identifier} domains={catalog.domains} catalog={catalog} />

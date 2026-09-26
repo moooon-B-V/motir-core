@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { PERMISSIONS, isEnforced, type PermissionKey } from '@/lib/permissions/catalog';
@@ -213,7 +214,7 @@ describe('the capability methods and getPermissions agree, on every level and ev
 describe('the widened DTO survives the round trip through real rows', () => {
   it("reports each role's real headcount and the two groupings still cover the catalog", async () => {
     const s = await buildScenario('open', 'seam-dto');
-    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
 
     const seeded = await adminDb.projectMembership.groupBy({
       by: ['role'],
@@ -244,7 +245,7 @@ describe('the widened DTO survives the round trip through real rows', () => {
     // On an `open` project a project member's resolved set is their role's set —
     // so the marks a real member would see are the capabilities they really have.
     const s = await buildScenario('open', 'seam-marks');
-    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.member);
+    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.member);
     const memberRole = catalog.roles.find((role) => role.key === 'member')!;
     const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.member);
     for (const key of ROLE_GATED_PERMISSIONS.filter((k) => isEnforced(k))) {
@@ -254,7 +255,7 @@ describe('the widened DTO survives the round trip through real rows', () => {
 
   it('is JSON-serialisable end to end — no Set reaches a Server Component prop', async () => {
     const s = await buildScenario('limited', 'seam-json');
-    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.admin);
+    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.admin);
     expect(JSON.parse(JSON.stringify(catalog))).toEqual(catalog);
   });
 });
@@ -291,7 +292,10 @@ describe('the public path resolves for a genuinely anonymous actor', () => {
     // …and no ROLE grants one, on the very level where everybody holds them.
     for (const persona of PERSONAS) {
       const held = await projectAccessService.getPermissions(s.projectId, s.ctxs[persona]);
-      const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs[persona]);
+      const catalog = await projectRoleDefinitionService.getRoleCatalog(
+        s.projectId,
+        s.ctxs[persona],
+      );
       for (const role of catalog.roles) {
         expect(role.permissions.some((key) => key.startsWith('public_request:'))).toBe(false);
       }

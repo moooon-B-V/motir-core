@@ -450,9 +450,7 @@ describe('DELETE /api/projects/[key]/roles/[roleId]', () => {
     expect(ok.status).toBe(204);
     // Read the outcome BACK through the API's own view of the project, not a
     // raw row: both memberships have moved.
-    const catalog = await (
-      await import('@/lib/services/projectAccessService')
-    ).projectAccessService.getRoleCatalog(fx.projectId, fx.adminCtx);
+    const catalog = await projectRoleDefinitionService.getRoleCatalog(fx.projectId, fx.adminCtx);
     expect(catalog.roles.find((r) => r.key === destination.id)?.memberCount).toBe(2);
     expect(catalog.roles.some((r) => r.key === role.id)).toBe(false);
   });

@@ -2,13 +2,13 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
-import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { RoleList } from './_components/RoleList';
 import { guardSettingsPage } from '../_guard';
 
 // Project settings → Access → Roles & permissions, screen 1 (Story MOTIR-2282 ·
 // Subtask MOTIR-2263). A server component: it reads the active project's role
-// catalog through `projectAccessService.getRoleCatalog` and renders it. There is
+// catalog through `projectRoleDefinitionService.getRoleCatalog` and renders it. There is
 // no client state on this screen at all — it is a description of the model, and
 // the only interaction is a link into a role.
 //
@@ -41,7 +41,7 @@ export default async function ProjectRolesPage() {
   if (refused) return refused;
 
   const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, actor);
+  const catalog = await projectRoleDefinitionService.getRoleCatalog(ctx.projectId, actor);
   // MOTIR-2483 — the WRITE affordances. `true` past the guard, and that is the
   // point of MOTIR-2469's model: this destination's key IS `project:manage_access`
   // (the registry entry says so, and the service asserts the same key on every

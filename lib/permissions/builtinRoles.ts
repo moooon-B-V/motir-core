@@ -1,11 +1,21 @@
+import type { WorkspaceRole } from '@/generated/prisma/client';
 import type { ProjectRole } from '@/lib/projects/roles';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 
 // The BUILT-IN ROLES as permission SETS (Story MOTIR-2255 · Subtask MOTIR-2261).
 // A role stops being a name the policy switches on and becomes a chosen set over
-// `lib/permissions/catalog.ts`. These three are IMMUTABLE and seeded to reproduce
-// today's behaviour EXACTLY — Story MOTIR-2257 adds project-scoped custom roles
-// that start from one of these as their base.
+// `lib/permissions/catalog.ts`. These three are IMMUTABLE.
+//
+// ⚠️ THEY ARE WORKSPACE ROLES NOW (Story MOTIR-6168 · MOTIR-6459;
+// `docs/decisions/role-model.md` §2–§3). Each person holds ONE role per workspace
+// — Manager, Member or Viewer, or a workspace custom role authored from one of
+// them — and it is their role in every project of that workspace. Projects carry
+// no roles: a project only says whether the person was ADDED to it, which is
+// what the access level reads. The sets below are the old project `admin` /
+// `member` / `viewer` sets carried over UNCHANGED as Manager / Member / Viewer,
+// so the move changes who holds a set, never what a set means. And there is no
+// "workspace member with no role" any more, so the implicit set that stood below
+// them is gone (`member-facing-permissions.md`, the 2026-09-26 amendment).
 //
 // Each set is the role's MAXIMAL grant, i.e. what it holds on the most-open
 // access level. The project's `accessLevel` then SUBTRACTS from it — see
@@ -40,17 +50,21 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
  *
  * ⚠️ THE TWELVE ADMINISTRATIVE KEYS ARE HERE, AND THAT IS BEHAVIOUR-NEUTRAL.
  * They enter alongside `project:administer` and nowhere else: `member` /
- * `viewer` / {@link IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS} gain none. Because
- * `levelGrants` in `lib/permissions/resolve.ts` treats every key that is not
- * `work_item:edit` / `comment:add` / `attachment:create` identically, each of the
- * twelve resolves to EXACTLY the actors `project:administer` resolves to, on all
- * four access levels and both rails. `tests/permissions/accessParity.test.ts`
- * proves that equivalence over the whole 64-row input space rather than asserting
- * it here.
+ * `viewer` gain none. Because `levelGrants` in `lib/permissions/resolve.ts`
+ * treats every key but `work_item:edit` identically, each of the twelve resolves
+ * to EXACTLY the actors `project:administer` resolves to, on all four access
+ * levels. `tests/permissions/accessParity.test.ts` proves that over the whole
+ * input space rather than asserting it here.
  */
 /**
- * The TIER a membership on a CUSTOM role sits at (Story MOTIR-2257; Yue,
+ * The TIER a membership on a PROJECT custom role sits at (Story MOTIR-2257; Yue,
  * 2026-08-09).
+ *
+ * ⚠️ LEGACY SINCE MOTIR-6459. The resolver no longer reads a project role at all;
+ * its successor is `CUSTOM_WORKSPACE_ROLE_TIER` (`lib/workspaces/roles.ts`), which
+ * a workspace custom role sits at for the same reason. This constant survives only
+ * for the project-role writers MOTIR-6464 retires, and the follow-up contract
+ * story drops the columns it describes.
  *
  * `ProjectMembership.role` and `.roleDefinitionId` move together, and this is
  * the value the first takes whenever the second is set. It exists because the
@@ -182,14 +196,16 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
 ];
 
 /**
- * The three built-in project roles, as sets over the catalog. Typed against
+ * The three built-in WORKSPACE roles, as sets over the catalog. Typed against
  * {@link PermissionKey}, so a key that does not exist fails to compile.
  *
- *   * **admin**  — the whole role-gated catalog: administers the project (and
+ *   * **manager** — the whole role-gated catalog, in every project of the
+ *                  workspace (the old project `admin` set — and exactly what the
+ *                  resolver's manager rail already granted): administers the project (and
  *                  each of MOTIR-2256's twelve per-domain administrative keys),
  *                  moderates comments and attachments, manages watchers, and
  *                  (MOTIR-5293) manages anyone's saved filters.
- *   * **member** — browses, edits work items, comments, attaches, and (MOTIR-2291)
+ *   * **member**  — browses, edits work items, comments, attaches, and (MOTIR-2291)
  *                  runs the planner, manages sprints and saved filters, triages
  *                  and acts on a generated plan, and (MOTIR-3629) ARCHIVES a work
  *                  item. No administrative or moderation
@@ -197,7 +213,7 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
  *                  put a bulk import and a delete cascade at admin, and the
  *                  reversible soft-remove is what MOTIR-3629 separated from the
  *                  second of those.
- *   * **viewer** — READ-ONLY EVERYWHERE. Browse, plus (MOTIR-2291) `report:view`:
+ *   * **viewer**  — READ-ONLY EVERYWHERE. Browse, plus (MOTIR-2291) `report:view`:
  *                  the shipped viewer contract denies comment and attachment
  *                  creation on every access level (the Story 5.1 decision), and a
  *                  report is an aggregation of rows they may already read one at a
@@ -207,8 +223,8 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
  * `docs/decisions/member-facing-permissions.md`; that record is the source, and a
  * divergence between it and these sets is a bug here, not a judgement call.
  */
-export const BUILTIN_ROLE_PERMISSIONS: Record<ProjectRole, ReadonlySet<PermissionKey>> = {
-  admin: new Set<PermissionKey>(ROLE_GATED_PERMISSIONS),
+export const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceRole, ReadonlySet<PermissionKey>> = {
+  manager: new Set<PermissionKey>(ROLE_GATED_PERMISSIONS),
   member: new Set<PermissionKey>([
     'project:browse',
     'work_item:edit',
@@ -234,8 +250,8 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<ProjectRole, ReadonlySet<Permissio
     'ai:plan',
     'ai:view_plan',
     // MOTIR-3188 — the DECIDE half. `member` is where approve/decline already
-    // resolved through `ai:view_plan`, so the key lands beside it; `viewer` and
-    // the implicit workspace-member grant take neither, exactly as before.
+    // resolved through `ai:view_plan`, so the key lands beside it; `viewer` takes
+    // neither, exactly as before.
     'ai:decide_plan',
     // MOTIR-6328 — the three rooms' view-any keys (DECISION MOTIR-6165 Q2,
     // 2026-09-24): a member sees every plan, approval record and run of the
@@ -261,64 +277,19 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<ProjectRole, ReadonlySet<Permissio
 };
 
 /**
- * The implicit grant of a WORKSPACE member who holds NO project membership.
- * They are not a role — nobody assigned them anything — but the shipped policy
- * still admits them to `open` / `limited` / `public` projects, so the resolution
- * needs a base set for them. The access level is what then takes `work_item:edit`
- * away on `limited` and everything away on `private`.
- *
- * Naming it here (rather than reusing `BUILTIN_ROLE_PERMISSIONS.member` inline)
- * keeps the two ideas distinct: one is a role a human chose, the other is what
- * the workspace grants by default. Story MOTIR-2257's custom roles may change the
- * former without touching the latter.
- *
- * ⚠️ AND THE TWO SETS NOW DIVERGE (MOTIR-2291), which is the whole reason the
- * constant exists. Of the eight member-facing keys this set takes exactly ONE —
- * `report:view`. A stranger to the project may read its charts, because a
- * burndown aggregates rows they can already read one at a time. They may NOT
- * spend the workspace's AI credits, run an importer, restructure a sprint,
- * author a shared saved filter, accept a triage submission or delete a subtree
- * on a project nobody put them on: those are acts of ownership, and a workspace
- * membership is not one. Argued in `docs/decisions/member-facing-permissions.md`
- * §2 — copying `member`'s set here is now a REAL capability grant, not a
- * shortcut.
- *
- * ⚠️ AND `work_item:archive` DOES NOT ENTER EITHER (MOTIR-3629), which is the
- * one place that key parts from `member`. The argument above is what decides it:
- * archiving takes a row out of every active view for the whole team, and a
- * stranger to the project making the board's contents disappear is an act of
- * ownership even though it is reversible. Editing a field they can already read
- * is not the same act, which is why `work_item:edit` is here and this is not.
- *
- * ⚠️ IT IS A REAL LOSS FOR THAT ACTOR, and `levelGrants` is why the alternative
- * is worse rather than merely different. The shipped ⋯ menu drew them an Archive
- * row on `work_item:edit` while `archiveWorkItem` refused it on
- * `work_item:delete`, so the control was on screen and 403'd —
- * `tests/e2e/work-item-delete.spec.ts` asserted its presence, and MOTIR-3629
- * inverts that assertion on the record. Adding the key HERE without also naming
- * it in `levelGrants` (`lib/permissions/resolve.ts`) would leave an outsider on a
- * `limited` project able to archive while unable to edit, because that function
- * names only `work_item:edit` / `comment:add` / `attachment:create` and every
- * other key takes the default arm. Adding the branch is a per-level policy change
- * that file reserves for its own card. Full argument:
- * `docs/decisions/token-permissions.md` §10(c).
+ * The LEGACY project-role view of the sets above — `admin` is the Manager set —
+ * for the two surfaces that still speak project roles until they move: the
+ * project Roles page's catalogue (`permissionMappers`, MOTIR-6466 moves it to the
+ * workspace) and the project custom-role editor's "Start from"
+ * (`projectRoleDefinitionService`, retired by MOTIR-6464). Derived, never
+ * declared, so it cannot drift from the sets the resolver reads — and the role
+ * migration's literal-snapshot test (MOTIR-6458) reads it too.
  */
-export const IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS: ReadonlySet<PermissionKey> =
-  new Set<PermissionKey>([
-    'project:browse',
-    'work_item:edit',
-    'comment:add',
-    'attachment:create',
-    'report:view',
-    // MOTIR-6328 — `plan:view_any` and `run:view_any` ONLY. This actor opens
-    // `/plans` and `/runs` on browse today (both reads assert nothing further), so
-    // the two keys keep that reach once the reads assert them. It has never held
-    // `approval:view_any`, and widening a project stranger's view of the approval
-    // trail is not Story MOTIR-6179's to decide — the workspace roles story
-    // (MOTIR-6168) owns what this grant becomes.
-    'plan:view_any',
-    'run:view_any',
-  ]);
+export const BUILTIN_ROLE_PERMISSIONS: Record<ProjectRole, ReadonlySet<PermissionKey>> = {
+  admin: WORKSPACE_ROLE_PERMISSIONS.manager,
+  member: WORKSPACE_ROLE_PERMISSIONS.member,
+  viewer: WORKSPACE_ROLE_PERMISSIONS.viewer,
+};
 
 /**
  * The grants decided by the project's ACCESS LEVEL alone, held by every actor —

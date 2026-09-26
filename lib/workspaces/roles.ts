@@ -1,4 +1,4 @@
-import type { WorkspaceRole } from '@/generated/prisma/client';
+import type { MemberRole, WorkspaceRole } from '@/generated/prisma/client';
 
 // Workspace membership roles — TWO vocabularies, side by side, for one release.
 //
@@ -36,6 +36,52 @@ export type { WorkspaceRole };
  * it lists.
  */
 export const CUSTOM_WORKSPACE_ROLE_TIER: WorkspaceRole = 'member';
+
+/**
+ * A membership's WORKSPACE ROLE, read through the one place the deploy-window
+ * fallback lives (MOTIR-6459): the stored `workspaceRole` when the mapping
+ * (MOTIR-6458) has set it, else the legacy `role` mapped by the DECISION's table —
+ * `owner` / `admin` → `manager`, `member` → `member`, `viewer` → `viewer`.
+ *
+ * The fallback is what keeps a row the STILL-SERVING old build writes during the
+ * deploy window correct: that build knows nothing of `workspace_role`, so it
+ * creates a membership with the column NULL. The follow-up contract story makes
+ * the column NOT NULL once no NULL remains and deletes this arm in one place.
+ */
+export function resolveWorkspaceRole(m: {
+  workspaceRole: WorkspaceRole | null;
+  role: MemberRole;
+}): WorkspaceRole {
+  if (m.workspaceRole) return m.workspaceRole;
+  return legacyToWorkspaceRole(m.role);
+}
+
+/**
+ * The stored key array of the workspace CUSTOM role a membership holds — the
+ * resolver's `customRolePermissions` input — or null for a built-in. A Manager's
+ * is always null: the rail grants them everything, and the org Owner composed in
+ * as a Manager (MOTIR-6308) holds no membership to read one from.
+ */
+export function customRolePermissionsOf(
+  workspaceRole: WorkspaceRole | null,
+  membership: { roleDefinition: { permissions: string[] } | null } | null,
+): readonly string[] | null {
+  if (workspaceRole == null || workspaceRole === 'manager') return null;
+  return membership?.roleDefinition?.permissions ?? null;
+}
+
+/** The DECISION's mapping from a legacy `MemberRole` to a workspace role. */
+export function legacyToWorkspaceRole(role: MemberRole): WorkspaceRole {
+  switch (role) {
+    case 'owner':
+    case 'admin':
+      return 'manager';
+    case 'member':
+      return 'member';
+    case 'viewer':
+      return 'viewer';
+  }
+}
 
 /** The legacy `workspace_membership.role` strings the Replay gate reads. */
 export const LEGACY_WORKSPACE_ROLE = {
