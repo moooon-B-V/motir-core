@@ -43,7 +43,7 @@ coherently with no per-token churn. Two `--el-*` tokens are overridden directly:
 
 ### The priority ramp — why `high` is set directly
 
-The same collision Cobalt (MOTIR-2085) and Graphite (MOTIR-2094) each shipped,
+The same collision Cobalt (MOTIR-2085) and Graphite — now Motir — (MOTIR-2094) each shipped,
 found in Spectrum only once the floor was measured on the surface a user
 actually sees (MOTIR-2107). `--el-priority-highest` rides `--color-destructive`
 (`#d92e2b` light / `#f0555f` dark) and `--el-priority-high` rides

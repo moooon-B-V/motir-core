@@ -7,6 +7,7 @@ import {
   PALETTE_IDS,
   STYLE_IDS,
   TYPE_IDS,
+  BASE_PALETTE_ID,
   DEFAULT_PALETTE_ID,
   DEFAULT_STYLE_ID,
   DEFAULT_TYPE_ID,
@@ -115,8 +116,8 @@ describe('consumed registries match the app-facing contract (no divergence after
     // trimmed/renamed id here would break those surfaces silently.
     expect(PALETTE_IDS).toEqual([
       'motir',
+      'amethyst',
       'cobalt',
-      'graphite',
       'evergreen',
       'spectrum',
       'amber',
@@ -168,7 +169,7 @@ describe('consumed registries match the app-facing contract (no divergence after
     // palette; every palette declares it now, so it resolves like any other.)
     function resolveColor(colorVar: string, palette: string, theme: 'light' | 'dark'): string {
       const chain =
-        palette === DEFAULT_PALETTE_ID
+        palette === BASE_PALETTE_ID
           ? [theme === 'dark' ? BASE_DARK : BASE_LIGHT]
           : [
               theme === 'dark'
@@ -231,12 +232,12 @@ describe('consumed registries match the app-facing contract (no divergence after
     );
   });
 
-  it('every non-default palette ships a `[data-palette]` override block in the consumed CSS', () => {
+  it('every non-base palette ships a `[data-palette]` override block in the consumed CSS', () => {
     // The registry id set and the CSS override blocks must agree — a palette in
     // the registry with no CSS block would render as the base palette (drift the
     // registry alone can't catch).
     for (const id of PALETTE_IDS) {
-      if (id === DEFAULT_PALETTE_ID) continue; // base needs no override block
+      if (id === BASE_PALETTE_ID) continue; // base needs no override block
       expect(CONSUMED_THEME_CSS, `missing [data-palette='${id}'] block`).toContain(
         `[data-palette='${id}']`,
       );

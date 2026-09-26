@@ -432,7 +432,7 @@ describe('StationCard.session is relaxed ADDITIVELY (MOTIR-2205)', () => {
         doc={undefined}
         session={{
           ...session,
-          designChoice: { styleId: 'soft-playful', paletteId: 'motir', typeId: 'motir' },
+          designChoice: { styleId: 'soft-playful', paletteId: 'amethyst', typeId: 'motir' },
         }}
       />,
     );

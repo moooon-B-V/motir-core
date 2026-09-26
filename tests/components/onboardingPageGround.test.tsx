@@ -46,7 +46,7 @@ function bgTokenOf(element: Element): string {
 }
 
 function resolve(token: string, theme: 'light' | 'dark') {
-  return resolveToken(rules, { palette: 'motir', theme }, token);
+  return resolveToken(rules, { palette: 'amethyst', theme }, token);
 }
 
 /** The root `h-dvh` div of a rendered full-viewport onboarding surface. */

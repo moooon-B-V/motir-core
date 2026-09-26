@@ -127,7 +127,7 @@ export function tokenHexes(theme: Theme): TokenHexes {
   const layer = loadTokenLayer();
   const out: Record<string, string> = {};
   for (const token of layer.elementTokens) {
-    const { value, unresolved } = resolveToken(layer.rules, { palette: 'motir', theme }, token);
+    const { value, unresolved } = resolveToken(layer.rules, { palette: 'amethyst', theme }, token);
     if (unresolved.length > 0) continue;
     const flat = flattenColorMix(value);
     if (HEX.test(flat)) out[token] = flat.toLowerCase();

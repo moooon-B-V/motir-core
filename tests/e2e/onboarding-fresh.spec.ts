@@ -93,7 +93,7 @@ const CATALOG = {
 };
 
 // The design pick — both axes DIFFER from the product defaults (style
-// `warm-editorial`, palette `motir`), so a change is observable. Display names come
+// `warm-editorial`, project palette `amethyst`), so a change is observable. Display names come
 // from the shipped registries (the picker chips render the registry `name`).
 const DESIGN = {
   styleId: 'soft-playful',

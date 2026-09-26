@@ -10,9 +10,12 @@
 
 Warm minimalism with playful shape energy. Type is editorial — Source Serif 4
 serif headlines paired with Inter sans body, plus JetBrains Mono for code,
-IDs, and meta labels. The palette is Notion-warm (cream surfaces, charcoal
-ink, purple primary, pastel feature tints), avoiding the cold-terminal
-aesthetic common to AI tools. This is the **Warm Editorial** style — the house
+IDs, and meta labels. The Tier-0 base palette described in §2 is Notion-warm
+(cream surfaces, charcoal ink, purple primary, pastel feature tints) — the
+palette now registered as **Amethyst**. Since MOTIR-6471 Motir's own default
+palette, the one named **Motir**, is the cool monochrome scheme formerly called
+Graphite, layered over that base by its `[data-palette='motir']` block (see
+[`palettes/motir.md`](palettes/motir.md)). This is the **Warm Editorial** style — the house
 default (8px button rectangles, modest shadows). It is one of a registered
 **style library**: an alternate **Soft / Playful** style adopts Figma's
 pill-shape personality (50px pill buttons, more diffused shadows, roomier
@@ -447,7 +450,8 @@ When generating UI for Motir:
   Tier 3 block) and reference those rather than `--color-*` directly.
   A named palette (`data-palette`) overrides `--el-*` to reskin without
   touching components — so a new token automatically participates in every
-  palette (registry: `lib/theme/palettes.ts`; v1 ships `motir`).
+  palette (registry: `lib/theme/palettes.ts`; the default is `motir`, the
+  Tier-0 base is `amethyst`).
 - **Test across every registered style** (`data-style="warm-editorial"`,
   `"soft-playful"`, `"swiss-minimal-flat"`, `"neo-brutalism"`, `"cybercore-y2k"`,
   …). If a component only looks right in one, it's hardcoding shape and should be

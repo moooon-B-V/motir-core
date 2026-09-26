@@ -76,7 +76,7 @@ Two collisions, both found by the perceptual sweep in MOTIR-2075:
   **4.7** in dark. This document previously claimed they "read apart"; measured,
   they do not. The **status ramp takes its own step of the palette's jade** —
   **Radix Jade 12**, deep in light (`#1d3b31`) and pale in dark (`#adf0d4`), the
-  same light/dark inversion Graphite's accent step uses. Separation **ΔE 19.2 /
+  same light/dark inversion Motir's (ex-Graphite's) accent step uses. Separation **ΔE 19.2 /
   17.2**; contrast **10.9:1 / 13.3:1** on `--el-surface`.
 - **`todo` vs `cancelled` (dark).** `--color-stone` `#5a6b62` against
   `--color-steel` `#6f8077` is **ΔE 8.3** — this palette's neutral ramp is
