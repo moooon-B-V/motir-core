@@ -539,24 +539,7 @@ export type DecisionConfirmationPortDTO = Omit<ParsedDecision, 'ok'> & {
   /** The ids of those records — a decided band reads *record removed* when its STAMPED
    *  attachment is no longer among them, never by comparing it with the newest. */
   presentRecordIds: string[];
-  /** The epic this decision governs — the overturned band's Re-plan door. */
-  epic: DecisionEpicDTO | null;
 };
-
-/**
- * THE EPIC a decision governs, as the overturned band's **Re-plan** entrance needs it
- * (MOTIR-5960; design Panel 4a — the shipped `WorkItemPlanEntrance` on the epic). Null
- * when the decision has no epic ancestor. `canPlan` is the VIEWER's `work_item:edit`,
- * resolved with the read so the item page and the overlay draw the same door.
- */
-export interface DecisionEpicDTO {
-  key: string;
-  title: string;
-  hasDescription: boolean;
-  archived: boolean;
-  statusCategory: 'todo' | 'in_progress' | 'done' | null;
-  canPlan: boolean;
-}
 
 /** One key a decision supersedes, as the port's work-item chip draws it (MOTIR-5960). */
 export interface SupersededItemDTO {
@@ -584,7 +567,6 @@ export type DecisionConfirmationBodyDTO =
       supersedesItems: SupersededItemDTO[];
       recordCount: number;
       presentRecordIds: string[];
-      epic: DecisionEpicDTO | null;
     };
 
 /**

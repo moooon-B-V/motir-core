@@ -400,6 +400,12 @@ export const STRUCTURAL_GUARD_SPECS = [
   // capability first. It opens no database and renders nothing; its pairing
   // table (`writeControlPairing.ts`) is data only.
   'tests/permissions/writeControlGuard.test.ts',
+  // ── tests/mcp/ — the tracked-handler guard (MOTIR-6408) ────────────────────
+  // Walks `tests/` and parses every file that names the `/api/mcp` route,
+  // asserting each in-process handler call is registered with
+  // `trackServerWork`. It opens no database; its scanner imports only
+  // `typescript` and `node:*`.
+  'tests/mcp/mcp-route-tracked-guard.test.ts',
 ] as const;
 
 /**

@@ -6,7 +6,6 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import * as route from '@/app/api/mcp/route';
 import { db } from '@/lib/db';
 import { buildMcpServer, MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { CLI_TOKEN_GRANT, TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
@@ -25,6 +24,7 @@ import { seedSystemPrincipal } from '@/scripts/plan-seed/systemPrincipal';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { mcpRouteFetch } from '../helpers/mcpRouteFetch';
 
 // `report_unbuildable_target` (Story MOTIR-5544 · Subtask MOTIR-6286) — the
 // dispatched runner's report that its card is unbuildable, over a real Postgres
@@ -53,22 +53,6 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-function routeFetch(token: string): typeof fetch {
-  return (async (input: unknown, init: RequestInit = {}) => {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : (input as Request).url;
-    const headers = new Headers(init.headers ?? {});
-    headers.set('authorization', `Bearer ${token}`);
-    const method = (init.method ?? 'GET').toUpperCase();
-    const handler = method === 'GET' ? route.GET : method === 'DELETE' ? route.DELETE : route.POST;
-    return handler(new Request(url, { ...init, headers }) as never);
-  }) as unknown as typeof fetch;
-}
-
 /** A client on the REAL route, authenticated by a token minted with `grant`. */
 async function connectWithGrant(
   fx: WorkItemFixture,
@@ -79,7 +63,7 @@ async function connectWithGrant(
     fixedGrant: [...grant],
   });
   const transport = new StreamableHTTPClientTransport(new URL(ENDPOINT), {
-    fetch: routeFetch(token),
+    fetch: mcpRouteFetch(token),
   });
   const client = new Client({ name: 'report-unbuildable-target', version: '0.0.0' });
   await client.connect(transport);
