@@ -114,6 +114,23 @@ export interface SeedAncestor {
 }
 
 /**
+ * The anchor walk's view of `workItemRepository.findAncestors` rows, mapped
+ * against the project's workflow statuses (key → CATEGORY). Shared by the seed
+ * read and the session's seed guard, so both resolve the SAME anchor for a gate.
+ */
+export function toSeedAncestors(
+  rows: readonly { identifier: string; status: string; archivedAt: Date | null }[],
+  statuses: readonly { key: string; category: string }[],
+): SeedAncestor[] {
+  const categoryOf = new Map(statuses.map((s) => [s.key, s.category]));
+  return rows.map((row) => ({
+    key: row.identifier,
+    statusCategory: categoryOf.get(row.status) ?? null,
+    archived: row.archivedAt !== null,
+  }));
+}
+
+/**
  * WHERE the seeded planning surface anchors — a TOTAL per-kind resolver, pure.
  *
  *  - every refusal (and every other kind) anchors on the gate's OWN work item;

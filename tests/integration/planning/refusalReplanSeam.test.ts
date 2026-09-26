@@ -361,7 +361,12 @@ describe('the seam — refuse → door → seed read → seeded send → session
       // THE PLANS ROW names the refused card and the kind.
       const page = await planSessionsService.listSessions(fx.projectId, fx.ctx);
       const row = page.sessions.find((s) => s.id === sessionId);
-      expect(row?.seed).toEqual({ cardKey: card.identifier, gateKind: kind });
+      expect(row?.seed).toEqual({
+        cardKey: card.identifier,
+        gateKind: kind,
+        origin: 'refusal',
+        chosenLabel: null,
+      });
     });
   }
 });

@@ -6624,7 +6624,10 @@
           "decisionConfirmation": "推翻",
           "decisionChoice": "都不合适"
         },
-        "aria": "打开 {key}，即此对话重新规划的工作项"
+        "aria": "打开 {key}，即此对话重新规划的工作项",
+        "pickLabel": "<mono>{key}</mono> 的后续规划",
+        "chose": "选择了 {label}",
+        "pickAria": "打开 {key}，这段对话是它的后续规划（选择了 {label}）"
       }
     }
   },

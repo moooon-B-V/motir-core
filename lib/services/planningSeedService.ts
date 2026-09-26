@@ -17,6 +17,7 @@ import {
   readChosenOption,
   refusalSeedComposerFor,
   seedIntentOf,
+  toSeedAncestors,
   type SeedAncestor,
   type SeedTranslator,
 } from '@/lib/planning/refusalSeed';
@@ -61,12 +62,7 @@ async function ancestorsOf(workItemId: string, pctx: ProjectContext): Promise<Se
     ),
     workflowsService.listStatusesByProject(pctx.projectId, pctx.workspaceId),
   ]);
-  const categoryOf = new Map(statuses.map((s) => [s.key, s.category as string]));
-  return rows.map((row) => ({
-    key: row.identifier,
-    statusCategory: categoryOf.get(row.status) ?? null,
-    archived: row.archivedAt !== null,
-  }));
+  return toSeedAncestors(rows, statuses);
 }
 
 export const planningSeedService = {

@@ -16,7 +16,14 @@ import {
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
-import { isRefusalSeedGate } from '@/lib/planning/refusalSeed';
+import {
+  anchorOf,
+  isPickSeedGate,
+  isPlanningSeedGate,
+  readChosenOption,
+  toSeedAncestors,
+} from '@/lib/planning/refusalSeed';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { planSessionsService } from '@/lib/services/planSessionsService';
@@ -413,9 +420,15 @@ async function resumeOrStartWithin(
  * first and is seen here, or waits for this transaction.
  *
  * Refuses with ONE {@link PlanSeedNotApplicableError} when the gate is missing
- * or hidden by RLS, lives in another workspace or project, is not a refusal
- * {@link isRefusalSeedGate} accepts, or belongs to a work item the scope does
- * not anchor on (a card-less gate included).
+ * or hidden by RLS, lives in another workspace or project, is not a gate
+ * {@link isPlanningSeedGate} accepts (a refusal, or a PICK with a well-formed
+ * stamp — MOTIR-6434), or the scope does not sit on the gate's ANCHOR (a
+ * card-less gate included).
+ *
+ * The anchor is the one the seed read offered, resolved by the SAME
+ * `anchorOf`: a refusal's own card must be among the scope's targets; a pick's
+ * nearest not-done, unarchived ancestor must be, or — when it has none (the
+ * project) — the scope must be the project scope.
  */
 async function assertSeedApplicableWithin(
   pctx: ProjectContext,
@@ -428,19 +441,29 @@ async function assertSeedApplicableWithin(
     !gate ||
     gate.workspaceId !== pctx.workspaceId ||
     gate.projectId !== pctx.projectId ||
-    !isRefusalSeedGate(gate) ||
+    !isPlanningSeedGate(gate) ||
     !gate.workItemId
   ) {
     throw new PlanSeedNotApplicableError(seedGateId);
   }
-  const item = await workItemRepository.findById(gate.workItemId, tx);
-  if (
-    !item ||
-    item.projectId !== pctx.projectId ||
-    !scope.targetKeys.includes(item.identifier.toUpperCase())
-  ) {
+  const pick = isPickSeedGate(gate);
+  if (pick && !readChosenOption(gate.chosenOption))
     throw new PlanSeedNotApplicableError(seedGateId);
-  }
+  const item = await workItemRepository.findById(gate.workItemId, tx);
+  if (!item || item.projectId !== pctx.projectId) throw new PlanSeedNotApplicableError(seedGateId);
+
+  const ancestors = pick
+    ? toSeedAncestors(
+        await workItemRepository.findAncestors(item.id, pctx.workspaceId, tx),
+        await workflowsService.listStatusesByProject(pctx.projectId, pctx.workspaceId, tx),
+      )
+    : [];
+  const anchorKey = anchorOf(gate, item.identifier, ancestors);
+  const onAnchor =
+    anchorKey === null
+      ? scope.scopeKey === PROJECT_SCOPE_KEY && scope.targetKeys.length === 0
+      : scope.targetKeys.includes(anchorKey.toUpperCase());
+  if (!onAnchor) throw new PlanSeedNotApplicableError(seedGateId);
 }
 
 /**
@@ -687,7 +710,7 @@ export const planChangeSessionsService = {
    * A SEEDED first turn (AMENDMENT 17 §9; story MOTIR-6068 · MOTIR-6207) — the
    * re-plan a refused decision opens, started from the gate that refused it. In
    * ONE transaction: take the member's scope lock, assert the seed (the gate is
-   * a refusal `isRefusalSeedGate` accepts, in this workspace and project, on a
+   * a gate `isPlanningSeedGate` accepts (a refusal or a pick), in this workspace and project, on a
    * work item the scope anchors on — else {@link PlanSeedNotApplicableError} and
    * nothing is written), resume the member's recent session seeded by THIS gate
    * or create one with `seedGateId`, then append the turn exactly as

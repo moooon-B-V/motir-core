@@ -6628,7 +6628,10 @@
           "decisionConfirmation": "Overturn",
           "decisionChoice": "None of these"
         },
-        "aria": "Open {key}, the work item this conversation re-plans"
+        "aria": "Open {key}, the work item this conversation re-plans",
+        "pickLabel": "Follow-up to <mono>{key}</mono>",
+        "chose": "chose {label}",
+        "pickAria": "Open {key}, the choice this conversation is the follow-up to (chose {label})"
       }
     }
   },
