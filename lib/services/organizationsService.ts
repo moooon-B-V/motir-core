@@ -17,7 +17,6 @@ import {
   withWorkspaceContext,
 } from '@/lib/workspaces/context';
 import { isOrgOwnerRole, ORGANIZATION_ROLE } from '@/lib/organizations/roles';
-import { resolveWorkspaceRole } from '@/lib/workspaces/roles';
 import { orgCan } from '@/lib/organizations/capabilities';
 import {
   AlreadyOrgMemberError,
@@ -120,8 +119,8 @@ function isUniqueViolation(err: unknown): err is Prisma.PrismaClientKnownRequest
  * return (null = no access → the caller raises 404). `effectiveRole` is the
  * WORKSPACE ROLE the actor effectively has AFTER composing the org role: the org
  * OWNER and an org ADMIN are `manager` on EVERY workspace under the org, member
- * or not; everyone else holds their own workspace role, read through
- * `resolveWorkspaceRole` (Story MOTIR-6168 · MOTIR-6462).
+ * or not; everyone else holds their own stored workspace role (Story MOTIR-6168
+ * · MOTIR-6462).
  *
  * ⚠️ AN ORG ADMIN REACHES EVERY WORKSPACE AGAIN (Story MOTIR-6168). MOTIR-6308
  * raised the Owner alone, on reading R1 of `role-model.md`; the owner overturned
@@ -198,7 +197,7 @@ export const organizationsService = {
       // Everyone else reaches only the workspaces they're a member of.
       if (!reachesEveryWorkspace && !workspaceMembership) return null;
 
-      const workspaceRole = workspaceMembership ? resolveWorkspaceRole(workspaceMembership) : null;
+      const workspaceRole = workspaceMembership?.workspaceRole ?? null;
       return {
         organizationId: workspace.organizationId,
         orgRole: orgMembership.role,

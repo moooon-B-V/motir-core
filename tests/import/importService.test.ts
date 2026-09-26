@@ -817,7 +817,12 @@ describe('importService — the import:run gate', () => {
         name: slug,
       });
       await adminDb.workspaceMembership.create({
-        data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
+        data: {
+          userId: user.id,
+          workspaceId: fx.workspaceId,
+          workspaceRole: 'member',
+          role: 'member',
+        },
       });
       await addToProjectAs({
         key: fx.projectIdentifier,

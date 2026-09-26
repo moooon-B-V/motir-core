@@ -265,7 +265,12 @@ describe('GET /api/work-items/planning-anchor · the refusals', () => {
       data: { accessLevel: 'private' },
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: outsider.id, workspaceId: owner.workspace.id, role: 'member' },
+      data: {
+        userId: outsider.id,
+        workspaceId: owner.workspace.id,
+        workspaceRole: 'member',
+        role: 'member',
+      },
     });
 
     // The outsider signs in with the OWNER's project active — the shape a stale

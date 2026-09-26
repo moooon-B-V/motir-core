@@ -53,7 +53,7 @@ async function seedFixture(): Promise<Fixture> {
     data: { name: `moooon ${tag}`, slug: `ws-${tag}`, organizationId: org.id },
   });
   await adminDb.workspaceMembership.create({
-    data: { workspaceId: workspace.id, userId: user.id, role: 'owner' },
+    data: { workspaceId: workspace.id, userId: user.id, workspaceRole: 'manager', role: 'owner' },
   });
   const project = await adminDb.project.create({
     data: {

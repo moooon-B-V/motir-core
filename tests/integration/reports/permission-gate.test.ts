@@ -66,7 +66,7 @@ async function makeFixture(label: string): Promise<Fixture> {
     name: 'Viewer',
   });
   await adminDb.workspaceMembership.create({
-    data: { userId: viewer.id, workspaceId, role: 'member' },
+    data: { userId: viewer.id, workspaceId, workspaceRole: 'member', role: 'member' },
   });
   await addToProjectAs({
     key: project.identifier,
@@ -82,7 +82,7 @@ async function makeFixture(label: string): Promise<Fixture> {
     name: 'Outsider',
   });
   await adminDb.workspaceMembership.create({
-    data: { userId: outsider.id, workspaceId, role: 'member' },
+    data: { userId: outsider.id, workspaceId, workspaceRole: 'member', role: 'member' },
   });
 
   // A whole other tenant: their context carries their OWN workspace id, which is

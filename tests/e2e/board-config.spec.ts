@@ -298,7 +298,13 @@ test.describe('board-config @smoke', () => {
       name: 'Board Member',
     });
     await db.workspaceMembership.create({
-      data: { userId: member.id, workspaceId, role: 'member', activeProjectId: projectId },
+      data: {
+        userId: member.id,
+        workspaceId,
+        workspaceRole: 'member',
+        role: 'member',
+        activeProjectId: projectId,
+      },
     });
     // Story 6.10.4: a workspace member must also be a member of the workspace's
     // org (org membership gates workspace access). Enrol the member so the org

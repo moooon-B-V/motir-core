@@ -4,25 +4,14 @@ import {
   CUSTOM_WORKSPACE_ROLE_TIER,
   customRolePermissionsOf,
   legacyToWorkspaceRole,
-  resolveWorkspaceRole,
   WORKSPACE_ROLES,
 } from '@/lib/workspaces/roles';
 
 // The workspace-role vocabulary (Story MOTIR-6168 · MOTIR-6457 / MOTIR-6459) —
 // pure helpers, so unit-tested without a database.
 
-describe('resolveWorkspaceRole — the deploy-window fallback lives in ONE function', () => {
-  it('a stored workspace_role wins over the legacy column', () => {
-    expect(resolveWorkspaceRole({ workspaceRole: 'viewer', role: 'owner' })).toBe('viewer');
-    expect(resolveWorkspaceRole({ workspaceRole: 'manager', role: 'member' })).toBe('manager');
-  });
-
-  it('NULL + legacy admin resolves as Manager; NULL + viewer as Viewer', () => {
-    expect(resolveWorkspaceRole({ workspaceRole: null, role: 'admin' })).toBe('manager');
-    expect(resolveWorkspaceRole({ workspaceRole: null, role: 'viewer' })).toBe('viewer');
-  });
-
-  it('the legacy mapping is the DECISION’s table, total over MemberRole', () => {
+describe('legacyToWorkspaceRole — the DECISION’s table, kept for a pre-release invite token', () => {
+  it('is total over the legacy values', () => {
     expect(legacyToWorkspaceRole('owner')).toBe('manager');
     expect(legacyToWorkspaceRole('admin')).toBe('manager');
     expect(legacyToWorkspaceRole('member')).toBe('member');
@@ -31,18 +20,11 @@ describe('resolveWorkspaceRole — the deploy-window fallback lives in ONE funct
 });
 
 describe('isWorkspaceManager — the Manager, and nothing else (MOTIR-6462)', () => {
-  it('answers true for manager only — a legacy value is resolved BEFORE it arrives', () => {
+  it('answers true for manager only', () => {
     expect(isWorkspaceManager('manager')).toBe(true);
     for (const role of ['member', 'viewer', null, undefined] as const) {
       expect(isWorkspaceManager(role)).toBe(false);
     }
-    // The legacy owner / admin reach it through the resolver, never directly.
-    expect(isWorkspaceManager(resolveWorkspaceRole({ workspaceRole: null, role: 'owner' }))).toBe(
-      true,
-    );
-    expect(isWorkspaceManager(resolveWorkspaceRole({ workspaceRole: null, role: 'admin' }))).toBe(
-      true,
-    );
   });
 });
 

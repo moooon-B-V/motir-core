@@ -410,7 +410,12 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
     });
     await adminDb.$transaction(async (tx) => {
       await tx.workspaceMembership.create({
-        data: { userId: dev.id, workspaceId: workspace.id, role: 'member' },
+        data: {
+          userId: dev.id,
+          workspaceId: workspace.id,
+          workspaceRole: 'member',
+          role: 'member',
+        },
       });
       await githubIdentityRepository.upsertForUser(
         {

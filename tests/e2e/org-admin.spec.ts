@@ -435,7 +435,7 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
     data: { name: 'Side WS A', slug: `side-ws-a-${Date.now()}`, organizationId: orgA },
   });
   await db.workspaceMembership.create({
-    data: { userId: cUser.id, workspaceId: wb.id, role: 'member' },
+    data: { userId: cUser.id, workspaceId: wb.id, workspaceRole: 'member', role: 'member' },
   });
   // The owner is NOT a member of WB.
   expect(

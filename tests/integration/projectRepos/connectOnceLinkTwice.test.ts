@@ -115,7 +115,7 @@ async function secondWorkspace() {
     },
   });
   await adminDb.workspaceMembership.create({
-    data: { workspaceId: ws.id, userId: fx.ownerId, role: 'owner' },
+    data: { workspaceId: ws.id, userId: fx.ownerId, workspaceRole: 'manager', role: 'owner' },
   });
   const project = await createTestProject({
     workspaceId: ws.id,
@@ -311,7 +311,7 @@ describe('⚠️ CROSS-ORGANISATION isolation — with a DIFFERING-POPULATION fi
       },
     });
     await adminDb.workspaceMembership.create({
-      data: { workspaceId: ws.id, userId: user.id, role: 'owner' },
+      data: { workspaceId: ws.id, userId: user.id, workspaceRole: 'manager', role: 'owner' },
     });
     await adminDb.organizationMembership.create({
       data: { organizationId: org.id, userId: user.id, role: ORGANIZATION_ROLE.owner },
@@ -383,7 +383,12 @@ describe('the two reads the SURFACES depend on', () => {
       },
     });
     await adminDb.workspaceMembership.create({
-      data: { workspaceId: fx.workspaceId, userId: member.id, role: 'admin' },
+      data: {
+        workspaceId: fx.workspaceId,
+        userId: member.id,
+        workspaceRole: 'manager',
+        role: 'admin',
+      },
     });
     await adminDb.organizationMembership.create({
       data: { organizationId: orgId, userId: member.id, role: ORGANIZATION_ROLE.member },

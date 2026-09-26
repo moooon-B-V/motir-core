@@ -28,9 +28,9 @@ async function resolveActorUserId(workspaceId: string): Promise<string | null> {
   const owner = await db.workspaceMembership.findFirst({
     where: {
       workspaceId,
-      OR: [{ workspaceRole: 'manager' }, { workspaceRole: null, role: { in: ['owner', 'admin'] } }],
+      workspaceRole: 'manager',
     },
-    orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   });
   if (owner) return owner.userId;
   // No Manager (older workspaces predating the owner tier) — any member can

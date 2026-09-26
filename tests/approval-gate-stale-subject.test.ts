@@ -237,7 +237,12 @@ describe('what the stamp does NOT cover', () => {
     const stamp = await stampOf(item.id, 'design_result');
     const other = await createTestUser();
     await adminDb.workspaceMembership.create({
-      data: { userId: other.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: other.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+        role: 'member',
+      },
     });
     const label = await adminDb.label.create({
       data: {

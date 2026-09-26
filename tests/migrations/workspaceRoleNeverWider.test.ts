@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Client } from 'pg';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import {
   BUILTIN_ROLE_PERMISSIONS,
@@ -11,7 +11,12 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { currentWorkerAdminUrl } from '../helpers/parallelDb';
-import { makeTenant, runMigrationFile, type Tenant } from './_workspaceRoleTenant';
+import {
+  makeTenant,
+  restoreWorkspaceRoleNotNull,
+  runMigrationFile,
+  type Tenant,
+} from './_workspaceRoleTenant';
 
 // The never-wider CHECK (Story MOTIR-6168 · Subtask MOTIR-6461) — the second
 // migration, run over the mapping's fixture tenant exactly as `migrate deploy`
@@ -55,6 +60,11 @@ const implicitSnapshot = JSON.parse(
 
 beforeEach(async () => {
   await truncateAuthTables();
+});
+
+// The fixture drops MOTIR-6561's NOT NULL to seed pre-migration rows; put it back.
+afterEach(async () => {
+  await restoreWorkspaceRoleNotNull();
 });
 
 afterAll(async () => {

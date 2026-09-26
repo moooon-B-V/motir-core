@@ -493,6 +493,7 @@ test('a reader who may not decide sees the plan and no verbs; a plan with no con
     data: {
       userId: viewer.id,
       workspaceId: plan.ctx.workspaceId,
+      workspaceRole: 'member',
       role: 'member',
       activeProjectId: project.id,
     },

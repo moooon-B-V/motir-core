@@ -2,7 +2,6 @@ import type { Prisma, WorkspaceMembership, WorkspaceRole } from '@/generated/pri
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
-import { resolveWorkspaceRole } from '@/lib/workspaces/roles';
 
 // The membership READ every access gate makes — always context-bound.
 //
@@ -72,8 +71,7 @@ export async function readOwnMembership(
 
 /**
  * The actor's WORKSPACE ROLE FOR A GATE, with the org's Owner AND Admins composed
- * in: the membership's workspace role (read through `resolveWorkspaceRole`, so a
- * not-yet-migrated row resolves by the legacy mapping), or `manager` for the Owner
+ * in: the membership's workspace role, or `manager` for the Owner
  * or an Admin of the workspace's organization, member or not, or null for anyone
  * else with no membership.
  *
@@ -122,10 +120,10 @@ export async function readReachRole(
 export async function composeOwnerReach(
   userId: string,
   workspaceId: string,
-  membership: Pick<WorkspaceMembership, 'workspaceRole' | 'role'> | null,
+  membership: Pick<WorkspaceMembership, 'workspaceRole'> | null,
   tx: Prisma.TransactionClient,
 ): Promise<WorkspaceRole | null> {
-  const stored = membership ? resolveWorkspaceRole(membership) : null;
+  const stored = membership?.workspaceRole ?? null;
   if (stored === 'manager') return stored;
   const reachesAsManager = await organizationMembershipRepository.isOrgManagerOfWorkspaceOrg(
     userId,

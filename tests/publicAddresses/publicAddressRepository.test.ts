@@ -389,7 +389,7 @@ async function seedTenant(
     data: { name: `Workspace ${tag}`, slug: `ws-${tag}`, organizationId: organization.id },
   });
   await adminDb.workspaceMembership.create({
-    data: { userId: owner.id, workspaceId: workspace.id, role: 'owner' },
+    data: { userId: owner.id, workspaceId: workspace.id, workspaceRole: 'manager', role: 'owner' },
   });
   const project = await adminDb.project.create({
     data: {

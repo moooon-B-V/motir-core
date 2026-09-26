@@ -32,7 +32,6 @@ import { assertOrgCapability } from '@/lib/services/organizationAccessService';
 import {
   CUSTOM_WORKSPACE_ROLE_TIER,
   legacyToWorkspaceRole,
-  resolveWorkspaceRole,
   WORKSPACE_ROLES,
   type WorkspaceRole,
 } from '@/lib/workspaces/roles';
@@ -1313,10 +1312,8 @@ export const workspacesService = {
           destination = { workspaceRole: requested!, roleDefinitionId: null };
         }
 
-        // `countManagers` counts STORED Managers; a not-yet-migrated target that
-        // resolves to Manager is not among them, so it is subtracted only when it is.
-        const targetIsManager = resolveWorkspaceRole(target) === 'manager';
-        const remaining = managers - (target.workspaceRole === 'manager' ? 1 : 0);
+        const targetIsManager = target.workspaceRole === 'manager';
+        const remaining = managers - (targetIsManager ? 1 : 0);
         if (targetIsManager && destination.workspaceRole !== 'manager' && remaining < 1) {
           throw new LastManagerError(input.workspaceId);
         }

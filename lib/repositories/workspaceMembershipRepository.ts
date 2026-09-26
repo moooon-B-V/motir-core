@@ -84,23 +84,21 @@ export const workspaceMembershipRepository = {
   },
 
   /**
-   * How many members of a workspace sit on each BUILT-IN role, grouped by both
-   * columns — `(workspaceRole, role)` for memberships with no custom role — so
-   * the service can fold a not-yet-migrated row (`workspace_role` NULL) through
-   * `resolveWorkspaceRole` the same way the resolver does (MOTIR-6460).
+   * How many members of a workspace sit on each BUILT-IN role — memberships
+   * with no custom role, grouped by `workspaceRole` (MOTIR-6460; the legacy
+   * `role` left the grouping with the deploy-window fallback, MOTIR-6561).
    */
   async countBuiltInRolesByWorkspace(
     workspaceId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<{ workspaceRole: WorkspaceRole | null; role: MemberRole; count: number }[]> {
+  ): Promise<{ workspaceRole: WorkspaceRole; count: number }[]> {
     const rows = await tx.workspaceMembership.groupBy({
-      by: ['workspaceRole', 'role'],
+      by: ['workspaceRole'],
       where: { workspaceId, roleDefinitionId: null },
       _count: { _all: true },
     });
     return rows.map((r) => ({
       workspaceRole: r.workspaceRole,
-      role: r.role,
       count: r._count._all,
     }));
   },
@@ -317,16 +315,16 @@ export const workspaceMembershipRepository = {
    * must be a MEMBER, not the org Owner: `createWorkItem`'s `assertReporterMember`
    * requires one, and the org Owner may hold no membership at all (MOTIR-6308).
    *
-   * The rule (Story MOTIR-6168 · MOTIR-6462): the oldest MANAGER — a membership
-   * whose `workspace_role` is `manager`, or, while the column is still NULL in the
-   * deploy window, whose legacy `role` is `owner` / `admin` (the fallback
-   * `resolveWorkspaceRole` applies). The legacy `role` orders FIRST so the pick is
-   * the same person the old owner-only lookup returned wherever that owner row
-   * still holds the Manager role: `member_role` declares `owner` first, so
-   * `role asc` puts the founder ahead of a later Manager. A founder demoted out
-   * of the Manager role no longer matches, and the oldest remaining Manager
-   * stands in. Returns null only for a workspace with no Manager (an invariant
-   * violation the caller handles). Read-only → `dbRead` without a `tx`.
+   * The rule (Story MOTIR-6168 · MOTIR-6462): the OLDEST MANAGER — the
+   * membership whose `workspace_role` is `manager` with the earliest `createdAt`.
+   * A founder is the oldest membership of the workspace they created, so the pick
+   * is still the founder wherever the founder holds the Manager role; a founder
+   * demoted out of it no longer matches, and the oldest remaining Manager stands
+   * in. The legacy `role` no longer takes part: it once ordered first (`owner`
+   * ahead of a later `admin`) and matched a NULL `workspace_role` during the
+   * deploy window, and both went with the fallback (MOTIR-6561). Returns null
+   * only for a workspace with no Manager (an invariant violation the caller
+   * handles). Read-only → `dbRead` without a `tx`.
    */
   async findStandInManagerByWorkspace(
     workspaceId: string,
@@ -334,14 +332,8 @@ export const workspaceMembershipRepository = {
   ): Promise<WorkspaceMembership | null> {
     const client = tx ?? dbRead;
     return client.workspaceMembership.findFirst({
-      where: {
-        workspaceId,
-        OR: [
-          { workspaceRole: 'manager' },
-          { workspaceRole: null, role: { in: ['owner', 'admin'] } },
-        ],
-      },
-      orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+      where: { workspaceId, workspaceRole: 'manager' },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
   },
 

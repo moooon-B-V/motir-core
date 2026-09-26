@@ -142,7 +142,12 @@ async function bindIdentity(opts: {
   });
   if (opts.inThisWorkspace) {
     await adminDb.workspaceMembership.create({
-      data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: user.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+        role: 'member',
+      },
     });
   } else {
     await workspacesService.createWorkspace({ name: 'Elsewhere', ownerUserId: user.id });

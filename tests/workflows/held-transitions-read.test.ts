@@ -130,12 +130,22 @@ describe('listHeldTransitions', () => {
   it('a reader who may not decide gets the row with canDecide false and the routed-to name', async () => {
     const reporter = await createTestUser({ name: 'Rita Reporter' });
     await adminDb.workspaceMembership.create({
-      data: { userId: reporter.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: reporter.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+        role: 'member',
+      },
     });
     const item = await cardInReview({ gateKind: 'design_result', reporterId: reporter.id });
     const bystander = await createTestUser();
     await adminDb.workspaceMembership.create({
-      data: { userId: bystander.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: bystander.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+        role: 'member',
+      },
     });
 
     const rows = await approvalGatesService.listHeldTransitions(item.id, {

@@ -93,7 +93,7 @@ async function teammate(): Promise<ProjectContext> {
     name: `Teammate ${seq}`,
   });
   await adminDb.workspaceMembership.create({
-    data: { userId: u.id, workspaceId: fx.workspaceId, role: 'member' },
+    data: { userId: u.id, workspaceId: fx.workspaceId, workspaceRole: 'member', role: 'member' },
   });
   await addToProjectAs({
     key: fx.project.identifier,

@@ -38,10 +38,9 @@ export const PROJECT_ACCESS_LEVELS = ['public', 'open', 'limited', 'private'] as
  * project-management gate regardless of project membership.
  *
  * Roles live on the workspace (Story MOTIR-6168), so the answer is `manager`.
- * Every caller hands it a WORKSPACE role — a membership read through
- * `resolveWorkspaceRole`, or the composed role `readReachRole` /
- * `resolveWorkspaceAccess` answer (MOTIR-6462) — so a legacy `owner` / `admin`
- * has already become `manager` before it gets here.
+ * Every caller hands it a WORKSPACE role — a membership's stored
+ * `workspaceRole`, or the composed role `readReachRole` /
+ * `resolveWorkspaceAccess` answer (MOTIR-6462).
  */
 export function isWorkspaceManager(role: WorkspaceRole | null | undefined): boolean {
   return role === 'manager';

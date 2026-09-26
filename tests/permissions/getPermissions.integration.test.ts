@@ -759,23 +759,6 @@ describe('the workspace role decides every project at once (MOTIR-6459)', () => 
     );
   });
 
-  it('a NULL workspace_role resolves by the legacy mapping — the deploy-window fallback', async () => {
-    const s = await buildScenario('open', 'null-fallback');
-    // The row the still-serving OLD build writes during a deploy: the legacy
-    // column only, workspace_role NULL. (The service writes both since MOTIR-6462,
-    // so the fixture clears the new column to recreate that row.)
-    await adminDb.workspaceMembership.update({
-      where: { userId_workspaceId: { userId: s.ctxs.wsAdmin.userId, workspaceId: s.workspaceId } },
-      data: { workspaceRole: null },
-    });
-    const row = await adminDb.workspaceMembership.findUniqueOrThrow({
-      where: { userId_workspaceId: { userId: s.ctxs.wsAdmin.userId, workspaceId: s.workspaceId } },
-    });
-    expect([row.role, row.workspaceRole]).toEqual(['admin', null]);
-    const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.wsAdmin);
-    expect([...held].sort()).toEqual([...ROLE_GATED_PERMISSIONS].sort());
-  });
-
   it('the org Owner with NO workspace membership still passes every role-gated key in a private project (MOTIR-6308)', async () => {
     const s = await buildScenario('private', 'owner-reach');
     const org = await adminDb.workspace.findUniqueOrThrow({ where: { id: s.workspaceId } });

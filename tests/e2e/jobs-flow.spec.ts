@@ -282,6 +282,7 @@ test('@smoke cross-workspace isolation: jobs from another workspace are not visi
     data: {
       workspaceId: workspaceB.id,
       userId: isoUserId,
+      workspaceRole: 'manager',
       role: 'owner',
     },
   });

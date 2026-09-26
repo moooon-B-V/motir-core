@@ -145,7 +145,7 @@ async function gate(
 async function plainMember(): Promise<Actor> {
   const user = await createTestUser();
   await adminDb.workspaceMembership.create({
-    data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
+    data: { userId: user.id, workspaceId: fx.workspaceId, workspaceRole: 'member', role: 'member' },
   });
   return { id: user.id, email: user.email };
 }

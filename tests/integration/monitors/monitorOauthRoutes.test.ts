@@ -143,7 +143,12 @@ describe('GET /api/monitors/sentry/oauth/start', () => {
       data: { name: 'V', email: `sv-${Date.now()}@example.com` },
     });
     await adminDb.workspaceMembership.create({
-      data: { workspaceId: fx.workspaceId, userId: viewer.id, role: 'member' },
+      data: {
+        workspaceId: fx.workspaceId,
+        userId: viewer.id,
+        workspaceRole: 'member',
+        role: 'member',
+      },
     });
     await adminDb.projectMembership.create({
       data: {

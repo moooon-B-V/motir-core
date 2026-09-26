@@ -233,7 +233,7 @@ describe('membership direction (6.10.2 §5, asymmetric)', () => {
       data: { name: 'Acme Beta', slug: 'acme-beta-org-only', organizationId: orgId },
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: other.id, workspaceId: second.id, role: 'owner' },
+      data: { userId: other.id, workspaceId: second.id, workspaceRole: 'manager', role: 'owner' },
     });
     await adminDb.organizationMembership.create({
       data: { organizationId: orgId, userId: other.id, role: 'member' },

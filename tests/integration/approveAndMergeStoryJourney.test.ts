@@ -442,7 +442,7 @@ describe('§3 access', () => {
   async function plainMember(workspaceId: string) {
     const user = await createTestUser();
     await adminDb.workspaceMembership.create({
-      data: { userId: user.id, workspaceId, role: 'member' },
+      data: { userId: user.id, workspaceId, workspaceRole: 'member', role: 'member' },
     });
     return user;
   }

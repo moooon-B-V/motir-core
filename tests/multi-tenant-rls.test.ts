@@ -161,7 +161,12 @@ describe('multi-tenant RLS — write isolation', () => {
     await expect(
       asAppRole({ userId: fx.userAId, workspaceId: fx.workspaceAId }, (tx) =>
         tx.workspaceMembership.create({
-          data: { userId: fx.userAId, workspaceId: fx.workspaceBId, role: 'member' },
+          data: {
+            userId: fx.userAId,
+            workspaceId: fx.workspaceBId,
+            workspaceRole: 'member',
+            role: 'member',
+          },
         }),
       ),
     ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);

@@ -289,6 +289,7 @@ test('the Plans page states: no conversations, a filter with none, and a browse-
     data: {
       userId: viewer.id,
       workspaceId: session.workspaceId,
+      workspaceRole: 'member',
       role: 'member',
       activeProjectId: project.id,
     },

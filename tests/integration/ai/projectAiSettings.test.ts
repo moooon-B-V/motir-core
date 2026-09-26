@@ -415,7 +415,12 @@ describe('projectAiSettingsService — tenancy + admin gates', () => {
     const fx = await makeFixture();
     const member = await createTestUser({ email: 'member@example.com' });
     await adminDb.workspaceMembership.create({
-      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: member.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+        role: 'member',
+      },
     });
 
     // Browse-scoped read: an ordinary member sees the configuration.
@@ -462,7 +467,12 @@ describe('projectAiSettingsService — tenancy + admin gates', () => {
     const fx = await makeFixture();
     const member = await createTestUser({ email: 'ai-key-member@example.com' });
     await adminDb.workspaceMembership.create({
-      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: member.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+        role: 'member',
+      },
     });
 
     const err = await projectAiSettingsService

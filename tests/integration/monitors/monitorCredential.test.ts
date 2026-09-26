@@ -360,7 +360,12 @@ describe('the PROBE is on demand, and the verdict is PERSISTED', () => {
       data: { name: 'V', email: `pv-${Date.now()}@example.com` },
     });
     await adminDb.workspaceMembership.create({
-      data: { workspaceId: fx.workspaceId, userId: viewer.id, role: 'member' },
+      data: {
+        workspaceId: fx.workspaceId,
+        userId: viewer.id,
+        workspaceRole: 'member',
+        role: 'member',
+      },
     });
     await adminDb.projectMembership.create({
       data: {

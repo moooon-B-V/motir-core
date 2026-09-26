@@ -158,7 +158,12 @@ describe('PATCH /api/projects/[key]/status-automation', () => {
     const fx = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
     const member = await createTestUser({ email: 'member@example.com' });
     await adminDb.workspaceMembership.create({
-      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: member.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+        role: 'member',
+      },
     });
     signInAs(fx, member.id);
 

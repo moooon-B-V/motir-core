@@ -58,7 +58,7 @@ async function makeFixture(label: string): Promise<Fixture> {
       name: role,
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: u.id, workspaceId, role: 'member' },
+      data: { userId: u.id, workspaceId, workspaceRole: 'member', role: 'member' },
     });
     await addToProjectAs({
       key: project.identifier,

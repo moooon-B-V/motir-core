@@ -7,9 +7,11 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The workspace's STAND-IN principal (Story MOTIR-6168 · MOTIR-6462) — the
-// member eighteen system writers stamp as reporter / actor. The lookup moved
-// from "the oldest legacy `owner` row" to "the oldest MANAGER", and it has to
-// return the same person wherever that owner row still holds the Manager role.
+// member eighteen system writers stamp as reporter / actor. The rule is the
+// OLDEST MANAGER by `createdAt` (then `id`). Since MOTIR-6561 the legacy `role`
+// takes no part — it neither orders the pick nor stands in for a NULL workspace
+// role — and because a founder's membership is written when the workspace is,
+// the oldest Manager is the founder wherever the founder is still a Manager.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -35,36 +37,73 @@ async function standIn(workspaceId: string) {
   );
 }
 
-/** The old rule, verbatim: the oldest `role = 'owner'` row. */
-async function oldOwnerRule(workspaceId: string) {
-  return adminDb.workspaceMembership.findFirst({
-    where: { workspaceId, role: 'owner' },
-    orderBy: { createdAt: 'asc' },
-  });
-}
-
 describe('findStandInManagerByWorkspace', () => {
-  it('returns the same user the owner-only lookup did while the owner row exists — even beside an OLDER Manager', async () => {
+  it('returns the founder — the oldest Manager — when a later Manager joins', async () => {
     const founder = await user('founder');
-    const admin = await user('admin');
+    const later = await user('later');
     const { workspace } = await workspacesService.createWorkspace({
       name: 'Stand-in Co',
       ownerUserId: founder.id,
     });
-    // A legacy admin row older than the founder's (NULL workspace role, so it
-    // resolves as a Manager) — a pure oldest-Manager rule would pick it.
     await adminDb.workspaceMembership.create({
       data: {
-        userId: admin.id,
+        userId: later.id,
         workspaceId: workspace.id,
+        workspaceRole: 'manager',
         role: 'admin',
+      },
+    });
+
+    const picked = await standIn(workspace.id);
+    expect(picked?.userId).toBe(founder.id);
+  });
+
+  it('ignores the legacy role: an older row whose legacy role is `owner` but whose workspace role is Member is never picked', async () => {
+    const founder = await user('founder-legacy');
+    const legacyOwner = await user('legacy-owner');
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'Legacy Co',
+      ownerUserId: founder.id,
+    });
+    await adminDb.workspaceMembership.create({
+      data: {
+        userId: legacyOwner.id,
+        workspaceId: workspace.id,
+        workspaceRole: 'member',
+        role: 'owner',
         createdAt: new Date('2000-01-01T00:00:00Z'),
       },
     });
 
     const picked = await standIn(workspace.id);
     expect(picked?.userId).toBe(founder.id);
-    expect(picked?.userId).toBe((await oldOwnerRule(workspace.id))?.userId);
+  });
+
+  it('breaks a createdAt tie by id, so the pick is deterministic', async () => {
+    const founder = await user('founder-tie');
+    const a = await user('tie-a');
+    const b = await user('tie-b');
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'Tie Co',
+      ownerUserId: founder.id,
+    });
+    await adminDb.workspaceMembership.update({
+      where: { userId_workspaceId: { userId: founder.id, workspaceId: workspace.id } },
+      data: { workspaceRole: 'member' },
+    });
+    const at = new Date('2001-01-01T00:00:00Z');
+    for (const u of [a, b]) {
+      await adminDb.workspaceMembership.create({
+        data: { userId: u.id, workspaceId: workspace.id, workspaceRole: 'manager', createdAt: at },
+      });
+    }
+    const rows = await adminDb.workspaceMembership.findMany({
+      where: { workspaceId: workspace.id, workspaceRole: 'manager' },
+      orderBy: { id: 'asc' },
+    });
+
+    const picked = await standIn(workspace.id);
+    expect(picked?.userId).toBe(rows[0]!.userId);
   });
 
   it('returns the oldest Manager once the owner row no longer holds the Manager role', async () => {

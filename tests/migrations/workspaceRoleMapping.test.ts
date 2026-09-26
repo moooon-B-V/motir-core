@@ -1,10 +1,15 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { BUILTIN_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { adminDb } from '../helpers/adminDb';
-import { makeTenant, runMigrationFile, type Tenant } from './_workspaceRoleTenant';
+import {
+  makeTenant,
+  restoreWorkspaceRoleNotNull,
+  runMigrationFile,
+  type Tenant,
+} from './_workspaceRoleTenant';
 import { truncateAuthTables } from '../helpers/db';
 
 // The role migration's MAPPING (Story MOTIR-6168 · Subtask MOTIR-6458) — run
@@ -47,6 +52,11 @@ async function runMigration(): Promise<void> {
 
 beforeEach(async () => {
   await truncateAuthTables();
+});
+
+// The fixture drops MOTIR-6561's NOT NULL to seed pre-migration rows; put it back.
+afterEach(async () => {
+  await restoreWorkspaceRoleNotNull();
 });
 
 afterAll(async () => {
@@ -131,8 +141,11 @@ describe('the mapping, over a fixture tenant holding every case', () => {
         customName,
       ]);
     }
-    const nulls = await adminDb.workspaceMembership.count({ where: { workspaceRole: null } });
-    expect(nulls).toBe(0);
+    // A raw count: the generated client types the column NOT NULL since MOTIR-6561,
+    // while this test runs on the fixture's relaxed, pre-migration schema.
+    const [row] = await adminDb.$queryRaw<{ nulls: bigint }[]>`
+      SELECT count(*) AS nulls FROM "workspace_membership" WHERE "workspace_role" IS NULL`;
+    expect(Number(row!.nulls)).toBe(0);
   });
 
   it('writes one report row per person per reason, and none for the plain mapping', async () => {

@@ -503,7 +503,7 @@ describe('setWorkspacePolicy', () => {
         data: { organizationId, userId: actor.id, role: ORGANIZATION_ROLE.member },
       });
       await adminDb.workspaceMembership.create({
-        data: { workspaceId: workspace.id, userId: actor.id, role },
+        data: { workspaceId: workspace.id, userId: actor.id, workspaceRole: role, role },
       });
 
       await expect(
@@ -514,27 +514,6 @@ describe('setWorkspacePolicy', () => {
         }),
       ).rejects.toBeInstanceOf(WorkspaceForbiddenError);
     }
-  });
-
-  it('allows a legacy workspace ADMIN — it resolves to the Manager', async () => {
-    // A row the deploy window left with `workspace_role` NULL and the legacy
-    // `admin`: `resolveWorkspaceRole` maps it to `manager`, so the gate still
-    // admits everyone it admitted before (MOTIR-6462).
-    const { workspace, organizationId } = await makeOrgWithWorkspace();
-    const admin = await makeUser();
-    await adminDb.organizationMembership.create({
-      data: { organizationId, userId: admin.id, role: ORGANIZATION_ROLE.member },
-    });
-    await adminDb.workspaceMembership.create({
-      data: { workspaceId: workspace.id, userId: admin.id, role: 'admin' },
-    });
-
-    const dto = await twoFactorPolicyService.setWorkspacePolicy({
-      workspaceId: workspace.id,
-      actorUserId: admin.id,
-      requiresTwoFactor: true,
-    });
-    expect(dto.requiresTwoFactor).toBe(true);
   });
 
   it('allows a stored workspace MANAGER, and refuses a stored Member whose legacy role says owner', async () => {

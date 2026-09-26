@@ -77,7 +77,7 @@ async function seedTenant(tag: string): Promise<Tenant> {
     data: { name: `WS ${tag}`, slug: `monitor-ws-${tag}-${n}`, organizationId: org.id },
   });
   await adminDb.workspaceMembership.create({
-    data: { workspaceId: workspace.id, userId: user.id, role: 'owner' },
+    data: { workspaceId: workspace.id, userId: user.id, workspaceRole: 'manager', role: 'owner' },
   });
   const project = await adminDb.project.create({
     data: {

@@ -5,13 +5,15 @@ import type { MemberRole, WorkspaceRole } from '@/generated/prisma/client';
 // Roles live on the workspace (`docs/decisions/role-model.md` §2): each person
 // holds ONE role there — Manager · Member · Viewer — or a workspace custom role,
 // and it is their role in every project of the workspace. The values are the
-// Prisma `WorkspaceRole` enum, stored in `workspace_membership.workspace_role`
-// beside the legacy column below. This file is the single source of the strings
-// so a gate, a migration and a page read the same constants.
+// Prisma `WorkspaceRole` enum, stored in `workspace_membership.workspace_role`,
+// which is NOT NULL (MOTIR-6561) and the ONLY place a role is read from. This
+// file is the single source of the strings so a gate, a migration and a page
+// read the same constants.
 //
 // The LEGACY `workspace_membership.role` column (Story 1.2 · Subtask 1.6.5) is
-// still written — NOT NULL until the contract story drops it — but nothing
-// outside `resolveWorkspaceRole` below reads it any more (MOTIR-6462).
+// still in the schema until the retirement's contract release drops it, and
+// NOTHING reads it: the deploy-window fallback that did (`resolveWorkspaceRole`)
+// was deleted by MOTIR-6561 once every row carried a workspace role.
 
 /** The three built-in workspace roles, in the order every surface lists them. */
 export const WORKSPACE_ROLES = [
@@ -32,25 +34,6 @@ export type { WorkspaceRole };
  * it lists.
  */
 export const CUSTOM_WORKSPACE_ROLE_TIER: WorkspaceRole = 'member';
-
-/**
- * A membership's WORKSPACE ROLE, read through the one place the deploy-window
- * fallback lives (MOTIR-6459): the stored `workspaceRole` when the mapping
- * (MOTIR-6458) has set it, else the legacy `role` mapped by the DECISION's table —
- * `owner` / `admin` → `manager`, `member` → `member`, `viewer` → `viewer`.
- *
- * The fallback is what keeps a row the STILL-SERVING old build writes during the
- * deploy window correct: that build knows nothing of `workspace_role`, so it
- * creates a membership with the column NULL. The follow-up contract story makes
- * the column NOT NULL once no NULL remains and deletes this arm in one place.
- */
-export function resolveWorkspaceRole(m: {
-  workspaceRole: WorkspaceRole | null;
-  role: MemberRole;
-}): WorkspaceRole {
-  if (m.workspaceRole) return m.workspaceRole;
-  return legacyToWorkspaceRole(m.role);
-}
 
 /**
  * The stored key array of the workspace CUSTOM role a membership holds — the

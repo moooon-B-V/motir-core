@@ -70,7 +70,12 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
     name: 'CRUD Routes Member',
   });
   await adminDb.workspaceMembership.create({
-    data: { userId: member.id, workspaceId: ws.workspace.id, role: 'member' },
+    data: {
+      userId: member.id,
+      workspaceId: ws.workspace.id,
+      workspaceRole: 'member',
+      role: 'member',
+    },
   });
   const board = await withWorkspaceServiceContext(ws.workspace.id, (tx) =>
     boardRepository.findDefaultForProject(project.id, ws.workspace.id, tx),
