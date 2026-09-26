@@ -722,19 +722,13 @@ test('re-planning the PARENT goes through the same confirm', async ({ page, acce
 
   // ⚠️ SINCE MOTIR-6154 THE ANCHOR IS THE LEVEL, NOT A CARD ON IT. The surface
   // opens INSIDE the epic, so what is on screen is the epic's children — the
-  // proposed `Account recovery` among them — and the epic's own change is NOT
-  // drawn, because a level frames the nodes ON it and the anchor is the level
-  // itself. MOTIR-6155 agrees from its own direction: a `modify`'s
-  // `proposalLevelKey` is its TARGET'S PARENT, so the epic's own modify belongs to
-  // the ROOT level, which is the one the arrival just left. (Before MOTIR-6154 the
-  // canvas opened at the root, where the epic WAS a card, and the change was on
-  // screen from the first paint — which is what the comment this replaces meant by
-  // *"the epic is a ROOT node, so its frame is on the level already shown"*.)
-  //
-  // That the rename is invisible from the level the surface arrives on is a real
-  // consequence of that story, not a property worth asserting — it is filed as
-  // MOTIR-6223. What this test rules on is that the rename is REVIEWABLE before
-  // the confirm, so it goes where it is drawn: the root.
+  // proposed `Account recovery` among them — and no CARD carries the epic's own
+  // change, because a level frames the nodes ON it and the anchor is the level
+  // itself. MOTIR-6223 draws that change where the level is drawn: a second row of
+  // the breadcrumb bar (design MOTIR-6241), carrying the op, the proposed title and
+  // the changed fields. So the rename is REVIEWABLE from the level the surface
+  // arrives on, and this test rules on that first; the root still draws the epic's
+  // card frame, and the test climbs there second to hold that too.
   //
   // ⚠️ THE VIEW IS CHOSEN FIRST, BEFORE THE CANVAS IS READ AT ALL. This plan
   // STRADDLES two containers — the `add` under the epic, the `modify` on the epic
@@ -753,6 +747,12 @@ test('re-planning the PARENT goes through the same confirm', async ({ page, acce
     'page',
   );
   await expect(canvasTitle(page, UNDER_PARENT)).toBeVisible();
+
+  // ⭐ THE RENAME, ON THE LEVEL YOU ARE STANDING IN (MOTIR-6223). The crumb keeps
+  // the COMMITTED title; the band under it carries the proposed one.
+  const levelBand = workspace(page).getByTestId('canvas-level-band');
+  await expect(levelBand).toHaveAttribute('data-state', 'changed');
+  await expect(levelBand).toContainText(`This level — title → ${RENAMED_EPIC}`);
 
   // The ROOT read is the one with NO `parentId` — a bare `/roadmap` predicate
   // would also match the level read the arrival itself issued.

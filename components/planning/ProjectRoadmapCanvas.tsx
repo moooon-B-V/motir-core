@@ -457,6 +457,28 @@ interface ProjectRoadmapCanvasBaseProps {
    * changes nothing but the bar (§23.13).
    */
   arrivals?: readonly LiveArrival[] | null;
+  /**
+   * THE LEVEL CHANGE BAND (bug MOTIR-6223; design MOTIR-6241) — what a pending
+   * plan does to the LEVEL in view, drawn as a SECOND ROW inside the breadcrumb
+   * bar. Asked of the drilled level only (the root has no bar, and the project is
+   * not a work item a plan can change); `null` draws nothing, and then the bar is
+   * byte for byte the one that shipped before.
+   *
+   * The foundation owns the SLOT, the consumer the words: only the consumer knows
+   * there is a plan, exactly as with `levelCaption`. Absent by default.
+   */
+  levelBand?: (focus: { id: string; label: string }) => ReactNode;
+  /**
+   * The plan is SOMEWHERE ELSE (bug MOTIR-6223, second half; design MOTIR-6241 §
+   * *BESIDE the anchor*) — a second ARMING of the declined-follow offer, whose
+   * copy, markup, placement and behaviour are unchanged: *"Plan is in
+   * {identifier} · Go there"* is already true when the plan places nothing on the
+   * reader's level and something on another. Asked with the current trail; a
+   * DECLINED follow wins the slot when both are up. Absent by default.
+   */
+  elsewhereOffer?: (
+    trail: readonly CanvasCrumb[],
+  ) => { key: string; trail: readonly CanvasCrumb[] } | null;
 }
 
 /**
@@ -532,6 +554,8 @@ export function ProjectRoadmapCanvas({
   levelCaption,
   motion = false,
   arrivals = null,
+  levelBand,
+  elsewhereOffer,
 }: ProjectRoadmapCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tFolders = useTranslations('folders');
@@ -1421,6 +1445,152 @@ export function ProjectRoadmapCanvas({
     drilled && emptyDrilledFor && lastCrumb
       ? emptyDrilledFor({ id: lastCrumb.id, label: lastCrumb.label })
       : null;
+  // The LEVEL CHANGE BAND (MOTIR-6223) — the bar's second row, drilled only.
+  const band =
+    drilled && levelBand && lastCrumb
+      ? levelBand({ id: lastCrumb.id, label: lastCrumb.label })
+      : null;
+  // ONE offer slot, two armings (MOTIR-6223): a DECLINED follow, else the plan
+  // being somewhere the reader is not. The declined one wins — it is the older
+  // sentence, and it names where the plan lands just the same.
+  const offer = declined ?? elsewhereOffer?.(crumbs) ?? null;
+
+  // The bar's crumb row — the whole bar without a band, row one with one.
+  const breadcrumbRow = (
+    <>
+      {(drilled || offer !== null) && (
+        <button
+          type="button"
+          onClick={goBack}
+          aria-label={t('back')}
+          className="inline-flex size-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+        >
+          <ChevronLeft className="size-4" aria-hidden="true" />
+        </button>
+      )}
+      <ol className="flex min-w-0 items-center gap-1 text-sm">
+        <li className="shrink-0">
+          <Crumb label={resolvedRootLabel} active={false} onClick={() => navigate(null)} />
+        </li>
+        {breadcrumbSegments(crumbs, isFolderCrumb ?? (() => false)).map((seg) => {
+          if (seg.kind === 'ellipsis') {
+            const target = crumbs[seg.targetIndex]!;
+            const full = seg.path.join(' ▸ ');
+            return (
+              <li key={`ellipsis:${target.id}`} className="flex min-w-0 items-center gap-1">
+                <ChevronRight
+                  className="size-3.5 shrink-0 text-(--el-text-faint)"
+                  aria-hidden="true"
+                />
+                <Crumb
+                  label="…"
+                  title={full}
+                  ariaLabel={full}
+                  active={false}
+                  onClick={() => navigate(target.id)}
+                />
+              </li>
+            );
+          }
+          const c = crumbs[seg.index]!;
+          return (
+            <li key={c.id} className="flex min-w-0 items-center gap-1">
+              <ChevronRight
+                className="size-3.5 shrink-0 text-(--el-text-faint)"
+                aria-hidden="true"
+              />
+              <Crumb
+                label={c.label}
+                active={seg.index === crumbs.length - 1}
+                onClick={() => navigate(c.id)}
+                folder={seg.folder}
+                // THE TARGET CRUMB (MOTIR-6160) — the planning surface's
+                // answer to MOTIR-2070. Standing INSIDE the target removes
+                // the node its ring was drawn on, so the mark moves to the
+                // crumb: this level IS the thing being planned. A folder
+                // crumb wins the glyph slot if both ever applied, which
+                // they cannot — a folder is not a work item.
+                planningTarget={!seg.folder && (isTargetCrumb?.(c) ?? false)}
+                srPrefix={
+                  seg.folder
+                    ? tFolders('breadcrumbFolderLabel')
+                    : (isTargetCrumb?.(c) ?? false)
+                      ? tTarget('crumbTargetPrefix')
+                      : undefined
+                }
+              />
+            </li>
+          );
+        })}
+      </ol>
+      {/* ⚠️ THE READER NAVIGATED, SO THE CANVAS DID NOT MOVE (MOTIR-6161) —
+                and saying nothing would strand them: the plan is landing somewhere
+                they are not looking. A quiet affordance in the bar's own row, never
+                a toast and never a modal, and it never moves anything by itself.
+                Taking it IS an explicit reader act, which is the one thing allowed
+                to move a reader who has navigated. */}
+      {offer !== null && (
+        <button
+          type="button"
+          data-testid="canvas-follow-offer"
+          onClick={() => {
+            const next = offer.trail;
+            // An elsewhere offer needs no clearing: once the reader stands
+            // where the plan is, it stops arming by itself.
+            if (offer === declined) setDeclined(null);
+            setCrumbs([...next]);
+            setFocusId(next[next.length - 1]?.id ?? null);
+            setLocalPositions({});
+            setSelectedId(null);
+            setHighlightId(null);
+            setShowChangesOverride(null);
+            suppressedLevelRef.current = levelKey(next[next.length - 1]?.id ?? null);
+            setFollowFade(true);
+            setFollowAnnouncement(
+              tTarget('movedAnnouncement', {
+                target: next[next.length - 1]?.label ?? resolvedRootLabel,
+              }),
+            );
+          }}
+          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+        >
+          <span
+            aria-hidden="true"
+            className="size-1.5 shrink-0 rounded-(--radius-badge) bg-(--el-accent)"
+          />
+          {tTarget('goToTarget', {
+            identifier:
+              offer.trail[offer.trail.length - 1]?.crumbKey ??
+              offer.trail[offer.trail.length - 1]?.label ??
+              resolvedRootLabel,
+          })}
+        </button>
+      )}
+      {/* THE ARRIVALS COUNT (MOTIR-6300; design Part XXIII §23.7) — ONE slot,
+                in the follow offer's own markup. The offer WINS it when it is up: it
+                already names where the plan lands. */}
+      {offer === null && arrivalsPill !== null && (
+        <button
+          type="button"
+          data-testid="canvas-arrivals-offer"
+          onClick={() => goToArrivals(arrivalsPill.latest.trail)}
+          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+        >
+          <span
+            aria-hidden="true"
+            className="size-1.5 shrink-0 rounded-(--radius-badge) bg-(--el-accent)"
+          />
+          {tTarget(arrivalsPill.levels > 1 ? 'arrivedAcross' : 'arrivedIn', {
+            count: arrivalsPill.count,
+            identifier:
+              arrivalsPill.latest.trail[arrivalsPill.latest.trail.length - 1]?.crumbKey ??
+              arrivalsPill.latest.trail[arrivalsPill.latest.trail.length - 1]?.label ??
+              resolvedRootLabel,
+          })}
+        </button>
+      )}
+    </>
+  );
 
   return (
     <div
@@ -1448,7 +1618,7 @@ export function ProjectRoadmapCanvas({
         {/* breadcrumb + Back overlay — only while drilled. At the ROOT it renders
             for the arrivals pill too (§23.7): the root crumb and the pill, and no
             Back, because there is nowhere to go back to. */}
-        {(drilled || declined !== null || arrivalsPill !== null) && (
+        {(drilled || offer !== null || arrivalsPill !== null) && (
           <nav
             aria-label={t('breadcrumb')}
             // Widened from 36rem with the `identifier · title` crumb label (MOTIR-1805
@@ -1456,136 +1626,19 @@ export function ProjectRoadmapCanvas({
             // The 44rem basis is also the collision budget: when that and the fixed
             // control cluster do not fit together, flex-wrap moves the controls to
             // their own right-aligned row instead of crushing the crumb targets.
-            className="pointer-events-auto flex min-w-0 max-w-[44rem] basis-[44rem] flex-1 items-center gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-2 py-1 shadow-(--shadow-card)"
+            //
+            // With a LEVEL CHANGE BAND (MOTIR-6223) the bar STACKS: `breadcrumbRow`
+            // becomes its first row, unchanged, and the band the second, inside the
+            // same card. Without one it is the single-row bar, byte for byte.
+            className={`pointer-events-auto flex min-w-0 max-w-[44rem] basis-[44rem] flex-1 ${band ? 'flex-col items-stretch' : 'items-center gap-1'} rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-2 py-1 shadow-(--shadow-card)`}
           >
-            {(drilled || declined !== null) && (
-              <button
-                type="button"
-                onClick={goBack}
-                aria-label={t('back')}
-                className="inline-flex size-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-              >
-                <ChevronLeft className="size-4" aria-hidden="true" />
-              </button>
-            )}
-            <ol className="flex min-w-0 items-center gap-1 text-sm">
-              <li className="shrink-0">
-                <Crumb label={resolvedRootLabel} active={false} onClick={() => navigate(null)} />
-              </li>
-              {breadcrumbSegments(crumbs, isFolderCrumb ?? (() => false)).map((seg) => {
-                if (seg.kind === 'ellipsis') {
-                  const target = crumbs[seg.targetIndex]!;
-                  const full = seg.path.join(' ▸ ');
-                  return (
-                    <li key={`ellipsis:${target.id}`} className="flex min-w-0 items-center gap-1">
-                      <ChevronRight
-                        className="size-3.5 shrink-0 text-(--el-text-faint)"
-                        aria-hidden="true"
-                      />
-                      <Crumb
-                        label="…"
-                        title={full}
-                        ariaLabel={full}
-                        active={false}
-                        onClick={() => navigate(target.id)}
-                      />
-                    </li>
-                  );
-                }
-                const c = crumbs[seg.index]!;
-                return (
-                  <li key={c.id} className="flex min-w-0 items-center gap-1">
-                    <ChevronRight
-                      className="size-3.5 shrink-0 text-(--el-text-faint)"
-                      aria-hidden="true"
-                    />
-                    <Crumb
-                      label={c.label}
-                      active={seg.index === crumbs.length - 1}
-                      onClick={() => navigate(c.id)}
-                      folder={seg.folder}
-                      // THE TARGET CRUMB (MOTIR-6160) — the planning surface's
-                      // answer to MOTIR-2070. Standing INSIDE the target removes
-                      // the node its ring was drawn on, so the mark moves to the
-                      // crumb: this level IS the thing being planned. A folder
-                      // crumb wins the glyph slot if both ever applied, which
-                      // they cannot — a folder is not a work item.
-                      planningTarget={!seg.folder && (isTargetCrumb?.(c) ?? false)}
-                      srPrefix={
-                        seg.folder
-                          ? tFolders('breadcrumbFolderLabel')
-                          : (isTargetCrumb?.(c) ?? false)
-                            ? tTarget('crumbTargetPrefix')
-                            : undefined
-                      }
-                    />
-                  </li>
-                );
-              })}
-            </ol>
-            {/* ⚠️ THE READER NAVIGATED, SO THE CANVAS DID NOT MOVE (MOTIR-6161) —
-                and saying nothing would strand them: the plan is landing somewhere
-                they are not looking. A quiet affordance in the bar's own row, never
-                a toast and never a modal, and it never moves anything by itself.
-                Taking it IS an explicit reader act, which is the one thing allowed
-                to move a reader who has navigated. */}
-            {declined !== null && (
-              <button
-                type="button"
-                data-testid="canvas-follow-offer"
-                onClick={() => {
-                  const next = declined.trail;
-                  setDeclined(null);
-                  setCrumbs([...next]);
-                  setFocusId(next[next.length - 1]?.id ?? null);
-                  setLocalPositions({});
-                  setSelectedId(null);
-                  setHighlightId(null);
-                  setShowChangesOverride(null);
-                  suppressedLevelRef.current = levelKey(next[next.length - 1]?.id ?? null);
-                  setFollowFade(true);
-                  setFollowAnnouncement(
-                    tTarget('movedAnnouncement', {
-                      target: next[next.length - 1]?.label ?? resolvedRootLabel,
-                    }),
-                  );
-                }}
-                className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-              >
-                <span
-                  aria-hidden="true"
-                  className="size-1.5 shrink-0 rounded-(--radius-badge) bg-(--el-accent)"
-                />
-                {tTarget('goToTarget', {
-                  identifier:
-                    declined.trail[declined.trail.length - 1]?.crumbKey ??
-                    declined.trail[declined.trail.length - 1]?.label ??
-                    '',
-                })}
-              </button>
-            )}
-            {/* THE ARRIVALS COUNT (MOTIR-6300; design Part XXIII §23.7) — ONE slot,
-                in the follow offer's own markup. The offer WINS it when it is up: it
-                already names where the plan lands. */}
-            {declined === null && arrivalsPill !== null && (
-              <button
-                type="button"
-                data-testid="canvas-arrivals-offer"
-                onClick={() => goToArrivals(arrivalsPill.latest.trail)}
-                className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-(--radius-control) border border-(--el-border) bg-(--el-card) px-(--spacing-control-x) py-(--spacing-control-y) text-xs text-(--el-text-secondary) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-              >
-                <span
-                  aria-hidden="true"
-                  className="size-1.5 shrink-0 rounded-(--radius-badge) bg-(--el-accent)"
-                />
-                {tTarget(arrivalsPill.levels > 1 ? 'arrivedAcross' : 'arrivedIn', {
-                  count: arrivalsPill.count,
-                  identifier:
-                    arrivalsPill.latest.trail[arrivalsPill.latest.trail.length - 1]?.crumbKey ??
-                    arrivalsPill.latest.trail[arrivalsPill.latest.trail.length - 1]?.label ??
-                    resolvedRootLabel,
-                })}
-              </button>
+            {band ? (
+              <>
+                <div className="flex min-w-0 items-center gap-1">{breadcrumbRow}</div>
+                {band}
+              </>
+            ) : (
+              breadcrumbRow
             )}
           </nav>
         )}
