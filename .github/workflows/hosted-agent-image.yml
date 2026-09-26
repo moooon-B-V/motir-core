@@ -1,0 +1,169 @@
+# The HOSTED AGENT image — build, prove, publish (Story MOTIR-683 · Subtask MOTIR-687).
+#
+# `packages/cli/sandbox/hosted/` is the one-shot container Motir boots per
+# dispatched card: OpenCode, pinned and configured per the gateway's egress
+# contract, and nothing else agent-shaped. This workflow is its whole lane:
+#
+#   - on a PULL REQUEST touching it: build the image, prove it carries no
+#     credential, and run the smoke test against the BUILT image. No push.
+#   - on a PUSH TO `main` touching it: the SAME build and the SAME proofs, and
+#     only then a push to GHCR — printing the DIGEST, because the deployment
+#     boots a digest (`MOTIR_HOSTED_AGENT_IMAGE`, docs/decisions/hosted-agent-run.md
+#     §6), never a tag. The push is a LATER STEP of the job that just proved the
+#     image, so a green build is the publish gate.
+#
+# ── Why it gates on the hosted folder alone ─────────────────────────────────
+# Unlike the sandbox and runner images (`COPY . .` from the repository root,
+# which is why `ci.yml`'s `changes` job treats every path as their input), this
+# image's build context IS `packages/cli/sandbox/hosted/`: nothing outside it is
+# copied in. So a change anywhere else cannot change the image, and the path
+# filter below is its complete input set — plus this file and the two composite
+# actions it runs.
+#
+# ── Where the image is read from ────────────────────────────────────────────
+# `ghcr.io/moooon-b-v/motir-hosted-agent`. Its recipe is in this public
+# repository, so by `docs/decisions/fleet-image-pull.md` §1 it is published
+# PUBLIC and the fleet pulls it anonymously. Pulling the published digest from
+# the fleet — the production check — is MOTIR-6386's (under the dogfood story),
+# because it can only happen after this lane has published once.
+
+name: Hosted agent image
+
+on:
+  pull_request:
+    paths:
+      - 'packages/cli/sandbox/hosted/**'
+      - '.github/workflows/hosted-agent-image.yml'
+      - '.github/actions/buildx/**'
+      - '.github/actions/pnpm/**'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/cli/sandbox/hosted/**'
+      - '.github/workflows/hosted-agent-image.yml'
+      - '.github/actions/buildx/**'
+      - '.github/actions/pnpm/**'
+
+# A pull request's newer push supersedes its older run. A publish is never
+# cancelled mid-push — a half-cancelled push leaves a tag naming a manifest
+# whose layers were not all uploaded.
+concurrency:
+  group: hosted-agent-image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # OCI repository names are lowercase-only (the same trap `sandbox-images.yml`
+  # documents), so the org is spelled lowercase here.
+  IMAGE: ghcr.io/moooon-b-v/motir-hosted-agent
+  LOCAL_TAG: motir-hosted-agent:ci
+
+jobs:
+  hosted-agent-image:
+    name: Build, prove, publish
+    runs-on: ubuntu-latest
+    # No run on record yet — this lane is new (MOTIR-687). The floor is set from
+    # its nearest neighbour, `sandbox-images.yml`'s base job (observed 2.8–8.3
+    # min), which builds a larger image than this one: 25 min, ~3x its worst.
+    # Re-measure once this lane has run and replace this comment with the number.
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/buildx
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: packages/cli/sandbox/hosted
+          file: packages/cli/sandbox/hosted/Dockerfile
+          tags: ${{ env.LOCAL_TAG }}
+          load: true
+          cache-from: type=gha,scope=hosted-agent
+          cache-to: type=gha,scope=hosted-agent,mode=max
+
+      # AC2 — nothing credential-shaped is baked in. The run's credentials are
+      # injected at boot (docs/decisions/hosted-agent-run.md §3–§5); a key found
+      # here would be a key every run of every organization carries. The
+      # patterns: an Anthropic key, a one-api / gateway `sk-` key, and every
+      # GitHub token family (classic, fine-grained, app installation, user,
+      # OAuth, refresh).
+      - name: The image carries no credential
+        run: |
+          set -euo pipefail
+          patterns='sk-ant-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{48}|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}'
+          env_json="$(docker image inspect "$LOCAL_TAG" --format '{{json .Config.Env}}')"
+          echo "image env: $env_json"
+          if echo "$env_json" | grep -Eq "$patterns|(ANTHROPIC|OPENAI)_API_KEY|GITHUB_TOKEN|GH_TOKEN|MOTIR_RUN_KEY|MOTIR_RUN_TOKEN|MOTIR_GIT_TOKEN"; then
+            echo "::error::the image's environment carries a credential or a credential variable"
+            exit 1
+          fi
+          rootfs="$(mktemp -d)"
+          cid="$(docker create "$LOCAL_TAG")"
+          docker export "$cid" | tar -x -C "$rootfs" --exclude='proc/*' --exclude='sys/*' --exclude='dev/*' 2>/dev/null || true
+          docker rm "$cid" >/dev/null
+          # `-a`, not `-I`: a key embedded in a binary is still a key.
+          hits="$(grep -rEal "$patterns" "$rootfs" 2>/dev/null || true)"
+          if [ -n "$hits" ]; then
+            echo "$hits" | head -20
+            echo "::error::credential-shaped strings found in the image filesystem (files listed above)"
+            exit 1
+          fi
+          for f in auth.json .npmrc .git-credentials; do
+            if find "$rootfs" -name "$f" -not -path '*/node_modules/*' | grep -q .; then
+              echo "::error::the image ships a $f"
+              exit 1
+            fi
+          done
+          echo "no credential found in the image's env or filesystem"
+
+      # AC1, AC3–AC6 — the smoke test, against the image just built. It skips its
+      # image layer when MOTIR_HOSTED_AGENT_IMAGE is unset, so this is the step
+      # that turns that layer on.
+      - uses: ./.github/actions/pnpm
+      - run: pnpm install --frozen-lockfile --filter @motir/cli
+        env:
+          HUSKY: '0'
+      - name: Smoke the image
+        env:
+          MOTIR_HOSTED_AGENT_IMAGE: ${{ env.LOCAL_TAG }}
+        run: pnpm --filter @motir/cli exec vitest run sandbox/hosted/smoke.test.ts
+
+      # ── Publish: a push to `main` only, and only now the image is proven. ──
+      - name: Log in to GHCR
+        if: ${{ github.event_name == 'push' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish
+        if: ${{ github.event_name == 'push' }}
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: packages/cli/sandbox/hosted
+          file: packages/cli/sandbox/hosted/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:main
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=hosted-agent
+      - name: Print the published digest
+        if: ${{ github.event_name == 'push' }}
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DIGEST" ]; then
+            echo "::error::the push reported no digest"
+            exit 1
+          fi
+          echo "Published ${IMAGE}@${DIGEST}"
+          {
+            echo '### Hosted agent image published'
+            echo
+            echo "\`${IMAGE}@${DIGEST}\`"
+            echo
+            echo 'Set `MOTIR_HOSTED_AGENT_IMAGE` to this reference — a digest, never a tag.'
+          } >> "$GITHUB_STEP_SUMMARY"

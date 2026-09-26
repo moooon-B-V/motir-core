@@ -16,5 +16,11 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "tsup.config.ts", "vitest.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "sandbox/hosted/**/*.ts",
+    "tsup.config.ts",
+    "vitest.config.ts"
+  ]
 }
