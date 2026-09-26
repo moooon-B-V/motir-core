@@ -97,6 +97,29 @@ export const projectMembershipRepository = {
     });
   },
 
+  /**
+   * How many people were ADDED to the project (Story MOTIR-6169 · MOTIR-6541) —
+   * the size of a Members-only project's entry list. Takes `tx` for the
+   * `project_membership` RLS policy, as `findMembersByProject` does.
+   */
+  async countByProject(projectId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.projectMembership.count({ where: { projectId } });
+  },
+
+  /**
+   * The ids of the people ADDED to the project (Story MOTIR-6169 · MOTIR-6541) —
+   * what the entry rule and the access migration test a person against. Takes
+   * `tx` for the `project_membership` RLS policy.
+   */
+  async findUserIdsByProject(projectId: string, tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.projectMembership.findMany({
+      where: { projectId },
+      select: { userId: true },
+      orderBy: { userId: 'asc' },
+    });
+    return rows.map((r) => r.userId);
+  },
+
   async create(
     data: { workspaceId: string; projectId: string; userId: string; role: MemberRole },
     tx: Prisma.TransactionClient,

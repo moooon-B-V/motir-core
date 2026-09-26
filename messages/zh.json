@@ -1966,7 +1966,8 @@
           "custom_role_recreated": "其自定义项目角色已在工作区重新创建。",
           "custom_role_merged": "两个自定义角色合并为一个，仅保留两者共有的权限。",
           "org_admin_granted": "成为组织管理员（每位工作区所有者均如此）。",
-          "mapped_narrower": "在某个项目中的权限比以前更窄。"
+          "mapped_narrower": "在某个项目中的权限比以前更窄。",
+          "project_access_lost": "不再能进入一个改为“仅成员”的项目——他们未被添加到该项目。"
         }
       }
     },

@@ -1966,7 +1966,8 @@
           "custom_role_recreated": "Their custom project role was re-created at the workspace.",
           "custom_role_merged": "Two custom roles merged into one holding only the keys both shared.",
           "org_admin_granted": "Became an organization Admin, as every workspace owner does.",
-          "mapped_narrower": "Their keys in a project are narrower than before."
+          "mapped_narrower": "Their keys in a project are narrower than before.",
+          "project_access_lost": "No longer enters a project that became Members only — they were not added to it."
         }
       }
     },

@@ -3,6 +3,7 @@ import {
   Prisma,
   type User,
   type Workspace,
+  type WorkspaceAccessScope,
   type WorkspaceMembership,
   type WorkspaceRole,
   type WorkspaceRoleDefinition,
@@ -130,6 +131,24 @@ export const workspaceMembershipRepository = {
     return tx.workspaceMembership.update({
       where: { userId_workspaceId: { userId, workspaceId } },
       data: { workspaceRole: role.workspaceRole, roleDefinitionId: role.roleDefinitionId },
+    });
+  },
+
+  /**
+   * Write a member's ACCESS SCOPE — Full or Limited (Story MOTIR-6169 ·
+   * MOTIR-6541). Whether the change is allowed (a Manager's scope is never
+   * read, so setting one is refused) is the service's call; this writes what it
+   * is given. Targets the row by the `(userId, workspaceId)` unique.
+   */
+  async setAccessScope(
+    userId: string,
+    workspaceId: string,
+    accessScope: WorkspaceAccessScope,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkspaceMembership> {
+    return tx.workspaceMembership.update({
+      where: { userId_workspaceId: { userId, workspaceId } },
+      data: { accessScope },
     });
   },
 

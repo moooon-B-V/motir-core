@@ -5,10 +5,12 @@ import {
   type PrMergeMode,
   type Project,
   type ProjectAccessLevel,
+  type ProjectAccessMode,
   type ProjectRepoOwnership,
   type WorkflowPolicyMode,
 } from '@/generated/prisma/client';
 import { db, dbRead } from '@/lib/db';
+import { levelForMode } from '@/lib/projects/accessMode';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ProjectSquareRank } from '@/lib/projectSquare/rank';
 
@@ -770,6 +772,31 @@ export const projectRepository = {
       where: { id },
       data: {
         accessLevel,
+        ...(options.stampMadePublicAt ? { madePublicAt: new Date() } : {}),
+      },
+    });
+  },
+
+  /**
+   * Set the project's ACCESS MODE (Story MOTIR-6169 · MOTIR-6541) — `access_mode`
+   * AND the legacy `accessLevel` (`levelForMode`), in ONE update. THE ONLY
+   * WRITER of `access_mode`: the two columns move together until the follow-up
+   * contract story drops `accessLevel`, so the RLS policies that still key on
+   * `"accessLevel" = 'public'` never disagree with the mode the application
+   * reads. `stampMadePublicAt` is `setAccessLevel`'s option, for the same
+   * reason: the service passes it only on the not-public → public edge.
+   */
+  async setAccessMode(
+    id: string,
+    accessMode: ProjectAccessMode,
+    tx: Prisma.TransactionClient,
+    options: { stampMadePublicAt?: boolean } = {},
+  ): Promise<Project> {
+    return tx.project.update({
+      where: { id },
+      data: {
+        accessMode,
+        accessLevel: levelForMode(accessMode),
         ...(options.stampMadePublicAt ? { madePublicAt: new Date() } : {}),
       },
     });

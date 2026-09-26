@@ -30,6 +30,7 @@ export const ROLE_MIGRATION_REASONS = [
   'custom_role_merged',
   'org_admin_granted',
   'mapped_narrower',
+  'project_access_lost',
 ] as const satisfies readonly RoleMigrationReason[];
 
 /** The Pill hue each workspace role carries — the member-role tints moved up a tier. */
