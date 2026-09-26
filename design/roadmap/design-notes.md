@@ -38,6 +38,7 @@ arrangement (still pannable / zoomable; nodes still draggable from there).
 | `roadmap-arrival.mock.html`               | the **roadmap you come back to** (MOTIR-3834): the level-addressable URL, the full-fold frame, the collapsible Dependencies panel, and the ARRIVAL view |
 | `roadmap-arrival.png`                     | its full-page export (`scripts/render-design-mock.mjs`, light, `deviceScaleFactor 2`, 1200px)                                                           |
 | `roadmap--folder-node.mock.html`          | a **FOLDER on the canvas** (MOTIR-5713): the folder card, the folder level, and the navigable folder crumb — a delta                                    |
+| `edges--covered-by-parent.mock.html`      | **covered cross-parent edges** (MOTIR-6353): when _blocked elsewhere_ shows, the covered and exempt cases, the legend copy — a delta                    |
 
 The `roadmap` mock is a **multi-panel review board** — six sheets (5 spec + the
 multi-level drill-down sheet, below), every panel inspected (the multi-panel
@@ -2175,3 +2176,156 @@ Swept over the tree, not only over the keys this asset names (`type-design.md`'s
 | **MOTIR-5418**                  | TAKES nothing: the plan-review text crumb stands (decision 8)                                                                         | none owed                                                                                |
 | **MOTIR-3493** / **MOTIR-3490** | TAKES a STRUCTURE on the ROOT: the grouped node now holds only unfiled rows, and the loose band leads with folders                    | both `done`; MOTIR-5710 carries the change                                               |
 | **MOTIR-5311** / **MOTIR-5314** | GIVES nothing, TAKES nothing: their vocabulary and level rule are composed as they stand                                              | none owed                                                                                |
+
+---
+
+## Covered cross-parent edges (MOTIR-6015)
+
+_MOTIR-6353, Story MOTIR-6352 — `edges--covered-by-parent.mock.html`, a DELTA of `edges.mock.html`
+sheet 2. It amends [§3](#3-cross-level--cross-story-signal--the-off-level-blocker-the-heart-sheet-2),
+and `edges.mock.html` is left as the record it is._
+
+Story MOTIR-6015 made a SAME-LEVEL `blocked_by` across parents a legitimate edge: a subtask may wait
+on a subtask in another story, and a story on a story in another epic. Such an edge is **valid
+exactly when the parents carry it**. §3 was written for a world where every off-level blocker was a
+planning error (_"a correct plan is a tree"_), and it painted all of them as the bad-plan tangle.
+Under the new rule most of those edges are correct. Painting them red would turn the canvas's
+loudest signal into noise on exactly the plans the planners now draw well.
+
+### The rule
+
+> **Project scope: an off-level blocker shows _blocked elsewhere_ if and only if the validator calls
+> the edge INVALID.**
+
+An off-level edge is one of four things, and the canvas treats each one differently:
+
+| the edge                                                                                                                                           | validator verdict                                                                           | canvas (project scope)                                                                                                                                 | sheet |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
+| **UNCOVERED** — same level, different parents, and the blocked item's parent is NOT directly `blocked_by` the blocker's parent                     | INVALID — `invalidEdges` (`validate_work_item`, `validate_plan`)                            | the shipped §3 treatment, unchanged: `cross` arrow, ghost anchor, midpoint flag, _blocked elsewhere_ pill + ring                                       | 1, 3  |
+| **COVERED** — same level, different parents, and the blocked item's parent IS directly `blocked_by` the blocker's parent                           | valid                                                                                       | **nothing at this level**: no arrow, no anchor, no flag, no pill, no ring. The parents' in-level arrow one level up already draws the dependency       | 2, 4  |
+| **EXEMPT** — same level, and an end has no work-item parent (a root, or an item FILED in a folder)                                                 | valid (`coveredByParents`: "no parent edge to require")                                     | **NEW: the neutral anchor.** The ordinary in-level arrow (pending, or firm once done) from a ghost anchor in neutral tokens. No flag, no pill, no ring | 7     |
+| **CROSS-LEVEL** — the two ends sit at different depths below their nearest common ancestor, or an epic paired with a non-epic (`isCrossLevelEdge`) | INVALID — "blocked elsewhere" (the user's ruling of 2026-09-26, recorded on bug MOTIR-6509) | the §3 treatment, as UNCOVERED. Coverage is never asked of it: a cross-level edge is invalid whatever its parents carry                                | —     |
+
+**"Directly"** means ONE `is_blocked_by` link from the blocked item's parent to the blocker's parent,
+exactly as `coveredByParents` (`lib/workItems/crossParentCoverage.ts`) reads it: not transitive (B
+waiting on C waiting on A does not cover B's child waiting on A's child), and never a grandparent
+(the epics carrying an edge does not cover a subtask edge between their stories). The rule recurses
+by being asked of EVERY edge. The story edge that covers a subtask edge is itself judged at the story
+level against the epics.
+
+**One predicate, never a second copy.** The canvas asks `lib/workItems/crossParentCoverage.ts`
+(coverage and exemption) and `lib/workItems/edgeLevel.ts` (`isCrossLevelEdge`), the same two
+functions the validators call. So the flag and the verdict cannot disagree, and
+`tests/workItems/crossParentCoverage.test.ts` already pins that nothing defines a second copy.
+
+### Why each non-obvious state is decided the way it is
+
+- **Covered draws NOTHING, not a quieter arrow (sheet 2).** The card's reader asks _"is this plan
+  wrong here?"_. A covered edge's answer is no, and the dependency itself is legible one level up,
+  where the parents' arrow runs. A second, softer anchor at the leaf level would reintroduce
+  off-level chrome on every precise edge the planners now draw. It would compete with the one warning
+  the canvas has, for information the reader already has. **Readiness is untouched**: the edge still
+  holds the card out of the ready set; only its drawing changes.
+- **Mixed keeps the pill (sheet 3).** The pill says _this card has an invalid edge_. One is enough.
+  The pill never counts or names the covered blocker, and only the uncovered blocker gets an anchor.
+  The shipped anchor-dedupe (`anchorAdded`) already mints one anchor per blocker, so an anchor shared
+  with a covered edge is drawn only if some uncovered edge needs it.
+- **Done-ness does not decide (sheet 5).** What the canvas ships today: in project scope a DONE
+  off-level blocker is drawn exactly like an open one (`stub.isDone` is read only in the sprint arm).
+  Coverage keeps that: the verdict is about the plan's SHAPE, and `invalidEdges` does not read status.
+  So an uncovered done blocker stays flagged, and a covered done blocker is hidden like any covered
+  edge. The canvas never flags an edge the validator calls valid, and never hides one it calls
+  invalid.
+- **The exempt edge keeps an anchor, in NEUTRAL tones (sheet 7).** Being valid, it gets no warning.
+  But unlike a covered edge, no level above draws it (a root has no parent level), so hiding it would
+  make a real dependency invisible on the whole roadmap. Same-level plus exempt is only reachable
+  between two ROOTS, and it reaches the canvas as an off-level blocker when one of them is filed (a
+  filed item leaves the root read and is drawn inside its folder level, MOTIR-5713 decision 1).
+  MOTIR-5713 decision 7 designed exactly this anchor's folder line, and it stays: the reader still
+  learns which folder door holds the blocker.
+- **A cross-level edge is always flagged.** `coveredByParents` does not consult the level, so on its
+  own it would call a cross-level edge between two parents that happen to be linked "covered". The
+  canvas must ask `isCrossLevelEdge` FIRST, as `uncoveredCrossParentEdges` does. Bug MOTIR-6509 makes
+  such an edge writable and reports it INVALID with the reason "blocked elsewhere", so the flag is its
+  on-canvas form.
+
+### The neutral anchor (the one new element)
+
+Derived from the shipped `GhostAnchor` (`components/planning/WorkItemNode.tsx`). Same box
+(`200 × NODE_H`, `overflow-hidden`, `--radius-card`, dashed border, `p-(--spacing-card-padding)`),
+same three lines (the `ArrowUpRight` identifier, the title, the location or folder line), same
+hatch geometry. Only the tone changes:
+
+| part             | danger (§3, invalid)                              | neutral (valid, exempt)                                              |
+| ---------------- | ------------------------------------------------- | -------------------------------------------------------------------- |
+| border           | dashed `--el-danger`                              | dashed `--el-border-strong`                                          |
+| hatch            | `--el-surface` / `--el-danger-surface`            | `--el-surface` / `--el-border-soft`                                  |
+| identifier       | `--el-danger-on-surface`, 600, mono               | `--el-text-secondary`, 600, mono                                     |
+| title            | `--el-text-secondary`                             | `--el-text-secondary` (unchanged)                                    |
+| location line    | "in {parent} ↗" `--el-danger`, or the folder path | the folder path (`FolderPathLabel`, `--el-text-secondary`), as today |
+| edge into target | `cross`: `--el-warning`, 2.5, midpoint flag       | `firm` / `pending` by the blocker's status, 2, **no flag**           |
+| blocked node     | `cross-blocked` state: danger ring + pill         | `normal` (or whatever other state it has — done, ready, here)        |
+
+It keeps the anchor's behaviour: viewable (MOTIR-1586), and a click drills to the blocker's level.
+Its accessible name is the shipped anchor's.
+
+### The legend (sheet 6)
+
+The label stays **blocked elsewhere** / **受阻于别处**. The meaning
+(`roadmap.canvas.legend.blockedElsewhereMeaning`) stops describing where the blocker is, which is
+true of every covered edge too, and names what is wrong and the remedy:
+
+| key                                             | en (today → after)                                                                                            | zh (today → after)                                                      |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `roadmap.canvas.legend.blockedElsewhereMeaning` | the blocker sits elsewhere in the plan → **its parent isn’t blocked by the blocker’s parent — add that link** | 阻塞项位于计划中的别处 → **其父项未被阻塞项的父项阻塞——请补上这条关联** |
+
+The copy names the cross-parent remedy, because that is the case the planners now produce. A
+cross-level edge shares the row. Its remedy is to re-wire the edge on one level, which the anchor's
+location line and the validator's reason tell the reader. A second legend row for a rare, now
+planner-refused shape would cost more reading than it saves. **No other new strings**: the pill,
+the midpoint flag and the anchor keep their shipped copy.
+
+### Plan review
+
+The plan-review canvas composes the same level builder (`mergePlanLevel`), so every state above
+applies there over the PROJECTED tree. A plan that adds the parents' edge (a `modify` with
+`blockedByAdd` on the parent, or an `add` carrying it) previews the child edge as covered, and a
+plan that removes it previews the flag. The `validate_plan` verdict is the reference, as
+`validate_work_item` is for the committed roadmap. No separate sheet: the drawing is identical, and
+only the tree the predicate reads differs.
+
+### Unchanged — and not drawn
+
+- **Sprint scope** (`blockerNotInSprint` / `blockerNotInSprintMeaning`, the _"not in this sprint ↗"_
+  anchor): sprint validity is a different question, and its arm runs before any of this. Unchanged.
+- The in-level firm / pending arrows, the ghost anchor's anatomy, the midpoint flag's copy, the
+  arrival / level-member / grouped / departing exclusions in `buildWorkItemLevel`.
+- No soft / hard block marker (Story MOTIR-6354's; excluded here).
+
+### Shipped reality this asset records
+
+- The shipped `cross` edge, its marker and the legend's warning swatch are `--el-warning`, not the
+  `--el-danger` §3 names. The anchor and the node ring are `--el-danger`. The mock draws what ships.
+- Every canvas in the mock is the real `ProjectRoadmapCanvas` + `buildWorkItemLevel` markup, rendered
+  headless from each state's level data (the harness recorded under _How the asset was produced_
+  above, with a throwaway spec deleted before the commit), and the stylesheet is Tailwind's real
+  output for the document over `packages/design-system/theme.css`. The covered panels are what the
+  builder renders once a covered edge is dropped before the off-level branch.
+
+### Tokens & a11y
+
+Colour is `--el-*` only and shape is the element-semantic tokens. The neutral anchor's text is
+`--el-text-secondary` on `--el-surface` / `--el-border-soft`, which clears AA in both themes, as the
+shipped anchor's title already does. The pill, the flag and the anchor are not colour-alone: each
+keeps its glyph and label.
+
+### Allocation — what this design GIVES and TAKES
+
+| key                             | gives / takes                                                                                                                                                                                                                                                   | disposition                                                       |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **MOTIR-6359**                  | GIVES the committed-roadmap build, and TAKES a premise: coverage is not a boolean. The read reports each off-level edge as uncovered / covered / exempt / cross-level; the builder skips covered, draws exempt with the neutral anchor, and flags the other two | amended on the record in the same pass (criteria + a re-estimate) |
+| **MOTIR-6362**                  | GIVES the same four dispositions over the projected tree                                                                                                                                                                                                        | amended on the record (one criterion)                             |
+| **MOTIR-6365** / **MOTIR-6373** | GIVE the exempt case to assert: the neutral anchor at the root, and no flag                                                                                                                                                                                     | amended on the record (one criterion each)                        |
+| **MOTIR-6352**                  | TAKES a wording: "flags exactly `invalidEdges`" becomes "flags exactly the edges the validator calls invalid", since MOTIR-6509 moves cross-level edges into that verdict                                                                                       | amended on the record                                             |
+| **MOTIR-6509**                  | TAKES nothing: its verdict is what this design flags                                                                                                                                                                                                            | none owed                                                         |
+| **MOTIR-5713**                  | TAKES nothing: decision 7's folder line is kept, on the neutral anchor                                                                                                                                                                                          | none owed                                                         |
