@@ -10,7 +10,8 @@
   - MOTIR-6447 (the credit pre-flight)
   - MOTIR-6448 (machine time by run)
   - MOTIR-6449 (the run's git credential)
-  - through them, MOTIR-690 (start) and MOTIR-6450 (end)
+  - MOTIR-690 (start), MOTIR-691 (the UI), MOTIR-692 and MOTIR-6451 (the test gates), MOTIR-6452 (the E2E) and MOTIR-6453 (production configuration), for the model choice in §7
+  - through them, MOTIR-6450 (end)
 - **Supersedes:** this card's own earlier scope, a `motir-ai/docs/hosted-execution.md` that was to choose a container orchestrator and a per-agent `*_BASE_URL` matrix. It was never written; both questions have since been settled elsewhere (see Context).
 
 > Structured **Status → Context → Decision → Consequences**, in the shape the other records here use. Every enumeration below was read on `origin/main` of motir-core `84b69443e`, motir-gateway `00f72c8` and motir-ai `c440da5` (2026-09-26).
@@ -155,60 +156,67 @@ Every credential's expiry is derived from the timeout: the run key's `expiresAt`
 
 ### 6 · motir-core's configuration names
 
-| Name                        | Holds                                                                                   | Notes                                                                                                                  |
-| --------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `MOTIR_GATEWAY_URL`         | the gateway's origin, no trailing `/v1`                                                 | the same name and meaning as the gateway's egress contract, so the container receives it verbatim                      |
-| `MOTIR_RUN_KEY_MINT_SECRET` | the mint secret                                                                         | the same name the gateway reads, character for character                                                               |
-| `MOTIR_HOSTED_AGENT_IMAGE`  | `ghcr.io/moooon-b-v/motir-hosted-agent@sha256:…`                                        | **a digest, never a tag**, so a publish cannot change what a running deployment boots                                  |
-| `MOTIR_HOSTED_AGENT_MODEL`  | an override of the model §7 decides, as the gateway's bare model id (`claude-opus-4-8`) | optional; unset means §7's default. Passed to the key's `models` allow-list as is, and to OpenCode as `anthropic/<id>` |
+| Name                        | Holds                                            | Notes                                                                                             |
+| --------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `MOTIR_GATEWAY_URL`         | the gateway's origin, no trailing `/v1`          | the same name and meaning as the gateway's egress contract, so the container receives it verbatim |
+| `MOTIR_RUN_KEY_MINT_SECRET` | the mint secret                                  | the same name the gateway reads, character for character                                          |
+| `MOTIR_HOSTED_AGENT_IMAGE`  | `ghcr.io/moooon-b-v/motir-hosted-agent@sha256:…` | **a digest, never a tag**, so a publish cannot change what a running deployment boots             |
 
-All four are server-only: no public-env prefix, and never serialized to the browser.
+All three are server-only: no public-env prefix, and never serialized to the browser. **There is no model variable:** the model is the dispatcher's choice, validated against motir-ai's list (§7).
 
-### 7 · The model: `claude-opus-4-8`, one per deployment, chosen by Motir
+### 7 · The model: the dispatcher picks it from the models that can actually run
 
-**Why the run has a model chosen for it at all.** Something has to name one, and it cannot be OpenCode or the container:
+**Why the run has a model chosen for it at all.** Something has to name one before the container boots, and it cannot be OpenCode or the container:
 
 - OpenCode is started with `OPENCODE_DISABLE_MODELS_FETCH=true` and runs as `opencode run --model <provider/id>` (motir-gateway `docs/hosted-run-egress.md`, container environment). It has no catalog to fall back on, so a run with no model named does not start.
 - The run key is minted with a `models` allow-list, and the gateway refuses any other model with `403` (egress contract §1 and its threat table, `middleware/auth.go`). That allow-list is what stops an exfiltrated key from being spent on a dearer model, so the minter must know the model **before** the container boots.
-- motir-ai debits every turn at the model's effective `ModelCreditRate` in the `agent` lane, and `debitForTurn` throws when the model has none (`src/llm/gatewayClient.ts`, the comment on `PLANNER_MODELS`). A model with no rate is a run whose first call fails.
+- motir-ai debits every turn at the model's effective `ModelCreditRate` in the `agent` lane, and `debitForTurn` throws when the model has none (`src/services/creditService.ts`; the comment on `PLANNER_MODELS` in `src/llm/gatewayClient.ts`). A model with no rate is a run whose first call fails.
 
-So the model is a property of the run that motir-core fixes at start, the same way it fixes the run's id and timeout.
+**The decision.** The person who presses **Run hosted** chooses the model, from a list of the models that can run a hosted card, with a default already selected. The server checks the choice again when the run starts, and the run is refused before anything is opened, minted or booted when the model is not on the list.
 
-**The decision.** Every hosted run uses **`claude-opus-4-8`**. It is a code default in motir-core (a `HOSTED_AGENT_MODELS.default` constant beside the start path, in the shape of motir-ai's `PLANNER_MODELS`), and `MOTIR_HOSTED_AGENT_MODEL` overrides it per deployment. There is one model per deployment, and no person picks it per run.
+**Reference products, checked 2026-09-26.**
 
-**The eligible set** is the intersection of three records, read 2026-09-26:
+- GitHub Copilot's coding agent shows a model picker at the moment a task starts: when an issue is assigned to Copilot, and in the agents panel, GitHub Mobile and Raycast. It defaults to _Auto_ (docs.github.com, _Changing the AI model for GitHub Copilot cloud agent_; changelog 2025-12-08 and 2026-02-19).
+- Cursor's Cloud Agents API takes an optional model on launch, validated against the ids its `GET /v1/models` returns. With none given, it falls back to the user's default, then the team's, then the system's (cursor.com/docs/cloud-agent/api/endpoints).
 
-| Model               | Rated in the `agent` lane (motir-ai, MOTIR-4487) | Served by the gateway's Anthropic channel (`ai-upstream-transfer-basis.md`, channel set) | Input credits / M tokens (planning-rate base, which the agent lane copies) |
-| ------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `claude-fable-5`    | yes                                              | **no**                                                                                   | 23.0                                                                       |
-| `claude-opus-4-8`   | yes                                              | yes                                                                                      | 11.5                                                                       |
-| `claude-sonnet-4-6` | yes                                              | yes                                                                                      | 6.9                                                                        |
-| `claude-haiku-4-5`  | yes                                              | yes                                                                                      | 2.3                                                                        |
+Both put the choice at dispatch time and both limit it to a list the service publishes. Neither offers a free-text model id.
 
-DeepSeek is rated but has no transfer basis for prompt content (`ai-upstream-transfer-basis.md`), and a hosted run sends the customer's code, so it is out.
+**The offered set** is every model that meets all three conditions:
 
-**Why Opus rather than Sonnet.**
+1. **The gateway serves it.** It is in the servable set the gateway's daily catalog refresh adopts, `motir/catalog/upstream-prices.json`.
+2. **Its provider is one the hosted agent is configured for.** Today that is `anthropic` only. The egress contract sets OpenCode's `enabled_providers` to `["anthropic"]`, and Anthropic is in the gateway's `transfer-basis` routing group (`motir/catalog/channel-groups.sh`). A hosted run sends the customer's repository to the model, so a provider without a recorded transfer basis is never offered. That rules out DeepSeek, which `ai-upstream-transfer-basis.md` finds has no basis and whose channel sits in the `default` group only.
+3. **motir-ai has an effective `agent`-lane rate for it.** A model that fails this cannot be billed, so it is not shown.
 
-- **A hosted run is paid for whether it succeeds or not.** Its cost is tokens plus up to 90 minutes of machine time (§5), and nobody watches it. A failed run spends all of that and then returns the card to To Do (§2) for a second full run. Sonnet's saving is 40% of the token cost of one run; it is gone the first time a run Opus would have finished has to be dispatched twice.
-- **It is the model Motir already stands behind.** The planner that sizes these cards runs on `claude-opus-4-8` (MOTIR-3635), so a hosted card is executed by the same model class that decided it fits one run.
-- **It is the dearest model the gateway serves today.** Fable 5 would need a channel change and a transfer-basis re-read first, and doubles the rate. That is a separate decision with its own evidence.
+**The list is served by motir-ai, never kept in motir-core.** motir-ai holds the rates, and after the rate-sync story it holds the servable set too. It answers a service-auth `GET /v1/agent-models` with the offered models and the default. motir-core reads that list to draw the picker, and again inside the start path to validate the choice.
 
-This is a judgement, not a measurement. The dogfood story (MOTIR-714) measures real runs, and this default is revisited if the success rates show Sonnet finishing the same cards.
+The planning picker is the counter-example. It is fed by a copy in motir-core (`lib/projectAiSettings/plannerModels.ts`, `PLANNER_MODEL_IDS`) that still lists DeepSeek while motir-ai's planner default has moved to `claude-opus-4-8`. A second copy for hosted runs would go stale the same way.
 
-**Rules any value of the override must meet**, so an operator cannot set a broken one:
+**Rates follow the catalog.** A model can appear in the catalog before anyone has priced it; today `claude-opus-5-5`, `claude-opus-5` and `claude-sonnet-5` are served but unrated. So condition 3 needs rates to be created when the catalog adopts a model or moves a price, not when somebody remembers to write a migration. That is a new story under AI economics (MOTIR-4329). When the gateway's `upstream-prices.json` changes on `main`, motir-ai generates a proposal (a pull request a person merges, like the gateway's own refresh) that does two things:
 
-- It is a **bare gateway model id** (`claude-opus-4-8`). The key's `models` list and the gateway both compare the request's bare id, so the start path passes it as is and prefixes `anthropic/` only for OpenCode's `--model`. Storing the prefixed form would put `anthropic/claude-opus-4-8` on the allow-list, and every call would be refused `403`.
-- It must have an effective `agent`-lane rate in motir-ai, and it must be served by a channel with a transfer basis. Neither is checked at boot in 9.1. A wrong value fails the run's first call and closes it as `failed`, which the panel shows.
+- adds the rate generations for every new or re-priced servable model, in **both lanes**, by the derivation `credit-model.md` §2a and `prompt-cache-pricing.md` §2 already fix;
+- records the servable set with each model's provider.
 
-**The model is recorded.** The start path stamps it on the card as `implementationModel`, beside `implementationHarness: opencode` (§2), so the card says which model built it. The run key's allow-list and motir-ai's usage record carry it for billing.
+Until that story lands, the offered set is the Anthropic models already rated and served: `claude-fable-5`, `claude-opus-4-8` and `claude-sonnet-4-6`.
+
+**The default** is a motir-ai constant, `HOSTED_AGENT_MODELS.default`, in the shape of `PLANNER_MODELS`. It starts as `claude-opus-5-5`: the newest Opus the gateway serves, and cheaper per token than Opus 4.8 ($4 / $20 against $5 / $25 per million tokens in the catalog). If the default is not in the offered set, for example because it is not yet rated, the list returns no default and the picker selects the first model offered. The dogfood story (MOTIR-714) measures real runs, and the default is revisited if they disagree.
+
+**What each state does:**
+
+| State                                                    | What happens                                                                                                                                                 |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| the list loads                                           | the picker shows the offered models with the default selected                                                                                                |
+| the list is empty, or motir-ai cannot be reached         | **Run hosted** is disabled and says why. Nothing is started                                                                                                  |
+| the chosen model has left the list since the page loaded | the start path refuses with `hosted_model_not_offered` before the run is opened, and the panel asks the person to choose again                               |
+| the run starts                                           | `DispatchRun.model` records the choice, the card's `implementationModel` is stamped with it, and the run key is minted with that one model as its allow-list |
+
+**One id, two spellings, never mixed.** The list, `DispatchRun.model`, `implementationModel` and the key's `models` allow-list all hold the gateway's **bare** id (`claude-opus-5-5`), because the gateway compares the request's bare id against the allow-list. The start path adds the `anthropic/` prefix only for OpenCode's `--model` flag. Putting the prefixed form on the allow-list would get every call refused with `403`.
 
 **Rejected.**
 
-- **The dispatcher picks per run, or the organization picks in settings.** A model picker is a price picker, and it needs a design, a surface and a rule for what a cheaper model is allowed to attempt. Story 9.1 has none of these, and "choosing among agents" is outside it (below).
-- **Use the egress contract's example, `claude-sonnet-4-5`.** It was an example of the flag's shape. It has no `ModelCreditRate` in motir-ai, so a run on it would fail its first debit.
-- **Leave it to configuration only, with no code default.** A missing value would then be a deployment that cannot run hosted at all. The code default makes the variable an override, as `PLANNER_MODEL` is.
-
----
+- **One model per deployment, set by configuration.** This was the first version of this section. It hides from the dispatcher a choice that decides what the run costs and how capable it is, and both reference products put that choice at dispatch. The configuration name `MOTIR_HOSTED_AGENT_MODEL` goes with it (§6).
+- **The whole gateway catalog.** It lists 63 models across six providers. Some cannot be billed, OpenCode is not configured for most of their providers, and DeepSeek has no transfer basis for customer code.
+- **A list kept in motir-core.** This is the planning picker's defect, described above.
+- **A list per organization or project.** It needs a settings surface and a rule for what a narrower list may refuse. Neither is in Story 9.1 (below).
 
 ## Consequences
 
@@ -218,6 +226,11 @@ This is a judgement, not a measurement. The dogfood story (MOTIR-714) measures r
   1. **Amend MOTIR-1894**: the Motir Agent App requests `contents: write` + `pull_requests: write`, never `workflows: write`, and enables user authorization ("Request user authorization (OAuth) during installation" plus expiring user tokens). Its title's "the ONLY permission" becomes false.
   2. **A "Link your GitHub account" surface**: a `design` card and a `code` card under 9.1. It covers where a person authorizes the Motir Agent App for their user and where the run's refusal sends them. MOTIR-6449 (the git credential) reads the stored authorization; it does not build the surface.
   3. **MOTIR-6449's criteria are amended** to the split above: a user token narrowed by `repository_id` for a user-owned repository, and a narrowed installation token for a Motir-created one.
+  4. **The model choice (§7)**, proposed in the same re-plan as this revision:
+     - MOTIR-684, MOTIR-689, MOTIR-690, MOTIR-691, MOTIR-692, MOTIR-6451 and MOTIR-6452 carry the picker, the validation and the minted allow-list;
+     - MOTIR-6453 drops `MOTIR_HOSTED_AGENT_MODEL`;
+     - a new motir-ai card serves `GET /v1/agent-models`;
+     - a new story under MOTIR-4329 makes rates follow the catalog.
 
 ---
 
@@ -226,7 +239,8 @@ This is a judgement, not a measurement. The dogfood story (MOTIR-714) measures r
 - **The orchestrator, the fleet, the machine size or its price.** These are MOTIR-1918 and MOTIR-4336, plus AI economics.
 - **The gateway's contract, or how usage is billed.** These are Story 9.0 and `docs/hosted-run-egress.md`.
 - **Several hosted runs at once, a queue, or choosing among agents.** These are out of Story 9.1.
-- **A model choice per organization, project or card**, or how a cheaper model's runs would be priced or limited. §7 fixes one model per deployment and nothing finer.
+- **A model list per organization or project**, or a provider other than Anthropic for hosted runs. §7 offers one list, the same for everyone, drawn from the providers the egress contract configures.
+- **How rates are generated from the catalog.** §7 depends on it; the rate-sync story under AI economics (MOTIR-4329) decides and builds it.
 - **Network-level egress enforcement.** The lock is the credential (egress contract §4).
 - **What a _local_ run's card becomes on failure.** Only hosted runs are decided here.
 - **How a hosted run is re-run automatically after a design is sent back.** That is Story 9.2, which calls the start path this document's §1–§3 describe.
