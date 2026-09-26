@@ -1313,15 +1313,36 @@
    is not a colour-painting property, so the material-rule test skips it.
    Per-surface exceptions (the board column's clip-safe shadow, modals) override
    below by source order. Modals carry their own deeper shadow via the modal
-   radius (next rule). */
+   radius (next rule).
+
+   ⚠️ EVERY 3D `box-shadow` BELOW LEADS WITH TAILWIND'S RING LAYERS, AND MUST.
+   A Tailwind `ring-*` IS a box-shadow — `--tw-ring-offset-shadow` +
+   `--tw-ring-shadow`, painted by the utility inside `@layer utilities`. These
+   rules are UNLAYERED, and an unlayered declaration outranks a layered one
+   whatever their specificity, so a rule that sets `box-shadow` to the depth
+   alone ERASES the ring: the roadmap canvas's search match, selection and
+   Show-changes emphasis, and every control's `focus-visible:ring`, all went
+   blank in this style (MOTIR-6440). So each rule composes the ring layers
+   FIRST and its depth after — the same order Tailwind's own utility uses. At
+   rest the ring variables are `0 0 #0000` (their registered initial value, and
+   the fallback here for a build that emits no ring utility), so the depth is
+   unchanged; when a ring is on, it paints over it. A `none` becomes the ring
+   layers alone. `tests/theme/immersiveRingSurvivesDepth.test.ts` reads every
+   such rule back off the compiled stylesheet and fails on one that drops them.
+   `--tw-shadow` is deliberately NOT composed: replacing the element's own
+   `shadow-*` IS the style. */
 @scope ([data-style='3d-immersive']) to ([data-style]) {
   .rounded-\(--radius-card\) {
-    box-shadow: var(--shadow-card);
+    box-shadow:
+      var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000), var(--shadow-card);
   }
 }
 @scope ([data-style='3d-immersive']) to ([data-style]) {
   .rounded-\(--radius-modal\) {
-    box-shadow: var(--shadow-modal);
+    box-shadow:
+      var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000), var(--shadow-modal);
   }
 }
 
@@ -1369,7 +1390,9 @@
       transition:
         transform 80ms linear,
         box-shadow 260ms ease-out;
-      box-shadow: var(--shadow-elevated);
+      box-shadow:
+        var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+        var(--tw-ring-shadow, 0 0 #0000), var(--shadow-elevated);
     }
   }
 
@@ -1552,6 +1575,9 @@
     )
   ) {
     box-shadow:
+      var(--tw-inset-ring-shadow, 0 0 #0000),
+      var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
       0 3px 0 0 var(--el-border-strong),
       0 5px 10px -3px rgba(15, 15, 15, 0.18);
     transition:
@@ -1563,6 +1589,9 @@
 @scope ([data-style='3d-immersive']) to ([data-style]) {
   [data-variant='primary'] {
     box-shadow:
+      var(--tw-inset-ring-shadow, 0 0 #0000),
+      var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
       0 4px 0 0 var(--el-accent-pressed),
       0 7px 12px -3px rgba(15, 15, 15, 0.32);
   }
@@ -1570,6 +1599,9 @@
 @scope ([data-style='3d-immersive']) to ([data-style]) {
   [data-variant='danger'] {
     box-shadow:
+      var(--tw-inset-ring-shadow, 0 0 #0000),
+      var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
       0 4px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
       0 7px 12px -3px rgba(15, 15, 15, 0.32);
   }
@@ -1577,7 +1609,9 @@
 /* Ghost — the deliberately-flat quiet button; no thickness. */
 @scope ([data-style='3d-immersive']) to ([data-style]) {
   [data-variant='ghost'] {
-    box-shadow: none;
+    box-shadow:
+      var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000);
   }
 }
 
@@ -1597,7 +1631,9 @@
   ),
   :is([data-surface='popover'], [data-menu-surface]) :is(button, a).rounded-\(--radius-control\),
   :is(button, a).w-full.rounded-\(--radius-control\) {
-    box-shadow: none;
+    box-shadow:
+      var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000);
   }
 }
 
@@ -1612,6 +1648,9 @@
     ):active:not(:disabled) {
     transform: translateY(3px);
     box-shadow:
+      var(--tw-inset-ring-shadow, 0 0 #0000),
+      var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
       0 1px 0 0 var(--el-border-strong),
       0 2px 4px rgba(15, 15, 15, 0.14);
   }
@@ -1619,6 +1658,9 @@
 @scope ([data-style='3d-immersive']) to ([data-style]) {
   [data-variant='primary']:active:not(:disabled) {
     box-shadow:
+      var(--tw-inset-ring-shadow, 0 0 #0000),
+      var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
       0 1px 0 0 var(--el-accent-pressed),
       0 2px 5px rgba(15, 15, 15, 0.22);
   }
@@ -1626,13 +1668,18 @@
 @scope ([data-style='3d-immersive']) to ([data-style]) {
   [data-variant='danger']:active:not(:disabled) {
     box-shadow:
+      var(--tw-inset-ring-shadow, 0 0 #0000),
+      var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
       0 1px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
       0 2px 5px rgba(15, 15, 15, 0.22);
   }
 }
 @scope ([data-style='3d-immersive']) to ([data-style]) {
   [data-variant='ghost']:active:not(:disabled) {
-    box-shadow: none;
+    box-shadow:
+      var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000);
   }
 }
 
@@ -1664,6 +1711,9 @@
     select
   ) {
     box-shadow:
+      var(--tw-inset-ring-shadow, 0 0 #0000),
+      var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
       inset 0 2px 6px -2px rgba(15, 15, 15, 0.26),
       inset 0 1px 2px 0 rgba(15, 15, 15, 0.05);
   }
@@ -1726,7 +1776,9 @@
    right depth. */
 @scope ([data-style='3d-immersive']) to ([data-style]) {
   .shadow-\(--shadow-elevated\) {
-    box-shadow: var(--shadow-elevated);
+    box-shadow:
+      var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000), var(--shadow-elevated);
   }
 }
 @media (prefers-reduced-motion: no-preference) {
