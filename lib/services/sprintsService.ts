@@ -1060,7 +1060,7 @@ function isUniqueViolation(err: unknown): err is Prisma.PrismaClientKnownRequest
  *
  * ⚠️ IT REPLACES A GATE THAT ASKED A DIFFERENT QUESTION, AND THAT IS A DELIBERATE
  * WIDENING. Until this card the five lifecycle writes ran through a module-private
- * check resolving `isOwnerRole(membership?.role)` — the workspace OWNER or
+ * check resolving `isLegacyOwnerRole(membership?.role)` — the workspace OWNER or
  * workspace ADMIN, and nobody else. Not the project's own admin, not a project
  * member. `sprint:manage` is held by the project `admin` and `member` too
  * (`docs/decisions/member-facing-permissions.md` §1), so the team that runs the

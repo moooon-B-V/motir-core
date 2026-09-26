@@ -541,7 +541,10 @@ async function syncOnce(
       });
     }
 
-    const owner = await workspaceMembershipRepository.findOwnerByWorkspace(repo.workspaceId, tx);
+    const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(
+      repo.workspaceId,
+      tx,
+    );
     // A draft MARKED READY — read against the row as it stood BEFORE this delivery,
     // under the lock above. `false` only: an unknown draft-ness is not a flip.
     const actor = authorBoundUserId ?? owner?.userId ?? null;

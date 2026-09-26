@@ -1,0 +1,12 @@
+{
+  "source": "lib/permissions/builtinRoles.ts IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS at origin/main 7717433af (the base of Story MOTIR-6168), deleted by MOTIR-6459 in the same branch",
+  "keys": [
+    "attachment:create",
+    "comment:add",
+    "plan:view_any",
+    "project:browse",
+    "report:view",
+    "run:view_any",
+    "work_item:edit"
+  ]
+}

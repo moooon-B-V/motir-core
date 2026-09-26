@@ -4,10 +4,10 @@ import { db } from '@/lib/db';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import type { ProjectContext } from '@/lib/projects';
 import { plansService } from '@/lib/services/plansService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // The COVERAGE FLOOR half of MOTIR-6141 (story MOTIR-6095's motir-core gate) for
 // the two proposal-edit routes the story changed:
@@ -165,7 +165,7 @@ async function colleague(fx: WorkItemFixture, role: 'viewer' | null): Promise<st
     data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
   });
   if (role) {
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

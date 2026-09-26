@@ -113,12 +113,12 @@ describe('each capability keeps the gate it asserts', () => {
     expect((await renderPane())['dlqCount']).toBe(7);
   });
 
-  it('the REPLAY control is present for a workspace OWNER', async () => {
-    seed({ role: 'owner' });
+  it('the REPLAY control is present for a workspace MANAGER', async () => {
+    seed({ role: 'manager' });
     expect((await renderPane())['isOwner']).toBe(true);
   });
 
-  it('the REPLAY control is ABSENT for a non-owner — the gate is not widened', async () => {
+  it('the REPLAY control is ABSENT for a non-Manager — the gate is not widened', async () => {
     seed({ role: 'member' });
     expect((await renderPane())['isOwner']).toBe(false);
   });

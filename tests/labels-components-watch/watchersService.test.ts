@@ -17,6 +17,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { spyOnJobDispatch } from '../helpers/jobs';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // watchersService (Story 5.4 · Subtask 5.4.4) — the watch BUSINESS rules over
 // the 5.4.1 leaves, against a REAL Postgres (no-mocks rule): the verified
@@ -71,7 +72,7 @@ async function buildScenario(): Promise<WatcherScenario> {
   const { user: member, ctx: memberCtx } = await wsMember('member@ex.com', 'Plain Member');
   const { user: viewer, ctx: viewerCtx } = await wsMember('viewer@ex.com', 'Read Only');
 
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,
@@ -188,7 +189,7 @@ describe('manage others — the "Manage watchers" tier', () => {
     expect(added.watcherCount).toBe(1);
 
     // Promote the member to project admin — they may now manage others too.
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,
       ctx: s.fx.ctx,

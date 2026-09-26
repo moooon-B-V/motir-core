@@ -2,8 +2,6 @@ import { execFileSync } from 'node:child_process';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { CUSTOM_ROLE_TIER } from '@/lib/permissions/builtinRoles';
@@ -13,6 +11,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { addToProjectAs, setProjectRoleDefinitionFor } from './helpers/workspaceRoleFixtures';
 
 // STORY MOTIR-5299's VITEST GATE — the Approval records room (Subtask MOTIR-5303).
 //
@@ -53,7 +52,7 @@ beforeEach(async () => {
   ] as const) {
     const user = await createTestUser({ email: `${slot}@ex.com`, name: `Reader ${slot}` });
     await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
@@ -181,16 +180,15 @@ const EVERYTHING = {
  * the exact shape a team uses to close the room — and keep proving it.
  */
 async function withoutViewAny(userId: string) {
-  const role = await adminDb.projectRoleDefinition.create({
+  const role = await adminDb.workspaceRoleDefinition.create({
     data: {
       workspaceId: fx.workspaceId,
-      projectId: fx.projectId,
       name: `No full view ${userId}`,
       permissions: ['project:browse', 'work_item:edit', 'comment:add'],
     },
   });
   await adminDb.$transaction((tx) =>
-    projectMembershipRepository.setRoleDefinition(
+    setProjectRoleDefinitionFor(
       userId,
       fx.projectId,
       { roleDefinitionId: role.id, role: CUSTOM_ROLE_TIER },
@@ -239,16 +237,15 @@ describe('the built-in roles', () => {
 describe('the view follows `approval:view_any` — sufficient AND necessary, on a custom role', () => {
   it('C with browse + the key reads everything; the same C with the key removed reads only their own', async () => {
     await seed();
-    const role = await adminDb.projectRoleDefinition.create({
+    const role = await adminDb.workspaceRoleDefinition.create({
       data: {
         workspaceId: fx.workspaceId,
-        projectId: fx.projectId,
         name: 'Approvals lead',
         permissions: ['project:browse', 'approval:view_any'],
       },
     });
     await adminDb.$transaction((tx) =>
-      projectMembershipRepository.setRoleDefinition(
+      setProjectRoleDefinitionFor(
         ids.c,
         fx.projectId,
         { roleDefinitionId: role.id, role: CUSTOM_ROLE_TIER },
@@ -257,7 +254,7 @@ describe('the view follows `approval:view_any` — sufficient AND necessary, on 
     );
     expect(await titlesFor(ids.c)).toEqual(EVERYTHING);
 
-    await adminDb.projectRoleDefinition.update({
+    await adminDb.workspaceRoleDefinition.update({
       where: { id: role.id },
       data: { permissions: ['project:browse'] },
     });
@@ -363,7 +360,7 @@ describe('listRecords takes a requested view and serves a scope', () => {
   async function seatViewer(): Promise<string> {
     const user = await createTestUser({ email: 'viewer@ex.com', name: 'Reader viewer' });
     await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
@@ -374,16 +371,15 @@ describe('listRecords takes a requested view and serves a scope', () => {
   }
 
   async function onCustomRole(userId: string, permissions: string[]) {
-    const role = await adminDb.projectRoleDefinition.create({
+    const role = await adminDb.workspaceRoleDefinition.create({
       data: {
         workspaceId: fx.workspaceId,
-        projectId: fx.projectId,
         name: `R ${userId}`,
         permissions,
       },
     });
     await adminDb.$transaction((tx) =>
-      projectMembershipRepository.setRoleDefinition(
+      setProjectRoleDefinitionFor(
         userId,
         fx.projectId,
         { roleDefinitionId: role.id, role: CUSTOM_ROLE_TIER },

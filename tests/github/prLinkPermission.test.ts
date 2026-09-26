@@ -8,8 +8,6 @@ import {
   PULL_REQUEST_LINK_PERMISSION,
   githubPullRequestService,
 } from '@/lib/services/githubPullRequestService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -18,6 +16,11 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 import { connectRepairRepo, deliveredPr } from '../helpers/repairFixtures';
+import {
+  addToProjectAs,
+  createCustomRoleAs,
+  setProjectRoleAs,
+} from '../helpers/workspaceRoleFixtures';
 
 // MOTIR-6318 — the item page's pull-request LINK and UNLINK take the key their
 // MCP twins take. `linkPullRequest` / `unlinkPullRequest` (the cuid arms the
@@ -46,20 +49,20 @@ async function memberWithRole(
     name: 'Reader',
   });
   await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-  const role = await projectRoleDefinitionService.create({
+  const role = await createCustomRoleAs({
     projectId: fx.projectId,
     ctx: fx.ctx,
     name: `Role ${randomToken(4)}`,
     permissions,
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,
     targetUserId: user.id,
     role: 'member',
   });
-  await projectMembersService.setRole({
+  await setProjectRoleAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,
@@ -77,7 +80,7 @@ async function plainMember(fx: WorkItemFixture): Promise<ServiceContext> {
     name: 'Member',
   });
   await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

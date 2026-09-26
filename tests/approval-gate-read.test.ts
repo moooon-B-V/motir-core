@@ -14,6 +14,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { setWorkspaceRoleFor } from './helpers/workspaceRoleFixtures';
 
 // THE FRAME'S READ (Story MOTIR-4778 · Subtask MOTIR-4792) — the one the
 // approval frame renders from, against a REAL Postgres.
@@ -562,6 +563,7 @@ describe('canDecide holds the KIND’s permission FLOOR, as the door does (MOTIR
         role: 'viewer',
       },
     });
+    await setWorkspaceRoleFor(user.id, fx.workspaceId, 'viewer');
     return user;
   }
 

@@ -39,10 +39,10 @@ import { signIn } from './_helpers/shell-session';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { encodeFilterParam, FILTER_PARAM, type FilterAst } from '@/lib/filters/ast';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 test.describe.configure({ timeout: 90_000 });
 
@@ -115,7 +115,7 @@ async function enroll(
   role: 'admin' | 'member' | 'viewer',
 ): Promise<void> {
   await workspacesService.addMember({ userId: p.id, workspaceId: tenant.workspaceId });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: tenant.projectKey,
     actorUserId: tenant.owner.id,
     ctx: ctxOf(tenant.owner, tenant),

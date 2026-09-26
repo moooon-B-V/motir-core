@@ -3,12 +3,13 @@ import { adminDb } from './adminDb';
 /**
  * Write an `is_blocked_by` edge BELOW every service door (Story MOTIR-6015).
  *
- * The doors now refuse a cross-LEVEL edge (MOTIR-6367 / MOTIR-6369), but the
- * tree still carries them — 151 were live on the product tenant when the rule
- * shipped — and every reader (readiness, the cascade, the sprint walk, the
- * roadmap) must keep handling one. A fixture whose SUBJECT is how a reader
- * treats such an edge seeds it here, and says why at the call site. A fixture
- * whose blocker kind is merely incidental re-levels the blocker instead.
+ * The link doors refused a cross-LEVEL edge from MOTIR-6369 until MOTIR-6509
+ * (`edge-level-is-position.md` Amendment 2), which made them write it and made
+ * `validate_work_item` report it INVALID (`crossLevelEdges`); only the plan
+ * gate still refuses one. This helper stays for the fixtures written in that
+ * window and for any fixture that must not depend on a door's behaviour. A
+ * fixture that asserts `valid` over a cross-level edge now reads `false` — one
+ * whose blocker level is merely incidental re-levels the blocker instead.
  */
 export async function seedBlockedBy(
   fx: { workspaceId: string; ctx: { userId: string } },

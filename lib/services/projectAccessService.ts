@@ -2,15 +2,11 @@ import type { Prisma } from '@/generated/prisma/client';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
-import { projectRoleDefinitionRepository } from '@/lib/repositories/projectRoleDefinitionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
-import {
-  composeOwnerReach,
-  readMembership,
-  readOwnMembership,
-} from '@/lib/workspaces/membershipGate';
+import { composeOwnerReach } from '@/lib/workspaces/membershipGate';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import type { MemberRole, Project } from '@/generated/prisma/client';
+import { customRolePermissionsOf, resolveWorkspaceRole } from '@/lib/workspaces/roles';
+import type { Project } from '@/generated/prisma/client';
 import {
   canBrowse,
   canComment,
@@ -25,7 +21,6 @@ import {
   canUpvotePublicRequest,
   type ProjectAccessInputs,
 } from '@/lib/projects/access';
-import { asProjectRole, isWorkspaceManager, type ProjectRole } from '@/lib/projects/roles';
 import {
   NotProjectAdminError,
   PermissionDeniedError,
@@ -38,8 +33,8 @@ import {
 } from '@/lib/savedFilters/access';
 import { hasPermission, resolvePermissions } from '@/lib/permissions/resolve';
 import type { PermissionKey } from '@/lib/permissions/catalog';
-import { toActorPermissionsDTO, toRoleCatalogDTO } from '@/lib/mappers/permissionMappers';
-import type { ActorPermissionsDTO, RoleCatalogDTO } from '@/lib/dto/permissions';
+import { toActorPermissionsDTO } from '@/lib/mappers/permissionMappers';
+import type { ActorPermissionsDTO } from '@/lib/dto/permissions';
 
 // projectAccessService — the ENFORCEMENT half of the Story 6.4 access model
 // (Subtask 6.4.3). It resolves the three policy inputs (the project's access
@@ -131,35 +126,37 @@ async function resolveInputs(
   if (!project || project.workspaceId !== ctx.workspaceId) {
     throw new ProjectNotFoundError(projectId);
   }
-  const workspaceMembership = await readMembership(ctx.userId, ctx.workspaceId, tx);
-  // THE ORG OWNER'S REACH INTO EVERY PROJECT (MOTIR-6308; `role-model.md` §1).
-  // The resolver's always-pass rail is `isWorkspaceManager(workspaceRole)`, and
-  // this input used to be the STORED membership role alone — so an Owner never
-  // added to a workspace was let in by the workspace gate and then refused inside
-  // every project of it. The Owner's input is now the manager tier; the
-  // resolver's own table is untouched.
+  // ONE round trip for the WORKSPACE membership AND the workspace custom role it
+  // points at (Story MOTIR-6168 · MOTIR-6459) — the role is the workspace's now,
+  // so this is the read that decides the actor's keys in every project. Both
+  // tables are RLS-gated on `app.workspace_id`, which this transaction binds.
+  const workspaceMembership =
+    await workspaceMembershipRepository.findByUserAndWorkspaceWithRoleDefinition(
+      ctx.userId,
+      ctx.workspaceId,
+      tx,
+    );
+  // THE ORG OWNER'S REACH INTO EVERY PROJECT (MOTIR-6308; `role-model.md` §1):
+  // an Owner never added to a workspace reads as a Manager here, so the workspace
+  // gate and the project gate agree.
   const workspaceRole = await composeOwnerReach(
     ctx.userId,
     ctx.workspaceId,
-    workspaceMembership?.role ?? null,
+    workspaceMembership,
     tx,
   );
-  // ONE round trip for the membership AND the custom role it points at (Story
-  // MOTIR-2257 · MOTIR-2470) — a `findUnique` with an `include` is a single
-  // Prisma operation, so inside a transaction both tables are read on the same
-  // snapshot under the same `app.workspace_id` GUC their RLS policies key off.
-  // `roleDefinition` is null for every membership that names a built-in.
-  const projectMembership =
-    await projectMembershipRepository.findByUserAndProjectWithRoleDefinition(
-      ctx.userId,
-      projectId,
-      tx,
-    );
+  // The project records only whether the actor was ADDED — no project role and
+  // no project custom role enters the calculation (`role-model.md` §3).
+  const projectMembership = await projectMembershipRepository.findByUserAndProject(
+    ctx.userId,
+    projectId,
+    tx,
+  );
   return {
     accessLevel: project.accessLevel,
     workspaceRole,
-    projectRole: projectMembership?.role ?? null,
-    customRolePermissions: projectMembership?.roleDefinition?.permissions ?? null,
+    customRolePermissions: customRolePermissionsOf(workspaceRole, workspaceMembership),
+    addedToProject: projectMembership != null,
     // A CLOSING organization is read-only for every actor (MOTIR-6396). Read at
     // request time and never stored on a membership, so a cancel reopens every
     // write on the next request with nothing to restore.
@@ -211,57 +208,50 @@ async function resolvePublicInputs(
     return {
       accessLevel: project.accessLevel,
       workspaceRole: null,
-      projectRole: null,
+      addedToProject: false,
       organizationClosing: await isWorkspaceOrgClosing(project.workspaceId, tx),
     };
   }
-  // MOTIR-2527: `readOwnMembership`, not `readMembership` — the actor here may be a
-  // CROSS-ORG viewer of a public project, so binding `app.workspace_id` to a workspace
-  // that is not theirs would presume exactly the membership this read is asking about.
-  // The policy's "or your own" arm is sufficient: the row sought is always the actor's.
-  const workspaceMembership = await readOwnMembership(actorUserId, project.workspaceId, tx);
-  // Same ONE-round-trip read as `resolveInputs` (MOTIR-2470): an authenticated
-  // actor who is ALSO a member of the public project's workspace keeps their
-  // real capabilities, and if that membership is on a custom role, that role is
-  // what decides them here too.
-  //
-  // MOTIR-2684: `project_membership_active_workspace` keys PURELY on
-  // `app.workspace_id` — it has no "or your own" arm like the workspace-membership
-  // policy `readOwnMembership` leans on — so an unbound read of it returns nothing
-  // under `motir_app` and a real project ADMIN silently loses `canManage` on the
-  // public page (the 6.16.3 in-place Edit affordance). Binding the workspace is
-  // safe HERE and only here, in a way it is not for the project read above: the
-  // row has already come back and been proved `public`, so `project.workspaceId`
-  // is a value the database handed us, not a guess made on the reader's behalf —
-  // and the lookup is keyed on `(actorUserId, projectId)`, so the binding makes
-  // exactly the actor's own row visible and nothing else. A cross-org viewer with
-  // no membership still resolves to null, which is the same answer as before.
+  // Every read here runs under the PROJECT'S OWN workspace binding. MOTIR-2684:
+  // `project_membership_active_workspace` (and, since MOTIR-6457,
+  // `workspace_role_definition_active_workspace`) key PURELY on `app.workspace_id`,
+  // so an unbound read returns nothing under `motir_app` and a real member of a
+  // public project would silently lose their role on its public page. Binding the
+  // workspace is safe HERE and only here: the row has already come back and been
+  // proved `public`, so `project.workspaceId` is a value the database handed us,
+  // not a guess made on the reader's behalf — and every lookup is keyed on the
+  // actor's own `(userId, …)` pair, so the binding makes exactly the actor's own
+  // rows visible. A cross-org viewer with no membership still resolves to null.
   //
   // The org Owner's manager tier (MOTIR-6308) is read under the SAME binding and
-  // for the same reason: the project is proved `public`, so its workspace id came
-  // from the database, and the owner join is keyed on the actor's own row.
+  // for the same reason.
   const readBound = async (t: Prisma.TransactionClient) => {
-    const membership = await projectMembershipRepository.findByUserAndProjectWithRoleDefinition(
+    const workspaceMembership =
+      await workspaceMembershipRepository.findByUserAndWorkspaceWithRoleDefinition(
+        actorUserId,
+        project.workspaceId,
+        t,
+      );
+    const role = await composeOwnerReach(actorUserId, project.workspaceId, workspaceMembership, t);
+    const projectMembership = await projectMembershipRepository.findByUserAndProject(
       actorUserId,
       projectId,
       t,
     );
-    const role = await composeOwnerReach(
-      actorUserId,
-      project.workspaceId,
-      workspaceMembership?.role ?? null,
-      t,
-    );
-    return { membership, role };
+    return { workspaceMembership, role, added: projectMembership != null };
   };
-  const { membership: projectMembership, role: workspaceRole } = await (tx
+  const {
+    workspaceMembership,
+    role: workspaceRole,
+    added,
+  } = await (tx
     ? readBound(tx)
     : withWorkspaceContext({ userId: actorUserId, workspaceId: project.workspaceId }, readBound));
   return {
     accessLevel: project.accessLevel,
     workspaceRole,
-    projectRole: projectMembership?.role ?? null,
-    customRolePermissions: projectMembership?.roleDefinition?.permissions ?? null,
+    customRolePermissions: customRolePermissionsOf(workspaceRole, workspaceMembership),
+    addedToProject: added,
     organizationClosing: await isWorkspaceOrgClosing(project.workspaceId, tx),
   };
 }
@@ -405,28 +395,35 @@ export const projectAccessService = {
         projectAccessService.filterBrowsable(projects, ctx, t),
       );
     }
-    const workspaceMembership = await readMembership(ctx.userId, ctx.workspaceId, tx);
+    const workspaceMembership =
+      await workspaceMembershipRepository.findByUserAndWorkspaceWithRoleDefinition(
+        ctx.userId,
+        ctx.workspaceId,
+        tx,
+      );
     // The org Owner reads as the manager tier here too (MOTIR-6308).
     const workspaceRole = await composeOwnerReach(
       ctx.userId,
       ctx.workspaceId,
-      workspaceMembership?.role ?? null,
+      workspaceMembership,
       tx,
     );
-    // Owner/admin always browse everything; a non-member never browses any.
-    if (isWorkspaceManager(workspaceRole)) return projects;
+    // A Manager always browses everything; a non-member never browses any.
+    if (workspaceRole === 'manager') return projects;
     if (workspaceRole == null) return [];
     const memberships = await projectMembershipRepository.findByUserAndProjects(
       ctx.userId,
       projects.map((p) => p.id),
       tx,
     );
-    const projectRoleById = new Map(memberships.map((m) => [m.projectId, m.role]));
+    const added = new Set(memberships.map((m) => m.projectId));
+    const customRolePermissions = customRolePermissionsOf(workspaceRole, workspaceMembership);
     return projects.filter((p) =>
       canBrowse({
         accessLevel: p.accessLevel,
         workspaceRole,
-        projectRole: projectRoleById.get(p.id) ?? null,
+        customRolePermissions,
+        addedToProject: added.has(p.id),
       }),
     );
   },
@@ -484,22 +481,28 @@ export const projectAccessService = {
           throw new ProjectNotFoundError(projectId);
         }
         const [workspaceMembers, projectMembers, organizationClosing] = await Promise.all([
-          workspaceMembershipRepository.findMembersByWorkspace(ctx.workspaceId, tx),
+          workspaceMembershipRepository.findMembersByWorkspaceWithRoleDefinition(
+            ctx.workspaceId,
+            tx,
+          ),
           projectMembershipRepository.findMembersByProject(projectId, tx),
           // Nobody edits a closing org's projects, so nobody is handed its code
           // (MOTIR-6396).
           isWorkspaceOrgClosing(ctx.workspaceId, tx),
         ]);
-        const workspaceRoles = new Map(workspaceMembers.map((m) => [m.userId, m.role]));
-        const projectRoles = new Map(projectMembers.map((m) => [m.userId, m.role]));
+        const byUser = new Map(workspaceMembers.map((m) => [m.userId, m]));
+        const added = new Set(projectMembers.map((m) => m.userId));
 
         for (const userId of userIds) {
+          const membership = byUser.get(userId) ?? null;
+          const workspaceRole = membership ? resolveWorkspaceRole(membership) : null;
           result.set(
             userId,
             canEdit({
               accessLevel: project.accessLevel,
-              workspaceRole: workspaceRoles.get(userId) ?? null,
-              projectRole: projectRoles.get(userId) ?? null,
+              workspaceRole,
+              customRolePermissions: customRolePermissionsOf(workspaceRole, membership),
+              addedToProject: added.has(userId),
               organizationClosing,
             }),
           );
@@ -614,7 +617,7 @@ export const projectAccessService = {
     const inputs = await resolvePublicInputs(projectId, actorUserId, tx);
     if (!canBrowse(inputs)) throw new ProjectAccessDeniedError(projectId, 'browse');
     return {
-      isMember: inputs.workspaceRole != null || inputs.projectRole != null,
+      isMember: inputs.workspaceRole != null || inputs.addedToProject,
       // The in-place "Edit" affordance gate for the public page (Subtask 6.16.3)
       // — admin-only; an anonymous / cross-org viewer resolves to `false`.
       canManage: canManageProject(inputs),
@@ -815,79 +818,4 @@ export const projectAccessService = {
     const held = await this.getPermissions(projectId, ctx, tx);
     return toActorPermissionsDTO(projectId, held);
   },
-
-  /**
-   * The project's ROLE CATALOG — every role with the permissions it holds and how
-   * many people hold it, plus the ROLE-GATED permission rows grouped by domain
-   * and their total. This is what the read-only Roles & permissions screens
-   * render (Subtask MOTIR-2263), list and detail alike.
-   *
-   * ⚠️ A PROJECT-SCOPED SERVICE READ, not a static import, even though today's
-   * PERMISSION answer is the same for every project. Story MOTIR-2257 makes
-   * custom roles project-scoped, at which point that half genuinely depends on
-   * which project is asked — and a page wired to a constant would need its data
-   * source torn out and replaced exactly then. The member counts are already
-   * per-project. It also re-uses the same 404-not-403 gate, so the page cannot
-   * confirm a foreign project exists.
-   *
-   * ⚠️ THE GATE RUNS BEFORE THE COUNT. `resolveInputs` throws
-   * ProjectNotFoundError for a project in another workspace, so a cross-tenant id
-   * never reaches a membership read at all — the 404 posture is not something the
-   * count is allowed to weaken by timing.
-   */
-  async getRoleCatalog(
-    projectId: string,
-    ctx: AccessActorContext,
-    tx?: Prisma.TransactionClient,
-  ): Promise<RoleCatalogDTO> {
-    // Resolves for its SIDE EFFECT — the ProjectNotFoundError guard, which runs
-    // BEFORE any read so a foreign project's roles are never returned OR
-    // counted. This is the card MOTIR-2439's note pointed at: the read was built
-    // project-scoped precisely so the day a project has roles of its own,
-    // nothing about its shape had to change.
-    await resolveInputs(projectId, ctx, tx);
-
-    // ⚠️ TWO GROUPED READS FOR THE WHOLE CATALOG, plus one read of the role rows
-    // — never one query per role. `countByRole` covers memberships on built-ins;
-    // `countByRoleDefinition` covers memberships on custom ones. Both, and the
-    // definitions themselves, run under the SAME workspace context: all three
-    // tables' RLS policies read the per-transaction GUC, so a bare `db` read
-    // returns zero rows under the non-bypass app role.
-    const read = async (t: Prisma.TransactionClient) =>
-      Promise.all([
-        projectMembershipRepository.countByRole(projectId, t),
-        projectMembershipRepository.countByRoleDefinition(projectId, t),
-        projectRoleDefinitionRepository.findManyByProject(projectId, t),
-      ]);
-    const [builtInCounts, customCounts, customRoles] = tx
-      ? await read(tx)
-      : await withWorkspaceContext(
-          { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
-          read,
-        );
-
-    return toRoleCatalogDTO(
-      toRoleMemberCounts(builtInCounts),
-      customRoles,
-      Object.fromEntries(customCounts.map((c) => [c.roleDefinitionId, c.count])),
-    );
-  },
 };
-
-/**
- * The repository's grouped rows narrowed to the PROJECT-assignable roles. The
- * `MemberRole` enum is shared with workspace membership and carries `owner`,
- * which a project membership can never hold — dropping it here keeps the mapper
- * total over `ProjectRole` rather than defensive about an enum member that cannot
- * occur. Roles with no members are absent; the mapper zero-fills them.
- */
-function toRoleMemberCounts(
-  rows: { role: MemberRole; count: number }[],
-): Partial<Record<ProjectRole, number>> {
-  const counts: Partial<Record<ProjectRole, number>> = {};
-  for (const row of rows) {
-    const role = asProjectRole(row.role);
-    if (role) counts[role] = row.count;
-  }
-  return counts;
-}

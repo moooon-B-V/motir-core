@@ -2,8 +2,12 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import {
+  addToProjectAs,
+  createCustomRoleAs,
+  setProjectRoleAs,
+} from '../../helpers/workspaceRoleFixtures';
 
 // Seed for the LESSON LIBRARY E2E (Story MOTIR-3329 · Subtask MOTIR-3340).
 //
@@ -82,7 +86,7 @@ export async function seedLessonLibrary(prefix: string): Promise<LessonLibrarySe
 
   // The read-without-change role (MOTIR-3336's whole justification), authored
   // here so a walk can be signed in as somebody who holds it.
-  const viewOnlyRole = await projectRoleDefinitionService.create({
+  const viewOnlyRole = await createCustomRoleAs({
     projectId: project.id,
     ctx: ownerCtx,
     name: 'Lesson reader',
@@ -107,7 +111,7 @@ export async function seedLessonLibrary(prefix: string): Promise<LessonLibrarySe
     });
     await workspacesService.addMember({ userId: user.id, workspaceId: workspace.id });
     const builtIn = role === 'admin' || role === 'member';
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
@@ -115,7 +119,7 @@ export async function seedLessonLibrary(prefix: string): Promise<LessonLibrarySe
       role: builtIn ? role : 'member',
     });
     if (!builtIn) {
-      await projectMembersService.setRole({
+      await setProjectRoleAs({
         key: project.identifier,
         actorUserId: owner.id,
         ctx: ownerCtx,

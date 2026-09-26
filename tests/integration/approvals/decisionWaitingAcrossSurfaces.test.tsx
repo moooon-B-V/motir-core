@@ -225,7 +225,13 @@ async function everySurface(actor: Actor, opts: { canEdit: boolean }) {
   const workflow = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
   const members = (
     await adminDb.user.findMany({ where: { id: { in: [fx.ownerId, M.userId, N.userId] } } })
-  ).map((u) => ({ userId: u.id, name: u.name, email: u.email, role: 'member' }));
+  ).map((u) => ({
+    userId: u.id,
+    name: u.name,
+    email: u.email,
+    workspaceRole: 'member' as const,
+    customRole: null,
+  }));
   const sectionFor = (view: 'list' | 'tree', filtered: boolean) =>
     IssueTreeSection({
       projectId: fx.projectId,
@@ -326,7 +332,13 @@ describe('1 · one gate, every surface', () => {
 
   it('as a project VIEWER who is A’s assignee: A is others — the floor — on every surface', async () => {
     const viewer = await createTestUser({ email: 'v@ex.com', name: 'Vik' });
-    await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
+    // A Viewer is a WORKSPACE role now (Story MOTIR-6168); the project row below
+    // only puts them on the project.
+    await workspacesService.addMember({
+      userId: viewer.id,
+      workspaceId: fx.workspaceId,
+      role: 'viewer',
+    });
     await adminDb.projectMembership.deleteMany({
       where: { userId: viewer.id, projectId: fx.projectId },
     });

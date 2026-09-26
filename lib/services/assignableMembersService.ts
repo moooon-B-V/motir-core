@@ -1,5 +1,7 @@
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
+import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { toWorkspaceMemberDTO } from '@/lib/mappers/workspaceMappers';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 
@@ -13,9 +15,9 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 // instead of `workspacesService.listMembers` for a project-scoped view.
 //
 // Returns the same `WorkspaceMemberDTO` shape the pickers already consume, so the
-// AssigneePicker component is unchanged: the `private` branch maps project
-// memberships into that shape (the per-project `role` rides along, unused by the
-// picker but harmless and consistent with the workspace-member rows).
+// AssigneePicker component is unchanged: the `private` branch keeps the project's
+// members, in the project's order, and reports each one's WORKSPACE row — a
+// person's role is their workspace role in every project (Story MOTIR-6168).
 
 export const assignableMembersService = {
   /**
@@ -39,12 +41,17 @@ export const assignableMembersService = {
     }
     return withWorkspaceContext(input.ctx, async (tx) => {
       const rows = await projectMembershipRepository.findMembersByProject(input.projectId, tx);
-      return rows.map((row) => ({
-        userId: row.user.id,
-        name: row.user.name,
-        email: row.user.email,
-        role: row.role,
-      }));
+      const workspaceRows = await workspaceMembershipRepository.findMembersByWorkspace(
+        input.ctx.workspaceId,
+        tx,
+      );
+      const byUser = new Map(workspaceRows.map((m) => [m.userId, m]));
+      // A project member always holds a workspace membership (the membership
+      // cascade removes one with the other), so a miss is skipped, never invented.
+      return rows.flatMap((row) => {
+        const m = byUser.get(row.userId);
+        return m ? [toWorkspaceMemberDTO(m)] : [];
+      });
     });
   },
 };

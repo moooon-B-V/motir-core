@@ -116,7 +116,7 @@ export const firstAuditTriggerService = {
       // read returned null and EVERY repo was reported `no_owner` — un-audited,
       // silently, with the planning workspace's nudge as the only trace.
       owner = await withWorkspaceServiceContext(workspaceId, (tx) =>
-        workspaceMembershipRepository.findOwnerByWorkspace(workspaceId, tx),
+        workspaceMembershipRepository.findStandInManagerByWorkspace(workspaceId, tx),
       );
       if (!owner) return { repoRef, submitted: 0, outcomes: [], skipped: 'no_owner' };
       projects = await withWorkspaceServiceContext(workspaceId, (tx) =>

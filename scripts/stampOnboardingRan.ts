@@ -174,7 +174,7 @@ export async function stampOnboardingRan(
   // user's GUC so the write satisfies the project table's RLS policy under the
   // production non-bypass role.
   const owner = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
-    workspaceMembershipRepository.findOwnerByWorkspace(project.workspaceId, tx),
+    workspaceMembershipRepository.findStandInManagerByWorkspace(project.workspaceId, tx),
   );
   if (!owner) {
     return { kind: 'no_actor', projectId: project.id, workspaceId: project.workspaceId };

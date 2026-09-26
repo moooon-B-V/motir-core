@@ -12,13 +12,13 @@ import {
   pullRequestMergeService,
 } from '@/lib/services/pullRequestMergeService';
 import { pullRequestApprovalGateHandler } from '@/lib/approvalGates/pullRequestApprovalHandler';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // THE MERGE ENTRY POINT (Story MOTIR-4882 · MOTIR-5517 · MOTIR-5613), against a REAL
 // Postgres. The host is the seam's `mergeChangeRequest`, stubbed per case — the one thing
@@ -54,7 +54,7 @@ async function seatedOn(role: 'member' | 'viewer') {
   await adminDb.workspaceMembership.create({
     data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

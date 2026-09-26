@@ -41,6 +41,7 @@ import { changeStatusAction, updateIssueAction } from '@/app/(authed)/items/[key
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
 
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe(
@@ -72,6 +73,7 @@ async function viewerAndItem(fx: WorkItemFixture) {
       tx,
     ),
   );
+  await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
   session.current = { user: { id: viewer.id } };
   activeCtx.current = { projectId: fx.projectId, userId: viewer.id, workspaceId: fx.workspaceId };
   return item;

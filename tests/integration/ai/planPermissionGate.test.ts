@@ -8,7 +8,6 @@ import { aiSprintPlanningService } from '@/lib/services/aiSprintPlanningService'
 import { aiPreplanService } from '@/lib/services/aiPreplanService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { createTestProject } from '../../fixtures/projectFixtures';
@@ -16,6 +15,7 @@ import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { addressOf, openTestSession } from '../../helpers/planSession';
 import type { ProjectContext } from '@/lib/projects';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // The `ai:plan` GATE (Story MOTIR-2291 · Subtask MOTIR-2355) — the two
 // conversational planners.
@@ -68,7 +68,7 @@ async function makeFixture(label: string): Promise<Fixture> {
       data: { userId: u.id, workspaceId, role: 'member' },
     });
     if (role) {
-      await projectMembersService.addMember({
+      await addToProjectAs({
         key: project.identifier,
         actorUserId: owner.id,
         ctx: ownerCtx,
@@ -109,18 +109,20 @@ describe('the plan-change session asks ai:plan', () => {
     ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 
-  it('refuses a workspace member with NO project membership — the case that does not follow from the viewer one', async () => {
+  it('a workspace Member with NO project membership holds ai:plan — one role in every project (MOTIR-6168)', async () => {
+    // This was the "implicit workspace member" refusal: a member not on the
+    // project held `work_item:edit` and not `ai:plan`. That class retired with the
+    // project roles (MOTIR-6459) — a Member's role is the same in every open
+    // project — so the member-facing planner admits them. The Viewer above is the
+    // refusal that still holds.
     const fx = await makeFixture('implicit');
-    // They DO hold `work_item:edit` here, which is what these paths asked for
-    // until this card — so the refusal is specifically about the new key.
     const held = await projectAccessService.getPermissions(fx.outsiderPctx.projectId, {
       userId: fx.outsiderPctx.userId,
       workspaceId: fx.outsiderPctx.workspaceId,
     });
-    expect(held.has('work_item:edit')).toBe(true);
-    expect(held.has('ai:plan')).toBe(false);
-
-    await expect(openTestSession(fx.outsiderPctx)).rejects.toBeInstanceOf(PermissionDeniedError);
+    expect(held.has('ai:plan')).toBe(true);
+    const session = await openTestSession(fx.outsiderPctx);
+    expect(session.id).toBeTruthy();
   });
 
   it('still admits a project MEMBER — the planner is member-facing, not administrative', async () => {
@@ -151,13 +153,6 @@ describe('the plan-editing jobs ask ai:plan', () => {
     await expect(aiPlanEditsService.submitExpand('PROD-1', fx.viewerPctx)).rejects.toBeInstanceOf(
       PermissionDeniedError,
     );
-  });
-
-  it('refuses the implicit workspace member, who holds work_item:edit and not ai:plan', async () => {
-    const fx = await makeFixture('edits-implicit');
-    await expect(
-      aiPlanEditsService.submitAugment('add a story', fx.outsiderPctx),
-    ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 
   it('refuses a VIEWER the explanation drafter — the one that reached no gate at all', async () => {

@@ -250,7 +250,7 @@ test('@smoke Story 2.8: admin deletes a subtree from detail → cascade gone, an
 // project able to archive while unable to edit, which is worse than either
 // answer. A branch there is a per-level policy change `lib/permissions/resolve.ts`
 // reserves for its own card, and this card asked about ROLES.
-test('Story 2.8: a non-project-member sees neither Archive nor Delete (MOTIR-3629)', async ({
+test('Story 2.8: a workspace Member never added to the project archives but never deletes (MOTIR-3629 · MOTIR-6168)', async ({
   page,
 }) => {
   const s = await seed(page);
@@ -271,13 +271,12 @@ test('Story 2.8: a non-project-member sees neither Archive nor Delete (MOTIR-362
   // Delete is `work_item:delete` — a plain member never sees the row (hidden, not
   // shown-disabled), and that half is unchanged.
   await expect(menu.getByRole('menuitem', { name: /^Delete/ })).toHaveCount(0);
-  // Archive is `work_item:archive` now, which the implicit workspace-member grant
-  // does not carry — so the row is ABSENT rather than present-and-403ing. Same
-  // treatment as Delete: hidden, never shown-disabled.
-  await expect(menu.getByRole('menuitem', { name: 'Archive' })).toHaveCount(0);
-  // …while everything `work_item:edit` actually buys them is untouched. This is
-  // what makes the removal above a NARROWING of one affordance and not a
-  // regression in what an outsider on an `open` project can do.
+  // Archive is `work_item:archive`. Since roles moved to the workspace (Story
+  // MOTIR-6168 · MOTIR-6459) there is no implicit workspace-member grant: a
+  // workspace MEMBER holds the Member role's keys in every `open` project,
+  // added or not — and the Member role carries archive. So the row is present.
+  await expect(menu.getByRole('menuitem', { name: 'Archive' })).toBeVisible();
+  // …with everything `work_item:edit` buys them.
   await expect(menu.getByRole('menuitem', { name: 'Edit details' })).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: 'Copy link' })).toBeVisible();
 });

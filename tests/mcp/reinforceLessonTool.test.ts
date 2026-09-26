@@ -2,7 +2,6 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import {
   runReinforceLesson,
   registerReinforceLesson,
@@ -15,6 +14,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // `reinforce_lesson` (Subtask MOTIR-3553 · Bug MOTIR-3547) — the tool, over real
 // Postgres, with motir-ai stubbed AT THE TRANSPORT so the real client builds the
@@ -85,7 +85,7 @@ async function actorWithRole(
     name: role,
   });
   await workspacesService.addMember({ userId: u.id, workspaceId: fx.workspaceId });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

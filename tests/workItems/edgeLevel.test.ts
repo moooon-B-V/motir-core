@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertLinkSameLevel, isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
-import { CrossLevelLinkError } from '@/lib/workItems/linkErrors';
+import { crossLevelEdgeFindings, isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
 
 // MOTIR-6411 — the level of a `blocked_by` is POSITION (MOTIR-6387,
 // `docs/decisions/edge-level-is-position.md`): the same depth below the nearest
@@ -86,53 +85,50 @@ describe('Amendment 1 — an epic is blocked only by another epic', () => {
     expect(cross('B', 'E1')).toBe(true);
     expect(isCrossLevelEdge({ kind: 'story', ancestors: [] }, end('E2'))).toBe(true);
   });
-  it('under an epic the position rule stands — case 4b is still refused, case 1 still legal', () => {
+  it('under an epic the position rule stands — case 4b is still cross-level, case 1 still legal', () => {
     expect(cross('XR', 'Y')).toBe(true);
     expect(cross('T', 'S')).toBe(false);
   });
 });
 
-describe('assertLinkSameLevel', () => {
-  it('refuses a cross-level blocked_by with both keys and depths', () => {
-    try {
-      assertLinkSameLevel(
-        'is_blocked_by',
-        { identifier: 'ACME-9', ...end('X1') },
-        { identifier: 'ACME-2', ...end('Y') },
-      );
-      expect.unreachable('a cross-level edge must be refused');
-    } catch (err) {
-      expect(err).toBeInstanceOf(CrossLevelLinkError);
-      expect((err as Error).message).toContain('ACME-9 sits 3 level(s)');
-      expect((err as Error).message).toContain('ACME-2 sits 2');
-    }
+describe('crossLevelEdgeFindings — the verdict both validators report (Amendment 2)', () => {
+  const labelled = (n: keyof typeof chain) => ({ ...end(n), label: `ACME-${n}` });
+  const lookup = (id: string) => (id in chain ? labelled(id as keyof typeof chain) : undefined);
+
+  it('names each cross-level edge with both depths, the reason and the sentence', () => {
+    expect(crossLevelEdgeFindings([{ blockedId: 'X1', blockerId: 'Y' }], lookup)).toEqual([
+      {
+        item: 'ACME-X1',
+        blockedBy: 'ACME-Y',
+        itemDepth: 3,
+        blockedByDepth: 2,
+        reason: 'blocked_elsewhere',
+        explanation: expect.stringContaining('ACME-X1 sits 3 level(s)'),
+      },
+    ]);
   });
-  it('refuses an epic paired with a non-epic in the epic-tier words', () => {
-    expect(() =>
-      assertLinkSameLevel(
-        'is_blocked_by',
-        { identifier: 'ACME-1', ...end('E1') },
-        {
-          identifier: 'ACME-7',
-          ...end('R'),
-        },
-      ),
-    ).toThrow(/ACME-1 is an epic and ACME-7 is a task\. An epic is blocked only by another epic/);
+  it('words an epic pairing in the epic-tier sentence', () => {
+    const [finding] = crossLevelEdgeFindings([{ blockedId: 'E1', blockerId: 'R' }], lookup);
+    expect(finding?.explanation).toMatch(
+      /ACME-E1 is an epic and ACME-R is a task\. An epic is blocked only by another epic/,
+    );
   });
-  it('never judges another link kind, and passes a same-level edge', () => {
-    expect(() =>
-      assertLinkSameLevel(
-        'relates_to',
-        { identifier: 'A', ...end('X1') },
-        { identifier: 'B', ...end('B') },
-      ),
-    ).not.toThrow();
-    expect(() =>
-      assertLinkSameLevel(
-        'is_blocked_by',
-        { identifier: 'A', ...end('T') },
-        { identifier: 'B', ...end('S') },
-      ),
-    ).not.toThrow();
+  it('passes a same-level edge, skips an end it cannot place, and sorts by item then blocker', () => {
+    expect(
+      crossLevelEdgeFindings(
+        [
+          { blockedId: 'Y', blockerId: 'S' },
+          { blockedId: 'T', blockerId: 'S' },
+          { blockedId: 'B', blockerId: 'Y' },
+          { blockedId: 'B', blockerId: 'X' },
+          { blockedId: 'B', blockerId: 'missing' },
+        ],
+        lookup,
+      ).map((f) => [f.item, f.blockedBy]),
+    ).toEqual([
+      ['ACME-B', 'ACME-X'],
+      ['ACME-B', 'ACME-Y'],
+      ['ACME-Y', 'ACME-S'],
+    ]);
   });
 });

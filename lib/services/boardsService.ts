@@ -1347,7 +1347,7 @@ export const boardsService = {
  *
  * ⚠️ IT REPLACES A GATE THAT ASKED A DIFFERENT QUESTION, AND THAT IS A DELIBERATE
  * WIDENING. Until this card, board configuration ran through a module-private
- * `assertBoardConfigAdmin` resolving `isOwnerRole(membership?.role)` — the
+ * `assertBoardConfigAdmin` resolving `isLegacyOwnerRole(membership?.role)` — the
  * workspace OWNER, and nobody else. Not a workspace admin, not the project's own
  * admin. `board:configure` is held by all three, so a project admin can now tune
  * their own board, which is what the key exists to express and what both mirrors

@@ -516,9 +516,10 @@ describe('setWorkspacePolicy', () => {
     }
   });
 
-  it('allows a workspace ADMIN — `WORKSPACE_ROLE` would have refused them', async () => {
-    // `lib/workspaces/roles.ts`'s constant carries only `owner` and `member`, so
-    // gating on it refuses a workspace `admin`. This is the case that catches it.
+  it('allows a legacy workspace ADMIN — it resolves to the Manager', async () => {
+    // A row the deploy window left with `workspace_role` NULL and the legacy
+    // `admin`: `resolveWorkspaceRole` maps it to `manager`, so the gate still
+    // admits everyone it admitted before (MOTIR-6462).
     const { workspace, organizationId } = await makeOrgWithWorkspace();
     const admin = await makeUser();
     await adminDb.organizationMembership.create({
@@ -534,6 +535,49 @@ describe('setWorkspacePolicy', () => {
       requiresTwoFactor: true,
     });
     expect(dto.requiresTwoFactor).toBe(true);
+  });
+
+  it('allows a stored workspace MANAGER, and refuses a stored Member whose legacy role says owner', async () => {
+    // The stored `workspace_role` wins over the legacy column in both directions:
+    // a Manager on a legacy `member` row passes, a founder demoted to Member does not.
+    const { workspace, organizationId } = await makeOrgWithWorkspace();
+    const manager = await makeUser();
+    const demoted = await makeUser();
+    for (const u of [manager, demoted]) {
+      await adminDb.organizationMembership.create({
+        data: { organizationId, userId: u.id, role: ORGANIZATION_ROLE.member },
+      });
+    }
+    await adminDb.workspaceMembership.create({
+      data: {
+        workspaceId: workspace.id,
+        userId: manager.id,
+        role: 'member',
+        workspaceRole: 'manager',
+      },
+    });
+    await adminDb.workspaceMembership.create({
+      data: {
+        workspaceId: workspace.id,
+        userId: demoted.id,
+        role: 'owner',
+        workspaceRole: 'member',
+      },
+    });
+
+    const dto = await twoFactorPolicyService.setWorkspacePolicy({
+      workspaceId: workspace.id,
+      actorUserId: manager.id,
+      requiresTwoFactor: true,
+    });
+    expect(dto.requiresTwoFactor).toBe(true);
+    await expect(
+      twoFactorPolicyService.setWorkspacePolicy({
+        workspaceId: workspace.id,
+        actorUserId: demoted.id,
+        requiresTwoFactor: false,
+      }),
+    ).rejects.toBeInstanceOf(WorkspaceForbiddenError);
   });
 
   it('allows the ORG OWNER holding NO workspace membership row (MOTIR-6308)', async () => {
@@ -552,20 +596,22 @@ describe('setWorkspacePolicy', () => {
     expect(dto.requiresTwoFactor).toBe(true);
   });
 
-  it('refuses an ORG ADMIN holding NO workspace membership row — an Admin reaches by membership (MOTIR-6308)', async () => {
+  it('allows an ORG ADMIN holding NO workspace membership row — an org Admin is a Manager in every workspace (MOTIR-6168)', async () => {
+    // `role-model.md` AMENDMENT 1 overturned MOTIR-6308's reading R1: the org
+    // Admin carries the Manager role into every workspace of the org, as the
+    // Owner does.
     const { workspace, organizationId } = await makeOrgWithWorkspace();
     const orgAdmin = await makeUser();
     await adminDb.organizationMembership.create({
       data: { organizationId, userId: orgAdmin.id, role: ORGANIZATION_ROLE.admin },
     });
 
-    await expect(
-      twoFactorPolicyService.setWorkspacePolicy({
-        workspaceId: workspace.id,
-        actorUserId: orgAdmin.id,
-        requiresTwoFactor: true,
-      }),
-    ).rejects.toBeInstanceOf(NotAMemberError);
+    const dto = await twoFactorPolicyService.setWorkspacePolicy({
+      workspaceId: workspace.id,
+      actorUserId: orgAdmin.id,
+      requiresTwoFactor: true,
+    });
+    expect(dto.requiresTwoFactor).toBe(true);
   });
 
   it('raises NotAMemberError for someone with no access', async () => {

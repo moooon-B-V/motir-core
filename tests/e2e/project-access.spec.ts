@@ -38,6 +38,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -83,6 +84,8 @@ async function grantProjectRole(
   await db.projectMembership.create({
     data: { userId, workspaceId: tenant.workspaceId, projectId: tenant.projectId, role },
   });
+  // Roles live on the workspace since MOTIR-6168.
+  await setWorkspaceRoleFor(userId, tenant.workspaceId, role);
 }
 
 // Pin a project as the user's active project so the active-project-scoped routes
@@ -270,16 +273,22 @@ test.describe('project-access — gating end-to-end', () => {
     // The members panel + access controls render.
     await expect(page.getByRole('heading', { name: 'Access & members' })).toBeVisible();
     await expect(page.getByRole('radio', { name: /Private/ })).toBeVisible();
-    // The admin's own row is present (read-only self row → a role Pill, no select).
+    // The admin's own row is present (the self row carries no Remove).
     await expect(page.getByText('Ada Admin')).toBeVisible();
 
     // ── Add the recruit through the real add-member combobox (6.4.4 POST) ─────
     const addPicker = page.getByRole('combobox', { name: 'Add a project member' });
     await addPicker.click();
     await page.getByRole('option', { name: /Rita Recruit/ }).click();
-    // Once added, the recruit is a manageable member row — its per-row role
-    // select (only rendered for project members the admin can manage) appears.
-    await expect(page.getByRole('combobox', { name: 'Role for Rita Recruit' })).toBeVisible();
+    // Once added, the recruit is a manageable member row — its Remove button
+    // (only rendered for members the admin can manage) appears. The rows carry no
+    // role picker since MOTIR-6168: roles live on the workspace.
+    await expect(
+      page
+        .getByRole('listitem')
+        .filter({ hasText: 'Rita Recruit' })
+        .getByRole('button', { name: 'Remove' }),
+    ).toBeVisible();
 
     // ── Flip the access level to Private (6.4.4 PATCH, optimistic) ────────────
     await page.getByRole('radio', { name: /Private/ }).click();

@@ -34,8 +34,20 @@ function component(over: Partial<ComponentWithCountDto> = {}): ComponentWithCoun
 }
 
 const members: WorkspaceMemberDTO[] = [
-  { userId: 'u-bob', name: 'Bo', email: 'bophilips@motir.co', role: 'member' },
-  { userId: 'u-odie', name: 'Odie', email: 'odie@motir.co', role: 'member' },
+  {
+    userId: 'u-bob',
+    name: 'Bo',
+    email: 'bophilips@motir.co',
+    workspaceRole: 'member',
+    customRole: null,
+  },
+  {
+    userId: 'u-odie',
+    name: 'Odie',
+    email: 'odie@motir.co',
+    workspaceRole: 'member',
+    customRole: null,
+  },
 ];
 
 function render(ui: ReactElement) {

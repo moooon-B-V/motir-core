@@ -7,7 +7,6 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   isCoverageAdvisory,
   isBlockerCountAdvisory,
-  isCrossLevelEdgeAdvisory,
   isPathReferenceAdvisory,
   isOrderingAdvisory,
   isReferenceAdvisory,
@@ -95,7 +94,6 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   const selfBlocking = result.advisories.filter(isSelfBlockingDesignAdvisory);
   const bodyAbove = result.advisories.filter(isBodyAboveFieldMoveAdvisory);
   const blockerCounts = result.advisories.filter(isBlockerCountAdvisory);
-  const crossLevel = result.advisories.filter(isCrossLevelEdgeAdvisory);
   const uncovered = result.advisories.filter(isCoverageAdvisory);
   const pathReferences = result.advisories.filter(isPathReferenceAdvisory);
 
@@ -104,25 +102,6 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
     lines.push(
       '',
       `Advisory (${unaffected}): ${a.item} claims "${a.claim}" (${a.claimedCount}), but its graph holds ${a.blockerCount} blocked_by edge${a.blockerCount === 1 ? '' : 's'}. Update the prose or the graph.`,
-    );
-  }
-  // The CROSS-LEVEL-EDGE member (MOTIR-6369) — an edge the card already carries
-  // that joins two levels. Every write door now refuses a new one; this is how
-  // the ones drawn before the rule become visible.
-  if (crossLevel.length > 0) {
-    lines.push(
-      '',
-      `Advisory (${unaffected}): these cards are blocked_by an item on ANOTHER LEVEL — a ` +
-        'dependency joins two items at the same depth below their nearest common ancestor, ' +
-        'and an epic is blocked only by another epic:',
-      ...crossLevel.map(
-        (a) =>
-          `  ${a.item} (depth ${a.itemDepth}) is blocked_by ${a.blockedBy} ` +
-          `(depth ${a.blockedByDepth}) (${a.severity})`,
-      ),
-      'Re-wire it to the same-level item really waited on — it may be under another parent — or ' +
-        'between the two containers if the whole of one is needed. A new edge like this is ' +
-        'refused (CROSS_LEVEL_LINK); this one predates the rule.',
     );
   }
   if (references.length > 0) {
@@ -360,6 +339,36 @@ export function invalidEdgeLines(
 }
 
 /**
+ * The CROSS-LEVEL lines (MOTIR-6509) — shared wording for both validators' text
+ * blocks. Empty when there are none. The link door WRITES such an edge, so this
+ * is the one place a person or an agent is told about it.
+ */
+export function crossLevelEdgeLines(
+  crossLevelEdges: ReadonlyArray<{
+    item: string;
+    blockedBy: string;
+    itemDepth: number;
+    blockedByDepth: number;
+  }>,
+): string[] {
+  if (crossLevelEdges.length === 0) return [];
+  return [
+    '',
+    `${crossLevelEdges.length} edge(s) are blocked elsewhere — a blocked_by joining two ` +
+      'different LEVELS (two depths below their nearest common ancestor, or an epic and a ' +
+      'non-epic):',
+    ...crossLevelEdges.map(
+      (e) =>
+        `  ${e.item} (depth ${e.itemDepth}) is blocked by ${e.blockedBy} ` +
+        `(depth ${e.blockedByDepth})`,
+    ),
+    'The edge still holds the item out of the ready set. Re-wire it to the same-level item ' +
+      'really waited on (it may sit under another parent), or between the two containers ' +
+      'when the whole of one is needed.',
+  ];
+}
+
+/**
  * The SOFT-block lines (MOTIR-6368) — an ancestor's open blocker, which reaches
  * the target only through the readiness cascade. Phrased as information, never a
  * failure: soft blocks do not change `valid`.
@@ -380,7 +389,7 @@ function softBlockLines(result: WorkItemValidityDto): string[] {
 /** Human-readable summary for the dual-content text block.
  *
  * `planId` is present ⟺ the verdict was computed over the PROJECTION, and the
- * text says so: the same `{ key, valid, blockers, invalidEdges, advisories, softBlocks }` shape means two
+ * text says so: the same `{ key, valid, blockers, invalidEdges, crossLevelEdges, advisories, softBlocks }` shape means two
  * different things depending on which tree it was computed over, and a reader
  * watching the session has only this block to tell them apart. */
 function summarize(result: WorkItemValidityDto, planId?: string): string {
@@ -396,11 +405,12 @@ function summarize(result: WorkItemValidityDto, planId?: string): string {
     ].join('\n');
   }
   if (result.blockers.length === 0) {
-    // INVALID on the parent rule alone (MOTIR-6370) — finishable, but a
-    // cross-parent edge its parents do not carry.
+    // INVALID on the edge rules alone (MOTIR-6370 / MOTIR-6509) — finishable, but
+    // a cross-parent edge its parents do not carry, or an edge across levels.
     return [
       `Work item ${result.key} is INVALID${over} — its subtree can be finished, but:`,
       ...invalidEdgeLines(result.invalidEdges),
+      ...crossLevelEdgeLines(result.crossLevelEdges),
       ...softBlockLines(result),
       ...advisoryLines(result),
     ].join('\n');
@@ -415,6 +425,7 @@ function summarize(result: WorkItemValidityDto, planId?: string): string {
     ),
     'Pull these into the subtree (or finish them), or drop the dependency.',
     ...invalidEdgeLines(result.invalidEdges),
+    ...crossLevelEdgeLines(result.crossLevelEdges),
     ...softBlockLines(result),
     ...advisoryLines(result),
   ].join('\n');
@@ -475,13 +486,18 @@ export function registerValidateWorkItem(
         'never gates; only out-of-subtree work can. `condition` defaults to `loose` (a done ' +
         'dependency outside the subtree counts as satisfied); pass `tight` to require every ' +
         'dependency to be IN the subtree (a done item outside it is then reported as a blocker). ' +
-        'Returns `{ key, valid, blockers: [...], invalidEdges: [...], advisories: [...], ' +
-        'softBlocks: [...] }` — `blockers` naming each in-subtree item and the out-of-subtree, ' +
+        'Returns `{ key, valid, blockers: [...], invalidEdges: [...], crossLevelEdges: [...], ' +
+        'advisories: [...], softBlocks: [...] }` — `blockers` naming each in-subtree item and the out-of-subtree, ' +
         'unsatisfied work gating it (always an item’s OWN blocked_by edge); `invalidEdges` naming ' +
         'each same-level blocked_by between items under DIFFERENT parents whose parents carry no ' +
         'matching edge (`{ item, blockedBy, itemParent, blockerParent }` — a cross-parent edge is ' +
-        'valid only when the parents carry it; an end with no work-item parent is exempt). ' +
-        '`valid` is true only when BOTH are empty. `softBlocks` is NON-GATING: each open ' +
+        'valid only when the parents carry it; an end with no work-item parent is exempt); ' +
+        '`crossLevelEdges` naming each blocked_by FROM a subtree member to an item on ANOTHER ' +
+        'LEVEL — a different depth below their nearest common ancestor, or an epic and a ' +
+        'non-epic — as `{ item, blockedBy, itemDepth, blockedByDepth, reason: ' +
+        '"blocked_elsewhere", explanation }` (the link door writes such an edge and it still ' +
+        'holds the item out of the ready set; the plan gate refuses a PROPOSED one). ' +
+        '`valid` is true only when ALL THREE are empty. `softBlocks` is NON-GATING: each open ' +
         'blocked_by of one of the target’s ANCESTORS, as `{ via: { key, title }, blockedBy: ' +
         '{ key, title }, blockerStatus }` — a block that reaches the target only through the ' +
         'readiness cascade and that `--allow-soft-block` overrides at run time; it never changes ' +
@@ -517,10 +533,7 @@ export function registerValidateWorkItem(
         'trail), or ' +
         "`likely-blocker-count-mismatch` when an explicit counted claim about the card's own " +
         'blocker siblings disagrees with its current blocked_by edge count (with the exact ' +
-        '`claim`, `claimedCount`, and `blockerCount`), or `cross-level-edge` when a subtree ' +
-        'member ALREADY carries a blocked_by to an item on another LEVEL — epic, story, leaf — ' +
-        '(with `blockedBy`, `itemDepth` and `blockedByDepth` below the project root; a ' +
-        'new such edge is refused CROSS_LEVEL_LINK). A `coverage` ' +
+        '`claim`, `claimedCount`, and `blockerCount`). A `coverage` ' +
         'advisory (`kind: "coverage"`, `likely-unowned-criterion`) names a CONTAINER one of whose ' +
         "acceptance criteria no direct child's TITLE carries, reported only when a child was " +
         'created BEFORE the container (adopted) — with the `criterionIndex` and the ' +

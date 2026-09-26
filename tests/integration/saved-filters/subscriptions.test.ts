@@ -26,6 +26,7 @@ import { truncateAuthTables } from '../../helpers/db';
 import { captureEmailEvents, captureJobEvents } from '../../helpers/jobs';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // Story 6.2 · Subtask 6.2.5 — filter subscriptions. Real Postgres (the one
 // allowed seam is the Inngest client's `send()`, captured for assertion).
@@ -69,7 +70,7 @@ async function makeTeam(): Promise<Team> {
       workspaceId: fx.workspaceId,
       role: 'member',
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

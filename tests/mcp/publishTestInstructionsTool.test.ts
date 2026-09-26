@@ -3,8 +3,6 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { runPublishTestInstructions } from '@/lib/mcp/tools/publishTestInstructions';
 import { TEST_INSTRUCTIONS_MAX_BODY_BYTES } from '@/lib/testInstructions/caps';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
@@ -13,6 +11,11 @@ import { truncateAuthTables } from '../helpers/db';
 import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { organizationIdOf } from '../helpers/organizationOf';
 import { randomToken } from '../helpers/random';
+import {
+  addToProjectAs,
+  createCustomRoleAs,
+  setProjectRoleAs,
+} from '../helpers/workspaceRoleFixtures';
 
 // `publish_test_instructions` at the ADAPTER (Story MOTIR-4906 · MOTIR-5331) —
 // one case per refusal, each asserting its OWN code and a message that names
@@ -218,20 +221,20 @@ describe('runPublishTestInstructions — every refusal carries its own code and 
       name: 'Viewer',
     });
     await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
-    const role = await projectRoleDefinitionService.create({
+    const role = await createCustomRoleAs({
       projectId: fx.projectId,
       ctx: fx.ctx,
       name: 'Reader',
       permissions: ['project:browse', 'comment:add'],
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
       targetUserId: viewer.id,
       role: 'member',
     });
-    await projectMembersService.setRole({
+    await setProjectRoleAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

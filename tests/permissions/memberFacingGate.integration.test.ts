@@ -24,6 +24,7 @@ import type { ProjectContext } from '@/lib/projects';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { openTestSession } from '../helpers/planSession';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // THE STORY TEST GATE for MOTIR-2291 (Subtask MOTIR-2367) — the SEAM half,
 // against real Postgres.
@@ -92,9 +93,16 @@ async function buildScenario(slug: string): Promise<Scenario> {
       password: PASSWORD,
       name: role ?? 'outsider',
     });
-    await workspacesService.addMember({ userId: u.id, workspaceId: workspace.id });
+    // Roles live on the WORKSPACE (Story MOTIR-6168): the actor's tier is their
+    // workspace role (a legacy `admin` lands as the Manager), and the project
+    // membership below is only "added to this private project".
+    await workspacesService.addMember({
+      userId: u.id,
+      workspaceId: workspace.id,
+      role: role ?? 'member',
+    });
     if (role) {
-      await projectMembersService.addMember({
+      await addToProjectAs({
         key: project.identifier,
         actorUserId: owner.id,
         ctx: ownerCtx,
@@ -321,7 +329,7 @@ describe('no SECOND policy path — every gate resolves through projectAccessSer
     // `role === 'admin'` is a policy the model does not know about — invisible in
     // the grid, un-grantable to a custom role, and un-auditable by the guard.
     //
-    // ⚠️ The two remaining derivations are named, with the reason, exactly as
+    // ⚠️ The remaining derivations are named, with the reason, exactly as
     // `storyGate.test.ts` names its own: a bare directory exemption is a place to
     // put things you would rather not think about.
     const ALLOWED = new Set([
@@ -336,9 +344,13 @@ describe('no SECOND policy path — every gate resolves through projectAccessSer
       // whole tenant. Reading the policy is ungated; only SETTING it derives the
       // role, and `tests/twoFactorPolicy.test.ts` asserts both directions.
       'lib/services/twoFactorPolicyService.ts',
+      // A WORKSPACE's public address (MOTIR-4221), gated on the workspace
+      // Manager (MOTIR-6462). The address names the whole workspace, so no
+      // project permission could govern it — the same argument once more.
+      'lib/services/publicSubdomainService.ts',
     ]);
     const DERIVATION =
-      /\bisOwnerRole\s*\(|\bisWorkspaceManager\s*\(|\b(?:ws|project|workspace)?[Mm]embership\??\.role\s*===\s*'admin'/;
+      /\bis(?:Legacy)?OwnerRole\s*\(|\bisWorkspaceManager\s*\(|\b(?:ws|project|workspace)?[Mm]embership\??\.role\s*===\s*'admin'/;
     const offenders = serviceFiles()
       .filter((f) => !ALLOWED.has(f.path))
       .filter((f) => DERIVATION.test(f.code))
@@ -360,7 +372,7 @@ describe('no SECOND policy path — every gate resolves through projectAccessSer
         },
       };`;
     const DERIVATION =
-      /\bisOwnerRole\s*\(|\bisWorkspaceManager\s*\(|\b(?:ws|project|workspace)?[Mm]embership\??\.role\s*===\s*'admin'/;
+      /\bis(?:Legacy)?OwnerRole\s*\(|\bisWorkspaceManager\s*\(|\b(?:ws|project|workspace)?[Mm]embership\??\.role\s*===\s*'admin'/;
     expect(DERIVATION.test(violation)).toBe(true);
     // …and a body that asks the model instead is NOT caught.
     expect(
