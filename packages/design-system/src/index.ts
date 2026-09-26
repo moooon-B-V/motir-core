@@ -20,15 +20,10 @@ export * from './theme/palettes';
 export * from './theme/typography';
 
 // ── Pattern axis + storage/defaults (owned by ./theme/types) ─────────────────
-export {
-  THEME_STORAGE_KEYS,
-  THEME_DEFAULTS,
-  isThemePattern,
-  resolvePattern,
-  PALETTE_IDS_VERSION,
-  PALETTE_ID_MIGRATION,
-  migrateStoredPaletteId,
-} from './theme/types';
+export { THEME_STORAGE_KEYS, THEME_DEFAULTS, isThemePattern, resolvePattern } from './theme/types';
+// Its own line: `test/barrel-rsc-safe.test.ts` reads dist/index.js line by line,
+// and a re-export prettier wraps across lines no longer reads as one.
+export { PALETTE_IDS_VERSION, PALETTE_ID_MIGRATION, migrateStoredPaletteId } from './theme/types';
 export type { ThemePattern, ResolvedThemePattern } from './theme/types';
 
 // ── The theme-apply contract (§4) ────────────────────────────────────────────

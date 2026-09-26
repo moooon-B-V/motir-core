@@ -206,7 +206,9 @@ test.describe('Motir wears the monochrome palette; Amethyst stays for those who 
       await stubCompletedPreplan(page);
       await page.goto('/onboarding/discovery');
       await page.getByRole('button', { name: 'Design your look' }).last().click();
-      const designPage = page.getByTestId('design-page');
+      // The step's root is a labelled <section> — a `region` — so it is reached by
+      // role, which the accessibility tree scopes to the live copy.
+      const designPage = page.getByRole('region', { name: "Design your project's look" });
       await expect(designPage).toHaveAttribute('data-palette', 'amethyst');
       await expect(
         palettePicker(page).getByRole('radio', { name: 'Amethyst', exact: true }),
