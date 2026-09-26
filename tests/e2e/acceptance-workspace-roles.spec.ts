@@ -234,9 +234,7 @@ test('a Manager changes a role once and every project follows; a Reviewer role c
     // Switch project the way a person does; the item page reads the ACTIVE one.
     const switcher = page.getByRole('button', { name: 'Switch project' });
     await switcher.click();
-    const popover = page
-      .locator('[data-state=open]')
-      .filter({ has: page.getByText('Projects', { exact: true }) });
+    const popover = page.locator('[data-state=open]').filter({ hasText: /^Projects/ });
     await expect(popover).toBeVisible();
     await popover.getByText('Growth', { exact: true }).click();
     await expect(switcher).toContainText('Growth');
