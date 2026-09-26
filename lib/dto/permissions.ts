@@ -28,22 +28,6 @@ export interface PermissionDescriptorDTO {
 }
 
 /**
- * ONE custom role definition, as the write API returns it (Story MOTIR-2257 ·
- * Subtask MOTIR-2472). Distinct from {@link RoleDTO}, which is what the READ
- * screens render for every role in a project, built-in ones included — this is
- * the row the create / rename / re-permission calls just wrote, and nothing
- * more.
- */
-export interface RoleDefinitionDTO {
-  id: string;
-  name: string;
-  /** The permissions it holds, in CATALOG order (never insertion order). */
-  permissions: PermissionKey[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
  * One role in the catalog: its identity, and the permissions it holds.
  *
  * ⚠️ WIDENED BY MOTIR-2478, and the widening IS the ripple of custom roles. Until

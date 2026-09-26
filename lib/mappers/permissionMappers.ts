@@ -13,7 +13,6 @@ import type {
   ActorPermissionsDTO,
   PermissionDomainDTO,
   RoleCatalogDTO,
-  RoleDefinitionDTO,
   RoleDTO,
 } from '@/lib/dto/permissions';
 
@@ -202,35 +201,4 @@ export function toActorPermissionsDTO(
   held: Iterable<PermissionKey>,
 ): ActorPermissionsDTO {
   return { projectId, permissions: sortByCatalogOrder(held) };
-}
-
-/**
- * ONE custom role definition → the DTO the write API returns (Story MOTIR-2257 ·
- * Subtask MOTIR-2472). Not `RoleDTO`: that is what the READ screens render for
- * every role in a project, built-ins included. This is the row that was just
- * written.
- *
- * The stored `permissions` array is INTERSECTED with the role-gated set and
- * re-sorted into catalog order on the way out — the same posture
- * `resolvePermissions` takes on the read side (MOTIR-2470). The service refuses
- * an ungrantable key at write time, so this is not a second policy: it is what
- * keeps a row authored BEFORE a key was retired from reporting a permission the
- * product no longer governs.
- */
-export function toRoleDefinitionDTO(row: {
-  id: string;
-  name: string;
-  permissions: string[];
-  createdAt: Date;
-  updatedAt: Date;
-}): RoleDefinitionDTO {
-  const roleGated = new Set<string>(ROLE_GATED_PERMISSIONS);
-  const held = row.permissions.filter((key): key is PermissionKey => roleGated.has(key));
-  return {
-    id: row.id,
-    name: row.name,
-    permissions: sortByCatalogOrder(held),
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
 }

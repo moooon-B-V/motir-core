@@ -9,7 +9,7 @@
 // and the no-existence-leak 404 reuses `ProjectNotFoundError` — this file adds
 // only what is genuinely new to roles.
 
-import { MAX_CUSTOM_ROLES_PER_PROJECT, MAX_ROLE_NAME_LENGTH } from '@/lib/permissions/limits';
+import { MAX_ROLE_NAME_LENGTH } from '@/lib/permissions/limits';
 
 export class RoleDefinitionNotFoundError extends Error {
   readonly code = 'ROLE_DEFINITION_NOT_FOUND' as const;
@@ -25,19 +25,6 @@ export class InvalidRoleNameError extends Error {
   constructor() {
     super(`A role name must be a non-empty string of at most ${MAX_ROLE_NAME_LENGTH} characters.`);
     this.name = 'InvalidRoleNameError';
-  }
-}
-
-/**
- * A name already taken by another role IN THE SAME PROJECT — the translation of
- * the `(project_id, name)` unique index's P2002. The service catches the raw
- * database error and rethrows this, so a P2002 never escapes to a route.
- */
-export class RoleNameTakenError extends Error {
-  readonly code = 'ROLE_NAME_TAKEN' as const;
-  constructor(readonly name_: string) {
-    super(`A role named "${name_}" already exists in this project.`);
-    this.name = 'RoleNameTakenError';
   }
 }
 
@@ -59,15 +46,6 @@ export class UngrantablePermissionError extends Error {
   }
 }
 
-/** The per-project cap on custom roles, reached. */
-export class RoleLimitReachedError extends Error {
-  readonly code = 'ROLE_LIMIT_REACHED' as const;
-  constructor(readonly limit: number = MAX_CUSTOM_ROLES_PER_PROJECT) {
-    super(`A project may define at most ${limit} custom roles.`);
-    this.name = 'RoleLimitReachedError';
-  }
-}
-
 /**
  * An operation aimed at one of the three BUILT-IN roles. Refused rather than
  * reported as not-found, because the caller asked for something meaningful and
@@ -79,24 +57,6 @@ export class BuiltInRoleImmutableError extends Error {
   constructor(readonly role: string) {
     super(`"${role}" is a built-in role and cannot be edited or deleted.`);
     this.name = 'BuiltInRoleImmutableError';
-  }
-}
-
-/**
- * A delete refused because members still hold the role and no destination was
- * given. **Carries the affected COUNT** — that number is not decoration: it is
- * what the confirmation dialog says before it asks where those people should go
- * (`design/projects/roles-permissions.mock.html` panel 5). So it has to survive
- * the service boundary and, at MOTIR-2474, the HTTP one.
- */
-export class RoleInUseError extends Error {
-  readonly code = 'ROLE_IN_USE' as const;
-  constructor(
-    readonly roleName: string,
-    readonly count: number,
-  ) {
-    super(`"${roleName}" is held by ${count} member(s); choose a role to move them to.`);
-    this.name = 'RoleInUseError';
   }
 }
 
