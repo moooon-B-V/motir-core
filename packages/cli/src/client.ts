@@ -1477,6 +1477,10 @@ export class MotirClient {
     ancestor?: string[];
     /** SCOPE to one sprint — an id, or the literal `active` (MOTIR-3196). */
     sprintId?: string;
+    /** WIDEN past a SOFT block (MOTIR-6355): list a leaf held only by an
+     *  ancestor's block. A leaf with its OWN open blocker (HARD) is never
+     *  listed. Sent as the string `"true"`; omitted when not set. */
+    allowSoftBlock?: boolean;
   }): Promise<DispatchItem[]> {
     const items: DispatchItem[] = [];
     for await (const item of this.walkReady(args)) {
@@ -1501,6 +1505,7 @@ export class MotirClient {
     kinds?: string[];
     ancestor?: string[];
     sprintId?: string;
+    allowSoftBlock?: boolean;
   }): AsyncGenerator<DispatchItem> {
     let cursor: string | undefined;
     do {
@@ -1514,6 +1519,7 @@ export class MotirClient {
           // first page would claim a set it never enumerated.
           ...(args.ancestor ? { ancestor: args.ancestor } : {}),
           ...(args.sprintId !== undefined ? { sprintId: args.sprintId } : {}),
+          ...(args.allowSoftBlock ? { allowSoftBlock: 'true' as const } : {}),
           ...(cursor ? { cursor } : {}),
         },
       });

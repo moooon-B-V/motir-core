@@ -15,11 +15,14 @@ import { planIdField } from './planRef';
 // productized form of the *re-validate-the-active-sprint* rule (`motir-meta`
 // `plan-rules.md` #94): a planning agent calls this after any plan/re-plan that
 // touches sprint membership or a sprint item's `blocked_by` edges. A sprint is
-// VALID ⟺ every in-sprint, not-done item has BOTH its ENTIRE transitive
-// `blocked_by` closure AND all of its children `done` OR also in the sprint —
-// the parent-ready cascade applied to the sprint: a parent with an out-of-sprint
-// not-done child can never be finished within it. With NO `sprintId`, the
-// project's ACTIVE sprint is validated.
+// VALID ⟺ every in-sprint, not-done item has BOTH its OWN `blocked_by` edges
+// (transitively, through in-sprint blockers) AND all of its children `done` OR
+// also in the sprint — the parent-ready cascade applied to the sprint: a parent
+// with an out-of-sprint not-done child can never be finished within it. Only
+// HARD blocks gate (MOTIR-6354 / MOTIR-6368): an ANCESTOR's blocker is a SOFT
+// block on its descendants, overridable with `--allow-soft-block`, and is not
+// reported against them. With NO `sprintId`, the project's ACTIVE sprint is
+// validated.
 //
 // `condition` (Subtask 7.8.22) tunes the out-of-sprint `done` case: `loose`
 // (default) accepts a done blocker/child anywhere; `tight` requires it to be IN
@@ -159,10 +162,13 @@ export function registerValidateSprint(
     {
       title: 'Validate sprint finishability',
       description:
-        'Check whether a sprint is FINISHABLE: every in-sprint item has both its entire transitive ' +
-        'blocked_by closure AND all of its children either done or also in the sprint (the ' +
-        'parent-ready cascade applied to the sprint — a parent with an out-of-sprint, not-done ' +
-        'child can never be finished within it). Omit sprintId to validate the project’s ACTIVE ' +
+        'Check whether a sprint is FINISHABLE: every in-sprint item has both its OWN blocked_by ' +
+        'edges (transitively, through in-sprint blockers) AND all of its children either done or ' +
+        'also in the sprint (the parent-ready cascade applied to the sprint — a parent with an ' +
+        'out-of-sprint, not-done child can never be finished within it). Only an item’s OWN ' +
+        'blocked_by gates it: an ANCESTOR’s blocker is a SOFT block, overridable at run time with ' +
+        '`--allow-soft-block`, so it is not reported against in-sprint descendants (a blocked ' +
+        'epic or story that is itself in the sprint still gates). Omit sprintId to validate the project’s ACTIVE ' +
         'sprint. `condition` defaults to `loose` (a done item outside the sprint counts as ' +
         'satisfied); pass `tight` to require every gating item to be IN the sprint (a done item ' +
         'outside it is then reported as a blocker). Returns `{ valid: true }` when finishable, else ' +

@@ -73,7 +73,13 @@ describe('workItemsService.validateWorkItem — the subtree finishability rule',
     const fx = await makeWorkItemFixture();
     const task = await mk(fx, 'Lonely task', 'task');
     const result = await workItemsService.validateWorkItem(fx.projectId, task.identifier, fx.ctx);
-    expect(result).toEqual({ key: task.identifier, valid: true, blockers: [], advisories: [] });
+    expect(result).toEqual({
+      key: task.identifier,
+      valid: true,
+      blockers: [],
+      advisories: [],
+      softBlocks: [],
+    });
   });
 
   it('a target whose blockers are all IN its SUBTREE is VALID', async () => {
@@ -235,6 +241,113 @@ describe('workItemsService.validateWorkItem — the subtree finishability rule',
     await expect(
       workItemsService.validateWorkItem(fx.projectId, story.identifier, outsider.ctx),
     ).rejects.toMatchObject({ code: 'WORK_ITEM_NOT_FOUND' });
+  });
+});
+
+// MOTIR-6354 / MOTIR-6368 — `softBlocks`: an ANCESTOR's open blocker reaches the
+// target only through the readiness cascade (overridable with
+// `--allow-soft-block`). It is REPORTED, never gating: `valid` stays "can this
+// subtree finish".
+describe('workItemsService.validateWorkItem — softBlocks (MOTIR-6368)', () => {
+  it('a story whose epic is blocked_by an open epic is VALID with one softBlocks entry naming the epic', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await mk(fx, 'Parent epic', 'epic');
+    const openEpic = await mk(fx, 'Open epic', 'epic');
+    const story = await mk(fx, 'Story', 'story', epic.id);
+    await link(fx, epic.id, openEpic.id);
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(result).toEqual({
+      key: story.identifier,
+      valid: true,
+      blockers: [],
+      advisories: [],
+      softBlocks: [
+        {
+          via: { key: epic.identifier, title: 'Parent epic' },
+          blockedBy: { key: openEpic.identifier, title: 'Open epic' },
+          blockerStatus: 'todo',
+        },
+      ],
+    });
+  });
+
+  it('walks the WHOLE ancestor chain, skips a DONE ancestor blocker, and sorts by via then blocker', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await mk(fx, 'Epic', 'epic');
+    const story = await mk(fx, 'Story', 'story', epic.id);
+    const subtask = await mk(fx, 'Subtask', 'subtask', story.id);
+    const epicBlocker = await mk(fx, 'Epic blocker', 'task');
+    const storyBlocker = await mk(fx, 'Story blocker', 'task');
+    const doneBlocker = await mk(fx, 'Done blocker', 'task');
+    await markDone(doneBlocker.id);
+    await link(fx, story.id, storyBlocker.id);
+    await link(fx, epic.id, epicBlocker.id);
+    await link(fx, epic.id, doneBlocker.id); // satisfied — not a soft block
+    // The subtask is done: the verdict short-circuits, softBlocks is still read.
+    await markDone(subtask.id);
+
+    const result = await workItemsService.validateWorkItem(
+      fx.projectId,
+      subtask.identifier,
+      fx.ctx,
+    );
+    expect(result.valid).toBe(true);
+    expect(result.softBlocks).toEqual([
+      {
+        via: { key: epic.identifier, title: 'Epic' },
+        blockedBy: { key: epicBlocker.identifier, title: 'Epic blocker' },
+        blockerStatus: 'todo',
+      },
+      {
+        via: { key: story.identifier, title: 'Story' },
+        blockedBy: { key: storyBlocker.identifier, title: 'Story blocker' },
+        blockerStatus: 'todo',
+      },
+    ]);
+  });
+
+  it('an UNBLOCKED ancestor chain reports no soft blocks', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await mk(fx, 'Epic', 'epic');
+    const story = await mk(fx, 'Story', 'story', epic.id);
+    const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(result.softBlocks).toEqual([]);
+  });
+
+  it('soft blocks never change the verdict — an INVALID target keeps its own blockers and lists the soft ones beside them, in the MCP text too', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await mk(fx, 'Epic', 'epic');
+    const openEpic = await mk(fx, 'Open epic', 'epic');
+    const story = await mk(fx, 'Story', 'story', epic.id);
+    const outside = await mk(fx, 'Outside task', 'task');
+    await link(fx, epic.id, openEpic.id);
+    await link(fx, story.id, outside.id); // the story's OWN out-of-subtree blocker
+
+    const client = await connectClient(fx.ctx);
+    const invalid = (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key: story.identifier },
+    })) as CallToolResult;
+    const body = invalid.structuredContent as unknown as WorkItemValidityDto;
+    expect(body.valid).toBe(false);
+    expect(body.blockers.map((b) => b.blockedBy)).toEqual([outside.identifier]);
+    expect(body.softBlocks).toHaveLength(1);
+    const invalidText = JSON.stringify(invalid.content);
+    expect(invalidText).toContain('Soft blocks (1, do NOT affect validity)');
+    expect(invalidText).toContain(
+      `${epic.identifier} \\"Epic\\" is blocked by ${openEpic.identifier}`,
+    );
+
+    await markDone(outside.id);
+    const valid = (await client.callTool({
+      name: 'validate_work_item',
+      arguments: { key: story.identifier },
+    })) as CallToolResult;
+    expect((valid.structuredContent as unknown as WorkItemValidityDto).valid).toBe(true);
+    const validText = JSON.stringify(valid.content);
+    expect(validText).toContain('is VALID');
+    expect(validText).toContain('Soft blocks (1, do NOT affect validity)');
   });
 });
 

@@ -331,7 +331,9 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
         }}
       />,
     );
-    expect(screen.getByText('Blocked')).toBeTruthy();
+    // The SOFT banner (MOTIR-6377): the peek renders the same variant.
+    expect(screen.getByText('Parent blocked')).toBeTruthy();
+    expect(screen.queryByText('Blocked')).toBeNull();
     expect(screen.getByText(/Waiting on a parent item —/)).toBeTruthy();
     const parent = screen.getByRole('link', { name: 'PROD-8' });
     expect(parent.getAttribute('href')).toBe('/items/PROD-8');

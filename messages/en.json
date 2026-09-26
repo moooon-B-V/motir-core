@@ -1671,7 +1671,8 @@
       "allResolved": "All blockers resolved",
       "blocked": "Blocked",
       "waiting": "Waiting on {count, plural, one {# work item} other {# work items}}",
-      "waitingOnParent": "Waiting on a parent item"
+      "waitingOnParent": "Waiting on a parent item",
+      "parentBlocked": "Parent blocked"
     },
     "sprintPicker": {
       "label": "Sprint",

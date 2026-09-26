@@ -19,6 +19,7 @@ import {
   readOpenChildren,
   refuseLeafOnlyFlag,
   resolveScopeTarget,
+  softBlockAncestor,
   type ScopeRunOptions,
 } from './scope.js';
 import { orderClaimedSet } from '../scopedRun.js';
@@ -705,8 +706,10 @@ function keyList(entries: { key: string }[]): string {
 // ── motir run <key> ─────────────────────────────────────────────────────────
 
 export interface RunOptions extends DeliveryOptions, ScopeRunOptions {
-  /** `--force` — dispatch even though the item is not ready. */
+  /** `--force` — dispatch even though the item is not ready (HARD or SOFT). */
   force?: boolean;
+  /** `--allow-soft-block` — see `ScopeRunOptions.allowSoftBlock` (MOTIR-6355). */
+  allowSoftBlock?: boolean;
   /** `--max <n>` — stop after n cards of a SCOPE. Leaf runs ignore it. */
   max?: string;
   /** `--keep-going` — continue a SCOPE past a failed agent. */
@@ -723,15 +726,36 @@ export function notReadyError(detail: {
   identifier: string;
   openBlockers: { identifier: string; title: string }[];
   blockedByAncestor: { identifier: string } | null;
+  /** Whether `--allow-soft-block` was passed — and failed to cover this block. */
+  allowSoftBlock?: boolean;
 }): CliError {
   const reasons: string[] = detail.openBlockers.map((b) => `${b.identifier} (${b.title})`);
   if (detail.blockedByAncestor) {
     reasons.push(`its ancestor ${detail.blockedByAncestor.identifier} is blocked`);
   }
   const because = reasons.length > 0 ? ` Waiting on: ${reasons.join(', ')}.` : '';
-  return new CliError(`${detail.identifier} is not ready.${because}`, {
-    hint: `Pass --force to dispatch it anyway.`,
-  });
+  // The hint names the override that FITS the block (MOTIR-6355). A SOFT block —
+  // no open blocker of its own, only an ancestor's — is what `--allow-soft-block`
+  // exists for; a HARD one (its own open `blocked_by`) only `--force` passes.
+  const soft = detail.openBlockers.length === 0 && detail.blockedByAncestor !== null;
+  const hint = soft
+    ? `It is held only by its ancestor's block (SOFT). Pass --allow-soft-block to dispatch it anyway.`
+    : detail.allowSoftBlock
+      ? `--allow-soft-block overrides only an ancestor's block; this item's own blocker is open (HARD). Pass --force to dispatch it anyway.`
+      : `Pass --force to dispatch it anyway.`;
+  return new CliError(`${detail.identifier} is not ready.${because}`, { hint });
+}
+
+/**
+ * `--force` already overrides a HARD and a SOFT block, so naming both is not a
+ * stronger request — it is a confused one, and refused before anything is read.
+ */
+function refuseRedundantOverride(opts: RunOptions): void {
+  if (opts.force && opts.allowSoftBlock) {
+    throw new CliError('`--allow-soft-block` is redundant with `--force`.', {
+      hint: '`--force` already overrides both a HARD and a SOFT block; pass one of them, not both.',
+    });
+  }
 }
 
 export async function runCommand(
@@ -740,6 +764,7 @@ export async function runCommand(
   deps: DeliveryDeps = {},
 ): Promise<void> {
   refuseAutoOnlyFlag(opts, 'run');
+  refuseRedundantOverride(opts);
   const trimmed = key.trim();
   if (!trimmed) throw new CliError('A work item key is required, e.g. `motir run ACME-7`.');
   await withProjectSession(async (session) => {
@@ -769,7 +794,13 @@ export async function runCommand(
       // because it is the same requirement for the same reason.
       const agent = requireAgent({ ...opts, print: false }, 'motir run <scope>');
       const ownerId = await resolveOwnerId(client);
-      const claimed = await claimScopeForRun(session, decision.target, opts, ownerId);
+      const claimed = await claimScopeForRun(
+        session,
+        decision.target,
+        opts,
+        ownerId,
+        decision.readiness,
+      );
       if (!claimed) return;
 
       const runId = runIdFromDate((deps.now ?? (() => new Date()))());
@@ -891,14 +922,24 @@ export async function runCommand(
     const detail = decision.detail;
     const { item, readiness } = detail;
 
-    if (!readiness.ready && !opts.force) {
+    // HARD vs SOFT (MOTIR-6354), classified from the verdict already in hand —
+    // no second read. `--allow-soft-block` passes only a SOFT block; `--force`
+    // passes either.
+    const softAncestor = softBlockAncestor(readiness);
+    const softOverride = opts.allowSoftBlock === true && softAncestor !== null;
+    if (!readiness.ready && !opts.force && !softOverride) {
       throw notReadyError({
         identifier: item.identifier,
         openBlockers: readiness.openBlockers,
         blockedByAncestor: readiness.blockedByAncestor,
+        ...(opts.allowSoftBlock ? { allowSoftBlock: true } : {}),
       });
     }
-    if (!readiness.ready) {
+    if (softOverride) {
+      info(
+        `${item.identifier} is held only by its ancestor ${softAncestor.identifier}'s block — dispatching (--allow-soft-block).`,
+      );
+    } else if (!readiness.ready) {
       info(`${item.identifier} is not ready — dispatching anyway (--force).`);
     }
 

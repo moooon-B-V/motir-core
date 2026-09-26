@@ -484,6 +484,11 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
           'Dispatch even though the item is not ready (dependencies unmet). One work item only.',
       },
       {
+        flags: '--allow-soft-block',
+        description:
+          "Run an item held only by an ancestor's block (a SOFT block). Still refuses one with its own open blocker (a HARD block — only --force passes that).",
+      },
+      {
         flags: '--disable-log-bug',
         description:
           'Do not let the agent file a bug for a defect it finds elsewhere; it comments instead.',

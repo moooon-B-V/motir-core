@@ -310,10 +310,28 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
   return lines;
 }
 
+/**
+ * The SOFT-block lines (MOTIR-6368) — an ancestor's open blocker, which reaches
+ * the target only through the readiness cascade. Phrased as information, never a
+ * failure: soft blocks do not change `valid`.
+ */
+function softBlockLines(result: WorkItemValidityDto): string[] {
+  if (result.softBlocks.length === 0) return [];
+  return [
+    `Soft blocks (${result.softBlocks.length}, do NOT affect validity) — an ancestor is blocked, ` +
+      'so this work waits in the readiness cascade; `--allow-soft-block` runs it anyway:',
+    ...result.softBlocks.map(
+      (s) =>
+        `  ${s.via.key} "${s.via.title}" is blocked by ${s.blockedBy.key} ` +
+        `"${s.blockedBy.title}" (${s.blockerStatus})`,
+    ),
+  ];
+}
+
 /** Human-readable summary for the dual-content text block.
  *
  * `planId` is present ⟺ the verdict was computed over the PROJECTION, and the
- * text says so: the same `{ key, valid, blockers, advisories }` shape means two
+ * text says so: the same `{ key, valid, blockers, advisories, softBlocks }` shape means two
  * different things depending on which tree it was computed over, and a reader
  * watching the session has only this block to tell them apart. */
 function summarize(result: WorkItemValidityDto, planId?: string): string {
@@ -324,6 +342,7 @@ function summarize(result: WorkItemValidityDto, planId?: string): string {
   if (result.valid) {
     return [
       `Work item ${result.key} is VALID — its whole subtree can be finished within itself${over}.`,
+      ...softBlockLines(result),
       ...advisoryLines(result),
     ].join('\n');
   }
@@ -336,6 +355,7 @@ function summarize(result: WorkItemValidityDto, planId?: string): string {
         `${b.blockerSprintId ? `sprint ${b.blockerSprintId}` : 'backlog'})`,
     ),
     'Pull these into the subtree (or finish them), or drop the dependency.',
+    ...softBlockLines(result),
     ...advisoryLines(result),
   ].join('\n');
 }
@@ -395,8 +415,13 @@ export function registerValidateWorkItem(
         'never gates; only out-of-subtree work can. `condition` defaults to `loose` (a done ' +
         'dependency outside the subtree counts as satisfied); pass `tight` to require every ' +
         'dependency to be IN the subtree (a done item outside it is then reported as a blocker). ' +
-        'Returns `{ key, valid, blockers: [...], advisories: [...] }` — `blockers` naming each ' +
-        'in-subtree item and the out-of-subtree, unsatisfied work gating it. `advisories` is a ' +
+        'Returns `{ key, valid, blockers: [...], advisories: [...], softBlocks: [...] }` — ' +
+        '`blockers` naming each in-subtree item and the out-of-subtree, unsatisfied work gating ' +
+        'it (always an item’s OWN blocked_by edge). `softBlocks` is NON-GATING: each open ' +
+        'blocked_by of one of the target’s ANCESTORS, as `{ via: { key, title }, blockedBy: ' +
+        '{ key, title }, blockerStatus }` — a block that reaches the target only through the ' +
+        'readiness cascade and that `--allow-soft-block` overrides at run time; it never changes ' +
+        '`valid`, which stays "can this subtree finish". `advisories` is a ' +
         'SEPARATE, NEVER-BLOCKING channel with two families: a `reference` advisory names an ' +
         'in-subtree card whose DESCRIPTION names a not-done work item it has no blocked_by edge ' +
         "to (severity `likely-missing-edge` when the reference sits in the card's own acceptance " +

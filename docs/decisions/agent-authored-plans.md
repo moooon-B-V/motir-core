@@ -2188,10 +2188,23 @@ Two consequences, both observed on 2026-08-28 in one `motir re-plan MOTIR-1043`:
    `move_to_parent`. Half of it was a proposal a person approves; the other half was already applied
    and could not be declined with it. **That is the exact property routing a re-plan through the
    proposal door exists to buy, spent.**
-2. **A cross-parent `blocked_by` edge had to be ARGUED instead of avoided.** Dependency edges are
+2. **A cross-parent `blocked_by` edge had to be ARGUED instead of avoided.** ~~Dependency edges are
    legal between siblings; a card in the wrong story generates cross-parent edges that then need the
-   no-legal-lift justification written onto the card in prose, where nothing can check it. The move
+   no-legal-lift justification written onto the card in prose, where nothing can check it.~~ The move
    made the edge ordinary — but only after the plan had been written the other way.
+
+   > **⚠️ AMENDED 2026-09-25 (Story MOTIR-6354, after MOTIR-6015) — the struck sentence no longer
+   > holds: a dependency edge is legal between two work items at the SAME LEVEL, not only between
+   > siblings.** MOTIR-6015 made the rule the level rather than the parent: a `blocked_by` joins
+   > epic·epic, story·story or leaf·leaf, and the two may sit under different parents, so a
+   > cross-parent edge at one level is ordinary and needs no no-legal-lift justification. What an
+   > edge on an ANCESTOR does to the work beneath it is now named (MOTIR-6354): a work item whose own
+   > `blocked_by` edges are open is HARD-blocked; one whose own edges are all done but whose epic or
+   > story is blocked is SOFT-blocked — held only by an ancestor's block. A SOFT block is a
+   > deliberate override away: `motir run <key> --allow-soft-block` dispatches the item (on a story,
+   > it builds the scope from the children held only by the story's ancestor chain), while a HARD
+   > block still yields only to `--force`. The observation above is kept as it was written, because
+   > it is what the 2026-08-28 re-plan met.
 
 And in `motir-ai`, `modify_node`'s own description promised the operation three times
 (_"propose a `modify` (**re-parent** / re-scope / re-sequence / re-title)"_, plus two prompt lines)

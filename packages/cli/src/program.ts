@@ -305,6 +305,14 @@ export function buildProgram(): Command {
       '--force',
       'Dispatch even though the item is not ready (dependencies unmet). One work item only.',
     )
+    // ── HARD vs SOFT (MOTIR-6354 · MOTIR-6355) ──────────────────────────────
+    // `run` ONLY: `next` / `auto` / `batch` pick from the ready set, and there
+    // commander refuses the flag as unknown. Unlike `--force` it is not
+    // leaf-only — on a story it widens the ready read the scope is built from.
+    .option(
+      '--allow-soft-block',
+      "Run an item held only by an ancestor's block (a SOFT block). Still refuses one with its own open blocker (a HARD block — only --force passes that).",
+    )
     // ── The per-run FINDINGS POLICY (MOTIR-3022) ─────────────────────────────
     // ⚠️ These are NOT CLI-side behaviour. They travel to `dispatch_prompt` and
     // come back as different PROMPT TEXT, because the prompt is the entire
