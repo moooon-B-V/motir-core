@@ -3,6 +3,8 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { roleMigrationReportService } from '@/lib/services/roleMigrationReportService';
+import { RoleMigrationNotice } from './_components/RoleMigrationNotice';
 import { orgCanForWorkspace } from '@/lib/services/organizationAccessService';
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { resolveWorkspaceTierDisclosure } from '@/lib/workspaces/tierDisclosure.server';
@@ -66,9 +68,15 @@ export default async function WorkspaceSettingsPage() {
   // went (MOTIR-6312): the Owner or an Admin of its org. A pointer, not a door —
   // a Member sees none. `allSettledOrThrow`, never a bare `Promise.all`: both
   // arms open a transaction (MOTIR-3066).
-  const [members, canRemoveWorkspace] = await allSettledOrThrow([
+  // The role column's context and the migration report's first page (Story
+  // MOTIR-6168 · MOTIR-6465) join the same wave: who may change roles is decided
+  // on the SERVER and passed down as a boolean, and the report is null for a
+  // reader who is not a Manager.
+  const [members, canRemoveWorkspace, roleContext, migration] = await allSettledOrThrow([
     workspacesService.listMembers(ctx.workspaceId, ctx.userId),
     orgCanForWorkspace(ctx.userId, ctx.workspaceId, 'manageWorkspaces'),
+    workspacesService.getMemberRoleContext(ctx.workspaceId, ctx.userId),
+    roleMigrationReportService.firstPageForViewer(ctx.workspaceId, ctx.userId),
   ]);
   const memberCount = members.length;
 
@@ -83,17 +91,25 @@ export default async function WorkspaceSettingsPage() {
 
       <NameCard initialName={workspace.name} />
 
+      {migration && migration.total > 0 ? <RoleMigrationNotice initial={migration} /> : null}
+
       <MembersCard
         workspaceId={workspace.id}
         workspaceName={workspace.name}
         members={members}
         currentUserId={ctx.userId}
+        roleContext={roleContext}
       />
 
       <DangerZoneCard
         isLastMember={memberCount <= 1}
         canRemoveWorkspace={canRemoveWorkspace}
         placement="workspace"
+        leaveLockedByOrg={
+          roleContext.orgManagedUserIds.includes(ctx.userId)
+            ? { organizationName: roleContext.organizationName, workspaceName: workspace.name }
+            : null
+        }
       />
     </div>
   );

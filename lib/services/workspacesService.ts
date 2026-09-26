@@ -62,6 +62,7 @@ import type {
   CurrentWorkspaceDTO,
   OrgWorkspacePageDTO,
   OrgWorkspaceRowDTO,
+  MemberRoleContextDTO,
   WorkspaceMemberDTO,
   WorkspaceMemberRoleDTO,
   WorkspaceSummaryDTO,
@@ -450,6 +451,27 @@ async function isOrgManagerTarget(
 ): Promise<boolean> {
   await bindOrganizationContext(tx, workspace.organizationId);
   return organizationMembershipRepository.isOrgManagerOfWorkspaceOrg(userId, workspace.id, tx);
+}
+
+/**
+ * The organization's Owner and Admins, and its name — what the Members page's
+ * locked rows need (MOTIR-6465; MOTIR-6456 panel 6a). Other people's org rows,
+ * so the workspace's own organization is bound first, exactly as
+ * {@link isOrgManagerTarget} does.
+ */
+async function orgManagersOf(
+  workspace: { organizationId: string },
+  tx: Prisma.TransactionClient,
+): Promise<{ userIds: string[]; organizationName: string }> {
+  await bindOrganizationContext(tx, workspace.organizationId);
+  const [userIds, org] = [
+    await organizationMembershipRepository.findManagerUserIdsByOrganization(
+      workspace.organizationId,
+      tx,
+    ),
+    await organizationRepository.findByIdInTx(workspace.organizationId, tx),
+  ];
+  return { userIds, organizationName: org?.name ?? '' };
 }
 
 export const workspacesService = {
@@ -1254,6 +1276,37 @@ export const workspacesService = {
         };
       },
     );
+  },
+
+  /**
+   * What the Members page draws its role column with (Story MOTIR-6168 ·
+   * MOTIR-6465): whether the viewer may change roles (a Manager — their own
+   * role, or the org Owner / an org Admin), which members the ORG makes a
+   * Manager (locked rows), the org's name for their reason, and this
+   * workspace's custom roles for the picker. The gate is decided HERE, on the
+   * server; the client only receives the boolean.
+   */
+  async getMemberRoleContext(
+    workspaceId: string,
+    actorUserId: string,
+  ): Promise<MemberRoleContextDTO> {
+    return withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => {
+      const role = await readReachRole(actorUserId, workspaceId, tx);
+      if (!role) throw new NotAMemberError(actorUserId, workspaceId);
+      const workspace = await workspaceRepository.findByIdInTx(workspaceId, tx);
+      if (!workspace) throw new NotAMemberError(actorUserId, workspaceId);
+      const customRoles = await workspaceRoleDefinitionRepository.findManyByWorkspace(
+        workspaceId,
+        tx,
+      );
+      const managers = await orgManagersOf(workspace, tx);
+      return {
+        canManageRoles: role === 'manager',
+        orgManagedUserIds: managers.userIds,
+        organizationName: managers.organizationName,
+        customRoles: customRoles.map((r) => ({ id: r.id, name: r.name })),
+      };
+    });
   },
 
   /**

@@ -191,6 +191,23 @@ export const organizationMembershipRepository = {
   },
 
   /**
+   * The user ids holding the OWNER or an ADMIN role in `organizationId` — each a
+   * Manager of every workspace of the org (MOTIR-6168), whose workspace role the
+   * Members page shows locked (MOTIR-6456 panel 6a). The caller's `tx` must bind
+   * `app.organization_id` to this org: these are other people's rows.
+   */
+  async findManagerUserIdsByOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.organizationMembership.findMany({
+      where: { organizationId, role: { in: ['owner', 'admin'] } },
+      select: { userId: true },
+    });
+    return rows.map((r) => r.userId);
+  },
+
+  /**
    * The organizations `userId` is the OWNER or an ADMIN of — the org roles that
    * reach every workspace of the org (MOTIR-6168). Oldest membership first; the
    * workspace switcher lists each one's workspaces.

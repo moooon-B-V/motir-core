@@ -59,8 +59,22 @@ vi.mock('@/lib/workspaces', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/workspaces')>()),
   getWorkspaceContext,
 }));
+vi.mock('@/lib/services/roleMigrationReportService', () => ({
+  roleMigrationReportService: { firstPageForViewer: async () => null },
+}));
 vi.mock('@/lib/services/workspacesService', () => ({
-  workspacesService: { getWorkspaceSummary, listMembers, getMemberRole },
+  workspacesService: {
+    getWorkspaceSummary,
+    listMembers,
+    getMemberRole,
+    // The Members role column's context (MOTIR-6465) — inert here.
+    getMemberRoleContext: async () => ({
+      canManageRoles: false,
+      orgManagedUserIds: [],
+      organizationName: 'Acme',
+      customRoles: [],
+    }),
+  },
 }));
 vi.mock('@/lib/services/twoFactorPolicyService', () => ({
   twoFactorPolicyService: { getWorkspacePolicy },

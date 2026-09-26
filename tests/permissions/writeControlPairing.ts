@@ -256,6 +256,11 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
     card: 'MOTIR-6168',
     reason: 'membership only; who may rename is the workspace-roles story’s question',
   },
+  'settings/workspace/actions.ts#dismissRoleMigrationEntryAction': {
+    kind: 'role',
+    role: 'workspace:manager',
+  },
+  'settings/workspace/actions.ts#loadRoleMigrationPageAction': { kind: 'read' },
   'settings/workspace/actions.ts#setMemberRoleAction': { kind: 'role', role: 'workspace:manager' },
   'settings/workspace/jobs/actions.ts#replayDlqAction': { kind: 'role', role: 'workspace:manager' },
   'settings/workspace/security/actions.ts#setWorkspaceRequireTwoFactorAction': {
@@ -337,10 +342,6 @@ export const CONTROL_EXEMPTIONS: Record<string, ControlExemption> = {
   'app/(authed)/settings/organization/git/_components/GitlabProjectSyncSwitch.tsx': {
     kind: 'known-gap',
     card: 'MOTIR-6320',
-  },
-  'app/(authed)/settings/workspace/_components/MembersCard.tsx': {
-    kind: 'known-gap',
-    card: 'MOTIR-6317',
   },
   'app/(authed)/settings/workspace/_components/NameCard.tsx': {
     kind: 'known-gap',

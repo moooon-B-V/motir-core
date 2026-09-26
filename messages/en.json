@@ -1859,7 +1859,70 @@
       "errorRateLimited": "You've already sent 3 invites to this address in the last hour. Please wait before trying again.",
       "errorInvalidEmail": "Enter a valid email address.",
       "errorGeneric": "Could not send the invite. Please try again.",
-      "errorUnexpected": "Something went wrong. Please try again."
+      "errorUnexpected": "Something went wrong. Please try again.",
+      "personColumn": "Person",
+      "roleColumn": "Workspace role",
+      "roleSelectLabel": "Role for {name}",
+      "roleGroupBuiltIn": "Built-in",
+      "roleGroupCustom": "Custom roles",
+      "customRoleOption": "Custom role",
+      "role": {
+        "manager": "Manager",
+        "member": "Member",
+        "viewer": "Viewer"
+      },
+      "roleDesc": {
+        "manager": "Everything in this workspace — its settings, members and every project.",
+        "member": "Does the work in every project — edits items, comments, runs the planner.",
+        "viewer": "Reads every project and its reports. Changes nothing."
+      },
+      "onlyManager": "You’re the only Manager. Make someone else a Manager before changing your own role.",
+      "orgAdminRole": "Organization Admin — a Manager in every workspace of {org}. Change it on the organization’s Members page.",
+      "rolesManagerOnly": "Only a workspace Manager can change roles.",
+      "roleChanged": "{name} is now a {role} in every project of {workspace}",
+      "lastManagerTitle": "Couldn’t change the role",
+      "lastManagerBody": "A workspace needs at least one Manager. {name} is still a Manager.",
+      "roleChangeErrorTitle": "Couldn’t change {name}’s role",
+      "roleChangeErrorBody": "Nothing changed — they are still a {role}. Try again.",
+      "selfDemoteTitle": "Make yourself a {role}?",
+      "selfDemoteBody": "You won’t be able to change roles in {workspace} any more — including your own. To become a Manager again, ask another Manager of {workspace}, an organization Admin, or the Owner.",
+      "selfDemoteKeep": "Keep Manager",
+      "selfDemoteConfirm": "Make me a {role}",
+      "migration": {
+        "title": "Changed by the move to workspace roles",
+        "managersOnly": "Managers only",
+        "count": "{count, plural, one {# person} other {# people}}",
+        "body": "Roles now live on the workspace — one role per person, the same in every project. These people were not moved by the plain mapping. Check each one; change a role above if it is wrong.",
+        "dismiss": "Dismiss",
+        "dismissLabel": "Dismiss {name}",
+        "dismissed": "Dismissed",
+        "dismissError": "Couldn’t dismiss it",
+        "showMore": "Show more",
+        "before": "Before",
+        "after": "After",
+        "legacyRole": {
+          "owner": "Workspace owner",
+          "admin": "Workspace admin",
+          "member": "Member",
+          "viewer": "Viewer"
+        },
+        "projectRole": "{role} in {project}",
+        "projectRoleName": {
+          "admin": "Admin",
+          "member": "Member",
+          "viewer": "Viewer",
+          "owner": "Owner"
+        },
+        "narrowedIn": "Narrower in {projects}",
+        "reason": {
+          "narrowest_kept": "Held a narrower role in a project — the narrowest was kept.",
+          "project_role_dropped": "A project role wider than the workspace role was dropped.",
+          "custom_role_recreated": "Their custom project role was re-created at the workspace.",
+          "custom_role_merged": "Two custom roles merged into one holding only the keys both shared.",
+          "org_admin_granted": "Became an organization Admin, as every workspace owner does.",
+          "mapped_narrower": "Their keys in a project are narrower than before."
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Can't leave",
@@ -1870,7 +1933,8 @@
       "lastMemberTooltip": "You’re the last member. An organization admin can remove this workspace.",
       "lastMemberTooltipAdmin": "You’re the last member. Remove the workspace from Organization settings → Workspaces instead.",
       "removeHint": "To remove this workspace, go to Organization settings → Workspaces.",
-      "removeHintFoldIn": "To remove this workspace, use Workspaces above."
+      "removeHintFoldIn": "To remove this workspace, use Workspaces above.",
+      "orgAdminLeave": "You’re an organization Admin, so you’re a Manager of every workspace in {org}. To step out of {workspace}, your organization role has to change."
     },
     "project": {
       "empty": {

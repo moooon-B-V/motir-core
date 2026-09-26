@@ -5,6 +5,8 @@ import { twoFactorPolicyService } from '@/lib/services/twoFactorPolicyService';
 import { isWorkspaceManager } from '@/lib/projects/roles';
 import { NameCard } from '../../workspace/_components/NameCard';
 import { MembersCard } from '../../workspace/_components/MembersCard';
+import { RoleMigrationNotice } from '../../workspace/_components/RoleMigrationNotice';
+import { roleMigrationReportService } from '@/lib/services/roleMigrationReportService';
 import { DangerZoneCard } from '../../workspace/_components/DangerZoneCard';
 import { setWorkspaceRequireTwoFactorAction } from '../../workspace/security/actions';
 import { RequireTwoFactorCard } from './RequireTwoFactorCard';
@@ -46,7 +48,7 @@ export async function WorkspaceFoldInSection({
   // transaction, so a rejection on one must not leave the others running
   // unobserved (MOTIR-3066). The two arms MOTIR-3647 added are what make this a
   // four-arm wave; the pair before it predates the rule and moves with it.
-  const [workspace, members, policy, role] = await allSettledOrThrow([
+  const [workspace, members, policy, role, roleContext, migration] = await allSettledOrThrow([
     workspacesService.getWorkspaceSummary(workspaceId, actorUserId),
     workspacesService.listMembers(workspaceId, actorUserId),
     // Story MOTIR-1215 · MOTIR-3647 — the workspace require-2FA control's SECOND
@@ -55,6 +57,10 @@ export async function WorkspaceFoldInSection({
     // common case rather than the edge one.
     twoFactorPolicyService.getWorkspacePolicy(workspaceId, actorUserId),
     workspacesService.getMemberRole(actorUserId, workspaceId),
+    // The Members role column and the migration report fold in with Members
+    // (Story MOTIR-6168 · MOTIR-6465, design panel 4b).
+    workspacesService.getMemberRoleContext(workspaceId, actorUserId),
+    roleMigrationReportService.firstPageForViewer(workspaceId, actorUserId),
   ]);
   // The caller resolved this workspace from the actor's OWN membership list, so
   // a null here means it went away between the two reads. Nothing to host.
@@ -73,11 +79,14 @@ export async function WorkspaceFoldInSection({
 
       <NameCard initialName={workspace.name} />
 
+      {migration && migration.total > 0 ? <RoleMigrationNotice initial={migration} /> : null}
+
       <MembersCard
         workspaceId={workspace.id}
         workspaceName={workspace.name}
         members={members}
         currentUserId={actorUserId}
+        roleContext={roleContext}
       />
 
       {/* ⚠️ RELOCATING A SURFACE PRESERVES ITS GATE, AND THIS SECTION DOES NOT
@@ -102,6 +111,11 @@ export async function WorkspaceFoldInSection({
         isLastMember={members.length <= 1}
         canRemoveWorkspace={canManageWorkspaces}
         placement="foldIn"
+        leaveLockedByOrg={
+          roleContext.orgManagedUserIds.includes(actorUserId)
+            ? { organizationName: roleContext.organizationName, workspaceName: workspace.name }
+            : null
+        }
       />
     </>
   );

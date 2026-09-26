@@ -8,6 +8,8 @@ import { getSession } from '@/lib/auth';
 import { getWorkspaceContext, WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
 import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { roleMigrationReportService } from '@/lib/services/roleMigrationReportService';
+import type { RoleMigrationPageDTO } from '@/lib/dto/workspaces';
 import {
   InvalidWorkspaceRoleError,
   LastManagerError,
@@ -28,6 +30,8 @@ import type { WorkspaceRole } from '@/lib/workspaces/roles';
 export interface ActionResult {
   ok: boolean;
   error?: string;
+  /** The typed refusal's code, when the caller draws a message of its own (MOTIR-6465). */
+  code?: string;
 }
 
 async function requireContext() {
@@ -142,24 +146,62 @@ export async function setMemberRoleAction(
       roleDefinitionId: roleDefinitionId ?? null,
     });
   } catch (err) {
-    if (err instanceof LastManagerError) return { ok: false, error: t('actions.lastManager') };
+    if (err instanceof LastManagerError) {
+      return { ok: false, error: t('actions.lastManager'), code: err.code };
+    }
     if (err instanceof WorkspaceRoleForbiddenError || err instanceof NotAMemberError) {
-      return { ok: false, error: t('actions.rolesManagerOnly') };
+      return { ok: false, error: t('actions.rolesManagerOnly'), code: err.code };
     }
     if (err instanceof OrgManagedWorkspaceRoleError) {
-      return { ok: false, error: t('actions.orgManagedRole') };
+      return { ok: false, error: t('actions.orgManagedRole'), code: err.code };
     }
     if (
       err instanceof WorkspaceMemberNotFoundError ||
       err instanceof RoleDefinitionNotFoundError ||
       err instanceof InvalidWorkspaceRoleError
     ) {
-      return { ok: false, error: t('actions.roleChangeFailed') };
+      return { ok: false, error: t('actions.roleChangeFailed'), code: err.code };
     }
     throw err;
   }
   revalidateWorkspaceSettingsSurfaces();
   return { ok: true };
+}
+
+/**
+ * Dismiss one row of the migration report (MOTIR-6465). Manager-only — the
+ * service asserts it; a refusal comes back as `{ ok: false, error }`.
+ */
+export async function dismissRoleMigrationEntryAction(entryId: string): Promise<ActionResult> {
+  const { userId, workspaceId } = await requireContext();
+  try {
+    await roleMigrationReportService.dismiss(workspaceId, userId, entryId);
+  } catch (err) {
+    if (err instanceof WorkspaceRoleForbiddenError || err instanceof NotAMemberError) {
+      return { ok: false, error: (await getErrorsTranslator())('actions.rolesManagerOnly') };
+    }
+    throw err;
+  }
+  revalidateWorkspaceSettingsSurfaces();
+  return { ok: true };
+}
+
+/** The next page of the migration report, for the notice's "Show more" (a READ). */
+export async function loadRoleMigrationPageAction(
+  cursor: string,
+): Promise<{ ok: true; page: RoleMigrationPageDTO } | { ok: false; error: string }> {
+  const { userId, workspaceId } = await requireContext();
+  try {
+    return {
+      ok: true,
+      page: await roleMigrationReportService.listOpen(workspaceId, userId, cursor),
+    };
+  } catch (err) {
+    if (err instanceof WorkspaceRoleForbiddenError || err instanceof NotAMemberError) {
+      return { ok: false, error: (await getErrorsTranslator())('actions.rolesManagerOnly') };
+    }
+    throw err;
+  }
 }
 
 export async function leaveWorkspaceAction(): Promise<ActionResult> {

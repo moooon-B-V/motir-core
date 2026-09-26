@@ -35,11 +35,21 @@ const listMembers = vi.fn();
 const getMemberRole = vi.fn();
 const getWorkspacePolicy = vi.fn();
 
+vi.mock('@/lib/services/roleMigrationReportService', () => ({
+  roleMigrationReportService: { firstPageForViewer: async () => null },
+}));
 vi.mock('@/lib/services/workspacesService', () => ({
   workspacesService: {
     getWorkspaceSummary: (...a: unknown[]) => getWorkspaceSummary(...a),
     listMembers: (...a: unknown[]) => listMembers(...a),
     getMemberRole: (...a: unknown[]) => getMemberRole(...a),
+    // The Members role column's context (MOTIR-6465) — inert here.
+    getMemberRoleContext: async () => ({
+      canManageRoles: false,
+      orgManagedUserIds: [],
+      organizationName: 'Acme',
+      customRoles: [],
+    }),
   },
 }));
 vi.mock('@/lib/services/twoFactorPolicyService', () => ({

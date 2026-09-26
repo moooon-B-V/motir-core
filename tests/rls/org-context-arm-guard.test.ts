@@ -302,6 +302,15 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       '(the workspace GUC is still bound) and by workspace_org_member_read (the actor is a ' +
       'Manager, so a member of the org in every case the check is reached).',
   },
+  'lib/services/workspacesService.ts#orgManagersOf': {
+    tables: ['organization', 'organization_membership'],
+    source: 'scan',
+    why:
+      "MOTIR-6465 — the Members page draws the org's Owner and Admins locked at Manager (design " +
+      "panel 6a) and names the org in their reason. Both reads are of the workspace's OWN " +
+      "organization, bound off the workspace row inside the caller's withWorkspaceContext: " +
+      'organization_active admits the org row, org_membership_visible_active_or_own the members.',
+  },
   'lib/services/workspacesService.ts#assertMayRemoveWorkspace': {
     tables: ['organization_membership'],
     source: 'hand',
