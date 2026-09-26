@@ -13,12 +13,17 @@ import {
   ApprovalGatePrimaryPendingError,
   ApprovalGateSupersededError,
   ApprovalGateStaleSubjectError,
+  ApprovalGateVerbNotOfferedError,
 } from '@/lib/approvalGates/errors';
 import { MergeChangeRequestError } from '@/lib/git/errors';
 import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { toGateRefusal, type GateRefusal } from '@/lib/approvalGates/refusals';
-import type { ApprovalGateDTO, ApproveAndMergeMemberOutcomeDTO } from '@/lib/dto/approvalGate';
+import type {
+  ApprovalGateDTO,
+  ApprovalGateRefusalVerdictDTO,
+  ApproveAndMergeMemberOutcomeDTO,
+} from '@/lib/dto/approvalGate';
 import { reportUnmappedActionRefusal } from '@/lib/actions/unmappedRefusal';
 
 // Server Action for the approval FRAME (Story MOTIR-4778 · Subtask MOTIR-4792),
@@ -105,12 +110,19 @@ export async function decideApprovalGateAction(input: {
   identifier: string;
   noteMd?: string | null;
   /**
+   * WHAT A DESIGN REFUSAL MEANT — `revise` or `re_plan` (MOTIR-6421; ADR §10d). The door
+   * requires it on a `request_changes` of a `design_result` gate and refuses it on every
+   * other kind and verb, so the action passes it through untouched.
+   */
+  refusalVerdict?: ApprovalGateRefusalVerdictDTO | null;
+  /**
    * The `stamp` the frame's read handed this reader (MOTIR-5234) — what they were
    * shown. REQUIRED: a press that cannot say what it saw has not rendered a gate.
    */
   stamp: string;
 }): Promise<DecideGateActionResult> {
   const { gateId, decision, identifier, noteMd, stamp } = input;
+  const refusalVerdict = input.refusalVerdict ?? null;
   const optionId = decision === 'choose' ? (input.optionId?.trim() ?? '') : null;
   const ctx = await requireContext();
   try {
@@ -122,7 +134,7 @@ export async function decideApprovalGateAction(input: {
       // the audit's strongest claim (ADR §6a: *"a human click must be
       // distinguishable from a programmatic call"*), so it is stated at the one
       // call site that actually knows it rather than defaulted in the door.
-      { gateId, decision, optionId, noteMd, source: 'ui', stamp },
+      { gateId, decision, optionId, noteMd, refusalVerdict, source: 'ui', stamp },
       ctx,
     );
     // The server half, on the action's own response. A REFUSAL revalidates
@@ -184,7 +196,10 @@ function refusalOf(err: unknown): GateRefusal | null {
     const moved = err instanceof ApprovalGateStaleSubjectError ? err.moved : null;
     // ⚠️ And the PRIMARY-PENDING refusal names WHICH question holds the merge (MOTIR-5785).
     const primary = err instanceof ApprovalGatePrimaryPendingError ? err.primary : null;
-    return toGateRefusal(err.tag, { decidedByLabel, supersedeCause, moved, primary });
+    // ⚠️ And the VERB-NOT-OFFERED refusal says which input was missing (MOTIR-6427), so a
+    // design band can answer a missing verdict under the verdict, not under the reason.
+    const reason = err instanceof ApprovalGateVerbNotOfferedError ? err.reason : null;
+    return toGateRefusal(err.tag, { decidedByLabel, supersedeCause, moved, primary, reason });
   }
   return null;
 }

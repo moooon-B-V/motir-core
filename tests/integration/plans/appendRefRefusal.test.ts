@@ -117,13 +117,19 @@ describe('an unresolvable temp-ref is refused where it is written', () => {
           op: 'add',
           proposedFields: { title: 'Child', kind: 'task' },
           parentRef: `${TEMP_REF_PREFIX}${parentId}`,
+        },
+        // The blocker ref rides on a SAME-LEVEL peer: a child blocked_by its own
+        // parent story is cross-level, refused since MOTIR-6367.
+        {
+          op: 'add',
+          proposedFields: { title: 'Peer', kind: 'story' },
           blockedByRefs: [`${TEMP_REF_PREFIX}${parentId}`],
         },
       ],
       fx.ctx,
     );
-    expect(second.items).toHaveLength(2);
-    expect(await proposals(plan.id)).toBe(2);
+    expect(second.items).toHaveLength(3);
+    expect(await proposals(plan.id)).toBe(3);
   });
 
   it('leaves a REAL work-item id unaffected in both fields', async () => {
@@ -141,12 +147,18 @@ describe('an unresolvable temp-ref is refused where it is written', () => {
           op: 'add',
           proposedFields: { title: 'Under a real parent', kind: 'task' },
           parentRef: parent.id,
+        },
+        // Same-level peer for the blocker field (MOTIR-6367 refuses a leaf
+        // blocked_by a story).
+        {
+          op: 'add',
+          proposedFields: { title: 'Peer of the real parent', kind: 'story' },
           blockedByRefs: [parent.id],
         },
       ],
       fx.ctx,
     );
-    expect(await proposals(plan.id)).toBe(1);
+    expect(await proposals(plan.id)).toBe(2);
   });
 
   it('a batch carrying no temp-ref at all is untouched by the check', async () => {

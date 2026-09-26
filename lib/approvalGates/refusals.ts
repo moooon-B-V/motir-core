@@ -75,7 +75,10 @@ export type GateRefusal =
   | { tag: 'APPROVAL_GATE_DECISION_UNRESOLVABLE' }
   // A verb the gate does not offer (MOTIR-5893). The choice port only offers the
   // options it parsed, so a reader meets this only from a stale bundle or a crafted call.
-  | { tag: 'APPROVAL_GATE_VERB_NOT_OFFERED' }
+  // `reason` is carried ONLY for the three a refusal band answers in place — a missing
+  // reason, a missing verdict, a verdict where none is offered (MOTIR-6075, MOTIR-6427);
+  // every other reason keeps the bare shape.
+  | { tag: 'APPROVAL_GATE_VERB_NOT_OFFERED'; reason?: RefusalBandReason }
   | {
       tag: 'APPROVAL_GATE_PRIMARY_PENDING';
       /**
@@ -154,6 +157,17 @@ export const REFUSAL_TAGS_ARE_TOTAL: UnhandledGateRefusalTags extends never ? tr
  * code becomes `UNEXPECTED` instead of being rendered raw, because a server
  * string on a decision surface is the one thing this union exists to prevent.
  */
+/** The door's `VerbNotOfferedReason`s a refusal band answers itself (MOTIR-6427). */
+export type RefusalBandReason =
+  | 'request_changes_needs_a_note'
+  | 'refusal_verdict_required'
+  | 'refusal_verdict_not_offered';
+const REFUSAL_BAND_REASONS: ReadonlySet<string> = new Set<RefusalBandReason>([
+  'request_changes_needs_a_note',
+  'refusal_verdict_required',
+  'refusal_verdict_not_offered',
+]);
+
 export function toGateRefusal(
   code: unknown,
   extra?: {
@@ -192,12 +206,15 @@ export function toGateRefusal(
     case 'APPROVAL_GATE_NOT_FOUND':
     case 'APPROVAL_GATE_KIND_UNREGISTERED':
     case 'APPROVAL_GATE_DECISION_UNRESOLVABLE':
-    case 'APPROVAL_GATE_VERB_NOT_OFFERED':
     case 'APPROVAL_GATE_ALREADY_AWAITING':
     case 'APPROVAL_GATE_DECIDED_IMMUTABLE':
     case 'APPROVAL_GATE_SYNCED_ACTOR_MISMATCH':
     case 'APPROVAL_GATE_HAS_NO_CARD':
       return { tag: code };
+    case 'APPROVAL_GATE_VERB_NOT_OFFERED':
+      return extra?.reason && REFUSAL_BAND_REASONS.has(extra.reason)
+        ? { tag: code, reason: extra.reason as RefusalBandReason }
+        : { tag: code };
     // Only the conflict carries where it was found and which members (MOTIR-5915) — the
     // tags above keep their bare shape.
     case 'MERGE_CONFLICT':

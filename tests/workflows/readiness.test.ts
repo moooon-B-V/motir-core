@@ -6,6 +6,7 @@ import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { seedBlockedBy } from '../helpers/seedBlockedBy';
 import { truncateAuthTables } from '../helpers/db';
 
 // Readiness against per-project terminal sets (Story 2.2 · Subtask 2.2.6,
@@ -195,10 +196,10 @@ describe('ready cascade through the ancestor chain (Subtask 7.0.13)', () => {
       { projectId: fx.projectId, kind: 'task', title: 'BLK' },
       fx.ctx,
     );
-    await workItemsService.linkWorkItems(
-      { fromId, toId: blocker.id, kind: 'is_blocked_by' },
-      fx.ctx,
-    );
+    // Seeded below the doors: a root task is on another LEVEL (depth) than most
+    // items this helper gates, which the link door refuses (MOTIR-6369/6411).
+    // The cases are about the readiness cascade, not about the edge.
+    await seedBlockedBy({ workspaceId: fx.ctx.workspaceId, ctx: fx.ctx }, fromId, blocker.id);
     return blocker;
   }
 
@@ -324,10 +325,10 @@ describe('getIssueDetail readiness.blockedByAncestor — the cascade cause (Subt
       { projectId: fx.projectId, kind: 'task', title: 'BLK' },
       fx.ctx,
     );
-    await workItemsService.linkWorkItems(
-      { fromId, toId: blocker.id, kind: 'is_blocked_by' },
-      fx.ctx,
-    );
+    // Seeded below the doors: a root task is on another LEVEL (depth) than most
+    // items this helper gates, which the link door refuses (MOTIR-6369/6411).
+    // The cases are about the readiness cascade, not about the edge.
+    await seedBlockedBy({ workspaceId: fx.ctx.workspaceId, ctx: fx.ctx }, fromId, blocker.id);
     return blocker;
   }
 
@@ -494,10 +495,10 @@ describe('getReadinessVerdict — the banner verdict, RESOLVED (MOTIR-4496)', ()
       { projectId: fx.projectId, kind: 'task', title },
       fx.ctx,
     );
-    await workItemsService.linkWorkItems(
-      { fromId, toId: blocker.id, kind: 'is_blocked_by' },
-      fx.ctx,
-    );
+    // Seeded below the doors: a root task is on another LEVEL (depth) than most
+    // items this helper gates, which the link door refuses (MOTIR-6369/6411).
+    // The cases are about the readiness cascade, not about the edge.
+    await seedBlockedBy({ workspaceId: fx.ctx.workspaceId, ctx: fx.ctx }, fromId, blocker.id);
     return blocker;
   }
 

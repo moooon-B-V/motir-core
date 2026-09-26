@@ -68,8 +68,12 @@ describe('pre-commit plan validation — engine + endpoints + projection==materi
     // ── Seed: a real subtree + an active sprint + out-of-subtree blockers ────────
     const story = await mk(fx, 'Target story', 'story'); // the validate-plan target
     await mk(fx, 'Existing child', 'subtask', story.id);
-    const outsideNotDone = await mk(fx, 'Outside not-done', 'task'); // gates under loose+tight
-    const outsideDone = await mk(fx, 'Outside done', 'task'); // gates only under tight
+    // The outside blockers sit at their dependents' depths under a root of their
+    // own — A is one level down, B two — so neither edge is cross-level (MOTIR-6411).
+    const elsewhere = await mk(fx, 'Elsewhere', 'story');
+    const elsewhereTask = await mk(fx, 'Elsewhere task', 'task', elsewhere.id);
+    const outsideNotDone = await mk(fx, 'Outside not-done', 'subtask', elsewhereTask.id); // gates under loose+tight
+    const outsideDone = await mk(fx, 'Outside done', 'task', elsewhere.id); // gates only under tight
     await markDone(outsideDone.id);
 
     const sprintId = (await sprintsService.createSprint(fx.projectId, { name: 'S1' }, fx.ctx)).id;

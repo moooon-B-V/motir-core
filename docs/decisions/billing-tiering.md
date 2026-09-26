@@ -465,8 +465,11 @@ The shape locked above became, in practice:
 
 - **Stripe account:** sandbox, legal entity **moooon B.V.** (NL), business type
   _vennootschap met rechtspersoonlijkheid_ (B.V.), MCC SaaS, public business name
-  **Motir**, statement descriptor **MOTIR**, brand color **#5645d4** (the Motir
-  primary purple from `globals.css`), business website `https://motir.co`. Logo
+  **Motir**, statement descriptor **MOTIR**, brand color **#1a1d21** and accent
+  color **#155bc4** (the Motir palette's `--el-accent` ink and `--el-link` blue,
+  `design/brand/design-notes.md` §10 — superseding the old purple `#5645d4`; the
+  dashboard itself is set by the Stripe branding card, MOTIR-6479), business
+  website `https://motir.co`. Logo
   deferred (no asset yet; placeholder-free is cleaner than throwaway-placeholder).
 - **Catalog:** 3 Products / 11 Prices as originally provisioned per the §3 table
   (the 2026-06-23 amendment archives `starter_pool_{monthly,annual}` → **9 active**;

@@ -49,6 +49,8 @@ afterEach(async () => {
   // it is awaited here rather than reported — see `serverWork.ts` (MOTIR-6324).
   // Only the handler's promise is awaited: whatever a handler starts and does
   // not await itself still outlives this line and is still reported below.
+  // The wait is bounded: a request that never settles fails THIS test by name
+  // and is dropped, rather than timing out every later test's hook (MOTIR-6496).
   const { settleServerWork } = await import('./serverWork');
   await settleServerWork();
 

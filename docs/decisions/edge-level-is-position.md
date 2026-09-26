@@ -55,10 +55,36 @@ The cases the story needs answered, each by one walk:
 | 2b · the same, S under another epic E2    | X `blocked_by` Y                                               | **yes** — depth 3 / 3 under the root     | T → S and E1 → E2                                                                              |
 | 3 · subtask X under task T under story S1 | X `blocked_by` subtask Y under story S2 (same epic)            | **no** — depth 3 / 2                     | — the need is T `blocked_by` Y (depth 2 / 2), or X is re-filed                                 |
 | 4 · a root bug B in a folder              | B `blocked_by` subtask Y                                       | **no** — depth 1 / 3 under the root      | — per `log-bug.md` an edged bug is filed in Y's runnable container, where B and Y are siblings |
-| 4b · a root task R holding subtasks       | subtask X under R `blocked_by` subtask Y under story S under E | **no** — depth 2 / 3 under the root      | — file R under E (then it is case 2), or R `blocked_by` E                                      |
+| 4b · a root task R holding subtasks       | subtask X under R `blocked_by` subtask Y under story S under E | **no** — depth 2 / 3 under the root      | — file R under E (then it is case 2)                                                           |
+| 5 · a root task R (Amendment 1)           | R `blocked_by` epic E                                          | **no** — an epic pairs only with an epic | — file R under E, or wire it to the item under E it really waits on                            |
+
+Case 4b's remedy once also offered _"R `blocked_by` E"_; Amendment 1 below refuses
+that edge, so the remedy is to file R under E.
 
 **Kind still bounds what can exist** (an epic has no parent, a subtask holds
 nothing), but it no longer decides an edge.
+
+## Amendment 1 (2026-09-26, the user)
+
+**An epic is blocked only by another epic.** For epics there is no "same level" —
+there is the same KIND. The epic tier is decided by kind, ahead of any depth: an
+edge with an epic at either end is legal exactly when both ends are epics. The
+project root is not a common ancestor that makes an epic the peer of a root task,
+bug or story, even though both sit one step below it. **Under an epic, the position
+rule above stands unchanged.**
+
+| edge                                  | legal?                                          |
+| ------------------------------------- | ----------------------------------------------- |
+| epic `blocked_by` epic                | **yes**                                         |
+| epic `blocked_by` a root task         | **no** — an epic is blocked only by an epic     |
+| root task or bug `blocked_by` an epic | **no** — the same rule, read from the other end |
+| root bug `blocked_by` a root task     | **yes** — neither end is an epic; depth 0 / 0   |
+
+In motir-core the check sits in `isCrossLevelEdge` (`lib/workItems/edgeLevel.ts`),
+ahead of the depth comparison, so the plan gate (`cross_level`), `link_work_items`
+(`CROSS_LEVEL_LINK`), the `cross-level-edge` advisory and `invalidEdges` all apply
+it. Each end's kind comes from the reads those callers already make. Walking up
+through `invalidEdges`' parents always stops at an epic ↔ epic pair.
 
 ## Options rejected
 

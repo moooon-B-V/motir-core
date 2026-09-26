@@ -8,6 +8,7 @@ import type { WorkItemKindDto } from '@/lib/dto/workItems';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { seedBlockedBy } from '../../helpers/seedBlockedBy';
 
 // FOLDERS ON THE ROADMAP — the read (Bug MOTIR-5710 · MOTIR-5738,
 // `design/roadmap/design-notes.md` § *A FOLDER on the canvas*, decisions 1, 3, 4,
@@ -304,15 +305,12 @@ describe('with the folder option — a FILED blocker is off the root level', () 
 describe('an OFF-level blocker names its folder (MOTIR-5739)', () => {
   it('a filed blocker carries its folder path, root first; an unfiled one carries null', async () => {
     const t = await tree();
-    await workItemsService.linkWorkItems(
-      { fromId: t.e1.id, toId: t.deepBug.id, kind: 'is_blocked_by' },
-      fx.ctx,
-    );
+    // Seeded below the doors: this block is about how the roadmap RENDERS an
+    // off-level blocker, and some of these edges join two depths — which the
+    // link door refuses (MOTIR-6369 / 6411) while the tree still carries them.
+    await seedBlockedBy(fx, t.e1.id, t.deepBug.id);
     const road = await make('story', 'Road story', t.e2.id);
-    await workItemsService.linkWorkItems(
-      { fromId: t.e1.id, toId: road.id, kind: 'is_blocked_by' },
-      fx.ctx,
-    );
+    await seedBlockedBy(fx, t.e1.id, road.id);
 
     // Project-wide root, no folder option — the path is a fact about the blocker.
     const root = await read(null);
@@ -329,10 +327,10 @@ describe('an OFF-level blocker names its folder (MOTIR-5739)', () => {
   it('a child of a filed epic carries the epic’s folder path', async () => {
     const t = await tree();
     const underFiled = await make('story', 'Under the filed epic', t.filedEpic.id);
-    await workItemsService.linkWorkItems(
-      { fromId: t.e1.id, toId: underFiled.id, kind: 'is_blocked_by' },
-      fx.ctx,
-    );
+    // Seeded below the doors: this block is about how the roadmap RENDERS an
+    // off-level blocker, and some of these edges join two depths — which the
+    // link door refuses (MOTIR-6369 / 6411) while the tree still carries them.
+    await seedBlockedBy(fx, t.e1.id, underFiled.id);
 
     const root = await read(null, { folders: true });
 
@@ -341,11 +339,11 @@ describe('an OFF-level blocker names its folder (MOTIR-5739)', () => {
 
   it('resolves every stub’s folder in a bounded number of reads, whatever the stub count', async () => {
     const t = await tree();
+    // Seeded below the doors: this block is about how the roadmap RENDERS an
+    // off-level blocker, and some of these edges join two depths — which the
+    // link door refuses (MOTIR-6369 / 6411) while the tree still carries them.
     for (const id of [t.filedBug.id, t.filedTask.id, t.deepBug.id]) {
-      await workItemsService.linkWorkItems(
-        { fromId: t.e1.id, toId: id, kind: 'is_blocked_by' },
-        fx.ctx,
-      );
+      await seedBlockedBy(fx, t.e1.id, id);
     }
     const paths = vi.spyOn(folderRepository, 'findPathsByIds');
 

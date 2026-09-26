@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { commentsService } from '@/lib/services/commentsService';
 import { monitorIssueService } from '@/lib/services/monitorIssueService';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { projectedWorkItem } from '@/lib/services/planProjectionService';
@@ -214,6 +215,11 @@ export async function runGetWorkItem(
   // Errors section renders — so the two surfaces cannot disagree, and neither
   // calls the monitor. `[]` is the ordinary answer for a work item with no link.
   const errors = await monitorIssueService.listForWorkItem(detail.item.id, ctx);
+  // The LATEST REFUSAL (Story MOTIR-6070 · MOTIR-6422) — the SAME read the dispatched
+  // prompt's CHANGES REQUESTED section renders, so a person following the runbook and
+  // a dispatched agent are handed the same reason for the same card. `null` unless
+  // the card's most recently decided gate, of any kind, is `changes_requested`.
+  const latestRefusal = await approvalGatesService.latestRefusalFor(detail.item.id, ctx);
   const structured = {
     ...publishedDetail,
     folderId: detail.folderId,
@@ -224,6 +230,7 @@ export async function runGetWorkItem(
     ),
     deliveries,
     errors,
+    latestRefusal,
   };
   return toolOk(
     summarize(detail, item.commentCount, folderPath),
@@ -251,6 +258,14 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
         'facts and the latest event’s EVIDENCE Motir has stored — exception, stack frames, tags, ' +
         'request line — and `evidence.state` (`present`, `no_exception` or `never_read`, plus ' +
         '`stale`). It is read from Motir’s store, never live from the monitor; `[]` means none.' +
+        ' A committed item also carries `latestRefusal`: when the item’s most recently DECIDED ' +
+        'approval gate, of ANY kind, is `changes_requested`, it is `{ gateId, kind, noteMd, ' +
+        'decidedByLabel, decidedAt, decisionSource, refusalVerdict, subjectVersion }` — the ' +
+        'reason the last attempt was sent back (verbatim; `noteMd` null only on a GitHub review ' +
+        'with no body), who refused and when, the refused version, and the verdict when set. It ' +
+        'is `null` otherwise, including when a later approval answered it. It is the same ' +
+        'refusal the dispatched prompt’s CHANGES REQUESTED section quotes: address that reason ' +
+        'in the next attempt.' +
         ' Pass `planId` to read the card as it would stand once that plan materializes — the ' +
         'live tree ⊕ the plan’s proposals, so you can see what you proposed without merging ' +
         '`get_plan` against this call yourself. ' +

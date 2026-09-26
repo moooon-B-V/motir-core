@@ -64,6 +64,7 @@ const DECIDED: ApprovalRecordDecidedRowDto = {
   // The body has since changed — the row must not read the pick from it.
   subject: { ...SUBJECT, optionCount: 2, question: 'Something else entirely?' },
   confirmedRecord: null,
+  refusalVerdict: null,
   refusalReason: null,
   chosenOption: {
     optionId: 'managed-object-storage',

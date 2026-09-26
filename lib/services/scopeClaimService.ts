@@ -250,7 +250,11 @@ async function resolveWorkItemScope(
 
   // VALIDATE FIRST — before the shape read and long before any lock.
   const validity = await workItemsService.validateWorkItem(projectId, identifier, ctx);
-  if (!validity.valid) {
+  // FINISHABILITY ONLY — `blockers`, never `valid` (MOTIR-6370). `valid` also
+  // turns false on an uncovered cross-parent edge (`invalidEdges`), and a scope
+  // with one is still runnable: its pull request is where the missing parent
+  // edge gets added. Gating the claim on it would refuse the run that repairs it.
+  if (validity.blockers.length > 0) {
     return {
       ok: false,
       scope,

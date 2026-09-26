@@ -247,7 +247,12 @@ describe('claimScope — an UNFINISHABLE scope is refused before any lock', () =
     const { story, children } = await makeStoryScope(fx, 2);
     // A blocker OUTSIDE the subtree, not done: the story cannot be finished by a
     // run that owns only the subtree.
-    const outsider = await makeItem(fx, 'work outside the scope', { kind: 'task' });
+    // One level down under a root of its own — the child's depth (MOTIR-6411).
+    const elsewhere = await makeItem(fx, 'elsewhere', { kind: 'story' });
+    const outsider = await makeItem(fx, 'work outside the scope', {
+      kind: 'task',
+      parentId: elsewhere.id,
+    });
     await workItemsService.linkWorkItems(
       { fromId: children[0]!.id, toId: outsider.id, kind: 'is_blocked_by' },
       fx.ctx,

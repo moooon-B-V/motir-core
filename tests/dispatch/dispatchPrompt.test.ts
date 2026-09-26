@@ -115,8 +115,9 @@ describe('dispatchPromptService.getDispatchPrompt — over real state', () => {
       { projectId: fx.projectId, kind: 'story', title: 'Dispatch prompt story' },
       fx.ctx,
     );
+    // The item's sibling — same depth, so the edge is same-level (MOTIR-6411).
     const blocker = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Landed first' },
+      { projectId: fx.projectId, kind: 'task', title: 'Landed first', parentId: parent.id },
       fx.ctx,
     );
     const item = await workItemsService.createWorkItem(

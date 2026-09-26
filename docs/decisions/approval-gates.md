@@ -1405,6 +1405,8 @@ nothing** — the revise loop is Story 9.2's (§5).
 > and moves nothing. _Moves nothing_ above is therefore true only of Re-plan.
 > _It re-dispatches nothing_ still holds: the next run is whichever picks the card
 > up, and making it automatic is still 9.2's (§10g).
+>
+> **Amended for `design_result` by [`design-refusal-verdict.md`](design-refusal-verdict.md) (MOTIR-6419).**
 
 > ### §3 — AMENDMENT (MOTIR-4911, 2026-09-08): approval writes `done` ONLY when nothing will ever merge
 >
@@ -4421,6 +4423,8 @@ amendment rule 6 supersedes every OTHER `awaiting` gate on the card with cause
 `pulled_back` (the approve-to-merge gate included). That is correct: the
 commits are about to change.
 
+**Amended for `design_result` by [`design-refusal-verdict.md`](design-refusal-verdict.md) (MOTIR-6419).**
+
 #### 10d. The verdict is STORED on the decided gate — in a column of its own, NOT in `outcomeRef` — rung 2, DEVIATING from the card's recommendation
 
 The card recommended `outcomeRef`, beside `chosenOption`'s precedent, _"unless
@@ -4442,6 +4446,9 @@ it.
   that offers no verdict, and on every gate decided before this section.
 - **`outcomeRef` is unchanged**: it carries `statusWritten` — To do's key on a
   Revise, NULL on a Re-plan.
+
+  **Amended for `design_result` by [`design-refusal-verdict.md`](design-refusal-verdict.md) (MOTIR-6419).**
+
 - **The decide door takes the verdict** as `refusalVerdict` beside `noteMd`, on
   the route, the server action and the service. The door refuses a verdict on a
   kind or case that offers none, and refuses a verdict-offering refusal that
@@ -4471,6 +4478,9 @@ publish supersedes nothing that was approved.
   on the card the table below names as the anchor, in the `replan` mode the
   launcher already has (`lib/planning/launcher.ts`, `PlanningLaunchContext`
   gains `{ kind: 'refused-gate'; gateId }`).
+
+  **Amended for `design_result` by [`design-refusal-verdict.md`](design-refusal-verdict.md) (MOTIR-6419).**
+
 - **It is addressed by the GATE ID, never by the reason's text in a URL.** The
   surface reads the decided gate server-side and composes the first turn from
   the row: the card's key and title, the kind, what was refused, and the reason
@@ -4517,6 +4527,8 @@ above this section is unchanged.
 | `decision_choice` · an option chosen                         | — (not a refusal; its note stays optional)                                  | none                                       | `done` (unchanged, §1's MOTIR-5887 amendment point 6)                                                                                                                                        | **offered** — anchored on the choice card, seeded to plan `## What this choice gates` with the chosen option                             | MOTIR-6069                   |
 | `pull_request_approval`                                      | Request changes                                                             | none                                       | none (unchanged)                                                                                                                                                                             | **none** — the author reads the reason on the card and the pull request, as today                                                        | MOTIR-6067 (the reason only) |
 | `plan_approval` (MOTIR-6012)                                 | ~~— no refusal verb~~ **Decline**, reason OPTIONAL — §11.10 amends this row | —                                          | —                                                                                                                                                                                            | —                                                                                                                                        | MOTIR-6035                   |
+
+**Amended for `design_result` by [`design-refusal-verdict.md`](design-refusal-verdict.md) (MOTIR-6419)** — the `design_result` row.
 
 **Four notes on the table:**
 

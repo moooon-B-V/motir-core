@@ -521,15 +521,24 @@ jobs:
             # builder stage is `COPY . .` — it runs `pnpm install
             # --frozen-lockfile` against every workspace manifest and packs the
             # CLI. So the image's inputs are the whole packages/ tree, the
-            # lockfile, the root manifests and prisma/ — NOT just
-            # packages/cli/sandbox/**. Gating on the sandbox folder alone would
-            # skip the lane on exactly the changes most able to break it.
+            # lockfile and the root manifests — NOT just packages/cli/sandbox/**.
+            # Gating on the sandbox folder alone would skip the lane on exactly
+            # the changes most able to break it.
             # (`infra/ci-runner` is the other image and IS self-contained:
             # `context: infra/ci-runner`, one COPY of its own entrypoint.)
+            #
+            # ⚠️ `prisma/` IS IN THE CONTEXT AND IS NOT AN INPUT (MOTIR-6498).
+            # Being copied is not being read: the builder installs with
+            # `--ignore-scripts`, which skips the root postinstall — the only
+            # place `prisma generate` runs — and `@motir/cli` depends on nothing
+            # prisma. Counting `prisma/*` here made every migration PR build ten
+            # images its diff cannot affect. The test below pins BOTH of those
+            # preconditions, so if either stops holding it goes red and says
+            # `prisma/*` has to come back into this arm.
             # `tests/ci-changed-paths-gate.test.ts` re-derives this from the two
             # image workflows so the list cannot quietly go stale.
             case "$f" in
-              packages/*|prisma/*|infra/ci-runner/*) images=true ;;
+              packages/*|infra/ci-runner/*) images=true ;;
               pnpm-lock.yaml|pnpm-workspace.yaml|package.json|.npmrc) images=true ;;
               Dockerfile|.dockerignore) images=true ;;
               .github/workflows/sandbox-images.yml|.github/workflows/runner-image.yml) images=true ;;

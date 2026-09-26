@@ -16,12 +16,29 @@ export async function makeWorkWaitOn(
   opts: { title?: string; parentId?: string; kind?: 'task' | 'subtask' } = {},
 ): Promise<{ id: string; key: string }> {
   const { workItemsService } = await import('@/lib/services/workItemsService');
+  // Placed as the design card's SIBLING unless the caller names a parent: a
+  // `blocked_by` joins two items at the same depth below their nearest common
+  // ancestor (MOTIR-6387 / 6411), and a design card usually hangs under a story,
+  // so a root task waiting on it would be cross-level.
+  let parentId = opts.parentId;
+  let kind = opts.kind;
+  if (!parentId) {
+    const { adminDb } = await import('./adminDb');
+    const design = await adminDb.workItem.findUniqueOrThrow({
+      where: { id: designItemId },
+      select: { parent: { select: { id: true, kind: true } } },
+    });
+    if (design.parent) {
+      parentId = design.parent.id;
+      kind ??= design.parent.kind === 'task' || design.parent.kind === 'bug' ? 'subtask' : 'task';
+    }
+  }
   const dependent = await workItemsService.createWorkItem(
     {
       projectId: fx.projectId,
-      kind: opts.kind ?? 'task',
+      kind: kind ?? 'task',
       title: opts.title ?? 'Build to the design',
-      ...(opts.parentId ? { parentId: opts.parentId } : {}),
+      ...(parentId ? { parentId } : {}),
     },
     fx.ctx,
   );

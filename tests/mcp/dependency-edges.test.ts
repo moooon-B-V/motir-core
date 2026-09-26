@@ -603,6 +603,9 @@ describe('the `dependencies` block on get_work_item’s CHILDREN (MOTIR-1848)', 
       // The work item's monitor links (MOTIR-5981): a tool-only read, like
       // `deliveries`, that the aggregate DTO does not carry.
       errors: _errors,
+      // The card's latest Motir-pressed refusal and its verdict (MOTIR-6422): a
+      // tool-only read handed to the next run, which the aggregate DTO does not carry.
+      latestRefusal: _latestRefusal,
       ...restOfTool
     } = structured;
     const {

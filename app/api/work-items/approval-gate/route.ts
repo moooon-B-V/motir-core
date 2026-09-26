@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getActiveProject } from '@/lib/projects';
 import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
@@ -333,15 +334,35 @@ export async function GET(req: Request): Promise<Response> {
     // (Story MOTIR-5238 · Subtask MOTIR-5243). Absent, the answer is empty and
     // this route behaves exactly as it did.
     const since = params.get('since');
-    const [read, held] = await Promise.all([
+    const [read, held, statuses, parent] = await Promise.all([
       approvalGatesService.getForWorkItem({ workItemId: item.id, kind, since }, ctx),
       // WHETHER A REFUSED DECISION'S RECORD OFFERS RE-PLAN WITH AI (MOTIR-6211): the item
       // page's own `canEdit` (`work_item:edit`) and a card that is not archived — exactly
       // what `WorkItemPlanEntrance` is drawn under, so the two doors cannot disagree.
       projectAccessService.getPermissions(item.projectId, ctx),
+      // THE HEADER'S STATUS CHIP (MOTIR-6427; design panel 5b) — labelled from the project's
+      // own workflow, and repainted from what a press wrote.
+      workflowsService.listStatusesByProject(item.projectId, ctx.workspaceId),
+      // WHERE A DESIGN'S RE-PLAN OPENS (MOTIR-6427; §10h) — the parent, which the ask and the
+      // door name. Only a design anchors there (`refusalSeedAnchorsOnParent`).
+      kind === 'design_result' && item.parentId
+        ? workItemsService.getWorkItem(item.parentId, ctx)
+        : Promise.resolve(null),
     ]);
     const body: ApprovalGateOverlayReadDTO = {
-      workItem: { id: item.id, identifier: item.identifier, title: item.title },
+      workItem: {
+        id: item.id,
+        identifier: item.identifier,
+        title: item.title,
+        status: item.status,
+        parentIdentifier: parent?.identifier ?? null,
+      },
+      statuses: statuses.map((s) => ({
+        key: s.key,
+        label: s.label,
+        category: s.category,
+        isInitial: s.isInitial,
+      })),
       gate: read.gate,
       canDecide: read.canDecide,
       canReplan: held.has('work_item:edit') && item.archivedAt === null,

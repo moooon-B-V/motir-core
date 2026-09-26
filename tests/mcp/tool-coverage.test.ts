@@ -66,8 +66,9 @@ describe('MCP tool branch coverage', () => {
       { projectId: fx.projectId, kind: 'story', title: 'Parent story' },
       fx.ctx,
     );
+    // The child's sibling — same depth, so the edge is same-level (MOTIR-6411).
     const blocker = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Blocker' },
+      { projectId: fx.projectId, kind: 'task', title: 'Blocker', parentId: story.id },
       fx.ctx,
     );
     const child = await workItemsService.createWorkItem(

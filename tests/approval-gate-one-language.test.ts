@@ -317,6 +317,18 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       writes: 'superseded',
       callers: ['lib/services/workItemsService.ts'],
     },
+    // Story MOTIR-6070 · MOTIR-6423 (`docs/decisions/design-refusal-verdict.md` §2): a
+    // refusal that SENDS THE WORK BACK to To do withdraws the card's OTHER awaiting
+    // questions as `pulled_back` — the pull-back rule's own product-written `superseded`,
+    // no actor, no note, no decision. A sibling of the method above, because it runs
+    // INSIDE the decide door before the deciding write and must EXCLUDE the gate being
+    // decided (still `awaiting` at that moment). Its one caller is the shared gate-owned
+    // return to To do; the refusal itself is still recorded only by the door.
+    {
+      method: 'supersedeOtherAwaitingByWorkItem',
+      writes: 'superseded',
+      callers: ['lib/approvalGates/returnToTodo.ts'],
+    },
     // Story MOTIR-6012 (ADR `approval-gates.md` §11.7): the CARD-LESS plan gate's raise
     // and supersede, keyed on `(subjectId, kind)` because a plan gate has no work item.
     // Product-written questions and withdrawals, never decisions — the plan's own

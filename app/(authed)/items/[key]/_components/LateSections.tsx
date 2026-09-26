@@ -252,6 +252,7 @@ export async function LateUpperSections({
   deliveries,
   statusCategory,
   canReplan = false,
+  parentIdentifier = null,
 }: LateProps & {
   /** The session's user — only to say whether the design gate is ROUTED to the
    *  reader (the band's sentence, MOTIR-5229). Authority stays `canDecide`. */
@@ -263,6 +264,9 @@ export async function LateUpperSections({
    *  card is not archived. A refused decision's record offers Re-plan with AI when true
    *  (Story MOTIR-6068 · MOTIR-6211). Omitted, no door. */
   canReplan?: boolean;
+  /** The card's PARENT's key — where a design's Re-plan opens the planner (§10h;
+   *  MOTIR-6427). Null for a parentless card, which anchors on itself. */
+  parentIdentifier?: string | null;
 }) {
   const r = await reads;
   const [tGithub, tAcceptance, tDesignResult, tRuns, tChoice, tConfirm] = await Promise.all([
@@ -382,6 +386,12 @@ export async function LateUpperSections({
             decisionAnchor={developmentAnchors}
           >
             {canEdit ? <LinkPullRequestForm /> : null}
+            {/* A DESIGN THAT LEADS THIS BLOCK (Workflow B) is decided in the overlay too, and
+                its decision moves the status rail — To do when it is sent back (MOTIR-6427).
+                The design section's own bridge is not mounted on such a card, so it is here. */}
+            {designInDevelopment && r.designGate.gate ? (
+              <DecidedGateStatusBridge gateId={r.designGate.gate.id} />
+            ) : null}
             <DevelopmentSectionBody
               pullRequests={r.pullRequests}
               itemIdentifier={itemIdentifier}
@@ -569,6 +579,10 @@ export async function LateUpperSections({
             routedToViewer={r.designGate.gate?.routedToId === currentUserId}
             subject={r.designGate.subject}
             itemIdentifier={itemIdentifier}
+            // A design sent back with Re-plan keeps the door on its record, and the door
+            // opens the planner on the card's PARENT (§10h; MOTIR-6427).
+            canReplan={canReplan}
+            replanKey={parentIdentifier ?? itemIdentifier}
           />
         </ContentSectionCard>
       ) : null}

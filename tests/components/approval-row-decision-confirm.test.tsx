@@ -74,6 +74,7 @@ const CONFIRMED: ApprovalRecordDecidedRowDto = {
     createdAt: new Date().toISOString(),
   },
   refusalReason: null,
+  refusalVerdict: null,
 };
 
 describe('a WAITING decision row', () => {

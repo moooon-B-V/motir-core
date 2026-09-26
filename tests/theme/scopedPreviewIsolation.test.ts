@@ -195,11 +195,11 @@ describe('the completeness rules the two axes need — and why they differ', () 
     /*
      * The failure this forbids: a later palette overrides a token the base
      * block does not restate, and that ONE token leaks from the ancestor into a
-     * scoped `motir` tile. Nothing else would notice.
+     * scoped `amethyst` tile. Nothing else would notice.
      */
     const per = blocksFor('data-palette');
     const union = new Set([...per.values()].flatMap((s) => [...s]));
-    const base = per.get('motir');
+    const base = per.get('amethyst');
     expect(base, 'the base palette must declare a block of its own').toBeDefined();
     expect([...union].filter((t) => !base?.has(t)).sort()).toEqual([]);
   });
@@ -209,7 +209,7 @@ describe('the completeness rules the two axes need — and why they differ', () 
    *
    * The base palette's scope block is a hand-kept COPY: every declaration in it
    * restates what the Tier-0 `@theme` / Tier-3 base layer already says, so a
-   * nested `motir` tile can reach those values without inheriting its
+   * nested `amethyst` tile can reach those values without inheriting its
    * ancestor's. `theme.css` told its next reader the duplication was guarded —
    * "asserts each declaration here equals the value the base layer declares for
    * that token, so a change to `@theme` that is not mirrored here fails rather
@@ -231,10 +231,10 @@ describe('the completeness rules the two axes need — and why they differ', () 
       const selectors =
         theme === 'dark'
           ? [
-              "[data-theme='dark'] [data-appearance-scope][data-palette='motir']:not([data-theme])",
-              "[data-appearance-scope][data-palette='motir'][data-theme='dark']",
+              "[data-theme='dark'] [data-appearance-scope][data-palette='amethyst']:not([data-theme])",
+              "[data-appearance-scope][data-palette='amethyst'][data-theme='dark']",
             ]
-          : ["[data-appearance-scope][data-palette='motir']"];
+          : ["[data-appearance-scope][data-palette='amethyst']"];
       const block = rules.find((rule) =>
         rule.selectors.some((selector) => selectors.includes(selector.trim())),
       );

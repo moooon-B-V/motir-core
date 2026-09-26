@@ -48,7 +48,14 @@ const NEWER_COMMIT = 'fffffff';
 
 function read(over: Partial<ApprovalGateOverlayReadDTO> = {}): ApprovalGateOverlayReadDTO {
   return {
-    workItem: { id: 'wi-1', identifier: 'MOTIR-5147', title: 'Design — the row' },
+    workItem: {
+      id: 'wi-1',
+      identifier: 'MOTIR-5147',
+      title: 'Design — the row',
+      status: 'in_review',
+      parentIdentifier: null,
+    },
+    statuses: [],
     gate: {
       id: 'gate-1',
       workItemId: 'wi-1',

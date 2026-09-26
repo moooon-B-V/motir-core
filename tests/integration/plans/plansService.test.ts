@@ -212,8 +212,23 @@ describe('plansService — lifecycle + proposals', () => {
 describe('plansService.approvePlan — materialize per op', () => {
   it('materializes an add: a new dispatchable WorkItem, intra-plan + real refs resolved, id written back, revision logged', async () => {
     const fx = await makeWorkItemFixture();
-    // A real existing work item the add will be blocked_by (real-ref resolution).
-    const blockerId = await seedItem(fx, 'Existing blocker');
+    // A real existing work item the add will be blocked_by (real-ref resolution) —
+    // one level down under a root of its own, the child's depth (MOTIR-6411).
+    const elsewhere = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Elsewhere' },
+      fx.ctx,
+    );
+    const blockerId = (
+      await workItemsService.createWorkItem(
+        {
+          projectId: fx.projectId,
+          kind: 'task',
+          title: 'Existing blocker',
+          parentId: elsewhere.id,
+        },
+        fx.ctx,
+      )
+    ).id;
 
     const plan = await plansService.createPlan(fx.projectId, { title: 'Tree' }, fx.ctx);
     // Add A: a parent story.

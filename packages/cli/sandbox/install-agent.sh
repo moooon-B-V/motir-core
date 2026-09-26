@@ -80,6 +80,16 @@ SANDBOX_AGENT_HOME="$RUNTIME_HOME/.motir-sandbox/agent-config"
 # drift out of agreement with the arm that actually did the install.
 CODEGRAPH_TARGET_FILE=/usr/local/lib/motir-sandbox/codegraph-target
 
+# `fetch_installer <url> <dest>` — every arm whose agent ships as a vendor
+# install SCRIPT downloads it with this, then runs the FILE. No arm pipes a
+# remote script into a shell: a pipe executes whatever arrives, and a vendor's
+# cache once handed CI a gzip body that bash then "ran" (MOTIR-6495). The
+# helper decodes it, checks it is a script (shebang + `bash -n`) and retries.
+# It sits beside this script in the image (the Dockerfile copies both).
+# shellcheck source=fetch-installer.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fetch-installer.sh"
+INSTALLER=/tmp/motir-agent-installer.sh
+
 # Install an npm-published agent globally. `--no-fund --no-audit` keeps the
 # build log down to the failure that actually matters.
 #
@@ -229,8 +239,9 @@ case "$AGENT" in
         # deliberately absent, not merely un-defaulted. The installer takes an
         # explicit target directory, so the `agy` binary goes straight onto the
         # global PATH with nothing to relocate.
-        curl -fsSL https://antigravity.google/cli/install.sh \
-            | bash -s -- --dir "$AGENT_PREFIX"
+        fetch_installer https://antigravity.google/cli/install.sh "$INSTALLER"
+        bash "$INSTALLER" --dir "$AGENT_PREFIX" </dev/null
+        rm -f "$INSTALLER"
         agy --version
         # codegraph's `antigravity` target writes ~/.gemini/antigravity/mcp_config.json.
         wire_codegraph antigravity
@@ -245,7 +256,9 @@ case "$AGENT" in
         # NOTE the binary is `agent` (with `cursor-agent` as the legacy alias),
         # NOT `cursor` — both names are linked so either command works.
         mkdir -p "$AGENT_STAGE"
-        HOME="$AGENT_STAGE" bash -c 'curl https://cursor.com/install -fsS | bash'
+        fetch_installer https://cursor.com/install "$INSTALLER"
+        HOME="$AGENT_STAGE" bash "$INSTALLER" </dev/null
+        rm -f "$INSTALLER"
         mkdir -p "$AGENT_ROOT/cursor-agent"
         cp -a "$AGENT_STAGE/.local/share/cursor-agent/." "$AGENT_ROOT/cursor-agent/"
         cursor_bin="$(find "$AGENT_ROOT/cursor-agent/versions" -maxdepth 2 -type f -name cursor-agent | head -1)"
@@ -300,8 +313,9 @@ case "$AGENT" in
         apt-get update
         apt-get install -y --no-install-recommends bzip2
         rm -rf /var/lib/apt/lists/*
-        curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh \
-            | CONFIGURE=false GOOSE_BIN_DIR="$AGENT_PREFIX" bash
+        fetch_installer https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh "$INSTALLER"
+        CONFIGURE=false GOOSE_BIN_DIR="$AGENT_PREFIX" bash "$INSTALLER" </dev/null
+        rm -f "$INSTALLER"
         goose --version
         # Goose speaks MCP via its own extension config, but codegraph ships no
         # `goose` target — wiring it would mean hand-writing a config format

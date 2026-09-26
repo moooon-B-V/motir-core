@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import {
+  CrossLevelLinkError,
   CrossWorkspaceLinkError,
   DuplicateLinkError,
   SelfLinkError,
@@ -44,6 +45,13 @@ function mapError(err: unknown): NextResponse {
   }
   if (err instanceof SelfLinkError) {
     return NextResponse.json({ code: err.code, error: err.name }, { status: 422 });
+  }
+  // The same-level edge rule (MOTIR-6015): a refusal, not a server error — 422 as the v1 door maps it.
+  if (err instanceof CrossLevelLinkError) {
+    return NextResponse.json(
+      { code: err.code, error: err.name, message: err.message },
+      { status: 422 },
+    );
   }
   if (
     err instanceof CrossWorkspaceLinkError ||

@@ -17,6 +17,7 @@ import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github
 import { awaitingRepoRows, type RepoDelivery } from '@/lib/workItems/repoDelivery';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
+import type { DesignRefusalFacts } from '@/components/approvals/RefusalReason';
 import { HowToTestBlock } from '@/components/howToTest/HowToTestBlock';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
 import { GithubMark } from '@/components/icons/GithubMark';
@@ -437,6 +438,7 @@ export function DevelopmentSectionBody({
   gateVerbsDisabled = false,
   handOver,
   canReplan,
+  designRefusal,
   cardTerminal = false,
   designResult = null,
   repair = null,
@@ -544,6 +546,13 @@ export function DevelopmentSectionBody({
    * condition). Omitted, a decision sent back offers no door.
    */
   canReplan?: boolean;
+  /**
+   * A DESIGN SENT BACK IS A VERDICT (Story MOTIR-6070 · MOTIR-6427) — passed straight to the
+   * frame: where a design's Re-plan opens (the card's parent) and the status either verdict
+   * returns it to. Only the approval overlay passes it; a design-led frame without it still
+   * asks for the verdict, naming the card itself and no status.
+   */
+  designRefusal?: DesignRefusalFacts;
   /**
    * The card sits in a DONE-category status (Bug MOTIR-5884; § 29's cite table). A
    * withdrawn merge question on such a card is never asked again, so its cite promises
@@ -772,6 +781,7 @@ export function DevelopmentSectionBody({
         verbsDisabled={gateVerbsDisabled}
         handOver={handOver}
         canReplan={canReplan}
+        designRefusal={designRefusal}
       >
         {block}
       </DevelopmentGateFrame>

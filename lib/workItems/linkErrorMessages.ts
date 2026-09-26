@@ -26,6 +26,8 @@ export function linkErrorMessage(err: unknown, t: ErrorTranslator): string | nul
         return t('links.duplicate');
       case 'WORK_ITEM_LINK_CYCLE':
         return t('links.cycle');
+      case 'CROSS_LEVEL_LINK':
+        return t('links.crossLevel');
       case 'CROSS_WORKSPACE_LINK':
       case 'WORKSPACE_MISMATCH_LINK':
         return t('links.crossWorkspace');

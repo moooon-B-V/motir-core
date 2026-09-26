@@ -95,6 +95,30 @@ export const githubInstallationRepository = {
     });
   },
 
+  /** EVERY connection the organization owns, GitHub and GitLab alike — the
+   *  organization Git offboarding's read (MOTIR-6397). {@link listByOrganizationId}
+   *  is GitHub-only on purpose (the inventory's), so this is its own method. */
+  async listAllProvidersByOrganizationId(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubInstallation[]> {
+    return tx.githubInstallation.findMany({
+      where: { organizationId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /** Hand an installation to another organization — the offboarding's UNLINK of a
+   *  shared installation (MOTIR-6397): the org being erased stops owning it, the
+   *  org still using it takes it over, and nothing on GitHub changes. */
+  async setOrganizationId(
+    id: string,
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.githubInstallation.update({ where: { id }, data: { organizationId } });
+  },
+
   /** The workspace's connection for a specific provider (`github` | `gitlab`), or
    *  null. The provider-aware read a GitLab caller uses. */
   async findByWorkspaceAndProvider(

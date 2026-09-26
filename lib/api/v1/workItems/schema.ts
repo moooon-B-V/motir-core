@@ -21,6 +21,7 @@ import type {
   ApprovalGateDecisionSourceDTO,
   ApprovalGateKindDTO,
   ApprovalGateRecordDTO,
+  ApprovalGateRefusalVerdictDTO,
   ApprovalGateStateDTO,
   ApprovalGateSupersedeCauseDTO,
 } from '@/lib/dto/approvalGate';
@@ -1466,6 +1467,16 @@ const _gateAuthoritiesTotal: AssertTotal<
   (typeof APPROVAL_GATE_AUTHORITY_VALUES)[number]
 > = true;
 
+/** What a design REFUSAL meant (MOTIR-6421; ADR `approval-gates.md` §10d). */
+const APPROVAL_GATE_REFUSAL_VERDICT_VALUES = [
+  'revise',
+  're_plan',
+] as const satisfies readonly ApprovalGateRefusalVerdictDTO[];
+const _gateRefusalVerdictsTotal: AssertTotal<
+  ApprovalGateRefusalVerdictDTO,
+  (typeof APPROVAL_GATE_REFUSAL_VERDICT_VALUES)[number]
+> = true;
+
 const APPROVAL_GATE_SOURCE_VALUES = [
   'ui',
   'api',
@@ -1528,6 +1539,9 @@ export const approvalGateDecisionSchema = z.object({
   supersededCause: z.enum(APPROVAL_GATE_SUPERSEDE_CAUSE_VALUES).nullable(),
   /** WHAT it caused — a merge commit sha, a status key, a chosen option's id. */
   outcomeRef: z.string().nullable(),
+  /** WHAT A DESIGN REFUSAL MEANT — `revise` or `re_plan` — on a `design_result` gate sent
+   *  back from Motir (MOTIR-6421). Null on every other kind, verb and source. */
+  refusalVerdict: z.enum(APPROVAL_GATE_REFUSAL_VERDICT_VALUES).nullable(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });
@@ -1575,6 +1589,7 @@ function presentApprovalGateDecision(gate: ApprovalGateDecisionDTO): V1ApprovalG
     subjectVersion: gate.subjectVersion,
     supersededCause: gate.supersededCause,
     outcomeRef: gate.outcomeRef,
+    refusalVerdict: gate.refusalVerdict,
     createdAt: gate.createdAt,
     updatedAt: gate.updatedAt,
   };

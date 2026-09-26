@@ -28,14 +28,16 @@ export type PlanSessionStateCountsDto = Record<PlanSessionStateDto, number>;
 
 /**
  * The gate kinds a session can be SEEDED by (story MOTIR-6068 · MOTIR-6209) —
- * the three refusals `isRefusalSeedGate` accepts today. Widening it is
- * MOTIR-6070 / MOTIR-6071's, together with the row's verb lookup, which is
- * TOTAL over this list.
+ * the refusals `isRefusalSeedGate` accepts today: the three decision kinds and,
+ * since MOTIR-6424, a `design_result` sent back with the Re-plan verdict. Widening
+ * it further is MOTIR-6071's, together with the row's verb lookup, which is TOTAL
+ * over this list.
  */
 export const PLAN_SESSION_SEED_GATE_KINDS = [
   'decision_approval',
   'decision_confirmation',
   'decision_choice',
+  'design_result',
 ] as const;
 
 export type PlanSessionSeedGateKindDto = (typeof PLAN_SESSION_SEED_GATE_KINDS)[number];

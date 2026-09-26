@@ -225,9 +225,11 @@ describe('decided_by_label — WHO, surviving their departure (ADR §6a)', () =>
     // member who has approved anything cannot be deleted while their revision
     // trail stands, and the test would measure that refusal instead of this
     // column (the same trap the sibling suite records for `WorkItem.reporter`).
-    // `request_changes` moves nothing (§3), so it leaves no revision and the
-    // departure is reachable — and a rejection is a decision, so the label is
-    // owed on it either way.
+    // A rejection is a decision, so the label is owed on it either way. Since
+    // MOTIR-6423 a design refusal ALSO moves the card (to To do,
+    // `design-refusal-verdict.md` §1), so it leaves a revision too — the decider's
+    // revision trail is cleared by hand below, so what is measured is this
+    // column's `SetNull` and not that `Restrict`.
     const assignee = await member('member');
     await assignTo(assignee.id);
     const evidence = await publish('frame');
@@ -238,11 +240,13 @@ describe('decided_by_label — WHO, surviving their departure (ADR §6a)', () =>
         stamp: DECIDED_WITHOUT_A_READER,
         gateId: gate.id,
         decision: 'request_changes',
+        refusalVerdict: 'revise',
         noteMd: 'Needs changes.',
         source: 'ui',
       },
       { userId: assignee.id, workspaceId: fx.workspaceId },
     );
+    await adminDb.workItemRevision.deleteMany({ where: { changedById: assignee.id } });
     await adminDb.user.delete({ where: { id: assignee.id } });
 
     const row = await rowOf(gate.id);
@@ -270,6 +274,7 @@ describe('decided_by_label — WHO, surviving their departure (ADR §6a)', () =>
         stamp: DECIDED_WITHOUT_A_READER,
         gateId: gate.id,
         decision: 'request_changes',
+        refusalVerdict: 'revise',
         noteMd: 'Needs changes.',
         source: 'ui',
       },
@@ -489,7 +494,7 @@ describe('outcome_ref — WHAT THE DECISION CAUSED (ADR §6a)', () => {
 });
 
 describe('request_changes writes the decision-time columns too (ADR §6a exempts none of them)', () => {
-  it('a REJECTION is a decision, and it records everything but an outcome', async () => {
+  it('a REJECTION is a decision, and it records everything — its outcome the To-do it wrote', async () => {
     // The negative that keeps the write out of the `approve` branch. A fix that
     // filled the columns only on approval would satisfy every other test in this
     // file and leave half the audit empty — and a rejection is exactly the
@@ -501,6 +506,7 @@ describe('request_changes writes the decision-time columns too (ADR §6a exempts
         stamp: DECIDED_WITHOUT_A_READER,
         gateId: gate.id,
         decision: 'request_changes',
+        refusalVerdict: 'revise',
         noteMd: 'The port is too short.',
         source: 'ui',
       },
@@ -513,8 +519,9 @@ describe('request_changes writes the decision-time columns too (ADR §6a exempts
     expect(row.decidedByLabel).toBe(`${fx.owner.name} <${fx.owner.email}>`);
     expect(row.decidedUnderAuthority).toBe('reporter');
     expect(row.decisionSource).toBe('ui');
-    // §3: request_changes moves nothing, so there is no outcome to name.
-    expect(row.outcomeRef).toBeNull();
+    // A design sent back goes to To do on either verdict (`design-refusal-verdict.md`
+    // §1, MOTIR-6423), so the outcome is To do's key.
+    expect(row.outcomeRef).toBe('todo');
   });
 });
 

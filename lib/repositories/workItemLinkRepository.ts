@@ -265,6 +265,28 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * The DEPENDENTS of a work item with their KEYS — {@link findDependentStates}
+   * plus the `identifier`, ordered by the dependent's key number, for a surface
+   * that NAMES the work waiting on an item (the design Re-plan seed's first turn,
+   * MOTIR-6424). Archived dependents are excluded for the same reason.
+   */
+  async findDependentKeys(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ identifier: string; status: string; projectId: string }>> {
+    const rows = await tx.workItemLink.findMany({
+      where: { toId: workItemId, kind: 'is_blocked_by', fromItem: { archivedAt: null } },
+      select: { fromItem: { select: { identifier: true, status: true, projectId: true } } },
+      orderBy: { fromItem: { key: 'asc' } },
+    });
+    return rows.map((r) => ({
+      identifier: r.fromItem.identifier,
+      status: r.fromItem.status,
+      projectId: r.fromItem.projectId,
+    }));
+  },
+
+  /**
    * Batched form of {@link findBlockerStates} for MANY items at once — the board
    * projection (3.1.4) needs a ready flag per card without an N+1. Returns every
    * `is_blocked_by` blocker of any item in `fromIds`, each row carrying the
@@ -332,6 +354,30 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * The `is_blocked_by` edges running FROM any of `fromIds` TO any of `toIds` —
+   * the cross-parent coverage check's parent-level lookup (MOTIR-6370): given the
+   * parents of every cross-parent edge's two ends, which parent pairs already
+   * carry the edge? ONE read for the whole subtree. Workspace-scoped when given.
+   */
+  async findBlockedByAmong(
+    fromIds: string[],
+    toIds: string[],
+    workspaceId?: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ fromId: string; toId: string }>> {
+    if (fromIds.length === 0 || toIds.length === 0) return [];
+    return (tx ?? dbRead).workItemLink.findMany({
+      where: {
+        fromId: { in: fromIds },
+        toId: { in: toIds },
+        kind: 'is_blocked_by',
+        ...(workspaceId ? { workspaceId } : {}),
+      },
+      select: { fromId: true, toId: true },
+    });
+  },
+
+  /**
    * The `is_blocked_by` EDGES of many items at once (Subtask 7.8.15 —
    * `validate_sprint`), each carrying the blocking item's id, `identifier`,
    * `status`, `sprintId` and `projectId`. The sprint-finishability check walks
@@ -374,6 +420,10 @@ export const workItemLinkRepository = {
       blockerStatus: string;
       blockerSprintId: string | null;
       blockerProjectId: string;
+      /** The blocker's kind — the cross-level-edge advisory's far end (MOTIR-6369). */
+      blockerKind: string;
+      /** The blocker's parent — the cross-parent coverage check's far end (MOTIR-6370). */
+      blockerParentId: string | null;
     }>
   > {
     if (fromIds.length === 0) return [];
@@ -394,6 +444,8 @@ export const workItemLinkRepository = {
             status: true,
             sprintId: true,
             projectId: true,
+            kind: true,
+            parentId: true,
           },
         },
       },
@@ -401,6 +453,8 @@ export const workItemLinkRepository = {
     return rows.map((r) => ({
       fromId: r.fromId,
       blockerId: r.toItem.id,
+      blockerKind: r.toItem.kind,
+      blockerParentId: r.toItem.parentId,
       blockerKey: r.toItem.identifier,
       blockerTitle: r.toItem.title,
       blockerStatus: r.toItem.status,

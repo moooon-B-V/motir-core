@@ -14,6 +14,7 @@ import type { PlanWithItemsDto, ProposalInput } from '@/lib/dto/plans';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
+import { seedBlockedBy } from '../helpers/seedBlockedBy';
 import { truncateAuthTables } from '../helpers/db';
 
 // The PROJECTED MODE on the MCP validators (Story MOTIR-3093 · Subtask
@@ -58,9 +59,6 @@ const mk = (
   kind: 'epic' | 'story' | 'task' | 'subtask',
   parentId?: string,
 ) => workItemsService.createWorkItem({ projectId: fx.projectId, kind, title, parentId }, fx.ctx);
-
-const link = (fx: WorkItemFixture, fromId: string, toId: string) =>
-  workItemsService.linkWorkItems({ fromId, toId, kind: 'is_blocked_by' }, fx.ctx);
 
 async function freshPlan(fx: WorkItemFixture): Promise<string> {
   const plan = await plansService.createPlan(fx.projectId, { title: 'Plan' }, fx.ctx);
@@ -200,8 +198,13 @@ describe('validate_plan — the FOREST verdict a PAT can now reach', () => {
 
     const client = await connectClient(fx.ctx);
 
+    // FINISHABLE over the forest (no blocker) — but not VALID since MOTIR-6370:
+    // Story B1 and Story A1 sit under different epics that carry no edge.
     const forest = await call(client, 'validate_plan', { planId });
-    expect(struct(forest)).toMatchObject({ valid: true, blockers: [] });
+    expect(struct(forest)).toMatchObject({ valid: false, blockers: [] });
+    expect(struct(forest).invalidEdges).toEqual([
+      expect.objectContaining({ blockedBy: storyA1, itemParent: epicB, blockerParent: epicA }),
+    ]);
 
     // The same plan, asked per-root: epic B's subtree does not contain Story A1,
     // so the subtree rule correctly reports it. Both answers are right for their
@@ -363,7 +366,9 @@ describe('validate_plan — the FOREST verdict a PAT can now reach', () => {
 describe('validate_work_item — the optional planId', () => {
   it('validates a subtree rooted at a `planItem:<id>` TEMP-REF — the case an authoring agent has', async () => {
     const fx = await makeWorkItemFixture();
-    const outside = await mk(fx, 'Outside todo', 'task');
+    // One level down under a root of its own, at the proposed child's depth
+    // (MOTIR-6411: an unrelated ROOT task is on another level).
+    const outside = await mk(fx, 'Outside todo', 'task', (await mk(fx, 'Elsewhere', 'story')).id);
 
     const planId = await freshPlan(fx);
     const parent = await addProposals(fx, planId, [
@@ -442,7 +447,9 @@ describe('validate_work_item — the optional planId', () => {
     const story = await mk(fx, 'Story', 'story');
     const child = await mk(fx, 'Child', 'subtask', story.id);
     const external = await mk(fx, 'External todo', 'task');
-    await link(fx, child.id, external.id);
+    // Seeded below the door: a child and a ROOT task sit at different depths
+    // (MOTIR-6411). This case is about the un-projected path, not the edge.
+    await seedBlockedBy(fx, child.id, external.id);
     // A plan exists and is NOT named — its proposals must not leak in.
     const planId = await freshPlan(fx);
     await addProposals(fx, planId, [

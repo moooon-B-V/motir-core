@@ -183,8 +183,18 @@ describe('get_plan — the proposed tree survives the wire', () => {
       { projectId: fx.projectId, kind: 'task', title: 'Doomed task' },
       fx.ctx,
     );
+    // Two levels down under a root of its own — the child proposal's depth, so its
+    // blocked_by is same-level (MOTIR-6411).
+    const elsewhere = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Elsewhere' },
+      fx.ctx,
+    );
+    const elsewhereTask = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Elsewhere task', parentId: elsewhere.id },
+      fx.ctx,
+    );
     const stale = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Stale task' },
+      { projectId: fx.projectId, kind: 'subtask', title: 'Stale task', parentId: elsewhereTask.id },
       fx.ctx,
     );
     const plan = await makePlan(fx);
@@ -217,7 +227,9 @@ describe('get_plan — the proposed tree survives the wire', () => {
             estimateMinutes: 40,
           },
           parentRef: `${TEMP_REF_PREFIX}${parentProposal.id}`,
-          blockedByRefs: [stale.id, `${TEMP_REF_PREFIX}${parentProposal.id}`],
+          // Not its own parent too: a parent sits a level above its child, and a
+          // blocked_by never crosses levels (MOTIR-6411).
+          blockedByRefs: [stale.id],
         },
         {
           op: 'modify',
@@ -243,7 +255,7 @@ describe('get_plan — the proposed tree survives the wire', () => {
     expect(parent.workItemId).toBeNull();
     expect(parent.parentRef).toBe(story.id);
     expect(child.parentRef).toBe(`${TEMP_REF_PREFIX}${parent.id}`);
-    expect(child.blockedByRefs).toEqual([stale.id, `${TEMP_REF_PREFIX}${parent.id}`]);
+    expect(child.blockedByRefs).toEqual([stale.id]);
     expect(child.proposedFields).toMatchObject({ storyPoints: 3, estimateMinutes: 40 });
 
     // The modify / remove: their targets, verbatim.
@@ -261,8 +273,13 @@ describe('get_plan — the proposed tree survives the wire', () => {
 
   it('renders the proposals as an indented tree with op markers and sizing', async () => {
     const fx = await makeWorkItemFixture();
+    // One level down under a root of its own — the nested add's depth (MOTIR-6411).
+    const elsewhere = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Elsewhere' },
+      fx.ctx,
+    );
     const stale = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Stale task' },
+      { projectId: fx.projectId, kind: 'task', title: 'Stale task', parentId: elsewhere.id },
       fx.ctx,
     );
     // A plan may carry only ONE op per target (`@@unique([planId, workItemId])`),

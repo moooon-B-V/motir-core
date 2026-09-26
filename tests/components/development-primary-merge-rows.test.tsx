@@ -349,7 +349,14 @@ describe('the item page — a DECISION-led question beside an awaiting merge gat
 /** The route's answer when a design or decision gate leads the Development block. */
 function primaryRead(gate: ApprovalGateDTO): ApprovalGateOverlayReadDTO {
   return {
-    workItem: { id: 'wi-acme-12', identifier: 'ACME-12', title: 'Throttle the public API' },
+    workItem: {
+      id: 'wi-acme-12',
+      identifier: 'ACME-12',
+      title: 'Throttle the public API',
+      status: 'in_review',
+      parentIdentifier: null,
+    },
+    statuses: [],
     gate,
     canDecide: true,
     canReplan: false,

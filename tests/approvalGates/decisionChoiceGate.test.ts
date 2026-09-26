@@ -222,6 +222,7 @@ describe('the handler — choose writes done; an option the subject lacks is ref
         ctx: fx.ctx,
         tx,
         resolvedStatusKey: 'done',
+        refusalVerdict: null,
         ...(optionId ? { choice: { optionId } } : {}),
       }),
     );

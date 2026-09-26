@@ -204,7 +204,11 @@ test('a person moves a card to Approved, and the board, the counts and the paren
   // chip in chapter 3 and prove it is tellable apart.
   const story = await mkItem(page, t, 'Ship the CSV export', { kind: 'story' });
   const card = await mkItem(page, t, 'Add the export button', { parentId: story.id });
-  const dependent = await mkItem(page, t, 'Document the export');
+  // The dependent sits at the card's depth (a subtask of its own root story): a
+  // `blocked_by` joins two items on the same level (MOTIR-6015), and the story
+  // whose rollup this walk reads keeps exactly its one child.
+  const docs = await mkItem(page, t, 'Document the release', { kind: 'story' });
+  const dependent = await mkItem(page, t, 'Document the export', { parentId: docs.id });
   const neighbourDoing = await mkItem(page, t, 'Wire the download handler');
   const neighbourReview = await mkItem(page, t, 'Tidy the empty state');
   await link(page, dependent.id, card.id);

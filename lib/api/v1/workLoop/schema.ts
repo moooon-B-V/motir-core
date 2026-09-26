@@ -11,6 +11,7 @@ import type { ScopeClaimDto } from '@/lib/dto/scopeClaim';
 import {
   isBodyAboveFieldMoveAdvisory,
   isBlockerCountAdvisory,
+  isCrossLevelEdgeAdvisory,
   isSelfBlockingDesignAdvisory,
   isSizingAdvisory,
 } from '@/lib/dto/workItems';
@@ -401,7 +402,12 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
     })),
     workflowMode: dto.workflowMode,
     sessionBranch: dto.sessionBranch,
-    advisories: dto.advisories.map((advisory) => {
+    // `flatMap` rather than `map` for ONE member: the CROSS-LEVEL-EDGE advisory
+    // (MOTIR-6369) is a `validate_work_item` finding the dispatch builder does
+    // not emit, and it is deliberately NOT a v1 wire variant — publishing it
+    // would be a contract change nobody asked for. Every other member maps 1:1.
+    advisories: dto.advisories.flatMap((advisory) => {
+      if (isCrossLevelEdgeAdvisory(advisory)) return [];
       if (isBlockerCountAdvisory(advisory)) {
         return {
           kind: 'shape' as const,

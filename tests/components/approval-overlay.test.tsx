@@ -88,6 +88,7 @@ const GATE: ApprovalGateDTO = {
   decisionSource: null,
   outcomeRef: null,
   confirmedRecord: null,
+  refusalVerdict: null,
   replanOwed: null,
   chosenOption: null,
   createdAt: '2026-09-08T04:00:00.000Z',
@@ -96,7 +97,14 @@ const GATE: ApprovalGateDTO = {
 
 function readOf(overrides: Partial<ApprovalGateOverlayReadDTO> = {}): ApprovalGateOverlayReadDTO {
   return {
-    workItem: { id: 'wi-1', identifier: 'GATE-1', title: 'Draw the row for a published design' },
+    workItem: {
+      id: 'wi-1',
+      identifier: 'GATE-1',
+      title: 'Draw the row for a published design',
+      status: 'in_review',
+      parentIdentifier: null,
+    },
+    statuses: [],
     gate: GATE,
     canDecide: true,
     canReplan: false,
@@ -397,7 +405,15 @@ describe('the exit row’s TITLE opens the quick view ABOVE the overlay (MOTIR-6
     // Back / forward lands on another gate's address: the peek does not follow.
     openAt('GATE-2', 'design_result');
     fetchApprovalGateOverlay.mockResolvedValue(
-      readOf({ workItem: { id: 'wi-2', identifier: 'GATE-2', title: 'Another design' } }),
+      readOf({
+        workItem: {
+          id: 'wi-2',
+          identifier: 'GATE-2',
+          title: 'Another design',
+          status: 'in_review',
+          parentIdentifier: null,
+        },
+      }),
     );
     view.rerender(<ApprovalOverlay />);
     await act(async () => {});
@@ -485,6 +501,17 @@ describe('the frame, composed at full size', () => {
     fireEvent.change(screen.getByLabelText(en.approvalGate.reason.label), {
       target: { value: 'The empty state needs the illustration.' },
     });
+    // …and a DESIGN also names its verdict (MOTIR-6427): the reason alone is still refused.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: en.approvalGate.reason.proceed }));
+    });
+    expect(screen.getByText(en.approvalGate.reason.verdict.required)).toBeTruthy();
+    expect(decideApprovalGateAction).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole('radio', {
+        name: new RegExp(`^${en.approvalGate.reason.verdict.revise.label}`),
+      }),
+    );
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: en.approvalGate.reason.proceed }));
     });
@@ -492,6 +519,7 @@ describe('the frame, composed at full size', () => {
       expect.objectContaining({
         decision: 'request_changes',
         noteMd: 'The empty state needs the illustration.',
+        refusalVerdict: 'revise',
       }),
     );
   });
@@ -732,7 +760,14 @@ describe('the APPROVE-TO-MERGE gate — the Development block as the port (§ 24
   ): ApprovalGateOverlayReadDTO {
     return readOf({
       gate: PR_GATE,
-      workItem: { id: 'wi-1', identifier: 'ACME-12', title: 'Throttle the public API' },
+      workItem: {
+        id: 'wi-1',
+        identifier: 'ACME-12',
+        title: 'Throttle the public API',
+        status: 'in_review',
+        parentIdentifier: null,
+      },
+      statuses: [],
       canDecide: over.canDecide ?? true,
       subject: {
         state: 'resolved',

@@ -10,6 +10,7 @@ import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepos
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { requireArgsCard, requireGateCard } from './gateCard';
+import { returnCardToTodo } from './returnToTodo';
 
 // THE `design_result` HANDLER — the registry's first and, in this build, only
 // member (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
@@ -208,17 +209,35 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
   },
 
   /**
-   * REQUEST CHANGES — record the decision and move nothing (ADR §3).
+   * REQUEST CHANGES — record the decision and SEND THE DESIGN BACK TO TO DO, on either
+   * verdict (Story MOTIR-6070 · MOTIR-6423; `docs/decisions/design-refusal-verdict.md`
+   * §1–§2, amending `approval-gates.md` §10c/§10d/§10h).
    *
-   * **It re-dispatches nothing.** The revise loop — the agent republishing after
-   * a rejection — is Story 9.2's (MOTIR-693), and §5 draws that line
-   * deliberately: this record owns the DECISION, 9.2 owns the ephemeral preview
-   * and the re-dispatch.
+   * | the refusal …                          | what it does                                     |
+   * | -------------------------------------- | ------------------------------------------------ |
+   * | pressed in Motir, `revise` or `re_plan` | card → the project's initial To do; the card's  |
+   * |                                        | OTHER awaiting gates withdrawn as `pulled_back`  |
+   * | synced from GitHub (no verdict)        | nothing — recorded only, as before (§10h note 3) |
+   *
+   * The two verdicts differ only in what the decided band asks afterwards (a Re-plan
+   * asks to open the planner); the status, the withdrawal and `outcomeRef` are the
+   * same. The write and the withdrawal are {@link returnCardToTodo}'s, shared with the
+   * acceptance Re-run the same record governs (MOTIR-6071).
+   *
+   * **It re-dispatches nothing.** The revise loop — the agent republishing after a
+   * rejection — is Story 9.2's (MOTIR-693). A card at To do is claimable again, and
+   * `assertDesignSettled` refuses only over an APPROVED result, so a revised publish
+   * raises a fresh gate.
    *
    * Its version supersedes and is reclaimed normally: only an APPROVAL pins its
-   * bytes (§6c), and that pin is MOTIR-4913's, `blocked_by` this card.
+   * bytes (§6c).
    */
-  async requestChanges(): Promise<GateEffect> {
-    return { statusWritten: null, statusDeferredReason: 'request_changes_moves_nothing' };
+  async requestChanges(args: GateEffectArgs): Promise<GateEffect> {
+    // The door admits a verdict ONLY on a Motir-pressed design refusal and requires it
+    // there (MOTIR-6421), so a null verdict here IS the GitHub-sourced refusal.
+    if (args.refusalVerdict === null) {
+      return { statusWritten: null, statusDeferredReason: 'request_changes_moves_nothing' };
+    }
+    return returnCardToTodo(args, 'designResultHandler');
   },
 };

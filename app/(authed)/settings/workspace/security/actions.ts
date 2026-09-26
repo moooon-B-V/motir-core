@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/auth';
 import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getWorkspaceContext } from '@/lib/workspaces';
+import { OrganizationClosingError } from '@/lib/organizations/errors';
 import { NotAMemberError, WorkspaceForbiddenError } from '@/lib/workspaces/errors';
 import { twoFactorPolicyService } from '@/lib/services/twoFactorPolicyService';
 import type { RequireTwoFactorSaveResult } from '../../organization/_components/RequireTwoFactorCard';
@@ -44,6 +45,9 @@ export async function setWorkspaceRequireTwoFactorAction(
   } catch (err) {
     if (err instanceof WorkspaceForbiddenError || err instanceof NotAMemberError) {
       return { ok: false, error: errors('actions.workspaceSecurityForbidden') };
+    }
+    if (err instanceof OrganizationClosingError) {
+      return { ok: false, error: errors('actions.organizationClosing') };
     }
     throw err;
   }

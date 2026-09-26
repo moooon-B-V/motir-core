@@ -407,10 +407,17 @@ describe('a result is published ONLY while an open work item is `blocked_by` the
   });
 
   it('accepts a `todo` dependent under ANOTHER story, and raises the gate as before', async () => {
-    const design = await makeItem('Design', 'task', { waits: false });
+    // The design hangs under a story of its own, so the dependent under ANOTHER
+    // story sits at its depth — a same-level edge across parents (MOTIR-6411).
+    const designStory = await makeItem('Design story', 'story');
+    const designDto = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Design', parentId: designStory.id },
+      fx.ctx,
+    );
+    const design = { key: designDto.identifier, id: designDto.id };
     const otherStory = await makeItem('Another story', 'story');
     await makeWorkWaitOn(design.id, fx, {
-      kind: 'subtask',
+      kind: 'task',
       parentId: otherStory.id,
       title: 'Build it, elsewhere',
     });

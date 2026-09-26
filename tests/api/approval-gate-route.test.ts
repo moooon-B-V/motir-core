@@ -269,7 +269,20 @@ describe('GET /api/work-items/approval-gate · the four subject answers', () => 
     expect(res.status).toBe(200);
     const body = await res.json();
 
-    expect(body.workItem).toEqual({ id: card.id, identifier: card.identifier, title: card.title });
+    // The card's status and, for a design, its parent — the header chip and where a
+    // Re-plan opens (MOTIR-6427). This fixture's card sits under a story.
+    expect(body.workItem).toMatchObject({
+      id: card.id,
+      identifier: card.identifier,
+      title: card.title,
+      status: card.status,
+    });
+    const story = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.parentId! } });
+    expect(body.workItem.parentIdentifier).toBe(story.identifier);
+    // The project's workflow, to label the chip before and after a press (MOTIR-6427).
+    expect(body.statuses).toEqual(
+      expect.arrayContaining([expect.objectContaining({ category: 'todo', isInitial: true })]),
+    );
     expect(body.gate).toMatchObject({
       workItemId: card.id,
       kind: 'design_result',
@@ -974,8 +987,12 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
       // the same read `lateReads.ts` makes for the item page's own Development block.
       'workItemRepairService.getRepairView',
       'workItemsService.getDeliveryView',
+      // A design's PARENT — where its Re-plan opens the planner (MOTIR-6427, §10h).
+      'workItemsService.getWorkItem',
       'workItemsService.getWorkItemByIdentifier',
       'workItemsService.listLinkedPullRequests',
+      // The project's workflow — the overlay header's status chip (MOTIR-6427).
+      'workflowsService.listStatusesByProject',
     ]);
     const lateReads = readFileSync(
       join(process.cwd(), 'app/(authed)/items/[key]/_components/lateReads.ts'),

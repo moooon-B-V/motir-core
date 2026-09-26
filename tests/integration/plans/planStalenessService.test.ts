@@ -217,7 +217,8 @@ describe('planStalenessService — per-reason detection', () => {
   it('multi-reason: one proposed add accumulates parent_removed AND blocker_removed', async () => {
     const fx = await makeWorkItemFixture();
     const parentId = await seed(fx, 'Parent story', 'story');
-    const blockerId = await seed(fx, 'Blocker');
+    // At the child's depth under a root of its own (MOTIR-6411).
+    const blockerId = await seed(fx, 'Blocker', 'task', await seed(fx, 'Elsewhere', 'story'));
     const { planId, items } = await plannedPlan(fx, [
       {
         op: 'add',
@@ -250,7 +251,8 @@ describe('planStalenessService — all-clear + purity + tenancy', () => {
   it('returns all-clear when the tree is unchanged since plannedAt', async () => {
     const fx = await makeWorkItemFixture();
     const parentId = await seed(fx, 'Parent', 'story');
-    const blockerId = await seed(fx, 'Blocker');
+    // At the child's depth under a root of its own (MOTIR-6411).
+    const blockerId = await seed(fx, 'Blocker', 'task', await seed(fx, 'Elsewhere', 'story'));
     const targetId = await seed(fx, 'Target');
     const baseRevision = await latestRev(targetId, fx.workspaceId);
 
@@ -418,7 +420,8 @@ describe('planStalenessService — all-clear + purity + tenancy', () => {
     // Tenant A's plan: an add under A's parent, blocked by A's blocker — both
     // live, so on its own A's plan is all-clear.
     const aParent = await seed(a, 'A parent', 'story');
-    const aBlocker = await seed(a, 'A blocker');
+    // At the child's depth under a root of its own (MOTIR-6411).
+    const aBlocker = await seed(a, 'A blocker', 'task', await seed(a, 'Elsewhere', 'story'));
     const { planId, items } = await plannedPlan(a, [
       {
         op: 'add',

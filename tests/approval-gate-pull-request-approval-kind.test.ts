@@ -228,6 +228,7 @@ describe('deciding the gate', () => {
         ctx: fx.ctx,
         tx,
         resolvedStatusKey: 'approved',
+        refusalVerdict: null,
       };
       return {
         subject: await pullRequestApprovalGateHandler.resolveSubject(args),

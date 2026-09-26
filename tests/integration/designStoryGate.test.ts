@@ -307,6 +307,7 @@ describe('(3) no door hands out a design that is not approved', () => {
           stamp: DECIDED_WITHOUT_A_READER,
           gateId: gate.id,
           decision: 'request_changes',
+          refusalVerdict: 'revise',
           source: 'ui',
           noteMd: 'not yet',
         },

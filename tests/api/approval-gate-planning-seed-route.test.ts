@@ -1,7 +1,12 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ApprovalGateKind, ApprovalGateState, WorkItem } from '@/generated/prisma/client';
+import type {
+  ApprovalGateKind,
+  ApprovalGateRefusalVerdict,
+  ApprovalGateState,
+  WorkItem,
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { buildScope } from '@/lib/planChange/scope';
@@ -10,7 +15,7 @@ import { TWO_FACTOR_REQUIRED_PATH } from '@/lib/auth/twoFactorGate';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
-import { createTestWorkItem } from '../fixtures/workItemFixtures';
+import { createTestLink, createTestWorkItem } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -109,6 +114,8 @@ async function gate(
   kind: ApprovalGateKind,
   state: ApprovalGateState,
   noteMd: string | null = REASON,
+  refusalVerdict: ApprovalGateRefusalVerdict | null = null,
+  decisionSource: 'ui' | 'github' = 'ui',
 ): Promise<string> {
   seq += 1;
   const decided = state !== 'awaiting' && state !== 'superseded';
@@ -121,7 +128,14 @@ async function gate(
       subjectId: `subject-${seq}`,
       state,
       ...(decided
-        ? { decidedById: fx.ownerId, decidedAt: new Date(), decidedByLabel: 'Owner', noteMd }
+        ? {
+            decidedById: fx.ownerId,
+            decidedAt: new Date(),
+            decidedByLabel: 'Owner',
+            noteMd,
+            refusalVerdict,
+            decisionSource,
+          }
         : {}),
     },
   });
@@ -241,6 +255,185 @@ describe('GET /api/approval-gates/[id]/planning-seed · 200', () => {
     expect((await readSeed(gateId)).status).toBe(200);
     expect((await readSeed(gateId)).status).toBe(200);
     expect(await counts()).toEqual(before);
+  });
+});
+
+// MOTIR-6424 — a DESIGN sent back with the Re-plan verdict seeds the planner on the
+// design card's PARENT, with a first turn naming the open work waiting on the design.
+describe('a design Re-plan seed', () => {
+  async function designUnder(parentId: string | null) {
+    return createTestWorkItem(fx, {
+      kind: parentId ? 'subtask' : 'task',
+      title: 'Empty state for the exports list',
+      ...(parentId ? { parentId } : {}),
+    });
+  }
+
+  async function waitsOn(dependent: WorkItem, design: WorkItem) {
+    await createTestLink({
+      workspaceId: fx.workspaceId,
+      fromId: dependent.id,
+      toId: design.id,
+      kind: 'is_blocked_by',
+      createdById: fx.ownerId,
+    });
+  }
+
+  it('anchors on the PARENT and names each OPEN dependent, in key order (en + zh)', async () => {
+    const design = await designUnder(card.id);
+    const later = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'Toolbar',
+      parentId: card.id,
+    });
+    const earlier = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'List',
+      parentId: card.id,
+    });
+    const finished = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'Done',
+      parentId: card.id,
+    });
+    const archived = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'Gone',
+      parentId: card.id,
+    });
+    // Linked out of key order, so the order in the turn is the key order.
+    await waitsOn(archived, design);
+    await waitsOn(later, design);
+    await waitsOn(finished, design);
+    await waitsOn(earlier, design);
+    await adminDb.workItem.update({ where: { id: finished.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
+    const gateId = await gate(design, 'design_result', 'changes_requested', REASON, 're_plan');
+    signIn(owner());
+
+    const res = await readSeed(gateId);
+    expect(res.status).toBe(200);
+    const { seed } = await res.json();
+    expect(seed).toEqual({
+      gateId,
+      gateKind: 'design_result',
+      anchorKey: card.identifier,
+      firstTurn: expect.any(String),
+      seededSessionId: null,
+    });
+    expect(seed.firstTurn).toBe(
+      [
+        `${design.identifier} · ${design.title}`,
+        'Changes were requested on this design.',
+        `The reason given:\n“${REASON}”`,
+        `The work items waiting on this design: ${later.identifier}, ${earlier.identifier}`,
+        `Re-plan ${card.identifier} from that reason: this design and the work waiting on it.`,
+      ].join('\n\n'),
+    );
+
+    requestLocale.current = 'zh';
+    const zh = (await (await readSeed(gateId)).json()).seed.firstTurn as string;
+    expect(zh).toContain(`等待这个设计的工作项：${later.identifier}、${earlier.identifier}`);
+    expect(zh).toContain(`请根据这个理由重新规划 ${card.identifier}：这个设计以及等待它的工作。`);
+  });
+
+  it('with nothing waiting, the waiting line is omitted', async () => {
+    const design = await designUnder(card.id);
+    const gateId = await gate(design, 'design_result', 'changes_requested', REASON, 're_plan');
+    signIn(owner());
+    const turn = (await (await readSeed(gateId)).json()).seed.firstTurn as string;
+    expect(turn).not.toContain('waiting on this design:');
+    expect(turn).toBe(
+      [
+        `${design.identifier} · ${design.title}`,
+        'Changes were requested on this design.',
+        `The reason given:\n“${REASON}”`,
+        `Re-plan ${card.identifier} from that reason: this design and the work waiting on it.`,
+      ].join('\n\n'),
+    );
+  });
+
+  it('a PARENTLESS design card anchors on itself', async () => {
+    const design = await designUnder(null);
+    const gateId = await gate(design, 'design_result', 'changes_requested', REASON, 're_plan');
+    signIn(owner());
+    const { seed } = await (await readSeed(gateId)).json();
+    expect(seed.anchorKey).toBe(design.identifier);
+    expect(seed.firstTurn).toContain(`Re-plan ${design.identifier} from that reason`);
+  });
+
+  it('a session seeded from it is stamped when the scope holds the PARENT (or the card), refused otherwise', async () => {
+    const { PlanSeedNotApplicableError } = await import('@/lib/planChange/errors');
+    const design = await designUnder(card.id);
+    const gateId = await gate(design, 'design_result', 'changes_requested', REASON, 're_plan');
+    const me = pctxFor(owner());
+
+    const onParent = await planChangeSessionsService.startSeededWithFirstTurn(
+      me,
+      buildScope([card.identifier]),
+      'Re-plan it',
+      gateId,
+    );
+    const stamped = await adminDb.planChangeSession.findUniqueOrThrow({
+      where: { id: onParent.id },
+    });
+    expect(stamped.seedGateId).toBe(gateId);
+
+    const onCard = await planChangeSessionsService.startSeededWithFirstTurn(
+      me,
+      buildScope([design.identifier]),
+      'Re-plan it',
+      gateId,
+    );
+    expect(
+      (await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: onCard.id } })).seedGateId,
+    ).toBe(gateId);
+
+    const unrelated = await createTestWorkItem(fx, { kind: 'story', title: 'Unrelated' });
+    const before = await counts();
+    await expect(
+      planChangeSessionsService.startSeededWithFirstTurn(
+        me,
+        buildScope([unrelated.identifier]),
+        'Re-plan it',
+        gateId,
+      ),
+    ).rejects.toBeInstanceOf(PlanSeedNotApplicableError);
+    expect(await counts()).toEqual(before);
+  });
+
+  it('the parent anchor is a DESIGN rule only: a decision refusal is refused on its parent’s scope', async () => {
+    const { PlanSeedNotApplicableError } = await import('@/lib/planChange/errors');
+    const decision = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'Pick the store',
+      parentId: card.id,
+    });
+    const gateId = await gate(decision, 'decision_approval', 'changes_requested');
+    await expect(
+      planChangeSessionsService.startSeededWithFirstTurn(
+        pctxFor(owner()),
+        buildScope([card.identifier]),
+        'Re-plan it',
+        gateId,
+      ),
+    ).rejects.toBeInstanceOf(PlanSeedNotApplicableError);
+  });
+
+  it('a design sent back with REVISE is refused on either anchor', async () => {
+    const { PlanSeedNotApplicableError } = await import('@/lib/planChange/errors');
+    const design = await designUnder(card.id);
+    const gateId = await gate(design, 'design_result', 'changes_requested', REASON, 'revise');
+    for (const key of [card.identifier, design.identifier]) {
+      await expect(
+        planChangeSessionsService.startSeededWithFirstTurn(
+          pctxFor(owner()),
+          buildScope([key]),
+          'Re-plan it',
+          gateId,
+        ),
+      ).rejects.toBeInstanceOf(PlanSeedNotApplicableError);
+    }
   });
 });
 
@@ -364,9 +557,34 @@ describe('GET /api/approval-gates/[id]/planning-seed · the identical 404', () =
     await expectNotFound(gateId);
   });
 
-  it('a refused gate of a kind with NO composer (design_result changes_requested)', async () => {
-    const gateId = await gate(card, 'design_result', 'changes_requested');
+  it('a refused gate of a kind with NO composer (acceptance_result changes_requested)', async () => {
+    const gateId = await gate(card, 'acceptance_result', 'changes_requested');
     signIn(owner());
+    await expectNotFound(gateId);
+  });
+
+  // MOTIR-6424 — a design sent back seeds ONLY with the Re-plan verdict.
+  it('a design sent back with REVISE — the same 404 as an unknown id', async () => {
+    const gateId = await gate(card, 'design_result', 'changes_requested', REASON, 'revise');
+    signIn(owner());
+    expect(await expectNotFound(gateId)).toBe(await expectNotFound('no-such-gate'));
+  });
+
+  it('a GitHub-synced design refusal (no verdict), and a design refusal from before the verdict', async () => {
+    signIn(owner());
+    await expectNotFound(
+      await gate(card, 'design_result', 'changes_requested', REASON, null, 'github'),
+    );
+    await expectNotFound(await gate(card, 'design_result', 'changes_requested', REASON, null));
+  });
+
+  it('a design Re-plan whose card the viewer cannot BROWSE', async () => {
+    const gateId = await gate(card, 'design_result', 'changes_requested', REASON, 're_plan');
+    signIn(owner());
+    expect((await readSeed(gateId)).status).toBe(200);
+    const outsider = await plainMember();
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
+    signIn(outsider, fx, 'private');
     await expectNotFound(gateId);
   });
 
@@ -470,6 +688,9 @@ describe('the catalogues and the route’s shape', () => {
         'verb.decisionApproval',
         'verb.decisionChoice',
         'verb.decisionConfirmation',
+        'verb.designResult',
+        'blockedBy',
+        'askDesign',
       ].sort(),
     );
   });

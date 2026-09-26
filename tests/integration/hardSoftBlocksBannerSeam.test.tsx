@@ -104,7 +104,8 @@ describe('SEAM — the banner reads the REAL get_work_item verdict', () => {
     const story = await make(fx, 'story', 'The story under E', epic.id);
     const s1 = await make(fx, 'subtask', 'Soft only', story.id);
     const s2 = await make(fx, 'subtask', 'Own blocker', story.id);
-    const otherStory = await make(fx, 'story', 'Another story');
+    // Under the unfinished epic, so X sits at S2's depth (MOTIR-6411).
+    const otherStory = await make(fx, 'story', 'Another story', openEpic.id);
     const x = await make(fx, 'subtask', 'The other story’s open subtask', otherStory.id);
     await block(fx, s2.id, x.id);
 
