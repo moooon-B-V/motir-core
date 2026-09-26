@@ -31,7 +31,7 @@ Story 9.1 runs one card on OpenCode in a fresh metered container, as the person 
 
 The container orchestrator (Fly Machines in a separate org behind the `ContainerOrchestrator` port) was decided by MOTIR-1918 and built by MOTIR-4336. The harness was settled as OpenCode, on Motir's gateway key only, by the epic (MOTIR-673). **Neither is re-opened here.**
 
-What nobody has recorded is how these pieces meet for one run. Six questions have to be answered once, because at least two cards and usually two repositories depend on each.
+What nobody has recorded is how these pieces meet for one run. Seven questions have to be answered once, because at least two cards and usually two repositories depend on each.
 
 ---
 
@@ -155,14 +155,58 @@ Every credential's expiry is derived from the timeout: the run key's `expiresAt`
 
 ### 6 · motir-core's configuration names
 
-| Name                        | Holds                                                                                     | Notes                                                                                             |
-| --------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `MOTIR_GATEWAY_URL`         | the gateway's origin, no trailing `/v1`                                                   | the same name and meaning as the gateway's egress contract, so the container receives it verbatim |
-| `MOTIR_RUN_KEY_MINT_SECRET` | the mint secret                                                                           | the same name the gateway reads, character for character                                          |
-| `MOTIR_HOSTED_AGENT_IMAGE`  | `ghcr.io/moooon-b-v/motir-hosted-agent@sha256:…`                                          | **a digest, never a tag**, so a publish cannot change what a running deployment boots             |
-| `MOTIR_HOSTED_AGENT_MODEL`  | the OpenCode model id, e.g. `anthropic/claude-sonnet-4-5` (the egress contract's example) | also passed as the run key's `models` allow-list, so the key cannot be spent on any other model   |
+| Name                        | Holds                                                                                   | Notes                                                                                                                  |
+| --------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `MOTIR_GATEWAY_URL`         | the gateway's origin, no trailing `/v1`                                                 | the same name and meaning as the gateway's egress contract, so the container receives it verbatim                      |
+| `MOTIR_RUN_KEY_MINT_SECRET` | the mint secret                                                                         | the same name the gateway reads, character for character                                                               |
+| `MOTIR_HOSTED_AGENT_IMAGE`  | `ghcr.io/moooon-b-v/motir-hosted-agent@sha256:…`                                        | **a digest, never a tag**, so a publish cannot change what a running deployment boots                                  |
+| `MOTIR_HOSTED_AGENT_MODEL`  | an override of the model §7 decides, as the gateway's bare model id (`claude-opus-4-8`) | optional; unset means §7's default. Passed to the key's `models` allow-list as is, and to OpenCode as `anthropic/<id>` |
 
 All four are server-only: no public-env prefix, and never serialized to the browser.
+
+### 7 · The model: `claude-opus-4-8`, one per deployment, chosen by Motir
+
+**Why the run has a model chosen for it at all.** Something has to name one, and it cannot be OpenCode or the container:
+
+- OpenCode is started with `OPENCODE_DISABLE_MODELS_FETCH=true` and runs as `opencode run --model <provider/id>` (motir-gateway `docs/hosted-run-egress.md`, container environment). It has no catalog to fall back on, so a run with no model named does not start.
+- The run key is minted with a `models` allow-list, and the gateway refuses any other model with `403` (egress contract §1 and its threat table, `middleware/auth.go`). That allow-list is what stops an exfiltrated key from being spent on a dearer model, so the minter must know the model **before** the container boots.
+- motir-ai debits every turn at the model's effective `ModelCreditRate` in the `agent` lane, and `debitForTurn` throws when the model has none (`src/llm/gatewayClient.ts`, the comment on `PLANNER_MODELS`). A model with no rate is a run whose first call fails.
+
+So the model is a property of the run that motir-core fixes at start, the same way it fixes the run's id and timeout.
+
+**The decision.** Every hosted run uses **`claude-opus-4-8`**. It is a code default in motir-core (a `HOSTED_AGENT_MODELS.default` constant beside the start path, in the shape of motir-ai's `PLANNER_MODELS`), and `MOTIR_HOSTED_AGENT_MODEL` overrides it per deployment. There is one model per deployment, and no person picks it per run.
+
+**The eligible set** is the intersection of three records, read 2026-09-26:
+
+| Model               | Rated in the `agent` lane (motir-ai, MOTIR-4487) | Served by the gateway's Anthropic channel (`ai-upstream-transfer-basis.md`, channel set) | Input credits / M tokens (planning-rate base, which the agent lane copies) |
+| ------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `claude-fable-5`    | yes                                              | **no**                                                                                   | 23.0                                                                       |
+| `claude-opus-4-8`   | yes                                              | yes                                                                                      | 11.5                                                                       |
+| `claude-sonnet-4-6` | yes                                              | yes                                                                                      | 6.9                                                                        |
+| `claude-haiku-4-5`  | yes                                              | yes                                                                                      | 2.3                                                                        |
+
+DeepSeek is rated but has no transfer basis for prompt content (`ai-upstream-transfer-basis.md`), and a hosted run sends the customer's code, so it is out.
+
+**Why Opus rather than Sonnet.**
+
+- **A hosted run is paid for whether it succeeds or not.** Its cost is tokens plus up to 90 minutes of machine time (§5), and nobody watches it. A failed run spends all of that and then returns the card to To Do (§2) for a second full run. Sonnet's saving is 40% of the token cost of one run; it is gone the first time a run Opus would have finished has to be dispatched twice.
+- **It is the model Motir already stands behind.** The planner that sizes these cards runs on `claude-opus-4-8` (MOTIR-3635), so a hosted card is executed by the same model class that decided it fits one run.
+- **It is the dearest model the gateway serves today.** Fable 5 would need a channel change and a transfer-basis re-read first, and doubles the rate. That is a separate decision with its own evidence.
+
+This is a judgement, not a measurement. The dogfood story (MOTIR-714) measures real runs, and this default is revisited if the success rates show Sonnet finishing the same cards.
+
+**Rules any value of the override must meet**, so an operator cannot set a broken one:
+
+- It is a **bare gateway model id** (`claude-opus-4-8`). The key's `models` list and the gateway both compare the request's bare id, so the start path passes it as is and prefixes `anthropic/` only for OpenCode's `--model`. Storing the prefixed form would put `anthropic/claude-opus-4-8` on the allow-list, and every call would be refused `403`.
+- It must have an effective `agent`-lane rate in motir-ai, and it must be served by a channel with a transfer basis. Neither is checked at boot in 9.1. A wrong value fails the run's first call and closes it as `failed`, which the panel shows.
+
+**The model is recorded.** The start path stamps it on the card as `implementationModel`, beside `implementationHarness: opencode` (§2), so the card says which model built it. The run key's allow-list and motir-ai's usage record carry it for billing.
+
+**Rejected.**
+
+- **The dispatcher picks per run, or the organization picks in settings.** A model picker is a price picker, and it needs a design, a surface and a rule for what a cheaper model is allowed to attempt. Story 9.1 has none of these, and "choosing among agents" is outside it (below).
+- **Use the egress contract's example, `claude-sonnet-4-5`.** It was an example of the flag's shape. It has no `ModelCreditRate` in motir-ai, so a run on it would fail its first debit.
+- **Leave it to configuration only, with no code default.** A missing value would then be a deployment that cannot run hosted at all. The code default makes the variable an override, as `PLANNER_MODEL` is.
 
 ---
 
@@ -182,6 +226,7 @@ All four are server-only: no public-env prefix, and never serialized to the brow
 - **The orchestrator, the fleet, the machine size or its price.** These are MOTIR-1918 and MOTIR-4336, plus AI economics.
 - **The gateway's contract, or how usage is billed.** These are Story 9.0 and `docs/hosted-run-egress.md`.
 - **Several hosted runs at once, a queue, or choosing among agents.** These are out of Story 9.1.
+- **A model choice per organization, project or card**, or how a cheaper model's runs would be priced or limited. §7 fixes one model per deployment and nothing finer.
 - **Network-level egress enforcement.** The lock is the credential (egress contract §4).
 - **What a _local_ run's card becomes on failure.** Only hosted runs are decided here.
 - **How a hosted run is re-run automatically after a design is sent back.** That is Story 9.2, which calls the start path this document's §1–§3 describe.
