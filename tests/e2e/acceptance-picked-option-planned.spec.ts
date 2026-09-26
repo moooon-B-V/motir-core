@@ -153,14 +153,36 @@ async function stubAiAccess(page: Page): Promise<void> {
   );
 }
 
+/**
+ * OPEN A PAGE SIGNED IN — clearing the RE-CONSENT HOLD the way a person does
+ * (`shell-session.ts`'s `clearReconsentHold`, MOTIR-3713). A seeded person agreed to
+ * the legal documents as they stood when they were created; a spec earlier in the
+ * shard can change what is published, and the lane (`MOTIR_CLOUD=true`) then holds
+ * them at `/re-consent`. Pressing the real Agree button keeps the gate exercised
+ * rather than bypassed. Then it asserts the page landed where it was sent, naming
+ * the URL, so a lost session fails here instead of hanging on the next click.
+ */
+async function openSignedIn(page: Page, path: string): Promise<void> {
+  const destination = new URL(path, 'http://x').pathname;
+  await page.goto(path);
+  await page.waitForURL(
+    (url) => url.pathname.startsWith('/re-consent') || url.pathname === destination,
+    { timeout: FIRST_PAINT_MS },
+  );
+  if (new URL(page.url()).pathname.startsWith('/re-consent')) {
+    await page
+      .getByRole('button', { name: /^Agree (and|to both and|to all and) continue$/ })
+      .click({ timeout: FIRST_PAINT_MS });
+  }
+  await expect(page, `landed on ${page.url()}`).toHaveURL(
+    new RegExp(`${escapeRe(destination)}(\\?|$)`),
+    { timeout: FIRST_PAINT_MS },
+  );
+}
+
 /** Open the choice full screen from the To-approve list, pick OPTION and confirm. */
 async function chooseOption(page: Page, key: string): Promise<Locator> {
-  await page.goto('/workbench?tab=approvals');
-  // SIGNED IN, on the workbench — never the sign-in page or the public site a lost
-  // session redirects to (the failure this names instead of hanging on a click).
-  await expect(page, `landed on ${page.url()}`).toHaveURL(/\/workbench/, {
-    timeout: FIRST_PAINT_MS,
-  });
+  await openSignedIn(page, '/workbench?tab=approvals');
   await rowFor(page, key)
     .getByRole('button', { name: en.workbench.approvals.review, exact: true })
     .click({ timeout: FIRST_PAINT_MS });
@@ -369,7 +391,7 @@ test.describe('a picked option is planned', () => {
     await chapter(
       'The chosen record’s door returns to the conversation — nothing is sent twice',
       async () => {
-        await page.goto(`/items/${choice.identifier}`);
+        await openSignedIn(page, `/items/${choice.identifier}`);
         const door = pickDoor(page, choice.identifier);
         await expect(door).toBeVisible({ timeout: FIRST_PAINT_MS });
         await expect(door).toHaveText(planDoor.label);
@@ -439,7 +461,7 @@ test.describe('a picked option is planned', () => {
   test('None of these still asks to RE-PLAN, with the refusal turn pre-filled and unsent', async ({
     page,
   }) => {
-    await page.goto('/workbench?tab=approvals');
+    await openSignedIn(page, '/workbench?tab=approvals');
     await rowFor(page, second.identifier)
       .getByRole('button', { name: en.workbench.approvals.review, exact: true })
       .click({ timeout: FIRST_PAINT_MS });
@@ -490,7 +512,7 @@ test.describe('a picked option is planned', () => {
       headers: { origin: new URL(page.url()).origin },
     });
     expect(signedIn.status()).toBe(200);
-    await viewerPage.goto(`/items/${choice.identifier}`);
+    await openSignedIn(viewerPage, `/items/${choice.identifier}`);
     await expect(viewerPage.getByText(`chose`, { exact: false }).first()).toBeVisible({
       timeout: FIRST_PAINT_MS,
     });
