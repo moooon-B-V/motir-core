@@ -164,6 +164,40 @@ interface TokenResponse {
   error?: string;
 }
 
+/**
+ * REVOKE a stored token at GitLab (`POST /oauth/revoke`, RFC 7009) — the
+ * organization Git offboarding's last act for a GitLab connection
+ * (MOTIR-6306 · MOTIR-6397), so a deleted row does not leave a live grant behind
+ * it. BEST-EFFORT by contract: resolves `true` when GitLab accepted it and `false`
+ * when it could not be done (unconfigured, unreachable, refused). A token GitLab
+ * already considers invalid is answered `200` too, which is what makes a re-run
+ * harmless. It never throws: the row goes either way, and an expired access token
+ * dies by itself within two hours.
+ */
+export async function revokeToken(token: string): Promise<boolean> {
+  let config: GitlabOAuthConfig;
+  try {
+    config = resolveConfig();
+  } catch {
+    return false;
+  }
+  try {
+    const res = await fetch(`${gitlabBaseUrl()}/oauth/revoke`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        token,
+      }),
+      signal: AbortSignal.timeout(GITLAB_REFRESH_TIMEOUT_MS),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** POST the shared `/oauth/token` endpoint for both the initial exchange and the
  *  refresh, mapping the failure to the caller's typed error. */
 async function postToken(

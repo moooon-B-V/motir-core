@@ -191,6 +191,16 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/publicFollowDigestTick.ts',
     shape: '{ enqueued: number; projects: number }',
   },
+  'purge-retained-organizations': {
+    file: 'lib/jobs/definitions/organizationRetentionPurge.ts',
+    shape:
+      '{ failed: number; failures: Array<{ error: string; organizationId: string }>; purged: number; scanned: number }',
+  },
+  'erase-due-organizations': {
+    file: 'lib/jobs/definitions/organizationErasureSweep.ts',
+    shape:
+      '{ claimed: number; erased: number; failed: number; failures: Array<{ error: string; requestId: string; step: string }>; reconciled: number; resumed: number; scanned: number; skipped: number }',
+  },
   'erase-due-accounts': {
     file: 'lib/jobs/definitions/accountErasureSweep.ts',
     shape:
@@ -327,6 +337,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ discrepancies: Array<{ driftMinutes: number; exceedsTolerance: boolean; meteredMinutes: number; repoName: string; reportedMinutes: number }>; month: number; org: string; outcome: "reconciled"; repos: Array<{ driftMinutes: number; exceedsTolerance: boolean; meteredMinutes: number; repoName: string; reportedMinutes: number }>; year: number } | { outcome: "skipped"; reason: "metering_disabled" | "no_billing_credential" }',
   },
+  'send-due-org-deletion-reminders': {
+    file: 'lib/jobs/definitions/organizationDeletionReminders.ts',
+    shape: '{ remindersSent: number }',
+  },
   'refresh-certificates': {
     file: 'lib/jobs/definitions/publicAddressCertificateRefresh.ts',
     shape: '{ changed: number; failed: number; scanned: number; skipped: "not-configured" | null }',
@@ -369,10 +383,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   // before the change has no `planHeld`, and absent reads as 0, which is exactly
   // what that run recorded (a held card was then counted in `failed`). Nothing
   // branches on the summary; it is surfaced on `job_run.output` only.
+  // MOTIR-6396 added the OPTIONAL `orgClosing` member the same way and for the same
+  // reason: absent reads as 0, and no earlier run skipped for a closing org.
   'run-rules': {
     file: 'lib/jobs/definitions/automationEngine.ts',
     shape:
-      '{ deduped: number; failed: number; matched: number; noActions: number; planHeld?: number | undefined; skipped: boolean; succeeded: number }',
+      '{ deduped: number; failed: number; matched: number; noActions: number; orgClosing?: number | undefined; planHeld?: number | undefined; skipped: boolean; succeeded: number }',
   },
   'schedule-health': {
     file: 'lib/jobs/definitions/dailyHealthCheck.ts',
@@ -391,7 +407,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   send: {
     file: 'lib/jobs/definitions/emailSend.ts',
     shape:
-      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | undefined; template: "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "ownership-transferred" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
+      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | undefined; template: "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "organization-deletion-cancelled" | "organization-deletion-reminder" | "organization-deletion-scheduled" | "organization-erased" | "ownership-transferred" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
   },
   'settle-runner': {
     file: 'lib/services/ciRunnerBootService.ts',

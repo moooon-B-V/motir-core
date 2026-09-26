@@ -131,7 +131,7 @@ afterEach(() => {
 // ── Resolved tokens ─────────────────────────────────────────────────────────
 
 /** The base palette in its LIGHT theme — light means the attribute is ABSENT. */
-const LIGHT: ThemeContext = { palette: 'motir', theme: 'light' };
+const LIGHT: ThemeContext = { palette: 'amethyst', theme: 'light' };
 const { rules } = loadTokenLayer();
 const resolve = (token: string): string => {
   const { value, unresolved } = resolveToken(rules, LIGHT, token);

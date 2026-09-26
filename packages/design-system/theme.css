@@ -3305,7 +3305,7 @@
      --el-danger-on-surface is the ink for danger text ON a page: the palette's
      own danger hue pulled 30% toward that theme's body ink, which is the
      smallest move that clears AA everywhere. Raw --el-danger does NOT — it is
-     4.25:1 (base), 4.11:1 (cobalt) and 4.24:1 (graphite) on the DARK page, and
+     4.25:1 (base), 4.11:1 (cobalt) and 4.24:1 (motir, then graphite) on the DARK page, and
      under 4.5 on most tints in both themes.
      DERIVED rather than listed, deliberately: both inputs are tokens, so it
      re-skins with data-palette and a new palette is covered on the day it is
@@ -3375,7 +3375,7 @@
      palettes x both themes (tests/theme/statusHueSeparation.test.ts).
      ⚠️ It is NOT --color-accent, which `design/boards/implemented-column.mock.html`
      originally specified: that reads clean in the base palette and collides in
-     five of the ten (amber/candy/citrine/graphite/sienna, ΔE as low as 0.0). The
+     five of the ten (amber/candy/citrine/graphite — now motir — /sienna, ΔE as low as 0.0). The
      asset carries the correction and the measurement. */
   /* pink — BUILT, waiting on checks (MOTIR-3003). The one saturated Tier-0 hue
      no other STATUS spends; sharing a hue across FAMILIES is this file's own
@@ -3397,7 +3397,7 @@
      the four palettes that ride this base value (cobalt, evergreen, spectrum,
      garnet) re-skin it as before and each GAINS contrast; ΔE2000 to the nearest
      sibling stays >= 13.7 in all ten palettes x both themes (27.1 / 26.8 here).
-     Why the base and not a [data-palette='motir'] block: <html> carries no
+     Why the base and not a [data-palette='amethyst'] block: <html> carries no
      data-appearance-scope, so a root palette block would be a second cascade
      nobody renders — the base layer IS how the browser reaches these values. */
   --el-status-implemented: color-mix(in srgb, var(--color-accent) 75%, var(--color-charcoal));
@@ -3417,7 +3417,7 @@
      palette-tuned, so the nine palettes that ride this base value re-skin it as
      before and each keeps its own --color-success; ΔE2000 to the nearest
      sibling stays >= 11.3 in all ten palettes x both themes. Why the base and
-     not a [data-palette='motir'] block: same as --el-status-implemented above —
+     not a [data-palette='amethyst'] block: same as --el-status-implemented above —
      <html> carries no data-appearance-scope, so the base layer IS how the
      browser reaches these values. */
   /* A person's YES, and NOT yet shipped (MOTIR-5139). The `done` green one ink
@@ -3998,10 +3998,13 @@
    motion / type). That is the data-style axis's job; keeping the two disjoint
    is what makes "style × palette" a product of two independent choices.
 
-   v1 ships exactly one palette — `motir` (Yue, 2026-06-17: "use Motir's colour
-   palette for the v1"). It IS the Tier-3 base, so — exactly like the
-   `warm-editorial` base style — it needs NO override block: setting
-   data-palette="motir" simply leaves the base --el-* tokens in force. Each
+   v1 shipped exactly one palette, the warm one (Yue, 2026-06-17: "use Motir's
+   colour palette for the v1"), then called `motir` and since MOTIR-6471 called
+   `amethyst`. It IS the Tier-3 base, so — exactly like the `warm-editorial`
+   base style — it needs NO root override block: data-palette="amethyst" simply
+   leaves the base --el-* tokens in force. `motir` now names the monochrome
+   palette (formerly `graphite`), whose block is below; it is the default id,
+   and <html> always carries a data-palette, so the base is a fallback. Each
    later "Palette: …" subtask ADDS its `[data-palette='<id>']` block here,
    overriding --el-* (light + dark via [data-palette='<id>'][data-theme='dark']
    where the palette diverges from the base flip), and authors its
@@ -4009,21 +4012,22 @@
    [data-style] block on the other axis.
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* `motir` needs no block — it is the Tier-3 base above. Each later palette
-   ADDS its [data-palette='<id>'] override here (light + dark companion). */
+/* `amethyst` needs no root block — it is the Tier-3 base above. Each other
+   palette ADDS its [data-palette='<id>'] override here (light + dark companion). */
 
-/* ── The `motir` BASE palette, re-asserted for a SCOPED subtree (MOTIR-3933) ──
-   `motir` is the Tier-0 default, so it historically had NO block: the base
-   values simply were the palette. That is correct for `<html>` and wrong for a
-   NESTED scope, which inherits its ancestor's palette and has nothing to
-   override it with — a `motir` preview under a `graphite` document rendered as
-   graphite. Every other palette re-asserts, so the base must too.
+/* ── The `amethyst` BASE palette, re-asserted for a SCOPED subtree (MOTIR-3933) ──
+   The warm palette is the Tier-0 default (it was called `motir` until
+   MOTIR-6471), so it historically had NO block: the base values simply were
+   the palette. That is correct for `<html>` and wrong for a NESTED scope, which
+   inherits its ancestor's palette and has nothing to override it with — a warm
+   preview under a monochrome document rendered as monochrome. Every other
+   palette re-asserts, so the base must too.
 
    ⚠️ SCOPED BY `[data-appearance-scope]`, DELIBERATELY. `<html>` never carries
    that attribute, so this block matches only a nested preview and the ROOT
    cascade is byte-identical to before. It also keeps the block from reading as
    a palette OVERRIDE: several `tests/theme/*` guards DERIVE "which palettes
-   override this token" from the stylesheet, and a bare `[data-palette='motir']`
+   override this token" from the stylesheet, and a bare `[data-palette='amethyst']`
    block silently enrolled the BASE palette in bars written for overrides. It is
    not an override — it is a scope reset — and the selector now says so.
 
@@ -4037,7 +4041,7 @@
    which is a file that has never existed, and the VALUE assertion it promised
    had never been written either — only the token-SET one had. Both are true
    now. A citation to a guard is worth exactly as much as the guard. */
-[data-appearance-scope][data-palette='motir'] {
+[data-appearance-scope][data-palette='amethyst'] {
   --color-accent: #ff64c8;
   --color-accent-green: #1aae39;
   --color-accent-orange: #dd5b00;
@@ -4097,8 +4101,8 @@
    overrides; the rest keep the light block's values above. Two selectors for
    the same reason every other palette now has two: the compound one for
    `<html>`, the descendant one for a nested scope. */
-[data-theme='dark'] [data-appearance-scope][data-palette='motir']:not([data-theme]),
-[data-appearance-scope][data-palette='motir'][data-theme='dark'] {
+[data-theme='dark'] [data-appearance-scope][data-palette='amethyst']:not([data-theme]),
+[data-appearance-scope][data-palette='amethyst'][data-theme='dark'] {
   --color-background: #0f0f0f;
   --color-border: #2a2a2a;
   --color-canvas: #0e0e0e;
@@ -4308,9 +4312,10 @@
   --el-priority-high: var(--color-warning);
 }
 
-/* ── Palette: Graphite (data-palette="graphite") — Subtask 7.3.51 ───────────
+/* ── Palette: Motir (data-palette="motir") — Subtask 7.3.51, renamed from
+   "Graphite" (the retired `graphite` id) and made the default in MOTIR-6471 ──
    A stark, editorial, COOL-NEUTRAL MONOCHROME re-skin — the cool foil to
-   Motir's warmth: true greyscale surfaces + ink on a clean Radix Slate scale,
+   Amethyst's warmth (the base): true greyscale surfaces + ink on a clean Radix Slate scale,
    a single restrained accent. The accent is expressed two ways, exactly as
    Vercel / Linear do it: the primary CTA is a high-contrast INK fill (near-black
    on light, near-white on dark — the monochrome statement), while the one
@@ -4337,8 +4342,8 @@
    Accessibility: every text-on-surface, white-on-fill, link, and chip-tint
    pairing clears WCAG AA (≥4.5; ≥3.0 for icon/UI hues) in BOTH light and dark —
    verified numerically + by rendered specimen, never eyeballed. See
-   docs/palettes/graphite.md for the colour-role reference. */
-[data-palette='graphite'] {
+   docs/palettes/motir.md for the colour-role reference. */
+[data-palette='motir'] {
   /* brand & primary — the high-contrast INK CTA + the single cool-blue accent.
      --color-primary is the accent AS text/icon/focus on a surface (the cool
      blue, AA on white & the slate surface); --color-primary-fill is the CTA
@@ -4346,7 +4351,7 @@
   --color-primary: #155bc4; /* cool-blue accent — links / active / focus / icon */
   --color-primary-foreground: #ffffff; /* white labels on the ink fill */
   --color-primary-pressed: #2b2f35; /* pressed ink CTA (one step off the fill) */
-  --color-primary-fill: #1a1d21; /* near-black graphite CTA fill (white-on AA) */
+  --color-primary-fill: #1a1d21; /* near-black ink CTA fill (white-on AA) */
 
   /* surfaces — pure white canvas over cool slate sections (Radix Slate) */
   --color-background: #ffffff; /* stark white canvas */
@@ -4404,7 +4409,7 @@
   /* Status ramp — the one place the mono identity COLLIDES with the Tier-0
      indirection (MOTIR-2073). `--el-status-in-progress` rides --color-info and
      `--el-status-in-review` rides --color-primary; every other palette keeps
-     those two sources apart, but Graphite deliberately unifies them (info =
+     those two sources apart, but Motir (then Graphite) deliberately unifies them (info =
      the accent, above), which re-collapsed in_review onto in_progress — the
      exact differentiation MOTIR-1273 delivered. The fix keeps BOTH deliberate
      choices by giving the status ramp its own SECOND STEP of the same accent
@@ -4418,7 +4423,7 @@
   /* Priority ramp — highest vs high (MOTIR-2094, the MOTIR-2085 shape in a
      second palette). `--el-priority-highest` rides --color-destructive
      (#c92a2a) and `--el-priority-high` rides --color-warning (#c2410c);
-     Graphite's warning is a RED-leaning burnt orange sitting beside its danger
+     this palette's warning is a RED-leaning burnt orange sitting beside its danger
      red, so the two land ΔE2000 10.02 apart. That PASSES the ΔE 10 bar a
      coloured priority GLYPH needs — by 0.02, which is rounding, not margin: the
      two marks are at the perceptual minimum, and any future nudge to either
@@ -4426,24 +4431,24 @@
      identity (the chrome is greyscale; semantic hues stay chromatic on purpose),
      so it is a collision to fix, not a choice to document.
      The fix is Cobalt's: neither semantic moves — danger stays danger, warning
-     stays warning — and the PRIORITY ramp takes its own step of a hue Graphite
+     stays warning — and the PRIORITY ramp takes its own step of a hue this palette
      already owns, Radix Amber 11, one of this palette's documented Radix
      sources. Separation from highest ΔE 24.7 (nearest other step, medium, ΔE
      32.2); contrast 4.6:1 card / 4.0:1 surface, past the 3:1 icon/UI bar. */
   --el-priority-high: #ab6400; /* Radix Amber 11 — the ramp's own amber step */
-  /* implemented (MOTIR-3003) — Graphite's --color-accent is its blue accent, a
+  /* implemented (MOTIR-3003) — this palette's --color-accent is its blue accent, a
      step from the same family as --el-status-in-progress. The ink step is free
      here and reads as "not yet coloured in", which is what the state is:
      ΔE 15.9 light / 11.8 dark from the nearest status. */
   --el-status-implemented: var(--color-charcoal);
 }
 
-/* Graphite — dark companion. A cool near-black slate canvas; the CTA fill
+/* Motir (formerly Graphite) — dark companion. A cool near-black slate canvas; the CTA fill
    inverts to near-WHITE ink (Vercel's dark white-button), the accent blue
    brightens so it reads AS text on the dark canvas, and semantic/type hues
    brighten to clear AA on near-black. */
-[data-theme='dark'] [data-palette='graphite']:not([data-theme]),
-[data-palette='graphite'][data-theme='dark'] {
+[data-theme='dark'] [data-palette='motir']:not([data-theme]),
+[data-palette='motir'][data-theme='dark'] {
   --color-background: #0c0d0f; /* stark cool near-black canvas */
   --color-foreground: #edeef0;
   --color-surface: #18191c; /* cool slate section */
@@ -4679,7 +4684,7 @@
   /* Status ramp (MOTIR-2075) — two collisions in this theme.
      in_review vs done: emerald #3ddc97 against grass #34d27a, ΔE2000 4.7. Same
      fix as light, inverted: Radix Jade 12's DARK step, pale rather than deep —
-     the light/dark inversion Graphite's accent step already uses. ΔE 17.2;
+     the light/dark inversion this palette's accent step already uses. ΔE 17.2;
      contrast 13.3:1 surface / 14.5:1 card.
      todo vs cancelled: --color-stone #5a6b62 against --color-steel #6f8077,
      ΔE 8.3 — this palette's neutral ramp is compressed against the base's
@@ -4921,7 +4926,7 @@
   --el-sidebar-item-bg-hover: #261f3d;
 
   /* Priority ramp — the dark half of the light block's amber step (MOTIR-2107).
-     UNLIKE cobalt and graphite (whose dark hues were already far enough apart to
+     UNLIKE cobalt and motir (whose dark hues were already far enough apart to
      re-assert the source here), Spectrum's dark destructive #f0555f and warning
      #fb8b4c render a chip only ΔE 4.8 apart, so dark carries its own amber too:
      the brighter #fbab4c the other dark palettes already use, which reads as an
@@ -5471,7 +5476,7 @@
      Miro's OTHER brand hue at its own depth — the action blue, blue-650 — which
      leaves blocked on the warning gold where its semantics belong. Note
      in_progress rides blue-500 #3859ff: same family, two depths, ΔE 17.0 apart,
-     the Graphite idiom. Contrast 9.2:1 surface / 10.2:1 card.
+     the Motir (ex-Graphite) idiom. Contrast 9.2:1 surface / 10.2:1 card.
      todo vs cancelled: gray-450 #7f8497 vs gray-500 #656b81, ΔE 10.0 — one step
      apart on Mirotone's gray ramp. cancelled drops to gray-600. ΔE 20.6;
      contrast 7.5:1 / 8.3:1. */

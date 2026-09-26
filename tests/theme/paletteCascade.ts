@@ -21,7 +21,7 @@ import { join } from 'node:path';
 
 /** The `data-*` axis state of the root element for one resolution context. */
 export interface ThemeContext {
-  /** `data-palette` value. `motir` is the base and ships no override block. */
+  /** `data-palette` value. `amethyst` is the base and ships no root override block. */
   palette: string;
   /**
    * `light` means the attribute is ABSENT — light is the implicit `@theme`

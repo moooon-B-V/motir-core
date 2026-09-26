@@ -249,13 +249,13 @@ export function StylePicker({
 /**
  * Each palette's signature primary hue, hardcoded — the light-theme
  * `--color-primary-fill` of its `[data-palette]` block in `app/globals.css`
- * (graphite's is its near-black ink CTA). Used for the picker swatch so the dot
+ * (motir's is its near-black ink CTA; amethyst, the base, is the old purple). Used for the picker swatch so the dot
  * shows the palette's identity colour independent of the active theme/style.
  */
 const PALETTE_SWATCH_HEX: Record<PaletteId, string> = {
-  motir: '#5645d4',
+  motir: '#1a1d21',
+  amethyst: '#5645d4',
   cobalt: '#3650c2',
-  graphite: '#1a1d21',
   evergreen: '#0c7a52',
   spectrum: '#5a37c9',
   amber: '#f0b90b',

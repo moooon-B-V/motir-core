@@ -4,7 +4,7 @@ import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { DesignStep } from '@/components/onboarding/DesignStep';
 import { DEFAULT_STYLE_ID, STYLE_IDS, STYLE_REGISTRY } from '@/lib/theme/styles';
-import { DEFAULT_PALETTE_ID } from '@/lib/theme/palettes';
+import { DEFAULT_PROJECT_PALETTE_ID } from '@/lib/theme/palettes';
 import { DEFAULT_TYPE_ID } from '@/lib/theme/typography';
 import type { DesignChoiceDTO } from '@/lib/dto/aiPreplan';
 
@@ -92,11 +92,19 @@ describe('DesignStep (MOTIR-1040)', () => {
     const { page } = renderStep();
     fireEvent.click(screen.getByRole('radio', { name: STYLE_REGISTRY[OTHER_STYLE].name }));
     fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Cobalt' }));
 
     fireEvent.click(screen.getByRole('button', { name: /Reset/ }));
 
     expect(page().getAttribute('data-style')).toBe(DEFAULT_STYLE_ID);
     expect(page().getAttribute('data-theme')).toBe('light');
+    expect(page().getAttribute('data-palette')).toBe(DEFAULT_PROJECT_PALETTE_ID);
+  });
+
+  it('opens a new project on Amethyst — the project default, not Motir’s own (MOTIR-6471)', () => {
+    const { page } = renderStep();
+    expect(DEFAULT_PROJECT_PALETTE_ID).toBe('amethyst');
+    expect(page().getAttribute('data-palette')).toBe('amethyst');
   });
 
   it('Use this design + Back call their callbacks', () => {
@@ -127,7 +135,7 @@ describe('DesignStep (MOTIR-1040)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use this design' }));
     expect(onUseDesign).toHaveBeenCalledWith({
       styleId: OTHER_STYLE,
-      paletteId: DEFAULT_PALETTE_ID,
+      paletteId: DEFAULT_PROJECT_PALETTE_ID,
       typeId: DEFAULT_TYPE_ID,
     });
   });

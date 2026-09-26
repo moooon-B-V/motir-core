@@ -24,16 +24,29 @@
  * disjoint is what makes "style × palette" a true product of two independent
  * choices rather than N×M hand-tuned combinations.
  *
- * ── v1 — Motir's own palette ─────────────────────────────────────────────
- * v1 ships exactly ONE registered palette: **Motir** — the warm, Notion-warm
- * scheme the product already wears (cream surfaces, charcoal ink, purple
- * primary, pastel feature tints). It is the Tier-0/Tier-3 BASE, so — exactly
- * like the `warm-editorial` base style — it needs NO `[data-palette]` override
- * block; the base `--el-*` tokens already are it. (Per Yue, 2026-06-17: "use
- * Motir's colour palette for the v1.") Each later "Palette: …" subtask ADDS its
- * entry here, ships a `[data-palette='<id>']` block in globals.css overriding
- * the `--el-*` layer, and authors its `docs/palettes/<id>.md` doc — exactly the
- * shape the per-style subtasks (7.3.33+) follow on the other axis.
+ * ── Motir's own palette, and the one that used to be ──────────────────────
+ * **Motir** is the palette Motir wears when a person has chosen none: the stark
+ * monochrome scheme (cool greyscale surfaces + ink, an ink CTA, a single
+ * restrained cool-blue accent). It shipped as "Graphite" (7.3.51) and took the
+ * product's name in MOTIR-6471, so its colours arrive through its
+ * `[data-palette='motir']` block.
+ *
+ * **Amethyst** is the warm scheme the product wore until then (cream surfaces,
+ * charcoal ink, purple primary, pastel feature tints), which carried the name
+ * "Motir" from v1 (Per Yue, 2026-06-17) until that rename. It is still the
+ * Tier-0/Tier-3 BASE in theme.css, so — exactly like the `warm-editorial` base
+ * style — the base `--el-*` tokens already are it; its `[data-palette='amethyst']`
+ * blocks only re-assert that base inside a scoped subtree. `<html>` always
+ * carries a `data-palette`, so the base is a fallback, never what a person sees
+ * by default. Each later "Palette: …" subtask ADDS its entry here, ships a
+ * `[data-palette='<id>']` block overriding the `--el-*` layer, and authors its
+ * `docs/palettes/<id>.md` doc — exactly the shape the per-style subtasks
+ * (7.3.33+) follow on the other axis.
+ *
+ * ⚠️ A STORED palette id written before the rename means the OTHER palette:
+ * `motir` meant today's `amethyst`, and `graphite` meant today's `motir`. Every
+ * store is migrated once (`PALETTE_ID_MIGRATION` in ./types.ts, and the
+ * `user_appearance_preference` migration) — never alias the old spellings.
  */
 
 /** A registered, runtime-selectable colour palette. */
@@ -56,16 +69,26 @@ export interface PaletteDefinition {
 
 /**
  * The registry. Insertion order is the gallery order. Each `id` matches a
- * `[data-palette='<id>']` block in app/globals.css (Motir is the base, so its
- * block is the Tier-3 defaults — no override block needed).
+ * `[data-palette='<id>']` block in theme.css (Amethyst is the Tier-3 base, so its
+ * blocks only re-assert the defaults inside a scoped subtree).
  */
 export const PALETTE_REGISTRY = {
   motir: {
     id: 'motir',
     name: 'Motir',
-    tagline: 'Warm and editorial — cream surfaces, charcoal ink, a purple primary, pastel tints.',
-    inspiration: "Notion's warm marketing palette — the product's house colours.",
+    tagline:
+      'Stark and editorial — cool greyscale surfaces + ink, an ink CTA, a single restrained cool-blue accent.',
+    inspiration:
+      "Vercel's black-and-white precision + Linear's ultra-minimal, on Radix Slate/Blue scales.",
     designDoc: 'docs/palettes/motir.md',
+  },
+  amethyst: {
+    id: 'amethyst',
+    name: 'Amethyst',
+    tagline: 'Warm and editorial — cream surfaces, charcoal ink, a purple primary, pastel tints.',
+    inspiration:
+      "Notion's warm marketing palette — Motir's house colours until the monochrome rename.",
+    designDoc: 'docs/palettes/amethyst.md',
   },
   cobalt: {
     id: 'cobalt',
@@ -75,15 +98,6 @@ export const PALETTE_REGISTRY = {
     inspiration:
       "Coinbase's clean institutional blue + IBM's structured blue, on Radix Blue/Indigo/Slate scales.",
     designDoc: 'docs/palettes/cobalt.md',
-  },
-  graphite: {
-    id: 'graphite',
-    name: 'Graphite',
-    tagline:
-      'Stark and editorial — cool greyscale surfaces + ink, an ink CTA, a single restrained cool-blue accent.',
-    inspiration:
-      "Vercel's black-and-white precision + Linear's ultra-minimal, on Radix Slate/Blue scales.",
-    designDoc: 'docs/palettes/graphite.md',
   },
   evergreen: {
     id: 'evergreen',
@@ -157,10 +171,30 @@ export type PaletteId = keyof typeof PALETTE_REGISTRY;
 export const PALETTE_IDS = Object.keys(PALETTE_REGISTRY) as PaletteId[];
 
 /**
- * The default palette a fresh install / unset preference resolves to. Motir is
- * the house palette and the Tier-3 base.
+ * The palette Motir wears when a person has chosen none — a fresh install, a
+ * signed-out visitor, an unset (null) server preference. Its VALUE has been
+ * `'motir'` since v1; what it NAMES changed in MOTIR-6471, from the warm scheme
+ * (now `amethyst`) to the monochrome one (formerly `graphite`).
  */
 export const DEFAULT_PALETTE_ID: PaletteId = 'motir';
+
+/**
+ * The palette theme.css's Tier-0/Tier-3 BASE carries — the one with no root
+ * `[data-palette]` override block, only a scoped re-assertion. It is the
+ * reference every other palette's override is measured AGAINST. Until
+ * MOTIR-6471 it was also {@link DEFAULT_PALETTE_ID}; since the rename the two
+ * differ, so a reader asking "which palette is the base?" names this and never
+ * the default.
+ */
+export const BASE_PALETTE_ID: PaletteId = 'amethyst';
+
+/**
+ * The default look the onboarding Design step offers for a user's OWN project —
+ * a different question from the one {@link DEFAULT_PALETTE_ID} answers. It stays
+ * on the warm scheme the step has always opened on (MOTIR-6470's scope boundary,
+ * confirmed by the requester).
+ */
+export const DEFAULT_PROJECT_PALETTE_ID: PaletteId = 'amethyst';
 
 /** Narrowing guard — is an arbitrary string a registered palette id? */
 export function isPaletteId(value: unknown): value is PaletteId {

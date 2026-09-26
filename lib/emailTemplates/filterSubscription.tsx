@@ -6,6 +6,7 @@ import { PrimaryButton } from './_components/PrimaryButton';
 import { getMessagesFor } from '@/lib/i18n/messages';
 import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 import type { RenderedEmail } from './types';
+import { EMAIL_LINK } from './_components/emailColors';
 
 // Filter-subscription results email (Story 6.2 · Subtask 6.2.5). Sent by the
 // `email.send` job when a saved-filter subscription is DUE: the filter name,
@@ -118,7 +119,7 @@ const fallbackLinkRow = {
   fontSize: '13px',
   margin: '0 0 24px',
 };
-const fallbackLink = { color: '#2563eb', wordBreak: 'break-all' as const };
+const fallbackLink = { color: EMAIL_LINK, wordBreak: 'break-all' as const };
 const hr = { borderColor: '#e5e7eb', margin: '8px 0 16px' };
 const reason = { color: '#9ca3af', fontSize: '12px', margin: '0 0 8px' };
 const unsubscribeRow = { fontSize: '12px', margin: '0 0 8px' };

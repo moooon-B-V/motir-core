@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
+import { BASE_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
 import { DEFAULT_STATUSES } from '@/lib/workflows/defaultWorkflow';
 import { statusElVar } from '@/lib/workflows/statusColor';
 import { PRIORITY_OPTIONS } from '@/lib/issues/priority';
@@ -32,7 +32,7 @@ import { loadTokenLayer, declaredIn, resolveValue, type ThemeContext } from './p
 
 const { rules, baseBlock, elementTokens } = loadTokenLayer();
 
-const NON_BASE_PALETTES = PALETTE_IDS.filter((id) => id !== DEFAULT_PALETTE_ID);
+const NON_BASE_PALETTES = PALETTE_IDS.filter((id) => id !== BASE_PALETTE_ID);
 const THEMES = ['light', 'dark'] as const;
 const CONTEXTS: ThemeContext[] = PALETTE_IDS.flatMap((palette) =>
   THEMES.map((theme) => ({ palette, theme })),
@@ -130,7 +130,7 @@ describe('palette coverage — every element token is actually re-skinned', () =
   it('gives every element token a palette-dependent value, bar the documented exceptions', () => {
     const invariant = elementTokens.filter((token) =>
       PALETTE_IDS.every((palette) =>
-        THEMES.every((theme) => at(palette, theme)[token] === at(DEFAULT_PALETTE_ID, theme)[token]),
+        THEMES.every((theme) => at(palette, theme)[token] === at(BASE_PALETTE_ID, theme)[token]),
       ),
     );
     expect(invariant.sort()).toEqual([...KNOWN_PALETTE_INVARIANT].sort());
@@ -206,7 +206,7 @@ describe('recessed canvas — the planning board reads as a recess in every pale
     const reused: string[] = [];
     for (const palette of NON_BASE_PALETTES) {
       for (const theme of THEMES) {
-        if (at(palette, theme)['--el-canvas'] === at(DEFAULT_PALETTE_ID, theme)['--el-canvas']) {
+        if (at(palette, theme)['--el-canvas'] === at(BASE_PALETTE_ID, theme)['--el-canvas']) {
           reused.push(`${palette}/${theme}`);
         }
       }
@@ -343,9 +343,7 @@ describe('rendered specimen — the differentiating hues still differentiate', (
     for (const palette of NON_BASE_PALETTES) {
       for (const [family, tokens] of Object.entries(FAMILIES)) {
         const differs = THEMES.some((theme) =>
-          tokens.some(
-            (token) => at(palette, theme)[token] !== at(DEFAULT_PALETTE_ID, theme)[token],
-          ),
+          tokens.some((token) => at(palette, theme)[token] !== at(BASE_PALETTE_ID, theme)[token]),
         );
         if (!differs) unchanged.push(`${palette}/${family}`);
       }

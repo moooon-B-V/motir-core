@@ -1,3 +1,4 @@
+import { assertWorkspaceOrgNotClosing } from '@/lib/organizations/closingGuard';
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
@@ -246,6 +247,9 @@ export const githubInstallationService = {
     installationId: string;
     provider?: GitProviderId;
   }): Promise<GithubInstallationDTO> {
+    // No new connection in an org scheduled for deletion (MOTIR-6396). System
+    // context: this door carries no user, and both rows have a system read arm.
+    await withSystemContext((tx) => assertWorkspaceOrgNotClosing(ctx.workspaceId, tx));
     const gitProvider = getGitProvider(ctx.provider ?? 'github');
     const [account, repos] = await Promise.all([
       gitProvider.fetchInstallation(ctx.installationId),

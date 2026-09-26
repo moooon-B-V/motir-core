@@ -6,6 +6,7 @@ import { PrimaryButton } from './_components/PrimaryButton';
 import { getMessagesFor } from '@/lib/i18n/messages';
 import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 import type { RenderedEmail } from './types';
+import { EMAIL_LINK } from './_components/emailColors';
 
 // Workspace-invite email. Matches design/workspaces/invite-email-html.png.
 // Per CLAUDE.md, templates are pure render functions: no sendEmail call, no DB
@@ -60,7 +61,7 @@ const fallbackLinkRow = {
   fontSize: '13px',
   margin: '0 0 24px',
 };
-const fallbackLink = { color: '#2563eb', wordBreak: 'break-all' as const };
+const fallbackLink = { color: EMAIL_LINK, wordBreak: 'break-all' as const };
 
 /**
  * Public template entry point. Returns `{ subject, text, html }` for the service

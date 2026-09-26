@@ -152,8 +152,8 @@ describe('appearancePreferenceService.update', () => {
   it('is idempotent: re-applying the same patch keeps one row and the same DTO', async () => {
     const user = await createTestUser();
 
-    const first = await appearancePreferenceService.update(user.id, { paletteId: 'graphite' });
-    const second = await appearancePreferenceService.update(user.id, { paletteId: 'graphite' });
+    const first = await appearancePreferenceService.update(user.id, { paletteId: 'motir' });
+    const second = await appearancePreferenceService.update(user.id, { paletteId: 'motir' });
 
     expect(second).toEqual(first);
     expect(await db.userAppearancePreference.count({ where: { userId: user.id } })).toBe(1);
@@ -163,6 +163,9 @@ describe('appearancePreferenceService.update', () => {
     ['pattern', { pattern: 'twilight' }],
     ['styleId', { styleId: 'no-such-style' }],
     ['paletteId', { paletteId: 'no-such-palette' }],
+    // MOTIR-6471 retired the id; its palette is `motir` now, and the stored rows
+    // were migrated, so a write still spelling it is a stale client.
+    ['paletteId', { paletteId: 'graphite' }],
     ['typeId', { typeId: 'inter-system' }],
   ])('rejects an unknown %s with a typed error and writes nothing', async (_axis, patch) => {
     const user = await createTestUser();
