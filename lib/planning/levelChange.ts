@@ -1,6 +1,5 @@
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
-import { changedFields } from '@/lib/planning/planChangeDiff';
 import { levelTrail } from '@/lib/planning/planArrival';
 import { proposalLevelKey } from '@/lib/planning/planShape';
 
@@ -25,7 +24,8 @@ export type LevelChange =
   | {
       state: 'changed';
       item: PlanReviewItemDto;
-      /** `planningWorkspace.conversation.diff.field.*` keys, the card's own words. */
+      /** The changed fields' WIRE names, in change order — labelled by the band
+       *  exactly as the card's diff line labels them (`planReview.field_*`). */
       fields: string[];
       /** The proposed title, only when the title is among the changes — the crumb
        *  directly above keeps the committed one, so `was → now` is one glance. */
@@ -68,7 +68,7 @@ export function levelChangeFor(
   return {
     state: 'changed',
     item,
-    fields: changedFields(item),
+    fields: item.changes.map((c) => c.field),
     proposedTitle: title?.to ?? null,
   };
 }

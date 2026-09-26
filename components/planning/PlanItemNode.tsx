@@ -410,8 +410,11 @@ export function PlanItemOpBadge({
  *  which is why its own gap was cosmetic and this one was not.
  *
  *  The copy itself is still owed — `plan-change-field-labels.test.tsx` fails
- *  when a `PLAN_ITEM_CHANGE_FIELDS` member has no message. */
-function fieldLabel(t: ReturnType<typeof useTranslations>, field: string): string {
+ *  when a `PLAN_ITEM_CHANGE_FIELDS` member has no message.
+ *
+ *  EXPORTED (MOTIR-6223) so the level change band names a field in exactly the
+ *  card's words; `t` must be the `planReview` translator. */
+export function fieldLabel(t: ReturnType<typeof useTranslations>, field: string): string {
   const key = `field_${field}`;
   return t.has(key) ? t(key) : field;
 }

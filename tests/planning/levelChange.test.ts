@@ -78,14 +78,15 @@ describe('levelChangeFor', () => {
     expect(levelChangeFor([item({ parentNodeId: 'lvl' })], 'lvl', null)).toBeNull();
   });
 
-  it('reads a modify as CHANGED, with the card’s field words and the proposed title', () => {
+  it('reads a modify as CHANGED, with its changed fields in change order and the proposed title', () => {
     const change = levelChangeFor(
       [
         modifyOf('lvl', {
           changes: [
             { field: 'title', from: 'Old', to: 'New' },
             { field: 'storyPoints', from: '3', to: '5' },
-            // A field with no copy key is dropped, as the retired frame dropped it.
+            // Carried as-is: the band labels it the way the card's diff line
+            // does, degrading an unknown field to its wire name (MOTIR-3151).
             { field: 'somethingNew', from: 'a', to: 'b' },
           ],
         }),
@@ -95,7 +96,7 @@ describe('levelChangeFor', () => {
     );
     expect(change).toMatchObject({
       state: 'changed',
-      fields: ['title', 'points'],
+      fields: ['title', 'storyPoints', 'somethingNew'],
       proposedTitle: 'New',
     });
   });

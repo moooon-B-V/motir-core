@@ -226,7 +226,7 @@ describe('PlanReviewCanvas — a pending change to the level you stand in (bug M
     expect(within(b).getByText('change')).toBeTruthy();
     expect(b.textContent).toContain('This level');
     expect(b.textContent).toContain('title → Authentication & sessions');
-    expect(within(b).getByTestId('canvas-level-band-fields').textContent).toBe('title · status');
+    expect(within(b).getByTestId('canvas-level-band-fields').textContent).toBe('Title · Status');
   });
 
   it('keeps the COMMITTED title on the crumb — the band carries the proposed one', async () => {
@@ -247,7 +247,7 @@ describe('PlanReviewCanvas — a pending change to the level you stand in (bug M
       return band()!;
     });
     expect(b.textContent).not.toContain('→');
-    expect(within(b).getByTestId('canvas-level-band-fields').textContent).toBe('priority');
+    expect(within(b).getByTestId('canvas-level-band-fields').textContent).toBe('Priority');
   });
 
   it('says a REMOVED level goes on approve — and the crumb is not struck', async () => {

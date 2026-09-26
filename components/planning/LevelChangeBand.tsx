@@ -1,7 +1,11 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { PlanItemOpBadge, type PlanItemOutcome } from '@/components/planning/PlanItemNode';
+import {
+  fieldLabel,
+  PlanItemOpBadge,
+  type PlanItemOutcome,
+} from '@/components/planning/PlanItemNode';
 import type { LevelChange } from '@/lib/planning/levelChange';
 
 // THE LEVEL CHANGE BAND (bug MOTIR-6223; design MOTIR-6241,
@@ -46,7 +50,7 @@ export function LevelChangeBand({
   outcome: PlanItemOutcome | null;
 }) {
   const t = useTranslations('planningWorkspace.arrival.levelChange');
-  const tDiff = useTranslations('planningWorkspace.conversation.diff');
+  const tReview = useTranslations('planReview');
   return (
     <div
       data-testid="canvas-level-band"
@@ -78,13 +82,13 @@ export function LevelChangeBand({
         )}
       </span>
       {change.state === 'changed' && change.fields.length > 0 ? (
-        // The changed fields in the card's own words, joined as the retired frame
-        // joined them — the information the missing frame would have carried.
+        // The changed fields in the card's own words (its diff line's labels),
+        // joined with `·` — the information the missing frame would have carried.
         <span
           data-testid="canvas-level-band-fields"
           className="max-w-[16rem] shrink-0 truncate rounded-(--radius-badge) bg-(--el-tint-sky) px-(--spacing-chip-x) py-(--spacing-chip-y) text-[10px] font-semibold text-(--el-text-strong)"
         >
-          {change.fields.map((f) => tDiff(`field.${f}`)).join(' · ')}
+          {change.fields.map((f) => fieldLabel(tReview, f)).join(' · ')}
         </span>
       ) : null}
     </div>
