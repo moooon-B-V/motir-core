@@ -176,7 +176,9 @@ describe('the `system.*` schedule is CLUSTERED — the quiet gap the compute sle
     // 26 since `system.dlq-standing-depth-sweep` (MOTIR-5869), at `0 7 * * *` — an
     // hour of its own after the nightly cascade, on a clustered minute, costing NO
     // NEW WAKE. Derived by the grep above.
-    expect(jobSchedules().length).toBe(26);
+    // 27 since `system.organization-deletion-reminders` (MOTIR-6395), at `0 9 * * *` —
+    // a clustered minute, costing NO NEW WAKE. Derived by the grep above.
+    expect(jobSchedules().length).toBe(27);
     expect(wakeMinutes()).toEqual([...SCHEDULE_CLUSTER_MINUTES].sort((a, b) => a - b));
     expect(wakeMinutes()).toEqual([0, 30]);
     expect(longestQuietGapMinutes()).toBe(30);

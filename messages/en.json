@@ -846,6 +846,46 @@
       "viewAll": "See the full changelog",
       "unsubscribe": "Unsubscribe",
       "why": "You're getting this because you follow this project on Motir. One click above stops it."
+    },
+    "organizationDeletionScheduled": {
+      "subject": "{organization} is scheduled for deletion on {date}",
+      "preview": "{organization} will be erased on {date}",
+      "greeting": "Hi {name},",
+      "ledeOwner": "You scheduled {organization} for deletion. It will be erased on {date}.",
+      "ledeMember": "{scheduledBy} scheduled {organization} for deletion. It will be erased on {date}.",
+      "readOnly": "Until then the organization is read-only: you can still read everything and download your own data, but nothing can be changed.",
+      "cancelOwner": "You can cancel the deletion at any time before then, from the organization settings.",
+      "cancelMember": "If this is a mistake, ask {scheduledBy}, the organization's Owner, to cancel it before {date}.",
+      "openSettings": "Open organization settings",
+      "downloadData": "Download your data",
+      "footer": "You are receiving this because you are a member of the organization."
+    },
+    "organizationDeletionCancelled": {
+      "subject": "The deletion of {organization} was cancelled",
+      "preview": "{organization} will not be deleted",
+      "greeting": "Hi {name},",
+      "lede": "{cancelledBy} cancelled the deletion of {organization}.",
+      "detail": "Everything is back to normal: you can edit again, and nothing will be erased.",
+      "open": "Open Motir",
+      "footer": "You are receiving this because you are a member of the organization."
+    },
+    "organizationDeletionReminder": {
+      "subject": "{organization} will be deleted in {daysLeft, plural, one {# day} other {# days}}",
+      "preview": "{organization} will be erased on {date}",
+      "greeting": "Hi {name},",
+      "lede": "{organization} is scheduled for deletion on {date}, {daysLeft, plural, one {# day} other {# days}} from now. It is read-only until then.",
+      "cancelOwner": "You can still cancel the deletion from the organization settings.",
+      "cancelAdmin": "Only {owner}, the organization's Owner, can cancel it.",
+      "openSettings": "Open organization settings",
+      "footer": "You are receiving this because you are the Owner or an Admin of the organization."
+    },
+    "organizationErased": {
+      "subject": "{organization} has been deleted",
+      "preview": "{organization} and everything in it has been erased",
+      "greeting": "Hi {name},",
+      "lede": "{organization} has been deleted. Its workspaces, projects, members, and the repositories Motir hosted for it have been erased.",
+      "kept": "Motir keeps only its billing records, as the law requires, until {year}. They are deleted then too.",
+      "footer": "You are receiving this because you were the Owner or an Admin of the organization."
     }
   },
   "auth": {

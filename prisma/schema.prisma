@@ -9864,9 +9864,11 @@ model OrganizationDeletionRequest {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  requestedBy  User?        @relation("OrganizationDeletionRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
-  cancelledBy  User?        @relation("OrganizationDeletionCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  organization Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requestedBy  User?                        @relation("OrganizationDeletionRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  cancelledBy  User?                        @relation("OrganizationDeletionCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  /// The emails already sent about this request (MOTIR-6395's dedupe record).
+  notices      OrganizationDeletionNotice[]
 
   /// History, newest first. NOT `([organizationId])` — see the doc comment.
   @@index([organizationId, requestedAt])
@@ -9875,6 +9877,40 @@ model OrganizationDeletionRequest {
   @@index([requestedByUserId])
   @@index([cancelledByUserId])
   @@map("organization_deletion_request")
+}
+
+/// One email notice sent about an {@link OrganizationDeletionRequest} (Story
+/// MOTIR-6306 · MOTIR-6395) — the DEDUPE record that makes each notice
+/// exactly-once per (request, kind, daysLeft) whatever the job engine's own
+/// idempotency window is: the reminder job runs every day for a month, and the
+/// schedule / cancel / erase callers are at-least-once.
+///
+/// Written AFTER the notice's emails are enqueued (each carrying its own
+/// per-recipient idempotency key), so a crash between the two re-sends at worst
+/// inside the engine's dedupe window rather than silently skipping a notice.
+/// Cascades with its request, so the seven-year purge takes it too.
+model OrganizationDeletionNotice {
+  id        String                         @id @default(cuid())
+  requestId String                         @map("request_id")
+  kind      OrganizationDeletionNoticeKind
+  /// The reminder's day count (7 or 1); 0 for the one-off notices.
+  daysLeft  Int                            @default(0) @map("days_left")
+  sentAt    DateTime                       @default(now()) @map("sent_at")
+
+  request OrganizationDeletionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, kind, daysLeft])
+  @@map("organization_deletion_notice")
+}
+
+/// Which notice an {@link OrganizationDeletionNotice} records (DECISION §8).
+enum OrganizationDeletionNoticeKind {
+  scheduled
+  cancelled
+  reminder
+  erased
+
+  @@map("organization_deletion_notice_kind")
 }
 
 /// Where an {@link OrganizationDeletionRequest} stands (DECISION §2–§7).

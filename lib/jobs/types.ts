@@ -439,6 +439,10 @@ export interface JobEventDataMap {
    *  true. Cron triggered, so it carries no tenant: the due set spans users and
    *  tenants and the ledger row is untenanted, like every `system.*` sweep. */
   'system.account-erasure-sweep': SystemScheduledData;
+  /** The ORGANIZATION-DELETION reminders (Story MOTIR-6306 · MOTIR-6395) — the
+   *  seven-day and one-day notices to a closing org's Owner and Admins. Cron
+   *  triggered, so it carries no payload beyond the scheduled envelope. */
+  'system.organization-deletion-reminders': SystemScheduledData;
   /** The code-graph OFFBOARDING sweep (Story MOTIR-2192 · MOTIR-2168) — drains
    *  due `code_graph_offboarding` rows through motir-ai's offboard seam, which is
    *  what makes §14's retention window real. Cron triggered, so it carries no

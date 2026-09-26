@@ -846,6 +846,46 @@
       "viewAll": "查看完整更新日志",
       "unsubscribe": "退订",
       "why": "你收到这封邮件是因为你在 Motir 上关注了该项目。点击上方链接即可停止接收。"
+    },
+    "organizationDeletionScheduled": {
+      "subject": "{organization} 已计划于 {date} 删除",
+      "preview": "{organization} 将于 {date} 被清除",
+      "greeting": "{name}，你好：",
+      "ledeOwner": "你已计划删除 {organization}，它将于 {date} 被清除。",
+      "ledeMember": "{scheduledBy} 已计划删除 {organization}，它将于 {date} 被清除。",
+      "readOnly": "在此之前，该组织为只读：你仍可查看所有内容并下载自己的数据，但无法做任何修改。",
+      "cancelOwner": "在此之前，你可以随时在组织设置中取消删除。",
+      "cancelMember": "如果这是误操作，请在 {date} 之前联系组织所有者 {scheduledBy} 取消。",
+      "openSettings": "打开组织设置",
+      "downloadData": "下载你的数据",
+      "footer": "你收到这封邮件，是因为你是该组织的成员。"
+    },
+    "organizationDeletionCancelled": {
+      "subject": "{organization} 的删除已取消",
+      "preview": "{organization} 不会被删除",
+      "greeting": "{name}，你好：",
+      "lede": "{cancelledBy} 已取消删除 {organization}。",
+      "detail": "一切已恢复正常：你可以继续编辑，不会有任何内容被清除。",
+      "open": "打开 Motir",
+      "footer": "你收到这封邮件，是因为你是该组织的成员。"
+    },
+    "organizationDeletionReminder": {
+      "subject": "{organization} 将在 {daysLeft} 天后删除",
+      "preview": "{organization} 将于 {date} 被清除",
+      "greeting": "{name}，你好：",
+      "lede": "{organization} 已计划于 {date} 删除，距今还有 {daysLeft} 天。在此之前它为只读状态。",
+      "cancelOwner": "你仍可在组织设置中取消删除。",
+      "cancelAdmin": "只有组织所有者 {owner} 可以取消删除。",
+      "openSettings": "打开组织设置",
+      "footer": "你收到这封邮件，是因为你是该组织的所有者或管理员。"
+    },
+    "organizationErased": {
+      "subject": "{organization} 已被删除",
+      "preview": "{organization} 及其全部内容已被清除",
+      "greeting": "{name}，你好：",
+      "lede": "{organization} 已被删除。它的工作区、项目、成员，以及 Motir 为它托管的代码仓库均已清除。",
+      "kept": "按照法律要求，Motir 仅保留其账单记录至 {year} 年，届时也将一并删除。",
+      "footer": "你收到这封邮件，是因为你曾是该组织的所有者或管理员。"
     }
   },
   "auth": {

@@ -169,6 +169,31 @@ export const organizationDeletionRequestRepository = {
     });
   },
 
+  /**
+   * The REMINDER job's read (MOTIR-6395): every `scheduled` request falling due
+   * at or before `until`, soonest first. Cancelled requests do not match — that
+   * is how a cancel stops its reminders, with nothing queued to un-queue.
+   */
+  async listScheduledDueBy(
+    until: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<OrganizationDeletionRequest[]> {
+    return tx.organizationDeletionRequest.findMany({
+      where: { status: 'scheduled', erasureDueAt: { lte: until } },
+      orderBy: [{ erasureDueAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
+  },
+
+  /** One request by id, or null. */
+  async findById(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<OrganizationDeletionRequest | null> {
+    return tx.organizationDeletionRequest.findUnique({ where: { id } });
+  },
+
   /** Move one request along its lifecycle. Keyed by `id` — the caller has just
    *  locked that row. Write → `tx` required. */
   async update(
