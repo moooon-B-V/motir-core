@@ -25,6 +25,7 @@ import {
 } from '@/lib/planning/launcher';
 import { resolvePlanningHostGate } from '@/lib/planning/workspaceHost';
 import { fetchPlanningAnchor } from '@/lib/planning/planningAnchorClient';
+import { fetchPlanningSeed } from '@/lib/planning/planningSeedClient';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { surfaceArrivalTrail } from '@/lib/planning/surfaceArrival';
@@ -150,6 +151,30 @@ interface AnchorLoad {
   trail: CanvasCrumb[];
 }
 
+/**
+ * What the REFUSAL SEED read settled on, and for which gate (story MOTIR-6068 ·
+ * MOTIR-6210). Pending is DERIVED (`seed.gateId !== gateId`), exactly as the
+ * anchor read's is, so nothing is written synchronously in the effect.
+ *
+ *  · `seeded`   — a refused gate the viewer may read, with no recent seeded
+ *                 session: a `work-item` re-plan on the card, the turn unsent;
+ *  · `resume`   — the viewer's own recent seeded session: that conversation,
+ *                 resumed, with no draft (design MOTIR-6206 sheet 7);
+ *  · `fallback` — a 404 or any failure: a plain `project` launch, silently.
+ */
+type SeedLoad =
+  | { gateId: string; kind: 'seeded'; anchorKey: string; firstTurn: string }
+  | { gateId: string; kind: 'resume'; anchorKey: string; sessionId: string }
+  | { gateId: string; kind: 'fallback' };
+
+/** The unseeded fall-back — exactly what *Plan with AI* on the project opens. */
+const PROJECT_LAUNCH: PlanningLaunch = {
+  mode: 'project',
+  from: 'project',
+  itemKey: null,
+  repoKey: null,
+};
+
 export function PlanningWorkspaceOverlay({
   projectKey,
   projectName,
@@ -180,7 +205,76 @@ export function PlanningWorkspaceOverlay({
   // The address decides, EXCEPT while a vetoed history pop is being answered.
   const launch = addressLaunch ?? heldLaunch;
   const open = launch !== null;
-  const anchorKey = launch?.itemKey ?? null;
+
+  // ── THE REFUSAL SEED (story MOTIR-6068 · MOTIR-6210) ─────────────────────────
+  //
+  // A `refused-gate` launch carries the gate's id and nothing else, so before the
+  // workspace can mount it has to learn WHICH card it is about and WHAT the first
+  // turn says — both from the server (`approval-gates.md` §10f: the reason never
+  // rides the URL). The read runs first, the anchor read second, and both sit in
+  // the ONE `PlanningWorkspaceSkeleton` window a `work-item` launch already shows
+  // (design MOTIR-6206 sheet 6): no composer exists yet, so the empty re-plan
+  // placeholder cannot flash, and the host mounts once with the draft in its
+  // first render.
+  const gateId = launch?.from === 'refused-gate' ? (launch.gateId ?? null) : null;
+  const [seed, setSeed] = useState<SeedLoad | null>(null);
+  // A CLOSE forgets the seed, so the next open of the same gate reads it again —
+  // a send in between made a seeded session the door must now return to. Adjusted
+  // during render (the state is this component's own), never in an effect.
+  if (!open && seed !== null) setSeed(null);
+  useEffect(() => {
+    if (!open || gateId === null) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const found = await fetchPlanningSeed(gateId, controller.signal);
+        if (controller.signal.aborted) return;
+        setSeed(
+          found === null
+            ? { gateId, kind: 'fallback' }
+            : found.seededSessionId
+              ? {
+                  gateId,
+                  kind: 'resume',
+                  anchorKey: found.anchorKey,
+                  sessionId: found.seededSessionId,
+                }
+              : {
+                  gateId,
+                  kind: 'seeded',
+                  anchorKey: found.anchorKey,
+                  firstTurn: found.firstTurn,
+                },
+        );
+      } catch {
+        if (controller.signal.aborted) return;
+        // ⚠️ SILENT, like the 404 (design MOTIR-6206 sheet 8). An outage is not a
+        // finding about the gate, and saying *"that refusal is not available"*
+        // would confirm to someone who cannot see it that it exists.
+        setSeed({ gateId, kind: 'fallback' });
+      }
+    })();
+    return () => controller.abort();
+  }, [open, gateId]);
+  const settledSeed = seed !== null && seed.gateId === gateId ? seed : null;
+  const waitingForSeed = gateId === null ? false : settledSeed === null;
+
+  // The launch the WORKSPACE sees. A seeded one is resolved to the `work-item`
+  // re-plan it is, on the refused card, so it goes through the SAME anchor read
+  // and the SAME host mount — and arrives where any item launch arrives. The
+  // gate's id is never part of it: nothing below the overlay can show one.
+  const workspaceLaunch = useMemo<PlanningLaunch | null>(() => {
+    if (launch === null || launch.from !== 'refused-gate') return launch;
+    if (settledSeed === null || settledSeed.kind === 'fallback') return PROJECT_LAUNCH;
+    return {
+      mode: 'replan',
+      from: 'work-item',
+      itemKey: settledSeed.anchorKey,
+      repoKey: null,
+      ...(settledSeed.kind === 'resume' ? { sessionId: settledSeed.sessionId } : {}),
+    };
+  }, [launch, settledSeed]);
+  const anchorKey = workspaceLaunch?.itemKey ?? null;
 
   // The current address, as the reader's browser has it — the thing Close writes
   // back minus four parameters. Composed from the two hooks rather than read off
@@ -483,6 +577,11 @@ export function PlanningWorkspaceOverlay({
   // item's chip must not appear under the new one's address.
   const settled = anchor !== null && anchor.key === anchorKey ? anchor : null;
   const waitingForAnchor = anchorKey !== null && settled === null;
+  // The seed reaches the host only once its card RESOLVED for this viewer: a card
+  // the anchor read cannot see degrades to the project conversation, and a draft
+  // about it there would be a turn about nothing on screen.
+  const seededDraft = settledSeed?.kind === 'seeded' && settled?.target ? settledSeed : null;
+  const resumedSeed = settledSeed?.kind === 'resume';
 
   return (
     <Modal
@@ -563,7 +662,7 @@ export function PlanningWorkspaceOverlay({
         // It comes down when the verdict lands, above: either the user is being
         // moved, or `routed === 'clear'` and this is an ordinary workspace.
         <PlanningReadingState substrate={substrate} />
-      ) : waitingForAnchor ? (
+      ) : waitingForSeed || waitingForAnchor ? (
         <PlanningWorkspaceSkeleton />
       ) : (
         <PlanningWorkspaceHost
@@ -583,7 +682,7 @@ export function PlanningWorkspaceOverlay({
           key={anchorKey ?? 'project'}
           projectKey={projectKey}
           projectName={projectName}
-          launch={launch}
+          launch={workspaceLaunch ?? launch}
           anchorId={settled?.target?.id ?? null}
           onClose={requestClose}
           closeGuardRef={closeGuardRef}
@@ -594,6 +693,10 @@ export function PlanningWorkspaceOverlay({
           canManage={can('ai:configure')}
           initialTarget={settled?.target ?? null}
           {...(justReturned ? { justReturnedFromOnboarding: true } : {})}
+          {...(seededDraft
+            ? { initialDraft: seededDraft.firstTurn, seedGateId: seededDraft.gateId }
+            : {})}
+          {...(resumedSeed ? { sessionIsResume: true } : {})}
           initialCanvasTrail={settled?.trail}
         />
       )}
@@ -619,5 +722,10 @@ function launchContext(launch: PlanningLaunch): PlanningLaunchContext {
     return { kind: 'convention-refine', repoKey: launch.repoKey };
   }
   if (launch.from === 'roadmap') return { kind: 'roadmap' };
+  // The address a refusal wrote round-trips as itself — the gate's id, not the
+  // card it resolved to — so a reload keeps seeding (or resuming) from the gate.
+  if (launch.from === 'refused-gate' && launch.gateId) {
+    return { kind: 'refused-gate', gateId: launch.gateId };
+  }
   return { kind: 'project', hasPlan: launch.mode === 'replan' ? true : undefined };
 }

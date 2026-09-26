@@ -9,6 +9,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams('planState=none'),
 }));
 
+import zhMessages from '@/messages/zh.json';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { SessionRow } from '@/app/(authed)/plans/_components/SessionRow';
 import type { SessionRowView } from '@/app/(authed)/plans/_components/types';
@@ -30,6 +31,7 @@ function view(over: Partial<SessionRowView> = {}): SessionRowView {
     startedByName: 'Mara Lind',
     latestPlan: { id: 'p_31', status: 'planned' },
     planCount: 2,
+    seed: null,
     ...over,
   };
 }
@@ -160,5 +162,65 @@ describe('the meta line', () => {
     renderWithIntl(<SessionRow view={view({ origin })} />);
     const label = { generation: 'Generated plan', expand: 'Expanded plan', legacy: 'Earlier plan' };
     expect(screen.getByText(label[origin])).toBeTruthy();
+  });
+});
+
+describe('the SEED link — Re-plan of {KEY} · {verb} (MOTIR-6209, design MOTIR-6206)', () => {
+  it.each([
+    ['decision_approval', 'Request changes'],
+    ['decision_confirmation', 'Overturn'],
+    ['decision_choice', 'None of these'],
+  ] as const)('%s reads `Re-plan of ACME-44 · %s` and opens the work item', (gateKind, verb) => {
+    renderWithIntl(<SessionRow view={view({ seed: { cardKey: 'ACME-44', gateKind } })} />);
+
+    const link = screen.getByRole('link', {
+      name: 'Open ACME-44, the work item this conversation re-plans',
+    });
+    expect(link.getAttribute('href')).toBe('/items/ACME-44');
+    expect(link.textContent).toBe(`Re-plan of ACME-44·${verb}`);
+    // The key in mono, like the anchor; the separator decorative.
+    expect(within(link).getByText('ACME-44').className).toBe('font-mono');
+    expect(within(link).getByText('·').getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('is raised above the stretched title link, so the two doors do not collide', () => {
+    renderWithIntl(
+      <SessionRow view={view({ seed: { cardKey: 'ACME-44', gateKind: 'decision_approval' } })} />,
+    );
+    const link = screen.getByTestId('plan-session-seed');
+    expect(link.className).toContain('relative');
+    expect(link.className).toContain('z-10');
+    // The meta line's LAST item.
+    expect(link.parentElement!.lastElementChild).toBe(link);
+    // Pressing it is the browser's navigation, never the conversation opener.
+    fireEvent.click(link);
+    expect(shallowPush).not.toHaveBeenCalled();
+    // The title still opens the conversation.
+    expect(
+      screen.getByRole('link', { name: 'Split invoicing out of billing' }).getAttribute('href'),
+    ).toContain('planSession=s_1');
+  });
+
+  it('zh reads `ACME-44 的重新规划 · 推翻`', () => {
+    renderWithIntl(
+      <SessionRow
+        view={view({ seed: { cardKey: 'ACME-44', gateKind: 'decision_confirmation' } })}
+      />,
+      { locale: 'zh', messages: zhMessages },
+    );
+    const link = screen.getByRole('link', { name: '打开 ACME-44，即此对话重新规划的工作项' });
+    expect(link.textContent).toBe('ACME-44 的重新规划·推翻');
+  });
+
+  it('a row with no seed draws nothing extra — the same meta line and links as before', () => {
+    renderWithIntl(<SessionRow view={view()} />);
+    expect(screen.queryByTestId('plan-session-seed')).toBeNull();
+    expect(screen.queryByText(/Re-plan of/)).toBeNull();
+    // Title + chip, exactly the two doors the shipped row has.
+    expect(screen.getAllByRole('link')).toHaveLength(2);
+    // Anchor, activity, starter and the destination tag — nothing after it.
+    const meta = screen.getByText('active 12 minutes ago').parentElement!;
+    expect(meta.children).toHaveLength(4);
+    expect(meta.lastElementChild!.getAttribute('data-testid')).toBe('plan-destination');
   });
 });

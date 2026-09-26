@@ -256,6 +256,14 @@ export interface ApprovalGateControlProps {
    */
   recordDetail?: ReactNode;
   /**
+   * A BAND AFTER THE DECIDED RECORD STRIP (Story MOTIR-6068 · Subtask MOTIR-6211; design
+   * `approval-control--replan-door.mock.html` panel 0) — the kind's own question to the
+   * reader who has just decided, drawn where its answer will sit. The refusal's *Re-plan
+   * {key} with Motir AI?* is the one today. Only a decided gate draws it; absent, the
+   * decided frame is unchanged.
+   */
+  recordBand?: ReactNode;
+  /**
    * State `G`'s dead-port words, when the KIND knows its own reason for the withdrawal
    * (MOTIR-5484 / MOTIR-5604: a push moved a pull request's head). Absent, the frame's
    * own words render.
@@ -925,6 +933,7 @@ export function ApprovalGateControl({
   layout = 'inline',
   alert,
   recordDetail,
+  recordBand,
   withdrawnPort,
   recordLead,
   onDecide,
@@ -1251,72 +1260,76 @@ export function ApprovalGateControl({
           <span>{t('withdrawn.at', { when: new Date(gate.updatedAt).toLocaleString() })}</span>
         </RecordStrip>
       ) : decided ? (
-        <RecordStrip sectioned={sectioned}>
-          {/* WHO decided — and, for a decision synced out of GitHub, that it happened
+        <>
+          <RecordStrip sectioned={sectioned}>
+            {/* WHO decided — and, for a decision synced out of GitHub, that it happened
               THERE (Story MOTIR-4910 · MOTIR-5599; design § 23, Panels G4–G6). The
               GitHub arm is a different SENTENCE rather than a suffix, because the band
               is read as prose and *"Ada Lovelace (@ada-l) · on GitHub"* reads as a
               handle rather than as an account of what happened. */}
-          {recordLead ? (
-            <span>{recordLead}</span>
-          ) : (
-            <span className="font-medium text-(--el-text)">
-              {gate.decisionSource === 'github' && gate.decidedByLabel
-                ? tGithub(
-                    gate.state === 'changes_requested'
-                      ? 'record.changesRequested'
-                      : 'record.approved',
-                    { name: gate.decidedByLabel },
-                  )
-                : (gate.decidedByLabel ?? t('record.unattributed'))}
-            </span>
-          )}
-          {/* ⚠️ A LINE, NEVER A DIMMED NAME (§6b — an unattributable presence must not
+            {recordLead ? (
+              <span>{recordLead}</span>
+            ) : (
+              <span className="font-medium text-(--el-text)">
+                {gate.decisionSource === 'github' && gate.decidedByLabel
+                  ? tGithub(
+                      gate.state === 'changes_requested'
+                        ? 'record.changesRequested'
+                        : 'record.approved',
+                      { name: gate.decidedByLabel },
+                    )
+                  : (gate.decidedByLabel ?? t('record.unattributed'))}
+              </span>
+            )}
+            {/* ⚠️ A LINE, NEVER A DIMMED NAME (§6b — an unattributable presence must not
               read as nobody). The pair (source `github`, `decidedById` null) is the
               whole of what says *not a Motir member*, and saying it in words is what
               stops a reader taking the bare handle for a missing name. */}
-          {gate.decisionSource === 'github' && gate.decidedById === null ? (
-            <span>{tGithub('record.notMember')}</span>
-          ) : null}
-          {gate.decidedAt && !recordLead ? (
-            <span>{new Date(gate.decidedAt).toLocaleString()}</span>
-          ) : null}
-          {/* ⚠️ THE VERSION, FROM THE AUDIT COLUMN — never re-derived from
+            {gate.decisionSource === 'github' && gate.decidedById === null ? (
+              <span>{tGithub('record.notMember')}</span>
+            ) : null}
+            {gate.decidedAt && !recordLead ? (
+              <span>{new Date(gate.decidedAt).toLocaleString()}</span>
+            ) : null}
+            {/* ⚠️ THE VERSION, FROM THE AUDIT COLUMN — never re-derived from
               whatever design is current now. `subjectVersion` is the immutable
               answer to WHAT was approved (ADR §6a), and it is the reason this
               row is evidence rather than a name with a date beside it. */}
-          {gate.subjectVersion ? (
-            <span className="font-mono text-(--el-text-identifier)">
-              {t('record.version', { version: gate.subjectVersion.slice(0, 8) })}
-            </span>
-          ) : null}
-          {gate.state === 'changes_requested' ? (
-            <span>{changesRequestedLine ?? t('record.willRepublish')}</span>
-          ) : null}
-          {/* A REFUSAL SAYS WHY (MOTIR-6075; design Panel 4) — quoted as the overturned
+            {gate.subjectVersion ? (
+              <span className="font-mono text-(--el-text-identifier)">
+                {t('record.version', { version: gate.subjectVersion.slice(0, 8) })}
+              </span>
+            ) : null}
+            {gate.state === 'changes_requested' ? (
+              <span>{changesRequestedLine ?? t('record.willRepublish')}</span>
+            ) : null}
+            {/* A REFUSAL SAYS WHY (MOTIR-6075; design Panel 4) — quoted as the overturned
               record quotes its note, after who / when / version and the kind's line. */}
-          {gate.state === 'changes_requested' ? (
-            <RefusalReasonQuote noteMd={gate.noteMd} decisionSource={gate.decisionSource} />
-          ) : null}
-          {/* ⚠️ ONLY ON AN APPROVAL, AND ONLY WHEN THE KIND ANSWERED. §6c pins
+            {gate.state === 'changes_requested' ? (
+              <RefusalReasonQuote noteMd={gate.noteMd} decisionSource={gate.decisionSource} />
+            ) : null}
+            {/* ⚠️ ONLY ON AN APPROVAL, AND ONLY WHEN THE KIND ANSWERED. §6c pins
               for approvals alone, so the line has no meaning on a rejection —
               and `null` means the kind was not asked, which renders nothing
               rather than a guess. The NOT-kept arm is drawn as plainly as the
               kept one: an unconditional reassurance is the failure this line
               exists to prevent. */}
-          {gate.state === 'approved' && filesKept !== null ? (
-            filesKept ? (
-              <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-tint-mint) px-2 py-0.5 font-semibold text-(--el-text-strong)">
-                {t('record.filesKept')}
-              </span>
-            ) : (
-              <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-muted) px-2 py-0.5 font-semibold text-(--el-text-secondary)">
-                {t('record.filesNotKept')}
-              </span>
-            )
-          ) : null}
-          {recordDetail ?? null}
-        </RecordStrip>
+            {gate.state === 'approved' && filesKept !== null ? (
+              filesKept ? (
+                <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-tint-mint) px-2 py-0.5 font-semibold text-(--el-text-strong)">
+                  {t('record.filesKept')}
+                </span>
+              ) : (
+                <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-muted) px-2 py-0.5 font-semibold text-(--el-text-secondary)">
+                  {t('record.filesNotKept')}
+                </span>
+              )
+            ) : null}
+            {recordDetail ?? null}
+          </RecordStrip>
+          {/* The kind's question to the reader who just decided (MOTIR-6211, panel 0). */}
+          {recordBand ?? null}
+        </>
       ) : (
         <>
           {/* The re-asked gate's history and reason, above the verbs (§ 28 panel 1). */}

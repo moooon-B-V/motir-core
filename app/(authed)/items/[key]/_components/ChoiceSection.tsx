@@ -39,6 +39,7 @@ export function ChoiceSection({
   routedToLabel,
   routedToViewer,
   itemIdentifier,
+  canReplan = false,
 }: {
   body: ChoiceBodyDTO;
   gate: ApprovalGateDTO | null;
@@ -46,6 +47,10 @@ export function ChoiceSection({
   routedToLabel: string | null;
   routedToViewer: boolean;
   itemIdentifier: string;
+  /** May this reader open the planner on the card — `WorkItemPlanEntrance`'s condition
+   *  (MOTIR-6211). The decided refusal's record carries Re-plan with AI when true;
+   *  omitted, it carries none. */
+  canReplan?: boolean;
 }) {
   const t = useTranslations('approvalGate.choice');
 
@@ -100,6 +105,7 @@ export function ChoiceSection({
       routedToLabel={routedToLabel}
       identifier={itemIdentifier}
       onDecide={decideNothing}
+      replan={{ canReplan }}
     />
   );
 }

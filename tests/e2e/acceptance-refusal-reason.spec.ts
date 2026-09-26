@@ -176,6 +176,12 @@ test.describe('A refusal says why', () => {
         CHOICE_REASON,
       );
       await expect(choiceDialog.getByText(`“${CHOICE_REASON}”`)).toBeVisible();
+      // MOTIR-6068 (MOTIR-6211): a None of these now OFFERS the seeded planner in the
+      // decided band. Declining it opens nothing and leaves the overlay open, so answer
+      // it before closing — that receipt is MOTIR-6068's, not this story's.
+      await choiceDialog
+        .getByRole('button', { name: en.planningWorkspace.handoff.notNow, exact: true })
+        .click();
       await page.keyboard.press('Escape');
       await expect(choiceDialog).toBeHidden();
     });

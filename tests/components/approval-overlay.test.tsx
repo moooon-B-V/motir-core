@@ -99,6 +99,7 @@ function readOf(overrides: Partial<ApprovalGateOverlayReadDTO> = {}): ApprovalGa
     workItem: { id: 'wi-1', identifier: 'GATE-1', title: 'Draw the row for a published design' },
     gate: GATE,
     canDecide: true,
+    canReplan: false,
     routedToLabel: 'Riley Reviewer',
     stamp: 'v1.stamp-the-read-handed-over',
     // NOTHING HAS MOVED since this reader opened it (Story MOTIR-5238 · MOTIR-5243).

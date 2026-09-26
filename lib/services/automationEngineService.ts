@@ -24,6 +24,7 @@ import {
 import type { AutomationRuleWithOwner } from '@/lib/repositories/automationRuleRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { AutomationTriggerType } from '@/generated/prisma/client';
+import { PlanTargetHeldError } from '@/lib/workItems/errors';
 
 // The automation EXECUTION ENGINE (Story 6.6 · Subtask 6.6.2) — events in,
 // attributed service calls out, every run audited. The heart of the story:
@@ -51,7 +52,10 @@ import type { AutomationTriggerType } from '@/generated/prisma/client';
 //   5. FAILURE OPS: a failed run increments `consecutiveFailureCount`; at the
 //      verified threshold (10) the rule AUTO-DISABLES; a success resets the
 //      counter; the owner gets ONE error email on the FIRST failure after a
-//      success (the verified dedupe), via the 1.6 email pipeline.
+//      success (the verified dedupe), via the 1.6 email pipeline. A `transition`
+//      refused because an undecided plan holds the card (`PLAN_TARGET_HELD`)
+//      is NOT a failure: it records `plan_held` and touches neither the counter
+//      nor the email (MOTIR-6340; AMENDMENT 21 §5(b)).
 //
 // CONTEXT / RLS: the engine runs OUTSIDE any HTTP request (a background job),
 // so there is no session and every gated statement binds the WORKSPACE tier —
@@ -103,6 +107,11 @@ export interface AutomationRunSummary {
   succeeded: number;
   failed: number;
   noActions: number;
+  /** Rules whose `transition` met a card an undecided plan holds (MOTIR-6340).
+   * OPTIONAL because the `run-rules` step memoizes this summary and a memo
+   * written before the member existed has none — absent reads as 0, which is
+   * what that run recorded. */
+  planHeld?: number;
   /** Rules already run for this event (idempotency replay skips). */
   deduped: number;
 }
@@ -152,8 +161,10 @@ const ACTION_EXECUTORS: {
     // and the action speak one vocabulary (the 6.6.5 editor supplies keys). The
     // workflow gate stays the authority: an UNKNOWN key throws UnknownStatusError
     // (the stale-referent case — a deleted status), an ILLEGAL move throws
-    // IllegalTransitionError, and a no-op (already in the target) returns without
-    // a transition — each a recorded outcome, never a bypass.
+    // IllegalTransitionError, a card an undecided plan holds throws
+    // PlanTargetHeldError (recorded as `plan_held`, not a failure — MOTIR-6340),
+    // and a no-op (already in the target) returns without a transition — each a
+    // recorded outcome, never a bypass.
     await workItemsService.updateStatus(ctx.workItemId, config.toStatusId, ownerCtx);
   },
   async set_field(config, ctx) {
@@ -238,6 +249,7 @@ export const automationEngineService = {
       succeeded: 0,
       failed: 0,
       noActions: 0,
+      planHeld: 0,
       deduped: 0,
     };
 
@@ -279,6 +291,9 @@ export const automationEngineService = {
         case 'no_actions':
           summary.noActions += 1;
           break;
+        case 'plan_held':
+          summary.planHeld = (summary.planHeld ?? 0) + 1;
+          break;
         case 'deduped':
           summary.deduped += 1;
           break;
@@ -316,7 +331,7 @@ export const automationEngineService = {
   async runRule(
     rule: AutomationRuleWithOwner,
     input: AutomationEngineEventInput,
-  ): Promise<'success' | 'failure' | 'no_actions' | 'deduped'> {
+  ): Promise<'success' | 'failure' | 'no_actions' | 'plan_held' | 'deduped'> {
     // (4) Idempotency — already ran this rule for this event? Skip before
     // re-executing any action (a replay must not re-apply side effects).
     // Bound (MOTIR-2815): `automation_rule_execution` is policy-gated. Unbound,
@@ -346,16 +361,27 @@ export const automationEngineService = {
       ownerId: rule.ownerId,
     };
     let failure: string | null = null;
+    let planHeld: string | null = null;
     for (const action of actions) {
       try {
         await runAction(action, actionCtx);
       } catch (err) {
-        failure = describeActionError(err);
+        // A card an undecided plan holds at `planning` is not the rule's to move
+        // while the plan rewrites it (AMENDMENT 21 §5(b)): the rule did nothing
+        // wrong, so the refusal is a recorded no-op — never a failure that feeds
+        // the auto-disable streak or emails the owner (MOTIR-6340). It still
+        // stops the run, as any refused action does.
+        if (err instanceof PlanTargetHeldError) planHeld = describeActionError(err);
+        else failure = describeActionError(err);
         break;
       }
     }
 
     const durationMs = Date.now() - startedAt;
+    if (planHeld !== null) {
+      await this.recordPlanHeld(rule, input, planHeld, durationMs);
+      return 'plan_held';
+    }
     if (failure !== null) {
       await this.recordFailure(rule, input, failure, durationMs);
       return 'failure';
@@ -399,6 +425,25 @@ export const automationEngineService = {
       workItemId: input.workItemId,
       eventId: input.eventId,
       durationMs,
+    });
+  },
+
+  /** Write a `plan_held` audit row carrying the refusal (`PLAN_TARGET_HELD: …`).
+   * Like `no_actions`, the failure counter is UNCHANGED and no email is sent —
+   * the card was not the rule's to move, which is neither a success (the action
+   * did not apply) nor a failure (nothing is wrong with the rule). */
+  async recordPlanHeld(
+    rule: AutomationRuleWithOwner,
+    input: AutomationEngineEventInput,
+    reason: string,
+    durationMs: number,
+  ): Promise<void> {
+    await this.writeExecution(rule, {
+      status: 'plan_held',
+      workItemId: input.workItemId,
+      eventId: input.eventId,
+      durationMs,
+      error: reason,
     });
   },
 
@@ -492,7 +537,7 @@ export const automationEngineService = {
   async writeExecution(
     rule: { id: string; workspaceId: string },
     data: {
-      status: 'success' | 'failure' | 'no_actions';
+      status: 'success' | 'failure' | 'no_actions' | 'plan_held';
       workItemId: string;
       eventId: string;
       durationMs: number;

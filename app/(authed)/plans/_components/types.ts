@@ -1,5 +1,6 @@
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
 import type { PlanStatusDto } from '@/lib/dto/plans';
+import type { PlanSessionSeedDto } from '@/lib/dto/planSessions';
 
 // The serializable view-model a Plans-list SESSION row binds to (MOTIR-6025,
 // `design/ai-planning/design-notes.md` Part XIX §19.2). Built ON THE SERVER
@@ -23,4 +24,7 @@ export interface SessionRowView {
   latestPlan: { id: string; status: PlanStatusDto } | null;
   /** How many plans the session holds, the latest included. */
   planCount: number;
+  /** The refused work item the session was seeded from (MOTIR-6209) — the row's
+   *  `Re-plan of {KEY} · {verb}` link — or null, which draws nothing extra. */
+  seed: PlanSessionSeedDto | null;
 }

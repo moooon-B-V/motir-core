@@ -118,6 +118,7 @@ function storyRunRead(
     workItem: { id: 'wi-acme-20', identifier: 'ACME-20', title: 'Hold a basket' },
     gate,
     canDecide: true,
+    canReplan: false,
     routedToLabel: 'Ada L.',
     stamp: gate.state === 'awaiting' ? 'v1.stamp-on-screen' : null,
     movedSince: [],

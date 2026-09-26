@@ -8,7 +8,6 @@ import type { PlanItemChangeDto, PlanReviewItemDto } from '@/lib/dto/planReview'
 import type { QuickViewData } from '@/lib/dto/quickView';
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
-import { changedFields } from '@/lib/planning/planChangeDiff';
 import enMessages from '@/messages/en.json';
 import zhMessages from '@/messages/zh.json';
 
@@ -423,16 +422,12 @@ describe('the peek', () => {
   });
 });
 
-// ── The planning workspace's change frame (§20.8, sheet 5) ─────────────────
-
-describe('the change frame chip', () => {
-  it('names the field `difficulty`', () => {
-    const item = modifyLeaf([{ field: 'difficulty', from: 'low', to: 'high' }]);
-    expect(changedFields(item)).toEqual(['difficulty']);
-    expect(enMessages.planningWorkspace.conversation.diff.field.difficulty).toBe('difficulty');
-    expect(zhMessages.planningWorkspace.conversation.diff.field.difficulty).toBe('难度');
-  });
-});
+// The planning workspace's change frame (§20.8, sheet 5) had its own chip copy,
+// `planningWorkspace.conversation.diff.field.difficulty`. MOTIR-6342 removed it
+// with the level builder that drew it (MOTIR-6299): a changed card on the planning
+// surface is `PlanItemNode`, whose DiffLine names the field from
+// `planReview.field_difficulty` — held in both locales by the canvas-card cases
+// above.
 
 describe('the DifficultyIndicator itself (the compact form the review composes)', () => {
   it('draws the compact form with no host class, named for a screen reader', async () => {
