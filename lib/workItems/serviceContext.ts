@@ -46,6 +46,17 @@ export interface ServiceContext {
    */
   tokenGrant?: readonly PermissionKey[];
   /**
+   * The DISPATCH RUN the acting token is bound to (MOTIR-688), when the actor is
+   * a hosted run's own credential. Absent for every other caller.
+   *
+   * ⚠️ It narrows to ONE RUN and ONE CARD. Only the three `/api/v1` routes that
+   * opt in (`acceptsRunToken`) ever put it here; the services behind them —
+   * `dispatchRunService.appendEvents` / `close` and
+   * `dispatchPromptService.getDispatchPrompt` — refuse any other run
+   * (`DISPATCH_RUN_TOKEN_OUT_OF_SCOPE`, 403) or card (`WORK_ITEM_NOT_FOUND`, 404).
+   */
+  tokenDispatchRunId?: string;
+  /**
    * Automation provenance (Story 6.6 · Subtask 6.6.2). When a write is
    * performed by the automation engine running a rule's action, this carries
    * that rule's id. The post-commit `work-item/*` events the write emits stamp

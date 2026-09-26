@@ -10,6 +10,7 @@ import {
   classifyApiV1Error,
   INTERNAL_ERROR_BODY,
   InsufficientPermissionError,
+  RunTokenNotAllowedError,
   UnauthenticatedError,
 } from '@/lib/api/v1/errors';
 import {
@@ -117,6 +118,16 @@ export interface V1RouteOptions {
    * definition, and a route that declares none fails MOTIR-1861's guard.
    */
   permission: PermissionKey;
+  /**
+   * Admit a hosted run's own credential (MOTIR-688,
+   * `docs/decisions/hosted-agent-run.md` §3). Default false: a RUN token is
+   * refused with `RUN_TOKEN_NOT_ALLOWED` (403) everywhere else, whatever its
+   * grant holds. Exactly three routes set it — the run's event append and close,
+   * and the card's dispatch prompt — and each hands `ctx.service` (which then
+   * carries `tokenDispatchRunId`) to a service that checks the binding against
+   * the run or card the request names.
+   */
+  acceptsRunToken?: boolean;
 }
 
 type V1Handler<P> = (ctx: V1RouteContext<P>) => Promise<Response> | Response;
@@ -163,7 +174,9 @@ export function withV1Route<P = Record<string, never>>(
     try {
       // ── 1. Authenticate, BEFORE any parsing or reading ──────────────────
       const presentedToken = presentedBearerToken(req);
-      const auth = await authenticateApiToken(req, options.permission);
+      const auth = await authenticateApiToken(req, options.permission, {
+        acceptsRunToken: options.acceptsRunToken === true,
+      });
 
       // 401 exits here, WITHOUT touching the limiter. The budget belongs to a
       // credential, so a request we could not identify must not be able to
@@ -196,6 +209,7 @@ export function withV1Route<P = Record<string, never>>(
       if (!decision.allowed) throw new RateLimitExceededError(retryAfterSeconds(decision));
 
       // ── 3. Enforce the declared permission ──────────────────────────────
+      if (!auth.ok && auth.reason === 'run_token_refused') throw new RunTokenNotAllowedError();
       if (!auth.ok) throw new InsufficientPermissionError(options.permission);
 
       // ── 4. Run the handler ──────────────────────────────────────────────
@@ -215,6 +229,9 @@ export function withV1Route<P = Record<string, never>>(
           // The token's grant, for the record-view reads that consult a finer
           // key after this door (MOTIR-6330, `holdsRecordView`).
           tokenGrant: auth.grant,
+          // A RUN token's binding (MOTIR-688) — present only on a route that
+          // opted in, for the service to check against the run or card named.
+          ...(auth.dispatchRunId ? { tokenDispatchRunId: auth.dispatchRunId } : {}),
         },
         requestId,
         presentedToken,

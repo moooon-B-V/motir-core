@@ -15,6 +15,7 @@ import {
   DispatchRunNoTargetError,
   DispatchRunNotFoundError,
   DispatchRunTerminalError,
+  DispatchRunTokenOutOfScopeError,
   DuplicateDispatchRunError,
   UnknownDispatchRunCardError,
 } from '@/lib/dispatchRuns/errors';
@@ -299,6 +300,23 @@ async function readHostedRunCost(runId: string): Promise<DispatchRunCostDto | nu
   }
 }
 
+/**
+ * A hosted run's own credential may reach ONE run (MOTIR-688,
+ * `docs/decisions/hosted-agent-run.md` §3). `ctx.tokenDispatchRunId` is set only
+ * when a RUN token reached an ingest route that admits one; every other caller
+ * leaves it absent and passes straight through.
+ *
+ * ⚠️ Checked BEFORE the run is read, so a refusal says nothing about whether the
+ * named run exists, is closed, or lives elsewhere. Pass `null` for an OPEN,
+ * which a run token never performs: the server opens a hosted run itself.
+ */
+function assertRunTokenScope(runId: string | null, ctx: ServiceContext): void {
+  if (ctx.tokenDispatchRunId === undefined) return;
+  if (runId === null || runId !== ctx.tokenDispatchRunId) {
+    throw new DispatchRunTokenOutOfScopeError();
+  }
+}
+
 export const dispatchRunService = {
   /**
    * OPEN a run WITH ITS SET.
@@ -316,6 +334,7 @@ export const dispatchRunService = {
    * rather than allowed to escape.
    */
   async open(input: OpenDispatchRunInput, ctx: ServiceContext): Promise<DispatchRunOpenedDto> {
+    assertRunTokenScope(null, ctx);
     const project = await projectsService.getByKey(input.projectKey, ctx);
     await projectAccessService.assertCanEdit(project.id, ctx);
 
@@ -452,6 +471,7 @@ export const dispatchRunService = {
     events: AppendDispatchRunEventInput[],
     ctx: ServiceContext,
   ): Promise<DispatchRunAppendedDto> {
+    assertRunTokenScope(runId, ctx);
     for (const event of events) {
       if (event.body !== undefined) {
         const bytes = Buffer.byteLength(event.body, 'utf8');
@@ -710,6 +730,7 @@ export const dispatchRunService = {
     input: CloseDispatchRunInput,
     ctx: ServiceContext,
   ): Promise<DispatchRunDto> {
+    assertRunTokenScope(runId, ctx);
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {

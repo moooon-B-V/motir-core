@@ -523,3 +523,28 @@ export const CLI_TOKEN_GRANT: readonly PermissionKey[] = [
   'run:view_any',
   'ai:plan',
 ];
+
+/**
+ * The GRANT a HOSTED RUN's own Motir credential carries (MOTIR-688,
+ * `docs/decisions/hosted-agent-run.md` §3) — the two keys the routes a run
+ * token may reach assert: `work_item:edit` for its run's ingest
+ * (`/api/v1/dispatch-runs/{id}/events` and `/close`) and `project:browse` for
+ * its card's dispatch prompt.
+ *
+ * ⚠️ THE KEYS ARE AS COARSE AS THE CLI'S, AND THAT IS NOT WHAT NARROWS IT. A key
+ * narrows only the KIND of call, never what the call reaches — a bare
+ * `work_item:edit` token could edit every card in the project. What narrows a
+ * run token is its BINDING (`ApiToken.dispatchRunId`): every door it could
+ * knock on refuses it (`authenticateApiToken`, `verifyMcpToken`) except the
+ * three that opt in (`withV1Route`'s `acceptsRunToken`), and those three admit
+ * it for its OWN run and its OWN card only. The grant is the floor; the binding
+ * is the lock.
+ *
+ * It holds no `ai:*` key, so a run token can neither author nor read a plan,
+ * and it is a strict subset of {@link CLI_TOKEN_GRANT} (asserted by a test).
+ */
+export const HOSTED_RUN_TOKEN_GRANT: readonly PermissionKey[] = [
+  // Catalog order, as the note on CLI_TOKEN_GRANT requires of a hand-ordered list.
+  'project:browse',
+  'work_item:edit',
+];

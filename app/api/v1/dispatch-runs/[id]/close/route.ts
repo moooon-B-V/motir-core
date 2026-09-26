@@ -17,17 +17,23 @@ import { dispatchRunService } from '@/lib/services/dispatchRunService';
 // caller most needs to recognise: it means somebody — usually the server's own
 // abandoned-run reap — closed this run first, and the answer is to read it, not
 // to retry.
-export const POST = withV1Route<{ id: string }>({ permission: 'work_item:edit' }, async (ctx) => {
-  const body = await parseV1Body(ctx.req, dispatchRunCloseBodySchema);
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-688) may close its
+// own run and no other: `dispatchRunService.close` refuses any other `{id}` with
+// `DISPATCH_RUN_TOKEN_OUT_OF_SCOPE` (403) before reading it.
+export const POST = withV1Route<{ id: string }>(
+  { permission: 'work_item:edit', acceptsRunToken: true },
+  async (ctx) => {
+    const body = await parseV1Body(ctx.req, dispatchRunCloseBodySchema);
 
-  const run = await dispatchRunService.close(
-    ctx.params.id,
-    {
-      stopReason: body.stopReason,
-      ...(body.status !== undefined ? { status: body.status } : {}),
-    },
-    ctx.service,
-  );
+    const run = await dispatchRunService.close(
+      ctx.params.id,
+      {
+        stopReason: body.stopReason,
+        ...(body.status !== undefined ? { status: body.status } : {}),
+      },
+      ctx.service,
+    );
 
-  return NextResponse.json(run);
-});
+    return NextResponse.json(run);
+  },
+);

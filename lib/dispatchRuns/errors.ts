@@ -178,3 +178,61 @@ export class RunFoundReportReasonInvalidError extends Error {
     this.name = 'RunFoundReportReasonInvalidError';
   }
 }
+
+/**
+ * 403 — a hosted run's own credential (MOTIR-688) reaching a DIFFERENT run's
+ * ingest, or opening a run at all. A run token is bound to exactly one
+ * `DispatchRun` (`ApiToken.dispatchRunId`) and may report to that run alone;
+ * the server opens hosted runs itself, so it never opens one.
+ *
+ * ⚠️ CHECKED BEFORE THE RUN IS READ, so the answer is the same whether the run
+ * it named exists, is closed, or lives in another workspace — the refusal says
+ * nothing about any run but the token's own.
+ */
+export class DispatchRunTokenOutOfScopeError extends Error {
+  readonly code = 'DISPATCH_RUN_TOKEN_OUT_OF_SCOPE';
+  constructor() {
+    super('This credential is bound to a different dispatch run.');
+    this.name = 'DispatchRunTokenOutOfScopeError';
+  }
+}
+
+/**
+ * A run credential was asked for a run that is no longer `running` (MOTIR-688).
+ * A credential minted for a closed run would be a live key to nothing — or, worse,
+ * a live key that outlived the run's own end path, which is the only thing that
+ * revokes it. Raised by `runCredentialService.mintRunCredential`, a server-side
+ * call with no route of its own.
+ */
+export class RunCredentialRunNotLiveError extends Error {
+  readonly code = 'RUN_CREDENTIAL_RUN_NOT_LIVE';
+  constructor(
+    readonly dispatchRunId: string,
+    readonly status: string,
+  ) {
+    super(
+      `Dispatch run ${dispatchRunId} is ${status}; a run credential is minted only for a running run.`,
+    );
+    this.name = 'RunCredentialRunNotLiveError';
+  }
+}
+
+/**
+ * A run credential was asked to live past its run's timeout (MOTIR-688,
+ * `docs/decisions/hosted-agent-run.md` §5): nothing a run holds may outlive it by
+ * more than the settle margin, and the expiry is the backstop when the end
+ * path's revoke fails — so an expiry past that bound is refused, never clamped.
+ */
+export class RunCredentialExpiryTooLateError extends Error {
+  readonly code = 'RUN_CREDENTIAL_EXPIRY_TOO_LATE';
+  constructor(
+    readonly requested: Date,
+    readonly latest: Date,
+  ) {
+    super(
+      `A run credential may expire no later than ${latest.toISOString()} (the run's timeout plus ` +
+        `the settle margin); ${requested.toISOString()} was requested.`,
+    );
+    this.name = 'RunCredentialExpiryTooLateError';
+  }
+}
