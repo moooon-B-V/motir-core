@@ -8573,7 +8573,11 @@
       },
       "verbNotOffered": {
         "title": "这个审批不提供该决定。",
-        "next": "没有任何更改。请刷新页面，从显示的选项中重新决定。"
+        "next": "没有任何更改。请刷新页面，从显示的选项中重新决定。",
+        "verdict": {
+          "title": "这个审批不接受修订或重新规划的选择。",
+          "next": "没有任何更改。请刷新页面，从显示的选项中重新决定。"
+        }
       },
       "primaryPending": {
         "design": {
@@ -9051,11 +9055,29 @@
       "record": {
         "showAll": "显示全部",
         "showLess": "收起",
-        "noneOnGithub": "GitHub 上未给出原因。"
+        "noneOnGithub": "GitHub 上未给出原因。",
+        "verdict": {
+          "revise": "已退回修订",
+          "replan": "已退回重新规划"
+        }
       },
       "row": {
         "noneOnGithub": "GitHub 上未给出原因",
         "on": "版本 {version}"
+      },
+      "verdict": {
+        "legend": "是修订还是重新规划？",
+        "required": "请选择“修订”或“重新规划”——退回的设计需要其中之一。",
+        "revise": {
+          "label": "修订",
+          "hint": "小改动：退回重做。",
+          "consequence": "{key} 退回到{status}，下一次运行将从你的理由开始。"
+        },
+        "replan": {
+          "label": "重新规划",
+          "hint": "这会改变它之后的工作：用 Motir AI 重新规划。",
+          "consequence": "{key} 退回到{status}，然后 Motir AI 会提议重新规划 {parent}。"
+        }
       }
     },
     "planApproval": {

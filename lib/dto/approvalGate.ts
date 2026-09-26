@@ -16,6 +16,7 @@ import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 // TYPE-ONLY, and it has to stay that way: `stamp.ts` reaches for `node:crypto`,
 // and this DTO is imported by client components. An `import type` is erased.
 import type { StampComponent } from '@/lib/approvalGates/stamp';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
@@ -1035,9 +1036,40 @@ export type ApprovalGateOverlaySubjectDTO =
     };
 
 /** The overlay's one read. */
+/**
+ * One workflow status as the approval overlay NAMES it (Story MOTIR-6070 · Subtask
+ * MOTIR-6427) — enough for a `StatusPill` and for the design band's *goes back to
+ * {status}*, and nothing a picker would need.
+ */
+export interface ApprovalOverlayStatusDTO {
+  key: string;
+  label: string;
+  category: StatusCategoryDto;
+  isInitial: boolean;
+}
+
 export interface ApprovalGateOverlayReadDTO {
-  /** The card the address named — what the overlay's header identifies. */
-  workItem: { id: string; identifier: string; title: string };
+  /**
+   * The card the address named — what the overlay's header identifies.
+   *
+   * `status` is its status KEY, drawn as a chip in the header and repainted from the
+   * decision's `statusWritten` (MOTIR-6427; design panel 5b). `parentIdentifier` is where a
+   * design's Re-plan opens the planner — the card's PARENT (§10h's anchor) — read only for
+   * a `design_result` address, and null for every other kind and for a parentless card.
+   */
+  workItem: {
+    id: string;
+    identifier: string;
+    title: string;
+    status: string;
+    parentIdentifier: string | null;
+  };
+  /**
+   * The project's workflow statuses, in position order (MOTIR-6427) — what labels the
+   * header's chip before and after a press, and which names the status a design sent back
+   * returns to (the initial `todo`-category one, `returnCardToTodo`'s own rule).
+   */
+  statuses: ApprovalOverlayStatusDTO[];
   /** The gate of the asked kind, whatever its state; null when the card has none. */
   gate: ApprovalGateDTO | null;
   /** The AUTHORITY answer (`approvalGatesService.getForWorkItem`), never the routing one. */

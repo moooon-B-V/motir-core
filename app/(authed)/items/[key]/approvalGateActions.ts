@@ -13,6 +13,7 @@ import {
   ApprovalGatePrimaryPendingError,
   ApprovalGateSupersededError,
   ApprovalGateStaleSubjectError,
+  ApprovalGateVerbNotOfferedError,
 } from '@/lib/approvalGates/errors';
 import { MergeChangeRequestError } from '@/lib/git/errors';
 import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
@@ -195,7 +196,10 @@ function refusalOf(err: unknown): GateRefusal | null {
     const moved = err instanceof ApprovalGateStaleSubjectError ? err.moved : null;
     // ⚠️ And the PRIMARY-PENDING refusal names WHICH question holds the merge (MOTIR-5785).
     const primary = err instanceof ApprovalGatePrimaryPendingError ? err.primary : null;
-    return toGateRefusal(err.tag, { decidedByLabel, supersedeCause, moved, primary });
+    // ⚠️ And the VERB-NOT-OFFERED refusal says which input was missing (MOTIR-6427), so a
+    // design band can answer a missing verdict under the verdict, not under the reason.
+    const reason = err instanceof ApprovalGateVerbNotOfferedError ? err.reason : null;
+    return toGateRefusal(err.tag, { decidedByLabel, supersedeCause, moved, primary, reason });
   }
   return null;
 }

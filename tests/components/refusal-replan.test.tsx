@@ -590,7 +590,14 @@ function overlayRead(
   canReplan = true,
 ): ApprovalGateOverlayReadDTO {
   return {
-    workItem: { id: 'wi-42', identifier: 'ACME-42', title: 'Where exports live' },
+    workItem: {
+      id: 'wi-42',
+      identifier: 'ACME-42',
+      title: 'Where exports live',
+      status: 'in_review',
+      parentIdentifier: null,
+    },
+    statuses: [],
     gate,
     canDecide: true,
     canReplan,

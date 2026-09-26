@@ -204,31 +204,36 @@ test.describe('deciding an approval gate repaints the item page in place', () =>
     await expect(page.getByText('Files kept')).toBeVisible();
   });
 
-  test('requesting changes records the decision and the status rail does NOT move', async ({
+  test('requesting changes records the verdict and the status rail moves back to To Do', async ({
     page,
     baseURL,
   }) => {
     seed = await seedDesignApproval('repaint-changes');
     await arriveAtTheGate(page, baseURL!, seed);
 
-    // A refusal SAYS WHY (MOTIR-6075): the verb opens the band, and the band sends it
-    // with its reason.
+    // A refusal SAYS WHY (MOTIR-6075) and, on a design, WHAT IT MEANT (MOTIR-6427): the
+    // verb opens the band, and the band sends the reason with a verdict.
     const dialog = await openTheOverlay(page, seed);
     await dialog.getByRole('button', { name: 'Request changes' }).click();
     await dialog.getByLabel('What needs to change?').fill('The fold is wrong.');
+    await dialog
+      .getByRole('radiogroup', { name: 'Is it a revise or a re-plan?' })
+      .getByRole('radio', { name: /^Revise/ })
+      .check();
     await dialog.getByRole('button', { name: 'Yes, request changes' }).click();
+    // THE AUTHORITATIVE SIGNAL — the frame's decided state, from the action's response.
     await expect(dialog.getByText('Changes requested', { exact: true })).toBeVisible();
+    await expect(dialog.getByTestId('refusal-verdict')).toHaveText('Sent back to revise');
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
     // The page's own record of it, drawn in place.
     await expect(page.getByText('Changes requested', { exact: true })).toBeVisible();
 
-    // Sending a design back feeds the revise loop; it settles
-    // nothing, so the card stays exactly where it was. This is the half a
-    // blanket refresh would also pass — it is here to say that the repaint
-    // renders what the server actually holds rather than what the press implied.
-    await expect(statusCard(page).getByText('In Review', { exact: true })).toBeVisible();
-    await expect(statusCard(page).getByText('Done', { exact: true })).toHaveCount(0);
+    // A DESIGN SENT BACK GOES TO TO DO on either verdict (MOTIR-6423;
+    // `design-refusal-verdict.md` §1), so the rail moves — from the decision's
+    // `statusWritten`, in place, the page-state contract's case 2.
+    await expect(statusCard(page).getByText('To Do', { exact: true })).toBeVisible();
+    await expect(statusCard(page).getByText('In Review', { exact: true })).toHaveCount(0);
     // Only an approval pins the bytes, so there is no `Files kept` line to draw.
     await expect(page.getByText('Files kept')).toHaveCount(0);
   });

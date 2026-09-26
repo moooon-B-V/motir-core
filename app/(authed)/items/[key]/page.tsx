@@ -651,6 +651,7 @@ export default async function IssueDetailPage({
                       deliveries={deliveryView.deliveries}
                       statusCategory={statusCategory}
                       canReplan={canEdit && !isArchived}
+                      parentIdentifier={detail.parent?.identifier ?? null}
                     />
                   </Suspense>
                   <ChildPanel

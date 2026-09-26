@@ -8577,7 +8577,11 @@
       },
       "verbNotOffered": {
         "title": "That decision is not one this approval offers.",
-        "next": "Nothing was changed. Reload the page and decide again from the options shown."
+        "next": "Nothing was changed. Reload the page and decide again from the options shown.",
+        "verdict": {
+          "title": "A verdict is not something this approval takes.",
+          "next": "Nothing was changed. Reload the page and decide again from the options shown."
+        }
       },
       "primaryPending": {
         "design": {
@@ -9055,11 +9059,29 @@
       "record": {
         "showAll": "Show all",
         "showLess": "Show less",
-        "noneOnGithub": "No reason given on GitHub."
+        "noneOnGithub": "No reason given on GitHub.",
+        "verdict": {
+          "revise": "Sent back to revise",
+          "replan": "Sent back to re-plan"
+        }
       },
       "row": {
         "noneOnGithub": "No reason given on GitHub",
         "on": "on {version}"
+      },
+      "verdict": {
+        "legend": "Is it a revise or a re-plan?",
+        "required": "Choose Revise or Re-plan — a design sent back needs one.",
+        "revise": {
+          "label": "Revise",
+          "hint": "A small change: send it back to be redone.",
+          "consequence": "{key} goes back to {status}, and the next run starts from your reason."
+        },
+        "replan": {
+          "label": "Re-plan",
+          "hint": "This changes the work after it: re-plan with Motir AI.",
+          "consequence": "{key} goes back to {status}, and Motir AI then offers to re-plan {parent}."
+        }
       }
     },
     "planApproval": {

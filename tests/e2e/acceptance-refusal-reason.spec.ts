@@ -115,6 +115,13 @@ test.describe('A refusal says why', () => {
       'A send that fails is shown in place, and the reason survives the retry',
       async () => {
         await designDialog.getByLabel(r.label).pressSequentially(DESIGN_REASON, { delay: 12 });
+        // A DESIGN sent back also names its VERDICT (MOTIR-6070 · MOTIR-6427): the door
+        // refuses a design refusal without one. Revise asks nothing afterwards, so the
+        // record below is the whole answer, as it was when this receipt was recorded.
+        await designDialog
+          .getByRole('radiogroup', { name: r.verdict.legend })
+          .getByRole('radio', { name: new RegExp(`^${r.verdict.revise.label}`) })
+          .check();
         // ONE injected failure on the decide call — the server action's POST.
         let failed = false;
         await page.route('**/workbench**', async (route) => {
