@@ -498,7 +498,10 @@ export function ProjectMembersSettings({
             one line says where what each person can do comes from. */}
         <p className="text-(--el-text-secondary) mb-3 font-sans text-xs">
           {t('access.membersFromWorkspaceRole')}{' '}
-          <Link href="/settings/workspace/roles" className="text-(--el-link) hover:underline">
+          <Link
+            href="/settings/workspace/roles"
+            className="text-(--el-link) underline underline-offset-2"
+          >
             {t('access.workspaceRolesLink')}
           </Link>
         </p>
