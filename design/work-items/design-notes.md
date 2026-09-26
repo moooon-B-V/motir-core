@@ -9032,22 +9032,33 @@ change from the base are underlined on the board — a board annotation, not a U
 
 ### The copy (en first, then zh)
 
-| where                                                   | key (suggested)                                                 | en                                                                                    | zh                                                                    |
-| ------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| ask title                                               | `approvalGate.planAsk.title`                                    | Plan the follow-up with Motir AI?                                                     | 用 Motir AI 规划后续工作？                                            |
-| ask line 1, parent anchor                               | `approvalGate.planAsk.opens`                                    | Motir AI opens on {key} with your choice already written as the first message.        | Motir AI 会在 {key} 上打开，并已把你的选择写成第一条消息。            |
-| ask line 1, project anchor                              | `approvalGate.planAsk.opensProject`                             | Motir AI opens on your project with your choice already written as the first message. | Motir AI 会在你的项目上打开，并已把你的选择写成第一条消息。           |
-| ask line 2                                              | `approvalGate.replanAsk.unsent` (reused)                        | Nothing is sent until you send it — you can edit it first.                            | 在你发送之前不会发出任何内容——你可以先修改。                          |
-| ask, dismiss                                            | `planningWorkspace.handoff.notNow` (reused, as the shipped ask) | Not now                                                                               | 暂时不用                                                              |
-| ask, yes                                                | `approvalGate.planAsk.yes`                                      | Plan with AI                                                                          | 用 AI 规划                                                            |
-| door label                                              | `approvalGate.planDoor.label`                                   | Plan with AI                                                                          | 用 AI 规划                                                            |
-| door accessible name                                    | `approvalGate.planDoor.aria`                                    | Plan the follow-up to {item} with AI                                                  | 用 AI 规划 {item} 的后续工作                                          |
-| record line (was `record.followUp`)                     | `approvalGate.choice.record.gates`                              | **What this choice gates** — {gates}                                                  | **这个选择决定的工作** — {gates}                                      |
-| confirm, third line (was `confirm.followUp`)            | `approvalGate.choice.confirm.offerPlan`                         | Offer to plan the follow-up with Motir AI: {gates}.                                   | 提议用 Motir AI 规划后续工作：{gates}。                               |
-| consequence, option selected (was `consequence.picked`) | `approvalGate.choice.consequence.picked`                        | Choosing moves {key} to Done, then offers to plan what it gates with Motir AI.        | 选择后会把 {key} 移至“已完成”，然后提议用 Motir AI 规划它决定的工作。 |
+| where                                                   | key (suggested)                                                 | en                                                                                                           | zh                                                                        |
+| ------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| ask title                                               | `approvalGate.planAsk.title`                                    | Plan the follow-up with Motir AI?                                                                            | 用 Motir AI 规划后续工作？                                                |
+| ask line 1, parent anchor                               | `approvalGate.planAsk.opens`                                    | Motir AI opens on {key} to plan the follow-up, with your choice already written as the first message.        | Motir AI 会在 {key} 上打开来规划后续工作，并已把你的选择写成第一条消息。  |
+| ask line 1, project anchor                              | `approvalGate.planAsk.opensProject`                             | Motir AI opens on your project to plan the follow-up, with your choice already written as the first message. | Motir AI 会在你的项目上打开来规划后续工作，并已把你的选择写成第一条消息。 |
+| ask line 2                                              | `approvalGate.replanAsk.unsent` (reused)                        | Nothing is sent until you send it — you can edit it first.                                                   | 在你发送之前不会发出任何内容——你可以先修改。                              |
+| ask, dismiss                                            | `planningWorkspace.handoff.notNow` (reused, as the shipped ask) | Not now                                                                                                      | 暂时不用                                                                  |
+| ask, yes                                                | `approvalGate.planAsk.yes`                                      | Plan with AI                                                                                                 | 用 AI 规划                                                                |
+| door label                                              | `approvalGate.planDoor.label`                                   | Plan with AI                                                                                                 | 用 AI 规划                                                                |
+| door accessible name                                    | `approvalGate.planDoor.aria`                                    | Plan the follow-up to {item} with AI                                                                         | 用 AI 规划 {item} 的后续工作                                              |
+| record line (was `record.followUp`)                     | `approvalGate.choice.record.gates`                              | **What this choice gates** — {gates}                                                                         | **这个选择决定的工作** — {gates}                                          |
+| confirm, third line (was `confirm.followUp`)            | `approvalGate.choice.confirm.offerPlan`                         | Offer to plan the follow-up with Motir AI: {gates}.                                                          | 提议用 Motir AI 规划后续工作：{gates}。                                   |
+| consequence, option selected (was `consequence.picked`) | `approvalGate.choice.consequence.picked`                        | Choosing moves {key} to Done, then offers to plan what it gates with Motir AI.                               | 选择后会把 {key} 移至“已完成”，然后提议用 Motir AI 规划它决定的工作。     |
 
 The keys are suggestions; MOTIR-6436 owns the catalogue. `record.followUp`, `confirm.followUp` and the
 old `consequence.picked` wording are retired by that card.
+
+### Revision — 2026-09-26, after changes requested
+
+The design gate came back **changes requested** (Yue, 2026-09-26): _"The picked option planned UI is not
+good, the planner should know the choice has just been made and it's a follow-up planning."_ The first
+version opened the planner as an ordinary work-item launch — the generic _in context_ chip and the
+generic _What should change — or what would you like to know?_ — and its first turn never said a
+choice had just been made. The revision makes the follow-up explicit on the planning surface
+(`design/ai-chat/planning-workspace--pick-seed.mock.html`, § _The picked option planned_ in
+`design/ai-chat/design-notes.md` → _Revision_), and here only the ask's first line changes: it now says
+the planner opens **to plan the follow-up** (the copy table above).
 
 ### What this design does NOT draw
 

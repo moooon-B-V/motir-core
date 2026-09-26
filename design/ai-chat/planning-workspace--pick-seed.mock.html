@@ -8542,20 +8542,25 @@
         <div class="snum">1</div>
         <div>
           <h2>
-            <code>decision_choice</code> · an option chosen — anchored on the choice&rsquo;s PARENT,
-            en and zh
+            <code>decision_choice</code> · an option chosen — a FOLLOW-UP, anchored on the
+            choice&rsquo;s PARENT, en and zh <i>(revised 2026-09-26 after changes requested)</i>
           </h2>
           <p>
-            Yes on the ask (or the door) opens the planning surface on ACME-40, the container the
-            level stopped at — a FORWARD planning launch, so the chip is the
-            <code>contextual</code> mode&rsquo;s <i>in context</i> and the lead is
-            <i>Opened in the context of ACME-40.</i> (never the re-plan chip). The first turn is
-            written and UNSENT: the choice&rsquo;s key and title, the option chosen and its best-if
-            line, what the choice gates (<code>followUp</code>, verbatim), and one sentence asking
-            to PLAN that work. Every value comes from the gate&rsquo;s stamped
-            <code>chosenOption</code>, never the current body. As on the base&rsquo;s sheet 6, the
-            seed read shares the anchor read&rsquo;s skeleton, so no empty placeholder ever flashes
-            before the draft.
+            The planner KNOWS the choice has just been made and that this is its follow-up planning
+            — on three surfaces at once. The chip is <b>follow-up</b> (never <i>in context</i>,
+            never <i>plan change</i>). The lead names the choice it follows (<i
+              >Opened to plan the follow-up to ACME-42, on ACME-40.</i
+            >) and the second line says what just happened and what to do, in place of the generic
+            <i>What should change — or what would you like to know?</i>. A
+            <b>Follow-up to a choice</b> card, composed from the chosen record&rsquo;s own chips,
+            shows what was chosen and that it was just now. And the unsent first turn itself opens
+            by telling the planner:
+            <i
+              >I just chose an option on this choice — this is the follow-up planning it was waiting
+              for.</i
+            >
+            Every value comes from the stamped <code>chosenOption</code>. The field opens at its
+            tail, and no empty placeholder flashes (the base&rsquo;s sheet 6).
           </p>
         </div>
       </div>
@@ -8575,7 +8580,7 @@
                 ><span
                   class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) ml-auto"
                   data-testid="planning-mode-chip"
-                  >in context</span
+                  >follow-up</span
                 >
               </div>
               <div class="railscroll" role="log" style="flex: 1; min-height: 0">
@@ -8600,9 +8605,39 @@
                   <div
                     class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
                   >
-                    <span>Opened in the context of ACME-40.</span>
-                    <span>What should change — or what would you like to know?</span>
+                    <span>Opened to plan the follow-up to ACME-42, on ACME-40.</span>
+                    <span
+                      >You just chose Managed object storage. Send the message below to plan what it
+                      gates, or edit it first.</span
+                    >
                   </div>
+                </div>
+                <div
+                  data-testid="pick-followup-card"
+                  class="mt-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2"
+                >
+                  <p
+                    class="text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
+                  >
+                    Follow-up to a choice
+                  </p>
+                  <p class="mt-1.5 text-[13px] font-medium text-(--el-text)">
+                    <span class="font-mono">ACME-42</span> · Choose where exports live
+                  </p>
+                  <p
+                    class="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-(--el-text-secondary)"
+                  >
+                    <span class="text-(--el-text)">Chose</span
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent"
+                      >Managed object storage</span
+                    ><span>best if you want</span
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-sky) text-(--el-text-strong) border-transparent"
+                      >less to operate</span
+                    >
+                  </p>
+                  <p class="mt-1.5 text-xs text-(--el-text-secondary)">Chosen by Yue · just now</p>
                 </div>
               </div>
               <form class="relative border-t border-(--el-border) px-3 py-3">
@@ -8647,6 +8682,8 @@
                       style="height: 44px; padding-block: 11px"
                     >
 ACME-42 · Choose where exports live
+
+I just chose an option on this choice — this is the follow-up planning it was waiting for.
 
 The option chosen: Managed object storage
 Best if you want: less to operate
@@ -8701,7 +8738,7 @@ Plan this work with the option chosen.</textarea
                 ><span
                   class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) ml-auto"
                   data-testid="planning-mode-chip"
-                  >上下文</span
+                  >后续规划</span
                 >
               </div>
               <div class="railscroll" role="log" style="flex: 1; min-height: 0">
@@ -8726,9 +8763,38 @@ Plan this work with the option chosen.</textarea
                   <div
                     class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
                   >
-                    <span>已在 ACME-40 的上下文中打开。</span>
-                    <span>想改动什么 —— 或者想了解什么？</span>
+                    <span>已在 ACME-40 上打开，规划 ACME-42 的后续工作。</span>
+                    <span
+                      >你刚选择了托管对象存储。发送下面的消息来规划它决定的工作，也可以先修改。</span
+                    >
                   </div>
+                </div>
+                <div
+                  data-testid="pick-followup-card"
+                  class="mt-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2"
+                >
+                  <p
+                    class="text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
+                  >
+                    选择的后续规划
+                  </p>
+                  <p class="mt-1.5 text-[13px] font-medium text-(--el-text)">
+                    <span class="font-mono">ACME-42</span> · 选择导出文件的存放位置
+                  </p>
+                  <p
+                    class="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-(--el-text-secondary)"
+                  >
+                    <span class="text-(--el-text)">选择了</span
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent"
+                      >托管对象存储</span
+                    ><span>如果你更看重</span
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-sky) text-(--el-text-strong) border-transparent"
+                      >更少运维</span
+                    >
+                  </p>
+                  <p class="mt-1.5 text-xs text-(--el-text-secondary)">由 Yue 选择 · 刚刚</p>
                 </div>
               </div>
               <form class="relative border-t border-(--el-border) px-3 py-3">
@@ -8773,6 +8839,8 @@ Plan this work with the option chosen.</textarea
                       style="height: 44px; padding-block: 11px"
                     >
 ACME-42 · 选择导出文件的存放位置
+
+我刚在这个选择上选定了一个选项——这就是它在等的后续规划。
 
 选中的选项：托管对象存储
 如果你更看重：更少运维
@@ -8821,13 +8889,14 @@ ACME-42 · 选择导出文件的存放位置
         <div class="snum">2</div>
         <div>
           <h2>
-            <code>decision_choice</code> · an option chosen — no open container, so it opens at the
-            PROJECT
+            <code>decision_choice</code> · an option chosen — no open container, so the follow-up
+            opens at the PROJECT
           </h2>
           <p>
             A root choice, a folder-filed one, or a chain whose every ancestor is <code>done</code>:
-            the surface opens as a project launch (the <i>plan</i> chip, <i>Opened on Acme.</i>),
-            and the turn&rsquo;s second paragraph says why before anything else.
+            the same follow-up framing, on the project (<i
+              >Opened on Acme to plan the follow-up to ACME-42.</i
+            >), and the turn says why it opened there right after the follow-up line.
           </p>
         </div>
       </div>
@@ -8847,7 +8916,7 @@ ACME-42 · 选择导出文件的存放位置
                 ><span
                   class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) ml-auto"
                   data-testid="planning-mode-chip"
-                  >plan</span
+                  >follow-up</span
                 >
               </div>
               <div class="railscroll" role="log" style="flex: 1; min-height: 0">
@@ -8872,9 +8941,39 @@ ACME-42 · 选择导出文件的存放位置
                   <div
                     class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
                   >
-                    <span>Opened on Acme.</span>
-                    <span>What should change — or what would you like to know?</span>
+                    <span>Opened on Acme to plan the follow-up to ACME-42.</span>
+                    <span
+                      >You just chose Managed object storage. Send the message below to plan what it
+                      gates, or edit it first.</span
+                    >
                   </div>
+                </div>
+                <div
+                  data-testid="pick-followup-card"
+                  class="mt-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2"
+                >
+                  <p
+                    class="text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
+                  >
+                    Follow-up to a choice
+                  </p>
+                  <p class="mt-1.5 text-[13px] font-medium text-(--el-text)">
+                    <span class="font-mono">ACME-42</span> · Choose where exports live
+                  </p>
+                  <p
+                    class="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-(--el-text-secondary)"
+                  >
+                    <span class="text-(--el-text)">Chose</span
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent"
+                      >Managed object storage</span
+                    ><span>best if you want</span
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-sky) text-(--el-text-strong) border-transparent"
+                      >less to operate</span
+                    >
+                  </p>
+                  <p class="mt-1.5 text-xs text-(--el-text-secondary)">Chosen by Yue · just now</p>
                 </div>
               </div>
               <form class="relative border-t border-(--el-border) px-3 py-3">
@@ -8919,6 +9018,8 @@ ACME-42 · 选择导出文件的存放位置
                       style="height: 44px; padding-block: 11px"
                     >
 ACME-42 · Choose where exports live
+
+I just chose an option on this choice — this is the follow-up planning it was waiting for.
 
 This choice has no open container, so Motir AI opened on the project.
 
@@ -8975,7 +9076,7 @@ Plan this work with the option chosen.</textarea
                 ><span
                   class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) ml-auto"
                   data-testid="planning-mode-chip"
-                  >in context</span
+                  >follow-up</span
                 >
               </div>
               <div class="railscroll" role="log" style="flex: 1; min-height: 0">
@@ -9000,9 +9101,39 @@ Plan this work with the option chosen.</textarea
                   <div
                     class="rounded-(--radius-card) px-3 py-2 text-sm bg-(--el-chat-bubble-ai) text-(--el-text)"
                   >
-                    <span>Opened in the context of ACME-40.</span>
-                    <span>What should change — or what would you like to know?</span>
+                    <span>Opened to plan the follow-up to ACME-42, on ACME-40.</span>
+                    <span
+                      >You just chose Managed object storage. Send the message below to plan what it
+                      gates, or edit it first.</span
+                    >
                   </div>
+                </div>
+                <div
+                  data-testid="pick-followup-card"
+                  class="mt-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2"
+                >
+                  <p
+                    class="text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase"
+                  >
+                    Follow-up to a choice
+                  </p>
+                  <p class="mt-1.5 text-[13px] font-medium text-(--el-text)">
+                    <span class="font-mono">ACME-42</span> · Choose where exports live
+                  </p>
+                  <p
+                    class="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-(--el-text-secondary)"
+                  >
+                    <span class="text-(--el-text)">Chose</span
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-mint) text-(--el-text-strong) border-transparent"
+                      >Managed object storage</span
+                    ><span>best if you want</span
+                    ><span
+                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-tint-sky) text-(--el-text-strong) border-transparent"
+                      >less to operate</span
+                    >
+                  </p>
+                  <p class="mt-1.5 text-xs text-(--el-text-secondary)">Chosen by Yue · just now</p>
                 </div>
               </div>
               <form class="relative border-t border-(--el-border) px-3 py-3">
@@ -9047,6 +9178,8 @@ Plan this work with the option chosen.</textarea
                       style="height: 44px; padding-block: 11px"
                     >
 ACME-42 · Choose where exports live
+
+I just chose an option on this choice — this is the follow-up planning it was waiting for.
 
 The option chosen: Managed object storage
 Best if you want: less to operate
@@ -9096,8 +9229,8 @@ Plan this work with the option chosen.</textarea
         <div>
           <h2>The Plans row of a pick-seeded session — beside a refusal-seeded one</h2>
           <p>
-            A pick is never a refusal, so its seed link reads
-            <b>Planned from {KEY} · chose {label}</b>, linked to the CHOICE work item; the row title
+            A pick is never a refusal: its seed link reads
+            <b>Follow-up to {KEY} · chose {label}</b>, linked to the CHOICE work item; the row title
             is the session&rsquo;s anchor (the parent). The label truncates; the full label is on
             the link&rsquo;s accessible name. The refusal row below is MOTIR-6206&rsquo;s,
             unchanged.
@@ -9153,10 +9286,10 @@ Plan this work with the option chosen.</textarea
                       ><b class="max-w-[10rem] truncate font-semibold" title="Yue">Yue</b></span
                     ><a
                       href="/items/ACME-42"
-                      aria-label="Open ACME-42, the choice this conversation plans from (chose Managed object storage)"
+                      aria-label="Open ACME-42, the choice this conversation is the follow-up to (chose Managed object storage)"
                       data-testid="plan-session-seed"
                       class="relative z-10 inline-flex items-center gap-1 rounded-(--radius-control) text-(--el-text-secondary) underline decoration-(--el-border-strong) underline-offset-2 hover:text-(--el-text) hover:decoration-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-                      ><span>Planned from <span class="font-mono">ACME-42</span></span
+                      ><span>Follow-up to <span class="font-mono">ACME-42</span></span
                       ><span class="text-(--el-text-faint)" aria-hidden="true">·</span
                       ><span class="max-w-[10rem] truncate">chose Managed object storage</span></a
                     >
