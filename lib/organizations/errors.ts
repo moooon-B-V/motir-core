@@ -222,3 +222,14 @@ export class OrganizationDeletionAlreadyStartedError extends Error {
     this.name = 'OrganizationDeletionAlreadyStartedError';
   }
 }
+
+/** An erasure-only write was attempted for an organization whose deletion is not
+ *  (or no longer) `erasing` — the organization erasure's workspace guard
+ *  (MOTIR-6400). A programming or race error, never shown to a person. */
+export class OrganizationNotErasingError extends Error {
+  readonly code = 'ORGANIZATION_NOT_ERASING' as const;
+  constructor(readonly organizationId: string) {
+    super(`Organization ${organizationId} is not being erased.`);
+    this.name = 'OrganizationNotErasingError';
+  }
+}

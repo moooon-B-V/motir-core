@@ -1,4 +1,6 @@
 import { assertOrgNotClosing } from '@/lib/organizations/closingGuard';
+import { OrganizationNotErasingError } from '@/lib/organizations/errors';
+import { organizationDeletionRequestRepository } from '@/lib/repositories/organizationDeletionRequestRepository';
 import {
   type MemberRole,
   Prisma,
@@ -1075,6 +1077,47 @@ export const workspacesService = {
         );
         if (count !== 1 || !own) {
           throw new WorkspaceNotSoleMemberError(input.userId, input.workspaceId);
+        }
+      },
+    });
+  },
+
+  /**
+   * The THIRD entry onto {@link deleteWorkspaceCascade} (Story MOTIR-6306 ·
+   * MOTIR-6400): an organization's erasure sweep deleting each of its workspaces.
+   * It shares the one delete, so both survivals come with it — the code-graph
+   * offboarding row and the public-hostname reservation.
+   *
+   * The guard asserts, under the request row's lock and in BOTH of the delete's
+   * transactions, that the deletion request is `erasing` and is the open request
+   * of THIS workspace's organization. A cancel cannot land meanwhile: it refuses
+   * anything but `scheduled`.
+   *
+   * `actorUserId` only fills the `app.user_id` binding the cascade's context
+   * takes; the authority here is the request, not a person. The sweep passes the
+   * Owner who scheduled it.
+   */
+  async deleteWorkspaceForOrganizationErasure(input: {
+    workspaceId: string;
+    requestId: string;
+    actorUserId: string;
+  }): Promise<void> {
+    await deleteWorkspaceCascade({
+      workspaceId: input.workspaceId,
+      actorUserId: input.actorUserId,
+      guard: async (tx) => {
+        const organizationId = await workspaceRepository.findOrganizationId(input.workspaceId, tx);
+        if (!organizationId) throw new WorkspaceNotFoundError(input.workspaceId);
+        // The id comes from the workspace row just read — the trusted resolution
+        // `bindOrganizationContext` requires.
+        await bindOrganizationContext(tx, organizationId);
+        const request =
+          await organizationDeletionRequestRepository.findOpenByOrganizationIdForUpdate(
+            organizationId,
+            tx,
+          );
+        if (!request || request.id !== input.requestId || request.status !== 'erasing') {
+          throw new OrganizationNotErasingError(organizationId);
         }
       },
     });

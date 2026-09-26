@@ -66,6 +66,7 @@ import {
 import { monitorIssueResolveOnTransitioned } from './definitions/monitorIssueResolve';
 import { accountErasureSweep } from './definitions/accountErasureSweep';
 import { organizationDeletionReminders } from './definitions/organizationDeletionReminders';
+import { organizationErasureSweep } from './definitions/organizationErasureSweep';
 import { dlqStandingDepthSweep } from './definitions/dlqStandingDepthSweep';
 
 // EVERY JOB THIS IMAGE KNOWS (Story 1.6 · Subtask 1.6.2; re-based onto the
@@ -139,6 +140,7 @@ export const jobDefinitions = [
   dispatchRunSweep,
   accountErasureSweep,
   organizationDeletionReminders,
+  organizationErasureSweep,
   pullRequestReconcile,
   pullRequestAutoMerge,
   pullRequestBaseMoved,

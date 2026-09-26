@@ -1790,3 +1790,24 @@ export async function reopenOrg(coreOrganizationId: string): Promise<OrgClosingR
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as OrgClosingResult;
 }
+
+/** motir-ai's answer to an org offboard: whether the tenant was erased this call
+ *  (`false` for an org it never saw, and on a re-run over a tombstone). */
+export interface OrgOffboardResult {
+  erased: boolean;
+}
+
+/**
+ * POST /v1/orgs/:id/offboard — erase the organization's AI tenant down to its
+ * billing tombstone (MOTIR-6393). Idempotent; the erasure sweep calls it as its
+ * third step and retries on the next run when it throws.
+ */
+export async function offboardOrg(coreOrganizationId: string): Promise<OrgOffboardResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/orgs/${encodeURIComponent(coreOrganizationId)}/offboard`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as OrgOffboardResult;
+}

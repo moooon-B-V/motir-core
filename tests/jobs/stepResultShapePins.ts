@@ -191,6 +191,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/publicFollowDigestTick.ts',
     shape: '{ enqueued: number; projects: number }',
   },
+  'erase-due-organizations': {
+    file: 'lib/jobs/definitions/organizationErasureSweep.ts',
+    shape:
+      '{ claimed: number; erased: number; failed: number; failures: Array<{ error: string; requestId: string; step: string }>; reconciled: number; resumed: number; scanned: number; skipped: number }',
+  },
   'erase-due-accounts': {
     file: 'lib/jobs/definitions/accountErasureSweep.ts',
     shape:

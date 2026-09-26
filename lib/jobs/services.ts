@@ -48,6 +48,7 @@ import { jobRunsService } from '@/lib/services/jobRunsService';
 import { dataExportService } from '@/lib/services/dataExportService';
 import { accountErasureSweepService } from '@/lib/services/accountErasureSweepService';
 import { organizationDeletionNotifier } from '@/lib/services/organizationDeletionNotifier';
+import { organizationErasureSweepService } from '@/lib/services/organizationErasureSweepService';
 import { supervisionSweepService } from '@/lib/services/supervisionSweepService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
@@ -119,6 +120,8 @@ export const jobServices = {
   accountErasureSweep: accountErasureSweepService,
   // The 7-day and 1-day reminders before an organization is erased (MOTIR-6395).
   organizationDeletionNotifier,
+  // The erasure of organizations whose 30-day window has ended (MOTIR-6400).
+  organizationErasureSweep: organizationErasureSweepService,
   // The dispatch-run housekeeping (Story MOTIR-1789 · MOTIR-1792): the 30-day
   // log-body retention window, and the reap that closes a run nothing is
   // holding. One service because they share a cadence and a tenancy shape.

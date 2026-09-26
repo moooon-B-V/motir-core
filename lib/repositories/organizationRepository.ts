@@ -172,6 +172,34 @@ export const organizationRepository = {
   },
 
   /**
+   * Scrub the organization to its TOMBSTONE (Story MOTIR-6306 · MOTIR-6400;
+   * `organization-deletion.md` §6.4): the erased label, a random slug, `erasedAt`
+   * set, `closingSince` cleared, and every flag it carried reset. The row itself
+   * stays: it is what the seven-year billing record (`CiPeriodCharge`) hangs off.
+   * Requires `app.organization_id` bound (`organization_mutate_active`).
+   */
+  async scrubToTombstone(
+    id: string,
+    data: { name: string; slug: string; erasedAt: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.organization.update({
+      where: { id },
+      data: {
+        name: data.name,
+        slug: data.slug,
+        erasedAt: data.erasedAt,
+        closingSince: null,
+        requiresTwoFactor: false,
+        isMeta: false,
+        internalBilling: false,
+        aiIncludedSeat: false,
+        scaledTrackerSubscription: Prisma.DbNull,
+      },
+    });
+  },
+
+  /**
    * Row-lock the organization `FOR UPDATE` inside the caller's transaction — the
    * serialization anchor for the §4 count-guarded creates (8.1.11). The work-item
    * / project / workspace caps read a count then create; without a shared lock

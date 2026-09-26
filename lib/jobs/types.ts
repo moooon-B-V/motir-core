@@ -443,6 +443,9 @@ export interface JobEventDataMap {
    *  seven-day and one-day notices to a closing org's Owner and Admins. Cron
    *  triggered, so it carries no payload beyond the scheduled envelope. */
   'system.organization-deletion-reminders': SystemScheduledData;
+  /** The ORGANIZATION ERASURE sweep (Story MOTIR-6306 · MOTIR-6400) — erases every
+   *  organization whose deletion window has ended, resumably. Cron triggered. */
+  'system.organization-erasure-sweep': SystemScheduledData;
   /** The code-graph OFFBOARDING sweep (Story MOTIR-2192 · MOTIR-2168) — drains
    *  due `code_graph_offboarding` rows through motir-ai's offboard seam, which is
    *  what makes §14's retention window real. Cron triggered, so it carries no
