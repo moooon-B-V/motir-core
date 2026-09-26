@@ -202,6 +202,20 @@ export interface HostedAgentContainerRequest {
   /** The run this container belongs to — the slot's owner, for an
    *  ownership-checked release. */
   readonly runId: string;
+  /**
+   * THE `DispatchRun.id` THIS CONTAINER SERVES (MOTIR-6448) — stamped on every
+   * cost record the container produces, checkpoint and settle alike, so the fleet
+   * meter row names its run and the run's machine time is readable by its id
+   * (`docs/decisions/hosted-agent-run.md` §1: one id, everywhere).
+   *
+   * ⚠️ A REQUIRED KEY WHOSE VALUE MAY BE NULL, and null has exactly one caller:
+   * the meter REHEARSAL (`scripts/rehearseHostedAgentMeter.ts`), which boots a
+   * stand-in that serves no run. The column is a foreign key onto `dispatch_run`,
+   * so a synthetic id would be refused and the whole cost row lost with it; an
+   * honest null writes the row unnamed. Every real hosted run (MOTIR-690's start
+   * path) passes its `DispatchRun.id`, and omitting the key is a compile error.
+   */
+  readonly dispatchRunId: string | null;
   readonly organizationId: string;
   readonly workspaceId: string;
   readonly projectId: string;
@@ -247,6 +261,8 @@ export interface HostedAgentSession {
   readonly bootedAt: string;
   readonly dispatchId: string;
   readonly runId: string;
+  /** As {@link HostedAgentContainerRequest.dispatchRunId}. */
+  readonly dispatchRunId: string | null;
   readonly timeoutSeconds: number;
   readonly size: ContainerSize;
   readonly attribution: {
@@ -354,6 +370,19 @@ function orgScopedWhenSliced<T extends ContainerUsage | ContainerAccrual>(
   session: HostedAgentSession,
 ): T {
   return session.slices ? { ...record, repoFullName: null } : record;
+}
+
+/**
+ * Stamp the dispatch run onto a cost record (MOTIR-6448). Applied identically to the
+ * checkpoint and the settle, so the row's first write already names its run and the
+ * settle keeps it. `?? null` because a session memoized before this field existed is
+ * rebuilt from its memo without it; such a row stays unnamed rather than failing.
+ */
+function forDispatchRun<T extends ContainerUsage | ContainerAccrual>(
+  record: T,
+  session: HostedAgentSession,
+): T {
+  return { ...record, dispatchRunId: session.dispatchRunId ?? null };
 }
 
 function handleOf(session: HostedAgentSession): ContainerHandle {
@@ -485,6 +514,7 @@ export const hostedAgentContainerService = {
         bootedAt: now().toISOString(),
         dispatchId: request.dispatchId,
         runId: request.runId,
+        dispatchRunId: request.dispatchRunId,
         timeoutSeconds: request.timeoutSeconds,
         size: request.size,
         attribution: {
@@ -570,14 +600,17 @@ export const hostedAgentContainerService = {
     // nothing; `recordContainerAccrual` never throws, so this path still cannot.
     if (startedAt) {
       await recordContainerAccrual(
-        orgScopedWhenSliced(
-          buildContainerAccrual({
-            handle: handleOf(session),
-            attribution: hostedAgentUsageAttribution(session),
-            createdAt: new Date(session.handle.createdAt),
-            startedAt: new Date(startedAt),
-            observedAt: now(),
-          }),
+        forDispatchRun(
+          orgScopedWhenSliced(
+            buildContainerAccrual({
+              handle: handleOf(session),
+              attribution: hostedAgentUsageAttribution(session),
+              createdAt: new Date(session.handle.createdAt),
+              startedAt: new Date(startedAt),
+              observedAt: now(),
+            }),
+            session,
+          ),
           session,
         ),
       );
@@ -632,9 +665,10 @@ export const hostedAgentContainerService = {
       };
     }
 
-    const recorded: ContainerUsage = session.slices
-      ? { ...orgScopedWhenSliced(usage, session), slices: session.slices }
-      : usage;
+    const recorded: ContainerUsage = forDispatchRun(
+      session.slices ? { ...orgScopedWhenSliced(usage, session), slices: session.slices } : usage,
+      session,
+    );
     await recordContainerUsage(recorded);
 
     await fleetCeilingService.release(HOSTED_AGENT_WORKLOAD, session.dispatchId, session.runId);

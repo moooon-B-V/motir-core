@@ -9107,11 +9107,21 @@ model CiContainerUsage {
   terminalState  String? @map("terminal_state")
   teardownReason String? @map("teardown_reason")
 
+  /// THE DISPATCH RUN THIS CONTAINER SERVED (MOTIR-6448) — set only for a
+  /// hosted-agent container, whose one id everywhere is `DispatchRun.id`
+  /// (`docs/decisions/hosted-agent-run.md` §1). NULL for a CI runner and an index
+  /// container, which serve no run. A POINTER FROM THE METER TO THE RUN, never a
+  /// cost column on `dispatch_run` (MOTIR-1801): the run's machine time is READ
+  /// from here. `SET NULL` for the reason `project_id` gives — a deleted run must
+  /// not erase the record that Motir paid for this container.
+  dispatchRunId String? @map("dispatch_run_id")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  dispatchRun  DispatchRun? @relation(fields: [dispatchRunId], references: [id], onDelete: SetNull)
 
   /// THE IDEMPOTENCY GUARANTEE, and it is per RUNNER because a runner is what a
   /// container is. Both callers of the sink — the `finally` that guarantees
@@ -9127,6 +9137,8 @@ model CiContainerUsage {
   /// by repo.
   @@index([periodStart])
   @@index([projectId])
+  /// A run's machine-time read (MOTIR-6448).
+  @@index([dispatchRunId])
   @@map("ci_container_usage")
 }
 
@@ -9952,6 +9964,8 @@ model DispatchRun {
   events           DispatchRunEvent[]
   /// How-to-test records this run wrote (MOTIR-5328). SetNull on the FK.
   testInstructions TestInstructions[]
+  /// The fleet meter rows for this run's container (MOTIR-6448). SetNull on the FK.
+  containerUsage   CiContainerUsage[]
 
   @@unique([workspaceId, idempotencyKey])
   /// The run list and the `/runs/[id]` read: newest-first per project.
