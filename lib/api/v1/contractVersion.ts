@@ -624,6 +624,19 @@
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.41.0` at `70c845f0a`, so this claims `1.42.0`. If a sibling has taken
- *   it since, RENUMBER this entry — it names the FIELD.
+ *   it since, RENUMBER this entry — it names the FIELD. *
+ * - `1.43.0` — MOTIR-6502 adds `repairClass` (`ci` | `acceptance_rerun`) and
+ *   `acceptanceRefusal` (`{ reasonMd, decidedByLabel, decidedAt }`, nullable) to the
+ *   `WorkItemRepairClaim` component `claimWorkItemRepair` answers. `acceptance_rerun`
+ *   admits a story whose acceptance video was sent back with Re-run in Motir
+ *   (`acceptance-refusal-verdict.md` §4): its checks may be green, so every open member
+ *   is handed over, and the reason rides beside them. Every shipped admission is `ci`.
+ *
+ *   Additive: two new fields on an existing component (§8's allowed list) and a new
+ *   admission of an existing operation; no existing field changes meaning.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: this claims `1.43.0` on top
+ *   of MOTIR-6501's `1.42.0` in the same pull request. RENUMBER both if a sibling has
+ *   taken either since.
  */
-export const V1_CONTRACT_VERSION = '1.42.0';
+export const V1_CONTRACT_VERSION = '1.43.0';

@@ -1835,6 +1835,14 @@ export interface components {
                 name: string;
             } | null;
             startedAt: string | null;
+            /** @enum {string} */
+            repairClass: "ci" | "acceptance_rerun";
+            acceptanceRefusal: {
+                reasonMd: string | null;
+                decidedByLabel: string | null;
+                /** Format: date-time */
+                decidedAt: string;
+            } | null;
             pullRequests: {
                 repo: string;
                 number: number;

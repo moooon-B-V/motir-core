@@ -6527,7 +6527,13 @@
         "conflictOn": "<prs></prs> conflicts with {base} and cannot be merged.",
         "conflictOnNoBase": "<prs></prs> conflicts with its base branch and cannot be merged.",
         "howConflict": "An agent rebases or resolves on the pull request's own branch, pushes, and the checks run again.",
-        "rearm": "There is nothing to approve here. A push moves the head, which re-arms the question, and the next green raises the merge gate once — over the new commits."
+        "rearm": "There is nothing to approve here. A push moves the head, which re-arms the question, and the next green raises the merge gate once — over the new commits.",
+        "rerun": {
+          "title": "Answer the review",
+          "sentBack": "The acceptance video was sent back to <b>re-run</b>.",
+          "sentBackBy": "<b>{name}</b> sent the acceptance video back to <b>re-run</b>.",
+          "how": "An agent works on the same pull request with the reason, pushes, and records a new video once the checks pass."
+        }
       },
       "emptyTitle": "No linked pull request",
       "emptyDescription": "Use + Link pull request here or <mono>link_pull_request</mono> over the MCP to add a PR and show live PR and CI status.",

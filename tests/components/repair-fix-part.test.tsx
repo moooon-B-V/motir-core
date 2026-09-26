@@ -69,7 +69,13 @@ describe('F1 — red, nobody fixing it', () => {
   it('names each failing pull request and offers `motir fix <KEY>` in the shared code block', async () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-    renderPart({ state: 'offer', failing: [CORE, GATEWAY], lastGaveUp: null });
+    renderPart({
+      state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
+      failing: [CORE, GATEWAY],
+      lastGaveUp: null,
+    });
 
     const p = part();
     expect(p.textContent).toContain(
@@ -85,7 +91,13 @@ describe('F1 — red, nobody fixing it', () => {
   });
 
   it('one failing pull request reads in the singular', () => {
-    renderPart({ state: 'offer', failing: [CORE], lastGaveUp: null });
+    renderPart({
+      state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
+      failing: [CORE],
+      lastGaveUp: null,
+    });
     expect(within(part()).getByText(fix.how)).toBeTruthy();
   });
 });
@@ -95,6 +107,8 @@ describe('F2 — a fix in progress', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW);
     renderPart({
       state: 'in_progress',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
       failing: [CORE],
       holder: { id: 'u-mara', name: 'Mara S.' },
       byViewer: false,
@@ -116,6 +130,8 @@ describe('F2 — a fix in progress', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW);
     const base = {
       state: 'in_progress' as const,
+      repairClass: 'ci' as const,
+      acceptanceRefusal: null,
       failing: [CORE],
       startedAt: '2026-09-16T11:06:00Z',
     };
@@ -132,6 +148,8 @@ describe('F3 — the last fix gave up', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW);
     renderPart({
       state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
       failing: [CORE],
       lastGaveUp: { attempts: 3, endedAt: '2026-09-16T13:46:00Z' },
     });
@@ -149,6 +167,8 @@ describe('F3 — the last fix gave up', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW);
     renderPart({
       state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
       failing: [CORE],
       lastGaveUp: { attempts: null, endedAt: '2026-09-14T14:06:00Z' },
     });
@@ -211,7 +231,13 @@ describe('a member the merge queue threw out (MOTIR-5721)', () => {
   const plain = (text: string) => TAGS.reduce((out, tag) => out.split(tag).join(''), text);
 
   it('with NO exit the part is exactly the shipped F1 — no left-the-queue line, no sentence', () => {
-    renderPart({ state: 'offer', failing: [CORE], lastGaveUp: null });
+    renderPart({
+      state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
+      failing: [CORE],
+      lastGaveUp: null,
+    });
     const p = part();
     expect(p.textContent).toContain('Checks are failing on');
     expect(p.textContent).not.toContain('left the merge queue');
@@ -219,7 +245,13 @@ describe('a member the merge queue threw out (MOTIR-5721)', () => {
   });
 
   it('an own-failing and an ejected member draw BOTH lines, own-failing first', () => {
-    renderPart({ state: 'offer', failing: [CORE, EJECTED], lastGaveUp: null });
+    renderPart({
+      state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
+      failing: [CORE, EJECTED],
+      lastGaveUp: null,
+    });
     const text = part().textContent!;
     const own = text.indexOf(`Checks are failing on ${CORE.repo} · #${CORE.number}.`);
     const left = text.indexOf(`${EJECTED.repo} · #${EJECTED.number} left the merge queue.`);
@@ -231,6 +263,8 @@ describe('a member the merge queue threw out (MOTIR-5721)', () => {
   it('a member red on its OWN checks that also carries an exit stays on the failing line, and adds no sentence', () => {
     renderPart({
       state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
       failing: [{ ...EJECTED, ci: 'failing' }],
       lastGaveUp: null,
     });
@@ -241,6 +275,8 @@ describe('a member the merge queue threw out (MOTIR-5721)', () => {
   it('a failure that is neither a check nor a conflict reads the OTHER sentence', () => {
     renderPart({
       state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
       failing: [
         { ...EJECTED, queueExit: { rawReason: 'INVALID_MERGE_COMMIT', failingCheckName: null } },
       ],
@@ -252,6 +288,8 @@ describe('a member the merge queue threw out (MOTIR-5721)', () => {
   it('with several ejected members a CONFLICT wins', () => {
     renderPart({
       state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
       failing: [
         { ...EJECTED, repo: CORE.repo, number: CORE.number },
         { ...EJECTED, queueExit: { rawReason: 'MERGE_CONFLICT', failingCheckName: null } },
@@ -281,7 +319,13 @@ describe('a member failing only because it CONFLICTS (MOTIR-5916)', () => {
   };
 
   it('names it on the conflict line with its base, and says how an agent resolves it', () => {
-    renderPart({ state: 'offer', failing: [CONFLICTED], lastGaveUp: null });
+    renderPart({
+      state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
+      failing: [CONFLICTED],
+      lastGaveUp: null,
+    });
     const part = screen.getByTestId('repair-fix-part');
     expect(part.textContent).not.toContain('Checks are failing on');
     expect(screen.getByTestId('repair-conflict-line').textContent).toBe(
@@ -296,6 +340,8 @@ describe('a member failing only because it CONFLICTS (MOTIR-5916)', () => {
   it('a row with no recorded base reads *its base branch*', () => {
     renderPart({
       state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
       failing: [{ ...CONFLICTED, conflict: { baseRef: null } }],
       lastGaveUp: null,
     });
@@ -307,11 +353,71 @@ describe('a member failing only because it CONFLICTS (MOTIR-5916)', () => {
   it('a member red on its OWN checks AND conflicted is on both lines', () => {
     renderPart({
       state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
       failing: [{ ...CONFLICTED, ci: 'failing' as const }],
       lastGaveUp: null,
     });
     const part = screen.getByTestId('repair-fix-part');
     expect(part.textContent).toContain('Checks are failing on');
     expect(screen.getByTestId('repair-conflict-line')).toBeTruthy();
+  });
+});
+
+describe('an ACCEPTANCE RE-RUN (Story MOTIR-6071 · MOTIR-6502)', () => {
+  const REFUSAL = {
+    reasonMd: 'The empty board should say how to add the first card.\nAnd the toolbar wraps.',
+    decidedByLabel: 'Yue Zhu',
+    decidedAt: '2026-09-26T10:00:00.000Z',
+  };
+  const GREEN = { ...CORE, ci: 'passing' as const };
+  const rerunPart = () => screen.getByRole('group', { name: fix.rerun.title });
+
+  it('names the review, never failing checks, quotes the first line of the reason and offers `motir fix`', () => {
+    renderPart({
+      state: 'offer',
+      repairClass: 'acceptance_rerun',
+      acceptanceRefusal: REFUSAL,
+      failing: [GREEN],
+      lastGaveUp: null,
+    });
+
+    const p = rerunPart();
+    expect(within(p).getByRole('heading', { name: fix.rerun.title })).toBeTruthy();
+    const line = within(p).getByTestId('repair-rerun-line');
+    expect(line.textContent).toContain('Yue Zhu sent the acceptance video back to re-run.');
+    expect(line.textContent).toContain('“The empty board should say how to add the first card.”');
+    expect(line.textContent).not.toContain('toolbar');
+    expect(p.textContent).not.toContain('Checks are failing');
+    expect(within(p).getByText(fix.rerun.how)).toBeTruthy();
+    expect(codeBlocks).toEqual([{ language: 'shell', code: 'motir fix ACME-12' }]);
+  });
+
+  it('with no recorded name or reason, says so plainly', () => {
+    renderPart({
+      state: 'offer',
+      repairClass: 'acceptance_rerun',
+      acceptanceRefusal: { reasonMd: null, decidedByLabel: null, decidedAt: REFUSAL.decidedAt },
+      failing: [GREEN],
+      lastGaveUp: null,
+    });
+    expect(screen.getByTestId('repair-rerun-line').textContent).toBe(
+      'The acceptance video was sent back to re-run.',
+    );
+  });
+
+  it('while it is being fixed, still names the review and shows no command', () => {
+    renderPart({
+      state: 'in_progress',
+      repairClass: 'acceptance_rerun',
+      acceptanceRefusal: REFUSAL,
+      failing: [GREEN],
+      holder: { id: 'u1', name: 'Yue Zhu' },
+      byViewer: true,
+      startedAt: '2026-09-26T12:00:00.000Z',
+    });
+    const p = rerunPart();
+    expect(within(p).getByTestId('repair-rerun-line')).toBeTruthy();
+    expect(codeBlocks).toEqual([]);
   });
 });

@@ -224,6 +224,8 @@ describe('the late stack — the fix part sits inside the Development card', () 
   it('draws the part below the rows and above How to test, in the same card', async () => {
     await render_({
       state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
       failing: [
         {
           repo: CORE_PR.repo,

@@ -324,6 +324,29 @@ export const approvalGateRepository = {
   },
 
   /**
+   * The most recently DECIDED gate of ONE kind on one work item (Story MOTIR-6071 ·
+   * MOTIR-6502) — {@link findLatestDecidedByWorkItem} narrowed to a kind. The acceptance
+   * re-run class and the acceptance merge hold both ask *what did the last person who
+   * watched this story's video say?*, and a later decision of a DIFFERENT kind (a merge
+   * gate, a design) is not an answer to that question.
+   */
+  async findLatestDecidedByWorkItemAndKind(
+    workItemId: string,
+    kind: ApprovalGateKind,
+    tx: Prisma.TransactionClient,
+  ): Promise<ApprovalGate | null> {
+    return tx.approvalGate.findFirst({
+      where: {
+        workItemId,
+        kind,
+        decidedAt: { not: null },
+        state: { notIn: ['awaiting', 'superseded'] },
+      },
+      orderBy: [{ decidedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
+  /**
    * The most recently DECIDED `approved` gate of one kind, for MANY work items
    * — arm (a) of `design-result.md` AMENDMENT 5 Q2's ladder (Story MOTIR-5553 ·
    * Subtask MOTIR-5557). Returned as a MAP keyed by work-item id.

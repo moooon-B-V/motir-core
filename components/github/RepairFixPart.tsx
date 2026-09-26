@@ -3,7 +3,14 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { CircleEllipsis, CircleX, CornerLeftUp, TriangleAlert, UserRound } from 'lucide-react';
+import {
+  CircleEllipsis,
+  CircleX,
+  CornerDownLeft,
+  CornerLeftUp,
+  TriangleAlert,
+  UserRound,
+} from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import { CopyableCodeBlock } from '@/components/markdown/CopyableCodeBlock';
 import type { RepairPullRequestRefDto, WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
@@ -143,6 +150,32 @@ function FailingLines({ failing }: { failing: RepairPullRequestRefDto[] }) {
   );
 }
 
+/** THE ACCEPTANCE RE-RUN LINE (Story MOTIR-6071 · MOTIR-6502): the story's video was sent
+ *  back with Re-run. Its checks are usually green, so *Checks are failing* would be false —
+ *  the part names the review instead, with the reason quoted as the record quotes it. */
+function RerunLine({
+  refusal,
+}: {
+  refusal: NonNullable<Extract<WorkItemRepairViewDto, { state: 'offer' }>['acceptanceRefusal']>;
+}) {
+  const t = useTranslations('github.development.fix.rerun');
+  const reason = refusal.reasonMd?.trim().split('\n')[0] ?? '';
+  return (
+    <p className="flex items-start gap-2 text-[13px] leading-normal text-(--el-text)">
+      <CornerDownLeft className="mt-0.5 h-4 w-4 shrink-0 text-(--el-icon-muted)" aria-hidden />
+      <span data-testid="repair-rerun-line">
+        {t.rich(refusal.decidedByLabel ? 'sentBackBy' : 'sentBack', {
+          name: refusal.decidedByLabel ?? '',
+          b: bold,
+        })}
+        {reason ? (
+          <span className="block text-(--el-text-secondary)">&ldquo;{reason}&rdquo;</span>
+        ) : null}
+      </span>
+    </p>
+  );
+}
+
 /** The WHICH-TO-USE sentence (§ 26): under the command, in the offer state only,
  *  when a member is failing because the queue threw it out. */
 function WhichToUse({ ejected }: { ejected: RepairPullRequestRefDto[] }) {
@@ -161,12 +194,16 @@ function Command({
   itemIdentifier,
   many,
   conflict,
+  rerun = false,
 }: {
   itemIdentifier: string;
   many: boolean;
   /** A member conflicts (MOTIR-5916): the agent rebases or resolves, and there is nothing
    *  to approve until a push re-arms the question (§ 28's fix-part strings). */
   conflict: boolean;
+  /** An acceptance Re-run (MOTIR-6502): the agent answers the reviewer's reason on the
+   *  same pull request and records a new video. */
+  rerun?: boolean;
 }) {
   const t = useTranslations('github.development.fix');
   return (
@@ -174,7 +211,7 @@ function Command({
       <p className="text-[13px] leading-normal text-(--el-text)">{t('lead')}</p>
       <CopyableCodeBlock language="shell" code={`motir fix ${itemIdentifier}`} />
       <p className="text-xs leading-normal text-(--el-text-secondary)">
-        {t(conflict ? 'howConflict' : many ? 'howMany' : 'how')}
+        {t(rerun ? 'rerun.how' : conflict ? 'howConflict' : many ? 'howMany' : 'how')}
       </p>
       {conflict ? (
         <p className="text-xs leading-normal text-(--el-text-secondary)">{t('rearm')}</p>
@@ -208,6 +245,11 @@ export function RepairFixPart({
   // label that moved between renders would be a hydration mismatch waiting to happen.
   const [clock] = useState(() => now ?? Date.now());
   if (repair.state === 'hidden') return null;
+  // An acceptance Re-run names the review, never failing checks (MOTIR-6502).
+  const rerun =
+    repair.state !== 'pointer' && repair.repairClass === 'acceptance_rerun'
+      ? repair.acceptanceRefusal
+      : null;
 
   const pill =
     repair.state === 'in_progress' ? (
@@ -225,16 +267,18 @@ export function RepairFixPart({
   return (
     <div
       role="group"
-      aria-label={t('aria.part')}
+      aria-label={t(rerun ? 'rerun.title' : 'aria.part')}
       data-testid="repair-fix-part"
       data-state={repair.state}
       className="mt-4 flex min-w-0 flex-col gap-2 border-t border-(--el-border-soft) pt-4"
     >
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <h4 className="text-[13px] font-semibold text-(--el-text)">{t('title')}</h4>
+        <h4 className="text-[13px] font-semibold text-(--el-text)">
+          {t(rerun ? 'rerun.title' : 'title')}
+        </h4>
         {pill}
       </div>
-      <FailingLines failing={repair.failing} />
+      {rerun ? <RerunLine refusal={rerun} /> : <FailingLines failing={repair.failing} />}
 
       {repair.state === 'in_progress' ? (
         <>
@@ -284,8 +328,9 @@ export function RepairFixPart({
             itemIdentifier={itemIdentifier}
             many={repair.failing.length > 1}
             conflict={repair.failing.some((pr) => pr.conflict !== null)}
+            rerun={rerun !== null}
           />
-          {repair.failing.some(isEjectedOnly) ? (
+          {rerun === null && repair.failing.some(isEjectedOnly) ? (
             <WhichToUse ejected={repair.failing.filter(isEjectedOnly)} />
           ) : null}
         </>
