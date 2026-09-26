@@ -156,15 +156,21 @@ export interface DispatchRunCardWithDeliveriesDto extends DispatchRunCardDto {
  * run's own id (`docs/decisions/hosted-agent-run.md` §1).
  *
  * ⚠️ A READ, NEVER A COLUMN: `DispatchRun` carries no cost (MOTIR-1801). Zeroes
- * mean motir-ai has recorded no billed call for the run yet. Machine time is not
- * here — it is the fleet meter's (MOTIR-6448).
+ * mean motir-ai has recorded no billed call for the run yet. Machine SECONDS are
+ * not here — they are the fleet meter's (MOTIR-6448); the CREDITS they were
+ * charged at are (MOTIR-6514), and never the meter's cost figure.
  */
 export interface DispatchRunCostDto {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
+  /** The MODEL-CALL credits (MOTIR-689). */
   credits: number;
+  /** The machine-time charge (MOTIR-6514); `0` until the run's container settles. */
+  machineCredits: number;
+  /** `credits + machineCredits` — what the run cost the org, in credits. */
+  totalCredits: number;
 }
 
 /** The run as the BROWSER reads it — the header, its set, and what each leg shipped. */

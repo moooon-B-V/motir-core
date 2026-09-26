@@ -3,7 +3,7 @@
 - **Status:** Accepted (2026-06-21, locked with Yue; **catalog provisioned in
   Stripe sandbox 2026-06-22** per the §3 + §6 reconciliations below). This is the
   rung-1 pricing decision Story 8.1 implements — no billing code ships until it
-  is locked. **Amended 2026-06-23 + 2026-06-24 + 2026-09-04 + 2026-09-25 — see below.**
+  is locked. **Amended 2026-06-23 + 2026-06-24 + 2026-09-04 + 2026-09-25 + 2026-09-26 — see below.**
 - **Credit model:** the rates, the token→credit conversion and the ledger this ADR
   builds on are specified in `motir-ai/docs/credit-model.md`, owned by the closed
   side (where the ledger lives). Every citation of it below is repo-qualified for
@@ -435,6 +435,18 @@ only vs the PM tools above, not vs Cursor).
 >   dependency graph never asserts an ownership this record still denies. Merging
 >   this amendment IS the ratification; declining it re-files MOTIR-4331 under
 >   Epic 9 with nothing to unwind.
+
+> **Amendment (2026-09-26, MOTIR-6514) — agent HOSTING leaves the agent-lane
+> margin; it is CHARGED directly.** Per
+> [`hosted-agent-machine-charge.md`](hosted-agent-machine-charge.md) (MOTIR-6512),
+> a hosted run is charged for its container's machine time at CI's rate — 1 credit
+> per Linux-equivalent minute, rounded up once per run — as its own ledger line.
+> Pricing hosting into the per-token rate as well would bill it twice, so **the
+> agent-lane margin above covers provider TOKENS ONLY**: read "~20% over provider
+> tokens + agent HOSTING" as "~20% over provider tokens", and MOTIR-4483 calibrates
+> the lane over token cost alone. The token half of the decision stands unchanged,
+> and the hosting meter (MOTIR-4336) stays Motir's cost record — the charge is a
+> separate reader of its seconds, never a price derived from its cost.
 
 ### 3. The Stripe Price catalog (binding on 8.1.2 / MOTIR-1141)
 

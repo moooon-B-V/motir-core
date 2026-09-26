@@ -51,11 +51,31 @@ describe('getAgentRunUsage', () => {
       cacheReadTokens: 9000,
       cacheWriteTokens: 450,
       credits: 17,
+      // A body from before the machine charge: no machine figures, and the total
+      // IS the model-call credits (MOTIR-6514).
+      machineCredits: 0,
+      machineSeconds: 0,
+      totalCredits: 17,
     });
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://ai.test/v1/agent-runs/run_abc/usage');
     expect(init.method).toBe('GET');
     expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer svc-token');
+  });
+
+  it('reads the machine-time charge and the total beside the model-call credits (MOTIR-6514)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        json({ ...USAGE, machineCredits: 27, machineSeconds: 1592, totalCredits: 44 }),
+      ),
+    );
+    expect(await getAgentRunUsage('run_abc')).toMatchObject({
+      credits: 17,
+      machineCredits: 27,
+      machineSeconds: 1592,
+      totalCredits: 44,
+    });
   });
 
   it('returns null on a 404 — a run with no billed call yet', async () => {

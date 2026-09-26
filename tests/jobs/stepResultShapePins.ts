@@ -227,6 +227,14 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ outcome: { billableSeconds: number; containerId: string; costUsd: string; exitCode: null | number; failureDetail: null | string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "admission_deferred"; reason: string } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "provision_failed" } | { detail: string; outcome: "teardown_failed" }; phase: "terminal" } | { phase: "supervising"; session: { attribution: { orgId: string; projectId: string; repoFullName: string; workspaceId: string }; bootedAt: string; dispatchId: string; dispatchRunId: null | string; handle: { createdAt: string; id: string; provider: "arc" | "fake" | "fly" | "runs_on"; region: string }; runId: string; size: { cpuKind: "performance" | "shared"; cpus: number; memoryMb: number }; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; timeoutSeconds: number } }',
   },
+  // MOTIR-6514 — the machine-time charge that follows a settle naming a run. A
+  // `retryable` result is thrown inside the step and never memoized, so it is
+  // absent from the shape by construction.
+  'hostedAgentChargeStepId(dispatchId)': {
+    file: 'lib/services/hostedAgentContainerService.ts',
+    shape:
+      '{ balanceAfter: number; billableSeconds: number; credits: number; exhausted: boolean; idempotent: boolean; outcome: "charged" } | { detail: string; outcome: "refused" } | { outcome: "not_charged"; reason: "disabled" | "no_run" | "not_settled" | "unconfigured" | "zero_seconds" }',
+  },
   'hostedAgentSettleStepId(request.dispatchId)': {
     file: 'lib/services/hostedAgentContainerService.ts',
     shape:

@@ -13,6 +13,7 @@ import {
   hostedAgentContainerService,
   type HostedAgentSession,
 } from '@/lib/services/hostedAgentContainerService';
+import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
 import { isSupervisionKind, type SupervisionKind } from '@/lib/jobs/supervision/driver';
 
 // THE ABANDONED-SUPERVISION SWEEP (Story MOTIR-3778 · Subtask MOTIR-3830) — the
@@ -161,14 +162,23 @@ export const SUPERVISION_SETTLERS: Record<SupervisionKind, SupervisionSettler> =
   },
   'hosted-agent': {
     bootStepId: (subject) => hostedAgentBootStepId(subject),
-    settle: (session, abandoned) =>
-      hostedAgentContainerService.settle(session as HostedAgentSession, {
+    settle: async (session, abandoned) => {
+      const agent = session as HostedAgentSession;
+      const outcome = await hostedAgentContainerService.settle(agent, {
         done: true,
         reason: 'job_timed_out',
         startedAt: abandoned.startedAt,
         exitCode: null,
         failureDetail: abandoned.failureDetail,
-      }),
+      });
+      // An abandoned run's machine time is charged too (MOTIR-6514) — ONE attempt,
+      // since no later pass follows a sweep. It never throws for motir-ai, and a
+      // run whose own pass already charged it is deduplicated on `externalRef`.
+      if (outcome.outcome === 'settled' && agent.dispatchRunId !== null) {
+        await hostedRunChargeService.chargeMachineTime(agent.dispatchRunId);
+      }
+      return outcome;
+    },
   },
 };
 

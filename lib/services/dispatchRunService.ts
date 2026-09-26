@@ -279,8 +279,8 @@ async function assertMayReadRun(
 }
 
 /**
- * A HOSTED run's token and credit cost, read from motir-ai by the run's own id
- * (MOTIR-689; `docs/decisions/hosted-agent-run.md` §1). Zeroes when motir-ai has
+ * A HOSTED run's token and credit cost — model calls, machine time (MOTIR-6514)
+ * and their total — read from motir-ai by the run's own id (MOTIR-689; `docs/decisions/hosted-agent-run.md` §1). Zeroes when motir-ai has
  * recorded no billed call yet (its 404); `null` when it could not be asked at
  * all — a transport failure, a refusal or an unconfigured deployment — so an
  * outage never reads as a run that cost nothing, and never fails the run page.
@@ -294,6 +294,8 @@ async function readHostedRunCost(runId: string): Promise<DispatchRunCostDto | nu
       cacheReadTokens: usage?.cacheReadTokens ?? 0,
       cacheWriteTokens: usage?.cacheWriteTokens ?? 0,
       credits: usage?.credits ?? 0,
+      machineCredits: usage?.machineCredits ?? 0,
+      totalCredits: usage?.totalCredits ?? 0,
     };
   } catch {
     return null;

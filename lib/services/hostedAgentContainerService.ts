@@ -4,6 +4,7 @@ import {
   HostedAgentContainerUnpricedError,
 } from '@/lib/ciFleet/errors';
 import { fleetCeilingService, type FleetSlotVerdict } from '@/lib/services/fleetCeilingService';
+import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
 import {
   OrchestratorImageUnpullableError,
   getOrchestrator,
@@ -30,6 +31,7 @@ import {
 } from '@/lib/jobs/supervision/inProcessSteps';
 import {
   advanceSupervision,
+  deferSettledSupervision,
   inMemorySupervisionStore,
   type SupervisionStore,
   type SupervisionTerminalReason,
@@ -76,9 +78,19 @@ import {
 //   4. A RUN OVER A CARD SET MAY SPAN REPOSITORIES (MOTIR-1790), so the settle can
 //      attribute the handle's seconds across repo SLICES (MOTIR-3255's shape).
 //
-// ⚠️ NO BILLING, NO ENTITLEMENT, NO CREDIT, AND NO `isMeta` BRANCH. Hosting cost is
-// an INPUT to the agent lane's margin, never a billed line; the meter measures
+// ⚠️ THE METER STAYS COGS — NO ENTITLEMENT, NO CREDIT MATH AND NO `isMeta` BRANCH
+// HERE. What this seam writes is what the machine cost MOTIR, and it measures
 // Motir's own org like any tenant (`code-graph-index-fleet.md` §9).
+//
+// The CUSTOMER'S charge for the same machine time (MOTIR-6514,
+// `docs/decisions/hosted-agent-machine-charge.md`) is a SEPARATE READER of the
+// settled seconds, `hostedRunChargeService`: this file only CALLS it, once a settle
+// that names a run has committed, as its own memoized step after the settle step
+// ({@link hostedAgentChargeStepId}). The rate, the rounding and the motir-ai call
+// all live there, so a price never feeds back into the meter and the meter's cost
+// figure never becomes a price. A charge that cannot reach motir-ai never holds
+// the teardown — the container is gone and its slot released before it runs — and
+// is retried on the next pass until it lands.
 
 /** This service boots HOSTED-AGENT containers and nothing else. */
 const HOSTED_AGENT_WORKLOAD = 'hosted_agent' satisfies FleetWorkloadKind;
@@ -96,6 +108,27 @@ export function hostedAgentBootStepId(dispatchId: string): string {
 }
 export function hostedAgentSettleStepId(dispatchId: string): string {
   return `hosted-agent-settle:${dispatchId}`;
+}
+/** The machine-time charge that follows a settle naming a run (MOTIR-6514). A
+ *  step of its own, AFTER the settle step, so a charge that could not land is
+ *  retried without the settle's side effects repeating. */
+export function hostedAgentChargeStepId(dispatchId: string): string {
+  return `hosted-agent-charge:${dispatchId}`;
+}
+
+/**
+ * How long a pass waits before retrying a machine charge that could not reach
+ * motir-ai. A minute, the supervision's own ceiling cadence: the container is
+ * already gone, so waiting costs nothing but the charge's latency.
+ */
+export const HOSTED_AGENT_CHARGE_RETRY_MS = 60_000;
+
+/** Thrown INSIDE the charge step so the engine does not memoize a failure. */
+class HostedAgentChargeNotLandedError extends Error {
+  constructor(readonly detail: string) {
+    super(`the hosted run's machine charge did not land: ${detail}`);
+    this.name = 'HostedAgentChargeNotLandedError';
+  }
 }
 
 /** How long a container has to reach a running state before it is written off as
@@ -758,7 +791,44 @@ export const hostedAgentContainerService = {
           ),
       },
     );
+
+    // THE CHARGE — after the settle step, never inside it. Only a SETTLED
+    // container that served a run is charged: CI and index containers never
+    // reach this seam, and the rehearsal's stand-in names no run.
+    if (result.outcome.outcome === 'settled' && session.dispatchRunId !== null) {
+      await this.chargeSettledRun(session.dispatchId, session.dispatchRunId, steps, options);
+    }
     return result.outcome;
+  },
+
+  /**
+   * Charge a settled run's machine time, as a memoized step. A charge that did
+   * not land throws inside the step — so the failure is NOT memoized — and the
+   * pass is deferred: the next one replays boot and settle from their memos and
+   * re-executes only this step. A charge that landed, or that was decided not to
+   * happen, is memoized, so a replayed pass never calls motir-ai again.
+   */
+  async chargeSettledRun(
+    dispatchId: string,
+    dispatchRunId: string,
+    steps: MemoizingSteps,
+    options: HostedAgentSupervisionOptions,
+  ): Promise<void> {
+    const now = options.now ?? ((): Date => new Date());
+    try {
+      await steps.run(hostedAgentChargeStepId(dispatchId), async () => {
+        const charge = await hostedRunChargeService.chargeMachineTime(dispatchRunId, { now });
+        if (charge.outcome === 'retryable')
+          throw new HostedAgentChargeNotLandedError(charge.detail);
+        return charge;
+      });
+    } catch (err) {
+      if (!(err instanceof HostedAgentChargeNotLandedError)) throw err;
+      deferSettledSupervision(
+        new Date(now().getTime() + HOSTED_AGENT_CHARGE_RETRY_MS),
+        `hosted-agent supervision ${dispatchId}: settled, machine charge pending (${err.detail})`,
+      );
+    }
   },
 
   /**

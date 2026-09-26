@@ -362,6 +362,53 @@ export async function debitCiOverage(
   return (await res.json()) as RawCiOverageDebitResponse;
 }
 
+// ── A hosted run's machine-time charge (MOTIR-6514 · motir-ai MOTIR-6513) ────
+
+/**
+ * What `POST /v1/credits/agent-machine` takes. motir-core owns the seconds, the
+ * rate and the conversion (`docs/decisions/hosted-agent-machine-charge.md` §5);
+ * motir-ai is handed WHOLE credits and the seconds they came from, and nothing
+ * else — no cost figure, no meter row.
+ */
+export interface AgentMachineDebitInput {
+  coreOrganizationId: string;
+  /** The run's `DispatchRun.id`. */
+  coreRunId: string;
+  /** Whole credits (integer ≥ 1), already converted. */
+  credits: number;
+  /** The settled billable seconds the credits were computed from (integer ≥ 1). */
+  billableSeconds: number;
+  /** The idempotency key — the dispatch run id: one charge per run. */
+  externalRef: string;
+  reason?: string;
+}
+
+/** The same body `ci-overage` answers, `idempotent` included. */
+export type RawAgentMachineDebitResponse = RawCiOverageDebitResponse;
+
+/**
+ * POST /v1/credits/agent-machine — charge an org's ledger for ONE hosted run's
+ * machine time, the ledger's third non-AI debit.
+ *
+ * `debitCiOverage`'s contract exactly: the caller invokes it AFTER the meter write
+ * has committed, and this function THROWS a typed error on failure — the caller
+ * (`hostedRunChargeService`) is the layer that knows the seconds are durable and
+ * decides to retry. Idempotent on `externalRef`, so a retry after a timed-out call
+ * that had in fact landed answers `idempotent: true` and moves nothing.
+ */
+export async function debitAgentMachine(
+  input: AgentMachineDebitInput,
+): Promise<RawAgentMachineDebitResponse> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/credits/agent-machine`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawAgentMachineDebitResponse;
+}
+
 /**
  * POST /v1/credits/index-check — may this organisation's next index container
  * boot? (MOTIR-4593; motir-ai MOTIR-5284.)
@@ -1212,7 +1259,13 @@ export interface RawAgentRunUsage {
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
+  /** The MODEL-CALL credits (MOTIR-689's figure, unchanged). */
   credits: number;
+  /** The machine-time charge (MOTIR-6513 · MOTIR-6514); `0` until the run is charged. */
+  machineCredits: number;
+  machineSeconds: number;
+  /** `credits + machineCredits`, as motir-ai sums them. */
+  totalCredits: number;
 }
 
 const AGENT_RUN_USAGE_TOTALS = [
@@ -1258,7 +1311,20 @@ export async function getAgentRunUsage(coreRunId: string): Promise<RawAgentRunUs
     cacheReadTokens: body['cacheReadTokens'] as number,
     cacheWriteTokens: body['cacheWriteTokens'] as number,
     credits: body['credits'] as number,
+    // ⚠️ OPTIONAL ON THE WIRE: a motir-ai that predates the machine charge omits
+    // them, and a run it never charged for machine time has none to report. The
+    // total then IS the model-call credits, never a missing number.
+    machineCredits: numericOr(body['machineCredits'], 0),
+    machineSeconds: numericOr(body['machineSeconds'], 0),
+    totalCredits: numericOr(
+      body['totalCredits'],
+      (body['credits'] as number) + numericOr(body['machineCredits'], 0),
+    ),
   };
+}
+
+function numericOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
 export interface CodeGraphOffboardRepoResult {

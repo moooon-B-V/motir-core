@@ -26,6 +26,9 @@ const USAGE = {
   cacheReadTokens: 9000,
   cacheWriteTokens: 450,
   credits: 17,
+  machineCredits: 27,
+  machineSeconds: 1592,
+  totalCredits: 44,
   events: 4,
   startedAt: '2026-09-26T12:00:00.000Z',
   lastUsageAt: '2026-09-26T12:10:00.000Z',
@@ -74,6 +77,8 @@ async function openRun(origin: 'local' | 'hosted'): Promise<string> {
 }
 
 describe('getRunDetail — a hosted run carries its token and credit cost', () => {
+  // MOTIR-6514 — `credits` stays the model-call figure; the machine charge and
+  // the total ride beside it.
   it("reads motir-ai's per-run usage by the run's own id", async () => {
     const runId = await openRun('hosted');
     const fetchMock = vi.fn(async () => json(USAGE));
@@ -88,7 +93,11 @@ describe('getRunDetail — a hosted run carries its token and credit cost', () =
       cacheReadTokens: 9000,
       cacheWriteTokens: 450,
       credits: 17,
+      machineCredits: 27,
+      totalCredits: 44,
     });
+    // The browser is handed credits, never the fleet meter's COGS figure.
+    expect(JSON.stringify(detail)).not.toMatch(/costUsd|usdPerSecond/);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url] = fetchMock.mock.calls[0] as unknown as [string];
     expect(url).toBe(`https://ai.test/v1/agent-runs/${runId}/usage`);
@@ -107,6 +116,8 @@ describe('getRunDetail — a hosted run carries its token and credit cost', () =
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
       credits: 0,
+      machineCredits: 0,
+      totalCredits: 0,
     });
   });
 
