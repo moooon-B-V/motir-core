@@ -6570,11 +6570,14 @@
       },
       "fix": {
         "title": "Fix the checks",
+        "titleSentBack": "Fix what was sent back",
         "aria": {
-          "part": "Fix the checks"
+          "part": "Fix the checks",
+          "partSentBack": "Fix what was sent back"
         },
         "failingOn": "Checks are failing on <prs></prs>.",
         "leftQueueOn": "<prs></prs> left the merge queue.",
+        "sentBack": "The acceptance video was sent back to re-run. An agent fixes it on {count, plural, one {the same pull request} other {the same pull requests}}, from the reason given, then records a new video.",
         "lead": "Hand the repair to an agent from your terminal:",
         "how": "An agent works on the pull request's own branch, pushes, and the checks run again.",
         "howMany": "An agent works on each pull request's own branch, pushes, and the checks run again.",
@@ -6602,13 +6605,7 @@
         "conflictOn": "<prs></prs> conflicts with {base} and cannot be merged.",
         "conflictOnNoBase": "<prs></prs> conflicts with its base branch and cannot be merged.",
         "howConflict": "An agent rebases or resolves on the pull request's own branch, pushes, and the checks run again.",
-        "rearm": "There is nothing to approve here. A push moves the head, which re-arms the question, and the next green raises the merge gate once — over the new commits.",
-        "rerun": {
-          "title": "Answer the review",
-          "sentBack": "The acceptance video was sent back to <b>re-run</b>.",
-          "sentBackBy": "<b>{name}</b> sent the acceptance video back to <b>re-run</b>.",
-          "how": "An agent works on the same pull request with the reason, pushes, and records a new video once the checks pass."
-        }
+        "rearm": "There is nothing to approve here. A push moves the head, which re-arms the question, and the next green raises the merge gate once — over the new commits."
       },
       "emptyTitle": "No linked pull request",
       "emptyDescription": "Use + Link pull request here or <mono>link_pull_request</mono> over the MCP to add a PR and show live PR and CI status.",
@@ -8886,7 +8883,34 @@
       "consequenceMerges": "Approving accepts {key} and merges {prs}, then moves {key} to Approved. The video is not merged — it is evidence and is never committed.",
       "accepted": "Acceptance approved by {name} · {when}",
       "stands": "Acceptance approved by {name} · {when} — the video stands",
-      "mergeHeld": "The pull request merges when its checks pass — no second press."
+      "mergeHeld": "The pull request merges when its checks pass — no second press.",
+      "cta": {
+        "body": "Watch the recording full screen, then approve or request changes."
+      },
+      "verdict": {
+        "legend": "Is it a re-run or a re-plan?",
+        "required": "Choose Re-run or Re-plan — an acceptance sent back needs one.",
+        "rerun": {
+          "label": "Re-run",
+          "hint": "For a fix to what was built.",
+          "consequence": "Nothing moves; the merge approval is withdrawn, and motir fix works on {count, plural, one {the same pull request} other {the same pull requests}} with your reason."
+        },
+        "replan": {
+          "hint": "For a change to the story's shape.",
+          "consequence": "Nothing moves; the merge approval is withdrawn, and you are asked whether to re-plan."
+        }
+      },
+      "refusal": {
+        "noRerun": "Every subtask has already merged — there is nothing left to re-run, so sending this back asks for a remedy."
+      },
+      "remedyAsk": {
+        "title": "Plan a remedy for {key} with Motir AI?",
+        "yes": "Plan a remedy with AI"
+      },
+      "remedyDoor": {
+        "label": "Plan a remedy with AI",
+        "aria": "Plan a remedy for {item} with AI from this refusal"
+      }
     },
     "pullRequestApproval": {
       "kindLabel": "Pull requests",
@@ -9273,7 +9297,9 @@
         "noneOnGithub": "No reason given on GitHub.",
         "verdict": {
           "revise": "Sent back to revise",
-          "replan": "Sent back to re-plan"
+          "replan": "Sent back to re-plan",
+          "rerun": "Sent back to re-run",
+          "remedy": "Sent back for a remedy"
         }
       },
       "row": {

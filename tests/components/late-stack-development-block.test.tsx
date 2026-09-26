@@ -495,6 +495,69 @@ describe('a story run — the acceptance question is asked where it can be answe
     expect(screen.getByTestId('acceptance-development-slot')).toBeTruthy();
     expect(screen.queryByTestId('standalone-acceptance')).toBeNull();
   });
+
+  // ONE SENT BACK KEEPS THE FRAME (Story MOTIR-6071 · MOTIR-6506; design choice 4). The
+  // refusal withdrew the merge gate `pulled_back`; handing it the frame would say the work
+  // was pulled back out of review, which is false.
+  const SENT_BACK: ApprovalGateDTO = {
+    ...AWAITING_MERGE_GATE,
+    id: 'gate-acc',
+    kind: 'acceptance_result',
+    subjectId: 'ae-1',
+    subjectVersion: 'c0ffee1',
+    state: 'changes_requested',
+    decidedById: 'u-2',
+    decidedByLabel: 'Ada L.',
+    decidedAt: '2026-09-26T10:00:00.000Z',
+    decisionSource: 'ui',
+    noteMd: 'Exports need a date filter.',
+    refusalVerdict: 're_plan',
+  };
+  const WITHDRAWN_MERGE: ApprovalGateDTO = {
+    ...AWAITING_MERGE_GATE,
+    state: 'superseded',
+    supersededCause: 'pulled_back',
+  };
+  const pulledBack = messages.approvalGate.withdrawn.cause.pulled_back;
+
+  async function renderSentBack(acceptance: ApprovalGateDTO) {
+    const ui = await LateUpperSections({
+      reads: Promise.resolve(story({ acceptance, merge: WITHDRAWN_MERGE })),
+      itemId: 'wi-acme-12',
+      itemIdentifier: 'ACME-12',
+      currentUserId: 'u-viewer',
+      canEdit: true,
+      repoDelivery: [],
+      deliveries: [],
+      canReplan: true,
+    });
+    return render(ui);
+  }
+
+  it('sent back over the CURRENT receipt: the acceptance keeps the frame — its record and door, no merge band', async () => {
+    await renderSentBack(SENT_BACK);
+    expect(
+      screen.getAllByText(messages.approvalGate.acceptanceResult.kindLabel).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByTestId('refusal-verdict').textContent).toBe(
+      messages.approvalGate.reason.record.verdict.replan,
+    );
+    const door = screen.getByTestId('refusal-replan-door');
+    expect(door.getAttribute('data-mode')).toBe('replan');
+    expect(screen.queryByText(pulledBack)).toBeNull();
+    expect(
+      screen.queryByRole('button', {
+        name: messages.approvalGate.pullRequestApproval.verb.approveAndMerge,
+      }),
+    ).toBeNull();
+    expect(screen.queryByTestId('standalone-acceptance')).toBeNull();
+  });
+
+  it('sent back over an OLDER receipt: the frame is the merge gate’s again', async () => {
+    await renderSentBack({ ...SENT_BACK, subjectId: 'ae-older' });
+    expect(screen.queryByTestId('refusal-verdict')).toBeNull();
+    expect(screen.queryByTestId('refusal-replan-door')).toBeNull();
+  });
 });
 
 // THE PAGE HOST THREADS THE SPENT APPROVAL (Bug MOTIR-5863). `frameGateFor` builds the

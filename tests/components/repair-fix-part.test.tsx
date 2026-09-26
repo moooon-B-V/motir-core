@@ -364,16 +364,17 @@ describe('a member failing only because it CONFLICTS (MOTIR-5916)', () => {
   });
 });
 
-describe('an ACCEPTANCE RE-RUN (Story MOTIR-6071 · MOTIR-6502)', () => {
+describe('an ACCEPTANCE SENT BACK TO RE-RUN (Story MOTIR-6071 · MOTIR-6502 / MOTIR-6506)', () => {
   const REFUSAL = {
     reasonMd: 'The empty board should say how to add the first card.\nAnd the toolbar wraps.',
     decidedByLabel: 'Yue Zhu',
     decidedAt: '2026-09-26T10:00:00.000Z',
   };
   const GREEN = { ...CORE, ci: 'passing' as const };
-  const rerunPart = () => screen.getByRole('group', { name: fix.rerun.title });
+  const GREEN_GATEWAY = { ...GATEWAY, ci: 'passing' as const };
+  const sentBackPart = () => screen.getByRole('group', { name: fix.aria.partSentBack });
 
-  it('names the review, never failing checks, quotes the first line of the reason and offers `motir fix`', () => {
+  it('titles the part as sent back, names the review — never failing checks — and offers `motir fix`', () => {
     renderPart({
       state: 'offer',
       repairClass: 'acceptance_rerun',
@@ -382,28 +383,52 @@ describe('an ACCEPTANCE RE-RUN (Story MOTIR-6071 · MOTIR-6502)', () => {
       lastGaveUp: null,
     });
 
-    const p = rerunPart();
-    expect(within(p).getByRole('heading', { name: fix.rerun.title })).toBeTruthy();
-    const line = within(p).getByTestId('repair-rerun-line');
-    expect(line.textContent).toContain('Yue Zhu sent the acceptance video back to re-run.');
-    expect(line.textContent).toContain('“The empty board should say how to add the first card.”');
-    expect(line.textContent).not.toContain('toolbar');
+    const p = sentBackPart();
+    expect(p.getAttribute('data-repair-kind')).toBe('sent_back');
+    expect(within(p).getByRole('heading', { name: fix.titleSentBack })).toBeTruthy();
+    const line = within(p).getByTestId('repair-sent-back-line');
+    expect(line.textContent).toBe(
+      'The acceptance video was sent back to re-run. An agent fixes it on the same pull request, from the reason given, then records a new video.',
+    );
+    // The shipped `pointer` recipe: secondary ink, the undo glyph in muted icon ink.
+    expect(line.className).toContain('text-(--el-text-secondary)');
+    expect(line.className).toContain('text-[13px]');
+    expect(line.querySelector('svg')!.getAttribute('class')).toContain('text-(--el-icon-muted)');
     expect(p.textContent).not.toContain('Checks are failing');
-    expect(within(p).getByText(fix.rerun.how)).toBeTruthy();
+    // The command, the lead and `how` are the shipped ones.
+    expect(within(p).getByText(fix.lead)).toBeTruthy();
+    expect(within(p).getByText(fix.how)).toBeTruthy();
     expect(codeBlocks).toEqual([{ language: 'shell', code: 'motir fix ACME-12' }]);
   });
 
-  it('with no recorded name or reason, says so plainly', () => {
+  it('counts the story’s open pull requests, and says `howMany` for several', () => {
     renderPart({
       state: 'offer',
       repairClass: 'acceptance_rerun',
-      acceptanceRefusal: { reasonMd: null, decidedByLabel: null, decidedAt: REFUSAL.decidedAt },
-      failing: [GREEN],
+      acceptanceRefusal: REFUSAL,
+      failing: [GREEN, GREEN_GATEWAY],
       lastGaveUp: null,
     });
-    expect(screen.getByTestId('repair-rerun-line').textContent).toBe(
-      'The acceptance video was sent back to re-run.',
+    expect(screen.getByTestId('repair-sent-back-line').textContent).toContain(
+      'on the same pull requests,',
     );
+    expect(within(sentBackPart()).getByText(fix.howMany)).toBeTruthy();
+  });
+
+  it('a member that is ALSO red keeps the shipped failing line after the sent-back line', () => {
+    renderPart({
+      state: 'offer',
+      repairClass: 'acceptance_rerun',
+      acceptanceRefusal: REFUSAL,
+      failing: [GREEN, GATEWAY],
+      lastGaveUp: null,
+    });
+    const p = sentBackPart();
+    expect(within(p).getByRole('heading', { name: fix.titleSentBack })).toBeTruthy();
+    const text = p.textContent ?? '';
+    expect(text.indexOf('sent back to re-run')).toBeLessThan(text.indexOf('Checks are failing'));
+    expect(text).toContain(`Checks are failing on ${GATEWAY.repo} · #${GATEWAY.number}.`);
+    expect(text).not.toContain(`${CORE.repo} · #${CORE.number}`);
   });
 
   it('while it is being fixed, still names the review and shows no command', () => {
@@ -416,8 +441,20 @@ describe('an ACCEPTANCE RE-RUN (Story MOTIR-6071 · MOTIR-6502)', () => {
       byViewer: true,
       startedAt: '2026-09-26T12:00:00.000Z',
     });
-    const p = rerunPart();
-    expect(within(p).getByTestId('repair-rerun-line')).toBeTruthy();
+    const p = sentBackPart();
+    expect(within(p).getByTestId('repair-sent-back-line')).toBeTruthy();
     expect(codeBlocks).toEqual([]);
+  });
+
+  it('a CI repair keeps its shipped title and draws no sent-back line', () => {
+    renderPart({
+      state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
+      failing: [CORE],
+      lastGaveUp: null,
+    });
+    expect(part().getAttribute('data-repair-kind')).toBe('failing');
+    expect(screen.queryByTestId('repair-sent-back-line')).toBeNull();
   });
 });

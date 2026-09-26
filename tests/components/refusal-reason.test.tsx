@@ -360,4 +360,23 @@ describe('ApprovalRow — the reason REPLACES the details on a refused row only'
     );
     expect(screen.queryByTestId('refusal-reason-cell')).toBeNull();
   });
+
+  // An acceptance sent back to Re-run LEADS with *Re-run*, not *Revise* (MOTIR-6506, 5b).
+  it('an acceptance row refused with `revise` leads with Re-run', () => {
+    renderWithIntl(
+      <ApprovalRow
+        record={{
+          section: 'decided',
+          row: row({
+            kind: 'acceptance_result',
+            subject: { kind: 'acceptance_result' } as ApprovalRecordDecidedRowDto['subject'],
+            refusalVerdict: 'revise',
+          }),
+        }}
+      />,
+    );
+    expect(screen.getByTestId('refusal-reason-cell').textContent).toBe(
+      `${en.approvalGate.acceptanceResult.verdict.rerun.label} · \u201CNeeds the illustration.\u201D`,
+    );
+  });
 });

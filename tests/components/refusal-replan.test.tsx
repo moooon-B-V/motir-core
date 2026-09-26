@@ -76,8 +76,13 @@ const { DevelopmentSectionBody } = await import('@/components/github/Development
 const { ChoiceSection } = await import('@/app/(authed)/items/[key]/_components/ChoiceSection');
 const { DecisionConfirmSection } =
   await import('@/app/(authed)/items/[key]/_components/DecisionConfirmSection');
-const { asksToReplanAfterPress, RefusalReplanAsk } =
-  await import('@/components/approvals/RefusalReplan');
+const {
+  asksToReplanAfterPress,
+  RefusalReplanAsk,
+  RefusalReplanDoor,
+  refusalReplanModeOf,
+  useRefusalReplanSlots,
+} = await import('@/components/approvals/RefusalReplan');
 const { useOpenRefusalReplan } = await import('@/components/approvals/useOpenRefusalReplan');
 
 const ask = en.approvalGate.replanAsk;
@@ -989,5 +994,155 @@ describe('the ask in the frame’s SECTION form (MOTIR-6212)', () => {
     const band = screen.getByTestId('refusal-replan-ask');
     expect(band.classList.contains('mt-3')).toBe(spaced);
     expect(within(band).getByRole('button', { name: ask.yes })).toBeTruthy();
+  });
+});
+
+// THE REMEDY COPY SET (Story MOTIR-6071 · MOTIR-6506; design
+// `approval-control--acceptance-verdict.mock.html` panels 7–8): the ask and the door speak
+// `replan` or `remedy`, keyed off the gate's verdict, and say which as `data-mode`.
+describe('the ask and the door in their two copy sets (MOTIR-6506)', () => {
+  const remedyAsk = en.approvalGate.acceptanceResult.remedyAsk;
+  const remedyDoor = en.approvalGate.acceptanceResult.remedyDoor;
+
+  it.each([
+    ['acceptance_result', null, 'remedy'],
+    ['acceptance_result', 're_plan', 'replan'],
+    ['design_result', 're_plan', 'replan'],
+    ['decision_approval', null, 'replan'],
+  ] as const)('%s · verdict %s → %s', (kind, refusalVerdict, mode) => {
+    expect(
+      refusalReplanModeOf({
+        kind,
+        state: 'changes_requested',
+        decisionSource: 'ui',
+        refusalVerdict,
+      }),
+    ).toBe(mode);
+  });
+
+  it('the REMEDY ask: *Plan a remedy for {key} with Motir AI?*, the shipped two lines, its own yes', () => {
+    const onAnswered = vi.fn();
+    render(
+      <RefusalReplanAsk
+        gateId="gate-70"
+        itemKey="ACME-70"
+        sectioned={false}
+        mode="remedy"
+        onAnswered={onAnswered}
+        onNotNow={vi.fn()}
+      />,
+    );
+    const band = screen.getByRole('group', {
+      name: remedyAsk.title.replace('{key}', 'ACME-70'),
+    });
+    expect(band.getAttribute('data-mode')).toBe('remedy');
+    expect(within(band).getByText(ask.opens.replace('{key}', 'ACME-70'))).toBeTruthy();
+    expect(within(band).getByText(ask.unsent)).toBeTruthy();
+    const yes = within(band).getByRole('button', { name: remedyAsk.yes });
+    expect(document.activeElement).toBe(yes);
+    fireEvent.click(yes);
+    expect(onAnswered).toHaveBeenCalledTimes(1);
+    expect(shallowReplace.mock.calls[0]![0] as string).toContain('gate-70');
+  });
+
+  it('the shipped ask is the `replan` set', () => {
+    render(
+      <RefusalReplanAsk
+        gateId="gate-60"
+        itemKey="ACME-60"
+        sectioned={false}
+        onAnswered={vi.fn()}
+        onNotNow={vi.fn()}
+      />,
+    );
+    const band = screen.getByTestId('refusal-replan-ask');
+    expect(band.getAttribute('data-mode')).toBe('replan');
+    expect(within(band).getByText(ask.title.replace('{key}', 'ACME-60'))).toBeTruthy();
+  });
+
+  it('the REMEDY door: *Plan a remedy with AI*, named for the story', () => {
+    render(<RefusalReplanDoor gateId="gate-70" itemKey="ACME-70" mode="remedy" />);
+    const link = screen.getByTestId('refusal-replan-door');
+    expect(link.getAttribute('data-mode')).toBe('remedy');
+    expect(link.textContent).toBe(remedyDoor.label);
+    expect(link.getAttribute('aria-label')).toBe(remedyDoor.aria.replace('{item}', 'ACME-70'));
+  });
+
+  it('the slots pick the set from the gate: a finished story’s refusal asks for a remedy, Not now leaves the remedy door', () => {
+    function Slots({ asking }: { asking: boolean }) {
+      const { door, ask: theAsk } = useRefusalReplanSlots({
+        gate: {
+          id: 'gate-70',
+          kind: 'acceptance_result',
+          state: 'changes_requested',
+          decisionSource: 'ui',
+          refusalVerdict: null,
+        },
+        itemKey: 'ACME-70',
+        replan: { canReplan: true, asking, onAskDone: vi.fn() },
+        sectioned: true,
+      });
+      return (
+        <>
+          {door}
+          {theAsk}
+        </>
+      );
+    }
+    const { rerender } = render(<Slots asking />);
+    expect(screen.getByTestId('refusal-replan-ask').getAttribute('data-mode')).toBe('remedy');
+    fireEvent.click(screen.getByRole('button', { name: NOT_NOW }));
+    rerender(<Slots asking={false} />);
+    const link = screen.getByTestId('refusal-replan-door');
+    expect(link.getAttribute('data-mode')).toBe('remedy');
+    expect(document.activeElement).toBe(link);
+  });
+
+  it('a Re-run never offers the planner — no ask and no door', () => {
+    function Slots() {
+      const { door, ask: theAsk } = useRefusalReplanSlots({
+        gate: {
+          id: 'gate-60',
+          kind: 'acceptance_result',
+          state: 'changes_requested',
+          decisionSource: 'ui',
+          refusalVerdict: 'revise',
+        },
+        itemKey: 'ACME-60',
+        replan: { canReplan: true, asking: true },
+        sectioned: false,
+      });
+      return (
+        <>
+          {door}
+          {theAsk}
+        </>
+      );
+    }
+    render(<Slots />);
+    expect(screen.queryByTestId('refusal-replan-ask')).toBeNull();
+    expect(screen.queryByTestId('refusal-replan-door')).toBeNull();
+  });
+
+  it('the remedy set in zh', () => {
+    render(
+      <RefusalReplanAsk
+        gateId="gate-70"
+        itemKey="ACME-70"
+        sectioned={false}
+        mode="remedy"
+        onAnswered={vi.fn()}
+        onNotNow={vi.fn()}
+      />,
+      { messages: zh as unknown as typeof en, locale: 'zh' },
+    );
+    expect(
+      screen.getByText(
+        zh.approvalGate.acceptanceResult.remedyAsk.title.replace('{key}', 'ACME-70'),
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: zh.approvalGate.acceptanceResult.remedyAsk.yes }),
+    ).toBeTruthy();
   });
 });

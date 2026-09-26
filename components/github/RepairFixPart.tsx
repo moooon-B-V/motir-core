@@ -6,9 +6,9 @@ import { useLocale, useTranslations } from 'next-intl';
 import {
   CircleEllipsis,
   CircleX,
-  CornerDownLeft,
   CornerLeftUp,
   TriangleAlert,
+  Undo2,
   UserRound,
 } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
@@ -150,30 +150,30 @@ function FailingLines({ failing }: { failing: RepairPullRequestRefDto[] }) {
   );
 }
 
-/** THE ACCEPTANCE RE-RUN LINE (Story MOTIR-6071 · MOTIR-6502): the story's video was sent
- *  back with Re-run. Its checks are usually green, so *Checks are failing* would be false —
- *  the part names the review instead, with the reason quoted as the record quotes it. */
-function RerunLine({
-  refusal,
-}: {
-  refusal: NonNullable<Extract<WorkItemRepairViewDto, { state: 'offer' }>['acceptanceRefusal']>;
-}) {
-  const t = useTranslations('github.development.fix.rerun');
-  const reason = refusal.reasonMd?.trim().split('\n')[0] ?? '';
+/** THE SENT-BACK LINE (Story MOTIR-6071 · MOTIR-6502 / MOTIR-6506; design
+ *  `approval-control--acceptance-verdict.mock.html` panel 6a): the story's acceptance video
+ *  was sent back with Re-run. Its checks are usually green, so *Checks are failing* would be
+ *  false — the part names the review instead. The shipped `pointer` line's recipe, not the
+ *  failing line's: a refusal is not a failure. `{count}` is the story's open pull requests,
+ *  every one of which the fix is handed. */
+function SentBackLine({ count }: { count: number }) {
+  const t = useTranslations('github.development.fix');
   return (
-    <p className="flex items-start gap-2 text-[13px] leading-normal text-(--el-text)">
-      <CornerDownLeft className="mt-0.5 h-4 w-4 shrink-0 text-(--el-icon-muted)" aria-hidden />
-      <span data-testid="repair-rerun-line">
-        {t.rich(refusal.decidedByLabel ? 'sentBackBy' : 'sentBack', {
-          name: refusal.decidedByLabel ?? '',
-          b: bold,
-        })}
-        {reason ? (
-          <span className="block text-(--el-text-secondary)">&ldquo;{reason}&rdquo;</span>
-        ) : null}
-      </span>
+    <p
+      className="flex items-start gap-2 text-[13px] leading-normal text-(--el-text-secondary)"
+      data-testid="repair-sent-back-line"
+    >
+      <Undo2 className="mt-0.5 h-4 w-4 shrink-0 text-(--el-icon-muted)" aria-hidden />
+      <span>{t('sentBack', { count })}</span>
     </p>
   );
+}
+
+/** A member the shipped failing lines name — red checks, a queue exit or a conflict. On a
+ *  sent-back story the part is handed EVERY open member, green ones included, so only these
+ *  follow the sent-back line (design § *Failing lines*). */
+function isFailing(pr: RepairPullRequestRefDto): boolean {
+  return pr.ci === 'failing' || pr.queueExit !== null || pr.conflict !== null;
 }
 
 /** The WHICH-TO-USE sentence (§ 26): under the command, in the offer state only,
@@ -194,16 +194,12 @@ function Command({
   itemIdentifier,
   many,
   conflict,
-  rerun = false,
 }: {
   itemIdentifier: string;
   many: boolean;
   /** A member conflicts (MOTIR-5916): the agent rebases or resolves, and there is nothing
    *  to approve until a push re-arms the question (§ 28's fix-part strings). */
   conflict: boolean;
-  /** An acceptance Re-run (MOTIR-6502): the agent answers the reviewer's reason on the
-   *  same pull request and records a new video. */
-  rerun?: boolean;
 }) {
   const t = useTranslations('github.development.fix');
   return (
@@ -211,7 +207,7 @@ function Command({
       <p className="text-[13px] leading-normal text-(--el-text)">{t('lead')}</p>
       <CopyableCodeBlock language="shell" code={`motir fix ${itemIdentifier}`} />
       <p className="text-xs leading-normal text-(--el-text-secondary)">
-        {t(rerun ? 'rerun.how' : conflict ? 'howConflict' : many ? 'howMany' : 'how')}
+        {t(conflict ? 'howConflict' : many ? 'howMany' : 'how')}
       </p>
       {conflict ? (
         <p className="text-xs leading-normal text-(--el-text-secondary)">{t('rearm')}</p>
@@ -245,11 +241,11 @@ export function RepairFixPart({
   // label that moved between renders would be a hydration mismatch waiting to happen.
   const [clock] = useState(() => now ?? Date.now());
   if (repair.state === 'hidden') return null;
-  // An acceptance Re-run names the review, never failing checks (MOTIR-6502).
-  const rerun =
-    repair.state !== 'pointer' && repair.repairClass === 'acceptance_rerun'
-      ? repair.acceptanceRefusal
-      : null;
+  // An acceptance sent back to Re-run names the review, never failing checks (MOTIR-6502);
+  // its title and first line are the design's sent-back class (MOTIR-6506). The command,
+  // the lead, `how` / `howMany`, in progress and gave up are the shipped ones.
+  const sentBack = repair.state !== 'pointer' && repair.repairClass === 'acceptance_rerun';
+  const failingLines = sentBack ? repair.failing.filter(isFailing) : repair.failing;
 
   const pill =
     repair.state === 'in_progress' ? (
@@ -267,18 +263,20 @@ export function RepairFixPart({
   return (
     <div
       role="group"
-      aria-label={t(rerun ? 'rerun.title' : 'aria.part')}
+      aria-label={t(sentBack ? 'aria.partSentBack' : 'aria.part')}
       data-testid="repair-fix-part"
       data-state={repair.state}
+      data-repair-kind={sentBack ? 'sent_back' : 'failing'}
       className="mt-4 flex min-w-0 flex-col gap-2 border-t border-(--el-border-soft) pt-4"
     >
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <h4 className="text-[13px] font-semibold text-(--el-text)">
-          {t(rerun ? 'rerun.title' : 'title')}
+          {t(sentBack ? 'titleSentBack' : 'title')}
         </h4>
         {pill}
       </div>
-      {rerun ? <RerunLine refusal={rerun} /> : <FailingLines failing={repair.failing} />}
+      {sentBack ? <SentBackLine count={repair.failing.length} /> : null}
+      <FailingLines failing={failingLines} />
 
       {repair.state === 'in_progress' ? (
         <>
@@ -328,9 +326,8 @@ export function RepairFixPart({
             itemIdentifier={itemIdentifier}
             many={repair.failing.length > 1}
             conflict={repair.failing.some((pr) => pr.conflict !== null)}
-            rerun={rerun !== null}
           />
-          {rerun === null && repair.failing.some(isEjectedOnly) ? (
+          {!sentBack && repair.failing.some(isEjectedOnly) ? (
             <WhichToUse ejected={repair.failing.filter(isEjectedOnly)} />
           ) : null}
         </>
