@@ -303,7 +303,8 @@ test.describe('a design sent back is a verdict', () => {
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')}</pre>`,
       );
-      await expect(page.getByText(banner)).toBeVisible();
+      // Scoped to the one block `setContent` just rendered (MOTIR-5037's page-rooted rule).
+      await expect(page.locator('pre').getByText(banner)).toBeVisible();
       await beat();
     });
 

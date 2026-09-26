@@ -315,10 +315,9 @@ export const approvalGateRepository = {
    */
   async findLatestDecidedByWorkItem(
     workItemId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<ApprovalGate | null> {
-    const client = tx ?? dbRead;
-    return client.approvalGate.findFirst({
+    return tx.approvalGate.findFirst({
       where: { workItemId, decidedAt: { not: null }, state: { notIn: ['awaiting', 'superseded'] } },
       orderBy: [{ decidedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
     });

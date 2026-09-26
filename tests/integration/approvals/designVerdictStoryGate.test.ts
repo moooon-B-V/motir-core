@@ -615,7 +615,7 @@ describe('coverage floor — the refusal band reads its own reasons off the door
 });
 
 describe('coverage floor — the story’s reads outside the chain’s own call shapes', () => {
-  it('the two new repository reads, with a caller’s transaction and on the bare RLS-scoped client', async () => {
+  it('the two new repository reads, inside the caller’s transaction', async () => {
     await moveTo('in_review');
     const v1 = await publish('v1');
     await refuseViaRoute(v1.gate.id, 're_plan');
@@ -628,11 +628,6 @@ describe('coverage floor — the story’s reads outside the chain’s own call 
     );
     expect(latest?.id).toBe(v1.gate.id);
     expect(dependents.map((d) => d.identifier)).toEqual([waiting.key]);
-
-    // Without a caller's transaction each read falls back to `dbRead`, and outside a
-    // workspace context the row-level policy admits nothing — never another tenant's rows.
-    expect(await approvalGateRepository.findLatestDecidedByWorkItem(card.id)).toBeNull();
-    expect(await workItemLinkRepository.findDependentKeys(card.id)).toEqual([]);
   });
 
   it('a seeded session is refused when the refused card has since MOVED to another project', async () => {

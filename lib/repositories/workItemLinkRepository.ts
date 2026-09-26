@@ -272,9 +272,9 @@ export const workItemLinkRepository = {
    */
   async findDependentKeys(
     workItemId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<Array<{ identifier: string; status: string; projectId: string }>> {
-    const rows = await (tx ?? dbRead).workItemLink.findMany({
+    const rows = await tx.workItemLink.findMany({
       where: { toId: workItemId, kind: 'is_blocked_by', fromItem: { archivedAt: null } },
       select: { fromItem: { select: { identifier: true, status: true, projectId: true } } },
       orderBy: { fromItem: { key: 'asc' } },
