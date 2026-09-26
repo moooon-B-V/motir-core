@@ -8,9 +8,9 @@ import { ADD_PLAN_ITEMS_TOOL_NAME, CREATE_PLAN_TOOL_NAME } from '@/lib/mcp/tools
 import { scopeClaimService } from '@/lib/services/scopeClaimService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
-import type { InvalidEdgeDto } from '@/lib/dto/workItems';
+import type { CrossLevelEdgeDto, InvalidEdgeDto } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { createTestProject, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -65,7 +65,12 @@ async function seed(fx: WorkItemFixture) {
 const link = (fx: WorkItemFixture, fromId: string, toId: string) =>
   workItemsService.linkWorkItems({ fromId, toId, kind: 'is_blocked_by' }, fx.ctx);
 
-type Validity = { valid: boolean; blockers: unknown[]; invalidEdges: InvalidEdgeDto[] };
+type Validity = {
+  valid: boolean;
+  blockers: unknown[];
+  invalidEdges: InvalidEdgeDto[];
+  crossLevelEdges: CrossLevelEdgeDto[];
+};
 
 async function openPlan(client: Client, fx: WorkItemFixture): Promise<string> {
   const r = await call(client, CREATE_PLAN_TOOL_NAME, {
@@ -138,20 +143,25 @@ describe('the plan gate, end to end through add_plan_items', () => {
   });
 });
 
-describe('the link door, end to end through link_work_items', () => {
-  it('subtask → story is refused CROSS_LEVEL_LINK with no row written; relates_to for the pair is created', async () => {
+describe('the link door, end to end through link_work_items (Amendment 2, MOTIR-6509)', () => {
+  it('subtask → story is WRITTEN and validate_work_item reports it INVALID; relates_to for the pair is created', async () => {
     const fx = await makeWorkItemFixture();
     const t = await seed(fx);
     const client = await connectClient(fx.ctx);
 
-    const refused = await call(client, 'link_work_items', {
+    const written = await call(client, 'link_work_items', {
       fromKey: t.x.identifier,
       toKey: t.a.identifier,
       relationship: 'blocked_by',
     });
-    expect(refused.isError).toBe(true);
-    expect(text(refused)).toContain('CROSS_LEVEL_LINK');
-    expect(await adminDb.workItemLink.count({ where: { kind: 'is_blocked_by' } })).toBe(0);
+    expect(written.isError, text(written)).toBeFalsy();
+    expect(await adminDb.workItemLink.count({ where: { kind: 'is_blocked_by' } })).toBe(1);
+    const verdict = (await call(client, 'validate_work_item', { key: t.e1.identifier }))
+      .structuredContent as unknown as Validity;
+    expect(verdict.valid).toBe(false);
+    expect(verdict.crossLevelEdges.map((e) => [e.item, e.blockedBy])).toEqual([
+      [t.x.identifier, t.a.identifier],
+    ]);
 
     const related = await call(client, 'link_work_items', {
       fromKey: t.x.identifier,
@@ -164,7 +174,7 @@ describe('the link door, end to end through link_work_items', () => {
 });
 
 describe('the epic tier — an epic is blocked only by another epic (Amendment 1)', () => {
-  it('link_work_items: epic → epic is created; epic → root task and root bug → epic are refused CROSS_LEVEL_LINK; root bug → root task is created', async () => {
+  it('link_work_items writes every one; validate_work_item flags epic → root task and root bug → epic, never epic → epic or root bug → root task', async () => {
     const fx = await makeWorkItemFixture();
     const t = await seed(fx);
     const client = await connectClient(fx.ctx);
@@ -175,20 +185,26 @@ describe('the epic tier — an epic is blocked only by another epic (Amendment 1
         relationship: 'blocked_by',
       });
 
-    const epicOnTask = await blockedBy(t.e1, t.r);
-    expect(epicOnTask.isError).toBe(true);
-    expect(text(epicOnTask)).toContain('CROSS_LEVEL_LINK');
-    expect(text(epicOnTask)).toContain('An epic is blocked only by another epic');
-    const bugOnEpic = await blockedBy(t.g, t.e1);
-    expect(bugOnEpic.isError).toBe(true);
-    expect(text(bugOnEpic)).toContain('CROSS_LEVEL_LINK');
-    expect(await adminDb.workItemLink.count({ where: { kind: 'is_blocked_by' } })).toBe(0);
+    for (const [from, to] of [
+      [t.e1, t.r],
+      [t.g, t.e1],
+      [t.e1, t.e2],
+      [t.g, t.r],
+    ] as const) {
+      const made = await blockedBy(from, to);
+      expect(made.isError, text(made)).toBeFalsy();
+    }
+    expect(await adminDb.workItemLink.count({ where: { kind: 'is_blocked_by' } })).toBe(4);
 
-    const epics = await blockedBy(t.e1, t.e2);
-    expect(epics.isError, text(epics)).toBeFalsy();
-    const roots = await blockedBy(t.g, t.r);
-    expect(roots.isError, text(roots)).toBeFalsy();
-    expect(await adminDb.workItemLink.count({ where: { kind: 'is_blocked_by' } })).toBe(2);
+    const flagged = async (key: string) =>
+      ((await call(client, 'validate_work_item', { key })).structuredContent as unknown as Validity)
+        .crossLevelEdges;
+    const onEpic = await flagged(t.e1.identifier);
+    expect(onEpic.map((e) => [e.item, e.blockedBy])).toEqual([[t.e1.identifier, t.r.identifier]]);
+    expect(onEpic[0]!.explanation).toContain('An epic is blocked only by another epic');
+    expect((await flagged(t.g.identifier)).map((e) => [e.item, e.blockedBy])).toEqual([
+      [t.g.identifier, t.e1.identifier],
+    ]);
     await client.close();
   });
 
@@ -322,6 +338,71 @@ describe('validity over a PROJECTION', () => {
         blockerParent: t.a.identifier,
       },
     ]);
+    await client.close();
+  });
+});
+
+describe('a COMMITTED cross-level edge over a PROJECTION (MOTIR-6509)', () => {
+  it('validate_plan and validate_work_item with a planId both report it, and a plan touching nothing of it stays INVALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await seed(fx);
+    await link(fx, t.x.id, t.a.id); // depth 2 → 1
+    const client = await connectClient(fx.ctx);
+
+    const planId = await openPlan(client, fx);
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'Another story', kind: 'story' },
+          parentRef: t.e2.id,
+        },
+      ],
+    });
+    expect(appended.isError, text(appended)).toBeFalsy();
+
+    const plan = await call(client, 'validate_plan', { planId });
+    const planVerdict = plan.structuredContent as unknown as Validity;
+    expect(planVerdict.valid).toBe(false);
+    expect(planVerdict.crossLevelEdges).toEqual([
+      expect.objectContaining({
+        item: t.x.identifier,
+        blockedBy: t.a.identifier,
+        itemDepth: 2,
+        blockedByDepth: 1,
+        reason: 'blocked_elsewhere',
+      }),
+    ]);
+    expect(text(plan)).toContain('blocked elsewhere');
+
+    const subtree = (await call(client, 'validate_work_item', { key: t.e1.identifier, planId }))
+      .structuredContent as unknown as Validity;
+    expect(subtree.valid).toBe(false);
+    expect(subtree.crossLevelEdges.map((e) => [e.item, e.blockedBy])).toEqual([
+      [t.x.identifier, t.a.identifier],
+    ]);
+    await client.close();
+  });
+
+  it('a blocker in ANOTHER project is not judged over the projection', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await seed(fx);
+    const other = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'FAR',
+    });
+    const far = await workItemsService.createWorkItem(
+      { projectId: other.id, kind: 'epic', title: 'Far epic' },
+      fx.ctx,
+    );
+    await link(fx, t.x.id, far.id);
+    const client = await connectClient(fx.ctx);
+    const planId = await openPlan(client, fx);
+    const verdict = (await call(client, 'validate_plan', { planId }))
+      .structuredContent as unknown as Validity;
+    expect(verdict.crossLevelEdges).toEqual([]);
     await client.close();
   });
 });

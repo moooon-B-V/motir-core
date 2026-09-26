@@ -65,8 +65,9 @@ const mk = (
 
 // Written BELOW the link door: this file tests the VALIDATOR over whatever edges
 // the tree carries, and most of its "outside the subtree" blockers are ROOT
-// tasks — a different depth from the members they gate, which the door now
-// refuses (MOTIR-6369 / 6411) while the tree still holds such edges.
+// tasks — a different depth from the members they gate. Such an edge is a
+// `crossLevelEdges` entry (MOTIR-6509), so a case asserting `valid: true` wires
+// a same-level edge instead.
 const link = (fx: Awaited<ReturnType<typeof makeWorkItemFixture>>, fromId: string, toId: string) =>
   seedBlockedBy(fx, fromId, toId);
 
@@ -83,6 +84,7 @@ describe('workItemsService.validateWorkItem — the subtree finishability rule',
       valid: true,
       blockers: [],
       invalidEdges: [],
+      crossLevelEdges: [],
       advisories: [],
       softBlocks: [],
     });
@@ -137,10 +139,12 @@ describe('workItemsService.validateWorkItem — the subtree finishability rule',
   it('a DONE blocker OUTSIDE the subtree satisfies loose but gates tight', async () => {
     const fx = await makeWorkItemFixture();
     const story = await mk(fx, 'Story', 'story');
-    const child = await mk(fx, 'Child', 'subtask', story.id);
+    await mk(fx, 'Child', 'subtask', story.id);
     const externalDone = await mk(fx, 'External done', 'task');
     await markDone(externalDone.id);
-    await link(fx, child.id, externalDone.id);
+    // Root → root: the same level, so only the finishability rule is asked
+    // (a subtask → root task would be `crossLevelEdges`, MOTIR-6509).
+    await link(fx, story.id, externalDone.id);
 
     const loose = await workItemsService.validateWorkItem(
       fx.projectId,
@@ -160,7 +164,7 @@ describe('workItemsService.validateWorkItem — the subtree finishability rule',
     expect(tight.valid).toBe(false);
     expect(tight.blockers).toEqual([
       {
-        item: child.identifier,
+        item: story.identifier,
         blockedBy: externalDone.identifier,
         blockerStatus: 'done',
         blockerSprintId: null,
@@ -216,10 +220,10 @@ describe('workItemsService.validateWorkItem — the subtree finishability rule',
   it('condition defaults to loose when omitted', async () => {
     const fx = await makeWorkItemFixture();
     const story = await mk(fx, 'Story', 'story');
-    const child = await mk(fx, 'Child', 'subtask', story.id);
+    await mk(fx, 'Child', 'subtask', story.id);
     const externalDone = await mk(fx, 'External done', 'task');
     await markDone(externalDone.id);
-    await link(fx, child.id, externalDone.id);
+    await link(fx, story.id, externalDone.id); // root → root: same level
 
     const omitted = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
     const loose = await workItemsService.validateWorkItem(
@@ -268,6 +272,7 @@ describe('workItemsService.validateWorkItem — softBlocks (MOTIR-6368)', () => 
       valid: true,
       blockers: [],
       invalidEdges: [],
+      crossLevelEdges: [],
       advisories: [],
       softBlocks: [
         {
@@ -327,7 +332,9 @@ describe('workItemsService.validateWorkItem — softBlocks (MOTIR-6368)', () => 
     const epic = await mk(fx, 'Epic', 'epic');
     const openEpic = await mk(fx, 'Open epic', 'epic');
     const story = await mk(fx, 'Story', 'story', epic.id);
-    const outside = await mk(fx, 'Outside task', 'task');
+    // A story under the OTHER epic: the same level as `story`, and its parents'
+    // edge (epic → openEpic) is carried, so only finishability is asked.
+    const outside = await mk(fx, 'Outside story', 'story', openEpic.id);
     await link(fx, epic.id, openEpic.id);
     await link(fx, story.id, outside.id); // the story's OWN out-of-subtree blocker
 
@@ -381,10 +388,10 @@ describe('validate_work_item MCP tool round-trip', () => {
   it('condition: tight reports a done out-of-subtree blocker the loose default accepts', async () => {
     const fx = await makeWorkItemFixture();
     const story = await mk(fx, 'Story', 'story');
-    const child = await mk(fx, 'Child', 'subtask', story.id);
+    await mk(fx, 'Child', 'subtask', story.id);
     const externalDone = await mk(fx, 'External done', 'task');
     await markDone(externalDone.id);
-    await link(fx, child.id, externalDone.id);
+    await link(fx, story.id, externalDone.id); // root → root: same level
 
     const client = await connectClient(fx.ctx);
     const loose = (await client.callTool({

@@ -482,6 +482,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
           blockerParent: `planItem:${epicAId}`,
         },
       ],
+      crossLevelEdges: [],
     });
 
     // The OTHER half: the same forest with epic B blocked_by epic A is VALID.
@@ -522,6 +523,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
       blockers: [],
       rejections: [],
       invalidEdges: [],
+      crossLevelEdges: [],
     });
 
     // Proof of the defect the forest rule fixes: iterating the SINGLE-subtree
@@ -627,7 +629,14 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
     await plansService.markPlanned(planId, fx.ctx);
 
     const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
-    expect(res).toEqual({ planId, valid: true, blockers: [], rejections: [], invalidEdges: [] });
+    expect(res).toEqual({
+      planId,
+      valid: true,
+      blockers: [],
+      rejections: [],
+      invalidEdges: [],
+      crossLevelEdges: [],
+    });
   });
 
   it('an EMPTY plan (no items, no live tree) is vacuously valid', async () => {
@@ -636,7 +645,14 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
     await plansService.markPlanned(planId, fx.ctx);
 
     const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
-    expect(res).toEqual({ planId, valid: true, blockers: [], rejections: [], invalidEdges: [] });
+    expect(res).toEqual({
+      planId,
+      valid: true,
+      blockers: [],
+      rejections: [],
+      invalidEdges: [],
+      crossLevelEdges: [],
+    });
   });
 
   // NOTE: a SAME-project blocker can never make the forest invalid — every
@@ -669,7 +685,14 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
     await plansService.markPlanned(planId, fx.ctx);
 
     const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
-    expect(res).toEqual({ planId, valid: true, blockers: [], rejections: [], invalidEdges: [] });
+    expect(res).toEqual({
+      planId,
+      valid: true,
+      blockers: [],
+      rejections: [],
+      invalidEdges: [],
+      crossLevelEdges: [],
+    });
   });
 
   it('an unknown planId throws PlanNotFoundError', async () => {
@@ -1072,7 +1095,14 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
     // `PlanValidityDto` is deliberately unchanged: the forest has no single
     // subject to attribute a body-vs-edges gap to. Per-card coverage is the
     // `validateProjectedWorkItem` call, asserted above.
-    expect(forest).toEqual({ planId, valid: true, blockers: [], rejections: [], invalidEdges: [] });
+    expect(forest).toEqual({
+      planId,
+      valid: true,
+      blockers: [],
+      rejections: [],
+      invalidEdges: [],
+      crossLevelEdges: [],
+    });
   });
 });
 
@@ -1211,6 +1241,7 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
       valid: true,
       blockers: [],
       invalidEdges: [],
+      crossLevelEdges: [],
       advisories: [],
       softBlocks: [],
     });
@@ -1242,6 +1273,7 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
       valid: true,
       blockers: [],
       invalidEdges: [],
+      crossLevelEdges: [],
       advisories: [],
       softBlocks: [],
     });
@@ -2227,12 +2259,15 @@ describe("a `modify`'s `patch.parentRef` moves the card in the PROJECTION (MOTIR
     const from = await mk(fx, 'The story it leaves', 'story');
     const to = await mk(fx, 'The story it joins', 'story');
     const leaf = await mk(fx, 'The leaf that moves', 'subtask', from.id);
-    const outside = await mk(fx, 'Outside the project tree', 'task');
+    // A done blocker on the leaf's own level (a subtask under a third story), with
+    // the parents' edge the post-move tree owes (`to` → `elsewhere`), so neither
+    // `invalidEdges` nor `crossLevelEdges` (MOTIR-6509) speaks: this case is about
+    // the walk's path after a move, not about the edge.
+    const elsewhere = await mk(fx, 'The story it waits on', 'story');
+    const outside = await mk(fx, 'Outside the moving subtrees', 'subtask', elsewhere.id);
     await markDone(outside.id);
-    // Seeded below the doors: a leaf and a ROOT task sit at different depths,
-    // which the link door refuses (MOTIR-6369 / 6411). This case is about the
-    // walk's path after a move, not about the edge.
-    await seedBlockedBy(fx, leaf.id, outside.id);
+    await link(fx, leaf.id, outside.id);
+    await link(fx, to.id, elsewhere.id);
 
     const planId = await freshPlan(fx);
     await reparent(fx, planId, leaf.id, to.id);

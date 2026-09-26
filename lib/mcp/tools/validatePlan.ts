@@ -3,7 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { planValidityService } from '@/lib/services/planValidityService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PlanValidityDto } from '@/lib/dto/plans';
-import { invalidEdgeLines } from '@/lib/mcp/tools/validateWorkItem';
+import { crossLevelEdgeLines, invalidEdgeLines } from '@/lib/mcp/tools/validateWorkItem';
 import type { ValidityCondition } from '@/lib/dto/sprints';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -100,6 +100,7 @@ function summarize(result: PlanValidityDto): string {
   }
 
   lines.push(...invalidEdgeLines(result.invalidEdges));
+  lines.push(...crossLevelEdgeLines(result.crossLevelEdges));
 
   return lines.join('\n');
 }
@@ -151,8 +152,12 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
         'blocked_by between items under DIFFERENT parents is carried by their parents too ' +
         '(the parents directly blocked_by each other); an uncovered one arrives in ' +
         '`invalidEdges` as `{ item, blockedBy, itemParent, blockerParent }` — a verdict only, ' +
-        'the append and approve do not refuse it. Returns ' +
-        '`{ planId, valid, rejections: [...], blockers: [...], invalidEdges: [...] }`; an item named ' +
+        'the append and approve do not refuse it. (4) SAME-LEVEL — a COMMITTED blocked_by the ' +
+        'plan leaves in place that joins two levels (the link door writes one; a PROPOSED one ' +
+        'is a `cross_level` rejection) arrives in `crossLevelEdges` as `{ item, blockedBy, ' +
+        'itemDepth, blockedByDepth, reason: "blocked_elsewhere", explanation }`. Returns ' +
+        '`{ planId, valid, rejections: [...], blockers: [...], invalidEdges: [...], ' +
+        'crossLevelEdges: [...] }`; an item named ' +
         '`planItem:<id>` is a PROPOSAL in this plan, not a work item. ' +
         '`condition` defaults to `loose` (a done dependency outside the plan counts as ' +
         'satisfied); `tight` requires every dependency to be IN the projection. This is the ' +

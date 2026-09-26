@@ -26,8 +26,10 @@ import {
 } from '@/lib/workItems/containerCoverage';
 import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
 import { uncoveredCrossParentEdges, type CoverageEdge } from '@/lib/workItems/crossParentCoverage';
+import { crossLevelEdgeFindings } from '@/lib/workItems/edgeLevel';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type {
+  CrossLevelEdgeDto,
   InvalidEdgeDto,
   WorkItemCoverageAdvisoryDto,
   WorkItemProseAdvisoryDto,
@@ -501,6 +503,48 @@ function projectedInvalidEdges(proj: Projection, memberIds: ReadonlySet<string>)
     .sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));
 }
 
+/**
+ * The CROSS-LEVEL `blocked_by` edges over a projection (MOTIR-6509) — the
+ * committed walk's twin (`workItemsService`'s `computeCrossLevelEdges`), asked of
+ * the tree the plan would leave. A PROPOSED cross-level edge never gets here (the
+ * append refuses it, `INVALID_PLAN_REF_GRAPH` / `cross_level`), so what this
+ * reports is a COMMITTED edge the plan leaves in place.
+ *
+ * ⚠️ An edge to a blocker in ANOTHER project is not judged here. The projection
+ * carries such a blocker in without its ancestors (`parentId: null`), so its
+ * chain would read as a root and its depth would be invented; the committed
+ * verdict reads the real chain and is the one that rules on it.
+ */
+function projectedCrossLevelEdges(
+  proj: Projection,
+  memberIds: ReadonlySet<string>,
+): CrossLevelEdgeDto[] {
+  const edges: Array<{ blockedId: string; blockerId: string }> = [];
+  for (const memberId of memberIds) {
+    const member = proj.nodes.get(memberId)!;
+    if (isDone(proj, member)) continue;
+    for (const blockerId of proj.blockedBy.get(memberId) ?? []) {
+      if (proj.nodes.get(blockerId)?.projectId === member.projectId) {
+        edges.push({ blockedId: memberId, blockerId });
+      }
+    }
+  }
+  return crossLevelEdgeFindings(edges, (id) => {
+    const n = proj.nodes.get(id)!;
+    const ancestors: string[] = [];
+    const seen = new Set<string>([id]);
+    for (let cur = n.parentId; cur !== null; ) {
+      const parent = proj.nodes.get(cur);
+      /* v8 ignore next -- UNREACHABLE in practice: a same-project node's parent is a live row of that project (loaded) or an `add` of this plan (projected), and a parent cycle is refused at the append. Kept so a chain the projection cannot finish is left UNJUDGED rather than given an invented depth. */
+      if (!parent || seen.has(cur)) return undefined;
+      ancestors.push(cur);
+      seen.add(cur);
+      cur = parent.parentId;
+    }
+    return { label: n.identifier, kind: n.kind, ancestors };
+  });
+}
+
 export const planValidityService = {
   /**
    * Is the PROJECTED subtree of `targetKey` finishable, once `planId` materializes?
@@ -574,11 +618,13 @@ export const planValidityService = {
     const prose = await projectedProseAdvisories(proj, memberIds, ctx);
     const coverage = await projectedCoverageAdvisories(proj, memberIds, ctx);
     const invalidEdges = projectedInvalidEdges(proj, memberIds);
+    const crossLevelEdges = projectedCrossLevelEdges(proj, memberIds);
     return {
       key: root.identifier,
-      valid: blockers.length === 0 && invalidEdges.length === 0,
+      valid: blockers.length === 0 && invalidEdges.length === 0 && crossLevelEdges.length === 0,
       blockers,
       invalidEdges,
+      crossLevelEdges,
       advisories: [...prose, ...coverage],
       softBlocks: await projectedSoftBlocks(proj, root.id, ctx),
     };
@@ -685,14 +731,22 @@ export const planValidityService = {
     // approve refuses on it, because a titles-first pass appends children before
     // it may have drawn every parent edge.
     const invalidEdges = projectedInvalidEdges(proj, memberIds);
+    // THE FOURTH (MOTIR-6509): a committed edge the plan leaves in place that
+    // joins two levels — the same verdict `validate_work_item` gives it.
+    const crossLevelEdges = projectedCrossLevelEdges(proj, memberIds);
     return {
       planId,
       // Every half, so a caller reading only `valid` cannot get a false green —
       // which is exactly the reading that failed here.
-      valid: blockers.length === 0 && rejections.length === 0 && invalidEdges.length === 0,
+      valid:
+        blockers.length === 0 &&
+        rejections.length === 0 &&
+        invalidEdges.length === 0 &&
+        crossLevelEdges.length === 0,
       blockers,
       rejections,
       invalidEdges,
+      crossLevelEdges,
     };
   },
 
