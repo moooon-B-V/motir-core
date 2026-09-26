@@ -77,7 +77,6 @@ on:
     # second copy of the list.
     paths:
       - 'packages/**'
-      - 'prisma/**'
       - 'infra/ci-runner/**'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -115,7 +114,7 @@ on:
   # 2. EVICTION. An Actions cache is reclaimed after 7 days WITHOUT A HIT, and
   #    the sandbox blobs (461 MB · 345 MB · 125 MB each) push this repository
   #    against the 10 GB budget, so eviction is a live pressure rather than a
-  #    theoretical one. A quiet week in `packages/` / `prisma/` — which is an
+  #    theoretical one. A quiet week in `packages/` — which is an
   #    ordinary week — takes the scope cold with nothing to notice it, and the
   #    cost lands on whoever opens the next pull request.
   #
