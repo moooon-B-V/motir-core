@@ -5,7 +5,6 @@ import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
-import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -126,12 +125,9 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
       workspaceId: workspace.id,
       ...(role === 'viewer' ? { role: 'viewer' as const } : {}),
     });
-    await projectMembersService.addMember({
-      key: project.identifier,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: u.id,
-      role,
+    // The LEGACY project row, written raw — the project role nothing reads now.
+    await adminDb.projectMembership.create({
+      data: { userId: u.id, projectId: project.id, workspaceId: workspace.id, role },
     });
     return u;
   }
@@ -491,93 +487,9 @@ describe('the DTO boundary is serialisable and deterministic', () => {
 // The per-role headcount the list row draws (Subtask MOTIR-2439) — read back
 // through the service against the memberships `buildScenario` actually seeds, so
 // the numbers are checked against real rows rather than against the mapper.
-describe('getRoleCatalog reports each role`s member count from real memberships', () => {
-  it('counts the seeded membership at each role, and only that project`s', async () => {
-    const s = await buildScenario('open', 'counts');
-    const other = await buildScenario('open', 'counts-other');
-
-    const seeded = await adminDb.projectMembership.groupBy({
-      by: ['role'],
-      where: { projectId: s.projectId },
-      _count: { _all: true },
-    });
-    const expected = new Map(seeded.map((row) => [row.role, row._count._all]));
-
-    const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
-    for (const role of catalog.roles) {
-      // `expected` is keyed by the `MemberRole` enum; only a BUILT-IN has one
-      // (`builtInRole` is null for a custom role — MOTIR-2478), and this project
-      // has no custom roles.
-      expect(role.builtInRole).not.toBeNull();
-      expect(role.memberCount, `${role.key} headcount`).toBe(expected.get(role.builtInRole!) ?? 0);
-    }
-    // `buildScenario` adds exactly one project member per role on an `open`
-    // project (the owner is a workspace manager, not a project membership row).
-    expect(catalog.roles.map((r) => r.memberCount)).toEqual([1, 1, 1]);
-
-    // A sibling project's memberships never leak in — the count is scoped to the
-    // project asked about, not to the workspace.
-    await projectMembersService.addMember({
-      key: (await adminDb.project.findUniqueOrThrow({ where: { id: other.projectId } })).identifier,
-      actorUserId: other.ctxs.owner.userId,
-      ctx: other.ctxs.owner,
-      targetUserId: (
-        await adminDb.user.findFirstOrThrow({ where: { email: 'plain-counts-other@ex.com' } })
-      ).id,
-      role: 'member',
-    });
-    const again = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
-    expect(again.roles.map((r) => r.memberCount)).toEqual([1, 1, 1]);
-    expect(
-      (
-        await projectRoleDefinitionService.getRoleCatalog(other.projectId, other.ctxs.owner)
-      ).roles.find((r) => r.key === 'member')?.memberCount,
-    ).toBe(2);
-  });
-
-  it('reports 0 for a role nobody holds, rather than omitting it', async () => {
-    // A `private` project auto-seeds the then-current workspace members as
-    // project MEMBERS, so nothing holds `viewer` here.
-    const owner = await usersService.createUser({
-      email: 'solo-owner@ex.com',
-      password: PASSWORD,
-      name: 'Solo',
-    });
-    const { workspace } = await workspacesService.createWorkspace({
-      name: 'Solo WS',
-      ownerUserId: owner.id,
-    });
-    const project = await projectsService.createProject({
-      workspaceId: workspace.id,
-      actorUserId: owner.id,
-      name: 'Solo Project',
-    });
-    const catalog = await projectRoleDefinitionService.getRoleCatalog(
-      project.id,
-      ctxFor(owner.id, workspace.id),
-    );
-    expect(catalog.roles.map((r) => r.key)).toEqual(['admin', 'member', 'viewer']);
-    for (const role of catalog.roles) {
-      expect(role.memberCount, `${role.key} must be a number, not undefined`).toBe(0);
-    }
-  });
-
-  it('gates BEFORE it counts — a foreign project 404s rather than reading memberships', async () => {
-    const mine = await buildScenario('open', 'count-gate-mine');
-    const theirs = await buildScenario('open', 'count-gate-theirs');
-    // The membership rows exist and are non-zero; the guard is what stops the
-    // read, not an empty result.
-    expect(
-      (
-        await projectRoleDefinitionService.getRoleCatalog(theirs.projectId, theirs.ctxs.owner)
-      ).roles.some((r) => r.memberCount > 0),
-    ).toBe(true);
-    await expect(
-      projectRoleDefinitionService.getRoleCatalog(theirs.projectId, mine.ctxs.owner),
-    ).rejects.toBeInstanceOf(ProjectNotFoundError);
-  });
-});
-
+// `getRoleCatalog`'s per-role headcount retired with the project roles (Story
+// MOTIR-6168 · MOTIR-6464) — a project membership holds no role; the catalog
+// counts nobody (asserted below) and the workspace Roles page counts holders.
 describe('a membership on a WORKSPACE custom role, resolved through the database (MOTIR-6459)', () => {
   /**
    * Put `userId` on a brand-new WORKSPACE custom role, writing BOTH columns
@@ -842,9 +754,13 @@ describe('the workspace role decides every project at once (MOTIR-6459)', () => 
 
   it('a NULL workspace_role resolves by the legacy mapping — the deploy-window fallback', async () => {
     const s = await buildScenario('open', 'null-fallback');
-    // Every fixture row here is written with workspace_role NULL (the service
-    // writes only the legacy column until MOTIR-6462), which is exactly the row
-    // the still-serving old build writes during a deploy.
+    // The row the still-serving OLD build writes during a deploy: the legacy
+    // column only, workspace_role NULL. (The service writes both since MOTIR-6462,
+    // so the fixture clears the new column to recreate that row.)
+    await adminDb.workspaceMembership.update({
+      where: { userId_workspaceId: { userId: s.ctxs.wsAdmin.userId, workspaceId: s.workspaceId } },
+      data: { workspaceRole: null },
+    });
     const row = await adminDb.workspaceMembership.findUniqueOrThrow({
       where: { userId_workspaceId: { userId: s.ctxs.wsAdmin.userId, workspaceId: s.workspaceId } },
     });
@@ -911,38 +827,23 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
     expect(catalog.roles.every((r) => r.builtIn)).toBe(true);
   });
 
-  it('every count is real, from TWO grouped reads — the query count does not scale with the roles', async () => {
+  it('counts nobody — a project role is held by no one since roles moved to the workspace', async () => {
+    // Story MOTIR-6168 · MOTIR-6464: a project membership carries no role, so the
+    // retiring catalog reports every role as held by nobody and reads no
+    // membership at all — one read of the role rows, however many roles there are.
     const s = await buildScenario('open', 'cat-counts');
-    const a = await seedRole(s, 'A role', ['project:browse']);
-    const b = await seedRole(s, 'B role', ['project:browse']);
-    const c = await seedRole(s, 'C role', ['project:browse']);
-    await adminDb.$transaction(async (tx) => {
-      await projectMembershipRepository.setRoleDefinition(
-        s.ctxs.member.userId,
-        s.projectId,
-        { roleDefinitionId: a.id, role: 'viewer' },
-        tx,
-      );
-      await projectMembershipRepository.setRoleDefinition(
-        s.ctxs.viewer.userId,
-        s.projectId,
-        { roleDefinitionId: a.id, role: 'viewer' },
-        tx,
-      );
-      await projectMembershipRepository.setRoleDefinition(
-        s.ctxs.admin.userId,
-        s.projectId,
-        { roleDefinitionId: b.id, role: 'viewer' },
-        tx,
-      );
-    });
+    await seedRole(s, 'A role', ['project:browse']);
+    await seedRole(s, 'B role', ['project:browse']);
 
     async function countReads(): Promise<number> {
       let reads = 0;
       const client = adminDb.$extends({
         query: {
-          async $allOperations({ args, query, operation }) {
-            if (operation.startsWith('find') || operation === 'count' || operation === 'groupBy') {
+          async $allOperations({ args, query, operation, model }) {
+            if (
+              model !== 'ProjectMembership' &&
+              (operation.startsWith('find') || operation === 'count' || operation === 'groupBy')
+            ) {
               reads += 1;
             }
             return query(args);
@@ -956,19 +857,14 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
     }
 
     const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
-    expect(catalog.roles.find((r) => r.name === 'A role')?.memberCount).toBe(2);
-    expect(catalog.roles.find((r) => r.name === 'B role')?.memberCount).toBe(1);
-    expect(catalog.roles.find((r) => r.name === 'C role')?.memberCount).toBe(0);
-    expect(catalog.roles.find((r) => r.key === 'admin')?.memberCount).toBe(0);
+    expect(catalog.roles.every((r) => r.memberCount === 0)).toBe(true);
 
-    const withThree = await countReads();
-    await seedRole(s, 'D role', ['project:browse']);
-    await seedRole(s, 'E role', ['project:browse']);
-    expect(await countReads()).toBe(withThree);
+    const withTwo = await countReads();
+    await seedRole(s, 'C role', ['project:browse']);
+    expect(await countReads()).toBe(withTwo);
     expect(
       (await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner)).roles,
-    ).toHaveLength(3 + 5);
-    expect(c.id).toBeTruthy();
+    ).toHaveLength(3 + 3);
   });
 
   it('the GATE runs before the read — a foreign project`s roles are never returned OR counted', async () => {

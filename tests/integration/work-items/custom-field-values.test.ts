@@ -420,7 +420,11 @@ describe('setValue — permission matrix', () => {
     const itemId = await makeIssue(fx);
 
     const viewer = await createTestUser({ email: 'viewer@ex.com', name: 'Viewer' });
-    await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
+    await workspacesService.addMember({
+      userId: viewer.id,
+      workspaceId: fx.workspaceId,
+      role: 'viewer',
+    });
     await withWorkspaceContext(fx.ctx, (tx) =>
       projectMembershipRepository.create(
         {

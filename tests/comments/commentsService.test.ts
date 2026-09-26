@@ -24,6 +24,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { captureEventPayloads } from '../helpers/jobs';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // Service-layer tests for commentsService (Story 5.1 · Subtask 5.1.2). Real
 // Postgres, no DB mocks (CLAUDE.md); the one external seam stubbed is the
@@ -95,14 +96,14 @@ async function buildScenario(): Promise<CommentsScenario> {
   const { user: projAdmin, ctx: projAdminCtx } = await wsMember('padmin@ex.com', 'Proj Admin');
   const { user: mentionee } = await wsMember('mentionee@ex.com', 'Mention Target');
 
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: ownerCtx,
     targetUserId: viewer.id,
     role: 'viewer',
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: ownerCtx,

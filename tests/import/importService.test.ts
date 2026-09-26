@@ -18,12 +18,12 @@ import {
   ImportSourceNotConnectedError,
 } from '@/lib/import/errors';
 import { usersService } from '@/lib/services/usersService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { makeWorkItemFixture } from '../fixtures';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // Service-layer tests for the import RUN surface (MOTIR-941) — the ONE service
 // the API routes call. Real Postgres; the CSV connector (credential-free) gives
@@ -819,7 +819,7 @@ describe('importService — the import:run gate', () => {
       await adminDb.workspaceMembership.create({
         data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
       });
-      await projectMembersService.addMember({
+      await addToProjectAs({
         key: fx.projectIdentifier,
         actorUserId: fx.ownerId,
         ctx: fx.ctx,

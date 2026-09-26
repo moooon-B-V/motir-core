@@ -14,6 +14,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from './fixtures';
 import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { setWorkspaceRoleFor } from './helpers/workspaceRoleFixtures';
 
 // THE DECISION-WAITING MARKER'S READ (Story MOTIR-4908 · Subtask MOTIR-5876) —
 // `approvalGatesService.pendingDecisionsFor`, against a REAL Postgres.
@@ -110,6 +111,7 @@ async function projectViewer() {
   await adminDb.projectMembership.create({
     data: { userId: user.id, projectId: fx.projectId, workspaceId: fx.workspaceId, role: 'viewer' },
   });
+  await setWorkspaceRoleFor(user.id, fx.workspaceId, 'viewer');
   return user;
 }
 

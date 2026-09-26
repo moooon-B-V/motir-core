@@ -432,6 +432,26 @@ async function deleteWorkspaceCascade(input: {
   });
 }
 
+/**
+ * Whether `userId` is the Owner or an Admin of the workspace's ORGANIZATION — a
+ * Manager of every workspace by their org role, whose workspace role is not a
+ * workspace Manager's to change (MOTIR-6463; MOTIR-6456 panel 6a).
+ *
+ * The target's org membership is ANOTHER person's row, admitted only by the
+ * active-org arm of `org_membership_visible_active_or_own`, so the workspace's
+ * own organization is bound first — a trusted resolution (the workspace row the
+ * caller just read), never request input. The binding outlives this read for the
+ * rest of `tx`, which is harmless: it only ever ADDS the org arm.
+ */
+async function isOrgManagerTarget(
+  userId: string,
+  workspace: { id: string; organizationId: string },
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  await bindOrganizationContext(tx, workspace.organizationId);
+  return organizationMembershipRepository.isOrgManagerOfWorkspaceOrg(userId, workspace.id, tx);
+}
+
 export const workspacesService = {
   /**
    * Create a workspace and its owner-membership in a single transaction.
@@ -1188,19 +1208,9 @@ export const workspacesService = {
         );
         if (!target) throw new WorkspaceMemberNotFoundError(input.targetUserId, input.workspaceId);
 
-        // The target's ORG role is a row of another person, admitted only by the
-        // active-org arm — so bind the workspace's own organization (a trusted
-        // resolution, never request input) before asking.
         const workspace = await workspaceRepository.findByIdInTx(input.workspaceId, tx);
         if (!workspace) throw new NotAMemberError(input.actorUserId, input.workspaceId);
-        await bindOrganizationContext(tx, workspace.organizationId);
-        if (
-          await organizationMembershipRepository.isOrgManagerOfWorkspaceOrg(
-            input.targetUserId,
-            input.workspaceId,
-            tx,
-          )
-        ) {
+        if (await isOrgManagerTarget(input.targetUserId, workspace, tx)) {
           throw new OrgManagedWorkspaceRoleError(input.targetUserId, input.workspaceId);
         }
 

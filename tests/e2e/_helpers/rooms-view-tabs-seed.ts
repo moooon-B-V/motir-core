@@ -3,10 +3,13 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { plansService } from '@/lib/services/plansService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
+import {
+  addToProjectAs,
+  createCustomRoleAs,
+  setProjectRoleAs,
+} from '../../helpers/workspaceRoleFixtures';
 
 // Seed for Story MOTIR-6179's E2E + acceptance recording (Subtask MOTIR-6337):
 // the Plans, Approvals and Runs rooms, each holding records of the MEMBER's and
@@ -84,22 +87,22 @@ export async function seedRoomsViewTabs(slug: string): Promise<RoomsViewTabsSeed
   }
 
   const viewerId = await persona('viewer', 'Vera Viewer');
-  await projectMembersService.addMember({ ...membership, targetUserId: viewerId, role: 'viewer' });
+  await addToProjectAs({ ...membership, targetUserId: viewerId, role: 'viewer' });
   const memberId = await persona('member', 'Milo Member');
-  await projectMembersService.addMember({ ...membership, targetUserId: memberId, role: 'member' });
+  await addToProjectAs({ ...membership, targetUserId: memberId, role: 'member' });
 
   // The CUSTOM role, through the shipped custom-role path (the Manager's Roles &
   // permissions door writes through this service). It reads Plans and Approvals
   // and can neither see Runs nor start one: no `run:view_any`, no `work_item:edit`.
-  const role = await projectRoleDefinitionService.create({
+  const role = await createCustomRoleAs({
     projectId: project.id,
     ctx: ownerCtx,
     name: 'Plans and approvals reader',
     permissions: ['project:browse', 'plan:view_any', 'approval:view_any'],
   });
   const customId = await persona('custom', 'Cato Custom');
-  await projectMembersService.addMember({ ...membership, targetUserId: customId, role: 'member' });
-  await projectMembersService.setRole({ ...membership, targetUserId: customId, role: role.id });
+  await addToProjectAs({ ...membership, targetUserId: customId, role: 'member' });
+  await setProjectRoleAs({ ...membership, targetUserId: customId, role: role.id });
 
   for (const id of [owner.id, viewerId, memberId, customId]) await pin(id);
   const memberCtx = { userId: memberId, workspaceId: workspace.id };

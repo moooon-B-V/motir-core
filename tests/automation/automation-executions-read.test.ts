@@ -5,7 +5,6 @@ import { automationRulesService } from '@/lib/services/automationRulesService';
 import { automationRuleExecutionRepository } from '@/lib/repositories/automationRuleExecutionRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { AutomationRuleNotFoundError } from '@/lib/automation/errors';
 import { AUTOMATION_EXECUTIONS_PAGE_SIZE } from '@/lib/services/automationRulesService';
@@ -14,6 +13,7 @@ import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // Read-side tests for the automation audit log (Story 6.6 · Subtask 6.6.6):
 // `automationRulesService.listExecutions` (the per-rule paged history) +
@@ -243,7 +243,7 @@ describe('listExecutions — admin gate + cross-tenant hide', () => {
       workspaceId: fx.workspaceId,
       role: 'member',
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

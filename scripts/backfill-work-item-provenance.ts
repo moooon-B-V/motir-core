@@ -35,7 +35,6 @@
 import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import {
   MOTIR_SEED_BURST_END,
   type ProvenanceBackfillBucket,
@@ -76,7 +75,15 @@ function parseArgs(argv: string[]): Args {
  * keeps the path production-correct.
  */
 async function resolveActorUserId(workspaceId: string): Promise<string | null> {
-  const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(workspaceId);
+  // The workspace's stand-in MANAGER — the rule
+  // `workspaceMembershipRepository.findStandInManagerByWorkspace` applies (MOTIR-6462).
+  const owner = await db.workspaceMembership.findFirst({
+    where: {
+      workspaceId,
+      OR: [{ workspaceRole: 'manager' }, { workspaceRole: null, role: { in: ['owner', 'admin'] } }],
+    },
+    orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+  });
   if (owner) return owner.userId;
   const member = await db.workspaceMembership.findFirst({
     where: { workspaceId },

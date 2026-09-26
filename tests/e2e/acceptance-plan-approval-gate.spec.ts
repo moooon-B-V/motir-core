@@ -41,9 +41,9 @@ import { signIn } from './_helpers/shell-session';
 import { seedPlanningAnchorTree, PLANNING_ANCHOR_PASSWORD } from './_helpers/planning-anchor-seed';
 import { finishSessionPlan, latestPlanningSession } from './_helpers/planChangeConversation';
 import { plansService } from '@/lib/services/plansService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { usersService } from '@/lib/services/usersService';
 import en from '@/messages/en.json';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 test.describe.configure({ timeout: 240_000 });
 
@@ -497,7 +497,7 @@ test('a reader who may not decide sees the plan and no verbs; a plan with no con
       activeProjectId: project.id,
     },
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: seed.projectKey,
     actorUserId: plan.ctx.userId,
     ctx: plan.ctx,

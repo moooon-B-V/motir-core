@@ -28,7 +28,7 @@ import { signUp, createFirstProject } from './shell-session';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 export const COMMENTS_PASSWORD = 'comments-e2e-pass-123';
 
@@ -105,7 +105,7 @@ export async function seedViewer(fx: CommentsFixture, email: string): Promise<vo
     name: 'Read Only',
   });
   await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.pm.id,
     ctx: { userId: fx.pm.id, workspaceId: fx.workspaceId },

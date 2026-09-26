@@ -515,7 +515,6 @@ export const FILE_TEST_SECONDS: Readonly<Record<string, number>> = {
   'tests/permissions/membershipGate.test.ts': 26.8,
   'tests/permissions/projectRoleDefinitionService.test.ts': 33.4,
   'tests/permissions/publicProjectAccess.test.ts': 30.6,
-  'tests/permissions/roleDefinitionRoutes.test.ts': 24.6,
   'tests/permissions/rolesStoryGate.integration.test.ts': 17.3,
   'tests/permissions/storyGate.integration.test.ts': 51.9,
   'tests/permissions/tenantRead.test.ts': 10.1,

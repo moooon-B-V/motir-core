@@ -14,6 +14,7 @@ import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs, setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
 
 // `projectAccessService.assertPermission` (Story MOTIR-2256 · Subtask
 // MOTIR-2293) against REAL Postgres. The PURE side of the split — that each of
@@ -93,7 +94,7 @@ async function buildScenario(slug: string): Promise<Scenario> {
       name: role,
     });
     await workspacesService.addMember({ userId: u.id, workspaceId: workspace.id });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
@@ -283,6 +284,7 @@ describe('`tx` is threaded into the gate reads', () => {
           role: 'admin',
         },
       });
+      await setWorkspaceRoleFor(promoted.id, s.workspaceId, 'admin');
       // Inside the SAME transaction, the gate sees the uncommitted row — which
       // is only possible if `tx` reached `resolveInputs`. A gate that quietly
       // ignored its `tx` and read through the `db` singleton would still see the

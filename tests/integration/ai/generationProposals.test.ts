@@ -4,7 +4,6 @@ import { mintJobToken } from '@/lib/ai/jobToken';
 import { plansService } from '@/lib/services/plansService';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import {
   GET as proposalsGET,
   POST as proposalsPOST,
@@ -14,6 +13,7 @@ import { createTestUser, makeWorkItemFixture as makeFixture } from '../../fixtur
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // CONTRACT TEST — the internal incremental-proposals seam (Subtask 7.4.4 ·
 // MOTIR-846) end-to-end through the REAL route, against a real Postgres. It is
@@ -322,7 +322,7 @@ describe('POST /api/internal/ai/plan-proposals — typed refusals, never a 500',
     await adminDb.workspaceMembership.create({
       data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,

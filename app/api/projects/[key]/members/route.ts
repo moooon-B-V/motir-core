@@ -7,8 +7,10 @@ import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 // /api/projects/[key]/members (Story 6.4 · Subtask 6.4.4)
 //   GET  — list the project's members (any workspace member; read-only for
 //          non-admins in the 6.4.5 UI).
-//   POST — add a workspace member to the project with a role (project-admin
-//          gated). Body: { userId, role }.
+//   POST — add a workspace member to the project (`member:manage` gated).
+//          Body: { userId }. A `role` is REFUSED — 400 `role_retired` — because
+//          roles live on the workspace (Story MOTIR-6168 · MOTIR-6464): being
+//          added to a project grants nothing of its own.
 //
 // Thin HTTP transport: read the workspace context (session), parse the request,
 // call ONE service method, map typed domain errors to status codes. No `db` /
@@ -70,13 +72,21 @@ export async function POST(req: Request, { params }: RouteParams): Promise<Respo
     body && typeof body === 'object' && 'userId' in body && typeof body.userId === 'string'
       ? body.userId
       : null;
-  const role =
-    body && typeof body === 'object' && 'role' in body && typeof body.role === 'string'
-      ? body.role
-      : null;
-  if (!userId || !role) {
+  if (body && typeof body === 'object' && 'role' in body) {
     return NextResponse.json(
-      { error: 'Both "userId" and "role" are required.', code: 'BAD_REQUEST' },
+      {
+        error:
+          'Project roles are retired: a person has one role in the workspace, the same in every ' +
+          "project. Add them here without a role, and set their role on the workspace's Members " +
+          'page (/settings/workspace).',
+        code: 'role_retired',
+      },
+      { status: 400 },
+    );
+  }
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'A "userId" is required.', code: 'BAD_REQUEST' },
       { status: 400 },
     );
   }
@@ -87,7 +97,6 @@ export async function POST(req: Request, { params }: RouteParams): Promise<Respo
       actorUserId: ctx.userId,
       ctx,
       targetUserId: userId,
-      role,
     });
     return NextResponse.json({ member }, { status: 201 });
   } catch (err) {

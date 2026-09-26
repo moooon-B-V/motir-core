@@ -8,12 +8,12 @@ import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { encodeFilterParam } from '@/lib/filters/ast';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // The `report:view` GATE (Story MOTIR-2291 · Subtask MOTIR-2351).
 //
@@ -68,7 +68,7 @@ async function makeFixture(label: string): Promise<Fixture> {
   await adminDb.workspaceMembership.create({
     data: { userId: viewer.id, workspaceId, role: 'member' },
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: project.identifier,
     actorUserId: owner.id,
     ctx: ownerCtx,

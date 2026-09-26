@@ -3,7 +3,6 @@ import { db } from '@/lib/db';
 import { NotProjectAdminError } from '@/lib/projects/errors';
 import { bugDestinationService } from '@/lib/services/bugDestinationService';
 import { foldersService } from '@/lib/services/foldersService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -11,6 +10,7 @@ import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { seededBugsFolderId } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // `PATCH /api/projects/[key]/bug-destination` and the room's read — the Bugs
 // room's two doors (Story MOTIR-4927 · Subtask MOTIR-4938), over the REAL stack.
@@ -64,7 +64,7 @@ async function seed(slug: string) {
 
   const memberUser = await user(`member-${slug}@ex.com`, 'Member');
   await workspacesService.addMember({ userId: memberUser.id, workspaceId: workspace.id });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: project.identifier,
     actorUserId: owner.id,
     ctx: ownerCtx,

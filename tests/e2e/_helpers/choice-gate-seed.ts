@@ -1,9 +1,9 @@
 import { adminDb } from '@/tests/helpers/adminDb';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestPerson } from './testPerson';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // THE CHOICE GATE E2E SEED (Story MOTIR-4914 · Subtask MOTIR-5899), for the acceptance
 // receipt `acceptance-choice-gate.spec.ts` records.
@@ -151,7 +151,7 @@ export async function seedChoiceGate(slug: string): Promise<ChoiceGateSeed> {
   // reporter nor an admin — so a choice routed to the owner is NOT theirs to decide.
   await workspacesService.addMember({ userId: viewer.id, workspaceId: workspace.id });
   const ctx = { userId: owner.id, workspaceId: workspace.id };
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: project.identifier,
     actorUserId: owner.id,
     ctx,

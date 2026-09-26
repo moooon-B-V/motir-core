@@ -17,9 +17,13 @@ import { createTestUser } from './fixtures/userFixtures';
 import { adminDb } from './helpers/adminDb';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { truncateAuthTables } from './helpers/db';
+import {
+  addToProjectAs,
+  createCustomRoleAs,
+  setProjectRoleAs,
+  setWorkspaceRoleFor,
+} from './helpers/workspaceRoleFixtures';
 
 // THE DECIDE DOOR (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
 // docs/decisions/approval-gates.md), against a REAL Postgres.
@@ -609,6 +613,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
         role: 'viewer',
       },
     });
+    await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
     const { gate } = await designSubtaskWithGate({ assigneeId: viewer.id });
 
     // Assigned to them, and still refused: the relationship rule is applied ON
@@ -658,21 +663,21 @@ describe('the ESCAPE HATCH is the `approval:decide_any` PERMISSION, never a work
   async function onCustomRole(permissions: PermissionKey[]) {
     const user = await plainMember();
     roleSeq += 1;
-    const role = await projectRoleDefinitionService.create({
+    const role = await createCustomRoleAs({
       projectId: fx.projectId,
       ctx: fx.ctx,
       name: `Unblocker ${roleSeq}`,
       permissions,
     });
-    await projectMembersService.addMember({ ...scoped(), targetUserId: user.id, role: 'member' });
-    await projectMembersService.setRole({ ...scoped(), targetUserId: user.id, role: role.id });
+    await addToProjectAs({ ...scoped(), targetUserId: user.id, role: 'member' });
+    await setProjectRoleAs({ ...scoped(), targetUserId: user.id, role: role.id });
     return user;
   }
 
   /** A plain workspace member seated on the project with a BUILT-IN role. */
   async function onBuiltInRole(role: 'admin' | 'member') {
     const user = await plainMember();
-    await projectMembersService.addMember({ ...scoped(), targetUserId: user.id, role });
+    await addToProjectAs({ ...scoped(), targetUserId: user.id, role });
     return user;
   }
 

@@ -6,7 +6,6 @@ import type { ProjectContext } from '@/lib/projects';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { backlogService } from '@/lib/services/backlogService';
@@ -14,6 +13,7 @@ import { StaleWorkItemError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // MOTIR-2560's STORY GATE (MOTIR-2567) — the seams BETWEEN the story's cards,
 // and the guards a coverage percentage cannot see.
@@ -381,7 +381,7 @@ describe('guard · the read-only actor is gated on the SERVER, not only in the U
       workspaceId: owner.workspace.id,
       role: 'member',
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: owner.project.identifier,
       actorUserId: owner.user.id,
       ctx: owner.ctx,

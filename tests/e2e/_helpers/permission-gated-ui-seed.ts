@@ -3,9 +3,12 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import {
+  addToProjectAs,
+  createCustomRoleAs,
+  setProjectRoleAs,
+} from '../../helpers/workspaceRoleFixtures';
 
 // Seed for Story MOTIR-2258's E2E + acceptance recording (Subtask MOTIR-2479).
 //
@@ -96,7 +99,7 @@ export async function seedPermissionGatedUi(slug: string): Promise<PermissionGat
   // same two steps `lesson-library-seed.ts` documents.
   const ownerCtx = { userId: owner.id, workspaceId: workspace.id };
   async function partialPersona(label: string, permissions: PermissionKey[]) {
-    const role = await projectRoleDefinitionService.create({
+    const role = await createCustomRoleAs({
       projectId: project.id,
       ctx: ownerCtx,
       name: label,
@@ -109,8 +112,8 @@ export async function seedPermissionGatedUi(slug: string): Promise<PermissionGat
     });
     await workspacesService.addMember({ userId: user.id, workspaceId: workspace.id });
     const member = { key: project.identifier, actorUserId: owner.id, ctx: ownerCtx };
-    await projectMembersService.addMember({ ...member, targetUserId: user.id, role: 'member' });
-    await projectMembersService.setRole({ ...member, targetUserId: user.id, role: role.id });
+    await addToProjectAs({ ...member, targetUserId: user.id, role: 'member' });
+    await setProjectRoleAs({ ...member, targetUserId: user.id, role: role.id });
     await pin(user.id);
   }
   await partialPersona('boards-only', ['project:browse', 'board:configure']);

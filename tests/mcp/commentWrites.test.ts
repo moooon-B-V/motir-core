@@ -6,8 +6,6 @@ import { commentsService } from '@/lib/services/commentsService';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { runEditComment } from '@/lib/mcp/tools/editComment';
 import { runDeleteComment } from '@/lib/mcp/tools/deleteComment';
 import { CLI_TOKEN_GRANT, toolPermission } from '@/lib/mcp/toolPermissions';
@@ -19,6 +17,11 @@ import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { captureEventPayloads } from '../helpers/jobs';
+import {
+  addToProjectAs,
+  createCustomRoleAs,
+  setProjectRoleAs,
+} from '../helpers/workspaceRoleFixtures';
 
 // MOTIR-5295 — `edit_comment` and `delete_comment`, the author's correction
 // doors onto a comment.
@@ -87,14 +90,14 @@ async function build(): Promise<Scenario> {
   const customMod = await wsMember('custom@ex.com', 'Custom Moderator');
   const mentionee = await wsMember('mentionee@ex.com', 'Mention Target');
 
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,
     targetUserId: projAdmin.id,
     role: 'admin',
   });
-  const moderatorRole = await projectRoleDefinitionService.create({
+  const moderatorRole = await createCustomRoleAs({
     projectId: fx.projectId,
     ctx: fx.ctx,
     name: 'Comment moderator',
@@ -102,14 +105,14 @@ async function build(): Promise<Scenario> {
   });
   // A custom role is assigned onto an existing membership — `addMember` takes
   // only a built-in, and `setRole` resolves a role definition id.
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,
     targetUserId: customMod.id,
     role: 'member',
   });
-  await projectMembersService.setRole({
+  await setProjectRoleAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

@@ -15,6 +15,7 @@ import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
 
 // Integration tests for the Story-4.3 estimationService (Subtask 4.3.3): the
 // per-issue story-point WRITE, the project estimation-config CRUD, and the
@@ -206,6 +207,11 @@ describe('estimationService getEstimationConfig / updateEstimationConfig', () =>
         },
       });
       if (roles.projectRole) {
+        // The tier lives on the WORKSPACE role since Story MOTIR-6168: the project
+        // role maps to it (a workspace admin already is the Manager).
+        if (roles.workspaceRole !== 'admin') {
+          await setWorkspaceRoleFor(user.id, fx.workspaceId, roles.projectRole);
+        }
         await adminDb.projectMembership.create({
           data: {
             userId: user.id,

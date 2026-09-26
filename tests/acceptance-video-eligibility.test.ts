@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { createTestWorkspace } from './fixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { addToProjectAs } from './helpers/workspaceRoleFixtures';
 
 // acceptanceVideoEligibilityService (Story MOTIR-1627 · Subtask MOTIR-1630)
 // against a REAL Postgres. billingService is mocked at the getAiAccessForContext
@@ -34,7 +35,6 @@ vi.mock('@/lib/services/billingService', () => ({
 
 const { acceptanceVideoEligibilityService } =
   await import('@/lib/services/acceptanceVideoEligibilityService');
-const { projectMembersService } = await import('@/lib/services/projectMembersService');
 const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
 
@@ -257,7 +257,7 @@ describe("canManageToggle is the PROJECT's `workflow:manage` (MOTIR-5172)", () =
       name: role,
     });
     await workspacesService.addMember({ userId: u.id, workspaceId: fx.workspaceId });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: project.identifier,
       actorUserId: fx.ownerId,
       ctx: { userId: fx.ownerId, workspaceId: fx.workspaceId },

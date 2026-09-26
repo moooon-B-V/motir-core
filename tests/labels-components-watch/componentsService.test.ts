@@ -3,7 +3,6 @@ import type { Prisma, User, WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { componentsService, COMPONENT_NAME_MAX_LENGTH } from '@/lib/services/componentsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { componentRepository } from '@/lib/repositories/componentRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
@@ -32,6 +31,7 @@ import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // componentsService (Story 5.4 · Subtask 5.4.3) — the taxonomy BUSINESS
 // rules over the 5.4.1 leaves, against a REAL Postgres (no-mocks rule): the
@@ -83,14 +83,14 @@ async function buildScenario(): Promise<ComponentScenario> {
   const { user: viewer, ctx: viewerCtx } = await wsMember('viewer@ex.com', 'Read Only');
   const { user: projAdmin, ctx: projectAdminCtx } = await wsMember('padmin@ex.com', 'Proj Admin');
 
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,
     targetUserId: viewer.id,
     role: 'viewer',
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: fx.projectIdentifier,
     actorUserId: fx.ownerId,
     ctx: fx.ctx,

@@ -4,13 +4,13 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { backlogService } from '@/lib/services/backlogService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { NotSprintAdminError } from '@/lib/sprints/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // The `sprint:manage` GATE (Story MOTIR-2291 · Subtask MOTIR-2350), against real
 // Postgres through the real resolution — never a mocked `hasPermission`, because
@@ -77,7 +77,7 @@ async function makeFixture(label: string): Promise<Fixture> {
       data: { userId: u.id, workspaceId, role: 'member' },
     });
     if (role) {
-      await projectMembersService.addMember({
+      await addToProjectAs({
         key: project.identifier,
         actorUserId: owner.id,
         ctx: ownerCtx,
@@ -156,13 +156,15 @@ describe('the sprint LIFECYCLE — sprint:manage, a deliberate WIDENING', () => 
     ).rejects.toBeInstanceOf(NotSprintAdminError);
   });
 
-  it('refuses a workspace member holding NO project membership', async () => {
-    // This actor resolves through IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS rather
-    // than a role, which is the case a role-set test cannot reach.
+  it('admits a workspace Member holding NO project membership — one role in every project (MOTIR-6168)', async () => {
+    // This actor used to resolve through IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS,
+    // which lacked `sprint:manage`. That class retired with the project roles
+    // (MOTIR-6459): a workspace Member holds the Member set in every open
+    // project, `sprint:manage` included. The Viewer is the refusal that stands.
     const fx = await makeFixture('life-outsider');
     await expect(
       sprintsService.createSprint(fx.projectId, {}, fx.outsiderCtx),
-    ).rejects.toBeInstanceOf(NotSprintAdminError);
+    ).resolves.toBeTruthy();
   });
 
   it('still admits the workspace owner, via the always-pass rail', async () => {
@@ -208,12 +210,10 @@ describe('backlog GROOMING — sprint:manage, a TIGHTENING', () => {
     expect(after.sprintId).toBeNull();
   });
 
-  it('refuses a workspace member with no project membership (the implicit grant)', async () => {
+  it('admits a workspace Member with no project membership — the implicit grant retired (MOTIR-6168)', async () => {
     const fx = await makeFixture('groom-outsider');
     const itemId = await itemFor(fx);
-    await expect(backlogService.rankIssue(itemId, {}, fx.outsiderCtx)).rejects.toBeInstanceOf(
-      PermissionDeniedError,
-    );
+    await expect(backlogService.rankIssue(itemId, {}, fx.outsiderCtx)).resolves.toBeDefined();
   });
 
   it('still admits a project MEMBER — grooming is everyday work, not administration', async () => {

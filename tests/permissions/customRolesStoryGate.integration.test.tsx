@@ -9,6 +9,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { runAsCloudBuild } from '../helpers/cloudBuild';
+import { adminDb } from '../helpers/adminDb';
 
 // SEAM 5 loops over EVERY access level, `public` included — and publishing is a
 // cloud-only capability since Story MOTIR-3908, refused on the self-hosted build
@@ -53,15 +54,15 @@ runAsCloudBuild();
 // not stored and not drawn. The seam is asserted on what the row DOES carry:
 // the role's own name, its `N of M permissions`, and its member count.
 
-// ⚠️ THE RESOLUTION HALF OF THIS GATE RETIRED WITH PROJECT ROLES (Story MOTIR-6168
-// · MOTIR-6459, `docs/decisions/role-model.md` §3). A project custom role still
-// has its screens and routes until MOTIR-6466 / MOTIR-6464 move and retire them,
-// so the SCREEN and ROUTE seams below stand. What it no longer does is GRANT: a
-// person's keys come from their WORKSPACE role, so SEAM 1 now asserts exactly
-// that, and the seams that ended at "…and the person resolves to the role's set"
-// (SEAM 4's resolution, SEAM 5's per-level table, the stale-key guard) moved to
-// the workspace custom role, where they are proven against real Postgres in
-// `tests/permissions/getPermissions.integration.test.ts`.
+// ⚠️ PROJECT CUSTOM ROLES RETIRED (Story MOTIR-6168; `docs/decisions/role-model.md`
+// §3). A role lives on the WORKSPACE now: it is authored, assigned and resolved
+// there (`tests/workspaces/workspaceRoleRoutes.test.ts`,
+// `tests/workspaces/memberRoleRoute.test.ts`, `getPermissions.integration`).
+//   * MOTIR-6459 stopped a project role from GRANTING (SEAM 1 went);
+//   * MOTIR-6464 retired its authoring routes (410) and every project-role writer
+//     (SEAM 3's editor round trip and SEAM 4's delete-with-reassign went).
+// What stands until MOTIR-6466 moves the Roles screens to the workspace: the
+// SCREEN seam over the rows that still exist, the level rail, and the guards.
 
 const ctxRef = { current: null as WorkspaceContext | null };
 vi.mock('@/lib/workspaces', async (importOriginal) => {
@@ -78,11 +79,8 @@ const { projectRoleDefinitionRepository } =
   await import('@/lib/repositories/projectRoleDefinitionRepository');
 const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
-const { WORKSPACE_ROLE_PERMISSIONS } = await import('@/lib/permissions/builtinRoles');
 const { RoleList } = await import('@/app/(authed)/settings/project/roles/_components/RoleList');
 const { RoleDetail } = await import('@/app/(authed)/settings/project/roles/_components/RoleDetail');
-const { POST: rolesPOST } = await import('@/app/api/projects/[key]/roles/route');
-const { PATCH: rolePATCH } = await import('@/app/api/projects/[key]/roles/[roleId]/route');
 const { truncateAuthTables } = await import('../helpers/db');
 
 const PASSWORD = 'hunter2hunter2';
@@ -128,40 +126,14 @@ async function build(slug: string, projectName = `Project ${slug}`): Promise<Fix
   };
 }
 
-/** A new workspace member, added to the project at a built-in role. */
-async function seatMember(fx: Fixture, slug: string, role: string) {
-  const user = await usersService.createUser({
-    email: `${slug}@ex.com`,
-    password: PASSWORD,
-    name: slug,
-  });
-  await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
-  await projectMembersService.addMember({
-    key: fx.projectKey,
-    actorUserId: fx.ownerId,
-    ctx: fx.ownerCtx,
-    targetUserId: user.id,
-    role,
-  });
-  return user;
-}
-
+/**
+ * A PROJECT custom role row, seeded straight into the table. Nothing can author
+ * one any more (the routes answer 410 since MOTIR-6464), but the rows exist and
+ * the retiring Roles screens still render them until MOTIR-6466 moves them.
+ */
 function authorRole(fx: Fixture, name: string, permissions: PermissionKey[]) {
-  return projectRoleDefinitionService.create({
-    projectId: fx.projectId,
-    ctx: fx.ownerCtx,
-    name,
-    permissions,
-  });
-}
-
-function assign(fx: Fixture, userId: string, roleKey: string) {
-  return projectMembersService.setRole({
-    key: fx.projectKey,
-    actorUserId: fx.ownerId,
-    ctx: fx.ownerCtx,
-    targetUserId: userId,
-    role: roleKey,
+  return adminDb.projectRoleDefinition.create({
+    data: { workspaceId: fx.workspaceId, projectId: fx.projectId, name, permissions },
   });
 }
 
@@ -191,34 +163,10 @@ function resolvedFor(fx: Fixture, userId: string) {
 
 // ═══════════════════════════════ THE SEAMS ═══════════════════════════════
 
-describe('SEAM 1 · author → assign → resolve', () => {
-  it('an authored PROJECT role grants nothing any more — the person resolves by their WORKSPACE role (MOTIR-6459)', async () => {
-    const fx = await build('seam1');
-    const nadia = await seatMember(fx, 'nadia-seam1', 'member');
-
-    const composed: PermissionKey[] = ['project:browse', 'comment:add', 'report:view'];
-    const role = await authorRole(fx, 'Contractor', composed);
-    await assign(fx, nadia.id, role.id);
-
-    // The assignment still lands on the row the screens read…
-    const members = await projectMembersService.listMembers({
-      key: fx.projectKey,
-      actorUserId: fx.ownerId,
-      ctx: fx.ownerCtx,
-    });
-    expect(members.find((m) => m.userId === nadia.id)?.roleDefinition?.id).toBe(role.id);
-    // …and decides nothing: Nadia holds exactly her workspace role's set.
-    const resolved = await resolvedFor(fx, nadia.id);
-    expect([...resolved].sort()).toEqual([...WORKSPACE_ROLE_PERMISSIONS.member].sort());
-  });
-});
-
 describe('SEAM 2 · store → read → SCREEN', () => {
-  it('a stored role reaches the list row as its own name, its count and its holders', async () => {
+  it('a stored role reaches the list row as its own name and its set — held by nobody', async () => {
     const fx = await build('seam2');
-    const holder = await seatMember(fx, 'holder-seam2', 'member');
-    const role = await authorRole(fx, 'Contractor', ['project:browse', 'comment:add']);
-    await assign(fx, holder.id, role.id);
+    await authorRole(fx, 'Contractor', ['project:browse', 'comment:add']);
 
     // The screen's OWN read — not a fixture shaped like one.
     const catalog = await projectRoleDefinitionService.getRoleCatalog(fx.projectId, fx.ownerCtx);
@@ -229,9 +177,8 @@ describe('SEAM 2 · store → read → SCREEN', () => {
     const row = screen.getByRole('link', { name: /Contractor/ });
     expect(within(row).getByText('Custom')).toBeTruthy();
     expect(row.textContent).toContain(`2 of ${catalog.roleGatedPermissionCount} permissions`);
-    // The member count is a fact about ProjectMembership that travelled the whole
-    // way through the grouped read into the row.
-    expect(row.textContent).toContain('1 member');
+    // Nobody holds a project role since roles moved to the workspace (MOTIR-6464).
+    expect(row.textContent).toContain('0 members');
     // The three built-ins are still drawn beside it, unchanged.
     for (const name of ['Admin', 'Member', 'Viewer']) {
       expect(screen.getByRole('link', { name: new RegExp(name) })).toBeTruthy();
@@ -261,121 +208,6 @@ describe('SEAM 2 · store → read → SCREEN', () => {
     expect(markOf('sprint:manage')).toBe('withheld');
     // And the row is labelled in words, not only by a glyph's colour.
     expect(screen.getAllByRole('img', { name: 'Held' })).toHaveLength(2);
-  });
-});
-
-describe('SEAM 3 · editor payload → real route → store → read', () => {
-  it('the body the editor sends round-trips to the row the list reads', async () => {
-    const fx = await build('seam3');
-    ctxRef.current = fx.ownerCtx;
-
-    // ⚠️ THE EDITOR'S ACTUAL BODY — `{ name, permissions }`, no `basedOn`. If the
-    // route ever grew a required field the editor does not send, this fails here
-    // rather than in a browser.
-    const created = await rolesPOST(
-      new Request('http://t/api/projects/x/roles', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: 'Contractor',
-          permissions: ['comment:add', 'project:browse'],
-        }),
-      }),
-      { params: Promise.resolve({ key: fx.projectKey }) },
-    );
-    expect(created.status).toBe(201);
-    const { role } = (await created.json()) as { role: { id: string; permissions: string[] } };
-
-    // Out through the READ the screens use — a different code path from the write
-    // response, which is the point: the two have to agree.
-    const catalog = await projectRoleDefinitionService.getRoleCatalog(fx.projectId, fx.ownerCtx);
-    const stored = catalog.roles.find((r) => r.key === role.id)!;
-    expect(stored.name).toBe('Contractor');
-    expect(stored.builtIn).toBe(false);
-    expect(stored.permissions).toEqual(role.permissions);
-
-    // And the same body shape on the EDIT verb, partial in each direction.
-    const renamed = await rolePATCH(
-      new Request('http://t/api/projects/x/roles/y', {
-        method: 'PATCH',
-        body: JSON.stringify({ name: 'Contractor (EU)' }),
-      }),
-      { params: Promise.resolve({ key: fx.projectKey, roleId: role.id }) },
-    );
-    expect(renamed.status).toBe(200);
-    const repermissioned = await rolePATCH(
-      new Request('http://t/api/projects/x/roles/y', {
-        method: 'PATCH',
-        body: JSON.stringify({ permissions: ['project:browse'] }),
-      }),
-      { params: Promise.resolve({ key: fx.projectKey, roleId: role.id }) },
-    );
-    expect(repermissioned.status).toBe(200);
-
-    const after = await projectRoleDefinitionService.getRoleCatalog(fx.projectId, fx.ownerCtx);
-    const final = after.roles.find((r) => r.key === role.id)!;
-    // A name-only patch left the set alone and a permissions-only patch left the
-    // name alone — each verb touches what it names and nothing else.
-    expect(final.name).toBe('Contractor (EU)');
-    expect(final.permissions).toEqual(['project:browse']);
-  });
-});
-
-describe('SEAM 4 · delete → reassign → resolve', () => {
-  it('every mover’s RESOLVED permissions become the destination’s — not merely a column that moved', async () => {
-    const fx = await build('seam4');
-    const [x, y] = await Promise.all([
-      seatMember(fx, 'x-seam4', 'member'),
-      seatMember(fx, 'y-seam4', 'member'),
-    ]);
-    const doomed = await authorRole(fx, 'Contractor', ['project:browse', 'comment:add']);
-    const destination = await authorRole(fx, 'Reader', ['project:browse', 'report:view']);
-    await assign(fx, x.id, doomed.id);
-    await assign(fx, y.id, doomed.id);
-
-    await projectRoleDefinitionService.delete({
-      projectId: fx.projectId,
-      roleId: doomed.id,
-      ctx: fx.ownerCtx,
-      reassignTo: destination.id,
-    });
-
-    // Every mover now points at the destination (what they can DO is their
-    // workspace role's since MOTIR-6459, proven in getPermissions.integration).
-    const members = await projectMembersService.listMembers({
-      key: fx.projectKey,
-      actorUserId: fx.ownerId,
-      ctx: fx.ownerCtx,
-    });
-    for (const mover of [x, y]) {
-      expect(members.find((m) => m.userId === mover.id)?.roleDefinition?.id).toBe(destination.id);
-    }
-    // The role itself is gone from the catalog the screens read.
-    const catalog = await projectRoleDefinitionService.getRoleCatalog(fx.projectId, fx.ownerCtx);
-    expect(catalog.roles.map((r) => r.key)).not.toContain(doomed.id);
-    expect(catalog.roles.find((r) => r.key === destination.id)?.memberCount).toBe(2);
-  });
-
-  it('a BUILT-IN destination puts the movers back on that tier, pointer cleared', async () => {
-    const fx = await build('seam4b');
-    const z = await seatMember(fx, 'z-seam4b', 'member');
-    const doomed = await authorRole(fx, 'Contractor', ['project:browse']);
-    await assign(fx, z.id, doomed.id);
-
-    await projectRoleDefinitionService.delete({
-      projectId: fx.projectId,
-      roleId: doomed.id,
-      ctx: fx.ownerCtx,
-      reassignTo: 'viewer',
-    });
-
-    const members = await projectMembersService.listMembers({
-      key: fx.projectKey,
-      actorUserId: fx.ownerId,
-      ctx: fx.ownerCtx,
-    });
-    const row = members.find((m) => m.userId === z.id);
-    expect(row?.role).toBe('viewer');
-    expect(row?.roleDefinition).toBeNull();
   });
 });
 
@@ -439,17 +271,15 @@ describe('GUARD · one write path for role_definition_id', () => {
     });
   }
 
-  it('nothing under lib/ writes the column except the two membership repositories', () => {
-    // The workspace membership carries its own pointer since MOTIR-6457, with its
-    // own single writer (`setWorkspaceRole`), held to the same pairing below.
+  it('nothing under lib/ writes the column except the WORKSPACE membership repository', () => {
+    // The project membership's pointer has no writer at all since the project
+    // roles retired (MOTIR-6464); the workspace membership carries the one
+    // pointer that means anything, with its single writer (`setWorkspaceRole`).
     const writers = walk(LIB)
       .filter((file) => /data:\s*\{[^}]*roleDefinitionId/.test(readFileSync(file, 'utf8')))
       .map((file) => relative(process.cwd(), file))
       .sort();
-    expect(writers).toEqual([
-      'lib/repositories/projectMembershipRepository.ts',
-      'lib/repositories/workspaceMembershipRepository.ts',
-    ]);
+    expect(writers).toEqual(['lib/repositories/workspaceMembershipRepository.ts']);
   });
 
   it('the WORKSPACE repository writes it in exactly one place, paired with the workspace role', () => {
@@ -457,13 +287,6 @@ describe('GUARD · one write path for role_definition_id', () => {
     const writes = [...source.matchAll(/data:\s*\{[^}]*roleDefinitionId[^}]*\}/g)].map((m) => m[0]);
     expect(writes).toHaveLength(1);
     expect(writes[0]).toContain('workspaceRole:');
-  });
-
-  it('the repository writes it in exactly two places, each pairing it with the tier', () => {
-    const source = readFileSync(join(LIB, 'repositories/projectMembershipRepository.ts'), 'utf8');
-    const writes = [...source.matchAll(/data:\s*\{[^}]*roleDefinitionId[^}]*\}/g)].map((m) => m[0]);
-    expect(writes).toHaveLength(2);
-    for (const write of writes) expect(write).toContain('role:');
   });
 });
 
@@ -542,16 +365,6 @@ describe('GUARD · tenancy at the non-bypass app role', () => {
     // indistinguishable from a missing one.
     await expect(
       projectRoleDefinitionService.getRoleCatalog(mine.projectId, theirs.ownerCtx),
-    ).rejects.toThrow();
-
-    // And the write path refuses too, at the service rather than by accident.
-    await expect(
-      projectRoleDefinitionService.update({
-        projectId: mine.projectId,
-        roleId: role.id,
-        ctx: theirs.ownerCtx,
-        name: 'Stolen',
-      }),
     ).rejects.toThrow();
 
     // Untouched, read back under its OWN context.

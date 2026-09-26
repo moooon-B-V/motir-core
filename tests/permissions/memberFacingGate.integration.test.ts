@@ -24,6 +24,7 @@ import type { ProjectContext } from '@/lib/projects';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { openTestSession } from '../helpers/planSession';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // THE STORY TEST GATE for MOTIR-2291 (Subtask MOTIR-2367) — the SEAM half,
 // against real Postgres.
@@ -101,7 +102,7 @@ async function buildScenario(slug: string): Promise<Scenario> {
       role: role ?? 'member',
     });
     if (role) {
-      await projectMembersService.addMember({
+      await addToProjectAs({
         key: project.identifier,
         actorUserId: owner.id,
         ctx: ownerCtx,

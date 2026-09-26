@@ -6,10 +6,10 @@ import { signIn } from './_helpers/shell-session';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // A LEAF CARRIES A DIFFICULTY A PERSON SETS — THE ACCEPTANCE RECEIPT (Story
 // MOTIR-6016 · Subtask MOTIR-6103). The story's verification recipe, in a real
@@ -408,7 +408,7 @@ test('a viewer without edit rights sees a leaf’s difficulty and no picker', as
     name: 'Vic Viewer',
   });
   await workspacesService.addMember({ userId: viewer.id, workspaceId: seed.workspaceId });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: seed.projectIdentifier,
     actorUserId: seed.ctx.userId,
     ctx: seed.ctx,

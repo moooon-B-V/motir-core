@@ -146,12 +146,10 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
       workspaceId: workspace.id,
       ...(role === 'viewer' ? { role: 'viewer' as const } : {}),
     });
-    await projectMembersService.addMember({
-      key: project.identifier,
-      actorUserId: owner.id,
-      ctx: ownerCtx,
-      targetUserId: u.id,
-      role,
+    // The LEGACY project row, written raw: `role` is only what a project admin
+    // used to be, and nothing reads it now (MOTIR-6464 retired the writer).
+    await adminDb.projectMembership.create({
+      data: { userId: u.id, projectId: project.id, workspaceId: workspace.id, role },
     });
     return u;
   }

@@ -327,7 +327,11 @@ describe('guard: the permission is ONE key, at the service tier', () => {
     const { todo } = await workItemTodosService.addTodo(card, { text: 'A step' }, fx.ctx);
 
     const viewer = await createTestUser({ email: 'gate-viewer@ex.com', name: 'Viewer' });
-    await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
+    await workspacesService.addMember({
+      userId: viewer.id,
+      workspaceId: fx.workspaceId,
+      role: 'viewer',
+    });
     await withWorkspaceContext(fx.ctx, (tx) =>
       projectMembershipRepository.create(
         { workspaceId: fx.workspaceId, projectId: fx.projectId, userId: viewer.id, role: 'viewer' },

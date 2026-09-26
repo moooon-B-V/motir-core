@@ -2,8 +2,8 @@ import { db } from './db-reset';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // Seed for the custom-roles E2E (Story MOTIR-2257 · Subtask MOTIR-2487).
 //
@@ -64,7 +64,7 @@ export async function seedCustomRoles(prefix: string): Promise<CustomRolesSeed> 
     name: 'Robin Vega',
   });
   await workspacesService.addMember({ userId: teammate.id, workspaceId: workspace.id });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: project.identifier,
     actorUserId: owner.id,
     ctx: ownerCtx,

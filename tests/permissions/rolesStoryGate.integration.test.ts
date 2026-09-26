@@ -15,6 +15,7 @@ import { toRoleCatalogDTO } from '@/lib/mappers/permissionMappers';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // THE STORY GATE for MOTIR-2282 (Subtask MOTIR-2264) — run against the merged
 // surface of the story's cards, doing the three things a per-card unit test
@@ -84,7 +85,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
 
   async function projectActor(role: 'viewer' | 'member' | 'admin') {
     const user = await workspaceUser(role);
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
@@ -212,20 +213,16 @@ describe('the capability methods and getPermissions agree, on every level and ev
 });
 
 describe('the widened DTO survives the round trip through real rows', () => {
-  it("reports each role's real headcount and the two groupings still cover the catalog", async () => {
+  it('counts no project-role holders, and the two groupings still cover the catalog', async () => {
     const s = await buildScenario('open', 'seam-dto');
     const catalog = await projectRoleDefinitionService.getRoleCatalog(s.projectId, s.ctxs.owner);
 
-    const seeded = await adminDb.projectMembership.groupBy({
-      by: ['role'],
-      where: { projectId: s.projectId },
-      _count: { _all: true },
-    });
-    const expected = new Map(seeded.map((row) => [row.role, row._count._all]));
+    // A project membership carries no role since roles moved to the workspace
+    // (Story MOTIR-6168 · MOTIR-6464), so the retiring catalog counts nobody;
+    // the workspace Roles page counts a role's holders.
     for (const role of catalog.roles) {
-      // Keyed by the `MemberRole` enum, which only a BUILT-IN carries.
       expect(role.builtInRole).not.toBeNull();
-      expect(role.memberCount, `${role.key}`).toBe(expected.get(role.builtInRole!) ?? 0);
+      expect(role.memberCount, `${role.key}`).toBe(0);
     }
 
     // The screens' own contract, read off the SERVICE rather than the mapper.

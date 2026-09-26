@@ -1,9 +1,9 @@
 import { adminDb } from '@/tests/helpers/adminDb';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestPerson } from './testPerson';
+import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 
 // THE DECISION-CONFIRM GATE E2E SEED (Story MOTIR-5871 · Subtask MOTIR-5964), for the
 // acceptance receipt `acceptance-decision-confirm-gate.spec.ts` records.
@@ -100,7 +100,7 @@ export async function seedDecisionConfirmGate(slug: string): Promise<DecisionCon
   // reporter nor an admin — so a decision routed to the owner is NOT theirs to confirm.
   await workspacesService.addMember({ userId: viewer.id, workspaceId: workspace.id });
   const ctx = { userId: owner.id, workspaceId: workspace.id };
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: project.identifier,
     actorUserId: owner.id,
     ctx,

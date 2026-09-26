@@ -4,7 +4,6 @@ import { Prisma } from '@/generated/prisma/client';
 import { automationRulesService } from '@/lib/services/automationRulesService';
 import type { AutomationRuleWriteInput } from '@/lib/services/automationRulesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { automationRuleRepository } from '@/lib/repositories/automationRuleRepository';
@@ -26,6 +25,7 @@ import { encodeFilterParam, type FilterAst, type FilterCondition } from '@/lib/f
 import { withWorkspaceServiceContext, type WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // Service-layer tests for automationRulesService (Story 6.6 · Subtask 6.6.1).
 // Real Postgres, no DB mocks; truncateAuthTables CASCADEs workspace → project →
@@ -81,7 +81,7 @@ async function makeScenario(slug: string) {
       workspaceId: workspace.id,
       role: 'member',
     });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key,
       actorUserId: owner.id,
       ctx: ownerCtx,

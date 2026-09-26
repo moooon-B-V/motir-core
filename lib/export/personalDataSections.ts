@@ -79,6 +79,7 @@ export type PersonalDataDelegate =
   | 'legalAcceptance'
   | 'workspaceMembership'
   | 'organizationMembership'
+  | 'roleMigrationReport'
   | 'notificationPreference'
   | 'userAppearancePreference'
   | 'canvasNodePosition'
@@ -291,6 +292,15 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     model: 'projectMembership',
     tier: 'tenant',
     basis: 'Explicit project memberships the reader holds.',
+    where: byUserId,
+  },
+  {
+    table: 'role_migration_report',
+    model: 'roleMigrationReport',
+    tier: 'tenant',
+    basis:
+      'How the move to workspace roles changed the reader’s own role in a workspace — ' +
+      'their roles before, their role after, and why (Story MOTIR-6168).',
     where: byUserId,
   },
   {

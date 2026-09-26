@@ -22,6 +22,7 @@ import { listFolderLevelAction } from '@/app/(authed)/items/actions';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
 
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe(
@@ -101,6 +102,7 @@ describe('listFolderLevelAction', () => {
         tx,
       ),
     );
+    await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
 
     actAs(fx, viewer.id);
     await expect(

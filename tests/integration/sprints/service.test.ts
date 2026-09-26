@@ -59,8 +59,11 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
     password: 'hunter2hunter2',
     name: 'Sprint Member',
   });
+  // The non-admin whose refusal these tests assert is a workspace VIEWER: since
+  // roles moved to the workspace (Story MOTIR-6168) a Member holds
+  // `sprint:manage` in every project.
   await adminDb.workspaceMembership.create({
-    data: { userId: member.id, workspaceId, role: 'member' },
+    data: { userId: member.id, workspaceId, role: 'viewer', workspaceRole: 'viewer' },
   });
 
   return {

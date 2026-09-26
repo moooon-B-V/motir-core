@@ -10,6 +10,7 @@ import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/erro
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // THE STORY-LEVEL SEAM for MOTIR-3329 (Subtask MOTIR-3339) — the assembled
 // route → service → client → upstream path, against real Postgres, with
@@ -86,7 +87,7 @@ async function buildScenario(slug: string): Promise<Scenario> {
     });
     await workspacesService.addMember({ userId: u.id, workspaceId: workspace.id });
     if (role) {
-      await projectMembersService.addMember({
+      await addToProjectAs({
         key: project.identifier,
         actorUserId: owner.id,
         ctx: ownerCtx,

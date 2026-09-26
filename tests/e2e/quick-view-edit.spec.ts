@@ -29,9 +29,9 @@ import { signUp, signIn } from './_helpers/shell-session';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // Three surfaces, several edits each, all against the real stack.
 test.describe.configure({ timeout: 120_000 });
@@ -310,7 +310,7 @@ test('a viewer gets NO edit affordance on any rail row — the boundary is visib
     workspaceId: owner.workspaceId,
     role: 'member',
   });
-  await projectMembersService.addMember({
+  await addToProjectAs({
     key: owner.projectKey,
     actorUserId: owner.userId,
     ctx: { userId: owner.userId, workspaceId: owner.workspaceId },

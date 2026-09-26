@@ -211,6 +211,17 @@ describe('who may change a role', () => {
     }
   });
 
+  it('the gate runs BEFORE a custom role id is resolved — a non-Manager cannot probe role ids', async () => {
+    // Moved from the retired project-role assignment test (MOTIR-2485's
+    // ordering): a foreign id and a real one answer a non-Manager the same 403.
+    const fx = await build();
+    const other = await build();
+    for (const roleDefinitionId of [fx.customRoleId, other.customRoleId, 'no-such-role']) {
+      const res = await patch(fx, fx.ctx.member, fx.ids.viewer, { roleDefinitionId });
+      expect(res.status, roleDefinitionId).toBe(403);
+    }
+  });
+
   it('the org Owner with no membership in the workspace gets 200', async () => {
     const fx = await build();
     const owner = await user('org-owner');

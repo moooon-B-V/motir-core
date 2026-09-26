@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
-import { projectMembersService } from '@/lib/services/projectMembersService';
 import { usersService } from '@/lib/services/usersService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
 
 // `workItemsService.reportImplementation` gates on `work_item:edit` (MOTIR-2603).
 //
@@ -46,7 +46,7 @@ async function memberWithProjectRole(fx: WorkItemFixture, email: string, role: s
     workspaceId: fx.workspaceId,
     role: 'member',
   });
-  await projectMembersService.addMember({ ...actorInput(fx), targetUserId: user.id, role });
+  await addToProjectAs({ ...actorInput(fx), targetUserId: user.id, role });
   return { user, ctx: { userId: user.id, workspaceId: fx.workspaceId } };
 }
 

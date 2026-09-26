@@ -3,6 +3,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
+import { addToProjectAs, setProjectRoleAs } from '../../helpers/workspaceRoleFixtures';
 
 // Seed for the Roles & permissions E2E (Story MOTIR-2282 · Subtask MOTIR-2265).
 //
@@ -68,7 +69,7 @@ export async function seedRolesPermissions(prefix: string): Promise<RolesPermiss
       name,
     });
     await workspacesService.addMember({ userId: user.id, workspaceId: workspace.id });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: project.identifier,
       actorUserId: owner.id,
       ctx: ownerCtx,
@@ -89,7 +90,7 @@ export async function seedRolesPermissions(prefix: string): Promise<RolesPermiss
   // assertions would be checking a fixture nobody meant to build. The promotion
   // goes through the shipped service rather than a DB poke, so the membership it
   // produces is the same row the product would produce.
-  await projectMembersService.setRole({
+  await setProjectRoleAs({
     key: project.identifier,
     actorUserId: owner.id,
     ctx: ownerCtx,

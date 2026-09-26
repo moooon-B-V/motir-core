@@ -2,8 +2,6 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { howToTestService, dispatchRunLabel } from '@/lib/services/howToTestService';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
@@ -19,6 +17,11 @@ import { truncateAuthTables } from '../helpers/db';
 import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { organizationIdOf } from '../helpers/organizationOf';
 import { randomToken } from '../helpers/random';
+import {
+  addToProjectAs,
+  createCustomRoleAs,
+  setProjectRoleAs,
+} from '../helpers/workspaceRoleFixtures';
 
 // The HOW TO TEST read (Story MOTIR-4906 · MOTIR-5333 — per RUN TARGET), on real
 // Postgres: a child with no record must point at its run target, and the query
@@ -378,23 +381,21 @@ describe('howToTestService.getForWorkItem', () => {
       name: 'Member',
     });
     await workspacesService.addMember({ userId: member.id, workspaceId: fx.workspaceId });
-    const role = await projectRoleDefinitionService
-      .create({
-        projectId: fx.projectId,
-        ctx: fx.ctx,
-        name: 'No browse',
-        permissions: ['comment:add'],
-      })
-      .catch(() => null);
+    const role = await createCustomRoleAs({
+      projectId: fx.projectId,
+      ctx: fx.ctx,
+      name: 'No browse',
+      permissions: ['comment:add'],
+    }).catch(() => null);
     if (role) {
-      await projectMembersService.addMember({
+      await addToProjectAs({
         key: fx.projectIdentifier,
         actorUserId: fx.ownerId,
         ctx: fx.ctx,
         targetUserId: member.id,
         role: 'member',
       });
-      await projectMembersService.setRole({
+      await setProjectRoleAs({
         key: fx.projectIdentifier,
         actorUserId: fx.ownerId,
         ctx: fx.ctx,
@@ -592,7 +593,7 @@ describe('howToTestService — the record carries its AUTHOR', () => {
       name: 'Gone',
     });
     await workspacesService.addMember({ userId: author.id, workspaceId: fx.workspaceId });
-    await projectMembersService.addMember({
+    await addToProjectAs({
       key: fx.projectIdentifier,
       actorUserId: fx.ownerId,
       ctx: fx.ctx,
