@@ -61,7 +61,9 @@ export function isRefusalSeedGate(gate: RefusalSeedGateFacts): boolean {
 // the UMBRELLA of the two.
 
 /** The fields the pick predicate reads — a whole `ApprovalGate` row satisfies it. */
-export type PickSeedGateFacts = Pick<ApprovalGate, 'kind' | 'state' | 'chosenOption'>;
+/** `chosenOption` is read only for presence, so both the row's JSON and the DTO's
+ *  parsed stamp satisfy it (the band reads the DTO, the seed read the row). */
+export type PickSeedGateFacts = Pick<ApprovalGate, 'kind' | 'state'> & { chosenOption: unknown };
 
 /**
  * Is this gate a PICK that may seed a planning session — an option chosen on a

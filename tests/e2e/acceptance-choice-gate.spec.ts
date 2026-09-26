@@ -148,13 +148,14 @@ test.describe('a person picks one of N options, and the pick is stamped', () => 
       const dialog = overlayFor(page, seed.two);
       await choose(dialog, page, 'Managed object storage');
       await expect(dialog.getByText(ch.state.chosen, { exact: true }).first()).toBeVisible();
+      // The record says what the choice gates. MOTIR-6436 (story MOTIR-6069;
+      // `picked-option-planning.md`) retired the *"Follow-up planning owed"* wording
+      // this receipt was recorded against, so the chapter asserts the fact it is about
+      // — the gated work on the record — and not the retired sentence.
       await expect(
         dialog.getByText(
-          fill(ch.record.followUp, {
-            gates:
-              'The report exports story — the storage adapter, the retention rule and the download page.',
-          }),
-          { exact: true },
+          'The report exports story — the storage adapter, the retention rule and the download page.',
+          { exact: false },
         ),
       ).toBeVisible();
       // The To-approve row underneath settled in the same moment.

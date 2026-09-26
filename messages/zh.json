@@ -8944,14 +8944,14 @@
       },
       "consequence": {
         "pick": "请先在上方选中一个选项。选择后，{key} 将移至“已完成”。",
-        "picked": "选择后，{key} 将移至“已完成”，并留下一轮待进行的后续规划。"
+        "picked": "选择后会把 {key} 移至“已完成”，然后询问是否让 Motir AI 开始规划它决定的工作。"
       },
       "confirm": {
         "title": "选择此项将会：",
         "record": "将「{label}」（如果你更看重：{bestFor}）记录为答案。",
         "done": "将 {key} 移至“已完成”。",
-        "followUp": "留下一轮待进行的后续规划：{gates}。",
-        "proceed": "是，选择「{label}」"
+        "proceed": "是，选择「{label}」",
+        "askPlan": "询问是否用 Motir AI 开始规划后续工作：{gates}。"
       },
       "state": {
         "chosen": "已选择"
@@ -8959,9 +8959,9 @@
       "record": {
         "lead": "由 {name} 选择 · {when}",
         "chose": "选择了",
-        "followUp": "待进行后续规划 — {gates}",
         "willRevise": "选项将被修改",
-        "askedBecause": "提问原因"
+        "askedBecause": "提问原因",
+        "gates": "<b>这个选择决定的工作</b> — {gates}"
       },
       "cta": {
         "body": "全屏查看选项，然后选择一个。",
@@ -9150,6 +9150,17 @@
         "writing": "信息已经足够——我现在开始编写计划。你不必在这里等待：随时可以关闭，计划完成后会在<link>待审批</link>中等你。",
         "rewriting": "我正在编写此计划的新版本。你可以关闭这里——它会一直留在<link>待审批</link>中，等我完成后你就可以决定。"
       }
+    },
+    "planAsk": {
+      "title": "用 Motir AI 规划后续工作？",
+      "opens": "Motir AI 会在 {key} 上打开，并立即根据你的选择开始规划后续工作。",
+      "opensProject": "Motir AI 会在你的项目上打开，并立即根据你的选择开始规划后续工作。",
+      "nothingToSend": "无需填写或发送任何内容——你的选择就是第一条消息。",
+      "yes": "用 AI 规划"
+    },
+    "planDoor": {
+      "label": "用 AI 规划",
+      "aria": "用 AI 规划 {item} 的后续工作"
     }
   },
   "approvalOverlay": {

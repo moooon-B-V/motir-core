@@ -8948,14 +8948,14 @@
       },
       "consequence": {
         "pick": "Pick an option above to choose it. Choosing moves {key} to Done.",
-        "picked": "Choosing moves {key} to Done and leaves a follow-up planning pass owed."
+        "picked": "Choosing moves {key} to Done, then asks whether Motir AI should start planning what it gates."
       },
       "confirm": {
         "title": "Choosing this will:",
         "record": "Record {label} (best if you want {bestFor}) as the answer.",
         "done": "Move {key} to Done.",
-        "followUp": "Leave a follow-up planning pass owed: {gates}.",
-        "proceed": "Yes, choose {label}"
+        "proceed": "Yes, choose {label}",
+        "askPlan": "Ask whether to start planning the follow-up with Motir AI: {gates}."
       },
       "state": {
         "chosen": "Chosen"
@@ -8963,9 +8963,9 @@
       "record": {
         "lead": "Chosen by {name} · {when}",
         "chose": "Chose",
-        "followUp": "Follow-up planning owed — {gates}",
         "willRevise": "the options will be revised",
-        "askedBecause": "Asked because"
+        "askedBecause": "Asked because",
+        "gates": "<b>What this choice gates</b> — {gates}"
       },
       "cta": {
         "body": "Review the options full screen, then choose one.",
@@ -9154,6 +9154,17 @@
         "writing": "I have what I need — I’m writing the plan now. You don’t have to wait here: close this whenever you like, and the plan will be waiting for you in <link>To approve</link>.",
         "rewriting": "I’m writing a new version of this plan. You can close this — it stays in <link>To approve</link>, and you can decide once I’m done."
       }
+    },
+    "planAsk": {
+      "title": "Plan the follow-up with Motir AI?",
+      "opens": "Motir AI opens on {key} and starts planning the follow-up right away, from your choice.",
+      "opensProject": "Motir AI opens on your project and starts planning the follow-up right away, from your choice.",
+      "nothingToSend": "There is nothing to write or send — your choice is the first message.",
+      "yes": "Plan with AI"
+    },
+    "planDoor": {
+      "label": "Plan with AI",
+      "aria": "Plan the follow-up to {item} with AI"
     }
   },
   "approvalOverlay": {

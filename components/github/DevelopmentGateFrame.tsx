@@ -10,10 +10,7 @@ import {
   type GateVerb,
 } from '@/components/approvals/ApprovalGateControl';
 import { useRefusalVerb } from '@/components/approvals/RefusalReason';
-import {
-  asksToReplanAfterPress,
-  useRefusalReplanSlots,
-} from '@/components/approvals/RefusalReplan';
+import { asksAfterPress, useRefusalReplanSlots } from '@/components/approvals/RefusalReplan';
 import { useOptimisticStatusWriter } from '@/app/(authed)/items/[key]/_components/OptimisticStatusProvider';
 import type {
   approveAndMergeAction,
@@ -567,7 +564,7 @@ export function DevelopmentGateFrame({
     announceGateDecided({ gate: result.gate, filesKept: null });
     // A DECISION sent back offers the seeded planner (§10h) — it ASKS first, in the band
     // the record now draws. Commits sent back (`pull_request_approval`) offer nothing yet.
-    if (asksToReplanAfterPress(result.gate)) setReplanAsk(result.gate.id);
+    if (asksAfterPress(result.gate)) setReplanAsk(result.gate.id);
     router.refresh();
     return null;
   }

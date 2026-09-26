@@ -214,7 +214,15 @@ describe('the read-only state and the record', () => {
     expect(screen.getAllByText('Chosen').length).toBeGreaterThan(0);
     expect(screen.getByText(/Chosen by Yue/)).toBeTruthy();
     expect(screen.getByText('Managed object storage')).toBeTruthy();
-    expect(screen.getByText('Follow-up planning owed — The export story.')).toBeTruthy();
+    // What the choice gates stays on the record as information; the *owed* sentence is
+    // gone (MOTIR-6436). The lead is bold, so the line is matched by its whole text.
+    expect(
+      screen.getByText(
+        (_, el) =>
+          el?.tagName === 'SPAN' && el.textContent === 'What this choice gates — The export story.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/planning owed/)).toBeNull();
     expect(screen.getByText('Asked because')).toBeTruthy();
     expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
@@ -357,7 +365,15 @@ describe('the remaining shapes (MOTIR-5898 coverage)', () => {
         itemIdentifier="ACME-42"
       />,
     );
-    expect(screen.getByText('Follow-up planning owed — The export story.')).toBeTruthy();
+    // What the choice gates stays on the record as information; the *owed* sentence is
+    // gone (MOTIR-6436). The lead is bold, so the line is matched by its whole text.
+    expect(
+      screen.getByText(
+        (_, el) =>
+          el?.tagName === 'SPAN' && el.textContent === 'What this choice gates — The export story.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/planning owed/)).toBeNull();
     expect(screen.queryByText("Can't be decided yet")).toBeNull();
   });
 });

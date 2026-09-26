@@ -48,6 +48,11 @@ const { shallowPush, shallowReplace } = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace }));
 
+// The PICK ask names where the planner opens from the SEED READ (MOTIR-6436); the
+// refusal ask never calls it.
+const { fetchPlanningSeed } = vi.hoisted(() => ({ fetchPlanningSeed: vi.fn() }));
+vi.mock('@/lib/planning/planningSeedClient', () => ({ fetchPlanningSeed }));
+
 const { fetchApprovalGateOverlay } = vi.hoisted(() => ({ fetchApprovalGateOverlay: vi.fn() }));
 vi.mock('@/lib/approvals/approvalOverlayClient', () => ({ fetchApprovalGateOverlay }));
 
@@ -76,7 +81,7 @@ const { DevelopmentSectionBody } = await import('@/components/github/Development
 const { ChoiceSection } = await import('@/app/(authed)/items/[key]/_components/ChoiceSection');
 const { DecisionConfirmSection } =
   await import('@/app/(authed)/items/[key]/_components/DecisionConfirmSection');
-const { asksToReplanAfterPress, RefusalReplanAsk } =
+const { asksToReplanAfterPress, asksToPlanAfterPress, RefusalReplanAsk } =
   await import('@/components/approvals/RefusalReplan');
 const { useOpenRefusalReplan } = await import('@/components/approvals/useOpenRefusalReplan');
 
@@ -93,6 +98,7 @@ beforeEach(() => {
   fetchApprovalGateOverlay.mockReset();
   decideApprovalGateAction.mockReset();
   refresh.mockReset();
+  fetchPlanningSeed.mockReset().mockResolvedValue({ anchorKey: 'ACME-40' });
 });
 afterEach(cleanup);
 
@@ -497,7 +503,9 @@ describe('the item page — the door on None of these and on the overturn', () =
     expect(new URLSearchParams(href.split('?')[1]).get('planGate')).toBe('gate-choice-1');
   });
 
-  it('a chosen option carries no door', () => {
+  it('a chosen option carries the Plan with AI door (MOTIR-6436), never the Re-plan door', () => {
+    pathname = '/items/ACME-42';
+    params = new URLSearchParams();
     render(
       <ChoiceSection
         body={{ ok: true, port: choicePort() }}
@@ -521,6 +529,41 @@ describe('the item page — the door on None of these and on the overturn', () =
       />,
     );
     expect(theDoor()).toBeNull();
+    const d = screen.getByTestId('pick-plan-door');
+    expect(d.getAttribute('aria-label')).toBe(
+      en.approvalGate.planDoor.aria.replace('{item}', 'ACME-42'),
+    );
+    expect(d.textContent).toBe(en.approvalGate.planDoor.label);
+    expect(d.getAttribute('data-mode')).toBe('plan');
+    expect(screen.queryByText(/planning owed/)).toBeNull();
+    fireEvent.click(d);
+    const href = shallowReplace.mock.calls[0]![0] as string;
+    expect(new URLSearchParams(href.split('?')[1]).get('planGate')).toBe('gate-choice-1');
+  });
+
+  it('a chosen option shows no door to a reader who may not plan', () => {
+    render(
+      <ChoiceSection
+        body={{ ok: true, port: choicePort() }}
+        gate={{
+          ...CHOICE_AWAITING,
+          ...DECIDED,
+          state: 'approved',
+          chosenOption: {
+            optionId: 'managed-object-storage',
+            label: 'Managed object storage',
+            bestFor: 'less to operate',
+            followUp: 'The export story.',
+            situation: 'better_than_your_decision',
+          },
+        }}
+        canDecide={false}
+        routedToLabel="Yue"
+        routedToViewer
+        itemIdentifier="ACME-42"
+      />,
+    );
+    expect(screen.queryByTestId('pick-plan-door')).toBeNull();
   });
 
   it('Overturned: the door REPLACES the plain epic entrance; the owed chip and every supersedes chip stay', () => {
@@ -725,7 +768,7 @@ describe('the approval overlay — Overturn and None of these ask first', () => 
     expect(within(dialog).getByRole('button', { name: z.yes })).toBeTruthy();
   });
 
-  it('a pick asks nothing', async () => {
+  async function choosePostgres() {
     decideApprovalGateAction.mockResolvedValue({
       ok: true,
       gate: {
@@ -765,9 +808,50 @@ describe('the approval overlay — Overturn and None of these ask first', () => 
         }),
       );
     });
+    return dialog;
+  }
+  const planAsk = en.approvalGate.planAsk;
+
+  it('a PICK asks to plan the follow-up (MOTIR-6436): the planner starts, nothing to send, focus on yes', async () => {
+    const dialog = await choosePostgres();
+    const group = within(dialog).getByTestId('pick-plan-ask');
+    expect(within(group).getByText(planAsk.title)).toBeTruthy();
+    // Where it opens comes from the seed read's resolved anchor.
+    expect(within(group).getByText(planAsk.opens.replace('{key}', 'ACME-40'))).toBeTruthy();
+    expect(within(group).getByText(planAsk.nothingToSend)).toBeTruthy();
+    expect(document.activeElement).toBe(within(group).getByRole('button', { name: planAsk.yes }));
+    // Never the refusal's words, and nothing says the person must send a message.
     expect(theAsk()).toBeNull();
-    expect(theDoor()).toBeNull();
+    expect(group.textContent).not.toMatch(/until you send|edit it first/i);
     expect(shallowReplace).not.toHaveBeenCalled();
+  });
+
+  it('a PICK’s yes opens the planner through the planGate address, in one replace', async () => {
+    const dialog = await choosePostgres();
+    fireEvent.click(within(dialog).getByRole('button', { name: planAsk.yes }));
+    const href = shallowReplace.mock.calls[0]![0] as string;
+    const q = new URLSearchParams(href.split('?')[1]);
+    expect(q.get('approval')).toBeNull();
+    expect(q.get('planGate')).toBe('gate-choice-1');
+  });
+
+  it('a PICK’s Not now opens nothing and focuses the Plan with AI door; Esc does the same without closing', async () => {
+    const dialog = await choosePostgres();
+    fireEvent.keyDown(within(dialog).getByRole('button', { name: planAsk.yes }), {
+      key: 'Escape',
+    });
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(shallowPush).not.toHaveBeenCalled();
+    expect(within(dialog).queryByTestId('pick-plan-ask')).toBeNull();
+    const d = within(dialog).getByTestId('pick-plan-door');
+    expect(document.activeElement).toBe(d);
+    expect(shallowReplace).not.toHaveBeenCalled();
+  });
+
+  it('a PICK at the project says the planner opens on your project', async () => {
+    fetchPlanningSeed.mockResolvedValue({ anchorKey: null });
+    const dialog = await choosePostgres();
+    expect(within(dialog).getByText(planAsk.opensProject)).toBeTruthy();
   });
 
   it('a Confirm asks nothing', async () => {
@@ -861,6 +945,23 @@ describe('the approval overlay — Overturn and None of these ask first', () => 
 });
 
 // ── the predicate and the hook ─────────────────────────────────────────────────────────
+
+describe('who asks a PICK — `asksToPlanAfterPress` (MOTIR-6436)', () => {
+  const STAMP = { optionId: 'a', label: 'A', bestFor: 'x', followUp: 'y', situation: 'z' };
+  it.each([
+    ['decision_choice', 'approved', 'ui', STAMP, true],
+    ['decision_choice', 'approved', 'mcp', STAMP, true],
+    ['decision_choice', 'approved', 'github', STAMP, false],
+    ['decision_choice', 'approved', 'ui', null, false],
+    ['decision_choice', 'changes_requested', 'ui', null, false],
+    ['decision_approval', 'approved', 'ui', STAMP, false],
+  ] as const)(
+    '%s · %s · %s · stamp %# → %s',
+    (kind, state, decisionSource, chosenOption, expected) => {
+      expect(asksToPlanAfterPress({ kind, state, decisionSource, chosenOption })).toBe(expected);
+    },
+  );
+});
 
 describe('who asks — `asksToReplanAfterPress`', () => {
   it.each([
