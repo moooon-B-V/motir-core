@@ -35,11 +35,21 @@
 -- erasure sweep (MOTIR-6400) and the retention purge (MOTIR-6401) — which run with
 -- no org bound and WRITE, so the arm is on both `USING` and `WITH CHECK`.
 --
--- ONE `FOR ALL` policy with the same predicate on both sides, because Postgres
--- applies the UPDATE policy's `USING` to `SELECT … FOR UPDATE` and filters silently:
--- a split read/update policy returns rows to a plain read and ZERO to the locking
--- read (MOTIR-3707 / MOTIR-3710). `current_setting(…, true)` is missing_ok, so no
--- context means nothing visible.
+-- ONE `FOR ALL` policy, because Postgres applies the UPDATE policy's `USING` to
+-- `SELECT … FOR UPDATE` and filters silently: a split read/update policy returns
+-- rows to a plain read and ZERO to the locking read (MOTIR-3707 / MOTIR-3710).
+-- `current_setting(…, true)` is missing_ok, so no context means nothing visible.
+--
+-- ⚠️ `USING` IS WIDER THAN `WITH CHECK` BY ONE ARM, AND ONLY FOR READING. A request
+-- row records that a PERSON scheduled or cancelled a deletion — personal data the
+-- personal-data export must carry (`lib/export/personalDataSections.ts`, the
+-- `account_deletion_request` / `work_item_revision` precedent). That export reads
+-- the identity tier under `withUserContext`, which binds `app.user_id` and no org,
+-- so without a user arm the read returns ZERO rows and raises nothing. The arm
+-- admits the rows naming the reader as `requested_by_user_id` or
+-- `cancelled_by_user_id`. It is deliberately ABSENT from `WITH CHECK`: no
+-- user-only context may insert or move a request — every write still needs the
+-- org's own context (the schedule / cancel service) or the system sweep.
 
 -- CreateEnum
 CREATE TYPE "organization_deletion_status" AS ENUM ('scheduled', 'cancelled', 'erasing', 'erased', 'purged');
@@ -111,6 +121,8 @@ CREATE POLICY "organization_deletion_request_org_or_system" ON "organization_del
   USING (
     current_setting('app.system_admin', true) = 'true'
     OR "organization_id" = current_setting('app.organization_id', true)
+    OR "requested_by_user_id" = current_setting('app.user_id', true)
+    OR "cancelled_by_user_id" = current_setting('app.user_id', true)
   )
   WITH CHECK (
     current_setting('app.system_admin', true) = 'true'

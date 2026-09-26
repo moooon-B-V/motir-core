@@ -14,7 +14,7 @@ import {
 import { withOrgContext } from '@/lib/organizations/context';
 import { organizationDeletionRequestRepository } from '@/lib/repositories/organizationDeletionRequestRepository';
 import { toOrganizationDeletionRequestDTO } from '@/lib/mappers/organizationDeletionMappers';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { REPO_ROOT, stripComments } from '../helpers/importGraph';
@@ -352,6 +352,37 @@ describe('row-level security', () => {
       ),
     ).rejects.toThrow();
     expect(await adminDb.organizationDeletionRequest.count()).toBe(0);
+  });
+
+  it('lets the person who scheduled READ their request under a user-only context — and only read it', async () => {
+    // The personal-data export reads the identity tier under `withUserContext`, which
+    // binds no org. The read-only user arm is what makes the requester's own row
+    // visible there; WITH CHECK keeps every write on the org or system arm.
+    const owner = await makeUser('rls-requester@example.com');
+    const stranger = await makeUser('rls-stranger@example.com');
+    const org = await makeOrg('rls-requester-org');
+    const request = await schedule(org.id, owner.id);
+
+    const mine = await withUserContext(
+      owner.id,
+      (tx) => tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "organization_deletion_request"`,
+    );
+    expect(mine.map((r) => r.id)).toEqual([request.id]);
+    const theirs = await withUserContext(
+      stranger.id,
+      (tx) => tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "organization_deletion_request"`,
+    );
+    expect(theirs).toEqual([]);
+
+    await expect(
+      withUserContext(owner.id, (tx) =>
+        organizationDeletionRequestRepository.update(request.id, { status: 'cancelled' }, tx),
+      ),
+    ).rejects.toThrow();
+    expect(
+      (await adminDb.organizationDeletionRequest.findUniqueOrThrow({ where: { id: request.id } }))
+        .status,
+    ).toBe('scheduled');
   });
 
   it('admits the userless sweeps through the system arm, and a context with nothing bound sees nothing', async () => {
