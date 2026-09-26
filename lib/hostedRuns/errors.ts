@@ -64,3 +64,62 @@ export class HostedRunKeyNotMintedError extends Error {
     this.name = 'HostedRunKeyNotMintedError';
   }
 }
+
+// --- The run's git credentials (MOTIR-6449) ---
+//
+// `docs/decisions/hosted-run-runs-the-cli-as-the-app.md` §5 and §8: a hosted run
+// writes as Motir's GitHub App, and a run that cannot write is refused before
+// anything boots, naming EVERY repository that cannot be written.
+
+/** What one repository needs before a hosted run can write it — the one fix the
+ *  person (or the owner of the GitHub account) has to make. */
+export type RunGitWriteFix = 'reconnect' | 'accept_permissions';
+
+/** One repository of the run that its App cannot write, with the decision's
+ *  reason verbatim and, for `accept_permissions`, where the owner accepts. */
+export interface RunGitWriteRefusal {
+  /** `owner/name`. */
+  repository: string;
+  reason: string;
+  fix: RunGitWriteFix;
+  /** The installation's settings page on GitHub, when it is known. */
+  fixUrl: string | null;
+}
+
+/**
+ * A run covers at least one repository its App cannot write (§8). Carries every
+ * refused repository, not the first: a person fixing them one run at a time
+ * would be told the next only after the last fix.
+ */
+export class HostedRunRepositoryNotWritableError extends Error {
+  readonly code = 'hosted_repository_not_writable' as const;
+  constructor(readonly refusals: readonly RunGitWriteRefusal[]) {
+    super(refusals.map((r) => r.reason).join('; '));
+    this.name = 'HostedRunRepositoryNotWritableError';
+  }
+}
+
+/** Why a git credential could not be produced for reasons that are NOT one of
+ *  the two refusals a person can act on. */
+export type RunGitCredentialUnavailableReason =
+  /** The App the repository needs is not configured on this deployment. */
+  | 'not_configured'
+  /** GitHub could not be reached, or answered something unexpected. */
+  | 'github_unavailable'
+  /** A repository of the run has nothing on GitHub yet (its row is not realized). */
+  | 'repository_unrealized'
+  /** The run covers no repository at all. */
+  | 'no_repository';
+
+/** The run's git credential could not be minted, for an operational reason. The
+ *  start path fails the run; the refresh route answers it as a server fault. */
+export class RunGitCredentialUnavailableError extends Error {
+  readonly code = 'run_git_credential_unavailable' as const;
+  constructor(
+    readonly reason: RunGitCredentialUnavailableReason,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'RunGitCredentialUnavailableError';
+  }
+}

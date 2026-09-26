@@ -1253,6 +1253,7 @@ model Workspace {
   dispatchRuns                DispatchRun[]
   dispatchRunCards            DispatchRunCard[]
   dispatchRunEvents           DispatchRunEvent[]
+  dispatchRunGitCredentials   DispatchRunGitCredential[]
   /// Folders in this workspace's projects (Story MOTIR-5308). Cascade.
   folders                     Folder[]
 
@@ -10270,6 +10271,9 @@ model DispatchRun {
   containerUsage   CiContainerUsage[]
   /// The run-bound Motir credential a hosted run holds (MOTIR-688). Cascade on the FK.
   runTokens        ApiToken[]
+  /// The GitHub installation tokens handed to this hosted run (MOTIR-6449), recorded
+  /// so the end path can revoke every one. Cascade on the FK.
+  gitCredentials   DispatchRunGitCredential[]
 
   @@unique([workspaceId, idempotencyKey])
   /// The run list and the `/runs/[id]` read: newest-first per project.
@@ -10282,6 +10286,43 @@ model DispatchRun {
   /// — the same shape `job_run`'s reap index has.
   @@index([status, startedAt])
   @@map("dispatch_run")
+}
+
+/// A GitHub INSTALLATION TOKEN handed to a hosted run (Story MOTIR-683 · MOTIR-6449;
+/// `docs/decisions/hosted-run-runs-the-cli-as-the-app.md` §5).
+///
+/// One row per token minted: a run spans one or more App installations, and it
+/// asks for fresh tokens through its git-credential route for as long as it runs
+/// (GitHub fixes an installation token's life at one hour). The row exists so the
+/// end path can REVOKE every token the run was handed — `DELETE /installation/token`
+/// authenticates with the token itself, so a token nobody kept cannot be revoked.
+///
+/// The token is stored ENCRYPTED (`lib/github/tokenCrypto.ts`), never in the clear,
+/// and the rows are deleted once revoked. Nothing reads it back except the revoke.
+model DispatchRunGitCredential {
+  id             String   @id @default(cuid())
+  /// Denormalized from the run for RLS, which does not traverse the FK.
+  workspaceId    String   @map("workspace_id")
+  dispatchRunId  String   @map("dispatch_run_id")
+  /// Which App minted it: `motir-studio` (a Motir-created repository) or
+  /// `motir-integration` (a connected one). A closed union in
+  /// `lib/github/runGitCredential.ts`; a string for the reason `seedSource` is one.
+  app            String
+  /// GitHub's numeric installation id (as a string — never do math on it).
+  installationId String   @map("installation_id")
+  /// The `owner/name` of every repository the token was narrowed to.
+  repositories   String[]
+  tokenEncrypted String   @map("token_encrypted")
+  /// GitHub's own expiry for the token. A token past it is dead and is not revoked.
+  expiresAt      DateTime @map("expires_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  dispatchRun DispatchRun @relation(fields: [dispatchRunId], references: [id], onDelete: Cascade)
+
+  @@index([dispatchRunId])
+  @@index([workspaceId])
+  @@map("dispatch_run_git_credential")
 }
 
 /// One LEG — one card this run owns. The model the first decomposition did not
