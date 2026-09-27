@@ -1,5 +1,4 @@
 import { Prisma, type Component, type Project, type WorkItem } from '@/generated/prisma/client';
-import { accessModeOf } from '@/lib/projects/accessMode';
 import {
   componentRepository,
   type ComponentUpdateInput,
@@ -166,7 +165,7 @@ async function assertDefaultAssigneeEligible(
 ): Promise<void> {
   const members = await assignableMembersService.list({
     projectId: project.id,
-    accessMode: accessModeOf(project),
+    accessMode: project.accessMode,
     ctx,
   });
   if (!members.some((m) => m.userId === userId)) {

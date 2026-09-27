@@ -7,6 +7,8 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { projectAccessData } from './helpers/projectAccess';
+import type { ProjectAccessMode } from '@/generated/prisma/client';
 
 // Schema + repository proof for the project access STORAGE (Story MOTIR-6169 ·
 // Subtask MOTIR-6541) — the EXPAND step. It covers only what that card ships:
@@ -50,32 +52,33 @@ async function tenant() {
   return { owner: owner.id, member: member.id, workspaceId: ws.workspace.id };
 }
 
-async function project(
-  workspaceId: string,
-  accessLevel: 'open' | 'limited' | 'private' | 'public',
-) {
+async function project(workspaceId: string, mode: ProjectAccessMode) {
   const n = seq++;
   return adminDb.project.create({
     data: {
-      name: `P ${accessLevel}`,
-      slug: `pas-${accessLevel}-${n}`,
+      name: `P ${mode}`,
+      slug: `pas-${mode}-${n}`,
       identifier: `PAS${n}`,
       workspaceId,
-      // legacy-access-level: the storage split of a legacy level is what this file tests.
-      accessLevel,
+      ...projectAccessData(mode),
     },
   });
 }
 
+async function unsetProject(workspaceId: string) {
+  const n = seq++;
+  return adminDb.project.create({
+    data: { name: `P unset`, slug: `pas-unset-${n}`, identifier: `PAS${n}`, workspaceId },
+  });
+}
+
 describe('the new columns, as the migration leaves them', () => {
-  it('backfills access_mode NULL on a project at every legacy level', async () => {
+  it('stores a project created naming neither column as workspace / open — the NOT NULL default (MOTIR-6686)', async () => {
     const t = await tenant();
-    for (const level of ['open', 'limited', 'private', 'public'] as const) {
-      const p = await project(t.workspaceId, level);
-      const row = await adminDb.project.findUniqueOrThrow({ where: { id: p.id } });
-      expect(row.accessMode).toBeNull();
-      expect(row.accessLevel).toBe(level);
-    }
+    const p = await unsetProject(t.workspaceId);
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: p.id } });
+    expect(row.accessMode).toBe('workspace');
+    expect(row.accessLevel).toBe('open');
   });
 
   it('reads access_scope `full` on a membership inserted without naming it', async () => {
@@ -107,7 +110,7 @@ describe('projectRepository.setAccessMode', () => {
     ['workspace', 'open'],
   ] as const)('writes access_mode = %s and access_level = %s together', async (mode, level) => {
     const t = await tenant();
-    const p = await project(t.workspaceId, mode === 'workspace' ? 'private' : 'open');
+    const p = await project(t.workspaceId, mode === 'workspace' ? 'members' : 'workspace');
     await adminDb.$transaction((tx) => projectRepository.setAccessMode(p.id, mode, tx));
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: p.id } });
     expect(row.accessMode).toBe(mode);
@@ -116,7 +119,7 @@ describe('projectRepository.setAccessMode', () => {
 
   it('stamps madePublicAt only when asked', async () => {
     const t = await tenant();
-    const p = await project(t.workspaceId, 'open');
+    const p = await project(t.workspaceId, 'workspace');
     await adminDb.$transaction((tx) => projectRepository.setAccessMode(p.id, 'public', tx));
     expect((await adminDb.project.findUniqueOrThrow({ where: { id: p.id } })).madePublicAt).toBe(
       null,
@@ -159,8 +162,8 @@ describe('workspaceMembershipRepository.setAccessScope', () => {
 describe('projectMembershipRepository — who was added', () => {
   it('counts and lists the people added to one project only', async () => {
     const t = await tenant();
-    const p1 = await project(t.workspaceId, 'private');
-    const p2 = await project(t.workspaceId, 'private');
+    const p1 = await project(t.workspaceId, 'members');
+    const p2 = await project(t.workspaceId, 'members');
     for (const userId of [t.owner, t.member]) {
       await adminDb.projectMembership.create({
         data: { workspaceId: t.workspaceId, projectId: p1.id, userId, role: 'member' },

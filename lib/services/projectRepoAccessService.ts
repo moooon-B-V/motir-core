@@ -1,5 +1,4 @@
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { accessModeOf } from '@/lib/projects/accessMode';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -504,7 +503,7 @@ async function resolveCandidates(projectId: string, ctx: ServiceContext): Promis
   if (!project || project.workspaceId !== ctx.workspaceId) return [];
   const members = await assignableMembersService.list({
     projectId,
-    accessMode: accessModeOf(project),
+    accessMode: project.accessMode,
     ctx,
   });
   const userIds = members.map((m) => m.userId);

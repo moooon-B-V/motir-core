@@ -1,5 +1,4 @@
 import { isWorkspaceOrgClosing } from '@/lib/organizations/closingGuard';
-import { accessModeOf } from '@/lib/projects/accessMode';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import {
@@ -1757,7 +1756,7 @@ export const workItemsService = {
     if (descTokenIds.length > 0) {
       const mentionable = await resolveDescriptionMentionable(
         input.projectId,
-        accessModeOf(project),
+        project.accessMode,
         ctx,
       );
       descMentionIds = descTokenIds.filter((id) => mentionable.has(id));
@@ -2318,7 +2317,7 @@ export const workItemsService = {
         if (project) {
           descMentionable = await resolveDescriptionMentionable(
             project.id,
-            accessModeOf(project),
+            project.accessMode,
             ctx,
           );
         }

@@ -9,8 +9,8 @@ import { levelForMode } from '@/lib/projects/accessMode';
 // A fixture writes exactly the same pair, through the same mapping, so a fixture
 // and the product cannot disagree about what "public" means.
 //
-// Why this exists: while `accessMode` is NULL, `accessModeOf` derives the mode
-// from `accessLevel`, so a fixture writing ONLY `accessLevel: 'public'` got a
+// Why this exists: while `accessMode` was NULL, the retired fallback derived the
+// mode from `accessLevel`, so a fixture writing ONLY `accessLevel: 'public'` got a
 // public project. Once `access_mode` is NOT NULL with DEFAULT `workspace`
 // (MOTIR-6686), that same fixture gets an Open-to-the-workspace project, and every
 // public-read test built on it fails for a reason unrelated to what it tests.

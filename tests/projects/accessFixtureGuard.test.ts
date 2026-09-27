@@ -8,8 +8,8 @@ import { describe, expect, it } from 'vitest';
 // A project's access is its MODE. Every test that sets it goes through
 // `tests/helpers/projectAccess.ts`, which writes the mode and the level it maps to
 // together — exactly what `projectRepository.setAccessMode` writes. A fixture that
-// writes `accessLevel` alone only worked while `accessModeOf` derived a NULL mode
-// from the level; once `access_mode` is NOT NULL (MOTIR-6686) it silently seeds an
+// writes `accessLevel` alone only worked while the retired NULL-mode fallback
+// derived the mode from the level; once `access_mode` is NOT NULL (MOTIR-6686) it silently seeds an
 // Open-to-the-workspace project instead, and the test fails — or worse, passes —
 // for a reason unrelated to what it tests.
 //
@@ -25,12 +25,11 @@ import { describe, expect, it } from 'vitest';
 const ALLOWED = new Set([
   // The helper itself: it writes the level `levelForMode` maps the mode to.
   'tests/helpers/projectAccess.ts',
-  // The LEGACY-MAPPING tests: they seed a legacy level ON PURPOSE, because the
-  // level-to-mode mapping, the storage split and the mapping migration are what
-  // they test. Each says so beside its fixture.
-  'tests/project-access-storage.test.ts',
+  // The LEGACY-MAPPING test: it seeds a legacy level ON PURPOSE, because the
+  // level-to-mode mapping migration is what it tests. It says so beside its
+  // fixture. (The storage and mapper tests left this list with MOTIR-6686, once
+  // the NULL-mode state they described could no longer exist.)
   'tests/migrations/projectAccessMapping.test.ts',
-  'tests/projects/accessMode.test.ts',
   // This file: its self-check below carries direct writes as SOURCE TEXT.
   'tests/projects/accessFixtureGuard.test.ts',
 ]);

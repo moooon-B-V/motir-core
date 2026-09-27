@@ -163,34 +163,3 @@ describe('the Manager rail', () => {
     expect(listed).toHaveLength(4);
   });
 });
-
-describe('a project the migration has not reached', () => {
-  it('resolves exactly as its mapped mode while access_mode is NULL', async () => {
-    const t = await tenant();
-    // A NULL-mode `limited` project behaves as Members only: the Full member,
-    // not added, holds nothing; mapped to `members` explicitly, the same.
-    const legacy = await adminDb.project.create({
-      data: {
-        name: 'Legacy',
-        slug: `pe-legacy-${seq++}`,
-        identifier: `PELEG${seq++}`,
-        workspaceId: t.wsId,
-        // legacy-access-level: a NULL mode derived from the level is what this case tests.
-        accessLevel: 'limited',
-      },
-    });
-    expect(legacy.accessMode).toBeNull();
-    expect(sorted(await projectAccessService.getPermissions(legacy.id, t.ctx(t.full.id)))).toEqual(
-      [],
-    );
-    const openLegacy = await adminDb.project.update({
-      where: { id: legacy.id },
-      // legacy-access-level: a NULL mode derived from the level is what this case tests.
-      data: { accessLevel: 'open' },
-    });
-    expect(openLegacy.accessMode).toBeNull();
-    expect(sorted(await projectAccessService.getPermissions(legacy.id, t.ctx(t.full.id)))).toEqual(
-      sorted(WORKSPACE_ROLE_PERMISSIONS.member),
-    );
-  });
-});

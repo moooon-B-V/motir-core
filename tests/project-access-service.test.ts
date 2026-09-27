@@ -193,8 +193,8 @@ const EXPECTED: Record<
     nonMember: { browse: false, edit: false },
   },
   // `plainMember` is a workspace Member NEVER ADDED to the project. The projects
-  // here are built with a legacy LEVEL and a NULL mode, so they resolve through
-  // `accessModeOf` (Story MOTIR-6169): `limited` is Members only now, so the
+  // here are set through the legacy LEVEL setter, which stores the mapped mode
+  // (Story MOTIR-6169): `limited` is Members only now, so the
   // plain member no longer enters it — the one row the access model moved
   // (`role-model.md` Q1, and the migration reports every such person).
   limited: {

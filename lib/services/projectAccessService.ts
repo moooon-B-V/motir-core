@@ -7,7 +7,6 @@ import { composeOwnerReach } from '@/lib/workspaces/membershipGate';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { customRolePermissionsOf } from '@/lib/workspaces/roles';
 import type { Project, ProjectAccessMode } from '@/generated/prisma/client';
-import { accessModeOf } from '@/lib/projects/accessMode';
 import {
   canBrowse,
   canComment,
@@ -159,7 +158,7 @@ async function resolveInputs(
     // (Story MOTIR-6169) — and the actor's SCOPE, read off the membership row; an
     // org Owner / Admin composed in as a Manager has no row, and a Manager's
     // scope is never read.
-    accessMode: accessModeOf(project),
+    accessMode: project.accessMode,
     workspaceRole,
     accessScope: workspaceMembership?.accessScope ?? null,
     customRolePermissions: customRolePermissionsOf(workspaceRole, workspaceMembership),
@@ -206,7 +205,7 @@ async function resolvePublicInputs(
   tx?: Prisma.TransactionClient,
 ): Promise<ProjectAccessInputs> {
   const project = await projectRepository.findById(projectId, tx);
-  if (!project || accessModeOf(project) !== 'public') {
+  if (!project || project.accessMode !== 'public') {
     throw new ProjectNotFoundError(projectId);
   }
   if (!actorUserId) {
@@ -435,7 +434,7 @@ export const projectAccessService = {
     const accessScope = workspaceMembership?.accessScope ?? null;
     return projects.filter((p) =>
       canEnter({
-        accessMode: accessModeOf(p),
+        accessMode: p.accessMode,
         workspaceRole,
         accessScope,
         addedToProject: added.has(p.id),
@@ -515,7 +514,7 @@ export const projectAccessService = {
           result.set(
             userId,
             canEdit({
-              accessMode: accessModeOf(project),
+              accessMode: project.accessMode,
               workspaceRole,
               accessScope: membership?.accessScope ?? null,
               customRolePermissions: customRolePermissionsOf(workspaceRole, membership),

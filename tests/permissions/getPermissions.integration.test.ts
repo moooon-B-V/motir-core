@@ -217,8 +217,8 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
     member: MEMBER_SET(),
     admin: MEMBER_SET(),
   },
-  // A legacy `limited` project with a NULL mode resolves as Members only
-  // (`accessModeOf`, Story MOTIR-6169 · MOTIR-6543): not added, nothing at all.
+  // A project set to the legacy `limited` level is stored Members only
+  // (Story MOTIR-6169 · MOTIR-6543): not added, nothing at all.
   limited: {
     owner: [...ROLE_GATED_PERMISSIONS],
     wsAdmin: [...ROLE_GATED_PERMISSIONS],
