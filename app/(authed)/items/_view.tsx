@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { getTranslations } from 'next-intl/server';
-import type { ProjectPageContext } from '@/lib/pages/projectPageContext';
+import { pageMembers, pageScope, type ProjectPageContext } from '@/lib/pages/projectPageContext';
 import { parsePage, parseSort, parseView, serializeSort } from '@/lib/issues/issueListView';
 import { parseIssueFilter, type IssueFilterParams } from '@/lib/issues/issueListFilter';
 import { parseAdvancedFilterParam } from '@/lib/issues/issueListAdvancedFilter';
@@ -8,7 +8,6 @@ import { collectFilterReferentIds } from '@/lib/filters/registry';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { savedFilterCapabilitiesFromPermissions } from '@/lib/savedFilters/access';
-import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { customFieldsService } from '@/lib/services/customFieldsService';
 import { componentsService } from '@/lib/services/componentsService';
@@ -62,7 +61,7 @@ export default async function ItemsView({
   >;
 }) {
   const t = await getTranslations('issueViews');
-  const ctx = pageCtx.reader;
+  const ctx = pageScope(pageCtx);
 
   // Story 6.4.6 — gate the issue list on canBrowse; a non-browsable active
   // project renders the no-access state, not the list. The same permission SET
@@ -111,7 +110,11 @@ export default async function ItemsView({
   // load-all; finding #57). The label resolve is skipped when the AST carries
   // no label condition. The page calls services only (never Prisma).
   const referencedLabelIds = ast ? collectFilterReferentIds(ast).labelIds : [];
-  const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  // The reader's contexts (MOTIR-6648): a member's own, or a Visitor's — see
+  // `pageScope`. A Visitor's members are name-only, its components name their
+  // default assignee by name, and it is offered no archived-items count (the
+  // archive is a member's tool, and the count would include withheld items).
+  const wsCtx = ctx.service;
   const [
     workflow,
     members,
@@ -124,27 +127,23 @@ export default async function ItemsView({
   ] = await Promise.all([
     workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
     // Assignable users scoped by access level (6.4.6): private → project members.
-    assignableMembersService.list({
-      projectId: ctx.projectId,
-      accessMode: ctx.project.accessMode,
-      ctx: wsCtx,
-    }),
+    pageMembers(ctx),
     // The builder's sprint value editor (6.1.4) — a project's sprint list is
     // small by nature (the bounded read its owner ships).
     sprintsService.listByProject(ctx.projectId, wsCtx),
     customFieldsService.listFields({
       key: ctx.project.identifier,
-      actorUserId: ctx.userId,
+      actorUserId: wsCtx.userId,
       ctx: wsCtx,
     }),
-    componentsService.listComponents(ctx.project.identifier, wsCtx),
+    componentsService.listComponents(ctx.project.identifier, ctx.read),
     // The builder's Folder field (Story MOTIR-5309 · MOTIR-5378) — the same
     // browse-gated read the folder picker uses, bounded at FOLDER_PICKER_MAX.
     foldersService.listProjectFolders({ projectId: ctx.projectId }, wsCtx),
     labelsService.resolveByIds(ctx.project.identifier, referencedLabelIds, wsCtx),
     // The [Archived] entry-point's count badge (Story 2.9 · Subtask 2.9.3) —
     // a cheap COUNT(*) of the project's archived items.
-    workItemsService.countArchivedWorkItems(ctx.projectId, wsCtx),
+    ctx.visitor ? 0 : workItemsService.countArchivedWorkItems(ctx.projectId, wsCtx),
   ]);
 
   // The actor's saved-filter tier (Subtask 6.2.3) — passed to the toolbar's
@@ -167,7 +166,7 @@ export default async function ItemsView({
               </div>
               {/* The closing organization's one header note (MOTIR-6403, design
                   MOTIR-6390 panel 6) — `null` for an open org. */}
-              <OrganizationReadOnlyNote workspaceId={ctx.workspaceId} />
+              {ctx.visitor ? null : <OrganizationReadOnlyNote workspaceId={ctx.workspaceId} />}
               <IssueListToolbar
                 view={view}
                 sort={sort}
@@ -225,8 +224,8 @@ export default async function ItemsView({
             >
               <IssueTreeSection
                 projectId={ctx.projectId}
-                workspaceId={ctx.workspaceId}
-                userId={ctx.userId}
+                reader={ctx.read}
+                service={ctx.service}
                 view={view}
                 sort={sort}
                 filter={filter}

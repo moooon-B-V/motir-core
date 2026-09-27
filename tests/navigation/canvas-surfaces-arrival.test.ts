@@ -122,7 +122,10 @@ describe('the two pages that were ALREADY one wave (MOTIR-3445)', () => {
     expect(src).toContain('savedFilterCapabilitiesFromPermissions(held)');
     const wave = waveContaining(
       src,
-      'assignableMembersService.list',
+      // The members read goes through `pageMembers` since MOTIR-6648, which is
+      // `assignableMembersService.list` for a member and the name-only list for
+      // a Visitor — the same one read, in the same wave.
+      'pageMembers(ctx)',
       'workflowsService.getWorkflow',
       'sprintsService.listByProject',
       'customFieldsService.listFields',

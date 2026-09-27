@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Sparkles } from 'lucide-react';
 
-import type { ProjectPageContext } from '@/lib/pages/projectPageContext';
+import { pageScope, type ProjectPageContext } from '@/lib/pages/projectPageContext';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { RoomViewSwitch } from '@/components/rooms/RoomViewSwitch';
@@ -67,9 +67,11 @@ export default async function PlansView({
   const planState = planStateFromParam(firstParam(params.planState));
   // `?session=<id>` — the overlay's fresh-start notice lands here (MOTIR-6024).
   const landingId = firstParam(params.session) || null;
-  const ctx = pageCtx.reader;
-
-  const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  // The room's reads take the reader's context whole (MOTIR-6645): a member's
+  // own, or a Visitor's, which withholds a plan touching a private epic's
+  // descendants and offers the Project view alone (MOTIR-6648).
+  const ctx = pageScope(pageCtx);
+  const wsCtx = ctx.read;
 
   // The active project may be one the actor can no longer browse (made private
   // while pinned) — render the no-access state rather than crashing.
@@ -87,7 +89,7 @@ export default async function PlansView({
       .roomAccess(ctx.projectId, wsCtx)
       .then((value) => ({ ok: true as const, value }))
       .catch((error: unknown) => ({ ok: false as const, error })),
-    requested === null
+    requested === null && !ctx.visitor
       ? planSessionsService
           .countSessionsByPlanState(ctx.projectId, wsCtx, { view: 'mine' })
           .then((counts) => sumCounts(counts) > 0)

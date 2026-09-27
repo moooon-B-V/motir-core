@@ -9858,6 +9858,14 @@
       "goBack": "Go back",
       "goBackLine": "Going back shares nothing. You’ll be asked again the next time you open {project}.",
       "failed": "We couldn’t save that. Try again."
+    },
+    "shell": {
+      "banner": "You’re watching <b>{project}</b> being built in public. It’s read-only, and this project’s Managers can see that you visited.",
+      "brandLabel": "{project} on motir.co",
+      "projectKey": "Project key {key}",
+      "rateLimitedTitle": "You’re reading a little too fast",
+      "rateLimitedBody": "This public project limits how quickly one reader can open it. Try again in {seconds, plural, one {# second} other {# seconds}}.",
+      "rateLimitedRetry": "Try again"
     }
   }
 }

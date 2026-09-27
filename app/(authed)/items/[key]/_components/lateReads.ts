@@ -32,6 +32,8 @@ import type { DesignGateSubjectDTO } from '@/lib/dto/designEvidence';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
 import type { ActivityTab } from '@/lib/activity/tab';
 import type { DispatchRunListItemDto } from '@/lib/dto/dispatchRuns';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { VisitorReadContext } from '@/lib/visitor/context';
 
 // The item page's LATE-TIER reads, as ONE promise (Subtask MOTIR-3436).
 //
@@ -220,7 +222,13 @@ export interface LateReadsInput {
   itemStatus: string;
   itemKind: string;
   projectId: string;
-  ctx: { userId: string; workspaceId: string };
+  ctx: ServiceContext;
+  /**
+   * The reader the ACTIVITY reads (comments, history, all) take: the member's
+   * `ctx`, or a Visitor's read context (MOTIR-6648), which withholds a private
+   * epic's descendants from every entry and chip. Defaults to `ctx`.
+   */
+  activityReader?: ServiceContext | VisitorReadContext;
   /** The full dispatch context the repo-delivery + PR reads take verbatim. */
   fullCtx: Parameters<typeof workItemsService.listLinkedPullRequests>[1];
   activityTab: ActivityTab;
@@ -326,6 +334,7 @@ export const RUN_HISTORY_PAGE = 20;
 
 export function readLateSections(input: LateReadsInput): Promise<LateReads> {
   const { itemId, ctx, projectId, activityTab } = input;
+  const activityReader = input.activityReader ?? ctx;
   // A story at in_review / done is the only shape that has an acceptance panel.
   // The ternaries stay: skipping a query is cheaper than parallelising it.
   const inReviewBand = input.itemStatus === 'in_review' || input.itemStatus === 'done';
@@ -360,7 +369,11 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
         try {
           if (activityTab === 'comments') {
             return {
-              comments: await commentsService.listComments(itemId, { order: 'desc' }, ctx),
+              comments: await commentsService.listComments(
+                itemId,
+                { order: 'desc' },
+                activityReader,
+              ),
               history: null,
               all: null,
             };
@@ -368,14 +381,14 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
           if (activityTab === 'history') {
             return {
               comments: null,
-              history: await activityService.listHistory(itemId, { order: 'desc' }, ctx),
+              history: await activityService.listHistory(itemId, { order: 'desc' }, activityReader),
               all: null,
             };
           }
           return {
             comments: null,
             history: null,
-            all: await activityService.listAll(itemId, { order: 'desc' }, ctx),
+            all: await activityService.listAll(itemId, { order: 'desc' }, activityReader),
           };
         } catch {
           return { comments: null, history: null, all: null };

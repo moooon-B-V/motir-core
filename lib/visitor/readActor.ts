@@ -5,15 +5,17 @@ import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { enforcePublicReadRateLimit } from '@/lib/rateLimit/publicReadGuard';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { VisitorReadContext } from '@/lib/visitor/context';
+import { VISITOR_COOKIE, isVisitorCookieValue } from '@/lib/visitor/cookie';
 
 // THE ONE ENTRANCE a Visitor's data doors use (Story MOTIR-6170 · MOTIR-6647;
 // `docs/decisions/visitor-sign-in-and-records.md`).
 //
 // A Visitor page renders server-side and then keeps fetching — tree levels, the
 // board, the peek, activity, the run modal — from `app/api/**` routes that serve
-// a member of the project's own workspace. The Visitor layout (MOTIR-6648) sets
-// the `motir_visitor` cookie naming the public project the reader is watching,
-// and a GET route asks THIS module whether that reader is its Visitor.
+// a member of the project's own workspace. `proxy.ts` (MOTIR-6648) sets the
+// `motir_visitor` cookie on every Visitor view, naming the public project the
+// reader is watching, and a GET route asks THIS module whether that reader is its
+// Visitor.
 //
 // ⚠️ THE COOKIE IS AN ADDRESS, NEVER A CREDENTIAL. It grants nothing on its own:
 // a Visitor is served only when the request's SESSION resolves, through
@@ -27,8 +29,8 @@ import type { VisitorReadContext } from '@/lib/visitor/context';
 // as it always was, so a Visitor stays refused on every write door (proven over
 // all of them by MOTIR-6650).
 
-/** The cookie the Visitor layout sets: host-only, HttpOnly, SameSite=Lax, Path=/. */
-export const VISITOR_COOKIE = 'motir_visitor';
+/** The cookie `proxy.ts` sets on a Visitor view: host-only, HttpOnly, SameSite=Lax, Path=/. */
+export { VISITOR_COOKIE };
 
 /** The public identifier the `motir_visitor` cookie names, or null. */
 export function readVisitorCookie(req: Request): string | null {
@@ -45,7 +47,7 @@ export function readVisitorCookie(req: Request): string | null {
     } catch {
       return null;
     }
-    return /^[A-Za-z0-9_-]{1,64}$/.test(value) ? value : null;
+    return isVisitorCookieValue(value) ? value : null;
   }
   return null;
 }

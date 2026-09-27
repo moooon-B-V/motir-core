@@ -3,10 +3,9 @@ import { personDisplayName } from '@/lib/people/personLabel';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Archive } from 'lucide-react';
-import type { ProjectPageContext } from '@/lib/pages/projectPageContext';
+import { pageMembers, pageScope, type ProjectPageContext } from '@/lib/pages/projectPageContext';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemTodosService } from '@/lib/services/workItemTodosService';
-import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { plansService } from '@/lib/services/plansService';
 import { estimationService } from '@/lib/services/estimationService';
@@ -51,6 +50,7 @@ import { DecisionWaitingHeaderLink } from './_components/DecisionWaitingHeaderLi
 import { PlacementProvider } from './_components/PlacementProvider';
 import { ChildList } from './_components/ChildList';
 import { ChildPanel } from './_components/ChildPanel';
+import { EpicNotPublicBlock, EpicNotPublicPill } from './_components/EpicNotPublic';
 import { RelationshipsPanel } from './_components/RelationshipsPanel';
 import { TodoListSection } from './_components/TodoListSection';
 import { IssueQuickViewController } from '../_components/IssueQuickViewController';
@@ -78,15 +78,16 @@ export default async function ItemView({
   searchParams: Promise<{ activity?: string }>;
 }) {
   const t = await getTranslations('issueViews');
-  const ctx = pageCtx.reader;
+  // The reader's contexts (MOTIR-6648) — a member's own, or a Visitor's: `read`
+  // for the reads that withhold a private epic's descendants (the detail, the
+  // rollup, the chips, the activity), `service` for the rest.
+  const ctx = pageScope(pageCtx);
+  const svc = ctx.service;
 
   const { key } = await params;
   let detail;
   try {
-    detail = await workItemsService.getIssueDetail(ctx.projectId, key, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
+    detail = await workItemsService.getIssueDetail(ctx.projectId, key, ctx.read);
   } catch (err) {
     // A browse denial (6.4.3) means the project is hidden from this actor — it
     // must be indistinguishable from a missing issue (404, no existence leak).
@@ -94,10 +95,10 @@ export default async function ItemView({
       // Story 6.8.2 — old-key link: if `key` addresses an issue under a RETIRED
       // project key (PROD-7 after PROD→NIF), 308-redirect to the canonical
       // identifier (NIF-7) so old bookmarks keep working; otherwise a real 404.
-      const canonical = await resolveAliasedIssueKey(key, {
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId,
-      });
+      // A Visitor follows no renamed-key alias: a hidden item and a missing one
+      // must read the same (`epic-privacy.md` §3), and an alias could tell them
+      // apart (MOTIR-6648).
+      const canonical = ctx.visitor ? null : await resolveAliasedIssueKey(key, svc);
       if (canonical) permanentRedirect(`/items/${canonical}`);
       notFound();
     }
@@ -197,8 +198,9 @@ export default async function ItemView({
     itemStatus: item.status,
     itemKind: item.kind,
     projectId: ctx.projectId,
-    ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
-    fullCtx: ctx,
+    ctx: svc,
+    activityReader: ctx.read,
+    fullCtx: svc,
     activityTab,
     canEdit,
     itemIdentifier: item.identifier,
@@ -237,17 +239,11 @@ export default async function ItemView({
     // Members back the inline assignee picker + reporter display, and the
     // Activity section's mention candidates. Assignable users are scoped by
     // access level (6.4.6): private → project members.
-    assignableMembersService.list({
-      projectId: ctx.projectId,
-      accessMode: ctx.project.accessMode,
-      ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
-    }),
+    // A Visitor's are name-only (MOTIR-6646).
+    pageMembers(ctx),
     // Sprints (Subtask 2.4.14) back the inline Sprint field's picker + the ⋯
     // menu's "Add to active sprint" quick action.
-    sprintsService.listByProject(ctx.projectId, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    }),
+    sprintsService.listByProject(ctx.projectId, svc),
     // Per-repository DELIVERY (Story MOTIR-2725 · MOTIR-2415). TIER TWO because
     // the rail's Repositories card renders it — the Development section below
     // uses the same value, passed down rather than read twice.
@@ -256,27 +252,16 @@ export default async function ItemView({
     // by the delivery set, plus the set itself. Combining them at the host is
     // what let this page and the quick view disagree (MOTIR-3036), so neither
     // does it.
-    workItemsService.getDeliveryView(item.id, item.targetRepos, ctx),
+    workItemsService.getDeliveryView(item.id, item.targetRepos, svc),
     // The project taxonomy behind the rail's Components picker (Story 5.4 ·
     // Subtask 5.4.8) — browse-gated, name-ordered, admin-bounded (finding #57).
-    componentsService.listComponents(ctx.project.identifier, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    }),
+    componentsService.listComponents(ctx.project.identifier, ctx.read),
     // The project estimation config (Subtask 4.3.4) — the rail's inline
     // story-points EstimateBadge reads the scale deck from it via context.
-    estimationService.getEstimationConfig(ctx.projectId, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    }),
+    estimationService.getEstimationConfig(ctx.projectId, svc),
     // Epic/parent subtree roll-up (Subtask 4.3.5) — one bounded recursive-CTE
     // aggregate, ONLY when the item has children. A leaf shows none.
-    detail.children.length > 0
-      ? estimationService.rollupForParent(item.id, {
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-        })
-      : null,
+    detail.children.length > 0 ? estimationService.rollupForParent(item.id, ctx.read) : null,
     getLocale() as Promise<Locale>,
     // Work-item references (Story 5.8 · 5.8.6) — every `[KEY](motir:<id>)` in
     // the description / explanation and every bare `MOTIR-N` in the title,
@@ -289,7 +274,7 @@ export default async function ItemView({
         ctx.project.identifier,
       ),
       ctx.projectId,
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      ctx.read,
     ),
     // The card's own TO-DO LIST (Story MOTIR-3808 · MOTIR-3815). TIER TWO, in
     // THIS group rather than the late stack, and that placement is measured
@@ -297,7 +282,7 @@ export default async function ItemView({
     // (`design/work-items/design-notes.md` § *Placement*), and on a card whose
     // work IS the list it is what the reader came for. One small ordered read
     // on the same card, so it costs the group nothing and adds no serial await.
-    workItemTodosService.listTodos(item.id, ctx),
+    workItemTodosService.listTodos(item.id, svc),
     // The UNDECIDED plans that name this card (bug MOTIR-4197 · design
     // MOTIR-4256 §2–§3). TIER TWO, IN THIS GROUP: the element is the first
     // child of the content column, so arriving late would push Description down, and it
@@ -309,12 +294,7 @@ export default async function ItemView({
     // MOTIR-4106's project-scoped boundary seam, which cannot answer *which
     // plans name THIS card*. CONDITIONAL, like the roll-up: skipped outright
     // for an actor without `plan:view_any`.
-    canViewPlans
-      ? plansService.listPendingProposalsForWorkItem(ctx.projectId, item.id, {
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-        })
-      : null,
+    canViewPlans ? plansService.listPendingProposalsForWorkItem(ctx.projectId, item.id, svc) : null,
     // The PLAN HISTORY — every plan that created, changed, archived or expanded
     // this card (Story MOTIR-5542 · MOTIR-5547 · design MOTIR-5545 § Plan
     // history 1). TIER TWO, IN THIS GROUP: the section renders with the first
@@ -331,7 +311,7 @@ export default async function ItemView({
             ctx.projectId,
             item.id,
             { limit: PLAN_HISTORY_FIRST_PAGE },
-            { userId: ctx.userId, workspaceId: ctx.workspaceId },
+            svc,
           )
           .catch(() => 'failed' as const)
       : null,
@@ -339,26 +319,20 @@ export default async function ItemView({
     // THIS group: the status control is in the rail the reader lands on, and its
     // held message sits UNDER the value — arriving late would push the rail down.
     // Empty on almost every card; one small read that costs the group nothing.
-    approvalGatesService.listHeldTransitions(item.id, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    }),
+    approvalGatesService.listHeldTransitions(item.id, svc),
     // THE HEADER'S DECISION-WAITING MARKER (Story MOTIR-4908 · MOTIR-5878). In THIS
     // group for the held-transitions reason above: the header is what the reader
     // lands on, and a marker arriving late would shift it. The late sections it
     // points at stream in afterwards; the marker waits for them on a press.
     approvalGatesService.pendingDecisionsFor(
       { projectId: item.projectId, workItemIds: [item.id] },
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      svc,
     ),
     // THE PLAN HOLD (Story MOTIR-6017 · MOTIR-6267) — beside the held moves, for
     // their reason: an undecided plan holding the card at Planning locks every
     // move, and the status control says so under its value. `null` on almost every
     // card (anything not at Planning stops after the item row).
-    planTargetLockService.readPlanHold(item.id, {
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    }),
+    planTargetLockService.readPlanHold(item.id, svc),
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
@@ -461,6 +435,10 @@ export default async function ItemView({
                         {t('archivedEntry')}
                       </Pill>
                     ) : null}
+                    {/* A Visitor's PRIVATE EPIC (MOTIR-6648, design MOTIR-6641 panel
+                8): the epic's own row stays, marked with the shipped public
+                marker. `childrenHidden` is set only on a Visitor's read. */}
+                    {detail.childrenHidden ? <EpicNotPublicPill /> : null}
                     {/* THE DECISION-WAITING MARKER (MOTIR-5878): loud when the decision
                 is the reader's, quiet naming who it waits on, nothing otherwise.
                 A pointer to the gate's section — never a Review & approve door. */}
@@ -654,18 +632,24 @@ export default async function ItemView({
                       parentIdentifier={detail.parent?.identifier ?? null}
                     />
                   </Suspense>
-                  <ChildPanel
-                    count={detail.children.length}
-                    itemId={item.id}
-                    itemIdentifier={item.identifier}
-                    projectKey={ctx.project.identifier}
-                  >
-                    <ChildList
-                      items={detail.children}
-                      workflow={detail.workflow}
-                      members={members}
-                    />
-                  </ChildPanel>
+                  {detail.childrenHidden ? (
+                    // The children panel REPLACED for a Visitor's private epic
+                    // (design MOTIR-6641 panel 8) — no count, no rows.
+                    <EpicNotPublicBlock />
+                  ) : (
+                    <ChildPanel
+                      count={detail.children.length}
+                      itemId={item.id}
+                      itemIdentifier={item.identifier}
+                      projectKey={ctx.project.identifier}
+                    >
+                      <ChildList
+                        items={detail.children}
+                        workflow={detail.workflow}
+                        members={members}
+                      />
+                    </ChildPanel>
+                  )}
                   {/* MOTIR-5547: the plan history — after Children (a plan that added
               work items under this card reads right under them), before the late
               stack's lower half. Renders nothing for an actor without

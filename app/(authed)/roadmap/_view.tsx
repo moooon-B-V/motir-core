@@ -1,6 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 import { Map } from 'lucide-react';
-import type { ProjectPageContext } from '@/lib/pages/projectPageContext';
+import { pageScope, type ProjectPageContext } from '@/lib/pages/projectPageContext';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -53,7 +54,9 @@ import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 async function resolveArrivalTrail(
   projectId: string,
   searchParams: Promise<Record<string, string | string[] | undefined>> | undefined,
-  wsCtx: { userId: string; workspaceId: string },
+  wsCtx: ServiceContext,
+  /** A Visitor's withheld ids (MOTIR-6648) — an arrival at one draws no trail. */
+  hiddenIds: ReadonlySet<string> = new Set(),
 ): Promise<CanvasCrumb[]> {
   const params = await searchParams;
   // FOLDERS live on the project-scope roadmap only (design decision 6): the sprint
@@ -81,6 +84,7 @@ async function resolveArrivalTrail(
       itemKey,
       wsCtx,
     );
+    if (hiddenIds.has(item.id)) return [];
     const workItemCrumbs = [...ancestors, item].map((a) => ({
       id: a.id,
       crumbKey: a.identifier,
@@ -129,9 +133,10 @@ export default async function RoadmapPageView({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const t = await getTranslations('roadmap');
-  const ctx = pageCtx.reader;
-
-  const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  // The reader's contexts (MOTIR-6648) — see `pageScope`. The roadmap read takes
+  // `read`, so a Visitor's canvas withholds a private epic's descendants.
+  const ctx = pageScope(pageCtx);
+  const wsCtx = ctx.service;
 
   // The active project may be one the actor can no longer browse (it was made
   // private while pinned). Gate the roadmap read on canBrowse and render the
@@ -164,11 +169,12 @@ export default async function RoadmapPageView({
   // emptiness check must read the same root it will draw. A project that filed
   // every root row into a folder is NOT empty; one holding only its seeded, empty
   // Bugs folder still is (`isRoadmapRootEmpty`).
-  const roots = await workItemsService.getProjectRoadmap(ctx.projectId, null, wsCtx, {
+  const roots = await workItemsService.getProjectRoadmap(ctx.projectId, null, ctx.read, {
     folders: true,
   });
   const isEmpty = isRoadmapRootEmpty(roots);
-  const aiConfigured = isMotirAiConfigured();
+  // Planning is authoring — never offered to a Visitor (design MOTIR-6641 panel 3).
+  const aiConfigured = isMotirAiConfigured() && !ctx.visitor;
 
   // An empty PROJECT keeps the server empty state (the canvas never mounts). A
   // populated project hands off to the client `RoadmapView`, which owns the scope
@@ -205,7 +211,7 @@ export default async function RoadmapPageView({
   // rather than two.
   const [activeSprint, initialTrail] = await Promise.all([
     sprintsService.getActiveSprint(ctx.projectId, wsCtx),
-    resolveArrivalTrail(ctx.projectId, searchParams, wsCtx),
+    resolveArrivalTrail(ctx.projectId, searchParams, wsCtx, ctx.visitor?.hiddenIds),
   ]);
 
   return (

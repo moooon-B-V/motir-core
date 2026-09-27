@@ -9854,6 +9854,14 @@
       "goBack": "返回",
       "goBackLine": "返回不会分享任何信息。下次打开 {project} 时会再次询问。",
       "failed": "无法保存，请重试。"
+    },
+    "shell": {
+      "banner": "你正在观看 <b>{project}</b> 公开构建的过程。这里是只读的，此项目的管理者可以看到你访问过。",
+      "brandLabel": "motir.co 上的 {project}",
+      "projectKey": "项目键 {key}",
+      "rateLimitedTitle": "你浏览得有点太快了",
+      "rateLimitedBody": "此公开项目限制了单个读者的访问速度。请在 {seconds} 秒后重试。",
+      "rateLimitedRetry": "重试"
     }
   }
 }

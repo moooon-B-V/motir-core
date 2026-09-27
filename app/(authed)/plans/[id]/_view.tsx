@@ -7,6 +7,9 @@ import { planReviewService } from '@/lib/services/planReviewService';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectRepoEstablishService } from '@/lib/services/projectRepoEstablishService';
 import { PlanNotFoundError } from '@/lib/plans/errors';
+import { isVisitorContext } from '@/lib/visitor/readScope';
+import type { WorkspaceContext } from '@/lib/workspaces';
+import type { PlanReviewDto } from '@/lib/dto/planReview';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { PlanDetail } from '@/components/planning/PlanDetail';
 import type { ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
@@ -79,24 +82,11 @@ export default async function PlanDetailView({
   //
   // Each read keeps its OWN catch: either may fail without taking the page down,
   // and a bare `Promise.all` would let one rejection discard the other's result.
+  // A VISITOR's plan is always of their one public project — the read refused any
+  // other as not-found — so its key is the context's; and the establish step is a
+  // member's tool, never read for a Visitor (MOTIR-6648).
   const [projectKey, repoView]: [string | null, ProjectRepoEstablishViewDto | null] =
-    await Promise.all([
-      projectsService
-        .assertProjectInWorkspace(review.projectId, ctx.workspaceId)
-        .then((project) => project.identifier)
-        .catch((err: unknown) => {
-          console.error('[plans/[id]] could not resolve the project:', err);
-          return null;
-        }),
-      review.status === 'approved'
-        ? projectRepoEstablishService
-            .getEstablishView(review.projectId, ctx)
-            .catch((err: unknown) => {
-              console.error('[plans/[id]] could not read the project repository set:', err);
-              return null;
-            })
-        : Promise.resolve(null),
-    ]);
+    isVisitorContext(ctx) ? [ctx.project.identifier, null] : await readMemberExtras(review, ctx);
 
   return (
     <div className="flex flex-col gap-4">
@@ -175,4 +165,29 @@ export default async function PlanDetailView({
       </div>
     </div>
   );
+}
+
+/** The member's project key and establish view, beside the plan read (see above). */
+async function readMemberExtras(
+  review: Pick<PlanReviewDto, 'projectId' | 'status'>,
+  ctx: WorkspaceContext,
+): Promise<[string | null, ProjectRepoEstablishViewDto | null]> {
+  const extras = await Promise.all([
+    projectsService
+      .assertProjectInWorkspace(review.projectId, ctx.workspaceId)
+      .then((project) => project.identifier)
+      .catch((err: unknown) => {
+        console.error('[plans/[id]] could not resolve the project:', err);
+        return null;
+      }),
+    review.status === 'approved'
+      ? projectRepoEstablishService
+          .getEstablishView(review.projectId, ctx)
+          .catch((err: unknown) => {
+            console.error('[plans/[id]] could not read the project repository set:', err);
+            return null;
+          })
+      : Promise.resolve(null),
+  ]);
+  return extras;
 }

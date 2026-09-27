@@ -87,10 +87,37 @@ describe('the moved public surfaces 308 to motir.co', () => {
     expect(res.headers.get('x-middleware-next')).toBe('1');
   });
 
+  it('does NOT 308 the Visitor views /p/<id>/<view> — they are served in the app (MOTIR-6648)', async () => {
+    process.env['MOTIR_PUBLIC_SITE_URL'] = PUBLIC;
+    process.env['MOTIR_BASE_URL'] = APP;
+    for (const path of [
+      '/p/PROD/board',
+      '/p/PROD/items',
+      '/p/PROD/items/PROD-7',
+      '/p/PROD/tree',
+      '/p/PROD/roadmap',
+      '/p/PROD/plans',
+      '/p/PROD/plans/cplan1',
+      '/p/PROD/approvals',
+      '/p/PROD/runs',
+      '/p/PROD/enter?next=%2Fp%2FPROD%2Fboard',
+    ]) {
+      const res = await redirect(path);
+      expect(res.status, path).not.toBe(308);
+      expect(res.headers.get('location'), path).toBeNull();
+      expect(res.headers.get('x-middleware-next'), path).toBe('1');
+    }
+  });
+
   it('still 308s the bare /p/<id> and any other /p/* path', async () => {
     process.env['MOTIR_PUBLIC_SITE_URL'] = PUBLIC;
     process.env['MOTIR_BASE_URL'] = APP;
-    for (const path of ['/p/PROD', '/p/PROD/changelog', '/p/PROD/consent/extra']) {
+    for (const path of [
+      '/p/PROD',
+      '/p/PROD/changelog',
+      '/p/PROD/consent/extra',
+      '/p/PROD/board/extra',
+    ]) {
       const res = await redirect(path);
       expect(res.status, path).toBe(308);
     }

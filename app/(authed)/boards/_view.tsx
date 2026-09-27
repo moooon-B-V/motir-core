@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import type { ProjectPageContext } from '@/lib/pages/projectPageContext';
+import { pageMembers, pageScope, type ProjectPageContext } from '@/lib/pages/projectPageContext';
 import {
   parseIssueFilter,
   isFilterActive,
@@ -12,7 +12,6 @@ import {
 import { encodeFilterParam } from '@/lib/filters/ast';
 import { collectFilterReferentIds } from '@/lib/filters/registry';
 import { savedFilterCapabilitiesFromPermissions } from '@/lib/savedFilters/access';
-import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { customFieldsService } from '@/lib/services/customFieldsService';
@@ -67,7 +66,7 @@ export default async function BoardView({
   searchParams: Promise<{ peek?: string; board?: string } & IssueFilterParams>;
 }) {
   const t = await getTranslations('boards');
-  const ctx = pageCtx.reader;
+  const ctx = pageScope(pageCtx);
 
   // Story 6.4.6 — the active project may be one the actor can no longer browse
   // (e.g. it was made private while pinned). Gate the board read on canBrowse and
@@ -134,22 +133,21 @@ export default async function BoardView({
   // scoped by access level (6.4.6): a private project lists only its project
   // members; open/limited list the whole workspace.
   const referencedLabelIds = ast ? collectFilterReferentIds(ast).labelIds : [];
-  const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  // `ctx.service` / `ctx.read` are the reader's contexts — a member's own, or a
+  // Visitor's (MOTIR-6648): the component list takes `read`, so a Visitor gets its
+  // default assignees by name only; the members are name-only for a Visitor too.
+  const wsCtx = ctx.service;
   const [members, workflow, sprints, customFields, components, referencedLabels] =
     await Promise.all([
-      assignableMembersService.list({
-        projectId: ctx.projectId,
-        accessMode: ctx.project.accessMode,
-        ctx: wsCtx,
-      }),
+      pageMembers(ctx),
       workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
       sprintsService.listByProject(ctx.projectId, wsCtx),
       customFieldsService.listFields({
         key: ctx.project.identifier,
-        actorUserId: ctx.userId,
+        actorUserId: wsCtx.userId,
         ctx: wsCtx,
       }),
-      componentsService.listComponents(ctx.project.identifier, wsCtx),
+      componentsService.listComponents(ctx.project.identifier, ctx.read),
       labelsService.resolveByIds(ctx.project.identifier, referencedLabelIds, wsCtx),
     ]);
 

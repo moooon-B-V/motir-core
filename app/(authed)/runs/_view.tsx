@@ -5,7 +5,9 @@ import { getTranslations } from 'next-intl/server';
 import { ChevronLeft, SearchX } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import type { DispatchRunScopeDto } from '@/lib/dto/dispatchRuns';
-import type { ProjectPageContext } from '@/lib/pages/projectPageContext';
+import { pageScope, type ProjectPageContext } from '@/lib/pages/projectPageContext';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { VisitorReadContext } from '@/lib/visitor/context';
 import {
   RUNS_RUN_PARAM,
   RUNS_SCOPE_PARAM,
@@ -76,10 +78,13 @@ export default async function RunsView({
   // ONE WAVE, not two awaits — the serial-read ratchet
   // (`tests/navigation/loading-boundary-guard.test.ts`, MOTIR-3449).
   const [t, awaitedParams] = await Promise.all([getTranslations('runs'), searchParams]);
-  const ctx = pageCtx.reader;
+  // The room's reads take the reader's context whole (MOTIR-6645): a member's
+  // own, or a Visitor's, which withholds a run touching a private epic's
+  // descendants and offers the Project view alone (MOTIR-6648).
+  const ctx = pageScope(pageCtx);
 
   const projectKey = ctx.project.identifier;
-  const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  const wsCtx = ctx.read;
   const params = awaitedParams ?? {};
   const scopeKey = parseRunsScope(params[RUNS_SCOPE_PARAM]);
   const requested = parseRoomView(params[RUNS_VIEW_PARAM]);
@@ -95,7 +100,7 @@ export default async function RunsView({
   // together. A probe that fails reads as "no rows" rather than failing the page.
   const [access, mineHasRows, scopeHeader] = await Promise.all([
     dispatchRunService.roomAccess(projectKey, wsCtx),
-    requested === null
+    requested === null && !ctx.visitor
       ? dispatchRunService
           .listRunsForProject(
             projectKey,
@@ -223,7 +228,7 @@ export default async function RunsView({
 async function readScopeHeader(
   projectKey: string,
   scopeKey: string,
-  ctx: { userId: string; workspaceId: string },
+  ctx: ServiceContext | VisitorReadContext,
 ): Promise<ScopeHeader> {
   try {
     return {
@@ -261,7 +266,7 @@ async function RunsIndexData({
   canRun,
 }: {
   projectKey: string;
-  ctx: { userId: string; workspaceId: string };
+  ctx: ServiceContext | VisitorReadContext;
   scopeKey: string | null;
   /** The SERVED view — both reads ask for it, and the island carries it. */
   view: RoomView;
