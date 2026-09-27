@@ -49,6 +49,12 @@ describe('RELATIONSHIP_KINDS', () => {
     expect(relationshipLabel('superseded_by')).toBe('Superseded by');
   });
 
+  it('labels an unknown relationship by its own id rather than throwing (MOTIR-6584)', () => {
+    // A value from an older/newer client that the label map does not hold still
+    // renders as something a person can read.
+    expect(relationshipLabel('replaces' as RelationshipKind)).toBe('replaces');
+  });
+
   it('the web add-link form does not offer the supersedes pair until the panel renders it', () => {
     expect(LINK_FORM_RELATIONSHIP_KINDS.map((r) => r.kind)).toEqual([
       'blocked_by',

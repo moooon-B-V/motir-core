@@ -302,4 +302,10 @@ describe('obsolescenceLines', () => {
       }),
     ).toEqual(['  obsolescence: outdated — superseded by PROD-2, PROD-3', '  note: why']);
   });
+
+  it('prints no note line when the note is only whitespace (MOTIR-6584)', () => {
+    expect(
+      obsolescenceLines({ obsolescence: 'outdated', obsolescenceNoteMd: '  \n\t\n ' }),
+    ).toEqual(['obsolescence: outdated']);
+  });
 });
