@@ -10388,6 +10388,10 @@ enum DispatchCommand {
   /// requests. Opened by the server's repair claim, not by the CLI's own open: the
   /// open `fix` run IS the one-repair-at-a-time lock, and it writes no status.
   fix
+  /// `motir continue <key>` (MOTIR-6532) — a TAKEOVER of a work item whose last run
+  /// DIED. Opened by the server's continue claim, like `fix`: the open `continue`
+  /// run IS the one-continue-at-a-time lock, and it writes no status.
+  continue
 
   @@map("dispatch_command")
 }

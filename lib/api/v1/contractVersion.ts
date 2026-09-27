@@ -622,6 +622,10 @@
  *   (nullable): the branch the prompt tells the agent to work on — the session
  *   branch, else the card's per-item branch — which a local run records on its
  *   leg's `checkout_ready` event.
+ *   MOTIR-6532 adds `claimWorkItemContinue`: `POST /api/v1/work-items/{key}/continue`
+ *   — the CONTINUE claim `motir continue <key>` makes on a work item whose last run
+ *   died (`WorkItemContinueClaim` component; a refusal is a 200 with an `outcome`),
+ *   and `continue` as a member of the `DispatchCommand` vocabulary.
  *
  *   Additive: a NEW operation and NEW nullable fields (§8's allowed list); no
  *   existing field changes meaning. Gated on `work_item:edit`, a key

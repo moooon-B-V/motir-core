@@ -75,7 +75,7 @@ export const REPORTER_RUN_CLOSED_WARNING =
 /** What a command hands the reporter when it opens a run. */
 export interface OpenDispatchRunInput {
   projectKey: string;
-  command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto' | 'fix';
+  command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto' | 'fix' | 'continue';
   /** `runIdFromDate`'s id — carried, never re-minted. */
   runId: string;
   /**

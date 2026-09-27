@@ -90,6 +90,24 @@ export interface LatestDispatchRun extends RunningDispatchRunHolder {
   endedAt: Date | null;
 }
 
+/** What {@link dispatchRunRepository.findLatestForWorkItem} returns. */
+export interface LatestRunForWorkItem {
+  id: string;
+  command: DispatchCommand;
+  origin: DispatchRun['origin'];
+  status: DispatchRunStatus;
+  stopReason: DispatchRun['stopReason'];
+  startedAt: Date;
+  endedAt: Date | null;
+  lastHeartbeatAt: Date | null;
+  createdById: string | null;
+  createdBy: { id: string; name: string } | null;
+  scopeWorkItemId: string | null;
+  scope: { identifier: string } | null;
+  /** The leg naming the work item — empty for a scoped run's container. */
+  cards: Array<{ id: string; sessionBranch: string | null }>;
+}
+
 export const dispatchRunRepository = {
   /** Open a run. `tx` required — a write. */
   async create(
@@ -191,6 +209,52 @@ export const dispatchRunRepository = {
         createdById: true,
         createdBy: { select: { id: true, name: true } },
       },
+    });
+  },
+
+  /**
+   * The NEWEST run of ANY command that holds a leg for this work item or is SCOPED
+   * to it, with everything the continue claim reads about it (MOTIR-6532): its
+   * liveness columns, its starter, its scope, and the leg naming this item (none
+   * for a scoped run's container). Null when the item has never been run.
+   */
+  async findLatestForWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<LatestRunForWorkItem | null> {
+    return tx.dispatchRun.findFirst({
+      where: { OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }] },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        command: true,
+        origin: true,
+        status: true,
+        stopReason: true,
+        startedAt: true,
+        endedAt: true,
+        lastHeartbeatAt: true,
+        createdById: true,
+        createdBy: { select: { id: true, name: true } },
+        scopeWorkItemId: true,
+        scope: { select: { identifier: true } },
+        cards: {
+          where: { workItemId },
+          select: { id: true, sessionBranch: true },
+          take: 1,
+        },
+      },
+    });
+  },
+
+  /** One run's starter — the name a continue says it took over from (MOTIR-6532). */
+  async findRunStarterById(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ createdBy: { id: string; name: string } | null } | null> {
+    return tx.dispatchRun.findUnique({
+      where: { id },
+      select: { createdBy: { select: { id: true, name: true } } },
     });
   },
 

@@ -7,6 +7,7 @@ import {
 import type { V1Collection } from '@/lib/api/v1/pagination';
 import type { WorkItemClaimDto } from '@/lib/dto/claim';
 import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
+import type { WorkItemContinueClaimDto } from '@/lib/dto/workItemContinue';
 import type { ScopeClaimDto } from '@/lib/dto/scopeClaim';
 import {
   isBodyAboveFieldMoveAdvisory,
@@ -1885,7 +1886,15 @@ function presentActivityValue(value: unknown): z.infer<typeof activityValueSchem
 
 /** Which CLI command opened the run. `fix` (MOTIR-5464) is opened by the server's
  *  repair claim, never by `openDispatchRun` from a client that knows the others. */
-export const dispatchCommandSchema = z.enum(['next', 'run', 'run_scope', 'batch', 'auto', 'fix']);
+export const dispatchCommandSchema = z.enum([
+  'next',
+  'run',
+  'run_scope',
+  'batch',
+  'auto',
+  'fix',
+  'continue',
+]);
 
 /** WHERE the run executed — the discriminator that lets one record serve two writers. */
 export const dispatchRunOriginSchema = z.enum(['local', 'hosted']);
@@ -2215,5 +2224,121 @@ export function presentCurrentTestInstructions(
           })),
         }
       : null,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The CONTINUE CLAIM (Story MOTIR-6526 · MOTIR-6532)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** What a continue claim resolved to. */
+export const workItemContinueOutcomeSchema = z.enum([
+  'claimed',
+  'mine',
+  'taken',
+  'not_continuable',
+]);
+
+/** Why a work item cannot be continued — see `WorkItemContinueRefusal`. */
+export const workItemContinueRefusalSchema = z.enum([
+  'run_alive',
+  'use_fix',
+  'not_in_progress',
+  'continue_the_parent',
+  'no_dead_run',
+  'no_branch',
+]);
+
+/**
+ * The result of claiming the CONTINUE of a work item whose last run died.
+ *
+ * ⚠️ **A REFUSAL IS A 200**, as on the repair claim. ⚠️ **THE ITEM'S STATUS IS
+ * NEVER WRITTEN** — the claim is an open dispatch run with command `continue`, and
+ * that run is the lock; the item is RE-ASSIGNED to the claimant.
+ */
+export const workItemContinueClaimSchema = z.object({
+  key: workItemKeySchema,
+  title: z.string(),
+  outcome: workItemContinueOutcomeSchema,
+  /** Why the item cannot be continued; null unless `outcome` is `not_continuable`. */
+  reason: workItemContinueRefusalSchema.nullable(),
+  /** The parent to continue instead; set only with `reason: continue_the_parent`. */
+  parentKey: workItemKeySchema.nullable(),
+  /** The open `continue` run — set on `claimed`, `mine` and `taken`. Report into it,
+   *  heartbeat it, and CLOSE it when the continue ends. */
+  runId: z.string().nullable(),
+  /** Who holds the item: the `continue` run's opener, or — with `run_alive` — the
+   *  live run's dispatcher. */
+  holder: actorRefSchema.nullable(),
+  /** When the holder's run started. */
+  startedAt: z.string().datetime().nullable(),
+  /** The run that died — set on `claimed` and `mine`. */
+  deadRun: z
+    .object({
+      id: z.string(),
+      command: dispatchCommandSchema,
+      origin: dispatchRunOriginSchema,
+      status: dispatchRunStatusSchema,
+      stopReason: dispatchStopReasonSchema.nullable(),
+      /** Its last heartbeat, else its end, else its start. */
+      lastHeardAt: z.string().datetime(),
+      dispatcher: actorRefSchema.nullable(),
+    })
+    .nullable(),
+  /** The branch to continue on — set on `claimed` and `mine`. */
+  branch: z.string().nullable(),
+  /** The open pull request the dead run left, when there is one. */
+  pullRequest: z
+    .object({
+      /** `owner/name`. */
+      repo: z.string(),
+      number: z.number().int(),
+      url: z.string(),
+      headRef: z.string(),
+    })
+    .nullable(),
+  /** Who the item was assigned to before this claim took it over. */
+  previousAssignee: actorRefSchema.nullable(),
+});
+export type V1WorkItemContinueClaim = z.infer<typeof workItemContinueClaimSchema>;
+
+/** Map the continue claim to the wire — field by field, never a spread. */
+export function presentWorkItemContinueClaim(
+  dto: WorkItemContinueClaimDto,
+): V1WorkItemContinueClaim {
+  const ref = (a: { id: string; name: string } | null) =>
+    a === null ? null : { id: a.id, name: a.name };
+  return {
+    key: dto.key,
+    title: dto.title,
+    outcome: dto.outcome,
+    reason: dto.reason,
+    parentKey: dto.parentKey,
+    runId: dto.runId,
+    holder: ref(dto.holder),
+    startedAt: dto.startedAt,
+    deadRun:
+      dto.deadRun === null
+        ? null
+        : {
+            id: dto.deadRun.id,
+            command: dto.deadRun.command,
+            origin: dto.deadRun.origin,
+            status: dto.deadRun.status,
+            stopReason: dto.deadRun.stopReason,
+            lastHeardAt: dto.deadRun.lastHeardAt,
+            dispatcher: ref(dto.deadRun.dispatcher),
+          },
+    branch: dto.branch,
+    pullRequest:
+      dto.pullRequest === null
+        ? null
+        : {
+            repo: dto.pullRequest.repo,
+            number: dto.pullRequest.number,
+            url: dto.pullRequest.url,
+            headRef: dto.pullRequest.headRef,
+          },
+    previousAssignee: ref(dto.previousAssignee),
   };
 }

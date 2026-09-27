@@ -39,6 +39,7 @@ import type {
   ScopeClaim,
   WorkItemClaim,
   WorkItemRepairClaim,
+  WorkItemContinueClaim,
 } from '../client.js';
 
 // The READ ADAPTERS — wire shapes in, the CLI's own view models out
@@ -637,6 +638,44 @@ export function toWorkItemClaim(body: SuccessBody<'claimWorkItem'>): WorkItemCla
  * The REPAIR claim result (MOTIR-5464) — restated field by field, and each pull
  * request element by element, for the reason {@link toWorkItemClaim} gives.
  */
+/** The CONTINUE claim (MOTIR-6532), field by field. */
+export function toWorkItemContinueClaim(
+  body: SuccessBody<'claimWorkItemContinue'>,
+): WorkItemContinueClaim {
+  const ref = (a: { id: string; name: string } | null) => (a ? { id: a.id, name: a.name } : null);
+  return {
+    key: body.key,
+    title: body.title,
+    outcome: body.outcome,
+    reason: body.reason,
+    parentKey: body.parentKey,
+    runId: body.runId,
+    holder: ref(body.holder),
+    startedAt: body.startedAt,
+    deadRun: body.deadRun
+      ? {
+          id: body.deadRun.id,
+          command: body.deadRun.command,
+          origin: body.deadRun.origin,
+          status: body.deadRun.status,
+          stopReason: body.deadRun.stopReason,
+          lastHeardAt: body.deadRun.lastHeardAt,
+          dispatcher: ref(body.deadRun.dispatcher),
+        }
+      : null,
+    branch: body.branch,
+    pullRequest: body.pullRequest
+      ? {
+          repo: body.pullRequest.repo,
+          number: body.pullRequest.number,
+          url: body.pullRequest.url,
+          headRef: body.pullRequest.headRef,
+        }
+      : null,
+    previousAssignee: ref(body.previousAssignee),
+  };
+}
+
 export function toWorkItemRepairClaim(
   body: SuccessBody<'claimWorkItemRepair'>,
 ): WorkItemRepairClaim {

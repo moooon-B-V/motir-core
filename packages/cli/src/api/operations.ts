@@ -100,6 +100,13 @@ export const V1_OPERATIONS = {
     successStatus: 200,
     responseComponent: "WorkItemClaim",
   },
+  "claimWorkItemContinue": {
+    method: "POST",
+    path: "/api/v1/work-items/{key}/continue",
+    permission: "work_item:edit",
+    successStatus: 200,
+    responseComponent: "WorkItemContinueClaim",
+  },
   "claimWorkItemRepair": {
     method: "POST",
     path: "/api/v1/work-items/{key}/repair",

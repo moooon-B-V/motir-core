@@ -19,6 +19,7 @@ import {
   toScopeClaim,
   toWorkItemClaim,
   toWorkItemRepairClaim,
+  toWorkItemContinueClaim,
   toActivityHistoryPage,
   toCommentsPage,
   toProjectList,
@@ -667,6 +668,41 @@ export interface RepairQueueExit {
 }
 
 /** The result of a repair claim. A refusal is a 200, as on the keyed claim. */
+/**
+ * What `POST /api/v1/work-items/{key}/continue` answered (MOTIR-6532) — the
+ * CONTINUE claim on a work item whose last run died. A refusal is a result, not an
+ * error: `not_continuable` carries its `reason`, `taken` its `holder`.
+ */
+export interface WorkItemContinueClaim {
+  key: string;
+  title: string;
+  outcome: 'claimed' | 'mine' | 'taken' | 'not_continuable';
+  reason:
+    | 'run_alive'
+    | 'use_fix'
+    | 'not_in_progress'
+    | 'continue_the_parent'
+    | 'no_dead_run'
+    | 'no_branch'
+    | null;
+  parentKey: string | null;
+  runId: string | null;
+  holder: { id: string; name: string } | null;
+  startedAt: string | null;
+  deadRun: {
+    id: string;
+    command: string;
+    origin: 'local' | 'hosted';
+    status: string;
+    stopReason: string | null;
+    lastHeardAt: string;
+    dispatcher: { id: string; name: string } | null;
+  } | null;
+  branch: string | null;
+  pullRequest: { repo: string; number: number; url: string; headRef: string } | null;
+  previousAssignee: { id: string; name: string } | null;
+}
+
 export interface WorkItemRepairClaim {
   key: string;
   title: string;
@@ -1890,6 +1926,18 @@ export class MotirClient {
   }
 
   /**
+   * CLAIM the continue of a work item whose last run died (MOTIR-6532) — the typed
+   * door `motir continue` goes through. The server locks the card, closes a lapsed
+   * run, re-assigns the card to the caller and opens the `continue` run; the card's
+   * status is never written.
+   */
+  async claimWorkItemContinue(key: string): Promise<WorkItemContinueClaim> {
+    return toWorkItemContinueClaim(
+      await this.v1.request('claimWorkItemContinue', { path: { key } }),
+    );
+  }
+
+  /**
    * CLAIM a whole SCOPE — a container and its children, or the project's active
    * sprint — in ONE all-or-nothing transaction (MOTIR-3049).
    *
@@ -1938,7 +1986,7 @@ export class MotirClient {
    */
   async openDispatchRun(args: {
     projectKey: string;
-    command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto' | 'fix';
+    command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto' | 'fix' | 'continue';
     idempotencyKey: string;
     cards: DispatchRunCardInput[];
     scopeKey?: string;

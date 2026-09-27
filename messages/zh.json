@@ -8485,7 +8485,8 @@
       "run_scope": "motir run '<'scope>",
       "batch": "motir batch",
       "auto": "motir auto",
-      "fix": "motir fix"
+      "fix": "motir fix",
+      "continue": "motir continue"
     },
     "skipReason": {
       "needsPlanning": "已跳过 — 需要规划。",

@@ -16,6 +16,7 @@ import {
   planTurnBodySchema,
   workItemClaimSchema,
   workItemRepairClaimSchema,
+  workItemContinueClaimSchema,
   scopeClaimBodySchema,
   scopeClaimSchema,
   ACTIVITY_VIEWS,
@@ -148,6 +149,49 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     },
     // 404 for an unknown or cross-workspace key (no existence leak); 422 for a
     // malformed key. A LOST claim is not an error status \u2014 see `outcome`.
+    errorStatuses: [404, 422],
+  }),
+
+  // ── The CONTINUE claim (Story MOTIR-6526 · MOTIR-6532) ──────────────────
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/continue',
+    operationId: 'claimWorkItemContinue',
+    summary: 'Claim the continue of a work item whose last run died',
+    description:
+      'Take over a work item whose last run DIED (`motir continue <key>`), for any member who ' +
+      'may edit the project, and hand back what the continuing agent needs: the dead run, the ' +
+      'branch its work is on, and its open pull request. In ONE transaction the item\u2019s row ' +
+      'is locked and, in order: an open dispatch run with command `continue` already holding ' +
+      'the item answers `mine` (yours \u2014 same `runId`, the branch again) or `taken` (named, ' +
+      'with its start); a run that is still ALIVE (a local run that heartbeat within 5 minutes, ' +
+      'an open hosted run) is `not_continuable` (`run_alive`, naming its dispatcher); an item at ' +
+      'Implemented / In Review / Approved is `use_fix` (its pull request is open \u2014 CI or ' +
+      '`motir fix` owns it); any other status but In Progress is `not_in_progress`; a leg of a ' +
+      'dead PARENT run is `continue_the_parent` (naming `parentKey`); no run that ended without ' +
+      'success is `no_dead_run`; a dead run that left no branch is `no_branch`. Otherwise a ' +
+      'LAPSED run still reading `running` is closed `abandoned`, the item is RE-ASSIGNED to the ' +
+      'caller, and a `continue` run is opened: `claimed`. \u26a0\ufe0f A refusal is a 200 with an ' +
+      '`outcome`, not an error. \u26a0\ufe0f The item\u2019s STATUS is never written. Heartbeat the ' +
+      'run (`heartbeatDispatchRun`) and CLOSE it (`closeDispatchRun`) when the continue ends.',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item\u2019s `MOTIR-<n>` key (case-insensitive).',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: workItemContinueClaimSchema },
+      description:
+        'What the continue claim resolved to, the `continue` run, the dead run and the branch.',
+    },
+    // 404 for an unknown or cross-workspace key (no existence leak); 422 for a
+    // malformed key. A refused continue is not an error status — see `outcome`.
     errorStatuses: [404, 422],
   }),
 
@@ -957,6 +1001,7 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   DispatchPrompt: dispatchPromptSchema,
   WorkItemClaim: workItemClaimSchema,
   WorkItemRepairClaim: workItemRepairClaimSchema,
+  WorkItemContinueClaim: workItemContinueClaimSchema,
   ScopeClaim: scopeClaimSchema,
   IntegrationResult: integrationResultSchema,
   SessionCloseOut: sessionCloseOutSchema,

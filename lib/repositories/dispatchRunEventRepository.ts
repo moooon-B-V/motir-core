@@ -139,6 +139,33 @@ export const dispatchRunEventRepository = {
     });
   },
 
+  /**
+   * The branch the run's newest `checkout_ready` recorded (MOTIR-6530 writes it as
+   * `data.branch`), for one leg — or for ANY leg of the run when `cardId` is null
+   * (a scoped run's session branch is every leg's). Null when none named one.
+   */
+  async findLatestCheckoutBranch(
+    dispatchRunId: string,
+    cardId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const rows = await tx.dispatchRunEvent.findMany({
+      where: {
+        dispatchRunId,
+        kind: 'checkout_ready',
+        ...(cardId === null ? {} : { dispatchRunCardId: cardId }),
+      },
+      orderBy: { seq: 'desc' },
+      select: { data: true },
+      take: 20,
+    });
+    for (const row of rows) {
+      const branch = (row.data as { branch?: unknown } | null)?.branch;
+      if (typeof branch === 'string' && branch.length > 0) return branch;
+    }
+    return null;
+  },
+
   async countByRun(dispatchRunId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.dispatchRunEvent.count({ where: { dispatchRunId } });
   },

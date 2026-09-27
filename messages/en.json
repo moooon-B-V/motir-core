@@ -8489,7 +8489,8 @@
       "run_scope": "motir run '<'scope>",
       "batch": "motir batch",
       "auto": "motir auto",
-      "fix": "motir fix"
+      "fix": "motir fix",
+      "continue": "motir continue"
     },
     "skipReason": {
       "needsPlanning": "Skipped — needs planning.",
