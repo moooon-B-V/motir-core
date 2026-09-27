@@ -484,11 +484,7 @@ export const hostedRunService = {
       };
       const booted = await hostedAgentContainerService.boot(request, options.supervision);
       if (booted.phase === 'terminal') {
-        const detail =
-          /* v8 ignore next -- boot() ends admission, pull and provision failures only; a SETTLED container is poll()'s, never boot()'s */
-          booted.outcome.outcome === 'settled'
-            ? `the container ended at boot (${booted.outcome.reason})`
-            : `${booted.outcome.outcome}: ${booted.outcome.detail}`;
+        const detail = bootFailureDetail(booted.outcome);
         await this.endHostedRun(run.id, 'failed', detail);
         throw new HostedRunBootFailedError(run.id, detail);
       }
@@ -726,3 +722,10 @@ export const hostedRunService = {
     };
   },
 };
+
+/** The reason line for a container that ended at boot, on the run and in the error. */
+function bootFailureDetail(outcome: HostedAgentContainerOutcome): string {
+  /* v8 ignore next -- boot() ends admission, pull and provision failures only; a SETTLED container is poll()'s, never boot()'s */
+  if (outcome.outcome === 'settled') return `the container ended at boot (${outcome.reason})`;
+  return `${outcome.outcome}: ${outcome.detail}`;
+}
