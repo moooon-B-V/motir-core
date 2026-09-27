@@ -16,6 +16,7 @@ import {
   PlanGrammarError,
   PlanProposalReferencedError,
   PlanRefGraphError,
+  PlanTargetImmutableError,
   UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
@@ -266,6 +267,18 @@ export async function PATCH(
       return NextResponse.json(
         { code: err.code, reason: err.reason, error: err.message },
         { status: 422 },
+      );
+    }
+    // A correction that puts a NON-mark key on a `modify` of a `done` /
+    // `cancelled` card (Story MOTIR-6577 — a mark-only `modify` is legal there,
+    // so the proposal exists, and the correction's approvability check re-runs
+    // the persist gate over the replacement patch). 409 with `planItemId`, the
+    // shape the approve route answers the same refusal with, instead of an
+    // unmapped 500. Found by the story's gate (MOTIR-6633).
+    if (err instanceof PlanTargetImmutableError) {
+      return NextResponse.json(
+        { code: err.code, planItemId: err.planItemId, error: err.message },
+        { status: 409 },
       );
     }
     if (err instanceof ProjectAccessDeniedError) {

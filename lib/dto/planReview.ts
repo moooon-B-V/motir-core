@@ -162,8 +162,13 @@ export const OBSOLESCENCE_CURRENT = 'current' as const;
  * Unlike `blockedByAdd`, the supersedes edges are NOT drawn on the canvas (no
  * canvas edge, §24.7), so they are shown as rows of their own — the four lists
  * collapse onto two rows, which is why the row set de-duplicates to ELEVEN.
+ *
+ * Exported for the story gate's CONTRACT GUARD (Story MOTIR-6577 · MOTIR-6633,
+ * `tests/integration/plans/planMarkStoryGate.test.ts`), which holds its keys to
+ * `PLAN_ITEM_PATCH_KEYS` and the MCP `patchSchema` at runtime, and its mark keys'
+ * rows to {@link PLAN_ITEM_MARK_CHANGE_FIELDS}. Read it; never write it.
  */
-const PATCH_KEY_RAIL_ROW = {
+export const PATCH_KEY_RAIL_ROW = {
   title: null,
   descriptionMd: null,
   explanationMd: null,

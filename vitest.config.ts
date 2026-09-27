@@ -171,6 +171,38 @@ export default defineConfig({
         'lib/issues/obsolescence.ts',
         'lib/mcp/obsolescence.ts',
         'lib/workItems/linkRelationships.ts',
+        // Story MOTIR-6577 · MOTIR-6633 — the seven NEW modules the "a plan MARKS a
+        // card" story added: the mark-only predicate the terminal-card carve-out
+        // and approve's write share, the plan path's mark bar (membership + the
+        // finished-card rule), the note's one-line form, and the review's four
+        // mark primitives. Pinned in `thresholds` below after being MEASURED on
+        // this branch, one spec at a time (stmts / branch / fn / lines):
+        //
+        //   markOnlyPatch.ts                 100 / 100   / 100 / 100  (tests/plans/planMarkPrimitives)
+        //   validateProposedObsolescence.ts  100 / 100   / 100 / 100  (same)
+        //   obsolescenceNote.ts              100 / 100   / 100 / 100  (same)
+        //   ObsolescencePill.tsx             100 / 100   / 100 / 100  (tests/components/plan-mark-primitives)
+        //   SupersedesChip.tsx               100 / 97.67 / 100 / 100  (same)
+        //   ProposalMarkRailRows.tsx         100 / 97.36 / 100 / 100  (same)
+        //   changeCellText.ts                100 / 100   / 100 / 100  (same)
+        //
+        // ⚠️ The story's CHANGED shared files are deliberately NOT added, by the
+        // rule the MOTIR-5548 block below states: `plansService`,
+        // `planReviewService`, `lib/dto/plans`, `lib/dto/planReview`, the three
+        // plan-proposal routes, `PlanItemNode` and `PlanningTargetChip` each carry
+        // other stories' methods, so a per-file floor would make this story cover
+        // code it did not write. Their story paths are held by
+        // `tests/integration/plans/planMarkStoryGate.test.ts` (every door →
+        // review → approve, and every refusal at every door) and the feature
+        // cards' own suites. `validateProposals`, `authorPlan`, `getPlan`,
+        // `ProposalPeek` and `PlanProposalList` were already gated and stay so.
+        'lib/plans/markOnlyPatch.ts',
+        'lib/plans/validateProposedObsolescence.ts',
+        'lib/workItems/obsolescenceNote.ts',
+        'components/issues/ObsolescencePill.tsx',
+        'components/planning/SupersedesChip.tsx',
+        'components/planning/ProposalMarkRailRows.tsx',
+        'components/planning/changeCellText.ts',
         // Story MOTIR-6016 · MOTIR-6102 — the three modules the DIFFICULTY story
         // added, pinned at the project floor in `thresholds` below after being
         // measured on this branch against the story's own specs.
@@ -2851,6 +2883,51 @@ export default defineConfig({
         'lib/issues/obsolescence.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/mcp/obsolescence.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/workItems/linkRelationships.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ── Story MOTIR-6577 · A PLAN MARKS A CARD (Subtask MOTIR-6633) ──────
+        // Pinned at the floor, not at the ≥97 measured (the include block above
+        // carries the numbers), for the same reason as the obsolescence entries.
+        'lib/plans/markOnlyPatch.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/plans/validateProposedObsolescence.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/workItems/obsolescenceNote.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/issues/ObsolescencePill.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/planning/SupersedesChip.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/planning/ProposalMarkRailRows.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/planning/changeCellText.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
