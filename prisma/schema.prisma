@@ -4915,9 +4915,10 @@ enum ApprovalGateDecisionSource {
   @@map("approval_gate_decision_source")
 }
 
-/// The VERDICT a Motir-pressed refusal of a `design_result` gate carries (Story
-/// MOTIR-6070 · MOTIR-6421; ADR `approval-gates.md` §10d). Required on that press
-/// and refused on every other kind, verb and source by the decide door.
+/// The VERDICT a Motir-pressed refusal carries (Story MOTIR-6070 · MOTIR-6421; ADR
+/// `approval-gates.md` §10d; widened by MOTIR-6501, `acceptance-refusal-verdict.md`
+/// §1). Required on a Motir-pressed design refusal and a story-run acceptance refusal,
+/// and refused on every other kind, run shape, verb and source by the decide door.
 enum ApprovalGateRefusalVerdict {
   /// Send it back to be REVISED — the card returns to To do for the next run.
   revise
@@ -5042,9 +5043,10 @@ model ApprovalGate {
   /// A page arm (MOTIR-5761) is a new `kind`, never a migration. Null on every
   /// other kind and on an undecided or overturned decision.
   confirmedRecord       Json?                       @map("confirmed_record")
-  /// WHAT A PERSON MEANT BY "NO" on a refused `design_result` gate (Story MOTIR-6070 ·
-  /// MOTIR-6421; ADR `approval-gates.md` §10d, amended by
-  /// `design-refusal-verdict.md`) — `revise` or `re_plan`, chosen at the press and
+  /// WHAT A PERSON MEANT BY "NO" on a refused `design_result` gate, or a story run's
+  /// `acceptance_result` gate (Story MOTIR-6070 · MOTIR-6421, MOTIR-6501; ADR
+  /// `approval-gates.md` §10d, amended by `design-refusal-verdict.md` and
+  /// `acceptance-refusal-verdict.md`) — `revise` or `re_plan`, chosen at the press and
   /// stamped IN the deciding write, so `trg_approval_gate_decided_immutable` holds it
   /// with the rest of the row. ⚠️ A COLUMN OF ITS OWN, NOT `outcomeRef`: the surfaces
   /// that repaint a card read `outcomeRef` as a status key. Null on every approval, on

@@ -171,6 +171,10 @@ export interface GateEffect {
      *  `approval-gates.md` §1's MOTIR-5787 amendment, point 7). */
     | 'rollup_writes_done'
     | 'request_changes_moves_nothing'
+    /** A STORY RUN's acceptance sent back with Re-run or Re-plan (MOTIR-6503;
+     *  `acceptance-refusal-verdict.md` §3): no status is written, and the story's other
+     *  waiting approvals — its merge gate — are withdrawn `pulled_back` and held. */
+    | 'acceptance_refusal_withdraws_merge_only'
     | 'no_status_in_target_category'
     /** A `plan_approval` decision (ADR §11.5): what approve and decline change is the
      *  PLAN's status. Approve's materialize writes work-item statuses on each item's own

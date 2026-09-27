@@ -420,6 +420,8 @@ describe('getRepairView — what the Development block draws', () => {
 
     expect(await view(fx, card.id)).toEqual({
       state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
       failing: [
         {
           repo: `acme/${repo.name}`,

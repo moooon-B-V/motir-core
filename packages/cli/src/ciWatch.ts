@@ -501,6 +501,147 @@ export function renderFixPrompt(input: {
   return lines.join('\n');
 }
 
+/** What an acceptance Re-run hands its agent (MOTIR-6502) — the shape `motir fix`
+ *  receives on an `acceptance_rerun` claim, restated so this module stays free of the
+ *  client's types. */
+export interface AcceptanceRerunInput {
+  key: string;
+  title: string | null;
+  refusal: { reasonMd: string | null; decidedByLabel: string | null; decidedAt: string };
+  /** The story's open delivery — `owner/name`, number and URL. */
+  pullRequests: ReadonlyArray<{ repo: string; number: number; url: string }>;
+  checkouts: readonly FixCheckout[];
+}
+
+function renderRefusalQuote(refusal: AcceptanceRerunInput['refusal']): string[] {
+  const who = refusal.decidedByLabel ?? 'The reviewer';
+  const reason = refusal.reasonMd?.trim();
+  const lines = [`${who} sent it back on ${refusal.decidedAt}, choosing **Re-run**:`, ''];
+  if (reason) {
+    for (const line of reason.split('\n')) lines.push(`> ${line}`);
+  } else {
+    lines.push('> (no reason was recorded)');
+  }
+  return lines;
+}
+
+function renderCheckoutList(checkouts: readonly FixCheckout[]): string[] {
+  const lines = ['## Where each branch is checked out', ''];
+  for (const c of checkouts)
+    lines.push(`- **${c.repo}** — branch \`${c.branch}\` at \`${c.path}\``);
+  lines.push('');
+  lines.push('Work in those checkouts, on those branches. Each push updates its');
+  lines.push('existing pull request.');
+  return lines;
+}
+
+/**
+ * THE RE-RUN PROMPT (Story MOTIR-6071 · MOTIR-6502; `acceptance-refusal-verdict.md` §4).
+ *
+ * A person watched the story's acceptance video and sent it back with **Re-run**: the
+ * work is built, and something about it is not what they wanted — a colour, a layout,
+ * an overflow. This is the one agent turn that answers them, on the SAME pull requests.
+ *
+ * ⚠️ IT IS A FIX, NOT A RESTART, AND THE PROMPT SAYS WHERE THE LINE IS. The verdict
+ * the reviewer did NOT pick is Re-plan — a change to the story's shape — and an agent
+ * handed a sentence of feedback will happily rebuild a feature around it. So anything
+ * structural is refused in words: stop, change nothing, and say so, because that is a
+ * Re-plan and it is the planner's.
+ *
+ * ⚠️ IT DOES NOT RECORD THE VIDEO. The recording is re-made only once CI is green on the
+ * fixed work (the decision's order: fix, push, watch CI, then re-record), so `motir fix`
+ * sends that as a CLOSING turn after the watch ({@link renderAcceptanceRecordPrompt}). A
+ * video recorded now would show code the CI loop may still change.
+ */
+export function renderAcceptanceRerunPrompt(input: AcceptanceRerunInput): string {
+  const lines: string[] = [];
+  lines.push(
+    `# Answer the acceptance review — ${input.key}${input.title ? ` (${input.title})` : ''}`,
+  );
+  lines.push('');
+  lines.push('This story was run as a whole and its pull requests are open. A person watched');
+  lines.push('its acceptance video and asked for a FIX to what was built.');
+  lines.push('');
+  lines.push('## What they said');
+  lines.push('');
+  lines.push(...renderRefusalQuote(input.refusal));
+  lines.push('');
+  lines.push('## The pull requests');
+  lines.push('');
+  for (const pr of input.pullRequests) lines.push(`- **${pr.repo}#${pr.number}** — ${pr.url}`);
+  lines.push('');
+  lines.push(...renderCheckoutList(input.checkouts));
+  lines.push('');
+  lines.push('## The scope');
+  lines.push('');
+  lines.push('A fix to the delivered work on these branches: what the reviewer saw and named.');
+  lines.push('**Anything structural is a Re-plan, not a Re-run** — a new screen, a different');
+  lines.push('flow, work another card owns, a change to what the story is for. If the reason');
+  lines.push('asks for that, make NO commit, stop, and say so in one paragraph: the reviewer');
+  lines.push('re-plans the story in Motir instead.');
+  lines.push('');
+  lines.push('## What to do');
+  lines.push('');
+  lines.push('1. **Merge each pull request\u2019s base branch first** (a merge, never a rebase),');
+  lines.push('   so you change the tree CI will judge.');
+  lines.push('2. **Find where the reviewer\u2019s complaint lives** — render or run the surface');
+  lines.push('   they watched rather than reasoning from the code, and change the smallest thing');
+  lines.push('   that answers it.');
+  lines.push('3. **Keep the tests true.** Update or add the tests that cover what you changed.');
+  lines.push('   Run ONLY the test files you touched, plus lint and typecheck — never the full');
+  lines.push('   suite: the push re-runs CI, and that is the verdict.');
+  lines.push('4. **Commit and push to the same branches.** Open no pull request, link nothing,');
+  lines.push('   and move no status — the board stays where it is.');
+  lines.push('5. **Do not record or publish the acceptance video.** Once CI is green on this');
+  lines.push('   push, you will be asked to re-record it in a separate step.');
+  lines.push('6. If the pull request body\u2019s `## How to test` no longer matches what a person');
+  lines.push(`   does, publish it again with \`${HOW_TO_TEST_TOOL_NAME}\` on ${input.key}.`);
+  return lines.join('\n');
+}
+
+/**
+ * THE CLOSING TURN of an acceptance Re-run (MOTIR-6502) — sent once CI is green on the
+ * fixed work: re-record the story's acceptance video and PUBLISH it, so a fresh
+ * acceptance question is asked, with the merge beside it
+ * (`acceptance-refusal-verdict.md` §3's release).
+ *
+ * ⚠️ THE PUBLISH IS THE DELIVERABLE, AND NOTHING ELSE MAKES IT. No CI lane uploads a
+ * recording; an agent that records and does not publish leaves the story with no new
+ * question and its merge held for ever. The confirmation is the receipt id.
+ */
+export function renderAcceptanceRecordPrompt(input: AcceptanceRerunInput): string {
+  const lines: string[] = [];
+  lines.push(
+    `# Re-record the acceptance video — ${input.key}${input.title ? ` (${input.title})` : ''}`,
+  );
+  lines.push('');
+  lines.push('CI is green on the fix you pushed for this review:');
+  lines.push('');
+  lines.push(...renderRefusalQuote(input.refusal));
+  lines.push('');
+  lines.push(...renderCheckoutList(input.checkouts));
+  lines.push('');
+  lines.push('## What to do');
+  lines.push('');
+  lines.push("1. **Run the story's acceptance spec** (`tests/e2e/acceptance*.spec.ts`, the one");
+  lines.push(`   that declares \`acceptanceStory('${input.key}')\`) on the acceptance lane, with`);
+  lines.push('   recording on, so the clip shows the fixed work.');
+  lines.push('2. **Publish it — two calls.** `create_acceptance_upload` with the card key mints a');
+  lines.push(
+    '   presigned PUT; PUT the clip\u2019s bytes to it (`Content-Type: video/webm`); then',
+  );
+  lines.push('   `publish_acceptance_result` with the pathname it returned, the chapters, the');
+  lines.push('   commit sha you pushed, and the card key.');
+  lines.push(
+    '3. **Report the receipt id the publish returned.** Without it nothing was published,',
+  );
+  lines.push('   and the reviewer has nothing new to watch.');
+  lines.push('');
+  lines.push('Change no code in this step and move no status. If the spec goes red, publish');
+  lines.push('nothing and say what failed: a red run records nothing.');
+  return lines.join('\n');
+}
+
 /** One failing pull request's branch, checked out where the fixing agent can
  *  reach it. */
 export interface FixCheckout {

@@ -87,6 +87,7 @@ const NO_GATE = {
   kind: 'design_result',
   state: 'awaiting',
   refusalVerdict: null,
+  decisionSource: null,
 } as const;
 
 export function DesignResultSection({

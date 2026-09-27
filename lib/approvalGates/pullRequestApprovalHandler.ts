@@ -14,7 +14,7 @@ import {
 import { workItemsService } from '@/lib/services/workItemsService';
 import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { designResultHoldsMerge } from '@/lib/services/mergeGates';
+import { acceptanceResultHoldsMerge, designResultHoldsMerge } from '@/lib/services/mergeGates';
 import { ApprovalGatePrimaryPendingError } from '@/lib/approvalGates/errors';
 import { requireArgsCard, requireGateCard } from './gateCard';
 
@@ -171,6 +171,17 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
       throw new ApprovalGatePrimaryPendingError(
         requireGateCard(gate, 'pullRequestApprovalHandler'),
         'decision',
+      );
+    }
+    // ⚠️ …AND A STORY RUN'S REFUSED ACCEPTANCE (MOTIR-6503; `acceptance-refusal-verdict.md`
+    // §3). The refusal withdrew this story's merge gate and the gate set asks no new one
+    // while it stands, but a gate row can still be named from a stale page or the REST
+    // route — so the merge of the code the reviewer sent back is refused here too, until a
+    // newer video is approved.
+    if (await acceptanceResultHoldsMerge(requireGateCard(gate, 'pullRequestApprovalHandler'), tx)) {
+      throw new ApprovalGatePrimaryPendingError(
+        requireGateCard(gate, 'pullRequestApprovalHandler'),
+        'acceptance',
       );
     }
     if (resolvedStatusKey !== PULL_REQUEST_APPROVAL_TARGET.key) {

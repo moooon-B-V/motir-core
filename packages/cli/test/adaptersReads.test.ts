@@ -6,6 +6,7 @@ import {
   toProjectList,
   toScopeClaim,
   toWhoami,
+  toWorkItemRepairClaim,
 } from '../src/adapters/reads.js';
 
 // The READ ADAPTERS as pure functions (Subtask 11.5.4 — MOTIR-2212).
@@ -295,5 +296,46 @@ describe('toScopeClaim — the SCOPE claim result (MOTIR-3049)', () => {
       scope: { kind: 'sprint', key: null, sprintId: 's1', name: 'Sprint 44' },
     } as never);
     expect(claim.scope).toEqual({ kind: 'sprint', key: null, sprintId: 's1', name: 'Sprint 44' });
+  });
+});
+
+describe('toWorkItemRepairClaim — the acceptance Re-run class (MOTIR-6502)', () => {
+  const base = {
+    key: 'PROD-60',
+    title: 'Exports list',
+    outcome: 'claimed' as const,
+    reason: null,
+    runTargetKey: null,
+    runId: 'run_fix_1',
+    holder: { id: 'u1', name: 'Zhu Yue' },
+    startedAt: '2026-09-26T10:00:00.000Z',
+    pullRequests: [] as never[],
+  };
+
+  it('carries the Re-run class and the reviewer’s refusal through, field by field', () => {
+    const claim = toWorkItemRepairClaim({
+      ...base,
+      repairClass: 'acceptance_rerun',
+      acceptanceRefusal: {
+        reasonMd: 'The empty board should say how to add the first card.',
+        decidedByLabel: 'Zhu Yue',
+        decidedAt: '2026-09-26T10:00:00.000Z',
+        surprise: 'should not survive',
+      },
+    } as never);
+
+    expect(claim.repairClass).toBe('acceptance_rerun');
+    expect(claim.acceptanceRefusal).toEqual({
+      reasonMd: 'The empty board should say how to add the first card.',
+      decidedByLabel: 'Zhu Yue',
+      decidedAt: '2026-09-26T10:00:00.000Z',
+    });
+  });
+
+  it('a server older than contract 1.43.0 sends neither field — every repair it hands over is a CI one', () => {
+    const claim = toWorkItemRepairClaim(base as never);
+
+    expect(claim.repairClass).toBe('ci');
+    expect(claim.acceptanceRefusal).toBeNull();
   });
 });

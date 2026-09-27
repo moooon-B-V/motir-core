@@ -32,7 +32,14 @@ import type { AwaitingGateRow, RecordGateRow } from '@/lib/repositories/approval
  * the caller has it in hand — the one input `replanOwed` is derived from (MOTIR-5956);
  * a caller without it reports none, which is only ever a decided overturn's debt.
  */
-export function toApprovalGateDto(row: ApprovalGate, subjectBody?: string | null): ApprovalGateDTO {
+export function toApprovalGateDto(
+  row: ApprovalGate,
+  subjectBody?: string | null,
+  /** Whether a refusal of this gate asks for a verdict — `refusalVerdictOfferFor`'s
+   *  answer, read by the caller (a database read has no place in a mapper). Absent
+   *  means false: only an `awaiting` gate asks, and only its render read computes it. */
+  offersRefusalVerdict = false,
+): ApprovalGateDTO {
   return {
     id: row.id,
     workItemId: row.workItemId,
@@ -59,6 +66,8 @@ export function toApprovalGateDto(row: ApprovalGate, subjectBody?: string | null
     outcomeRef: row.outcomeRef,
     // Written only in a Motir-pressed `design_result` refusal's deciding write (MOTIR-6421).
     refusalVerdict: row.refusalVerdict,
+    // A decided or withdrawn gate asks nothing, whatever the caller computed (MOTIR-6501).
+    offersRefusalVerdict: row.state === 'awaiting' && offersRefusalVerdict,
     // Written only by the choice handler's deciding write, in `ChosenOption`'s shape.
     chosenOption: (row.chosenOption as ChosenOptionDTO | null) ?? null,
     // Written only by the confirmation handler's deciding write (MOTIR-5954).
@@ -212,6 +221,7 @@ export function toApprovalGateDecisionDto(gate: ApprovalGateDTO): ApprovalGateDe
     supersededCause: gate.supersededCause,
     outcomeRef: gate.outcomeRef,
     refusalVerdict: gate.refusalVerdict,
+    offersRefusalVerdict: gate.offersRefusalVerdict,
     createdAt: gate.createdAt,
     updatedAt: gate.updatedAt,
   };

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type {
   ApprovalGateDecisionSourceDTO,
+  ApprovalGateKindDTO,
   ApprovalGateRefusalVerdictDTO,
 } from '@/lib/dto/approvalGate';
 import type { GateVerb } from './ApprovalGateControl';
@@ -23,13 +24,38 @@ import type { GateVerb } from './ApprovalGateControl';
 // `docs/decisions/design-refusal-verdict.md`; design
 // `approval-control--design-verdict.mock.html`). The `design` subject is the `version`
 // band plus a REQUIRED second input — Revise or Re-plan — in the slot MOTIR-6073 reserved
-// under the reason. It is its OWN subject because `version` is shared with
-// `acceptance_result`, which keeps the shipped *Leave {key} where it is* line: on a design
-// that line is false (either verdict sends the card back to To do), so it is dropped and
+// under the reason. It is its OWN subject because `version` keeps the shipped *Leave {key}
+// where it is* line (a recording's band used it until MOTIR-6506 gave the acceptance its
+// own subject, below): on a design that line is false (either verdict sends the card back to To do), so it is dropped and
 // each tile's consequence line says where the card goes instead.
+//
+// AN ACCEPTANCE SENT BACK ASKS BY RUN SHAPE (Story MOTIR-6071 · Subtask MOTIR-6506;
+// `docs/decisions/acceptance-refusal-verdict.md`; design
+// `approval-control--acceptance-verdict.mock.html`). The `acceptance` subject replaces the
+// `commits` subject a story run borrowed and the `version` subject the standalone arm used.
+// Its verdict field exists IFF the gate offers one (`offersRefusalVerdict`, MOTIR-6501 —
+// READ off the gate DTO, never re-derived here):
+//   · a STORY RUN — the reason, the record line alone, and the Re-run / Re-plan pair, each
+//     tile opening with *Nothing moves; the merge approval is withdrawn* (choice 2);
+//   · a FINISHED STORY — the reason, the shipped record + *stays* lines, and ONE line where
+//     the tiles would be, saying why no re-run is offered (choice 1).
+// Nothing is repainted after either: no acceptance refusal writes a status (§2).
 
 /** What the refusal sends back — the one thing its consequence lines differ by. */
-export type RefusalSubject = 'version' | 'commits' | 'decision' | 'design';
+export type RefusalSubject = 'version' | 'commits' | 'decision' | 'design' | 'acceptance';
+
+/**
+ * What the `acceptance` subject's band needs beyond the story's key (MOTIR-6506).
+ *
+ *  - `offersVerdict` — the awaiting gate's `offersRefusalVerdict`: the story has an open
+ *    delivery of its own (a STORY RUN), so the band asks Re-run or Re-plan.
+ *  - `pullRequestCount` — the story's open pull requests, which the Re-run tile's line
+ *    counts. A host that cannot count them passes 1 (the common story run).
+ */
+export interface AcceptanceRefusalFacts {
+  offersVerdict: boolean;
+  pullRequestCount: number;
+}
 
 /**
  * What the `design` subject's band needs beyond the card's key (MOTIR-6427).
@@ -72,10 +98,16 @@ export function useRefusalVerb(): (
   extra?: Partial<GateVerb>,
   /** The `design` subject's facts — ignored by every other subject. */
   design?: DesignRefusalFacts,
+  /** The `acceptance` subject's facts — ignored by every other subject. */
+  acceptance?: AcceptanceRefusalFacts,
 ) => GateVerb {
   const t = useTranslations('approvalGate.reason');
   const tGate = useTranslations('approvalGate');
-  return (subject, identifier, extra = {}, design) => {
+  const tAcceptance = useTranslations('approvalGate.acceptanceResult');
+  return (subject, identifier, extra = {}, design, acceptance) => {
+    if (subject === 'acceptance') {
+      return acceptanceVerb(identifier, extra, acceptance, t, tGate, tAcceptance);
+    }
     const status = subject === 'design' ? (design?.returnStatusLabel ?? null) : null;
     const consequences =
       subject === 'version'
@@ -131,6 +163,64 @@ export function useRefusalVerb(): (
       confirm: { title: t('title'), consequences, proceedLabel: t('proceed') },
       ...extra,
     };
+  };
+}
+
+type Translate = ReturnType<typeof useTranslations>;
+
+/**
+ * *Request changes* on an ACCEPTANCE (MOTIR-6506). A story run asks for the verdict with
+ * the acceptance's own words — *Re-run* stores `revise`, *Re-plan* stores `re_plan` — and
+ * keeps only the record line in the list (choice 2: each tile already says the merge is
+ * withdrawn). A finished story keeps the shipped two lines and draws the no-re-run line in
+ * the verdict's slot instead (choice 1): the door refuses a verdict there.
+ */
+function acceptanceVerb(
+  identifier: string,
+  extra: Partial<GateVerb>,
+  facts: AcceptanceRefusalFacts | undefined,
+  t: Translate,
+  tGate: Translate,
+  tAcceptance: Translate,
+): GateVerb {
+  const storyRun = facts?.offersVerdict === true;
+  const count = facts?.pullRequestCount ?? 1;
+  return {
+    decision: 'request_changes',
+    label: tGate('verb.requestChanges'),
+    variant: 'secondary',
+    confirms: true,
+    note: { label: t('label'), helper: t('helper'), required: t('required') },
+    ...(storyRun
+      ? {
+          verdict: {
+            legend: tAcceptance('verdict.legend'),
+            required: tAcceptance('verdict.required'),
+            options: [
+              {
+                value: 'revise',
+                label: tAcceptance('verdict.rerun.label'),
+                hint: tAcceptance('verdict.rerun.hint'),
+                consequence: tAcceptance('verdict.rerun.consequence', { count }),
+              },
+              {
+                value: 're_plan',
+                label: t('verdict.replan.label'),
+                hint: tAcceptance('verdict.replan.hint'),
+                consequence: tAcceptance('verdict.replan.consequence'),
+              },
+            ],
+          },
+        }
+      : { absentVerdict: tAcceptance('refusal.noRerun') }),
+    confirm: {
+      title: t('title'),
+      consequences: storyRun
+        ? [t('consequence.versionBack')]
+        : [t('consequence.versionBack'), t('consequence.stays', { key: identifier })],
+      proceedLabel: t('proceed'),
+    },
+    ...extra,
   };
 }
 
@@ -229,21 +319,54 @@ export function RefusalVerdictGroup({
   );
 }
 
+/** Which words a record's verdict chip reads, or null for none (MOTIR-6427, MOTIR-6506). */
+export function refusalVerdictChipKey(input: {
+  kind: ApprovalGateKindDTO;
+  verdict: ApprovalGateRefusalVerdictDTO | null;
+  decisionSource: ApprovalGateDecisionSourceDTO | null;
+  remedy: boolean;
+}): 'revise' | 'rerun' | 'replan' | 'remedy' | null {
+  const acceptance = input.kind === 'acceptance_result';
+  if (input.verdict === 're_plan') return 'replan';
+  if (input.verdict === 'revise') return acceptance ? 'rerun' : 'revise';
+  // A FINISHED story stores no verdict: *Sent back for a remedy* is DERIVED — an acceptance,
+  // no verdict, pressed in Motir, on a surface that knows the story has no open delivery
+  // of its own (`remedy`). Without that fact a null verdict is a record from before the
+  // verdict existed (panel 4d), and shows no chip.
+  return acceptance && input.remedy && input.decisionSource !== 'github' ? 'remedy' : null;
+}
+
 /**
  * THE VERDICT ON THE RECORD (design panel 4) — *Sent back to revise* / *Sent back to
  * re-plan*, in the record strip's *Files kept* chip shape with the NEUTRAL `--el-muted`
  * fill: a verdict is a fact, not a warning. Nothing for a refusal with no verdict — a
  * GitHub-synced one, or one recorded before the verdict existed (panel 4d).
+ *
+ * KIND-AWARE (MOTIR-6506): on an `acceptance_result` a `revise` reads *Sent back to
+ * re-run*, and a finished story's verdict-less refusal *Sent back for a remedy* when the
+ * surface says the story is finished (`remedy`).
  */
-export function RefusalVerdictChip({ verdict }: { verdict: ApprovalGateRefusalVerdictDTO | null }) {
+export function RefusalVerdictChip({
+  verdict,
+  kind,
+  decisionSource = null,
+  remedy = false,
+}: {
+  verdict: ApprovalGateRefusalVerdictDTO | null;
+  kind: ApprovalGateKindDTO;
+  decisionSource?: ApprovalGateDecisionSourceDTO | null;
+  /** The surface knows the story has no open delivery of its own (a finished story). */
+  remedy?: boolean;
+}) {
   const t = useTranslations('approvalGate.reason.record.verdict');
-  if (!verdict) return null;
+  const key = refusalVerdictChipKey({ kind, verdict, decisionSource, remedy });
+  if (!key) return null;
   return (
     <span
       className="inline-flex items-center rounded-(--radius-badge) bg-(--el-muted) px-2 py-0.5 font-semibold text-(--el-text-strong)"
       data-testid="refusal-verdict"
     >
-      {t(verdict === 'revise' ? 'revise' : 'replan')}
+      {t(key)}
     </span>
   );
 }
@@ -316,19 +439,28 @@ export function RefusalReasonCell({
   reason,
   version,
   verdict = null,
+  kind,
 }: {
   reason: string | null;
   version: string | null;
   /** A design sent back leads its cell with the verdict (MOTIR-6427; design panel 4e/4f). */
   verdict?: ApprovalGateRefusalVerdictDTO | null;
+  /** The row's gate kind — an acceptance's `revise` leads with *Re-run* (MOTIR-6506, 5b). */
+  kind?: ApprovalGateKindDTO;
 }) {
   const t = useTranslations('approvalGate.reason.row');
   const tVerdict = useTranslations('approvalGate.reason.verdict');
+  const tAcceptance = useTranslations('approvalGate.acceptanceResult.verdict');
   const trimmed = reason?.trim() ?? '';
   const first = trimmed.split('\n')[0] ?? '';
-  const verdictLabel = verdict
-    ? tVerdict(verdict === 'revise' ? 'revise.label' : 'replan.label')
-    : null;
+  const verdictLabel =
+    verdict === 'revise'
+      ? kind === 'acceptance_result'
+        ? tAcceptance('rerun.label')
+        : tVerdict('revise.label')
+      : verdict === 're_plan'
+        ? tVerdict('replan.label')
+        : null;
   const title = [
     verdictLabel,
     version ? t('on', { version: version.slice(0, 8) }) : null,
