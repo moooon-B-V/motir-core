@@ -172,8 +172,10 @@ async function seedDeepDestination(userId: string, workspaceId: string): Promise
     workspaceId,
     actorUserId: userId,
   });
+  // An empty workspace is healed with its default project, so this is never null
+  // here (it is null only for a reader who can enter none of several, MOTIR-6548).
   const item = await workItemsService.createWorkItem(
-    { projectId: project.id, kind: 'task', title: 'The page they were opening' },
+    { projectId: project!.id, kind: 'task', title: 'The page they were opening' },
     { userId, workspaceId },
   );
   return item.identifier;
