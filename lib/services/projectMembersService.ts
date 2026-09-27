@@ -182,6 +182,27 @@ export const projectMembersService = {
   },
 
   /**
+   * What the project's Access & members page may OFFER this actor (Story
+   * MOTIR-6169 · MOTIR-6550, design A6 / A7): the mode control needs
+   * `project:manage_access`, the people controls `member:manage`. Named here, in
+   * the service, because a settings page names no permission key of its own —
+   * its guard reads the registry (`tests/settings/settings-destination-guard`).
+   * Every write re-asserts its key regardless; these only decide what renders.
+   */
+  async getPageCapabilities(
+    input: ActorScopedInput,
+  ): Promise<{ canManageAccess: boolean; canManageMembers: boolean }> {
+    const project = await withWorkspaceContext(input.ctx, (tx) =>
+      resolveProjectInTx(input.key, input.ctx, tx),
+    );
+    const held = await projectAccessService.getPermissions(project.id, input.ctx);
+    return {
+      canManageAccess: held.has('project:manage_access'),
+      canManageMembers: held.has('member:manage'),
+    };
+  },
+
+  /**
    * Add a workspace member to the project. The target must already be a member
    * of the workspace (TargetNotWorkspaceMemberError → 400); a duplicate add
    * throws AlreadyProjectMemberError (409). `member:manage` gated. What they may

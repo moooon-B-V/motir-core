@@ -159,3 +159,23 @@ describe('GET /api/projects/[key]/access/preview', () => {
     expect((await preview(f.key, 'members')).status).toBe(403);
   });
 });
+
+describe('projectMembersService.getPageCapabilities — what the Access & members page offers (MOTIR-6550)', () => {
+  it('a Manager may manage both the mode and the people; a plain Member neither', async () => {
+    const { projectMembersService } = await import('@/lib/services/projectMembersService');
+    const f = await fixture('caps');
+    const at = (userId: string) => ({
+      key: f.key,
+      actorUserId: userId,
+      ctx: { userId, workspaceId: f.workspace.id },
+    });
+    expect(await projectMembersService.getPageCapabilities(at(f.owner.id))).toEqual({
+      canManageAccess: true,
+      canManageMembers: true,
+    });
+    expect(await projectMembersService.getPageCapabilities(at(f.plain.id))).toEqual({
+      canManageAccess: false,
+      canManageMembers: false,
+    });
+  });
+});

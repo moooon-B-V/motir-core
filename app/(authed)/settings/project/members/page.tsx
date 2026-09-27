@@ -6,7 +6,6 @@ import { getActiveProject, type ProjectContext } from '@/lib/projects';
 import { isCloud } from '@/lib/billing/availability';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectRepoAccessService } from '@/lib/services/projectRepoAccessService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { teamAccessSummary } from '@/lib/projectRepos/teamAccessView';
@@ -65,17 +64,16 @@ async function AccessMembersSection({ ctx }: { ctx: ProjectContext }) {
   const actor = { key: ctx.project.identifier, actorUserId: ctx.userId, ctx };
 
   // No role catalog: a project membership carries no role since roles moved to
-  // the workspace (Story MOTIR-6168 · MOTIR-6464). The actor's permission set
-  // splits the page's two cards (design A6 / A7): `project:manage_access` owns
-  // the mode control, `member:manage` the people controls — the guard above
-  // already required the second, so it is read here only to be explicit.
-  const [members, access, workspaceMembers, workspace, permissions, codeAccess, repos] =
+  // the workspace (Story MOTIR-6168 · MOTIR-6464). The page's two cards are
+  // split by what the actor holds (design A6 / A7), read by the service so this
+  // page names no permission key of its own.
+  const [members, access, workspaceMembers, workspace, capabilities, codeAccess, repos] =
     await Promise.all([
       projectMembersService.listMembers(actor),
       projectMembersService.getAccess(actor),
       workspacesService.listMembers(ctx.workspaceId, ctx.userId),
       workspacesService.getWorkspaceSummary(ctx.workspaceId, ctx.userId),
-      projectAccessService.getPermissions(ctx.projectId, ctx),
+      projectMembersService.getPageCapabilities(actor),
       // Door 2's count (MOTIR-1945) — read here rather than inside the card so
       // the card stays a pure presentational leaf and the reads still go out in
       // one parallel batch.
@@ -94,8 +92,8 @@ async function AccessMembersSection({ ctx }: { ctx: ProjectContext }) {
         members={members}
         workspaceMembers={workspaceMembers}
         currentUserId={ctx.userId}
-        canManageAccess={permissions.has('project:manage_access')}
-        canManageMembers={permissions.has('member:manage')}
+        canManageAccess={capabilities.canManageAccess}
+        canManageMembers={capabilities.canManageMembers}
         // Whether this BUILD publishes at all (MOTIR-4035). Read on the server,
         // where `MOTIR_CLOUD` lives, and threaded to the client island.
         publicAccessAvailable={isCloud()}
