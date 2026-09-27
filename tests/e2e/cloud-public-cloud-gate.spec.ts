@@ -33,7 +33,8 @@ const EMAIL = `public-cloud-gate-${Date.now()}@example.com`;
 const KEY = 'PUBG';
 
 // The resolved copy (messages/en.json › settings.access / settings.buildInPublic).
-const ACCESS_GROUP = 'Project access level';
+// The mode control's accessible name (Story MOTIR-6169 · MOTIR-6550).
+const ACCESS_GROUP = 'Project access mode';
 const START_CONFIRM = 'Start building in public';
 const STATUS_BADGE = 'Building in public';
 
@@ -101,13 +102,12 @@ test('a cloud build offers the publish door, and what it opens is readable by a 
     await expect(levels).toBeVisible();
     await beat();
 
-    // All four levels, on a cloud build. Off-cloud the fourth is not offered at
-    // all — that is the whole product change, and it is the assertion
+    // All three modes, on a cloud build, Public ENABLED. Off-cloud Public is
+    // drawn disabled with its reason (MOTIR-6550 · A10) — the assertion
     // `public-selfhost.spec.ts` makes from the other side.
-    await expect(levels.getByRole('radio', { name: /Building in public|Public/ })).toBeVisible();
-    await expect(levels.getByRole('radio', { name: /Open/ })).toBeVisible();
-    await expect(levels.getByRole('radio', { name: /Limited/ })).toBeVisible();
-    await expect(levels.getByRole('radio', { name: /Private/ })).toBeVisible();
+    await expect(levels.getByRole('radio', { name: /^Public/ })).toBeEnabled();
+    await expect(levels.getByRole('radio', { name: /^Open to the workspace/ })).toBeVisible();
+    await expect(levels.getByRole('radio', { name: /^Members only/ })).toBeVisible();
     await beat();
   });
 
@@ -115,7 +115,7 @@ test('a cloud build offers the publish door, and what it opens is readable by a 
   await chapter('Publishing asks first', async () => {
     await page
       .getByRole('radiogroup', { name: ACCESS_GROUP })
-      .getByRole('radio', { name: /Building in public|Public/ })
+      .getByRole('radio', { name: /^Public/ })
       .click();
 
     const dialog = page.getByRole('dialog');

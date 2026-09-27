@@ -17,6 +17,7 @@ import { getActiveProject } from '@/lib/projects';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils/cn';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The project Reports hub (Story 6.3 · Subtask 6.3.6) — the grouped index the
 // sidebar "Reports" link opens, replacing the Epic-6 stub. Per
@@ -33,10 +34,10 @@ export default async function ReportsPage() {
   const t = await getTranslations('reports');
   const ctx = await getActiveProject();
 
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   if (ctx.project.archivedAt) {
     const ts = await getTranslations('shell');

@@ -553,9 +553,9 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
     path: 'fix',
     // Story MOTIR-5460 · MOTIR-5465 — the command the item page's Development
     // block offers on a card whose pull requests went red after its run ended, or
-    // whose merge did not land for a reason THE CODE could answer (MOTIR-5803: a
-    // conflict waits at Implemented, a failed check at In Review; a setting or a
-    // hand removal is refused). It sits beside `run` — the same work loop's repair.
+    // whose merge did not land for a reason THE CODE could answer (MOTIR-5803; since
+    // MOTIR-6594 a conflict AND a queue failure both wait at Implemented; a setting or
+    // a hand removal is refused). It sits beside `run` — the same work loop's repair.
     // MOTIR-6502 adds a story whose acceptance video was sent back with Re-run.
     signature: '<key>',
     description:

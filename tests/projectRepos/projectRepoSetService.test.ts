@@ -1185,9 +1185,11 @@ describe('access gating', () => {
 
   it('refuses a WRITE from a workspace member who may only browse', async () => {
     // Reads stay browse-gated; the SET writes moved to `repository:manage`
-    // (MOTIR-2299). This actor was refused before the change too — they hold no
-    // `work_item:edit` on a `limited` project — so what moved is the error CLASS:
-    // `PROJECT_ACCESS_DENIED`/`edit` → `PERMISSION_DENIED` naming the key.
+    // (MOTIR-2299). This actor was refused before the change too — a workspace
+    // Viewer holds no `work_item:edit` — so what moved is the error CLASS:
+    // `PROJECT_ACCESS_DENIED`/`edit` → `PERMISSION_DENIED` naming the key. (The
+    // actor used to be a member not added to a `limited` project; that project is
+    // Members only since Story MOTIR-6169, so they would not browse it at all.)
     const fx = await makeWorkItemFixture();
     const viewer = await adminDb.user.create({
       data: { email: 'repo-set-viewer@example.com', name: 'Viewer', emailVerified: true },
@@ -1196,10 +1198,9 @@ describe('access gating', () => {
       data: {
         userId: viewer.id,
         workspaceId: fx.workspaceId,
-        workspaceRole: 'member',
+        workspaceRole: 'viewer',
       },
     });
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'limited' } });
     const viewerCtx = { userId: viewer.id, workspaceId: fx.workspaceId };
 
     // They CAN read the set…

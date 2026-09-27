@@ -102,6 +102,20 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'and so is out of `armedTables` reach — the probe in ' +
       '`tests/entitlementsService.test.ts` is what re-measures THAT, on every run.',
   },
+  'lib/services/assignableMembersService.ts#list': {
+    tables: ['organization_membership'],
+    source: 'scan',
+    why:
+      'the org Owner / Admin rail of the assignee list (Story MOTIR-6169 · MOTIR-6547) — ' +
+      'the org managers are read under a bound org, org_membership_visible_active_or_own',
+  },
+  'lib/services/projectMembersService.ts#previewAccessModeChange': {
+    tables: ['organization_membership'],
+    source: 'scan',
+    why:
+      'the access-change preview keeps the org Owner / Admin off the lose-entry list ' +
+      '(MOTIR-6544) — the same org-manager read, org_membership_visible_active_or_own',
+  },
   'lib/services/billingPropagationService.ts#setScaledTrackerState': {
     tables: ['organization'],
     source: 'scan',

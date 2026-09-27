@@ -192,6 +192,12 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   DEPTH_LIMIT_EXCEEDED: 422,
   TYPE_NOT_ALLOWED_ON_KIND: 422,
   DIFFICULTY_NOT_ALLOWED_ON_KIND: 422,
+  // MOTIR-6581 — an `obsolescence` outside the closed `outdated · deprecated`
+  // enum. Reached over v1 by BOTH checks with one code: the body schema's refusal
+  // is re-coded to this (`TYPED_FIELD_REFUSALS` in `workItems/schema.ts`), and
+  // the service's own `InvalidObsolescenceError` backstop maps here rather than
+  // falling through to a 500.
+  INVALID_OBSOLESCENCE: 422,
   ASSIGNEE_NOT_IN_WORKSPACE: 422,
   REPORTER_NOT_IN_WORKSPACE: 422,
   UNKNOWN_TARGET_REPO: 422,

@@ -716,6 +716,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // artifact that includes it.
   'pr-merge-mode.spec.ts': 12.0,
   'profile.spec.ts': 11.4,
+  // LOCAL provenance (MOTIR-6553): a brand-new spec, five tests, measured on
+  // 2026-09-27 against a production build, JSON reporter, per-test durationMs
+  // summed — 14.2 s (7.2 + 1.3 + 1.4 + 1.5 + 3.0). Rounded UP. Re-measure from
+  // the first green CI run that includes it.
+  'project-access-contractor.spec.ts': 15.0,
   'project-access.spec.ts': 9.7,
   'project-details.spec.ts': 7.7,
   'project-isolation.spec.ts': 5.4,

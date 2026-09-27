@@ -74,7 +74,7 @@ export interface PublicPageEditorProps {
   projectKey: string;
   /** The saved values the page read (`projectsService.getPublicHero`). */
   initial: PublicHeroValues;
-  /** `accessLevel === 'public'` — decides the not-yet-public band and the head link. */
+  /** `accessMode === 'public'` — decides the not-yet-public band and the head link. */
   isPublic: boolean;
   /** The project's page on the PUBLIC host (`publicProjectUrl`), resolved server-side. */
   publicPageUrl: string;

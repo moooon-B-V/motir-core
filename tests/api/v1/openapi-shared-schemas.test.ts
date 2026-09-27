@@ -51,6 +51,9 @@ import {
 import { PERMISSIONS, PERMISSION_CATALOG, isPermissionKey } from '@/lib/permissions/catalog';
 import { GRANTABLE_PERMISSIONS, isGrantable } from '@/lib/tokens/grant';
 import { V1_OPERATIONS } from '@/lib/api/v1/openapi/registry';
+import { emitOpenApiDocument, toOpenApiSchema } from '@/lib/api/v1/openapi/emit';
+import { createWorkItemBodySchema } from '@/lib/api/v1/workItems/schema';
+import { WORK_ITEM_OBSOLESCENCES } from '@/lib/issues/obsolescence';
 import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { createV1Caller, type V1Caller } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
@@ -527,4 +530,75 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
   // refuses a browse-only ACTOR) is now asserted where it actually lives, in
   // `tests/work-items/report-implementation-gate.test.ts`, against real
   // Postgres. §3's rule is total again — no exception list.
+});
+
+// MOTIR-6581 — a FIELD VOCABULARY named once. Asserted against the EMITTED
+// document by literal component and property name, for the reason the header
+// gives: a check that maps over the same registry the emitter reads would pass
+// on a document that referenced nothing.
+describe('the WorkItemObsolescence shared schema', () => {
+  const document = emitOpenApiDocument();
+  const schemas = (document['components'] as { schemas: Record<string, Record<string, unknown>> })
+    .schemas;
+  const REF = { $ref: '#/components/schemas/WorkItemObsolescence' };
+
+  function requestBody(path: string, method: string): Record<string, unknown> {
+    const paths = document['paths'] as unknown as Record<
+      string,
+      Record<
+        string,
+        { requestBody: { content: Record<string, { schema: Record<string, unknown> }> } }
+      >
+    >;
+    return paths[path]![method]!.requestBody.content['application/json']!.schema;
+  }
+
+  it('is ONE named component carrying exactly the service’s list', () => {
+    expect(schemas['WorkItemObsolescence']).toEqual({
+      type: 'string',
+      enum: [...WORK_ITEM_OBSOLESCENCES],
+    });
+    // Named ONCE: the members appear as an enum nowhere else in the document.
+    const serialized = JSON.stringify(document);
+    expect(serialized.split('"enum":["outdated","deprecated"]').length - 1).toBe(1);
+  });
+
+  it('is $ref’d, nullable, from the detail, the collection row and the ready row', () => {
+    for (const carrier of ['WorkItemDetail', 'WorkItemSummary', 'ReadyItem']) {
+      const properties = schemas[carrier]!['properties'] as Record<string, unknown>;
+      expect(properties['obsolescence'], carrier).toEqual({ anyOf: [REF, { type: 'null' }] });
+      expect(properties['obsolescenceNoteMd'], carrier).toEqual({
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+      });
+      // Required-and-nullable on a response: always present, `null` when unset.
+      expect(schemas[carrier]!['required'], carrier).toEqual(
+        expect.arrayContaining(['obsolescence', 'obsolescenceNoteMd']),
+      );
+    }
+  });
+
+  it('is $ref’d, optional and nullable, from the create and update bodies', () => {
+    for (const [path, method] of [
+      ['/api/v1/projects/{projectKey}/work-items', 'post'],
+      ['/api/v1/work-items/{key}', 'patch'],
+    ] as const) {
+      const body = requestBody(path, method);
+      const properties = body['properties'] as Record<string, unknown>;
+      expect(properties['obsolescence'], path).toEqual({ anyOf: [REF, { type: 'null' }] });
+      expect(properties['obsolescenceNoteMd'], path).toEqual({
+        anyOf: [{ type: 'string' }, { type: 'null' }],
+      });
+      expect((body['required'] as string[] | undefined) ?? []).not.toContain('obsolescence');
+    }
+  });
+
+  it('stays INLINED for a caller that renders a schema outside the document', () => {
+    // `lib/apiDocs/reference.ts` renders request bodies on their own, with no
+    // `components` to resolve a `$ref` against — the substitution is opt-in.
+    const standalone = toOpenApiSchema(createWorkItemBodySchema, 'input');
+    const properties = standalone['properties'] as Record<string, unknown>;
+    expect(properties['obsolescence']).toEqual({
+      anyOf: [{ type: 'string', enum: [...WORK_ITEM_OBSOLESCENCES] }, { type: 'null' }],
+    });
+  });
 });

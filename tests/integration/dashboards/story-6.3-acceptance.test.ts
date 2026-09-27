@@ -227,10 +227,9 @@ describe('Story 6.3 recipe — dashboard + three widgets, shared, read end-to-en
     const r = await seedRecipe();
     const projectScope: ReportScopeDto = { projectId: r.projectId };
 
-    // Flip the project private FIRST — this auto-enrolls the CURRENT members
-    // (finding #44). THEN add a fresh workspace member: joining after the flip,
-    // they are never enrolled on the project — a true per-viewer outsider (the
-    // widget-gating ordering).
+    // Flip the project private (going private adds nobody — Story MOTIR-6169),
+    // THEN add a fresh workspace member: never added to the project, they are a
+    // true per-viewer outsider (the widget-gating ordering).
     await projectMembersService.setAccessLevel({
       key: r.projectIdentifier,
       actorUserId: r.ownerCtx.userId,

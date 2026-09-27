@@ -20,6 +20,21 @@ import { dbRead } from '@/lib/db';
 // filter every read here applies (`recipientUserId`) is the application-layer
 // scoping on TOP of that tenant gate.
 
+/**
+ * The READ-TIME entry filter (Story MOTIR-6169 · MOTIR-6549): a notification about
+ * a work item is kept only while that item's project is one the reader can ENTER;
+ * a workspace-level notification (no `workItemId`) is always kept. Undefined means
+ * "no filter" — the write paths and the mark-all bulk update take none.
+ */
+function enterableFilter(
+  enterableProjectIds: readonly string[] | undefined,
+): Prisma.NotificationWhereInput {
+  if (enterableProjectIds === undefined) return {};
+  return {
+    OR: [{ workItemId: null }, { workItem: { projectId: { in: [...enterableProjectIds] } } }],
+  };
+}
+
 /** Options for the recipient feed read — cursor-paged, optionally per-tab. */
 export interface ListByRecipientOptions {
   /** Page size (default 20 — the drawer's "newest 20 + Show more", finding #57). */
@@ -30,6 +45,8 @@ export interface ListByRecipientOptions {
   category?: Prisma.NotificationWhereInput['category'];
   /** Walk direction (default `desc` — newest first, the drawer order). */
   order?: 'asc' | 'desc';
+  /** Keep only rows about projects the reader can enter (MOTIR-6549), filtered in SQL. */
+  enterableProjectIds?: readonly string[];
 }
 
 export const notificationRepository = {
@@ -80,9 +97,15 @@ export const notificationRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<Notification[]> {
     const client = tx ?? dbRead;
-    const { take = 20, cursor, category, order = 'desc' } = options;
+    const { take = 20, cursor, category, order = 'desc', enterableProjectIds } = options;
     return client.notification.findMany({
-      where: { recipientUserId, ...(category ? { category } : {}) },
+      // The entry filter is IN the query, so a page stays full across a gap of
+      // rows the reader may no longer see and the cursor walk never short-reads.
+      where: {
+        recipientUserId,
+        ...(category ? { category } : {}),
+        ...enterableFilter(enterableProjectIds),
+      },
       orderBy: [{ createdAt: order }, { id: order }],
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -102,13 +125,21 @@ export const notificationRepository = {
    */
   async countUnreadByRecipient(
     recipientUserId: string,
-    options: { category?: Prisma.NotificationWhereInput['category'] } = {},
+    options: {
+      category?: Prisma.NotificationWhereInput['category'];
+      enterableProjectIds?: readonly string[];
+    } = {},
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
     const client = tx ?? dbRead;
-    const { category } = options;
+    const { category, enterableProjectIds } = options;
     return client.notification.count({
-      where: { recipientUserId, readAt: null, ...(category ? { category } : {}) },
+      where: {
+        recipientUserId,
+        readAt: null,
+        ...(category ? { category } : {}),
+        ...enterableFilter(enterableProjectIds),
+      },
     });
   },
 
@@ -121,13 +152,20 @@ export const notificationRepository = {
    */
   async countByRecipient(
     recipientUserId: string,
-    options: { category?: Prisma.NotificationWhereInput['category'] } = {},
+    options: {
+      category?: Prisma.NotificationWhereInput['category'];
+      enterableProjectIds?: readonly string[];
+    } = {},
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
     const client = tx ?? dbRead;
-    const { category } = options;
+    const { category, enterableProjectIds } = options;
     return client.notification.count({
-      where: { recipientUserId, ...(category ? { category } : {}) },
+      where: {
+        recipientUserId,
+        ...(category ? { category } : {}),
+        ...enterableFilter(enterableProjectIds),
+      },
     });
   },
 

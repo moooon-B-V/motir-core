@@ -156,19 +156,21 @@ const queueAgain = () =>
 const rail = () => screen.getByRole('status', { name: 'rail' }).textContent;
 
 describe('manual mode, on the card’s decided approval', () => {
-  it('E1 · a failure: Left the queue, the reason in words, the failing check linked, and Queue again', () => {
+  // ⚠️ AMENDED by MOTIR-6596 (§4 FIFTH AMENDMENT; design § 31 panel 1): a queue FAILURE is
+  // CAN'T-LAND — held at Implemented, the failed CHECK named in the sentence, the held line
+  // beneath it, and NO *Queue again*.
+  it('E1 · a failure: Left the queue, the failed check named and linked, held, and NO Queue again', () => {
     renderFrame({ members: members({}) });
 
     expect(within(gatewayRow()).getByText(pra.outcome.leftQueue)).toBeTruthy();
-    expect(queueAgain()).toBeTruthy();
+    expect(queueAgain()).toBeNull();
     // The sibling keeps its own outcome, and no second question is drawn.
     expect(within(rowOf(CORE_PR.title)).queryByText(pra.outcome.leftQueue)).toBeNull();
     expect(screen.queryByRole('button', { name: pra.verb.approveAndMerge })).toBeNull();
-    // The record band still reads the approval, and now the exit.
     expect(screen.getByText(/Approved by Ada L\./)).toBeTruthy();
     expect(
       screen.getByText(
-        whole(plain(pra.exit.left, { pr: GATEWAY_NAME, reason: pra.exit.reason.CI_FAILURE })),
+        whole(plain(pra.exit.failed.checks, { pr: GATEWAY_NAME, check: 'CI complete' })),
       ),
     ).toBeTruthy();
     const link = screen.getByRole('link', {
@@ -176,14 +178,45 @@ describe('manual mode, on the card’s decided approval', () => {
     });
     expect(link.getAttribute('href')).toBe(CHECK_URL);
     expect(link.getAttribute('rel')).toBe('noopener noreferrer');
-    expect(screen.getByText(whole(plain(pra.exit.unchanged)))).toBeTruthy();
+    expect(screen.getByText(whole(plain(pra.exit.failed.held, { key: 'ACME-12' })))).toBeTruthy();
+    expect(screen.queryByText(whole(plain(pra.exit.unchanged)))).toBeNull();
   });
 
-  it('E1 · a timeout is worded as one', () => {
+  it('E1 · a timeout names the check that timed out', () => {
     renderFrame({ members: members({ exit: exit({ rawReason: 'CI_TIMEOUT' }) }) });
     expect(
-      screen.getByText(new RegExp(pra.exit.reason.CI_TIMEOUT.replace('.', '\\.'))),
+      screen.getByText(
+        whole(plain(pra.exit.failed.timedOut, { pr: GATEWAY_NAME, check: 'CI complete' })),
+      ),
     ).toBeTruthy();
+    expect(queueAgain()).toBeNull();
+  });
+
+  it.each(['INVALID_MERGE_COMMIT', 'GIT_TREE_INVALID'])(
+    'E1 · %s reads the one could-not-build sentence, held, and NO Queue again',
+    (rawReason) => {
+      renderFrame({
+        members: members({
+          exit: exit({ rawReason, failingCheckName: null, failingCheckUrl: null }),
+        }),
+      });
+      expect(
+        screen.getByText(whole(plain(pra.exit.failed.mergeCommit, { pr: GATEWAY_NAME }))),
+      ).toBeTruthy();
+      expect(queueAgain()).toBeNull();
+    },
+  );
+
+  it('E1 · a failure whose check nobody recorded falls back to the reason in words — nothing invented', () => {
+    renderFrame({
+      members: members({ exit: exit({ failingCheckName: null, failingCheckUrl: null }) }),
+    });
+    expect(
+      screen.getByText(
+        whole(plain(pra.exit.left, { pr: GATEWAY_NAME, reason: pra.exit.reason.CI_FAILURE })),
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Failing check/)).toBeNull();
   });
 
   it('E6 · no failing check known: the reason stands alone, and nothing is invented', () => {
@@ -251,7 +284,11 @@ describe('manual mode, on the card’s decided approval', () => {
           answer = resolve;
         }),
     );
-    renderFrame({ members: members({}) }, fakeActions(retry));
+    // A failure that still RE-ASKS — branch protection (MOTIR-6596: a queue FAILURE is held).
+    renderFrame(
+      { members: members({ exit: exit({ rawReason: 'BRANCH_PROTECTIONS' }) }) },
+      fakeActions(retry),
+    );
     expect(rail()).toBe('implemented');
 
     fireEvent.click(queueAgain()!);
@@ -286,7 +323,10 @@ describe('manual mode, on the card’s decided approval', () => {
       ok: false,
       refusal: { tag: 'MERGE_ALREADY_REQUEUED' },
     });
-    renderFrame({ members: members({}) }, fakeActions(retry));
+    renderFrame(
+      { members: members({ exit: exit({ rawReason: 'BRANCH_PROTECTIONS' }) }) },
+      fakeActions(retry),
+    );
 
     fireEvent.click(queueAgain()!);
 
@@ -518,16 +558,19 @@ describe('an EJECTED card offers `motir fix` beside Queue again (MOTIR-5721)', (
     );
   }
 
-  it('X1 · failed checks: Left the queue + Queue again on the row, and the fix part with the left-the-queue line, the command and the checks sentence', () => {
+  // ⚠️ AMENDED by MOTIR-6596 (§4 FIFTH AMENDMENT; design § 31 panel 1): a queue FAILURE is
+  // CAN'T-LAND, so the row keeps *Left the queue* with NO *Queue again*, and the part's
+  // sentence is the FAILED one — a new head, never the same commits again.
+  it('X1 · failed checks: Left the queue with NO Queue again, and the fix part with the left-the-queue line, the command and the failed sentence', () => {
     renderWithRepair(offer());
     expect(within(gatewayRow()).getByText(pra.outcome.leftQueue)).toBeTruthy();
-    expect(queueAgain()).toBeTruthy();
+    expect(queueAgain()).toBeNull();
     const part = fixPart();
     expect(part.textContent).toContain(`${GATEWAY_NAME} left the merge queue.`);
     expect(part.textContent).not.toContain('Checks are failing');
     expect(part.textContent).toContain('motir fix ACME-12');
     expect(within(part).getByTestId('repair-which').textContent).toBe(
-      sentence(fixMsg.which.checks),
+      sentence(fixMsg.which.failed),
     );
   });
 
@@ -547,7 +590,7 @@ describe('an EJECTED card offers `motir fix` beside Queue again (MOTIR-5721)', (
     );
   });
 
-  it('X4 · a repair in progress: no command and no sentence, and Queue again is still offered', () => {
+  it('X4 · a repair in progress: no command and no sentence, and no Queue again for a held failure', () => {
     renderWithRepair({
       state: 'in_progress',
       repairClass: 'ci',
@@ -557,7 +600,7 @@ describe('an EJECTED card offers `motir fix` beside Queue again (MOTIR-5721)', (
       byViewer: false,
       startedAt: '2026-09-15T15:10:00.000Z',
     });
-    expect(queueAgain()).toBeTruthy();
+    expect(queueAgain()).toBeNull();
     const part = fixPart();
     expect(part.textContent).toContain(`${GATEWAY_NAME} left the merge queue.`);
     expect(part.textContent).not.toContain('motir fix');
@@ -568,7 +611,7 @@ describe('an EJECTED card offers `motir fix` beside Queue again (MOTIR-5721)', (
     renderWithRepair(offer(), {}, { locale: 'zh', messages: zh });
     const zhPart = screen.getByRole('group', { name: zh.github.development.fix.aria.part });
     expect(within(zhPart).getByTestId('repair-which').textContent).toBe(
-      sentence(zh.github.development.fix.which.checks),
+      sentence(zh.github.development.fix.which.failed),
     );
   });
 

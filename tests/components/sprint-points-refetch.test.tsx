@@ -81,6 +81,8 @@ function item(over: Partial<WorkItemSummaryDto> & { id: string; key: number }): 
     estimateMinutes: null,
     storyPoints: null,
     archivedAt: null,
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     ...over,
   };
 }

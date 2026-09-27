@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import en from '@/messages/en.json';
-import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
+import type { ProjectAccessMode, WorkspaceRole } from '@/generated/prisma/client';
 import { hasPermission, resolvePermissions } from '@/lib/permissions/resolve';
 import type { ProjectPermissionInputs } from '@/lib/permissions/resolve';
 import { ROLE_GATED_PERMISSIONS, WORKSPACE_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
@@ -104,11 +104,11 @@ describe('the catalog carries `ai:decide_plan` as an enforced `ai` key', () => {
  * member: a Member never added to the project. It is in the table because it is
  * the actor a widening would reach first and the one no role screen would show.
  */
-const ACTORS: Record<string, Omit<ProjectPermissionInputs, 'accessLevel'>> = {
-  admin: { workspaceRole: 'manager', addedToProject: true },
-  member: { workspaceRole: 'member', addedToProject: true },
-  viewer: { workspaceRole: 'viewer', addedToProject: true },
-  memberNotAdded: { workspaceRole: 'member', addedToProject: false },
+const ACTORS: Record<string, Omit<ProjectPermissionInputs, 'accessMode'>> = {
+  admin: { workspaceRole: 'manager', accessScope: 'full', addedToProject: true },
+  member: { workspaceRole: 'member', accessScope: 'full', addedToProject: true },
+  viewer: { workspaceRole: 'viewer', accessScope: 'full', addedToProject: true },
+  memberNotAdded: { workspaceRole: 'member', accessScope: 'full', addedToProject: false },
 };
 
 /** The four operations, and the key each is gated on AFTER the split. */
@@ -139,24 +139,23 @@ type OperationName = keyof typeof OPERATIONS;
  * asserted then. `read` is `project:browse`, which this card does not touch and
  * which is included so a future widening of the READ shows up here too.
  *
- * The rows are the four actors × the four access levels. `private` is the row
- * that separates the implicit workspace member from the rest: the level denies a
- * non-member before any key is consulted.
+ * The rows are the four actors × the three access MODES (Story MOTIR-6169 ·
+ * MOTIR-6543): `workspace` is the old `open` row, `members` the old `private`
+ * row and `public` unchanged. The old `limited` row folded into `members` — its
+ * `memberNotAdded` verdicts moved from all-true to all-false on the record,
+ * because the DECISION maps `limited` to Members only (`role-model.md` Q1). That
+ * is an access change, not a plan-key one: both plan keys still agree on it.
+ * `members` is the row that separates the member never added from the rest:
+ * entry denies them before any key is consulted.
  */
-const BEFORE: Record<ProjectAccessLevel, Record<string, Record<OperationName, boolean>>> = {
-  open: {
+const BEFORE: Record<ProjectAccessMode, Record<string, Record<OperationName, boolean>>> = {
+  workspace: {
     admin: { read: true, author: true, approve: true, decline: true },
     member: { read: true, author: true, approve: true, decline: true },
     viewer: { read: true, author: false, approve: false, decline: false },
     memberNotAdded: { read: true, author: true, approve: true, decline: true },
   },
-  limited: {
-    admin: { read: true, author: true, approve: true, decline: true },
-    member: { read: true, author: true, approve: true, decline: true },
-    viewer: { read: true, author: false, approve: false, decline: false },
-    memberNotAdded: { read: true, author: true, approve: true, decline: true },
-  },
-  private: {
+  members: {
     admin: { read: true, author: true, approve: true, decline: true },
     member: { read: true, author: true, approve: true, decline: true },
     viewer: { read: true, author: false, approve: false, decline: false },
@@ -172,41 +171,48 @@ const BEFORE: Record<ProjectAccessLevel, Record<string, Record<OperationName, bo
 };
 
 describe('AC5 — built-in behaviour is unchanged: the same verdicts before and after', () => {
-  const LEVELS: ProjectAccessLevel[] = ['open', 'limited', 'private', 'public'];
+  const MODES: ProjectAccessMode[] = ['workspace', 'members', 'public'];
 
-  it.each(LEVELS)('%s — every actor × (read, author, approve, decline)', (accessLevel) => {
+  it.each(MODES)('%s — every actor × (read, author, approve, decline)', (accessMode) => {
     for (const [actor, base] of Object.entries(ACTORS)) {
-      const inputs: ProjectPermissionInputs = { accessLevel, ...base };
+      const inputs: ProjectPermissionInputs = { accessMode, ...base };
       for (const [operation, key] of Object.entries(OPERATIONS) as [
         OperationName,
         PermissionKey,
       ][]) {
-        const before = BEFORE[accessLevel]?.[actor]?.[operation];
-        expect(before, `no transcribed verdict for ${actor}/${operation}/${accessLevel}`).not.toBe(
+        const before = BEFORE[accessMode]?.[actor]?.[operation];
+        expect(before, `no transcribed verdict for ${actor}/${operation}/${accessMode}`).not.toBe(
           undefined,
         );
         expect(
           hasPermission(inputs, key),
-          `${operation} (${key}) for ${actor} on a ${accessLevel} project`,
+          `${operation} (${key}) for ${actor} on a ${accessMode} project`,
         ).toBe(before);
       }
     }
   });
 
-  it('the two keys are INDISTINGUISHABLE under every built-in input — 4 levels × 4 ws roles × added or not', () => {
+  it('the two keys are INDISTINGUISHABLE under every built-in input — 3 modes × 4 ws roles × 2 scopes × added or not', () => {
     // The strongest statement of neutrality available: approve used to resolve
     // through the author key and now resolves through the decide key, so if the
     // two agree on every input a built-in role can produce, nobody's access
     // moved. A single divergent cell here IS the behaviour change.
     const ROLES: (WorkspaceRole | null)[] = ['manager', 'member', 'viewer', null];
-    for (const accessLevel of ['open', 'limited', 'private', 'public'] as ProjectAccessLevel[]) {
+    for (const accessMode of ['workspace', 'members', 'public'] as ProjectAccessMode[]) {
       for (const workspaceRole of ROLES) {
-        for (const addedToProject of [false, true]) {
-          const inputs: ProjectPermissionInputs = { accessLevel, workspaceRole, addedToProject };
-          expect(
-            hasPermission(inputs, DECIDE_KEY),
-            `${DECIDE_KEY} diverges from ${AUTHOR_KEY} on { ${accessLevel}, ws=${workspaceRole}, added=${addedToProject} }`,
-          ).toBe(hasPermission(inputs, AUTHOR_KEY));
+        for (const scope of ['full', 'limited'] as const) {
+          for (const addedToProject of [false, true]) {
+            const inputs: ProjectPermissionInputs = {
+              accessMode,
+              workspaceRole,
+              accessScope: workspaceRole == null ? null : scope,
+              addedToProject,
+            };
+            expect(
+              hasPermission(inputs, DECIDE_KEY),
+              `${DECIDE_KEY} diverges from ${AUTHOR_KEY} on { ${accessMode}, ws=${workspaceRole}, ${scope}, added=${addedToProject} }`,
+            ).toBe(hasPermission(inputs, AUTHOR_KEY));
+          }
         }
       }
     }
@@ -217,8 +223,9 @@ describe('AC5 — built-in behaviour is unchanged: the same verdicts before and 
     // reachable from the Roles & permissions screen: a set an admin enumerated
     // by hand grants exactly what it lists, on every access level.
     const inputs = (permissions: PermissionKey[]): ProjectPermissionInputs => ({
-      accessLevel: 'open',
+      accessMode: 'workspace',
       workspaceRole: 'member',
+      accessScope: 'full',
       addedToProject: true,
       customRolePermissions: permissions,
     });
@@ -238,13 +245,18 @@ describe('AC5 — built-in behaviour is unchanged: the same verdicts before and 
     expect(WORKSPACE_ROLE_PERMISSIONS.viewer.has(DECIDE_KEY)).toBe(false);
   });
 
-  it('the Manager rail resolves to it on every access level, added or not', () => {
-    for (const accessLevel of ['public', 'open', 'limited', 'private'] as ProjectAccessLevel[]) {
+  it('the Manager rail resolves to it in every access mode, added or not', () => {
+    for (const accessMode of ['public', 'workspace', 'members'] as ProjectAccessMode[]) {
       for (const addedToProject of [false, true]) {
-        const held = resolvePermissions({ accessLevel, workspaceRole: 'manager', addedToProject });
+        const held = resolvePermissions({
+          accessMode,
+          workspaceRole: 'manager',
+          accessScope: 'full',
+          addedToProject,
+        });
         expect(
           held.has(DECIDE_KEY),
-          `manager (added=${addedToProject}) on ${accessLevel} lacks ${DECIDE_KEY}`,
+          `manager (added=${addedToProject}) on ${accessMode} lacks ${DECIDE_KEY}`,
         ).toBe(true);
       }
     }

@@ -14,6 +14,7 @@ import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { RelationshipsPanel } from '../_components/RelationshipsPanel';
 import { IssueQuickViewController } from '../../_components/IssueQuickViewController';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The issue edit route (Subtask 2.3.6). Server Component: resolves the active
 // project (the shipped active-project model — finding #50, no projects/[key]
@@ -33,10 +34,10 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
   const t = await getTranslations('issueViews');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   const { key } = await params;
   const serviceCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
@@ -86,7 +87,7 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
     projectAccessService.getCapabilities(ctx.projectId, serviceCtx),
     assignableMembersService.list({
       projectId: ctx.projectId,
-      accessLevel: ctx.project.accessLevel,
+      accessMode: ctx.project.accessMode,
       ctx: serviceCtx,
     }),
     // The moves an approval HOLDS (MOTIR-5528) — the status field says so here

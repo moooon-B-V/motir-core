@@ -121,8 +121,11 @@ export function failingDeliveries(
 }
 
 /** What an ended-early repair tells the person: the fixing attempt pushed
- *  nothing, so only a retry of the same commits is left (MOTIR-5720). */
-export const NOTHING_TO_CHANGE_DETAIL = 'nothing to change — use Queue again on the card';
+ *  nothing (MOTIR-5720). *Queue again* is not offered after a queue FAILURE
+ *  (`approval-gates.md` §4 FIFTH AMENDMENT; MOTIR-6594), so the way on is a new
+ *  head: a push whose checks go green asks for approval again. */
+export const NOTHING_TO_CHANGE_DETAIL =
+  'nothing was pushed — push a commit to re-run CI; a queue failure is not queued again';
 
 const deliveryId = (d: WorkItemDelivery) => `${d.repo}#${d.number}`;
 
@@ -267,7 +270,8 @@ export async function watchAndFixCi(input: CiWatchInput): Promise<CiWatchOutcome
     // exit still names the head the last attempt saw means the agent pushed
     // nothing — there was nothing to change, which is the flaky-queue case. Four
     // more identical attempts would spend time and credits to learn the same
-    // thing; the person's move is *Queue again*, and the watch says so.
+    // thing. The person's move is a new head — *Queue again* is not offered after a
+    // queue failure (MOTIR-6594) — and the watch says so.
     if (queueRedUnchanged(failing, headsAtAttempt)) {
       unchangedPolls += 1;
       if (unchangedPolls >= UNCHANGED_POLLS_TO_STOP) {
@@ -438,8 +442,10 @@ export function renderFixPrompt(input: {
         lines.push('    fix what it shows, and push.');
       }
       lines.push('  - **If nothing needs changing** (the queue\u2019s failure was flaky, or is');
-      lines.push('    already fixed on the base), make NO commit and say so. The person\u2019s');
-      lines.push('    move is then *Queue again* on the card, which retries the same commits.');
+      lines.push('    already fixed on the base), STILL PUSH: the merge of the base from step 1,');
+      lines.push('    or an empty commit if that merge brought nothing. *Queue again* is not');
+      lines.push('    offered after a queue failure, so only a new head whose checks go green');
+      lines.push('    asks for approval again. Say in your summary that nothing needed changing.');
     }
     lines.push('');
   }

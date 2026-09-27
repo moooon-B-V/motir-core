@@ -354,6 +354,8 @@ describe('get_work_item derives its CHILD rows from v1’s schema', () => {
     estimateMinutes: 30,
     storyPoints: 2,
     archivedAt: null,
+    obsolescence: null,
+    obsolescenceNoteMd: null,
   };
 
   it('the child row SATISFIES v1’s WorkItemRef — the comparison that was missing', () => {
@@ -507,6 +509,8 @@ const workItemDto = {
   implementationModel: null,
   subject: null,
   archivedAt: null,
+  obsolescence: null,
+  obsolescenceNoteMd: null,
   createdAt: '2026-08-05T16:05:35.168Z',
   updatedAt: '2026-08-06T00:36:35.928Z',
 };
@@ -554,6 +558,8 @@ describe('presentMcpWorkItemRow — the search row', () => {
     storyPoints: null,
     updatedAt: '2026-08-06T00:00:00.000Z',
     hasDescription: true,
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     ciState: null,
   };
 
@@ -605,6 +611,8 @@ describe('presentMcpReadyRow / presentMcpReadyDispatch', () => {
     type: 'code' as const,
     executor: 'coding_agent' as const,
     difficulty: null,
+    obsolescence: 'outdated' as const,
+    obsolescenceNoteMd: 'Superseded by the new flow.',
     descriptionMd: 'the body',
   };
 
@@ -817,6 +825,7 @@ describe('presentMcpProjectRow', () => {
     slug: 'motir',
     identifier: 'PROD',
     archivedAt: null as string | null,
+    accessMode: 'workspace' as const,
     accessLevel: 'open' as const,
     // The project MARK (MOTIR-2676) — deliberately NOT published by the MCP row
     // or by v1's `Project`, so the widening assertion below must keep holding
@@ -837,6 +846,7 @@ describe('presentMcpProjectRow', () => {
     expect(row.key).toBe('PROD');
     expect(row.id).toBe('proj-1');
     expect(row.slug).toBe('motir');
+    expect(row.accessMode).toBe('workspace');
     expect(row.accessLevel).toBe('open');
   });
 

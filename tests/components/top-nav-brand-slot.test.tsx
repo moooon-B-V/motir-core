@@ -46,7 +46,7 @@ vi.mock('@/app/(authed)/_components/CommandPaletteTrigger', () => ({
   CommandPaletteTrigger: () => <div />,
 }));
 vi.mock('@/app/(authed)/_components/CreateIssueButton', () => ({
-  CreateIssueButton: () => <div />,
+  CreateIssueButton: () => <div data-testid="create-issue" />,
 }));
 vi.mock('@/app/(authed)/_components/ReportButton', () => ({ ReportButton: () => <div /> }));
 vi.mock('@/components/planning/PlanWithAILauncher', () => ({ PlanWithAILauncher: () => <div /> }));
@@ -185,5 +185,18 @@ describe('the mark goes to the LANDING, not to the dashboard (MOTIR-4799)', () =
     const { container } = render(await TopNav(props));
     const brand = container.querySelector<HTMLAnchorElement>(`a[aria-label="topNav.brandHome"]`)!;
     expect(brand.getAttribute('href')).not.toBe('/dashboard');
+  });
+});
+
+describe('the work-item Create follows the active project (MOTIR-6548 · no-project shell S1)', () => {
+  it('is not rendered with no active project — there is nothing to create into', async () => {
+    const { container } = render(await TopNav(props));
+    expect(container.querySelector('[data-testid="create-issue"]')).toBeNull();
+  });
+
+  it('is rendered once there is one', async () => {
+    const project = { id: 'p1', name: 'Motir', identifier: 'MOTIR' } as never;
+    const { container } = render(await TopNav({ ...props, activeProject: project }));
+    expect(container.querySelector('[data-testid="create-issue"]')).not.toBeNull();
   });
 });

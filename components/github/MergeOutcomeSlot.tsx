@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { parseMemberVersion } from '@/lib/approvalGates/memberVersion';
+import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import type { PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
 
 // A PULL-REQUEST ROW'S SECOND PILL SLOT, after Approve and merge (Story MOTIR-4909 ·
@@ -68,7 +69,11 @@ export type RowMergeOutcome =
     }
   /** The commits cannot land as they stand — a conflict, or checks the host will not
    *  merge past. No verb: `motir fix` is the way forward (§4 FOURTH AMENDMENT, point 2). */
-  | { kind: 'cannotLand' };
+  | { kind: 'cannotLand' }
+  /** The merge queue FAILED it and it is held at Implemented (§4 FIFTH AMENDMENT;
+   *  MOTIR-6596, design § 31 panel 1). The pill still says what the queue did — *Left the
+   *  queue* — but no verb is offered: a second yes would queue the same refused commits. */
+  | { kind: 'failedHeld' };
 
 const MergeOutcomeContext = createContext<ReadonlyMap<string, RowMergeOutcome> | null>(null);
 
@@ -110,7 +115,9 @@ export type PersistedRowOutcome =
   | 'refusedSetting'
   /** The host refused, and the commits CANNOT land as they stand — a conflict, or red
    *  checks. No verb at all; `motir fix` is the way forward (§ 28 panel 3). */
-  | 'cannotLand';
+  | 'cannotLand'
+  /** A queue FAILURE, CAN'T-LAND since the FIFTH AMENDMENT — held, no verb (§ 31). */
+  | 'failedHeld';
 
 export function persistedRowOutcome(
   fact: Pick<
@@ -130,9 +137,14 @@ export function persistedRowOutcome(
     // The HEAD decides *New commits*, not whether a verb is offered: an exit at the
     // approved head may be unpressable (MOTIR-5802) and still *Left the queue*.
     if (!fact.exitAtApprovedHead) return 'newCommits';
-    // A CONFLICT cannot land as it stands, whatever anybody approves (§4 FOURTH
-    // AMENDMENT, point 2), so the row says that rather than offering a retry.
-    if (fact.exit.rawReason === 'MERGE_CONFLICT') return 'cannotLand';
+    // ⚠️ THE CLASS DECIDES, NEVER THE REASON STRING (MOTIR-6596). A CAN'T-LAND exit cannot
+    // land as it stands, whatever anybody approves (§4 FOURTH AMENDMENT, point 2), so the row
+    // offers no retry: a conflict says *Cannot be merged*, and a queue FAILURE — can't-land
+    // since the FIFTH AMENDMENT — keeps saying it *Left the queue*, held. The next
+    // reclassification changes `queueExit.ts` and nothing here.
+    if (classOfQueueExit(fact.exit.rawReason) === 'cant_land') {
+      return fact.exit.rawReason === 'MERGE_CONFLICT' ? 'cannotLand' : 'failedHeld';
+    }
     return fact.exit.disposition === 'failure' ? 'leftQueue' : 'removedFromQueue';
   }
   if (fact.retryable) return 'notMergedYet';
@@ -148,6 +160,7 @@ const READ_ONLY: Record<PersistedRowOutcome, RowMergeOutcome> = {
   notMergedYet: { kind: 'notMergedYet', onRetry: null, retrying: false },
   refusedSetting: { kind: 'refusedSetting', onRetry: null, retrying: false },
   cannotLand: { kind: 'cannotLand' },
+  failedHeld: { kind: 'failedHeld' },
 };
 
 /**
@@ -303,6 +316,15 @@ export function MergeOutcomeSlot({
             </Button>
           ) : null}
         </>
+      );
+    case 'failedHeld':
+      // § 31 panel 1: § 22's pill, and NO *Queue again* beside it — the queue refused these
+      // commits, so a press could only queue them to fail again. `motir fix` is below.
+      return (
+        <Pill severity="danger">
+          <CircleX className="h-3 w-3" aria-hidden />
+          {t('leftQueue')}
+        </Pill>
       );
     case 'cannotLand':
       // No verb at all, deliberately: a button here would be guaranteed to fail, and

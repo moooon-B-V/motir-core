@@ -2,6 +2,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 
 // The AI-generation TEST BED project (Subtask 7.4.10 · MOTIR-1426). A SECOND
 // project under the existing `moooon` workspace whose tree is NOT seeded and whose
@@ -80,6 +81,10 @@ export async function seedGenerationTestProject(
         tx,
       );
     }
+    // Open to the workspace, stored rather than derived (Story MOTIR-6169 ·
+    // MOTIR-6547): a seeded tenant carries no NULL `access_mode` — the
+    // NULL-means-derive window is for rows the OLD build wrote.
+    await projectRepository.setAccessMode(project.id, 'workspace', tx);
   });
 
   return project;

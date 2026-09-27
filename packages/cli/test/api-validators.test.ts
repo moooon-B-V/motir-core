@@ -38,6 +38,10 @@ const WORK_ITEM_DETAIL = {
   storyPoints: 2,
   createdAt: '2026-08-05T12:00:00Z',
   updatedAt: '2026-08-05T12:00:00Z',
+  // The OBSOLESCENCE mark (MOTIR-6581) — required-and-nullable, `null` on a
+  // current card. The marked shape is driven by the tolerance cases below.
+  obsolescence: null,
+  obsolescenceNoteMd: null,
   descriptionMd: '# Body',
   parentKey: 'MOTIR-2',
   // Story MOTIR-5310 · MOTIR-5412 — the item's OWN folder placement. A subtask
@@ -47,7 +51,15 @@ const WORK_ITEM_DETAIL = {
   folderPath: null,
   ancestorKeys: ['MOTIR-2'],
   children: [],
-  links: { blockedBy: [], blocks: [], relatesTo: [], duplicates: [], clones: [] },
+  links: {
+    blockedBy: [],
+    blocks: [],
+    relatesTo: [],
+    duplicates: [],
+    clones: [],
+    supersedes: [],
+    supersededBy: [],
+  },
   readiness: {
     ready: true,
     openBlockers: [],
@@ -96,6 +108,7 @@ const PROJECT = {
   key: 'MOTIR',
   name: 'Motir',
   accessLevel: 'open',
+  accessMode: 'workspace',
   archived: false,
 };
 
@@ -124,6 +137,8 @@ const READY_SET = {
       type: 'code',
       executor: 'coding_agent',
       difficulty: null,
+      obsolescence: null,
+      obsolescenceNoteMd: null,
       assigneeId: 'user_1',
       // The minimal ACTOR object every v1 collection row embeds (ADR
       // Amendment 8 Q1, MOTIR-2279). `assigneeId` is kept beside it and carries
@@ -238,6 +253,81 @@ describe('a response carrying a field this client does not know is ACCEPTED', ()
       targetRepositories: [{ ...WORK_ITEM_DETAIL.targetRepositories[0], surprise: 4 }],
     };
     expect(validators.operation_getWorkItem(grown)).toBe(true);
+  });
+
+  // MOTIR-6581 — the OBSOLESCENCE mark, asserted BY NAME rather than trusted to
+  // the generic `surprise` cases above: the last additive field (`difficulty`)
+  // broke every published client, so this one is proven on the two shapes a CLI
+  // reads before it builds on a card — the detail and the ready row.
+  it('the obsolescence mark on the DETAIL — `getWorkItem`, set and cleared', () => {
+    const marked = {
+      ...WORK_ITEM_DETAIL,
+      status: 'done',
+      obsolescence: 'deprecated',
+      obsolescenceNoteMd: 'Overturned by **MOTIR-9**.',
+    };
+    expect(validators.operation_getWorkItem(marked)).toBe(true);
+    expect(
+      validators.operation_getWorkItem({ ...marked, obsolescence: null, obsolescenceNoteMd: null }),
+    ).toBe(true);
+  });
+
+  it('the obsolescence mark on a READY row — `getProjectReadySet`', () => {
+    const marked = {
+      ...READY_SET,
+      items: [
+        {
+          ...READY_SET.items[0],
+          obsolescence: 'outdated',
+          obsolescenceNoteMd: 'See the new flow.',
+        },
+      ],
+    };
+    expect(validators.operation_getProjectReadySet(marked)).toBe(true);
+  });
+
+  it('the obsolescence mark on a COLLECTION row and on the write answers', () => {
+    const row = {
+      key: 'MOTIR-1',
+      kind: 'story',
+      type: null,
+      title: 'A story',
+      status: 'done',
+      priority: 'medium',
+      assigneeId: null,
+      reporterId: 'user_1',
+      dueDate: null,
+      estimateMinutes: null,
+      storyPoints: null,
+      createdAt: '2026-08-05T12:00:00Z',
+      updatedAt: '2026-08-05T12:00:00Z',
+      obsolescence: 'outdated',
+      obsolescenceNoteMd: null,
+      dependencies: { blockedBy: [], blocks: [] },
+    };
+    expect(validators.operation_listProjectWorkItems({ items: [row], nextCursor: null })).toBe(
+      true,
+    );
+    const marked = { ...WORK_ITEM_DETAIL, obsolescence: 'outdated', obsolescenceNoteMd: null };
+    expect(validators.operation_createWorkItem(marked)).toBe(true);
+    expect(validators.operation_updateWorkItem(marked)).toBe(true);
+  });
+
+  it('while an obsolescence OUTSIDE the enum is still rejected, naming the field', () => {
+    // Proves the shared `WorkItemObsolescence` component the carriers `$ref`
+    // actually RESOLVED in the compiled validator, rather than degrading to `{}`.
+    expect(
+      failingPaths(validators.operation_getWorkItem, {
+        ...WORK_ITEM_DETAIL,
+        obsolescence: 'stale',
+      }),
+    ).toContainEqual('/obsolescence');
+    expect(
+      failingPaths(validators.operation_getProjectReadySet, {
+        ...READY_SET,
+        items: [{ ...READY_SET.items[0], obsolescence: 'stale' }],
+      }),
+    ).toContainEqual('/items/0/obsolescence');
   });
 
   it('while a wrong TYPE on a known field is still rejected', () => {

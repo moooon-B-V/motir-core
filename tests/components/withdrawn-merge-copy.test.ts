@@ -220,3 +220,32 @@ describe('`conflict` — the conflicted row is named, with its base (Panels 1, 2
     );
   });
 });
+
+// `queue_failed` (MOTIR-6595 · MOTIR-6596; `design-notes.md` § 31 panels 5 and 5b): a gate the
+// OLD rule re-asked from a queue FAILURE, withdrawn by the convergence. The member is the one
+// whose delivery still carries the held failure; its own sentence, never `ci_failed`'s.
+describe('`queue_failed` — the member held by a queue failure is named (§ 31 panel 5)', () => {
+  const failed = (name: string): WithdrawnMember => ({ name, state: 'open', leftQueue: true });
+
+  it('names the held member in the meta and the sentence, and cites the green push', () => {
+    expect(copyFor('queue_failed', [merged(CORE), failed(AI)])).toEqual({
+      meta: pra('meta.withdrawnQueueFailed', { count: 2, pr: AI }),
+      sentence: pra('withdrawn.portQueueFailed', { pr: AI }),
+      cite: pra('withdrawn.citeQueueFailed'),
+    });
+  });
+
+  it('no held member left (a push moved on): the shared cause sentence, with the re-ask', () => {
+    expect(copyFor('queue_failed', [open(CORE)])).toEqual({
+      meta: pra('meta.withdrawnUnknown', { count: 1 }),
+      sentence: gate('withdrawn.cause.queue_failed'),
+      cite: pra('withdrawn.portCite'),
+    });
+  });
+
+  it('on a done-category card the cite is the shared one', () => {
+    expect(copyFor('queue_failed', [failed(AI)], { terminal: true }).cite).toEqual(
+      gate('withdrawn.portCite'),
+    );
+  });
+});

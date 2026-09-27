@@ -334,16 +334,17 @@ export const mergeQueueExitService = {
  * ⚠️ THE CLASS IS THE WHOLE OF THE DECISION, and it answers one question: could
  * re-running these SAME commits land them?
  *
- *  · `retryable` / `setting` — YES (a flaky check, a cleared queue, a hand removal, a
- *    setting somebody can change). The card moves to `in_review` as a SYSTEM write —
+ *  · `retryable` / `setting` — YES (a cleared queue, a hand removal, a setting somebody
+ *    can change). The card moves to `in_review` as a SYSTEM write —
  *    the status for *CI spoke and a person must decide*, and the only one a fresh
  *    approval can leave for `approved` — and {@link reconcileGatesFor} then raises
  *    exactly ONE awaiting `pull_request_approval` gate over the current set, because
  *    `resolveGateSet` reads the standing outcome as outranking the approval given
  *    before it. A decided design gate is not re-asked; the old merge gate row is never
  *    touched.
- *  · `cant_land` — NO. The commits cannot combine as they stand, so asking would offer
- *    a button guaranteed to fail. The card moves to `implemented`, where `motir fix`
+ *  · `cant_land` — NO. The commits cannot combine as they stand — a conflict, or since
+ *    the FIFTH AMENDMENT (MOTIR-6594) any queue FAILURE — so asking would offer a button
+ *    guaranteed to fail. The card moves to `implemented`, where `motir fix`
  *    claims it (MOTIR-5803), and the promotion is HELD at that head: no gate is raised
  *    here and none is raised by a green check at the same commits. A PUSH is what ends
  *    the hold, and the next green asks about the new commits (MOTIR-5604's path).

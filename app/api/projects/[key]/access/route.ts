@@ -4,11 +4,14 @@ import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectMemberErrorResponse } from '@/lib/projects/memberErrorResponse';
 import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 
-// PATCH /api/projects/[key]/access (Story 6.4 · Subtask 6.4.4)
-// Set the project's browse-access level (open / limited / private). Body:
-// { accessLevel }. Project-admin gated; going private seeds current workspace
-// members as project members (handled in the service). Thin HTTP transport per
-// CLAUDE.md: parse, one service call, map typed errors.
+// PATCH /api/projects/[key]/access (Story 6.4 · Subtask 6.4.4; Story MOTIR-6169 ·
+// MOTIR-6544) — set who may ENTER the project. Body: `{ accessMode }` (workspace /
+// members / public), or the legacy `{ accessLevel }` for the one release in which
+// the shipped UI still sends a level (mapped by the service's adapter). A body
+// carrying BOTH is refused — which one would win is not a question a route should
+// answer silently. `project:manage_access` gated. Nobody is added to the project
+// by a mode change. Thin HTTP transport per CLAUDE.md: parse, one service call,
+// map typed errors.
 
 interface RouteParams {
   params: Promise<{ key: string }>;
@@ -33,27 +36,40 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body', code: 'BAD_REQUEST' }, { status: 400 });
   }
-  const accessLevel =
-    body &&
-    typeof body === 'object' &&
-    'accessLevel' in body &&
-    typeof body.accessLevel === 'string'
-      ? body.accessLevel
-      : null;
-  if (!accessLevel) {
+  const field = (name: 'accessMode' | 'accessLevel'): string | null | undefined => {
+    if (!body || typeof body !== 'object' || !(name in body)) return undefined;
+    const value = (body as Record<string, unknown>)[name];
+    return typeof value === 'string' ? value : null;
+  };
+  const accessMode = field('accessMode');
+  const accessLevel = field('accessLevel');
+  if (accessMode !== undefined && accessLevel !== undefined) {
     return NextResponse.json(
-      { error: 'An "accessLevel" is required.', code: 'BAD_REQUEST' },
+      { error: 'Send "accessMode" or "accessLevel", not both.', code: 'BAD_REQUEST' },
+      { status: 400 },
+    );
+  }
+  if (!accessMode && !accessLevel) {
+    return NextResponse.json(
+      { error: 'An "accessMode" is required.', code: 'BAD_REQUEST' },
       { status: 400 },
     );
   }
 
   try {
-    const access = await projectMembersService.setAccessLevel({
-      key,
-      actorUserId: ctx.userId,
-      ctx,
-      level: accessLevel,
-    });
+    const access = accessMode
+      ? await projectMembersService.setAccessMode({
+          key,
+          actorUserId: ctx.userId,
+          ctx,
+          mode: accessMode,
+        })
+      : await projectMembersService.setAccessLevel({
+          key,
+          actorUserId: ctx.userId,
+          ctx,
+          level: accessLevel!,
+        });
     return NextResponse.json({ access });
   } catch (err) {
     const mapped = projectMemberErrorResponse(err);

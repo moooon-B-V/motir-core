@@ -1,4 +1,8 @@
-import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
+import type {
+  ProjectAccessMode,
+  WorkspaceAccessScope,
+  WorkspaceRole,
+} from '@/generated/prisma/client';
 import { describe, expect, it } from 'vitest';
 import { hasPermission, resolvePermissions } from '@/lib/permissions/resolve';
 import { ROLE_GATED_PERMISSIONS, WORKSPACE_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
@@ -14,26 +18,30 @@ import type { ProjectAccessInputs } from '@/lib/projects/access';
 // This file proves what the custom arm adds, and — the larger half — what it
 // must NOT disturb:
 //
-//   * the LEVEL-GATED layer stays above every role;
+//   * the MODE-GATED layer stays above every role;
 //   * the Manager RAIL stays above the custom set (a custom role is never a
 //     Manager, so no role somebody authored can narrow one — which is how you
 //     would otherwise lock yourself out of your own workspace's Roles page);
 //   * the null-deny RAIL stays below it (a role is never a way INTO a workspace);
-//   * `levelGrants` reads only whether the actor was ADDED, never the role, so a
-//     custom role is subtracted by `limited` / `private` exactly as a built-in is.
+//   * entry (`canEnter`, Story MOTIR-6169) reads the mode, the scope and whether
+//     the actor was ADDED — never the role — so a custom role is admitted or kept
+//     out exactly as a built-in is, and once in holds exactly what it lists.
 
-const ALL_LEVELS: ProjectAccessLevel[] = ['open', 'limited', 'private', 'public'];
+const ALL_MODES: ProjectAccessMode[] = ['workspace', 'members', 'public'];
 
 /** A membership on a workspace CUSTOM role — held at the `member` tier. */
 function onCustomRole(args: {
-  accessLevel: ProjectAccessLevel;
+  accessMode: ProjectAccessMode;
   workspaceRole?: WorkspaceRole | null;
+  accessScope?: WorkspaceAccessScope;
   addedToProject?: boolean;
   permissions: readonly string[];
 }): ProjectAccessInputs {
+  const workspaceRole = args.workspaceRole === undefined ? 'member' : args.workspaceRole;
   return {
-    accessLevel: args.accessLevel,
-    workspaceRole: args.workspaceRole === undefined ? 'member' : args.workspaceRole,
+    accessMode: args.accessMode,
+    workspaceRole,
+    accessScope: workspaceRole == null ? null : (args.accessScope ?? 'full'),
     addedToProject: args.addedToProject ?? true,
     customRolePermissions: args.permissions,
   };
@@ -47,7 +55,7 @@ describe('the custom set REPLACES the base — and only the base', () => {
   it('a membership on a custom role resolves that role`s set, not its tier`s', () => {
     const held = resolvePermissions(
       onCustomRole({
-        accessLevel: 'open',
+        accessMode: 'workspace',
         permissions: ['project:browse', 'comment:add', 'attachment:create'],
       }),
     );
@@ -59,14 +67,16 @@ describe('the custom set REPLACES the base — and only the base', () => {
   it('with NO custom role the built-in set is the base, null and absent alike', () => {
     for (const role of ['member', 'viewer'] as const) {
       const withNull = resolvePermissions({
-        accessLevel: 'open',
+        accessMode: 'workspace',
         workspaceRole: role,
+        accessScope: 'full',
         addedToProject: true,
         customRolePermissions: null,
       });
       const withAbsent = resolvePermissions({
-        accessLevel: 'open',
+        accessMode: 'workspace',
         workspaceRole: role,
+        accessScope: 'full',
         addedToProject: true,
       });
       const expected = sorted(WORKSPACE_ROLE_PERMISSIONS[role]);
@@ -80,8 +90,9 @@ describe('the custom set REPLACES the base — and only the base', () => {
     // roles (MOTIR-6459): a person has the same role in every project they can
     // enter (`role-model.md`).
     const held = resolvePermissions({
-      accessLevel: 'open',
+      accessMode: 'workspace',
       workspaceRole: 'member',
+      accessScope: 'full',
       addedToProject: false,
       customRolePermissions: null,
     });
@@ -91,19 +102,19 @@ describe('the custom set REPLACES the base — and only the base', () => {
   it('an EMPTY custom set grants nothing — it does NOT fall back to the tier', () => {
     // The distinction that a `??` on the array's LENGTH would get wrong. A role
     // that grants nothing is a legitimate role somebody authored on purpose.
-    const held = resolvePermissions(onCustomRole({ accessLevel: 'open', permissions: [] }));
+    const held = resolvePermissions(onCustomRole({ accessMode: 'workspace', permissions: [] }));
     expect(sorted(held)).toEqual([]);
     expect(held.size).toBe(0);
   });
 });
 
 describe('the two RAILS stay above and below the custom set', () => {
-  it('a Manager resolves the full role-gated catalog on every level, whatever custom array is passed', () => {
-    for (const level of ALL_LEVELS) {
+  it('a Manager resolves the full role-gated catalog in every mode, whatever custom array is passed', () => {
+    for (const level of ALL_MODES) {
       for (const addedToProject of [false, true]) {
         const held = resolvePermissions(
           onCustomRole({
-            accessLevel: level,
+            accessMode: level,
             workspaceRole: 'manager',
             addedToProject,
             permissions: [], // a role that grants nothing at all
@@ -117,16 +128,16 @@ describe('the two RAILS stay above and below the custom set', () => {
     // Specifically: they keep the key that lets them FIX a bad role.
     expect(
       resolvePermissions(
-        onCustomRole({ accessLevel: 'private', workspaceRole: 'manager', permissions: [] }),
+        onCustomRole({ accessMode: 'members', workspaceRole: 'manager', permissions: [] }),
       ).has('project:manage_access'),
     ).toBe(true);
   });
 
-  it('an actor with NO workspace membership holds nothing beyond the level-gated layer, custom role or not', () => {
+  it('an actor with NO workspace membership holds nothing beyond the mode-gated layer, custom role or not', () => {
     // Non-public: nothing at all.
     const onPrivate = resolvePermissions(
       onCustomRole({
-        accessLevel: 'private',
+        accessMode: 'members',
         workspaceRole: null,
         permissions: [...ROLE_GATED_PERMISSIONS],
       }),
@@ -137,7 +148,7 @@ describe('the two RAILS stay above and below the custom set', () => {
     // custom role names the entire catalog.
     const onPublic = resolvePermissions(
       onCustomRole({
-        accessLevel: 'public',
+        accessMode: 'public',
         workspaceRole: null,
         permissions: [...ROLE_GATED_PERMISSIONS],
       }),
@@ -155,11 +166,11 @@ describe('the two RAILS stay above and below the custom set', () => {
     );
   });
 
-  it('a custom role can neither HOLD nor WITHHOLD a level-gated `public_request:*` key', () => {
+  it('a custom role can neither HOLD nor WITHHOLD a mode-gated `public_request:*` key', () => {
     // Naming them does not grant them on a non-public project…
     const naming = resolvePermissions(
       onCustomRole({
-        accessLevel: 'open',
+        accessMode: 'workspace',
         permissions: ['public_request:submit', 'public_request:upvote', 'public_request:comment'],
       }),
     );
@@ -167,7 +178,7 @@ describe('the two RAILS stay above and below the custom set', () => {
 
     // …and omitting them does not take them away on a public one.
     const omitting = resolvePermissions(
-      onCustomRole({ accessLevel: 'public', permissions: ['project:browse'] }),
+      onCustomRole({ accessMode: 'public', permissions: ['project:browse'] }),
     );
     expect(omitting.has('public_request:submit')).toBe(true);
     expect(omitting.has('public_request:upvote')).toBe(true);
@@ -179,7 +190,7 @@ describe('the CATALOG is the source of truth over a stored array', () => {
   it('a key that is not in ROLE_GATED_PERMISSIONS is IGNORED, never granted', () => {
     const held = resolvePermissions(
       onCustomRole({
-        accessLevel: 'open',
+        accessMode: 'workspace',
         permissions: [
           'project:browse',
           // A key RETIRED from the catalog after the role was authored — the
@@ -199,7 +210,7 @@ describe('the CATALOG is the source of truth over a stored array', () => {
   it('the filter is derived from the constant, not a hardcoded deny-list', () => {
     const held = resolvePermissions(
       onCustomRole({
-        accessLevel: 'open',
+        accessMode: 'workspace',
         permissions: [...ROLE_GATED_PERMISSIONS, 'synthetic:not-in-the-catalog'],
       }),
     );
@@ -208,11 +219,11 @@ describe('the CATALOG is the source of truth over a stored array', () => {
   });
 });
 
-describe('the ACCESS-LEVEL truth table — a custom role is subtracted by whether the actor was ADDED', () => {
-  // ⚠️ The expectations are LITERAL, transcribed from `levelGrants`' branches by
-  // hand — not computed from the code under test, for the same reason
-  // accessParity's are not. The permission set is held CONSTANT, so the only
-  // variables are the level and whether the actor was added.
+describe('the ACCESS-MODE truth table — a custom role is admitted by entry, then held whole', () => {
+  // ⚠️ The expectations are LITERAL, transcribed from `canEnter`'s table by hand —
+  // not computed from the code under test, for the same reason accessParity's are
+  // not. The permission set is held CONSTANT, so the only variables are the mode,
+  // the scope and whether the actor was added.
   const GRANTED = ['project:browse', 'work_item:edit', 'comment:add', 'attachment:create'] as const;
   type Expectation = Record<(typeof GRANTED)[number], boolean>;
   const ALL: Expectation = {
@@ -227,47 +238,62 @@ describe('the ACCESS-LEVEL truth table — a custom role is subtracted by whethe
     'comment:add': false,
     'attachment:create': false,
   };
+  /** A non-entrant on a public project: the public read set's browse, nothing written. */
+  const PUBLIC_ONLY: Expectation = { ...NONE, 'project:browse': true };
 
-  const TABLE: Array<{ level: ProjectAccessLevel; added: boolean; expected: Expectation }> = [
-    // `open` / `public` — the set survives intact, added or not.
-    { level: 'open', added: false, expected: ALL },
-    { level: 'open', added: true, expected: ALL },
-    { level: 'public', added: false, expected: ALL },
-    { level: 'public', added: true, expected: ALL },
-    // `limited` — everything but EDIT for someone not added.
-    { level: 'limited', added: false, expected: { ...ALL, 'work_item:edit': false } },
-    { level: 'limited', added: true, expected: ALL },
-    // `private` — nothing for someone not added; everything for someone added.
-    { level: 'private', added: false, expected: NONE },
-    { level: 'private', added: true, expected: ALL },
+  const TABLE: Array<{
+    mode: ProjectAccessMode;
+    scope: WorkspaceAccessScope;
+    added: boolean;
+    expected: Expectation;
+  }> = [
+    // `workspace` — a Full member enters, added or not; a Limited one only if added.
+    { mode: 'workspace', scope: 'full', added: false, expected: ALL },
+    { mode: 'workspace', scope: 'full', added: true, expected: ALL },
+    { mode: 'workspace', scope: 'limited', added: false, expected: NONE },
+    { mode: 'workspace', scope: 'limited', added: true, expected: ALL },
+    // `members` — only someone added enters, whatever their scope.
+    { mode: 'members', scope: 'full', added: false, expected: NONE },
+    { mode: 'members', scope: 'full', added: true, expected: ALL },
+    { mode: 'members', scope: 'limited', added: false, expected: NONE },
+    { mode: 'members', scope: 'limited', added: true, expected: ALL },
+    // `public` — as `workspace`, and a non-entrant still browses.
+    { mode: 'public', scope: 'full', added: false, expected: ALL },
+    { mode: 'public', scope: 'full', added: true, expected: ALL },
+    { mode: 'public', scope: 'limited', added: false, expected: PUBLIC_ONLY },
+    { mode: 'public', scope: 'limited', added: true, expected: ALL },
   ];
 
-  it.each(TABLE)('$level · added=$added', ({ level, added, expected }) => {
+  it.each(TABLE)('$mode · $scope · added=$added', ({ mode, scope, added, expected }) => {
     const inputs = onCustomRole({
-      accessLevel: level,
+      accessMode: mode,
+      accessScope: scope,
       addedToProject: added,
       permissions: [...GRANTED],
     });
     for (const key of GRANTED) {
-      expect(hasPermission(inputs, key), `${level} · added=${added} · ${key}`).toBe(expected[key]);
+      expect(hasPermission(inputs, key), `${mode} · ${scope} · added=${added} · ${key}`).toBe(
+        expected[key],
+      );
     }
   });
 
   it('and the SAME subtraction lands on the corresponding BUILT-IN — the parity itself', () => {
     // A custom role holding EXACTLY a built-in's set must resolve to exactly what
-    // that built-in resolves to, on every level, added or not — any difference
-    // could only come from the level layer treating the two differently.
-    for (const level of ALL_LEVELS) {
+    // that built-in resolves to, in every mode, added or not — any difference
+    // could only come from entry treating the two differently.
+    for (const level of ALL_MODES) {
       for (const role of ['viewer', 'member'] as const) {
         for (const addedToProject of [false, true]) {
           const builtIn = resolvePermissions({
-            accessLevel: level,
+            accessMode: level,
             workspaceRole: role,
+            accessScope: 'full',
             addedToProject,
           });
           const custom = resolvePermissions(
             onCustomRole({
-              accessLevel: level,
+              accessMode: level,
               addedToProject,
               permissions: [...WORKSPACE_ROLE_PERMISSIONS[role]],
             }),
@@ -300,6 +326,8 @@ describe('resolve.ts stays PURE', () => {
     // erases at compile time.
     const prismaImports = source.match(/from '@\/generated\/prisma\/client'/g) ?? [];
     expect(prismaImports).toHaveLength(1);
-    expect(source).toMatch(/import type \{ ProjectAccessLevel, WorkspaceRole \}/);
+    expect(source).toMatch(
+      /import type \{\s*ProjectAccessMode,\s*WorkspaceAccessScope,\s*WorkspaceRole,?\s*\}/,
+    );
   });
 });

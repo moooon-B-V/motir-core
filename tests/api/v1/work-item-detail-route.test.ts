@@ -103,6 +103,8 @@ describe('GET /api/v1/work-items/{key}', () => {
     expect(body.links.relatesTo).toEqual([]);
     expect(body.links.duplicates).toEqual([]);
     expect(body.links.clones).toEqual([]);
+    expect(body.links.supersedes).toEqual([]);
+    expect(body.links.supersededBy).toEqual([]);
     // The blocker is open, so the item is not ready and says which blocker.
     expect(body.readiness.ready).toBe(false);
     expect(body.readiness.openBlockers.map((b) => b.key)).toEqual([blocker.identifier]);
@@ -363,6 +365,8 @@ describe('the v1 work-item presenters', () => {
         relatesTo: [],
         duplicates: [],
         clones: [],
+        supersedes: [],
+        supersededBy: [],
         readiness: { ready: true, openBlockers: [], blockedByAncestor: null },
         labels: [],
         components: [],

@@ -34,8 +34,10 @@ import { sanitizeNextPath } from './nextDestination';
 
 /**
  * The signed-in landing — where a reader goes when nothing more specific is
- * asked for. `/workbench` is project-scoped, and every signed-in reader is now
- * inside a project (MOTIR-4870), so it is a safe destination for all of them.
+ * asked for. `/workbench` is project-scoped, and almost every signed-in reader
+ * is inside a project (MOTIR-4870). The one exception — a reader who can enter
+ * none of a workspace's projects (MOTIR-6548) — is sent on from here to
+ * `NO_PROJECT_PATH` by the page itself.
  *
  * ⚠️ RENAMED from `/home` by MOTIR-4782, and the old address still LANDS: a
  * permanent 308 in `next.config.ts` carries it here with its query string, so a
@@ -47,8 +49,10 @@ import { sanitizeNextPath } from './nextDestination';
  * shipped create-first door when there is no project (MOTIR-2761)", which was
  * the second clause of the sentence above and is retired with the state it
  * described: a default project is seeded at the WORKSPACE tier, so
- * `getActiveProject()` returns null on no reachable path for a member and there
- * is no project-less reader for the door to serve.
+ * `getActiveProject()` returns null for a member only when they can enter none
+ * of the workspace's projects — and that reader gets the no-project landing
+ * (`NO_PROJECT_PATH`, MOTIR-6548), whose create door is withheld from anyone
+ * who could not enter what they made. The create-first door stays gone.
  *
  * ⚠️ AND THE LANDING NOW HAS A REGISTRATION ARM, which the retired notice did
  * not anticipate: it read as though this constant would simply keep serving
@@ -57,6 +61,16 @@ import { sanitizeNextPath } from './nextDestination';
  * sign-in still lands here.
  */
 export const AUTHED_LANDING_PATH = '/workbench';
+
+/**
+ * Where a signed-in reader with NO active project lands (Story MOTIR-6169 ·
+ * MOTIR-6548 · `design/shell/no-project--limited.mock.html`): a workspace that
+ * has projects, none of which they can enter. Every project-scoped page sends a
+ * null `getActiveProject()` here — `/sign-in` would bounce a signed-in reader
+ * straight back — and the page itself sends anyone who DOES have a project on
+ * to `AUTHED_LANDING_PATH`, so it is never a place a reader is stranded.
+ */
+export const NO_PROJECT_PATH = '/no-project';
 
 /**
  * Where the cross-origin idea hand-off goes (MOTIR-1458): the authed discovery

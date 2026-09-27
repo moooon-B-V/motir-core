@@ -331,7 +331,9 @@ view shows.
 Each `ReadyItemDto` has `id`, `key` (the `<KEY>-<n>` identifier), `kind`, `title`,
 `priority`, `status: { key, category }`, `assignee` (or null), and
 `descriptionExcerpt` — **plus the `dependencies` block** and the
-**[`commentCount`](#the-commentcount-field)** below.
+**[`commentCount`](#the-commentcount-field)** below — and the
+[obsolescence mark](#the-obsolescence-mark), `obsolescence` and
+`obsolescenceNoteMd`. A marked card stays in the ready set: the mark gates nothing.
 
 ##### The `dependencies` block (list reads)
 
@@ -391,6 +393,40 @@ item they return:
   that aggregate answers for one card; the list reads answer per row.
 - It is an MCP projection, not a web DTO field: `ReadyItemDto`,
   `WorkItemListItemDto` and `IssueDetailDto` are unchanged.
+
+##### The obsolescence mark
+
+A work item can be marked as no longer **true of the code** (Story MOTIR-6574 ·
+MOTIR-6582), on ANY kind and in ANY status — a `done` card included, which is
+the point: the card that shipped the old behaviour is the one a later reader
+trusts.
+
+```jsonc
+"obsolescence": "outdated",          // or "deprecated", or null
+"obsolescenceNoteMd": "Rewritten by the v2 flow — read ACME-40 instead."
+```
+
+- **`outdated`** — the text no longer describes what shipped; the capability
+  lives on in another shape. **`deprecated`** — retired or overturned on
+  purpose; do not build on it. `null` — still current.
+- **`obsolescenceNoteMd`** — the Markdown _why_, independent of the mark:
+  clearing the mark keeps the note. The item that REPLACES a marked one is a
+  real link, `supersedes` ([`link_work_items`](#link_work_items)), so
+  `get_work_item` names it in its `supersededBy` group.
+- **Written** by [`create_work_item`](#create_work_item) and
+  [`update_work_item`](#update_work_item) (`null` clears; a value outside the
+  enum is `INVALID_OBSOLESCENCE`).
+- **Read** by every work-item door: `get_work_item` (the item and each child
+  row), `search_work_items`, `list_ready`, `next_ready`, `claim_next_ready` and
+  every tool that returns a `WorkItemDto` carry both fields; `skeleton` carries
+  the mark only (the note is a body, and bodies stay off the breadth read).
+- **The text blocks** of `get_work_item` and `search_work_items` print
+  `obsolescence: outdated — superseded by ACME-40` and the note's first line
+  (`note: …`) on a marked card, and nothing new on an unmarked one.
+- **Informational only — no read hides a marked card.** No MCP read (and no
+  internal AI read) excludes, dims or re-sorts a marked row, and the mark does
+  not touch readiness. To select by it, filter on the `obsolescence` field of
+  [`search_work_items`](#search_work_items).
 
 ##### The dispatch advisories
 
@@ -595,7 +631,10 @@ to `excludeIds`.
 with `descriptionMd`, `contextRefs`, `blockerKeys`, `parentKey`, `runCommand`
 (`motir run <key>`), `sessionBranch`, `targetRepo`, `targetRepoCloneUrl`, and
 `targetRepoDefaultBranch` — plus the
-[`commentCount`](#the-commentcount-field) the list reads carry. A non-zero
+[`commentCount`](#the-commentcount-field) the list reads carry and the
+[obsolescence mark](#the-obsolescence-mark) (`obsolescence`,
+`obsolescenceNoteMd`) every ready row carries — a marked card is dispatched like
+any other, so read the note before building on it. A non-zero
 count on a dispatch payload is the cue to read
 [`get_work_item_activity`](#get_work_item_activity) before starting.
 
@@ -821,7 +860,11 @@ shape the detail page reads.
 
 **Output** — `structuredContent`: the `IssueDetailDto` aggregate: the item
 (description, status, priority, assignee, …), its parent, children, dependency
-links, and a readiness verdict. The **item** additionally carries
+links, and a readiness verdict. The link groups are `blockedBy`, `blocks`,
+`relatesTo`, `duplicates`, `clones`, **`supersedes`** (the older items this one
+replaces) and **`supersededBy`** (the newer items that replace it) — each an
+array of `{ linkId, item }`, `[]` when empty. The text block prints
+`Supersedes: …` / `Superseded by: …` lines when either group is non-empty. The **item** additionally carries
 [`commentCount`](#the-commentcount-field) — how much discussion this card has,
 so the [`get_work_item_activity`](#get_work_item_activity) round-trip is only
 paid when there is something to read. The child rows do **not** carry it: this
@@ -856,7 +899,13 @@ The item carries its **`difficulty`** (Story MOTIR-6016) — `trivial` / `low` /
 `medium` / `high`, how hard the work is to reason about, or `null` when unset
 and always `null` on an epic or story. Every tool returning a `WorkItemDto`, and
 every ready row (`list_ready`, `next_ready`, `claim_next_ready`), carries it too.
-They are the ONLY folder fields on the payload, and the text summary prints a
+Beside it the item carries the [obsolescence mark](#the-obsolescence-mark) —
+`obsolescence` (`outdated` / `deprecated`, `null` while the card is still true
+of the code) and `obsolescenceNoteMd` — and so does every **child** row. On a
+marked card the text block prints `obsolescence: outdated — superseded by
+ACME-40` (the tail names the `supersededBy` group) and `note: <first line>`; an
+unmarked card prints no new line, and a marked child is never hidden or moved.
+The folder fields `folderId` / `folderPath` are the ONLY folder fields on the payload, and the text summary prints a
 `Folder: Parked ▸ 2025` line beside `Parent:` when one is set.
 
 ```jsonc
@@ -1157,6 +1206,8 @@ epics included, so the agent surface can create one).
 | `type`               | type enum \| null                                   | no       | Work type (code / design / test / …) — leaf kinds only; rejected on a story. Seeds the executor from the type default unless `executor` is also given. Omit/`null` → untyped.                                                                                       |
 | `executor`           | `"coding_agent" \| "human"` \| null                 | no       | Who executes the work — leaf kinds only; overrides the type default. Omit/`null` → the type default (or unset).                                                                                                                                                     |
 | `difficulty`         | `"trivial" \| "low" \| "medium" \| "high"` \| null  | no       | How hard the work is to REASON about (not how big) — leaf kinds only; a non-null value on an epic/story is `DIFFICULTY_NOT_ALLOWED_ON_KIND`. Omit/`null` → unset.                                                                                                   |
+| `obsolescence`       | `"outdated" \| "deprecated"` \| null                | no       | The [obsolescence mark](#the-obsolescence-mark) — any kind, any status. A value outside the enum is `INVALID_OBSOLESCENCE`. Omit/`null` → unmarked.                                                                                                                 |
+| `obsolescenceNoteMd` | string \| null                                      | no       | Markdown note saying WHY the item is marked. Omit/`null` → none.                                                                                                                                                                                                    |
 | `targetRepo`         | string \| null                                      | no       | WHICH repo the item ships in — bare repo name (`"motir-core"`) or `"owner/name"`. Must name a repo in **this project's** repository set (else `UNKNOWN_TARGET_REPO`). Omit/`null` → unpinned.                                                                       |
 | `targetRepos`        | string[]                                            | no       | EVERY repo the item ships in, ORDERED — element 0 is the PRIMARY dispatch routes to. Same validation per element. MUTUALLY EXCLUSIVE with `targetRepo` (else `CONFLICTING_TARGET_REPO_INPUT`). Omit → the set comes from `targetRepo`; `[]` → the empty set.        |
 | `targetRepositories` | string[]                                            | no       | The same set as REFERENCES — the project's repository ROW IDS, ORDERED, element 0 the primary. Survives a rename, and can name one of two rows sharing a role. MUTUALLY EXCLUSIVE with BOTH fields above; an id outside this project is `UNKNOWN_PROJECT_REPO_REF`. |
@@ -2026,17 +2077,28 @@ and one `CLI_TOKEN_GRANT` already carries. The grant is **not** widened.
 
 Create a relationship between two work items — the primitive for the **dependency
 edges** the plan is built on. The `relationship` is read `fromKey <relationship>
-toKey` and uses the same five UI relationship kinds as the relationships panel
-(`blocked_by` / `blocks` / `relates_to` / `duplicates` / `clones`); `blocks` is
-the inverse direction of `blocked_by`, both stored as the single `is_blocked_by`
+toKey` and is one of seven relationships (`blocked_by` / `blocks` / `relates_to`
+/ `duplicates` / `clones` / `supersedes` / `superseded_by`); `blocks` is the
+inverse direction of `blocked_by`, both stored as the single `is_blocked_by`
 edge. An `is_blocked_by` link removes the blocked item from the ready set
 (`list_ready` / `next_ready` honor it) and renders the inverse edge on the other
 item. Targets may live in **another project in the same workspace**.
 
+**`supersedes` / `superseded_by`** (MOTIR-6580) record that one work item
+REPLACES another. `A supersedes B` means A is the NEWER item and B the OLDER one
+it replaces; `B superseded_by A` writes the very same stored row
+(`from` = A, `to` = B, kind `supersedes`) from the older end. It is directed with
+no reciprocal row, and it **gates nothing** — readiness, the ready set and the
+claim doors read `is_blocked_by` alone, and there is no cycle guard on it. The
+older item's own mark (`outdated` / `deprecated`) is a separate field; this edge
+says which item took over. `get_work_item` lists the edge under `supersedes` on
+the newer item and under `supersededBy` on the older one.
+
 Re-creating an existing link is **idempotent** (a success no-op, not an error). A
-**self** link, a dependency **cycle** (`is_blocked_by` only), or a
-**cross-workspace** link returns a typed error naming the violation. The link is
-an edit of the FROM item, so the same Story-6.4 edit gate as the UI applies.
+**self** link (any relationship), a dependency **cycle** (`is_blocked_by` only),
+or a **cross-workspace** link returns a typed error naming the violation. The
+link is an edit of the FROM item, so the same Story-6.4 edit gate as the UI
+applies.
 
 **A dependency SHOULD join two items on the SAME LEVEL** (Story MOTIR-6015 ·
 MOTIR-6369). The level is **position, not kind** (MOTIR-6387,
@@ -2060,11 +2122,11 @@ until somebody re-wires it to the same-level item really waited on. Only the pla
 gate refuses one (`INVALID_PLAN_REF_GRAPH` / `cross_level`): a planner may not
 author it. `relates_to`, `duplicates` and `clones` are never judged.
 
-| Input          | Type                                                                   | Required | Notes                                                     |
-| -------------- | ---------------------------------------------------------------------- | -------- | --------------------------------------------------------- |
-| `fromKey`      | string                                                                 | yes      | The first item's identifier, e.g. `"ACME-3"`.             |
-| `toKey`        | string                                                                 | yes      | The second item's identifier (may be in another project). |
-| `relationship` | `"blocked_by" \| "blocks" \| "relates_to" \| "duplicates" \| "clones"` | yes      | Read `fromKey <relationship> toKey`.                      |
+| Input          | Type                                                                                                      | Required | Notes                                                     |
+| -------------- | --------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------- |
+| `fromKey`      | string                                                                                                    | yes      | The first item's identifier, e.g. `"ACME-3"`.             |
+| `toKey`        | string                                                                                                    | yes      | The second item's identifier (may be in another project). |
+| `relationship` | `"blocked_by" \| "blocks" \| "relates_to" \| "duplicates" \| "clones" \| "supersedes" \| "superseded_by"` | yes      | Read `fromKey <relationship> toKey`.                      |
 
 **Output** — `structuredContent`: the created `WorkItemLinkDto` (plus the
 `relationship`). For an idempotent no-op, `{ idempotent: true, relationship }`.
@@ -2073,13 +2135,16 @@ author it. `relates_to`, `duplicates` and `clones` are never judged.
 
 Remove a relationship between two work items, addressed by the same `fromKey` +
 `toKey` + `relationship` used to create it. **Idempotent** — removing a link that
-is already absent succeeds as a no-op. Same edit gate as the UI link path.
+is already absent succeeds as a no-op. Same edit gate as the UI link path. Either
+direction of a directed pair names the same row: `A supersedes B` and
+`B superseded_by A` both remove the one `supersedes` edge (likewise
+`blocked_by` / `blocks`).
 
-| Input          | Type                                                                   | Required | Notes                         |
-| -------------- | ---------------------------------------------------------------------- | -------- | ----------------------------- |
-| `fromKey`      | string                                                                 | yes      | The first item's identifier.  |
-| `toKey`        | string                                                                 | yes      | The second item's identifier. |
-| `relationship` | `"blocked_by" \| "blocks" \| "relates_to" \| "duplicates" \| "clones"` | yes      | The relationship to remove.   |
+| Input          | Type                                                                                                      | Required | Notes                         |
+| -------------- | --------------------------------------------------------------------------------------------------------- | -------- | ----------------------------- |
+| `fromKey`      | string                                                                                                    | yes      | The first item's identifier.  |
+| `toKey`        | string                                                                                                    | yes      | The second item's identifier. |
+| `relationship` | `"blocked_by" \| "blocks" \| "relates_to" \| "duplicates" \| "clones" \| "supersedes" \| "superseded_by"` | yes      | The relationship to remove.   |
 
 **Output** — `structuredContent`: `{ removed: boolean, relationship }` — `removed`
 is `false` when no such link existed (the idempotent no-op).
@@ -2109,6 +2174,8 @@ the UI; the same Story-6.4 edit gate gates the call.
 | `type`               | work type \| null                                  | no       | Leaf items only; `null` clears it. First set seeds the executor.                                                                      |
 | `executor`           | `"coding_agent" \| "human"` \| null                | no       | Leaf items only; `null` clears it.                                                                                                    |
 | `difficulty`         | `"trivial" \| "low" \| "medium" \| "high"` \| null | no       | Leaf items only; `null` clears it. A re-kind onto a container that keeps one is refused.                                              |
+| `obsolescence`       | `"outdated" \| "deprecated"` \| null               | no       | The [obsolescence mark](#the-obsolescence-mark) — ANY kind in ANY status, a `done` card included; `null` clears it.                   |
+| `obsolescenceNoteMd` | string \| null                                     | no       | Why the item is marked; `null` clears it. Independent of the mark.                                                                    |
 | `estimateMinutes`    | number \| null                                     | no       | Estimated minutes (time); `null` clears it.                                                                                           |
 | `storyPoints`        | number \| null                                     | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals); set / change / `null` clears it.                                        |
 | `targetRepo`         | string \| null                                     | no       | Repo the item ships in — bare name or `"owner/name"`; must be in this project's repo set. `null` clears.                              |
@@ -2123,8 +2190,12 @@ assignee, a `type`/`executor` on a non-leaf, a `difficulty` on a non-leaf
 a `targetRepo` (or any `targetRepos` element) outside this project's repository
 set (`UNKNOWN_TARGET_REPO`), a `targetRepositories` element that is not one of this
 project's repository rows (`UNKNOWN_PROJECT_REPO_REF`), or more than one of the
-three repo fields at once (`CONFLICTING_TARGET_REPO_INPUT`) returns a typed
-error.
+three repo fields at once (`CONFLICTING_TARGET_REPO_INPUT`), or an
+`obsolescence` outside `outdated` · `deprecated` (`INVALID_OBSOLESCENCE` — the
+message leads with the code and names the field) returns a typed error.
+
+`change_kind` needs no obsolescence rule: the mark has no kind constraint, so a
+marked card is reclassified exactly like an unmarked one.
 
 #### `change_kind`
 
@@ -2360,10 +2431,15 @@ The `filter` envelope:
 - `combinator` — `"and"` (match all rows) or `"or"` (match any).
 - `conditions` — an array (up to the row cap) of
   `{ field, operator, value }`:
-  - `field` — a built-in (`kind`, `status`, `priority`, `type`, `assignee`,
-    `reporter`, `sprint`, `text`, `created`, `updated`, `due`, `storyPoints`,
-    `estimate`), a label/component (`lbl`, `cmp`), or a custom field
-    (`cf:<fieldId>`).
+  - `field` — a built-in (`kind`, `status`, `priority`, `type`, `difficulty`,
+    `obsolescence`, `assignee`, `reporter`, `sprint`, `text`, `created`,
+    `updated`, `due`, `storyPoints`, `estimate`), a label/component (`lbl`,
+    `cmp`), or a custom field (`cf:<fieldId>`).
+  - `obsolescence` (MOTIR-6583) takes `is_any_of` · `is_none_of` over
+    `outdated` · `deprecated`, plus `is_empty` · `is_not_empty`. An unmarked
+    card is `null`: `is_empty` selects it, and `is_none_of ["outdated"]`
+    INCLUDES it alongside the `deprecated` rows. A search without the condition
+    never drops or re-sorts a marked card.
   - `operator` — one of `is_any_of`, `is_none_of`, `is_empty`, `is_not_empty`,
     `contains`, `not_contains`, `eq`, `ne`, `lt`, `lte`, `gt`, `gte`,
     `on_or_before`, `on_or_after`, `between`, `in_last_days`, `in_next_days`
@@ -2382,7 +2458,11 @@ validation error.
 `{ items: WorkItemListItemDto[], total: number, nextCursor: string | null }`.
 Each row also carries the same [`dependencies` block](#the-dependencies-block-list-reads)
 and [`commentCount`](#the-commentcount-field) `list_ready` returns — identical
-shapes, so one renderer covers both lists.
+shapes, so one renderer covers both lists — and the
+[obsolescence mark](#the-obsolescence-mark): `obsolescence` and
+`obsolescenceNoteMd`. A marked row's text line is followed by
+`  obsolescence: <mark>` and `  note: <first line>`; an unmarked row reads as
+before. A marked row is never excluded or re-sorted.
 
 #### `search_work_items_semantic`
 
@@ -4025,16 +4105,16 @@ thing on the other.
 
 **Output** — `structuredContent`:
 
-| Field              | Type             | Notes                                                                          |
-| ------------------ | ---------------- | ------------------------------------------------------------------------------ |
-| `project`          | object           | `{ projectId, projectKey }`.                                                   |
-| `items`            | skeleton row\[\] | `{ key, id, kind, title, status, parentKey, revision, folderId }` — see below. |
-| `total`            | integer          | Live work items in the project, **before** the bound is applied.               |
-| `returned`         | integer          | Rows in `items`.                                                               |
-| `truncated`        | boolean          | Whether the bound bit.                                                         |
-| `limit`            | integer          | The bound actually applied.                                                    |
-| `folders`          | folder\[\]       | `{ id, parentFolderId, name, path }` — every folder of the project, see below. |
-| `foldersTruncated` | boolean          | Whether the project holds more folders than `folders` lists.                   |
+| Field              | Type             | Notes                                                                                        |
+| ------------------ | ---------------- | -------------------------------------------------------------------------------------------- |
+| `project`          | object           | `{ projectId, projectKey }`.                                                                 |
+| `items`            | skeleton row\[\] | `{ key, id, kind, title, status, parentKey, revision, folderId, obsolescence }` — see below. |
+| `total`            | integer          | Live work items in the project, **before** the bound is applied.                             |
+| `returned`         | integer          | Rows in `items`.                                                                             |
+| `truncated`        | boolean          | Whether the bound bit.                                                                       |
+| `limit`            | integer          | The bound actually applied.                                                                  |
+| `folders`          | folder\[\]       | `{ id, parentFolderId, name, path }` — every folder of the project, see below.               |
+| `foldersTruncated` | boolean          | Whether the project holds more folders than `folders` lists.                                 |
 
 `parentKey` is the parent's `<KEY>-<n>` identifier (null at a root), which is what
 makes the response a TREE rather than a list — the hierarchy is rebuildable from
@@ -4042,6 +4122,9 @@ this one call. `id` is the real work-item cuid `add_plan_items` takes for
 `parentRef` / `blockedByRefs` (it also accepts the `<KEY>-<n>` key), and `revision` is
 the `baseRevision` a `modify` / `remove` proposal anchors on — both ride the row
 so orienting and proposing do not cost a `get_work_item` per target.
+`obsolescence` is the [obsolescence mark](#the-obsolescence-mark) — `outdated` /
+`deprecated`, `null` while the card is still current. The mark only: its note is
+a body, read with `get_work_item`. A marked row is never dropped or re-ordered.
 
 **Folders.** `folderId` is the folder an item is **filed** in — its OWN placement,
 null for everything else. Only a root can be filed (an item has a parent OR a
