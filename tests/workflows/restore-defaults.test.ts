@@ -137,7 +137,6 @@ describe('restoreDefaultTransitions — additive merge', () => {
         userId: member.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await expect(

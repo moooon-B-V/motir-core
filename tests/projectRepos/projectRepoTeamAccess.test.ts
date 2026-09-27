@@ -193,7 +193,6 @@ async function addMember(
       userId: user.id,
       workspaceId: fx.workspaceId,
       workspaceRole: legacyToWorkspaceRole(opts.workspaceRole ?? 'member'),
-      role: opts.workspaceRole ?? 'member',
     },
   });
   if (opts.projectRole) {
@@ -207,7 +206,6 @@ async function addMember(
         userId: user.id,
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
-        role: opts.projectRole,
       },
     });
   }

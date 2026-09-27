@@ -247,7 +247,6 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
         userId: member.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     signInAs(fx, member.id);

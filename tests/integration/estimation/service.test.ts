@@ -205,7 +205,6 @@ describe('estimationService getEstimationConfig / updateEstimationConfig', () =>
           userId: user.id,
           workspaceId: fx.workspaceId,
           workspaceRole: legacyToWorkspaceRole(roles.workspaceRole ?? 'member'),
-          role: roles.workspaceRole ?? 'member',
         },
       });
       if (roles.projectRole) {
@@ -219,7 +218,6 @@ describe('estimationService getEstimationConfig / updateEstimationConfig', () =>
             userId: user.id,
             projectId: fx.projectId,
             workspaceId: fx.workspaceId,
-            role: roles.projectRole,
           },
         });
       }

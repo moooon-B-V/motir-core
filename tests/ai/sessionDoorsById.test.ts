@@ -131,7 +131,6 @@ describe('ITEM-ANCHORED planning', () => {
         userId: viewer.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await addToProjectAs({

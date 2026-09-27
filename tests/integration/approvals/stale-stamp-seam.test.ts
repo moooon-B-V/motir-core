@@ -236,7 +236,6 @@ describe('what nobody was deciding about never moves the stamp', () => {
         userId: other.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await workItemsService.updateWorkItem(card.id, { assigneeId: fx.ownerId }, fx.ctx);

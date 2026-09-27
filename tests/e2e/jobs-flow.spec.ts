@@ -283,7 +283,6 @@ test('@smoke cross-workspace isolation: jobs from another workspace are not visi
       workspaceId: workspaceB.id,
       userId: isoUserId,
       workspaceRole: 'manager',
-      role: 'owner',
     },
   });
   // Story 6.10.4: org membership gates workspace access — a workspace member who

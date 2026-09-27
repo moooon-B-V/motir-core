@@ -1,12 +1,7 @@
 import { assertOrgNotClosing } from '@/lib/organizations/closingGuard';
 import { OrganizationNotErasingError } from '@/lib/organizations/errors';
 import { organizationDeletionRequestRepository } from '@/lib/repositories/organizationDeletionRequestRepository';
-import {
-  type MemberRole,
-  Prisma,
-  type Workspace,
-  type WorkspaceMembership,
-} from '@/generated/prisma/client';
+import { Prisma, type Workspace, type WorkspaceMembership } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -31,7 +26,6 @@ import { bindOrganizationContext, withOrgContext } from '@/lib/organizations/con
 import { assertOrgCapability } from '@/lib/services/organizationAccessService';
 import {
   CUSTOM_WORKSPACE_ROLE_TIER,
-  legacyToWorkspaceRole,
   WORKSPACE_ROLES,
   type WorkspaceRole,
 } from '@/lib/workspaces/roles';
@@ -255,15 +249,9 @@ async function insertWorkspaceWithOwner(
   // The workspace creator is its MANAGER (Story MOTIR-6168 · MOTIR-6462 —
   // `role-model.md` left who becomes a new workspace's Manager open; it is the
   // creator, its first and only member). Invited members default to `member`
-  // (workspacesService.addMember). The legacy column is still NOT NULL, so it
-  // keeps its `owner` until the contract story drops it.
+  // (workspacesService.addMember).
   const membership = await workspaceMembershipRepository.create(
-    {
-      userId: input.ownerUserId,
-      workspaceId: workspace.id,
-      workspaceRole: 'manager',
-      role: 'owner',
-    },
+    { userId: input.ownerUserId, workspaceId: workspace.id, workspaceRole: 'manager' },
     tx,
   );
   return { workspace, membership };
@@ -881,7 +869,8 @@ export const workspacesService = {
   async addMember(input: {
     userId: string;
     workspaceId: string;
-    role?: MemberRole;
+    /** Defaults to Member — an added person is never a Manager unless asked for. */
+    workspaceRole?: WorkspaceRole;
   }): Promise<WorkspaceMembership> {
     let organizationId: string | null = null;
     try {
@@ -898,8 +887,7 @@ export const workspacesService = {
             {
               userId: input.userId,
               workspaceId: input.workspaceId,
-              workspaceRole: legacyToWorkspaceRole(input.role ?? 'member'),
-              role: input.role ?? 'member',
+              workspaceRole: input.workspaceRole ?? 'member',
             },
             tx,
           );

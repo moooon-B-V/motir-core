@@ -174,7 +174,6 @@ describe('planChangeSessionsService — open + resume', () => {
         userId: teammate.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await addToProjectAs({

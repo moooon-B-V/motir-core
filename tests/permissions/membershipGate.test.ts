@@ -103,7 +103,7 @@ describe('workspacesService — findMembership / getWorkspaceSummary / addMember
   it('ADMITS a member on findMembership', async () => {
     const membership = await workspacesService.findMembership(home.ownerId, home.workspaceId);
     expect(membership).not.toBeNull();
-    expect(membership?.role).toBe('owner');
+    expect(membership?.workspaceRole).toBe('manager');
   });
 
   it('returns null for a non-member on findMembership', async () => {
@@ -144,7 +144,7 @@ describe('workspacesService — findMembership / getWorkspaceSummary / addMember
     const row = await adminDb.workspaceMembership.findUnique({
       where: { userId_workspaceId: { userId: outsiderId, workspaceId: home.workspaceId } },
     });
-    expect(row?.role).toBe('member');
+    expect(row?.workspaceRole).toBe('member');
   });
 
   it('addMember carries the UPWARD org auto-join across the second tenant-root table', async () => {
@@ -229,7 +229,7 @@ describe('readOwnMembership — the user-only binding, for a gate with no active
   it('ADMITS the subject their own membership with no workspace bound', async () => {
     const membership = await readOwnMembership(home.ownerId, home.workspaceId);
     expect(membership).not.toBeNull();
-    expect(membership?.role).toBe('owner');
+    expect(membership?.workspaceRole).toBe('manager');
   });
 
   it('returns null for a user with no membership in that workspace', async () => {
@@ -255,7 +255,7 @@ describe('readOwnMembership — the user-only binding, for a gate with no active
       { userId: home.ownerId, workspaceId: home.workspaceId },
       (tx) => readMembership(home.ownerId, home.workspaceId, tx),
     );
-    expect(membership?.role).toBe('owner');
+    expect(membership?.workspaceRole).toBe('manager');
   });
 });
 
@@ -469,7 +469,7 @@ async function seedTenant(tag: string, identifier: string): Promise<Tenant> {
     data: { name: `Workspace ${tag}`, slug: `ws-${tag}`, organizationId: organization.id },
   });
   await adminDb.workspaceMembership.create({
-    data: { workspaceId: workspace.id, userId: owner.id, workspaceRole: 'manager', role: 'owner' },
+    data: { workspaceId: workspace.id, userId: owner.id, workspaceRole: 'manager' },
   });
   const project = await adminDb.project.create({
     data: {

@@ -134,7 +134,6 @@ describe('listHeldTransitions', () => {
         userId: reporter.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     const item = await cardInReview({ gateKind: 'design_result', reporterId: reporter.id });
@@ -144,7 +143,6 @@ describe('listHeldTransitions', () => {
         userId: bystander.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
 

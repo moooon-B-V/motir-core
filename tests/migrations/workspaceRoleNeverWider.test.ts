@@ -100,7 +100,7 @@ async function tenantWithLevels(): Promise<Tenant & { p3: { id: string; identifi
   });
   // Only the plain member is added to the private project.
   await adminDb.projectMembership.create({
-    data: { workspaceId: t.wsId, projectId: p3.id, userId: t.people.member!, role: 'member' },
+    data: { workspaceId: t.wsId, projectId: p3.id, userId: t.people.member! },
   });
   return { ...t, p3: { id: p3.id, identifier: p3.identifier } };
 }

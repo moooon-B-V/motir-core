@@ -712,7 +712,6 @@ describe('getOrgPeriodConsumption — the ONE read MOTIR-1901 consumes', () => {
         workspaceId: secondWorkspace.id,
         userId: owner.id,
         workspaceRole: 'manager',
-        role: 'owner',
       },
     });
     const second = { workspace: secondWorkspace };

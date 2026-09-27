@@ -157,21 +157,19 @@ export async function makeTenant(): Promise<Tenant> {
   // it must fold into Contractor-P1's workspace role, not become a second row.
   const twin = await def(p2.id, 'Commenter', ['report:view', 'comment:add', 'project:browse']);
 
+  // The legacy PROJECT role is what the mapping reads, and the application no
+  // longer writes it (MOTIR-6562) — so the fixture writes it raw, as it stood.
   const pm = (
     projectId: string,
     userId: string,
     role: 'admin' | 'member' | 'viewer',
     roleDefinitionId?: string,
   ) =>
-    adminDb.projectMembership.create({
-      data: {
-        workspaceId: ws.id,
-        projectId,
-        userId,
-        role,
-        roleDefinitionId: roleDefinitionId ?? null,
-      },
-    });
+    adminDb.$executeRaw`
+      INSERT INTO "project_membership"
+        ("id", "workspace_id", "project_id", "user_id", "role", "role_definition_id", "updated_at")
+      VALUES (gen_random_uuid()::text, ${ws.id}, ${projectId}, ${userId},
+              ${role}::"member_role", ${roleDefinitionId ?? null}, now())`;
   await pm(p1.id, people.narrower!, 'viewer');
   await pm(p2.id, people.narrower!, 'member');
   await pm(p1.id, people.wider!, 'admin');

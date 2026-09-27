@@ -278,7 +278,6 @@ describe('deleteStatus — delete-with-reassign (2.3.1)', () => {
         userId: member.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     const err = await workflowsService

@@ -1,5 +1,4 @@
 import {
-  type MemberRole,
   Prisma,
   type User,
   type Workspace,
@@ -341,14 +340,10 @@ export const workspaceMembershipRepository = {
     data: {
       userId: string;
       workspaceId: string;
-      /**
-       * The workspace role (MOTIR-6462): every new membership carries one, so the
-       * resolver's NULL fallback is only ever reached by a row the still-serving
-       * old build wrote during the deploy window.
-       */
+      /** The workspace role — the only role a membership row holds (MOTIR-6561). */
       workspaceRole: WorkspaceRole;
-      /** The legacy column, still NOT NULL until the contract story drops it. */
-      role: MemberRole;
+      // No legacy `role` (MOTIR-6562): nothing writes it, and the database
+      // default fills the column until the phase-3 release drops it.
     },
     tx: Prisma.TransactionClient,
   ): Promise<WorkspaceMembership> {

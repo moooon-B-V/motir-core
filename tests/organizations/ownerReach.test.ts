@@ -231,7 +231,11 @@ describe('an org Admin reaches every workspace of the org as its Manager (MOTIR-
       actorUserId: owner.id,
       identifier: 'LATE',
     });
-    await workspacesService.addMember({ userId: admin.id, workspaceId: later.id, role: 'member' });
+    await workspacesService.addMember({
+      userId: admin.id,
+      workspaceId: later.id,
+      workspaceRole: 'member',
+    });
     const held = await projectAccessService.getPermissions(project.id, {
       userId: admin.id,
       workspaceId: later.id,

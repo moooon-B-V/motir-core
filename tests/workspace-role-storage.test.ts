@@ -77,7 +77,6 @@ async function makeTenants(): Promise<Fixture> {
       userId: member1.id,
       workspaceId: w1.workspace.id,
       workspaceRole: 'member',
-      role: 'member',
     },
   });
   const roleW1 = await adminDb.workspaceRoleDefinition.create({
@@ -136,7 +135,7 @@ async function asAppRole<T>(
 }
 
 describe('the new columns and tables land BESIDE the old ones', () => {
-  it('a membership carries the workspace role beside the legacy one, and no custom role for a built-in', async () => {
+  it('a membership carries its workspace role, and no custom role for a built-in', async () => {
     // Since MOTIR-6561 the workspace role is NOT NULL, so the pre-6168 shape — a
     // row with only the legacy column — cannot be written any more; the
     // migration's own test (`tests/migrations/workspaceRoleNotNull.test.ts`)
@@ -145,7 +144,6 @@ describe('the new columns and tables land BESIDE the old ones', () => {
     const m = await adminDb.workspaceMembership.findUnique({
       where: { userId_workspaceId: { userId: fx.member1, workspaceId: fx.w1 } },
     });
-    expect(m?.role).toBe('member');
     expect(m?.workspaceRole).toBe('member');
     expect(m?.roleDefinitionId).toBeNull();
   });
@@ -350,8 +348,6 @@ describe('workspaceMembershipRepository — the workspace-role writers and reade
       where: { userId_workspaceId: { userId: fx.member1, workspaceId: fx.w1 } },
     });
     expect([m?.workspaceRole, m?.roleDefinitionId]).toEqual(['viewer', null]);
-    // The legacy column is untouched by the new writer.
-    expect(m?.role).toBe('member');
   });
 
   it('setWorkspaceRole issues exactly ONE statement against workspace_membership', async () => {
@@ -395,6 +391,9 @@ describe('workspaceMembershipRepository — the workspace-role writers and reade
       where: { workspaceId: fx.w1 },
       data: { workspaceRole: 'member' },
     });
+    // The legacy value, written raw — nothing in the app writes it (MOTIR-6562).
+    await adminDb.$executeRaw`
+      UPDATE "workspace_membership" SET "role" = 'owner' WHERE "workspaceId" = ${fx.w1}`;
     const before = await adminDb.$transaction((tx) =>
       workspaceMembershipRepository.countManagers(fx.w1, tx),
     );

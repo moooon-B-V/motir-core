@@ -148,7 +148,6 @@ async function member(role: 'member' | 'admin') {
       userId: user.id,
       workspaceId: fx.workspaceId,
       workspaceRole: legacyToWorkspaceRole(role),
-      role,
     },
   });
   return user;

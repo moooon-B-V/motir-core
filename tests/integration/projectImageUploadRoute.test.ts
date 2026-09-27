@@ -148,7 +148,6 @@ describe('POST /api/upload/project-image', () => {
         userId: member.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     signInAs(fx, member.id);

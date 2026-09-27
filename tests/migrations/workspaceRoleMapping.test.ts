@@ -103,15 +103,17 @@ async function digest(): Promise<string> {
   return JSON.stringify({ wm, wrd, rmr, om });
 }
 
-/** The legacy columns, which must be byte-identical before and after. */
+/**
+ * The legacy columns, which must be byte-identical before and after. Read raw:
+ * the application no longer names the legacy `role` columns (MOTIR-6562).
+ */
 async function legacy(): Promise<string> {
   const [pm, prd, wm] = await Promise.all([
-    adminDb.projectMembership.findMany({ orderBy: { id: 'asc' } }),
+    adminDb.$queryRaw`
+      SELECT "id", "role"::text AS "role", "role_definition_id" AS "roleDefinitionId"
+        FROM "project_membership" ORDER BY "id"`,
     adminDb.projectRoleDefinition.findMany({ orderBy: { id: 'asc' } }),
-    adminDb.workspaceMembership.findMany({
-      orderBy: { id: 'asc' },
-      select: { id: true, role: true },
-    }),
+    adminDb.$queryRaw`SELECT "id", "role"::text AS "role" FROM "workspace_membership" ORDER BY "id"`,
   ]);
   return JSON.stringify({ pm, prd, wm });
 }

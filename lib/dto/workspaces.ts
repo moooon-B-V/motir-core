@@ -14,7 +14,11 @@ export interface WorkspaceDTO {
 
 export interface MembershipDTO {
   id: string;
-  role: string;
+  /**
+   * The caller's workspace role (MOTIR-6562). Replaces the legacy `role`, which
+   * nothing writes any more and so would report the column default.
+   */
+  workspaceRole: WorkspaceRole;
   userId: string;
   workspaceId: string;
 }

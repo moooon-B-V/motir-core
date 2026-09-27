@@ -97,7 +97,7 @@ async function makeTeam(): Promise<Team> {
   await workspacesService.addMember({
     userId: member.id,
     workspaceId: fx.workspaceId,
-    role: 'member',
+    workspaceRole: 'member',
   });
   const filter = await savedFiltersService.create(
     fx.projectIdentifier,

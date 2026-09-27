@@ -302,7 +302,6 @@ test.describe('board-config @smoke', () => {
         userId: member.id,
         workspaceId,
         workspaceRole: 'member',
-        role: 'member',
         activeProjectId: projectId,
       },
     });

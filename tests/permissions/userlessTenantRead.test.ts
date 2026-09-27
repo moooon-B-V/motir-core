@@ -409,8 +409,8 @@ async function seedTenant(tag: string, identifier: string): Promise<Tenant> {
   });
   await adminDb.workspaceMembership.createMany({
     data: [
-      { userId: owner.id, workspaceId: workspace.id, workspaceRole: 'manager', role: 'owner' },
-      { userId: member.id, workspaceId: workspace.id, workspaceRole: 'member', role: 'member' },
+      { userId: owner.id, workspaceId: workspace.id, workspaceRole: 'manager' },
+      { userId: member.id, workspaceId: workspace.id, workspaceRole: 'member' },
     ],
   });
   const project = await seedProject(workspace.id, identifier);

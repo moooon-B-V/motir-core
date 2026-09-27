@@ -142,7 +142,6 @@ async function customMember(fx: WorkItemFixture, permissions: string[]) {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
         userId: user.id,
-        role: CUSTOM_ROLE_TIER,
       },
       tx,
     );

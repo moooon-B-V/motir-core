@@ -228,7 +228,6 @@ describe('authorisation — a WORKSPACE resource, not a project one', () => {
         userId: member.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
@@ -247,7 +246,6 @@ describe('authorisation — a WORKSPACE resource, not a project one', () => {
       data: {
         userId: manager.id,
         workspaceId: fx.workspaceId,
-        role: 'member',
         workspaceRole: 'manager',
       },
     });
@@ -263,7 +261,6 @@ describe('authorisation — a WORKSPACE resource, not a project one', () => {
         userId: viewer.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'viewer',
-        role: 'viewer',
       },
     });
     await expect(
@@ -532,7 +529,6 @@ describe('release', () => {
         userId: member.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await expect(publicSubdomainService.release(fx.workspaceId, member.id)).rejects.toBeInstanceOf(

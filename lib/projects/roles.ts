@@ -1,18 +1,19 @@
 import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
 
-// Project + workspace role helpers for the Story 6.4 access model. The
-// `MemberRole` enum (owner / admin / member / viewer) is shared by
-// `WorkspaceMembership.role` and `ProjectMembership.role` (see schema.prisma),
-// but the two scopes use it differently:
+// Project + workspace role helpers for the Story 6.4 access model.
 //
-//   * WORKSPACE scope — `owner` is the founder, `admin` a workspace manager.
-//     Both ALWAYS pass the project-management gate regardless of project
-//     membership (the Jira "site admin sees every project" shape). This is the
-//     `isWorkspaceManager` predicate.
-//   * PROJECT scope — a member is added with `admin` / `member` / `viewer`.
-//     `owner` is NOT a project-assignable role (a project has no founder; the
-//     workspace owner is the always-pass tier above). `PROJECT_ASSIGNABLE_ROLES`
-//     is the set the API accepts for add-member / set-role.
+// A person's ROLE lives on the workspace (Story MOTIR-6168): `WorkspaceRole`,
+// read from `workspace_membership.workspace_role`. A project membership carries
+// no role at all since MOTIR-6464 — it only says the person is IN the project.
+// The legacy `member_role` enum (owner / admin / member / viewer) the two
+// membership tables once shared is neither read (MOTIR-6561) nor written
+// (MOTIR-6562), and the phase-3 release drops it.
+//
+//   * `isWorkspaceManager` — the tier that ALWAYS passes the project-management
+//     gate regardless of project membership (the Jira "site admin sees every
+//     project" shape).
+//   * `PROJECT_ASSIGNABLE_ROLES` / `ProjectRole` — the built-in tier vocabulary
+//     the permission sets are keyed by (`lib/permissions/builtinRoles.ts`).
 //
 // Keeping these as named constants + predicates (not magic strings scattered
 // across the service) is the same single-source-of-truth pattern

@@ -147,7 +147,6 @@ describe('GET /api/monitors/sentry/oauth/start', () => {
         workspaceId: fx.workspaceId,
         userId: viewer.id,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await adminDb.projectMembership.create({
@@ -155,7 +154,6 @@ describe('GET /api/monitors/sentry/oauth/start', () => {
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
         userId: viewer.id,
-        role: 'viewer',
       },
     });
     await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');

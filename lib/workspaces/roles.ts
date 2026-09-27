@@ -1,4 +1,4 @@
-import type { MemberRole, WorkspaceRole } from '@/generated/prisma/client';
+import type { WorkspaceRole } from '@/generated/prisma/client';
 
 // Workspace membership roles (Story MOTIR-6168 · MOTIR-6457).
 //
@@ -12,8 +12,9 @@ import type { MemberRole, WorkspaceRole } from '@/generated/prisma/client';
 //
 // The LEGACY `workspace_membership.role` column (Story 1.2 · Subtask 1.6.5) is
 // still in the schema until the retirement's contract release drops it, and
-// NOTHING reads it: the deploy-window fallback that did (`resolveWorkspaceRole`)
-// was deleted by MOTIR-6561 once every row carried a workspace role.
+// NOTHING reads or writes it: the deploy-window fallback that read it
+// (`resolveWorkspaceRole`) was deleted by MOTIR-6561, and the writers stopped
+// with MOTIR-6562 (the database default fills the column).
 
 /** The three built-in workspace roles, in the order every surface lists them. */
 export const WORKSPACE_ROLES = [
@@ -49,8 +50,21 @@ export function customRolePermissionsOf(
   return membership?.roleDefinition?.permissions ?? null;
 }
 
-/** The DECISION's mapping from a legacy `MemberRole` to a workspace role. */
-export function legacyToWorkspaceRole(role: MemberRole): WorkspaceRole {
+/**
+ * A legacy membership role — the four values of the retired `member_role` type,
+ * spelled locally so application code imports nothing of it (MOTIR-6562).
+ */
+export type LegacyMemberRole = 'owner' | 'admin' | 'member' | 'viewer';
+
+/**
+ * The DECISION's mapping from a legacy role to a workspace role.
+ *
+ * It exists ONLY for an invite token minted before MOTIR-6562, whose payload
+ * carries `role` and no `workspaceRole`. Such a token expires after
+ * `INVITE_EXPIRY_MS` (7 days), so this and `LegacyMemberRole` are deleted by
+ * the phase-3 DROP card (MOTIR-6569), which runs long after the last one lapsed.
+ */
+export function legacyToWorkspaceRole(role: LegacyMemberRole): WorkspaceRole {
   switch (role) {
     case 'owner':
     case 'admin':

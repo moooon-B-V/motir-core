@@ -138,7 +138,7 @@ async function secondWorkspaceInSameOrg(opts: { accessLevel?: 'open' | 'private'
     },
   });
   await adminDb.workspaceMembership.create({
-    data: { workspaceId: ws.id, userId: fx.ownerId, workspaceRole: 'manager', role: 'owner' },
+    data: { workspaceId: ws.id, userId: fx.ownerId, workspaceRole: 'manager' },
   });
   const project = await createTestProject({
     workspaceId: ws.id,
@@ -266,7 +266,6 @@ describe('`Used by N projects` — ONE read, two consumers', () => {
         workspaceId: fx.workspaceId,
         userId: outsider.id,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await adminDb.organizationMembership.create({
@@ -619,7 +618,6 @@ describe('DISCONNECT FROM THE ORGANISATION — the cascade', () => {
         workspaceId: fx.workspaceId,
         userId: member.id,
         workspaceRole: 'manager',
-        role: 'admin',
       },
     });
     await adminDb.organizationMembership.create({

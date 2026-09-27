@@ -269,7 +269,6 @@ describe('GET /api/work-items/planning-anchor · the refusals', () => {
         userId: outsider.id,
         workspaceId: owner.workspace.id,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
 

@@ -278,7 +278,6 @@ describe('Project status-automation — validation + gates (MOTIR-1618)', () => 
         userId: member.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
 

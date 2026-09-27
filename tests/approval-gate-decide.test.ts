@@ -70,7 +70,7 @@ afterAll(async () => {
 async function plainMember() {
   const user = await createTestUser();
   await adminDb.workspaceMembership.create({
-    data: { userId: user.id, workspaceId: fx.workspaceId, workspaceRole: 'member', role: 'member' },
+    data: { userId: user.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
   });
   return user;
 }
@@ -548,7 +548,6 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
           userId: admin.id,
           workspaceId: fx.workspaceId,
           workspaceRole: 'manager',
-          role: 'admin',
         },
       });
       const { gate } = await designSubtaskWithGate({ assigneeId: assignee.id });
@@ -575,7 +574,6 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
         userId: bystander.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     const { gate } = await designSubtaskWithGate({ assigneeId: null });
@@ -609,7 +607,6 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
         userId: outsider.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     const { gate } = await designSubtaskWithGate({ assigneeId: null });
@@ -633,7 +630,6 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
         userId: viewer.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await adminDb.projectMembership.create({
@@ -641,7 +637,6 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
         userId: viewer.id,
-        role: 'viewer',
       },
     });
     await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
@@ -822,7 +817,6 @@ describe('the ESCAPE HATCH is the `approval:decide_any` PERMISSION, never a work
         userId: wsAdmin.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'manager',
-        role: 'admin',
       },
     });
     const ctx = { userId: wsAdmin.id, workspaceId: fx.workspaceId };

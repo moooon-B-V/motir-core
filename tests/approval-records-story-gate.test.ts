@@ -224,12 +224,14 @@ describe('the built-in roles', () => {
     });
   });
 
-  it('the built-in project ADMIN — not a workspace manager — reads everything but the superseded row', async () => {
+  it('the former project ADMIN — a workspace Manager since roles moved there — reads everything but the superseded row', async () => {
     await seed();
+    // `addToProjectAs(…, 'admin')` puts them on the Manager workspace role
+    // (MOTIR-6464); the legacy `member` this used to assert is no longer written.
     const membership = await adminDb.workspaceMembership.findFirst({
       where: { userId: ids.admin, workspaceId: fx.workspaceId },
     });
-    expect(membership?.role).toBe('member');
+    expect(membership?.workspaceRole).toBe('manager');
     expect(await titlesFor(ids.admin)).toEqual(EVERYTHING);
   });
 });

@@ -148,7 +148,7 @@ describe('Home story seam — the dedupe, at the boundary that can break it', ()
     await workspacesService.addMember({
       userId: other.id,
       workspaceId: fx.workspaceId,
-      role: 'member',
+      workspaceRole: 'member',
     });
 
     // Nine items, alternating the reader's relation, with the BOTH items
@@ -214,7 +214,7 @@ describe('Home story seam — the access matrix', () => {
     await workspacesService.addMember({
       userId: member.id,
       workspaceId: fx.workspaceId,
-      role: 'member',
+      workspaceRole: 'member',
     });
     // The reader is the REPORTER of both — the only difference is the project.
     await own(open.id, { assignee: null, reporter: member.id });
@@ -258,7 +258,7 @@ describe('Home story seam — the access matrix', () => {
     await workspacesService.addMember({
       userId: member.id,
       workspaceId: fx.workspaceId,
-      role: 'member',
+      workspaceRole: 'member',
     });
     await own(item.id, { assignee: member.id, reporter: fx.ownerId });
     await addToProjectAs({
@@ -325,7 +325,7 @@ describe('Home story seam — the access matrix', () => {
     await workspacesService.addMember({
       userId: member.id,
       workspaceId: fx.workspaceId,
-      role: 'member',
+      workspaceRole: 'member',
     });
 
     // INTERLEAVED by updatedAt: visible, hidden, visible, hidden, … so a
@@ -380,7 +380,7 @@ describe('Home story seam — the access matrix', () => {
     await workspacesService.addMember({
       userId: member.id,
       workspaceId: fx.workspaceId,
-      role: 'member',
+      workspaceRole: 'member',
     });
     await adminDb.$transaction(async (tx) => {
       await watcherRepository.add(open.id, member.id, tx);
@@ -458,7 +458,7 @@ describe('Home story seam — the two tabs are different questions', () => {
     await workspacesService.addMember({
       userId: other.id,
       workspaceId: fx.workspaceId,
-      role: 'member',
+      workspaceRole: 'member',
     });
 
     const ownedOnly = await createWorkItem(fx, { kind: 'task', title: 'Owned only' });

@@ -162,7 +162,6 @@ describe('PATCH /api/projects/[key]/status-automation', () => {
         userId: member.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     signInAs(fx, member.id);

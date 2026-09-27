@@ -146,7 +146,6 @@ async function bindIdentity(opts: {
         userId: user.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
   } else {

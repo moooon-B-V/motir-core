@@ -253,7 +253,7 @@ async function twoRepoStory(): Promise<WorkItem> {
 async function plainMember(): Promise<Actor> {
   const user = await createTestUser();
   await adminDb.workspaceMembership.create({
-    data: { userId: user.id, workspaceId: fx.workspaceId, workspaceRole: 'member', role: 'member' },
+    data: { userId: user.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
   });
   return { id: user.id, email: user.email };
 }
@@ -807,7 +807,6 @@ describe('GET /api/work-items/approval-gate · the permission floor (MOTIR-5445)
         userId: viewer.id,
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
-        role: 'viewer',
       },
     });
     await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');

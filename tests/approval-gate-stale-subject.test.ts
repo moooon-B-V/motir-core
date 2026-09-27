@@ -241,7 +241,6 @@ describe('what the stamp does NOT cover', () => {
         userId: other.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     const label = await adminDb.label.create({

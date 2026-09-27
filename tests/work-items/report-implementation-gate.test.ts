@@ -44,7 +44,7 @@ async function memberWithProjectRole(fx: WorkItemFixture, email: string, role: s
   await workspacesService.addMember({
     userId: user.id,
     workspaceId: fx.workspaceId,
-    role: 'member',
+    workspaceRole: 'member',
   });
   await addToProjectAs({ ...actorInput(fx), targetUserId: user.id, role });
   return { user, ctx: { userId: user.id, workspaceId: fx.workspaceId } };

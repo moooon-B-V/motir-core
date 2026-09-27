@@ -163,7 +163,6 @@ describe('PATCH /api/projects/[key]/monitors/[connectionId]', () => {
         workspaceId: fx.workspaceId,
         userId: viewer.id,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await adminDb.projectMembership.create({
@@ -171,7 +170,6 @@ describe('PATCH /api/projects/[key]/monitors/[connectionId]', () => {
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
         userId: viewer.id,
-        role: 'viewer',
       },
     });
     await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');

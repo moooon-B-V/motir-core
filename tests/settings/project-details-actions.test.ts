@@ -159,7 +159,7 @@ describe('project-details actions (6.8.4 wiring)', () => {
     await workspacesService.addMember({
       userId: member.id,
       workspaceId: workspace.id,
-      role: 'member',
+      workspaceRole: 'member',
     });
     setActor(member.id, 'member-g@example.com');
     setActive(member.id, workspace.id, project);

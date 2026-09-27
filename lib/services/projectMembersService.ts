@@ -183,7 +183,6 @@ export const projectMembersService = {
             workspaceId: input.ctx.workspaceId,
             projectId: project.id,
             userId: input.targetUserId,
-            role: 'member',
           },
           tx,
         );
@@ -271,7 +270,6 @@ export const projectMembersService = {
             workspaceId: input.ctx.workspaceId,
             projectId: project.id,
             userId: m.userId,
-            role: 'member' as const,
           })),
           tx,
         );

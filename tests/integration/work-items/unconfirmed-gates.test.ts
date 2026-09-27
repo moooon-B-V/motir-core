@@ -72,7 +72,7 @@ async function makeFixture(label: string): Promise<Fixture> {
       name: slug,
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: u.id, workspaceId, workspaceRole: 'member', role: 'member' },
+      data: { userId: u.id, workspaceId, workspaceRole: 'member' },
     });
     if (role) {
       await addToProjectAs({
@@ -173,7 +173,6 @@ describe('the five holes the bucket was hiding', () => {
         userId: viewer.id,
         workspaceId: fx.ownerCtx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
@@ -245,7 +244,6 @@ describe('the second half — the ready nudge and the editor upload', () => {
         userId: viewer.id,
         workspaceId: fx.ownerCtx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });

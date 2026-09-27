@@ -75,7 +75,7 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
     name: 'Config Member',
   });
   await adminDb.workspaceMembership.create({
-    data: { userId: member.id, workspaceId, workspaceRole: 'member', role: 'member' },
+    data: { userId: member.id, workspaceId, workspaceRole: 'member' },
   });
 
   const board = await withWorkspaceServiceContext(workspaceId, (tx) =>
@@ -240,7 +240,6 @@ describe('the MOTIR-2296 WIDENING — who may configure a board, before and afte
         userId: user.id,
         workspaceId: fx.workspaceId,
         workspaceRole: legacyToWorkspaceRole(roles.workspaceRole ?? 'member'),
-        role: roles.workspaceRole ?? 'member',
       },
     });
     if (roles.projectRole) {
@@ -254,7 +253,6 @@ describe('the MOTIR-2296 WIDENING — who may configure a board, before and afte
           userId: user.id,
           projectId: fx.projectId,
           workspaceId: fx.workspaceId,
-          role: roles.projectRole,
         },
       });
     }

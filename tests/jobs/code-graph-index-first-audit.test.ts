@@ -297,7 +297,9 @@ describe('system.code-graph-index — the FIRST-audit trigger', () => {
 describe('firstAuditTriggerService — the verdicts that derive nothing', () => {
   it('skips a workspace with no OWNER — there is no actor to mint a read-back token for', async () => {
     const { workspaceId } = await seedIndexWorkspace('fa-noowner', 1);
-    await adminDb.workspaceMembership.deleteMany({ where: { workspaceId, role: 'owner' } });
+    await adminDb.workspaceMembership.deleteMany({
+      where: { workspaceId, workspaceRole: 'manager' },
+    });
 
     const report = await firstAuditTriggerService.deriveFirstAudit({
       workspaceId,

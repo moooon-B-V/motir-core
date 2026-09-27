@@ -95,7 +95,6 @@ describe('the PERMISSION is part of this card, and it governs every method', () 
         workspaceId: fx.workspaceId,
         userId: viewer.id,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await adminDb.projectMembership.create({
@@ -103,7 +102,6 @@ describe('the PERMISSION is part of this card, and it governs every method', () 
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
         userId: viewer.id,
-        role: 'viewer',
       },
     });
     await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
@@ -152,7 +150,6 @@ describe('the PERMISSION is part of this card, and it governs every method', () 
         workspaceId: fx.workspaceId,
         userId: viewer.id,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await adminDb.projectMembership.create({
@@ -160,7 +157,6 @@ describe('the PERMISSION is part of this card, and it governs every method', () 
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
         userId: viewer.id,
-        role: 'viewer',
       },
     });
     await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');

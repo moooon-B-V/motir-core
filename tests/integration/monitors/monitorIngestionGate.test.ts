@@ -140,7 +140,6 @@ describe('reconcile — the refusals and failures that are not the binder’s wo
         workspaceId: fx.workspaceId,
         userId: viewer.id,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await adminDb.projectMembership.create({
@@ -148,7 +147,6 @@ describe('reconcile — the refusals and failures that are not the binder’s wo
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
         userId: viewer.id,
-        role: 'viewer',
       },
     });
     await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');

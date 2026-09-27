@@ -1197,7 +1197,6 @@ describe('access gating', () => {
         userId: viewer.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'limited' } });
@@ -1226,7 +1225,6 @@ describe('access gating', () => {
         userId: member.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await adminDb.projectMembership.create({
@@ -1234,7 +1232,6 @@ describe('access gating', () => {
         userId: member.id,
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
-        role: 'member',
       },
     });
     const memberCtx = { userId: member.id, workspaceId: fx.workspaceId };
@@ -1264,7 +1261,6 @@ describe('access gating', () => {
         userId: outsider.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });

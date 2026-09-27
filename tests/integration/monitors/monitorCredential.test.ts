@@ -364,7 +364,6 @@ describe('the PROBE is on demand, and the verdict is PERSISTED', () => {
         workspaceId: fx.workspaceId,
         userId: viewer.id,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await adminDb.projectMembership.create({
@@ -372,7 +371,6 @@ describe('the PROBE is on demand, and the verdict is PERSISTED', () => {
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
         userId: viewer.id,
-        role: 'viewer',
       },
     });
     await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');

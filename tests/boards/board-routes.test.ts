@@ -321,7 +321,6 @@ describe('board config API routes (Subtask 3.3.3)', () => {
         userId: member.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     session.current = {

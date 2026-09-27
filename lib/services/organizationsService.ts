@@ -423,7 +423,7 @@ export const organizationsService = {
           if (existing) return;
 
           await workspaceMembershipRepository.create(
-            { userId: input.userId, workspaceId: sole.id, workspaceRole: 'member', role: 'member' },
+            { userId: input.userId, workspaceId: sole.id, workspaceRole: 'member' },
             tx,
           );
         },

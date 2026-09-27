@@ -98,7 +98,6 @@ async function teammate(email: string): Promise<string> {
       userId: u.id,
       workspaceId: caller.fixture.workspaceId,
       workspaceRole: 'member',
-      role: 'member',
     },
   });
   await addToProjectAs({

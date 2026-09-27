@@ -50,7 +50,6 @@ describe('findStandInManagerByWorkspace', () => {
         userId: later.id,
         workspaceId: workspace.id,
         workspaceRole: 'manager',
-        role: 'admin',
       },
     });
 
@@ -70,10 +69,12 @@ describe('findStandInManagerByWorkspace', () => {
         userId: legacyOwner.id,
         workspaceId: workspace.id,
         workspaceRole: 'member',
-        role: 'owner',
         createdAt: new Date('2000-01-01T00:00:00Z'),
       },
     });
+    // The legacy value, written raw — nothing in the app writes it (MOTIR-6562).
+    await adminDb.$executeRaw`
+      UPDATE "workspace_membership" SET "role" = 'owner' WHERE "userId" = ${legacyOwner.id}`;
 
     const picked = await standIn(workspace.id);
     expect(picked?.userId).toBe(founder.id);
@@ -115,11 +116,14 @@ describe('findStandInManagerByWorkspace', () => {
       name: 'Migrated Co',
       ownerUserId: founder.id,
     });
-    // The founder was demoted to Member: the legacy column still says `owner`.
+    // The founder was demoted to Member while the legacy column still says
+    // `owner` (written raw — nothing in the app writes it since MOTIR-6562).
     await adminDb.workspaceMembership.update({
       where: { userId_workspaceId: { userId: founder.id, workspaceId: workspace.id } },
       data: { workspaceRole: 'member' },
     });
+    await adminDb.$executeRaw`
+      UPDATE "workspace_membership" SET "role" = 'owner' WHERE "userId" = ${founder.id}`;
     for (const [u, at, role] of [
       [viewer, '2001-01-01', 'viewer'],
       [older, '2002-01-01', 'manager'],
@@ -129,7 +133,6 @@ describe('findStandInManagerByWorkspace', () => {
         data: {
           userId: u.id,
           workspaceId: workspace.id,
-          role: 'member',
           workspaceRole: role,
           createdAt: new Date(`${at}T00:00:00Z`),
         },

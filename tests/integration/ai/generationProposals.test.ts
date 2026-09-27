@@ -324,7 +324,6 @@ describe('POST /api/internal/ai/plan-proposals — typed refusals, never a 500',
         userId: user.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await addToProjectAs({

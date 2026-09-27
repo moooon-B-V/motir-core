@@ -165,7 +165,6 @@ describe('multi-tenant RLS — write isolation', () => {
             userId: fx.userAId,
             workspaceId: fx.workspaceBId,
             workspaceRole: 'member',
-            role: 'member',
           },
         }),
       ),

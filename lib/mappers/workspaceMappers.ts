@@ -25,7 +25,7 @@ export function toWorkspaceDTO(workspace: Workspace): WorkspaceDTO {
 export function toMembershipDTO(membership: WorkspaceMembership): MembershipDTO {
   return {
     id: membership.id,
-    role: membership.role,
+    workspaceRole: membership.workspaceRole,
     userId: membership.userId,
     workspaceId: membership.workspaceId,
   };

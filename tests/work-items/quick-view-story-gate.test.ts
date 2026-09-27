@@ -379,7 +379,7 @@ describe('guard · the read-only actor is gated on the SERVER, not only in the U
     await workspacesService.addMember({
       userId: viewer.id,
       workspaceId: owner.workspace.id,
-      role: 'member',
+      workspaceRole: 'member',
     });
     await addToProjectAs({
       key: owner.project.identifier,

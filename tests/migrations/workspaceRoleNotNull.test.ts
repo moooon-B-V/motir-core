@@ -73,8 +73,11 @@ describe('20260927090000_workspace_role_not_null', () => {
     const ws = await workspace();
     const u = await user('nn-set');
     await adminDb.workspaceMembership.create({
-      data: { userId: u.id, workspaceId: ws.id, workspaceRole: 'viewer', role: 'owner' },
+      data: { userId: u.id, workspaceId: ws.id, workspaceRole: 'viewer' },
     });
+    // A legacy value that maps WIDER, written raw (nothing in the app writes it).
+    await adminDb.$executeRaw`
+      UPDATE "workspace_membership" SET "role" = 'owner' WHERE "userId" = ${u.id}`;
     await relaxWorkspaceRoleNotNull();
 
     await runMigrationFile(NOT_NULL);

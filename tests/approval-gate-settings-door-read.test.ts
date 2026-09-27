@@ -43,7 +43,7 @@ afterAll(async () => {
 async function seatedOn(role: 'admin' | 'member') {
   const user = await createTestUser();
   await adminDb.workspaceMembership.create({
-    data: { userId: user.id, workspaceId: fx.workspaceId, workspaceRole: 'member', role: 'member' },
+    data: { userId: user.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
   });
   await addToProjectAs({
     key: fx.projectIdentifier,

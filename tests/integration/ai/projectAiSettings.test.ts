@@ -419,7 +419,6 @@ describe('projectAiSettingsService — tenancy + admin gates', () => {
         userId: member.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
 
@@ -471,7 +470,6 @@ describe('projectAiSettingsService — tenancy + admin gates', () => {
         userId: member.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
 

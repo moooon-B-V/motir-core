@@ -97,7 +97,7 @@ async function seedTenant(slug: string): Promise<Tenant> {
     await workspacesService.addMember({ userId: u.id, workspaceId: workspace.id });
     if (role) {
       await db.projectMembership.create({
-        data: { userId: u.id, projectId: project.id, workspaceId: workspace.id, role },
+        data: { userId: u.id, projectId: project.id, workspaceId: workspace.id },
       });
       // Roles live on the workspace since MOTIR-6168.
       await setWorkspaceRoleFor(u.id, workspace.id, role);

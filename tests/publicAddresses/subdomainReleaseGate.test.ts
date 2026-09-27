@@ -288,7 +288,6 @@ describe('the route contract, and the two verbs it joins', () => {
         userId: member.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     ctxRef.current = { userId: member.id, workspaceId: fx.workspaceId };

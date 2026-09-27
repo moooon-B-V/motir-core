@@ -821,7 +821,6 @@ describe('importService — the import:run gate', () => {
           userId: user.id,
           workspaceId: fx.workspaceId,
           workspaceRole: 'member',
-          role: 'member',
         },
       });
       await addToProjectAs({

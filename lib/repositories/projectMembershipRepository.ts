@@ -1,9 +1,4 @@
-import {
-  type MemberRole,
-  Prisma,
-  type ProjectMembership,
-  type User,
-} from '@/generated/prisma/client';
+import { Prisma, type ProjectMembership, type User } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 
 // A project-membership row joined with the slice of its user the members list
@@ -97,8 +92,10 @@ export const projectMembershipRepository = {
     });
   },
 
+  // Neither writer takes the legacy `role` (MOTIR-6562): nothing reads it, and the
+  // database default fills the column until the phase-3 release drops it.
   async create(
-    data: { workspaceId: string; projectId: string; userId: string; role: MemberRole },
+    data: { workspaceId: string; projectId: string; userId: string },
     tx: Prisma.TransactionClient,
   ): Promise<ProjectMembership> {
     return tx.projectMembership.create({ data });
@@ -111,7 +108,7 @@ export const projectMembershipRepository = {
    * alone. Returns the count created.
    */
   async createManySkipDuplicates(
-    data: Array<{ workspaceId: string; projectId: string; userId: string; role: MemberRole }>,
+    data: Array<{ workspaceId: string; projectId: string; userId: string }>,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     if (data.length === 0) return 0;

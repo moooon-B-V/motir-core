@@ -56,7 +56,7 @@ export async function seedApprovalsRoom(slug: string): Promise<ApprovalsRoomSeed
   const tab = await seedApprovalsTab(slug);
   const ownerCtx = await (async () => {
     const owner = await adminDb.workspaceMembership.findFirstOrThrow({
-      where: { workspaceId: tab.workspaceId, role: 'owner' },
+      where: { workspaceId: tab.workspaceId, workspaceRole: 'manager' },
       select: { userId: true },
     });
     return { userId: owner.userId, workspaceId: tab.workspaceId };
@@ -77,7 +77,6 @@ export async function seedApprovalsRoom(slug: string): Promise<ApprovalsRoomSeed
         userId: user.id,
         projectId: tab.projectId,
         workspaceId: tab.workspaceId,
-        role: 'member',
       },
     });
     await adminDb.workspaceMembership.update({

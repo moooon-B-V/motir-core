@@ -316,7 +316,6 @@ describe('browse is the permission', () => {
         userId: viewer.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await addToProjectAs({

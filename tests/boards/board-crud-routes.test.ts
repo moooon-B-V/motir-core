@@ -74,7 +74,6 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
       userId: member.id,
       workspaceId: ws.workspace.id,
       workspaceRole: 'member',
-      role: 'member',
     },
   });
   const board = await withWorkspaceServiceContext(ws.workspace.id, (tx) =>

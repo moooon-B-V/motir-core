@@ -196,7 +196,6 @@ describe('the row names NO reviewer (MOTIR-5602, amended at design review)', () 
         userId: user.id,
         workspaceId: fx.workspaceId,
         workspaceRole: 'member',
-        role: 'member',
       },
     });
     await adminDb.githubIdentity.create({

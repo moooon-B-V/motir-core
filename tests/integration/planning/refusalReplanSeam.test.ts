@@ -123,7 +123,7 @@ async function member(inProject: boolean): Promise<Actor> {
   seq += 1;
   const user = await createTestUser({ name: `Member ${seq}` });
   await adminDb.workspaceMembership.create({
-    data: { userId: user.id, workspaceId: fx.workspaceId, workspaceRole: 'member', role: 'member' },
+    data: { userId: user.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
   });
   if (inProject) {
     await addToProjectAs({

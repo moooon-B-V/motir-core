@@ -79,7 +79,7 @@ async function makeScenario(slug: string) {
     await workspacesService.addMember({
       userId: user.id,
       workspaceId: workspace.id,
-      role: 'member',
+      workspaceRole: 'member',
     });
     await addToProjectAs({
       key,
@@ -105,7 +105,7 @@ async function makeScenario(slug: string) {
   await workspacesService.addMember({
     userId: plainWs.id,
     workspaceId: workspace.id,
-    role: 'member',
+    workspaceRole: 'member',
   });
 
   // Not a workspace member at all — the project is hidden (404).
