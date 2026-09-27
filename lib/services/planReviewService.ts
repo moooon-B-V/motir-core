@@ -53,7 +53,8 @@ import type {
 } from '@/lib/dto/planReview';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { folderRepository } from '@/lib/repositories/folderRepository';
-import { folderRefId, isFolderRef } from '@/lib/plans/refs';
+import { folderRefId, isFolderRef, isTempRef, SUPERSEDES_PATCH_SITES } from '@/lib/plans/refs';
+import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
 
 // The plan-detail READ assembly (Story 7.21 · Subtask 7.4.5 / MOTIR-847). A pure
 // READ orchestrator: it composes the substrate's own reads — `getPlan`
@@ -604,6 +605,48 @@ export const planReviewService = {
         { folderId, folderPath: pathById.get(folderId) ?? null },
       ]),
     );
+  },
+
+  /**
+   * What `get_plan`'s one-line render needs to print a proposed MARK (Story
+   * MOTIR-6577 · MOTIR-6631): each real work-item ref on the five `supersedes`
+   * carriers — and each `modify` target that touches `obsolescence` — resolved to
+   * its KEY, and those targets' CURRENT mark, so a line reads
+   * `mark: none → outdated · supersedes +ACME-3`. ONE workspace-scoped read for
+   * the whole plan, and none at all when no proposal carries a mark key.
+   *
+   * A row outside the plan's own project is left out of both maps (the render
+   * then prints the ref verbatim), the same reach `resolveProposalFolders` keeps
+   * — a plan reader was admitted to this project and no other. A `planItem:` ref
+   * is not an id and is never read.
+   */
+  async resolveProposalMarkRefs(
+    plan: PlanWithItemsDto,
+    ctx: ServiceContext,
+  ): Promise<{
+    keyById: Map<string, string>;
+    markById: Map<string, WorkItemObsolescenceDto | null>;
+  }> {
+    const ids = new Set<string>();
+    const take = (ref: string) => {
+      if (!isTempRef(ref) && !isFolderRef(ref)) ids.add(ref);
+    };
+    for (const item of plan.items) {
+      for (const ref of item.supersedesRefs ?? []) take(ref);
+      if (item.op !== 'modify' || !item.patch) continue;
+      for (const site of SUPERSEDES_PATCH_SITES)
+        for (const ref of item.patch[site] ?? []) take(ref);
+      if (item.workItemId && item.patch.obsolescence !== undefined) ids.add(item.workItemId);
+    }
+    if (ids.size === 0) return { keyById: new Map(), markById: new Map() };
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdsInWorkspace([...ids], ctx.workspaceId, tx),
+    );
+    const own = rows.filter((row) => row.projectId === plan.projectId);
+    return {
+      keyById: new Map(own.map((row) => [row.id, row.identifier])),
+      markById: new Map(own.map((row) => [row.id, row.obsolescence ?? null])),
+    };
   },
 
   async getPlanReview(planId: string, ctx: ServiceContext): Promise<PlanReviewDto> {

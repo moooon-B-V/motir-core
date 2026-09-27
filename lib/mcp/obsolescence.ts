@@ -52,7 +52,7 @@ export const obsolescenceNoteWriteField = z
   );
 
 /** The note's first non-blank line, trimmed — what a text block prints. */
-function firstLine(noteMd: string | null): string | null {
+export function firstLine(noteMd: string | null): string | null {
   if (noteMd === null) return null;
   const line = noteMd
     .split('\n')

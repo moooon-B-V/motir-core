@@ -383,6 +383,40 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   description:
                     'Dependency edges to REMOVE — work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs.',
                 },
+                obsolescence: {
+                  anyOf: [{ type: 'string', enum: ['outdated', 'deprecated'] }, { type: 'null' }],
+                  description:
+                    'MARK the target as no longer TRUE OF THE CODE: "outdated" or "deprecated" — "outdated" when the text no longer describes what shipped (the capability lives on in another shape), "deprecated" when it was retired or overturned on purpose. An explicit `null` clears it; omit it to leave the mark alone. A value outside the enum is refused INVALID_PROPOSAL. A plan may SET a mark only on a FINISHED target — one whose status is in the `done` category (`done`, `cancelled`, or a custom done status). On a to-do or in-progress target it is refused with INVALID_PROPOSAL: "a plan may mark only a finished work item; <KEY> is at <status>. A work item nobody will finish is removed — send `{ op: \'remove\', workItemId, reason }` instead." (at the append, at `update_plan_proposal`, and again at approve, where `validate_plan` reports it). Clearing a mark (`null`) is legal on any target. A MARK-ONLY `modify` — a patch carrying nothing but `obsolescence`, `obsolescenceNoteMd` and the four supersedes lists — is the ONE change a plan may make to a `done` or `cancelled` card; approve writes it and leaves the card’s status alone. Add any other key and the target is refused PLAN_TARGET_IMMUTABLE. Marking is never archiving: the card stays in the tree, and a `remove` never marks anything.',
+                },
+                obsolescenceNoteMd: {
+                  type: ['string', 'null'],
+                  description:
+                    'The Markdown note saying WHY the target is marked — what changed and what to read instead. Independent of `obsolescence` (clearing the mark keeps the note); an explicit `null` clears it. A mark key: legal in a mark-only `modify` of a `done` / `cancelled` card.',
+                },
+                supersedesAdd: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'On the NEWER card: the target REPLACES each listed card. Each entry names an OLDER card; approve writes one `supersedes` link from the target to it. Each entry is a work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref naming an `add` ALREADY on this plan (returned by an EARLIER call) — so a done card can be marked superseded by a card this plan creates. A key is resolved to its id here, and one that names nothing is refused `dangling` at this call. A `folder:<id>` ref, a ref listed twice, or the target itself is refused INVALID_PLAN_REF_GRAPH; so is an edge that closes a supersedes CYCLE (A replaces B replaces A). No level rule: any kind may supersede any kind. Unioned with an earlier `modify` of the same card; the same ref in `supersedesRemove` cancels it. A mark key.',
+                },
+                supersedesRemove: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'On the NEWER card: DELETE the `supersedes` link from the target to each listed (older) card at approve; a link that does not exist is a no-op. Same ref forms as `supersedesAdd`. A mark key.',
+                },
+                supersededByAdd: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'On the OLD card: `supersededByAdd` names the card that REPLACES it. Each entry names a NEWER card; approve writes one `supersedes` link from it to the target — the same row the newer card’s `supersedesAdd` would write, so spelling one edge from both ends lands one link. This is the list a mark on a done card usually needs beside `obsolescence`. Each entry is a work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref naming an `add` ALREADY on this plan (returned by an EARLIER call) — so a done card can be marked superseded by a card this plan creates. A key is resolved to its id here, and one that names nothing is refused `dangling` at this call. A `folder:<id>` ref, a ref listed twice, or the target itself is refused INVALID_PLAN_REF_GRAPH; so is an edge that closes a supersedes CYCLE (A replaces B replaces A). No level rule: any kind may supersede any kind. A mark key.',
+                },
+                supersededByRemove: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'On the OLD card: DELETE the `supersedes` link from each listed (newer) card to the target at approve; a link that does not exist is a no-op. Same ref forms as `supersededByAdd`. A mark key.',
+                },
               },
               additionalProperties: true,
               description:
@@ -398,6 +432,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               items: { type: 'string' },
               description:
                 'Dependency edges, in the same three forms as `parentRef`: work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs into this plan. A `folder:<id>` ref is refused here — a folder is a placement, it blocks nothing. An edge joins two items on the SAME LEVEL — the same depth below their nearest common ancestor, a folder adding none — and may cross parents; one between two levels is refused `INVALID_PLAN_REF_GRAPH` / `cross_level`. An epic is blocked only by another epic — an edge with an epic at either end is cross-level unless both ends are epics.',
+            },
+            supersedesRefs: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                '`add` only: the OLDER cards the created card REPLACES. Approve writes one `supersedes` link from the new card to each. Each entry is a work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref naming an `add` ALREADY on this plan (returned by an EARLIER call) — so a done card can be marked superseded by a card this plan creates. A key is resolved to its id here, and one that names nothing is refused `dangling` at this call. A `folder:<id>` ref, a ref listed twice, or the target itself is refused INVALID_PLAN_REF_GRAPH; so is an edge that closes a supersedes CYCLE (A replaces B replaces A). No level rule: any kind may supersede any kind. Refused on a `modify` (it spells its edges on the patch: `supersedesAdd` / `supersededByAdd`) and on a `remove`. This does NOT mark the older card — to mark it `outdated`, send a mark-only `modify` of it with `supersededByAdd: ["planItem:<this add>"]` in a LATER call.',
             },
             baseRevision: {
               type: 'string',
@@ -2490,6 +2530,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'REPLACES the dependency edges wholesale — a list has no sparse edit, so send the set you want and `[]` to clear it. Same ref rules and same re-validation as `parentRef`.',
       },
+      supersedesRefs: {
+        type: 'array',
+        items: { $ref: '#/properties/blockedByRefs/items' },
+        description:
+          'REPLACES an `add`’s supersedes set wholesale — send the set you want, `[]` to clear it. `add` only: the OLDER cards the created card REPLACES. Approve writes one `supersedes` link from the new card to each. Each entry is a work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref naming an `add` ALREADY on this plan (returned by an EARLIER call) — so a done card can be marked superseded by a card this plan creates. A key is resolved to its id here, and one that names nothing is refused `dangling` at this call. A `folder:<id>` ref, a ref listed twice, or the target itself is refused INVALID_PLAN_REF_GRAPH; so is an edge that closes a supersedes CYCLE (A replaces B replaces A). No level rule: any kind may supersede any kind. Refused on a `modify` (it spells its edges on the patch: `supersedesAdd` / `supersededByAdd`) and on a `remove`. This does NOT mark the older card — to mark it `outdated`, send a mark-only `modify` of it with `supersededByAdd: ["planItem:<this add>"]` in a LATER call. To change a `modify`’s supersedes edges, replace its `patch` instead.',
+      },
       targetRepo: {
         type: ['string', 'null'],
         description:
@@ -2628,6 +2674,40 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 description:
                   'Dependency edges to REMOVE — work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs.',
               },
+              obsolescence: {
+                anyOf: [{ type: 'string', enum: ['outdated', 'deprecated'] }, { type: 'null' }],
+                description:
+                  'MARK the target as no longer TRUE OF THE CODE: "outdated" or "deprecated" — "outdated" when the text no longer describes what shipped (the capability lives on in another shape), "deprecated" when it was retired or overturned on purpose. An explicit `null` clears it; omit it to leave the mark alone. A value outside the enum is refused INVALID_PROPOSAL. A plan may SET a mark only on a FINISHED target — one whose status is in the `done` category (`done`, `cancelled`, or a custom done status). On a to-do or in-progress target it is refused with INVALID_PROPOSAL: "a plan may mark only a finished work item; <KEY> is at <status>. A work item nobody will finish is removed — send `{ op: \'remove\', workItemId, reason }` instead." (at the append, at `update_plan_proposal`, and again at approve, where `validate_plan` reports it). Clearing a mark (`null`) is legal on any target. A MARK-ONLY `modify` — a patch carrying nothing but `obsolescence`, `obsolescenceNoteMd` and the four supersedes lists — is the ONE change a plan may make to a `done` or `cancelled` card; approve writes it and leaves the card’s status alone. Add any other key and the target is refused PLAN_TARGET_IMMUTABLE. Marking is never archiving: the card stays in the tree, and a `remove` never marks anything.',
+              },
+              obsolescenceNoteMd: {
+                type: ['string', 'null'],
+                description:
+                  'The Markdown note saying WHY the target is marked — what changed and what to read instead. Independent of `obsolescence` (clearing the mark keeps the note); an explicit `null` clears it. A mark key: legal in a mark-only `modify` of a `done` / `cancelled` card.',
+              },
+              supersedesAdd: {
+                type: 'array',
+                items: { type: 'string' },
+                description:
+                  'On the NEWER card: the target REPLACES each listed card. Each entry names an OLDER card; approve writes one `supersedes` link from the target to it. Each entry is a work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref naming an `add` ALREADY on this plan (returned by an EARLIER call) — so a done card can be marked superseded by a card this plan creates. A key is resolved to its id here, and one that names nothing is refused `dangling` at this call. A `folder:<id>` ref, a ref listed twice, or the target itself is refused INVALID_PLAN_REF_GRAPH; so is an edge that closes a supersedes CYCLE (A replaces B replaces A). No level rule: any kind may supersede any kind. Unioned with an earlier `modify` of the same card; the same ref in `supersedesRemove` cancels it. A mark key.',
+              },
+              supersedesRemove: {
+                type: 'array',
+                items: { type: 'string' },
+                description:
+                  'On the NEWER card: DELETE the `supersedes` link from the target to each listed (older) card at approve; a link that does not exist is a no-op. Same ref forms as `supersedesAdd`. A mark key.',
+              },
+              supersededByAdd: {
+                type: 'array',
+                items: { type: 'string' },
+                description:
+                  'On the OLD card: `supersededByAdd` names the card that REPLACES it. Each entry names a NEWER card; approve writes one `supersedes` link from it to the target — the same row the newer card’s `supersedesAdd` would write, so spelling one edge from both ends lands one link. This is the list a mark on a done card usually needs beside `obsolescence`. Each entry is a work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref naming an `add` ALREADY on this plan (returned by an EARLIER call) — so a done card can be marked superseded by a card this plan creates. A key is resolved to its id here, and one that names nothing is refused `dangling` at this call. A `folder:<id>` ref, a ref listed twice, or the target itself is refused INVALID_PLAN_REF_GRAPH; so is an edge that closes a supersedes CYCLE (A replaces B replaces A). No level rule: any kind may supersede any kind. A mark key.',
+              },
+              supersededByRemove: {
+                type: 'array',
+                items: { type: 'string' },
+                description:
+                  'On the OLD card: DELETE the `supersedes` link from each listed (newer) card to the target at approve; a link that does not exist is a no-op. Same ref forms as `supersededByAdd`. A mark key.',
+              },
             },
             additionalProperties: true,
             description:
@@ -2636,7 +2716,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
           { type: 'null' },
         ],
         description:
-          '`modify` only: REPLACES that proposal’s patch. This is the op no door could touch at all before — and the one that carries a dependency edit, so it is usually what a mistyped `planItem:` ref is sitting on.',
+          '`modify` only: REPLACES that proposal’s patch. This is the op no door could touch at all before — and the one that carries a dependency edit, so it is usually what a mistyped `planItem:` ref is sitting on. It is also how a `modify`’s MARK is corrected: the replacement patch’s `obsolescence`, `obsolescenceNoteMd` and four supersedes lists are re-checked exactly as the append checks them, including the finished-target rule.',
       },
     },
     required: ['planId', 'planItemId'],

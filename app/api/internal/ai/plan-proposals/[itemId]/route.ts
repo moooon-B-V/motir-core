@@ -62,7 +62,9 @@ import type { CorrectProposalInput, PlanItemPatch, UpdateProposalInput } from '@
 // (`lib/mcp/tools/authorPlan.ts`) — so an external MCP agent could revise a
 // landed plan and Motir's own planner could not. It carries the STRUCTURAL
 // fields the deepen turn may not touch (`parentRef`, `blockedByRefs`,
-// `targetRepo`, and a `modify`'s `patch`) and is legal on a `planned` plan as
+// `supersedesRefs`, `targetRepo`, and a `modify`'s `patch` — sent as
+// `modifyPatch`, which carries the obsolescence mark, its note and the four
+// supersedes lists whole) and is legal on a `planned` plan as
 // well as a `generating` one, exactly as the service is.
 //
 // ⚠️ THE MODE IS EXPLICIT, NEVER INFERRED FROM WHICH KEYS ARE PRESENT. Inferring
@@ -297,6 +299,14 @@ function correctionFrom(
       : {}),
     ...(Array.isArray(b.blockedByRefs)
       ? { blockedByRefs: b.blockedByRefs.filter((r): r is string => typeof r === 'string') }
+      : {}),
+    // An `add`'s SUPERSEDES set (Story MOTIR-6577 · MOTIR-6631) — a list, so it
+    // REPLACES the set like `blockedByRefs` beside it and `[]` clears it. The refs
+    // are ids or `planItem:` refs (this seam resolves no keys, exactly as for the
+    // blocker set); the service's ref passes and supersedes-cycle walk judge them,
+    // and refuse it on a `modify`, which spells its edges on `modifyPatch`.
+    ...(Array.isArray(b.supersedesRefs)
+      ? { supersedesRefs: b.supersedesRefs.filter((r): r is string => typeof r === 'string') }
       : {}),
     ...('targetRepo' in b
       ? { targetRepo: typeof b.targetRepo === 'string' ? b.targetRepo : null }

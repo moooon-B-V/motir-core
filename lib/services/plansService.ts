@@ -5556,12 +5556,21 @@ export const plansService = {
    *
    * Legal on `generating` AND `planned`; `approved` / `declined` are FROZEN and
    * the refusal names the status (`PlanNotEditableError`).
+   *
+   * `opts.byReviewer` (MOTIR-6631) is the HUMAN proposal-edit route
+   * (`PATCH /api/plans/[id]/items/[itemId]`) reaching this method for the one
+   * structural key it carries, an `add`'s `supersedesRefs`. That route edits a
+   * `planned` plan on a person's behalf, so the flag narrows the legal status to
+   * `planned` (the same `PlanNotInExpectedStatusError` `updateProposal` answers)
+   * and records the PERSON on the trail with no agent triple — `editAddProposal`'s
+   * `planned` attribution — instead of the plan's generation actor.
    */
   async correctProposal(
     planId: string,
     planItemId: string,
     input: CorrectProposalInput,
     ctx: ServiceContext,
+    opts: { byReviewer?: boolean } = {},
   ): Promise<PlanWithItemsDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
@@ -5642,6 +5651,9 @@ export const plansService = {
         const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
         if (!fresh) throw new PlanNotFoundError(planId);
         assertPlanProposalsEditable(fresh);
+        if (opts.byReviewer && fresh.status !== 'planned') {
+          throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
+        }
 
         const all = await planItemRepository.findByPlan(planId, tx);
         const item = all.find((i) => i.id === planItemId);
@@ -5975,7 +5987,9 @@ export const plansService = {
             planId,
             planItemId,
             changeKind: 'edited',
-            ...generationActor(fresh, ctx),
+            ...(opts.byReviewer
+              ? { changedById: ctx.userId, actor: null }
+              : generationActor(fresh, ctx)),
             diff: { fields: touched, proposalCount: 1, correction: true },
           },
           tx,
