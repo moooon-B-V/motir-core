@@ -141,7 +141,7 @@ import {
   type CoverageNodeInfo,
 } from '@/lib/workItems/crossParentCoverage';
 import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/components/errors';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
 import { validateStoryPoints } from '@/lib/estimation/validate';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -1260,6 +1260,21 @@ async function readFolderLevel(
  * line: the queryable substrate stays comment-scoped until a use case earns
  * more).
  */
+/**
+ * Assert the actor may BROWSE the project, answering a refusal as
+ * `ProjectNotFoundError` (MOTIR-6319) — the no-existence-leak posture
+ * `projectsService.resolveByKey` already takes: a project the actor cannot see is
+ * indistinguishable from one that does not exist.
+ */
+async function assertBrowseAsNotFound(projectId: string, ctx: ServiceContext): Promise<void> {
+  try {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+  } catch (err) {
+    if (err instanceof ProjectAccessDeniedError) throw new ProjectNotFoundError(projectId);
+    throw err;
+  }
+}
+
 async function resolveDescriptionMentionable(
   projectId: string,
   accessMode: ProjectAccessMode,
@@ -6471,11 +6486,15 @@ export const workItemsService = {
   async listCandidateParents(
     projectId: string,
     childType: IssueType,
-    workspaceId: string,
+    ctx: ServiceContext,
   ): Promise<WorkItemSummaryDto[]> {
+    // The caller's project is not trusted (MOTIR-6319): the actor must be able to
+    // browse it, or the picker would list another project's titles. A refusal is
+    // not-found, never forbidden — the no-existence-leak posture.
+    await assertBrowseAsNotFound(projectId, ctx);
     const kinds = allowedParentKinds(childType);
-    const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
-      workItemRepository.findByProjectAndKinds(projectId, kinds, workspaceId, tx),
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByProjectAndKinds(projectId, kinds, ctx.workspaceId, tx),
     );
     return rows.map(toWorkItemSummaryDto);
   },
@@ -6704,6 +6723,10 @@ export const workItemsService = {
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
+    // The tenant gate above is the WORKSPACE's; the project's own gate is browse
+    // (MOTIR-6319, measured: an outsider to a Members-only project was handed its
+    // ready leaves). Refused as not-found, like the tenant gate.
+    await assertBrowseAsNotFound(projectId, ctx);
     const limit = clampReadyLimit(filter.limit);
     const cursor = filter.cursor ? decodeReadyCursor(filter.cursor) : undefined;
     // `allowSoftBlock` (MOTIR-6366) is read HERE and only here: it is passed to

@@ -420,7 +420,15 @@ async function resolveActiveProjectInContext(
         // pointer — hard-deleted (the FK's onDelete: SetNull would have
         // nulled it, but belt + suspenders) or cross-workspace — falls
         // through to recovery below.
-        if (pinned && pinned.workspaceId === workspaceId) {
+        // …and only while the member can still ENTER it (MOTIR-6319): a pointer
+        // written by a forged call, or left behind when access was revoked, is
+        // treated as unset rather than handed back.
+        if (
+          pinned &&
+          pinned.workspaceId === workspaceId &&
+          (await projectAccessService.filterBrowsable([pinned], { userId, workspaceId }, tx))
+            .length > 0
+        ) {
           return toProjectDTO(pinned);
         }
       }
@@ -428,10 +436,19 @@ async function resolveActiveProjectInContext(
       // No resolvable pinned project. Recover to the first non-archived
       // project if one exists (#29.3), persisting it so the pointer heals.
       const projects = await projectRepository.findByWorkspace(workspaceId, tx);
-      const first = projects[0];
       // A MEMBER with no project — the healable state, told apart from the
       // `null` above (MOTIR-4870). `getActiveProject` is what acts on it.
-      if (!first) return NO_PROJECT_IN_WORKSPACE;
+      if (projects.length === 0) return NO_PROJECT_IN_WORKSPACE;
+      // Recover only to a project the member can ENTER (MOTIR-6319). A workspace
+      // that has projects, none of them enterable, is NOT the healable state —
+      // healing would create a project for someone who may not have one — so it
+      // resolves to no project; the no-project shell for that case is MOTIR-6548.
+      const [first] = await projectAccessService.filterBrowsable(
+        projects,
+        { userId, workspaceId },
+        tx,
+      );
+      if (!first) return null;
 
       if (membership.activeProjectId) {
         // The pointer was SET but didn't resolve — a real inconsistency
@@ -821,11 +838,21 @@ export const projectsService = {
       { userId: input.userId, workspaceId: input.workspaceId },
       async (tx) => {
         if (input.projectId !== null) {
-          await projectsService.assertProjectInWorkspaceInTx(
+          const project = await projectsService.assertProjectInWorkspaceInTx(
             input.projectId,
             input.workspaceId,
             tx,
           );
+          // The PROJECT tier is the gate, not the workspace (MOTIR-6319): a
+          // workspace member may pin only a project they can ENTER — the same
+          // `filterBrowsable` the switcher lists by. Anything else answers
+          // exactly as a missing project does, so a forged call learns nothing.
+          const enterable = await projectAccessService.filterBrowsable(
+            [project],
+            { userId: input.userId, workspaceId: input.workspaceId },
+            tx,
+          );
+          if (enterable.length === 0) throw new ProjectNotFoundError(input.projectId);
         }
         // The org Owner may act in a workspace they never joined (MOTIR-6308),
         // and there is then no membership row to hold the pointer. Their choice
