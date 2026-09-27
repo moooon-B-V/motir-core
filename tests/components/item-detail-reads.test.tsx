@@ -281,7 +281,7 @@ const detailFor = (over: Record<string, unknown> = {}) => ({
   relatesTo: [],
   duplicates: [],
   clones: [],
-  readiness: {},
+  readiness: { ready: false, openBlockers: [], blockedByAncestor: null },
 });
 
 // ── WHY THE PAGE IS IMPORTED IN A HOOK, AND WHY EVERY CALL IS TRACKED (MOTIR-4902)

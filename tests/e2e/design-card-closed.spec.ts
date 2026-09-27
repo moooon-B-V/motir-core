@@ -166,7 +166,10 @@ test.describe('a done design is final until a person reopens it', () => {
         .getByRole('main')
         .getByRole('button', { name: `Edit ${en.issueViews.status}`, exact: true })
         .click();
-      await page.getByRole('main').getByRole('combobox').click();
+      await page
+        .getByRole('main')
+        .getByRole('combobox', { name: en.issueViews.status, exact: true })
+        .click();
       const moved = page.waitForResponse(
         (r) => r.request().method() === 'POST' && Boolean(r.request().headers()['next-action']),
       );
