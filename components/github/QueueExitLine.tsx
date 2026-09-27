@@ -36,16 +36,40 @@ export function reasonKey(rawReason: string): WordedReason | 'unknown' {
   return WORDED.has(rawReason) ? (rawReason as WordedReason) : 'unknown';
 }
 
+/**
+ * THE HELD-FAILURE SENTENCE (§4 FIFTH AMENDMENT; MOTIR-6596, design § 31 panel 1): the
+ * failed CHECK named in the sentence itself, per reason. `null` falls back to § 22's
+ * `left` + reason — a check the queue attempt never recorded is not invented.
+ */
+function heldSentenceKey(
+  exit: PullRequestQueueExitDTO,
+): 'checks' | 'timedOut' | 'mergeCommit' | null {
+  switch (exit.rawReason) {
+    case 'CI_FAILURE':
+      return exit.failingCheckName ? 'checks' : null;
+    case 'CI_TIMEOUT':
+      return exit.failingCheckName ? 'timedOut' : null;
+    case 'INVALID_MERGE_COMMIT':
+    case 'GIT_TREE_INVALID':
+      return 'mergeCommit';
+    default:
+      return null;
+  }
+}
+
 export function QueueExitLine({
   name,
   exit,
   sub,
+  held = false,
 }: {
   /** The pull request as its row names it — `owner/name · #n`. */
   name: string;
   exit: PullRequestQueueExitDTO;
   /** The follow-on sentence, under the check line. */
   sub?: ReactNode;
+  /** A queue FAILURE held at Implemented (§ 31): the sentence names the failed check. */
+  held?: boolean;
 }) {
   const t = useTranslations('approvalGate.pullRequestApproval.exit');
   const bold = (chunks: ReactNode) => (
@@ -54,6 +78,7 @@ export function QueueExitLine({
   const failure = exit.disposition === 'failure';
   const reason = t(`reason.${reasonKey(exit.rawReason)}`);
   const Glyph = failure ? CircleX : CircleMinus;
+  const heldKey = held ? heldSentenceKey(exit) : null;
   return (
     <span className="flex w-full min-w-0 basis-full flex-col gap-1" data-queue-exit>
       <span className="flex items-start gap-2 leading-snug">
@@ -63,7 +88,15 @@ export function QueueExitLine({
           }`}
           aria-hidden
         />
-        <span>{t.rich(failure ? 'left' : 'removed', { pr: name, reason, b: bold })}</span>
+        <span>
+          {heldKey
+            ? t.rich(`failed.${heldKey}`, {
+                pr: name,
+                check: exit.failingCheckName ?? '',
+                b: bold,
+              })
+            : t.rich(failure ? 'left' : 'removed', { pr: name, reason, b: bold })}
+        </span>
       </span>
       {exit.failingCheckName && exit.failingCheckUrl ? (
         <span className="ml-5.5 text-(--el-text-secondary)">

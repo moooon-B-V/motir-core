@@ -170,7 +170,10 @@ export type ApprovalGateSupersedeCauseDTO =
   /** The plan went `stale` (ADR §11.7). */
   | 'plan_stale'
   /** The plan's last proposal was withdrawn, so it was discarded (ADR §11.7). */
-  | 'plan_discarded';
+  | 'plan_discarded'
+  /** A gate the old rule re-asked from a merge-queue FAILURE, withdrawn by the
+   *  convergence (MOTIR-6595; §4 FIFTH AMENDMENT). */
+  | 'queue_failed';
 
 /** Under which §2 authority rung the decision was made (ADR §6a). Mirrors the
  *  `ApprovalGateAuthority` Prisma enum. Frozen at decision time, so a reader can

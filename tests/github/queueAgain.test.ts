@@ -211,8 +211,12 @@ async function ejectedManual(email: string, reason = 'CI_FAILURE') {
 
 /** The same card after the queue removed #11, with the SIBLING already merged — so the
  *  re-asked gate covers exactly one un-landed member and the host is called once. Returns
- *  that fresh `awaiting` gate, which is what the row's verb decides (MOTIR-5802). */
-async function reaskedManual(email: string, reason = 'CI_FAILURE') {
+ *  that fresh `awaiting` gate, which is what the row's verb decides (MOTIR-5802).
+ *
+ *  ⚠️ The default reason is BRANCH PROTECTION, not `CI_FAILURE`: since the FIFTH
+ *  AMENDMENT (MOTIR-6594) a queue failure is CAN'T-LAND and re-asks nothing, and a
+ *  setting-blocked exit is the failure that still does. */
+async function reaskedManual(email: string, reason = 'BRANCH_PROTECTIONS') {
   const ejected = await ejectedManual(email, reason);
   await adminDb.githubPullRequest.update({
     where: { id: (await pr(12)).id },
@@ -316,6 +320,47 @@ describe('manual mode — Queue again on the card’s ONE decided approval', () 
     });
     expect(host).not.toHaveBeenCalled();
     expect((await latestExit(11)).requeuedAt).toBeNull();
+  });
+
+  // ⚠️ A GATE THE OLD RULE RE-ASKED FROM A QUEUE FAILURE (MOTIR-6594; §4 FIFTH AMENDMENT).
+  // Nothing raises one any more, but a card stranded before the convergence (MOTIR-6595)
+  // still holds it. Its press re-queues NOTHING: the commits cannot land as they stand,
+  // and the refusal names the FAILURE — never a conflict that does not exist.
+  it.each(['CI_FAILURE', 'CI_TIMEOUT', 'INVALID_MERGE_COMMIT', 'GIT_TREE_INVALID'])(
+    'a gate re-asked from a %s exit is refused MERGE_QUEUE_FAILED_NEEDS_FIX and enqueues nothing',
+    async (reason) => {
+      const { s, reasked, prId } = await reaskedManual(`stranded-${reason}@example.com`);
+      // The exit as the OLD rule recorded it: the same row, reason a queue failure.
+      await adminDb.githubPullRequestQueueExit.updateMany({
+        where: { pullRequestId: prId },
+        data: { rawReason: reason, disposition: 'failure' },
+      });
+      const host = stubHost({ outcome: 'enqueued', entryId: `MQE_${reason}` });
+
+      const outcome = await press(s, reasked.id, prId);
+
+      expect(outcome).toMatchObject({
+        pullRequestId: prId,
+        outcome: 'refused',
+        refusal: { tag: 'MERGE_QUEUE_FAILED_NEEDS_FIX', reason },
+      });
+      expect(host).not.toHaveBeenCalled();
+      expect((await latestExit(11)).requeuedAt).toBeNull();
+    },
+  );
+
+  it('the same stranded gate over a MERGE_CONFLICT exit is still refused MERGE_CONFLICT', async () => {
+    const { s, reasked, prId } = await reaskedManual('stranded-conflict@example.com');
+    await adminDb.githubPullRequestQueueExit.updateMany({
+      where: { pullRequestId: prId },
+      data: { rawReason: 'MERGE_CONFLICT', disposition: 'failure' },
+    });
+    const host = stubHost({ outcome: 'enqueued', entryId: 'MQE_SC' });
+
+    const outcome = await press(s, reasked.id, prId);
+
+    expect(outcome).toMatchObject({ outcome: 'refused', refusal: { tag: 'MERGE_CONFLICT' } });
+    expect(host).not.toHaveBeenCalled();
   });
 
   it('pressing the RE-ASKED gate IS the new approval — it decides it, enqueues once and returns the card to approved', async () => {
@@ -450,7 +495,11 @@ describe('manual mode — Queue again on the card’s ONE decided approval', () 
 
 describe('the members read — requeueable only where Queue again is honest', () => {
   it('is true for a standing exit at the approved head, and false otherwise', async () => {
-    const { s, item, approved, prId } = await ejectedManual('read@example.com');
+    // A FAILURE that still re-asks (a setting), so the re-asked gate below exists.
+    const { s, item, approved, prId } = await ejectedManual(
+      'read@example.com',
+      'BRANCH_PROTECTIONS',
+    );
     const read = async () =>
       (
         await pullRequestMergeService.listApprovalMembers(
@@ -472,7 +521,12 @@ describe('the members read — requeueable only where Queue again is honest', ()
       requeueable: false,
       retryable: false,
       queued: false,
-      exit: { rawReason: 'CI_FAILURE', disposition: 'failure', headSha: 'sha-a', requeuedAt: null },
+      exit: {
+        rawReason: 'BRANCH_PROTECTIONS',
+        disposition: 'failure',
+        headSha: 'sha-a',
+        requeuedAt: null,
+      },
     });
     // A member the queue never removed.
     expect(await sibling()).toMatchObject({ requeueable: false, exit: null, queued: true });
@@ -501,6 +555,21 @@ describe('the members read — requeueable only where Queue again is honest', ()
       )
     ).find((m) => m.pullRequestId === prId);
     expect(onReask).toMatchObject({ requeueable: true, retryDecidesGateId: reasked!.id });
+
+    // …but NOT for a queue FAILURE, even on that gate (MOTIR-6594): it is CAN'T-LAND, so
+    // the row offers no verb and `motir fix` is the way forward.
+    await adminDb.githubPullRequestQueueExit.updateMany({
+      where: { pullRequestId: prId },
+      data: { disposition: 'failure', rawReason: 'CI_FAILURE' },
+    });
+    expect(
+      (
+        await pullRequestMergeService.listApprovalMembers(
+          { workItemId: item.id, approvalGateId: reasked!.id },
+          s.ctx,
+        )
+      ).find((m) => m.pullRequestId === prId),
+    ).toMatchObject({ requeueable: false });
 
     // Put back: no longer requeueable.
     await adminDb.githubPullRequestQueueExit.updateMany({

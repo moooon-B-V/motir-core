@@ -161,6 +161,9 @@ export interface RowState {
   conflicted?: boolean;
   /** The branch the row targets, for `{base}` (MOTIR-5916). */
   baseRef?: string | null;
+  /** The row's delivery carries a standing queue FAILURE the class holds (MOTIR-6596) —
+   *  what names the member in a `queue_failed` withdrawal. Absent = no. */
+  leftQueue?: boolean;
 }
 
 /** What the press, or a retry, reported about one member — the response's outcome, minus
@@ -482,6 +485,8 @@ export function DevelopmentGateFrame({
       ...retryFor(member, fact.requeueable ? fact.pullRequestId : null),
     }),
     cannotLand: () => ({ kind: 'cannotLand' }),
+    // § 31 panel 1 (MOTIR-6596): a queue FAILURE held at Implemented offers nothing either.
+    failedHeld: () => ({ kind: 'failedHeld' }),
   };
 
   function outcomeFor(member: MemberVersion): RowMergeOutcome | null {
@@ -613,6 +618,7 @@ export function DevelopmentGateFrame({
               // the ROW, the same stored reading its *Conflicts with* pill draws.
               conflicted: row?.conflicted ?? false,
               baseRef: row?.baseRef ?? null,
+              leftQueue: row?.leftQueue ?? false,
             };
           }),
           moved: moved.map(nameOf),
@@ -904,6 +910,7 @@ export function DevelopmentGateFrame({
   function unlandedSub(kind: RowMergeOutcome['kind'], neutral: boolean): ReactNode {
     if (kind === 'newCommits') return t('exit.newCommits');
     if (kind === 'cannotLand') return t.rich('exit.cannotLand', { b: bold });
+    if (kind === 'failedHeld') return t.rich('exit.failed.held', { key: itemIdentifier, b: bold });
     if (kind === 'refusedSetting') return t.rich('setting.reasked', { b: bold });
     if (!reasked) return t.rich('exit.unchanged', { b: bold });
     return t.rich(neutral ? 'exit.neutral.reasked' : 'exit.reasked.failure', { b: bold });
@@ -918,6 +925,7 @@ export function DevelopmentGateFrame({
       kind !== 'removedFromQueue' &&
       kind !== 'newCommits' &&
       kind !== 'cannotLand' &&
+      kind !== 'failedHeld' &&
       kind !== 'refusedSetting'
     ) {
       return [];
@@ -976,6 +984,7 @@ export function DevelopmentGateFrame({
         key={member.subjectVersion}
         name={nameOf(member)}
         exit={fact.exit}
+        held={kind === 'failedHeld'}
         sub={unlandedSub(kind, fact.exit.disposition !== 'failure')}
       />,
     ];

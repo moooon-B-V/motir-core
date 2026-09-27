@@ -1583,6 +1583,7 @@ const APPROVAL_GATE_SUPERSEDE_CAUSE_VALUES = [
   'unknown',
   'plan_stale',
   'plan_discarded',
+  'queue_failed',
 ] as const satisfies readonly ApprovalGateSupersedeCauseDTO[];
 const _gateCausesTotal: AssertTotal<
   ApprovalGateSupersedeCauseDTO,

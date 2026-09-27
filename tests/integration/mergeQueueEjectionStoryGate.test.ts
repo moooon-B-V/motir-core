@@ -113,11 +113,18 @@ function dequeuedBody(repo: RepoName, number: number, headSha: string, reason: s
 
 let guid = 0;
 const nextGuid = () => `story-guid-${++guid}`;
+/**
+ * The default ejection: a FAILURE that still RE-ASKS. Since the FIFTH AMENDMENT
+ * (MOTIR-6594) a queue failure such as `CI_FAILURE` is CAN'T-LAND and asks nothing, so
+ * the loops below that walk the RE-ASK eject for branch protection — a `failure`
+ * disposition (red, promotion held) whose class is `setting` (asked again).
+ */
+const REASK = 'BRANCH_PROTECTIONS';
 const eject = (
   repo: RepoName,
   number: number,
   headSha: string,
-  reason = 'CI_FAILURE',
+  reason = REASK,
   deliveryId = nextGuid(),
 ) =>
   githubWebhookService.handleEvent(
@@ -539,8 +546,8 @@ describe('5 · redelivery and order', () => {
   it('the same GUID twice writes one row', async () => {
     const { item } = await approvedIntoTheQueue('redeliver@example.com');
     const id = nextGuid();
-    await eject('web', 7, 'sha-web', 'CI_FAILURE', id);
-    expect(await eject('web', 7, 'sha-web', 'CI_FAILURE', id)).toMatchObject({
+    await eject('web', 7, 'sha-web', REASK, id);
+    expect(await eject('web', 7, 'sha-web', REASK, id)).toMatchObject({
       outcome: 'duplicate',
     });
     expect(await exitsOf(7)).toHaveLength(1);
@@ -555,12 +562,12 @@ describe('5 · redelivery and order', () => {
   it('an OLD exit redelivered after Queue again changes nothing, and the queue ref is kept', async () => {
     const { s, item } = await approvedIntoTheQueue('old-exit@example.com');
     const id = nextGuid();
-    await eject('web', 7, 'sha-web', 'CI_FAILURE', id);
+    await eject('web', 7, 'sha-web', REASK, id);
     enqueueAll();
     await queueAgain(s, (await reaskedGate(item.id)).id, 7);
     expect(await statusOf(item.id)).toBe('approved');
 
-    expect(await eject('web', 7, 'sha-web', 'CI_FAILURE', id)).toMatchObject({
+    expect(await eject('web', 7, 'sha-web', REASK, id)).toMatchObject({
       outcome: 'duplicate',
     });
     expect(await statusOf(item.id)).toBe('approved');
@@ -570,11 +577,11 @@ describe('5 · redelivery and order', () => {
 
   it('a second GENUINE exit at the same head after Queue again is a new row, asked again', async () => {
     const { s, item } = await approvedIntoTheQueue('second-exit@example.com');
-    await eject('web', 7, 'sha-web', 'CI_FAILURE');
+    await eject('web', 7, 'sha-web', REASK);
     enqueueAll();
     await queueAgain(s, (await reaskedGate(item.id)).id, 7);
 
-    expect(await eject('web', 7, 'sha-web', 'CI_FAILURE')).toMatchObject({ outcome: 'recorded' });
+    expect(await eject('web', 7, 'sha-web', REASK)).toMatchObject({ outcome: 'recorded' });
     expect(await exitsOf(7)).toHaveLength(2);
     expect((await exitsOf(7))[1]!.requeuedAt).toBeNull();
     expect(await queueRef(7)).toBeNull();
@@ -699,7 +706,7 @@ describe('9 · the doors a person presses', () => {
 
   it('the route re-queues by DECIDING the re-asked gate, and answers a second press with the exit it stamped', async () => {
     const { s, item } = await approvedIntoTheQueue('route-manual@example.com');
-    await eject('web', 7, 'sha-web', 'CI_FAILURE');
+    await eject('web', 7, 'sha-web', REASK);
     doors.ctx = s.ctx;
     const prId = (await prRow(7)).id;
     const reasked = await reaskedGate(item.id);
@@ -994,7 +1001,8 @@ describe('11 · a HOST REFUSAL at the press, by class (MOTIR-5833 · MOTIR-5834)
 
 describe('12 · NO DOOR REUSES A SPENT APPROVAL, whatever the reason (MOTIR-5802)', () => {
   it.each([
-    ['CI_FAILURE', 'in_review'],
+    // A queue failure is CAN'T-LAND since the FIFTH AMENDMENT (MOTIR-6594).
+    ['CI_FAILURE', 'implemented'],
     ['MANUAL', 'in_review'],
     ['BRANCH_PROTECTIONS', 'in_review'],
     ['MERGE_CONFLICT', 'implemented'],

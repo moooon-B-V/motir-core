@@ -2,20 +2,23 @@ name: Converge un-landed cards
 
 # Manual operator action (Story MOTIR-5799 · MOTIR-5809; `docs/decisions/approval-gates.md`
 # §4 FOURTH AMENDMENT, point 9): put every `manual` card the OLD rules left holding a
-# SPENT approval where the amendment now puts it — four populations:
+# SPENT approval where the amendment now puts it — five populations:
 #
 #   A. `implemented` with a standing retryable or setting exit  → `in_review` + ONE gate
-#   B. `implemented` with a standing conflict                   → already right, COUNTED
+#   B. `implemented` with a standing conflict or queue failure  → already right, COUNTED
 #   C. `approved` with a standing neutral removal               → `in_review` + ONE gate
 #   D. `approved` with a member that never landed and carries no outcome, under an
 #      approval older than ten minutes                          → a refusal row is
 #      written (`unrecorded`, classed retryable) and the card asks again
+#   E. `in_review` holding an awaiting gate re-asked from a standing queue FAILURE
+#      (MOTIR-6595; §4 FIFTH AMENDMENT)                         → the gate is withdrawn
+#      `queue_failed` and the card is held at `implemented`
 #
 # Every move goes through `settleUnlandedOutcome`, the SAME entry point a live queue exit
 # and a live host refusal run.
 #
-# IDEMPOTENT + SAFE TO RE-RUN: a converged card is at `in_review`, so a second apply
-# converges 0. A card whose head moved is skipped and re-arms on its next green, as
+# IDEMPOTENT + SAFE TO RE-RUN: a converged card is at `in_review` (A, C, D) or held at
+# `implemented` (E), so a second apply converges 0. A card whose head moved is skipped and re-arms on its next green, as
 # today. `workflow_dispatch` ONLY — a data convergence is an explicit operator decision,
 # mirroring `backfill-ci-state.yml`. Running it on production is MOTIR-5810's task, after
 # the release carrying the re-ask is live.
