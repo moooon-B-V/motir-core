@@ -1,6 +1,7 @@
 import {
   type MemberRole,
   Prisma,
+  type Project,
   type ProjectMembership,
   type User,
 } from '@/generated/prisma/client';
@@ -111,6 +112,24 @@ export const projectMembershipRepository = {
    * (Story MOTIR-6169 · MOTIR-6545) — the Members page's "N projects" cell, in ONE
    * grouped query for the whole workspace. A person added to none is absent.
    */
+  /**
+   * The non-archived projects one person was ADDED to in a workspace, by name —
+   * the workspace Members page's "N projects" popover (Story MOTIR-6169 ·
+   * MOTIR-6551). Takes `tx` for the `project_membership` RLS policy.
+   */
+  async findProjectsByUserInWorkspace(
+    userId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Project[]> {
+    const rows = await tx.projectMembership.findMany({
+      where: { userId, workspaceId, project: { archivedAt: null } },
+      select: { project: true },
+      orderBy: { project: { name: 'asc' } },
+    });
+    return rows.map((r) => r.project);
+  },
+
   async countProjectsByUserInWorkspace(
     workspaceId: string,
     tx: Prisma.TransactionClient,

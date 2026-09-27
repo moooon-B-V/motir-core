@@ -105,6 +105,7 @@ function toRoleMigrationBefore(raw: unknown): RoleMigrationBeforeDTO {
         lost: list(r['lost']).filter((k): k is string => typeof k === 'string'),
       };
     }),
+    projectKey: str(o['projectKey']),
   };
 }
 

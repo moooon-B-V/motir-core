@@ -655,7 +655,8 @@
       "orgSecurityForbidden": "Only owners and admins of an organization can change its security settings.",
       "workspaceSecurityForbidden": "Only owners and admins of a workspace can change its security settings.",
       "refused": "That didn’t go through: {reason}",
-      "organizationClosing": "This organization is scheduled for deletion and is read-only. Only its Owner can cancel the deletion."
+      "organizationClosing": "This organization is scheduled for deletion and is read-only. Only its Owner can cancel the deletion.",
+      "memberProjectsFailed": "Couldn’t load their projects."
     },
     "links": {
       "notFound": "That work item no longer exists.",
@@ -1933,7 +1934,7 @@
       },
       "onlyManager": "You’re the only Manager. Make someone else a Manager before changing your own role.",
       "orgAdminRole": "Organization Admin — a Manager in every workspace of {org}. Change it on the organization’s Members page.",
-      "rolesManagerOnly": "Only a workspace Manager can change roles.",
+      "rolesManagerOnly": "Only a workspace Manager can change roles and access.",
       "roleChanged": "{name} is now a {role} in every project of {workspace}",
       "lastManagerTitle": "Couldn’t change the role",
       "lastManagerBody": "A workspace needs at least one Manager. {name} is still a Manager.",
@@ -1944,10 +1945,10 @@
       "selfDemoteKeep": "Keep Manager",
       "selfDemoteConfirm": "Make me a {role}",
       "migration": {
-        "title": "Changed by the move to workspace roles",
+        "title": "Changed by the move to workspace roles and project access",
         "managersOnly": "Managers only",
         "count": "{count, plural, one {# person} other {# people}}",
-        "body": "Roles now live on the workspace — one role per person, the same in every project. These people were not moved by the plain mapping. Check each one; change a role above if it is wrong.",
+        "body": "These people were not moved by the plain mapping. Check each one.",
         "dismiss": "Dismiss",
         "dismissLabel": "Dismiss {name}",
         "dismissed": "Dismissed",
@@ -1976,9 +1977,47 @@
           "custom_role_merged": "Two custom roles merged into one holding only the keys both shared.",
           "org_admin_granted": "Became an organization Admin, as every workspace owner does.",
           "mapped_narrower": "Their keys in a project are narrower than before.",
-          "project_access_lost": "No longer enters a project that became Members only — they were not added to it."
-        }
-      }
+          "project_access_lost": "No longer enters {projectKey} — it was Limited and they were not added."
+        },
+        "rolesHeading": "Roles",
+        "accessHeading": "Project access",
+        "accessBody": "Projects that were Limited are now Members only. Add anyone who should keep access on that project’s Access & members page.",
+        "accessBefore": "Could open {projectKey}",
+        "accessAfter": "No access to {projectKey}",
+        "openProjectAccess": "Open project access"
+      },
+      "accessColumn": "Access",
+      "scope": {
+        "full": "Full",
+        "limited": "Limited"
+      },
+      "scopeDesc": {
+        "full": "Opens every project open to the workspace, plus the ones they’re added to.",
+        "limited": "Opens only the projects they’re added to."
+      },
+      "scopeSelectLabel": "Access for {name}",
+      "scopeLockedManager": "Full · Manager",
+      "scopeLockedReason": "Managers open every project, so access doesn’t apply to them.",
+      "projectCount": "{count, plural, one {# project} other {# projects}}",
+      "noProjects": "No projects",
+      "noProjectsHelp": "Limited and added to no project — {name} can’t open anything in {workspace} yet.",
+      "projectsPopoverTitle": "{name} can open",
+      "projectsPopoverFoot": "Add or remove {name} on each project’s Access & members page.",
+      "scopeChangedFull": "{name} now opens every project open to {workspace}",
+      "scopeChangedLimited": "{name} now opens only the projects they’re added to",
+      "scopeChangeErrorTitle": "Couldn’t change {name}’s access",
+      "scopeNotApplicableBody": "{name} was just made a Manager, and Managers open every project. Their access stays Full.",
+      "inviteAccessLabel": "Access",
+      "inviteAccessFullDesc": "Every project open to the workspace.",
+      "inviteAccessLimitedDesc": "Only the projects you pick below.",
+      "inviteProjectsLabel": "Projects to join",
+      "inviteProjectsPlaceholder": "Pick projects…",
+      "inviteProjectsHint": "They join these projects when they accept.",
+      "inviteProjectsRemove": "Remove {project}",
+      "inviteNoProjectsWarning": "They won’t be able to open anything until a Manager adds them to a project.",
+      "inviteJoinsAsMember": "They join as a Member. You can change their role after they accept.",
+      "errorInviteProjects": "One of those projects can’t be joined. Pick them again.",
+      "errorInviteNotAllowed": "You can’t send this invite. Only a workspace Manager can invite with Limited access."
     },
     "danger": {
       "cantLeaveTitle": "Can't leave",

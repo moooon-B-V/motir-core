@@ -26,7 +26,8 @@ import {
   withWorkspaceContext,
   type TransactionBudget,
 } from '@/lib/workspaces/context';
-import { readMembership, readReachRole } from '@/lib/workspaces/membershipGate';
+import { composeOwnerReach, readMembership, readReachRole } from '@/lib/workspaces/membershipGate';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { bindOrganizationContext, withOrgContext } from '@/lib/organizations/context';
 import { assertOrgCapability } from '@/lib/services/organizationAccessService';
 import {
@@ -70,6 +71,7 @@ import type {
   CurrentWorkspaceDTO,
   OrgWorkspacePageDTO,
   OrgWorkspaceRowDTO,
+  MemberAddedProjectDTO,
   MemberRoleContextDTO,
   WorkspaceMemberAccessScopeDTO,
   WorkspaceMemberRoleDTO,
@@ -1425,7 +1427,12 @@ export const workspacesService = {
     actorUserId: string,
   ): Promise<MemberRoleContextDTO> {
     return withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => {
-      const role = await readReachRole(actorUserId, workspaceId, tx);
+      const membership = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+        actorUserId,
+        workspaceId,
+        tx,
+      );
+      const role = await composeOwnerReach(actorUserId, workspaceId, membership, tx);
       if (!role) throw new NotAMemberError(actorUserId, workspaceId);
       const workspace = await workspaceRepository.findByIdInTx(workspaceId, tx);
       if (!workspace) throw new NotAMemberError(actorUserId, workspaceId);
@@ -1434,13 +1441,55 @@ export const workspacesService = {
         tx,
       );
       const managers = await orgManagersOf(workspace, tx);
+      const isManager = role === 'manager';
+      // The invite's project picker offers the Manager's projects — every
+      // non-archived project, since a Manager enters them all (Story MOTIR-6169 ·
+      // MOTIR-6551, design W8). Nobody else can send a Limited invite, so nobody
+      // else is handed the list.
+      const projects = isManager ? await projectRepository.findByWorkspace(workspaceId, tx) : [];
       return {
-        canManageRoles: role === 'manager',
+        canManageRoles: isManager,
+        // Who may invite (design W9, MOTIR-6546's rule): a Manager, or a Full
+        // member (Full invites only). A Limited member gets no Invite at all.
+        canInvite: isManager || (membership?.accessScope ?? 'full') === 'full',
+        inviteProjects: projects.map((p) => ({ id: p.id, name: p.name, identifier: p.identifier })),
         orgManagedUserIds: managers.userIds,
         organizationName: managers.organizationName,
         customRoles: customRoles.map((r) => ({ id: r.id, name: r.name })),
       };
     });
+  },
+
+  /**
+   * The projects one member was ADDED to — the Members page's "N projects"
+   * popover (Story MOTIR-6169 · MOTIR-6551, design W3), read when it opens. Any
+   * member may open it (the count is on every row), so the list is narrowed to
+   * the projects the VIEWER can enter: a Limited viewer is never told the name
+   * of a Members-only project they cannot open.
+   */
+  async listMemberAddedProjects(
+    workspaceId: string,
+    actorUserId: string,
+    targetUserId: string,
+  ): Promise<MemberAddedProjectDTO[]> {
+    const projects = await withWorkspaceContext(
+      { userId: actorUserId, workspaceId },
+      async (tx) => {
+        const role = await readReachRole(actorUserId, workspaceId, tx);
+        if (!role) throw new NotAMemberError(actorUserId, workspaceId);
+        const added = await projectMembershipRepository.findProjectsByUserInWorkspace(
+          targetUserId,
+          workspaceId,
+          tx,
+        );
+        return projectAccessService.filterBrowsable(
+          added,
+          { userId: actorUserId, workspaceId },
+          tx,
+        );
+      },
+    );
+    return projects.map((p) => ({ id: p.id, name: p.name, identifier: p.identifier }));
   },
 
   /**

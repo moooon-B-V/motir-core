@@ -265,6 +265,14 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
     kind: 'role',
     role: 'workspace:manager',
   },
+  // The "N projects" popover's list (MOTIR-6551) — a READ, narrowed to what the viewer can enter.
+  'settings/workspace/actions.ts#listMemberAddedProjectsAction': READ,
+  // The door to one project's Access & members page (MOTIR-6551): it sets the
+  // actor's OWN active project, through `setActiveProject`'s entry gate.
+  'settings/workspace/actions.ts#openProjectAccessAction': {
+    kind: 'self',
+    reason: 'the actor’s own active project, through setActiveProject’s entry gate',
+  },
   'settings/workspace/actions.ts#setMemberRoleAction': { kind: 'role', role: 'workspace:manager' },
   'settings/workspace/jobs/actions.ts#replayDlqAction': { kind: 'role', role: 'workspace:manager' },
   'settings/workspace/security/actions.ts#setWorkspaceRequireTwoFactorAction': {

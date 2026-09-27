@@ -249,3 +249,74 @@ describe('PATCH /api/workspaces/:workspaceId/members/:userId/access-scope', () =
     spy.mockRestore();
   });
 });
+
+describe('workspacesService.getMemberRoleContext — who may invite, and with which projects (MOTIR-6551)', () => {
+  it('a Manager may invite with Limited, and is handed every project for the picker', async () => {
+    const f = await build();
+    const c = await workspacesService.getMemberRoleContext(f.workspaceId, f.manager.id);
+    expect(c.canInvite).toBe(true);
+    expect(c.inviteProjects.map((p) => p.identifier).sort()).toEqual(
+      [f.A.identifier, f.B.identifier].sort(),
+    );
+  });
+
+  it('a Full Member may invite (Full only) and is handed no projects; a Limited one may not invite', async () => {
+    const f = await build();
+    const full = await workspacesService.getMemberRoleContext(f.workspaceId, f.member.id);
+    expect(full).toMatchObject({ canManageRoles: false, canInvite: true, inviteProjects: [] });
+    await workspacesService.setMemberAccessScope({
+      actorUserId: f.manager.id,
+      workspaceId: f.workspaceId,
+      targetUserId: f.member.id,
+      scope: 'limited',
+    });
+    const limited = await workspacesService.getMemberRoleContext(f.workspaceId, f.member.id);
+    expect(limited.canInvite).toBe(false);
+  });
+
+  it('an org Admin who never joined is a Manager here, and may invite', async () => {
+    const f = await build();
+    const c = await workspacesService.getMemberRoleContext(f.workspaceId, f.orgAdmin.id);
+    expect(c).toMatchObject({ canManageRoles: true, canInvite: true });
+  });
+});
+
+describe('workspacesService.listMemberAddedProjects — the "N projects" popover (MOTIR-6551)', () => {
+  it('names the projects the person was added to', async () => {
+    const f = await build();
+    const projects = await workspacesService.listMemberAddedProjects(
+      f.workspaceId,
+      f.manager.id,
+      f.member.id,
+    );
+    expect(projects).toEqual([{ id: f.A.id, name: 'Alpha', identifier: f.A.identifier }]);
+  });
+
+  it('never names a project the VIEWER cannot enter', async () => {
+    const f = await build();
+    // Alpha goes Members only; `other` was never added to it, so they may not
+    // learn its name from someone else's row.
+    await projectMembersService.setAccessMode({
+      key: f.A.identifier,
+      mode: 'members',
+      actorUserId: f.manager.id,
+      ctx: { userId: f.manager.id, workspaceId: f.workspaceId },
+    });
+    expect(
+      await workspacesService.listMemberAddedProjects(f.workspaceId, f.other.id, f.member.id),
+    ).toEqual([]);
+    // The Manager still sees it.
+    expect(
+      (await workspacesService.listMemberAddedProjects(f.workspaceId, f.manager.id, f.member.id))
+        .length,
+    ).toBe(1);
+  });
+
+  it('refuses a reader who is not in the workspace', async () => {
+    const f = await build();
+    const stranger = await user('stranger');
+    await expect(
+      workspacesService.listMemberAddedProjects(f.workspaceId, stranger.id, f.member.id),
+    ).rejects.toMatchObject({ code: 'NOT_A_MEMBER' });
+  });
+});
