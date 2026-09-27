@@ -2599,13 +2599,18 @@ async function materialize(
       createdById: ctx.userId,
     }));
   });
-  await workItemLinkRepository.createManyIfAbsent(blockedByRows, tx);
 
   // Pass 2-bis — each `add`'s `supersedes` edges (Story MOTIR-6577 · MOTIR-6630):
-  // one row per ref, from = the created card (the NEWER one), to = the ref. The
-  // same one statement and `skipDuplicates` as the blockers — so the created card
-  // superseding a card a `modify` ALSO marks `supersededByAdd` it (the same row,
-  // spelled from the other end) lands once, whichever writes first.
+  // one row per ref, from = the created card (the NEWER one), to = the ref.
+  //
+  // ⚠️ THEY RIDE THE SAME ONE STATEMENT AS THE BLOCKERS, not a second batch.
+  // MOTIR-3396's budget is one round trip for the add pass's WHOLE link graph,
+  // whatever the kinds (`approveTransactionBudget.test.ts` pins the call count),
+  // so a plan's supersedes carriers add rows, never a round trip. The per-row
+  // triggers and `skipDuplicates` treat each row alone, so mixing kinds changes
+  // nothing — and the created card superseding a card a `modify` ALSO marks
+  // `supersededByAdd` it (the same row, spelled from the other end) still lands
+  // once, whichever writes first.
   const supersedesRows = adds.flatMap((item) => {
     const fromId = planItemToWorkItem.get(item.id)!;
     return (item.supersedesRefs ?? []).map((ref) => ({
@@ -2616,7 +2621,7 @@ async function materialize(
       createdById: ctx.userId,
     }));
   });
-  await workItemLinkRepository.createManyIfAbsent(supersedesRows, tx);
+  await workItemLinkRepository.createManyIfAbsent([...blockedByRows, ...supersedesRows], tx);
 
   // Pass 2b — DERIVE THE BIRTH STATUS from the edges Pass 2 just wired
   // (MOTIR-3050). Pass 1 gives every created row the workflow's INITIAL status,
