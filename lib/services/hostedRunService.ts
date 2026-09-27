@@ -22,6 +22,7 @@ import {
 import {
   HOSTED_RUN_STALL_WINDOW_MS,
   HOSTED_RUN_TIMEOUT_MS,
+  hostedRunStallWindowMs,
   latestRunCredentialExpiry,
 } from '@/lib/hostedRuns/limits';
 import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
@@ -623,7 +624,7 @@ export const hostedRunService = {
     );
     const bootedAt = new Date(session.bootedAt).getTime();
     const lastSign = Math.max(latest?.getTime() ?? 0, bootedAt);
-    return now.getTime() - lastSign >= HOSTED_RUN_STALL_WINDOW_MS ? HOSTED_RUN_STALL_DETAIL : null;
+    return now.getTime() - lastSign >= hostedRunStallWindowMs() ? HOSTED_RUN_STALL_DETAIL : null;
   },
 
   /**

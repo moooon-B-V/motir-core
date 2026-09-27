@@ -24,6 +24,27 @@ export const HOSTED_RUN_TIMEOUT_MS = 12 * 60 * 60_000;
 export const HOSTED_RUN_STALL_WINDOW_MS = 15 * 60_000;
 
 /**
+ * The stall window {@link hostedRunService.stallDetail} actually reads
+ * (MOTIR-6452). Production always gets {@link HOSTED_RUN_STALL_WINDOW_MS} — no
+ * seam narrows it there. The E2E acceptance lane cannot wait 15 real minutes for
+ * its stall case, and until this card there was no way to shorten it at all, so
+ * this is a TEST-ONLY override: it only ever answers something other than the
+ * real constant when BOTH `E2E_PROD_HARNESS` (the E2E production-harness flag,
+ * `lib/e2eProdHarness.ts` — never set outside the lane) AND
+ * `E2E_HOSTED_RUN_STALL_WINDOW_MS` are set, which the acceptance lane's config
+ * is the only thing that does. Read inline rather than importing
+ * `isE2EProdHarness` so this module keeps its own stated contract — a leaf with
+ * no imports, safe for any layer.
+ */
+export function hostedRunStallWindowMs(): number {
+  if (process.env['E2E_PROD_HARNESS'] === '1') {
+    const override = Number(process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS']);
+    if (Number.isFinite(override) && override > 0) return override;
+  }
+  return HOSTED_RUN_STALL_WINDOW_MS;
+}
+
+/**
  * How long past the timeout a run's credentials stay valid, so the end path can
  * settle (close the run, link the pull request) with them: 5 minutes.
  */

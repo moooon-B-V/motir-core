@@ -135,6 +135,23 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
       installCodeGraphBoundaryMock(agent);
     },
   },
+  {
+    // A HOSTED RUN's three outbound seams (Story MOTIR-683 · MOTIR-6452): the
+    // gateway (mint/revoke the run's model key), motir-ai (the offered-model
+    // list, the credit pre-flight, the run's usage and its machine-time
+    // charge) and GitHub's repo-level installation read. `hostedRunService`
+    // makes the gateway/motir-ai calls from BOTH the webServer (`start`,
+    // `cancel`) and the job worker (the stall/backstop end path's revoke +
+    // charge, run inside `supervise`'s durable job) — installed here from the
+    // one shared table, exactly the fix `lib/test-mock-seams.ts`'s own header
+    // describes for the GitHub merge seam.
+    flag: 'E2E_TEST_HOSTED_RUN',
+    message: 'hosted-run gateway + motir-ai + GitHub installation seams mocked.',
+    install: async (agent) => {
+      const { installHostedRunMock } = await import('@/lib/test-hosted-run-mock');
+      installHostedRunMock(agent);
+    },
+  },
 ];
 
 /**
