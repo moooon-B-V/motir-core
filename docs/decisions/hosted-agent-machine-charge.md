@@ -19,12 +19,18 @@
   - MOTIR-685 (`hosted-agent-run.md`) — which shows a run's machine time but decides no charge for it.
     This record adds one.
 
+> **AMENDED 2026-09-27 by [MOTIR-6525](run-death-keeps-work.md) — [`run-death-keeps-work.md`](run-death-keeps-work.md) §1.**
+> The 90-minute hosted timeout is withdrawn: a healthy run has no wall-clock limit, and a hosted run's
+> timeout is the **12-hour backstop** (`HOSTED_AGENT_MAX_TIMEOUT_MS`). So a run's machine time is now
+> bounded by the backstop — at most `720` credits — rather than by 90 minutes. The per-minute rate, the
+> rounding and _no allowance_ are unchanged.
+
 ---
 
 ## Context
 
-A hosted run keeps one Fly machine alive for as long as its agent works: up to the 90-minute timeout
-`hosted-agent-run.md` §5 sets. Motir pays for every second of it, and the meter already records every
+A hosted run keeps one Fly machine alive for as long as its agent works: up to ~~the 90-minute timeout~~
+the 12-hour backstop `hosted-agent-run.md` §5 sets (as amended 2026-09-27). Motir pays for every second of it, and the meter already records every
 second against the run: `ci_container_usage` rows under the `hosted_agent` workload (MOTIR-4336),
 keyed to the dispatch run by MOTIR-6448.
 
@@ -64,8 +70,8 @@ with no free allowance, as its own charge beside the run's model-call credits.**
    the private `margin-analysis.md`.
 3. **Rounding: whole credits, rounded up once per run.** `credits = ⌈billableSeconds ÷ 60⌉`, and `0`
    for a run with `0` billable seconds. A run that never booted a container is charged nothing for
-   machine time. Worked: a 30-minute run is `30` credits; 26 min 32 s is `⌈26.53⌉ = 27`; a run that
-   hits the 90-minute timeout is `90`. **This is the one place the agent charge differs from CI's:**
+   machine time. Worked: a 30-minute run is `30` credits; 26 min 32 s is `⌈26.53⌉ = 27`; ~~a run that
+   hits the 90-minute timeout is `90`~~ a run that reaches the 12-hour backstop is `720`. **This is the one place the agent charge differs from CI's:**
    CI overage carries an under-a-credit remainder to the next charge; a hosted run is one charge, so it
    rounds up once — at most one credit per run — as the credit model rounds every model call
    (`motir-ai` `credit-model.md` §3).

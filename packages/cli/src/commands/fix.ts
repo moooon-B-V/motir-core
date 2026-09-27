@@ -21,6 +21,7 @@ import type {
 } from '../client.js';
 import { resolveDispatchTarget } from '../dispatch.js';
 import { createDispatchRunReporter } from '../dispatchRunReporter.js';
+import { bindInterruptSignals, INTERRUPT_EXIT_CODE, type InterruptSignal } from '../interrupt.js';
 import { CliError } from '../errors.js';
 import { execCommand, type CommandRunner } from '../git.js';
 import type { LinkConfig } from '../config/linkConfig.js';
@@ -85,19 +86,13 @@ export interface FixDeps {
   maxCiPolls?: number;
   /**
    * Install the interrupt handler and return its remover. Production binds
-   * SIGINT; a test calls the handler directly to prove the run is closed.
+   * SIGINT and SIGTERM (`interrupt.ts`, MOTIR-6530); a test calls the handler
+   * directly to prove the run is closed.
    */
-  onInterrupt?: (handler: () => void) => () => void;
+  onInterrupt?: (handler: (signal?: InterruptSignal) => void) => () => void;
   /** How the process ends after an interrupt. `process.exit` in production. */
   exit?: (code: number) => void;
 }
-
-const bindSigint = (handler: () => void): (() => void) => {
-  process.on('SIGINT', handler);
-  return () => {
-    process.off('SIGINT', handler);
-  };
-};
 
 /**
  * The words for each refusal — TOTAL over the server's reason vocabulary, so a
@@ -297,10 +292,10 @@ async function repair(input: {
     await reporter.close(stopReason);
   };
   const exit = deps.exit ?? ((code: number) => process.exit(code));
-  const detach = (deps.onInterrupt ?? bindSigint)(() => {
+  const detach = (deps.onInterrupt ?? bindInterruptSignals)((signal = 'SIGINT') => {
     info('');
     info(`Interrupted — closing the repair of ${key}.`);
-    void close('interrupted').finally(() => exit(130));
+    void close('interrupted').finally(() => exit(INTERRUPT_EXIT_CODE[signal]));
   });
 
   try {
@@ -334,7 +329,9 @@ async function repair(input: {
       kind: 'checkout_ready',
       workItemKey: key,
       disposition: 'running',
-      data: { checkouts: prepared.checkouts },
+      // `branch` (MOTIR-6530): every `checkout_ready` names where the work is. A
+      // repair works on its pull requests' own branches; the first is the leg's.
+      data: { checkouts: prepared.checkouts, branch: prepared.checkouts[0]?.branch ?? null },
     });
 
     const runAgentFn = deps.runAgentFn ?? defaultRunAgent;

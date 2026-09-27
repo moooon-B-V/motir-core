@@ -54,6 +54,8 @@ It is created first (`dispatchRunService.open`, `origin: 'hosted'`), before anyt
 
 ### 2 · The lifecycle, on the shared vocabulary only
 
+> **AMENDED 2026-09-27 by [MOTIR-6525](run-death-keeps-work.md) — [`run-death-keeps-work.md`](run-death-keeps-work.md) §3.** No run end moves its card backwards. The **To Do** end state below is withdrawn: a failed, cancelled, stalled or backstopped run leaves its card at the status it holds, with its branch pushed and a _run died_ marker, and `motir continue` picks the work up. Success still moves the card to Implemented. The run statuses and teardown reasons in the table are unchanged.
+
 The story forbids a hosted-only status or event vocabulary, so a hosted run is expressed entirely in what `DispatchRun` already has. **No `DispatchRunStatus` and no event kind is added.**
 
 | Phase the panel shows | Written as                                                    | Written by                              |
@@ -65,15 +67,15 @@ The story forbids a hosted-only status or event vocabulary, so a hosted run is e
 | pull request open     | `delivery_linked` (the pull request URL)                      | the entrypoint                          |
 | done                  | `run_closed`                                                  | the end path (MOTIR-6450)               |
 
-| How it ended                                    | `DispatchRunStatus` | Teardown reason | The card becomes                                                                                                                                                                  |
-| ----------------------------------------------- | ------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| agent exited 0 and a pull request opened        | `succeeded`         | `job_completed` | **Implemented** (`in_progress → implemented`), exactly as a local run's card once its pull request opens. From there the pull request's own CI and merge move it, as for any card |
-| agent exited non-zero, or any start step failed | `failed`            | `job_completed` | **To Do** (`in_progress → todo`), so it can be dispatched again                                                                                                                   |
-| a person pressed cancel                         | `cancelled`         | `gate_revoked`  | **To Do**                                                                                                                                                                         |
-| wall-clock timeout (§5)                         | `timed_out`         | `job_timed_out` | **To Do**                                                                                                                                                                         |
-| stalled (§5)                                    | `timed_out`         | `job_timed_out` | **To Do**                                                                                                                                                                         |
+| How it ended                                                      | `DispatchRunStatus` | Teardown reason | The card becomes                                                                                                                                                                  |
+| ----------------------------------------------------------------- | ------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| agent exited 0 and a pull request opened                          | `succeeded`         | `job_completed` | **Implemented** (`in_progress → implemented`), exactly as a local run's card once its pull request opens. From there the pull request's own CI and merge move it, as for any card |
+| agent exited non-zero, or any start step failed                   | `failed`            | `job_completed` | keeps its status, marked _run died_                                                                                                                                               |
+| a person pressed cancel                                           | `cancelled`         | `gate_revoked`  | keeps its status, marked _run died_                                                                                                                                               |
+| ~~wall-clock timeout, 90 minutes (§5)~~ the 12-hour backstop (§5) | `timed_out`         | `job_timed_out` | keeps its status, marked _run died_                                                                                                                                               |
+| stalled (§5)                                                      | `timed_out`         | `job_timed_out` | keeps its status, marked _run died_                                                                                                                                               |
 
-Stall and timeout share a status because they are the same fact to the record: the run ran out of time. The run's closing `log` event names which one it was (_"stalled: no agent output for 15 minutes"_ / _"timed out after 90 minutes"_), and that line is what the panel shows. Both edges out of `in_progress` are legal in the default workflow (`lib/workflows/defaultWorkflow.ts`). **Returning to To Do rather than staying In Progress is deliberate:** a failed hosted run holds no worktree and no person, so In Progress would be a claim nobody is exercising, and both claim doors refuse it.
+Stall and timeout share a status because they are the same fact to the record: the run ran out of time. The run's closing `log` event names which one it was (_"stalled: no agent output for 15 minutes"_ / ~~_"timed out after 90 minutes"_~~ _"reached the 12-hour backstop"_), and that line is what the panel shows. ~~Both edges out of `in_progress` are legal in the default workflow (`lib/workflows/defaultWorkflow.ts`). **Returning to To Do rather than staying In Progress is deliberate:** a failed hosted run holds no worktree and no person, so In Progress would be a claim nobody is exercising, and both claim doors refuse it.~~ _Withdrawn 2026-09-27 ([`run-death-keeps-work.md`](run-death-keeps-work.md) §3, Rejected): sending the card back to To Do makes it lie about how far the work got and drops the branch out of sight. The card keeps its status and the_ run died _marker makes the state legible._
 
 `implementationSource: hosted` (with `implementationHarness: opencode`) is stamped at start and never cleared. It records how the card was attempted, and a later local run overwrites it through its own seam, as provenance already does (`docs/decisions/work-item-provenance.md`).
 
@@ -84,7 +86,7 @@ The container needs to call Motir to report through the shared ingest and to rea
 - **Bound to the run:** a new nullable `ApiToken.dispatchRunId`. A token carrying it is accepted by `/api/v1/dispatch-runs/{id}/events` and `/close` **only for that `{id}`**, refused on `POST /api/v1/dispatch-runs` (the server opens hosted runs itself), and allowed to read `GET /api/v1/work-items/[key]/dispatch-prompt` **only for that run's card**.
 - **Owned by the dispatcher**, so every write it makes is attributed to the person who pressed Run hosted, as the story requires.
 - **Grant:** `HOSTED_RUN_TOKEN_GRANT` = `['project:browse', 'work_item:edit']`, the two keys those routes assert. The binding in the first bullet is what narrows it; the keys alone are as coarse as the CLI's. It holds no `ai:*` key, so it cannot author or read plans.
-- **Lifetime:** `expiresAt` = boot time + the run's timeout (§5) + 5 minutes for settle.
+- **Lifetime:** `expiresAt` = boot time + the run's timeout (§5) + 5 minutes for settle. _Amended 2026-09-27 ([`run-death-keeps-work.md`](run-death-keeps-work.md) §1): the run's timeout is now the 12-hour backstop, so this is boot + 12 hours + 5 minutes._
 - **Death:** revoked at run end by the end path. Revoking an `ApiToken` **deletes its row** (MOTIR-3546), so a revoked run token cannot be revived. Its expiry is the backstop if revocation fails.
 
 **Reference:** GitHub Actions' `GITHUB_TOKEN`, minted per job, limited to that job's repository and declared permissions, and invalid when the job ends. **Rejected:** a second, purpose-built token system. `ApiToken` already carries hashing, expiry and grant checks, so a run token differs by one column and one grant.
@@ -143,16 +145,18 @@ The container needs to call Motir to report through the shared ingest and to rea
 
 ### 5 · Timeout and stall
 
-- **Wall-clock timeout: 90 minutes.**
-  - The planning corpus caps a leaf's agent run at 60 minutes, and a card sized past that is split before it is dispatched.
-  - To that add clone, dependency install, codegraph index, push and pull request. This is an allowance of up to 30 minutes, not a measured figure; the dogfood story (MOTIR-714) measures real runs, and the value is revisited if they disagree.
-  - 90 minutes lets a correctly sized card finish, and stops a runaway one at 1.5× its budget. The seam's own ceiling, `HOSTED_AGENT_MAX_TIMEOUT_MS` (12 hours), is a spend backstop, not a target.
+> **AMENDED 2026-09-27 by [MOTIR-6525](run-death-keeps-work.md) — [`run-death-keeps-work.md`](run-death-keeps-work.md) §1–§2.** A healthy run has no wall-clock limit: the 90-minute timeout below is withdrawn, struck through rather than deleted so its reasons stay readable. A hosted run's timeout is now the **12-hour backstop** (`HOSTED_AGENT_MAX_TIMEOUT_MS`), a spend backstop and not a target, and every expiry this section derived "from the timeout" now derives from it. The **15-minute stall** and the **no-heartbeat-from-the-container** rule stand, with their reasons.
+
+- ~~**Wall-clock timeout: 90 minutes.**~~ _Withdrawn: any fixed number kills the one run that was about to finish and still says nothing about a run that died a minute in; liveness answers the question the timeout stood in for._
+  - ~~The planning corpus caps a leaf's agent run at 60 minutes, and a card sized past that is split before it is dispatched.~~
+  - ~~To that add clone, dependency install, codegraph index, push and pull request. This is an allowance of up to 30 minutes, not a measured figure; the dogfood story (MOTIR-714) measures real runs, and the value is revisited if they disagree.~~
+  - ~~90 minutes lets a correctly sized card finish, and stops a runaway one at 1.5× its budget.~~ The seam's own ceiling, `HOSTED_AGENT_MAX_TIMEOUT_MS` (12 hours), is a spend backstop, not a target — and it is now the run's timeout. It exists so that no run, however it fails, can hold a machine indefinitely.
 - **Stall window: 15 minutes with no agent output.**
   - "Output" is any line OpenCode writes to stdout or stderr, forwarded by the entrypoint as `log` events. The watchdog reads the time of the run's latest event.
   - The entrypoint sends **no heartbeat**: a heartbeat would prove the container is alive, and the watchdog exists to catch an agent that is alive and stuck.
   - 15 minutes clears the longest silent step a normal card runs, a full local test file or a cold dependency install, while ending a hung agent within a sixth of the budget.
 
-Every credential's expiry is derived from the timeout: the run key's `expiresAt`, the run token's `expiresAt`, and the git credential's (bounded by GitHub's 8 hours or 1 hour, both longer). Nothing a run holds can outlive it by more than the 5-minute settle margin.
+Every credential's expiry is derived from the timeout — ~~90 minutes~~ the 12-hour backstop since 2026-09-27: the run key's `expiresAt`, the run token's `expiresAt`, and the git credential's (bounded by GitHub's own 8 hours or 1 hour). Nothing a run holds can outlive it by more than the 5-minute settle margin.
 
 ### 6 · motir-core's configuration names
 

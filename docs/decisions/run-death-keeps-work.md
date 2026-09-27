@@ -70,6 +70,7 @@ How a run ENDS never decides a card's status. Success moves the card forward bec
 - **Who may run it:** any member with edit rights on the project, on a card whose last run ended without success and which has no live run. It is not limited to the person who started the dead run.
 - **What it does:** it takes the card over (naming who held it), checks out the dead run's branch, and starts an agent told to CONTINUE on it rather than start again.
 - **`motir continue <parent>`** does the same for a parent run: it resumes on the parent's session branch and its existing draft pull request.
+  The children the dead run was still working are handed to the new holder and run again; the ones it already landed are left out of the new run, so they are never started twice (MOTIR-6537 found the first version skipped the unfinished children and refused on the finished ones).
 - The heartbeat is what makes this safe. A card whose run is still alive is never offered for continuing, so two agents cannot end up on one branch.
 
 Continuing a dead **hosted** run from the browser, without a laptop, is its own story (MOTIR-6527).

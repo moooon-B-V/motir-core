@@ -61,6 +61,7 @@ const OPTIONS_INTERFACE: Record<string, string | null> = {
   next: 'NextOptions',
   run: 'RunOptions',
   fix: 'FixOptions',
+  continue: 'ContinueOptions',
   auto: 'AutoOptions',
   batch: 'BatchOptions',
   plan: 'PlanOptions',

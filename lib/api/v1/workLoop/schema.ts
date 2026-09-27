@@ -7,6 +7,7 @@ import {
 import type { V1Collection } from '@/lib/api/v1/pagination';
 import type { WorkItemClaimDto } from '@/lib/dto/claim';
 import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
+import type { WorkItemContinueClaimDto } from '@/lib/dto/workItemContinue';
 import type { ScopeClaimDto } from '@/lib/dto/scopeClaim';
 import {
   isBodyAboveFieldMoveAdvisory,
@@ -374,6 +375,16 @@ export const dispatchPromptSchema = z.object({
   workflowMode: dispatchWorkflowModeSchema,
   /** The session branch the prompt instructs, or `null` in `per_item_pr` mode. */
   sessionBranch: z.string().nullable(),
+  /**
+   * The branch the prompt tells the agent to work on (MOTIR-6530) — the session
+   * branch, else the card's per-item branch; `null` for a manual item.
+   *
+   * ⚠️ OPTIONAL in the contract though this server always sends it: the CLI
+   * validates responses against this schema and is routinely pointed at an older
+   * Motir, which sends no such key — a required field would turn that skew into a
+   * refused dispatch rather than a run that simply does not know its branch.
+   */
+  branch: z.string().nullable().optional(),
   advisories: z.array(dispatchAdvisorySchema),
 });
 export type V1DispatchPrompt = z.infer<typeof dispatchPromptSchema>;
@@ -401,6 +412,7 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
     })),
     workflowMode: dto.workflowMode,
     sessionBranch: dto.sessionBranch,
+    branch: dto.branch,
     advisories: dto.advisories.map((advisory) => {
       if (isBlockerCountAdvisory(advisory)) {
         return {
@@ -732,6 +744,12 @@ export const scopeClaimBodySchema = z.discriminatedUnion('kind', [
       kind: z.literal('work_item'),
       /** The container's key — a story, task or bug. Case-insensitive. */
       key: z.string().min(1).max(64),
+      /**
+       * Leave children already LANDED (Implemented or later) out of the claim
+       * instead of refusing on them. Sent by `motir continue <PARENT>`, whose
+       * dead run landed them (MOTIR-6535); a fresh run omits it.
+       */
+      exceptLanded: z.boolean().optional(),
     })
     .strict(),
   z
@@ -1900,7 +1918,15 @@ function presentActivityValue(value: unknown): z.infer<typeof activityValueSchem
 
 /** Which CLI command opened the run. `fix` (MOTIR-5464) is opened by the server's
  *  repair claim, never by `openDispatchRun` from a client that knows the others. */
-export const dispatchCommandSchema = z.enum(['next', 'run', 'run_scope', 'batch', 'auto', 'fix']);
+export const dispatchCommandSchema = z.enum([
+  'next',
+  'run',
+  'run_scope',
+  'batch',
+  'auto',
+  'fix',
+  'continue',
+]);
 
 /** WHERE the run executed — the discriminator that lets one record serve two writers. */
 export const dispatchRunOriginSchema = z.enum(['local', 'hosted']);
@@ -2020,6 +2046,11 @@ export const dispatchRunSchema = z.object({
   model: z.string().nullable(),
   startedAt: z.string().datetime(),
   endedAt: z.string().datetime().nullable(),
+  /**
+   * When the run last said it was alive (MOTIR-6528). Null for a run whose CLI
+   * never heartbeats and for every hosted run, whose liveness is its supervision.
+   */
+  lastHeartbeatAt: z.string().datetime().nullable(),
   createdById: z.string().nullable(),
   /** The run's cards, in the run's own stored order. */
   cards: z.array(dispatchRunCardSchema),
@@ -2225,5 +2256,132 @@ export function presentCurrentTestInstructions(
           })),
         }
       : null,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The CONTINUE CLAIM (Story MOTIR-6526 · MOTIR-6532)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** What a continue claim resolved to. */
+export const workItemContinueOutcomeSchema = z.enum([
+  'claimed',
+  'mine',
+  'taken',
+  'not_continuable',
+]);
+
+/** Why a work item cannot be continued — see `WorkItemContinueRefusal`. */
+export const workItemContinueRefusalSchema = z.enum([
+  'run_alive',
+  'use_fix',
+  'not_in_progress',
+  'continue_the_parent',
+  'no_dead_run',
+  'no_branch',
+]);
+
+/**
+ * The result of claiming the CONTINUE of a work item whose last run died.
+ *
+ * ⚠️ **A REFUSAL IS A 200**, as on the repair claim. ⚠️ **THE ITEM'S STATUS IS
+ * NEVER WRITTEN** — the claim is an open dispatch run with command `continue`, and
+ * that run is the lock; the item is RE-ASSIGNED to the claimant.
+ */
+export const workItemContinueClaimSchema = z.object({
+  key: workItemKeySchema,
+  title: z.string(),
+  outcome: workItemContinueOutcomeSchema,
+  /** Why the item cannot be continued; null unless `outcome` is `not_continuable`. */
+  reason: workItemContinueRefusalSchema.nullable(),
+  /** The parent to continue instead; set only with `reason: continue_the_parent`. */
+  parentKey: workItemKeySchema.nullable(),
+  /** The open `continue` run — set on `claimed`, `mine` and `taken`. Report into it,
+   *  heartbeat it, and CLOSE it when the continue ends. */
+  runId: z.string().nullable(),
+  /** Who holds the item: the `continue` run's opener, or — with `run_alive` — the
+   *  live run's dispatcher. */
+  holder: actorRefSchema.nullable(),
+  /** When the holder's run started. */
+  startedAt: z.string().datetime().nullable(),
+  /** The run that died — set on `claimed` and `mine`. */
+  deadRun: z
+    .object({
+      id: z.string(),
+      command: dispatchCommandSchema,
+      origin: dispatchRunOriginSchema,
+      status: dispatchRunStatusSchema,
+      stopReason: dispatchStopReasonSchema.nullable(),
+      /** Its last heartbeat, else its end, else its start. */
+      lastHeardAt: z.string().datetime(),
+      dispatcher: actorRefSchema.nullable(),
+    })
+    .nullable(),
+  /** The branch to continue on — set on `claimed` and `mine`. */
+  branch: z.string().nullable(),
+  /** The open pull request the dead run left, when there is one. */
+  pullRequest: z
+    .object({
+      /** `owner/name`. */
+      repo: z.string(),
+      number: z.number().int(),
+      url: z.string(),
+      headRef: z.string(),
+    })
+    .nullable(),
+  /** Who the item was assigned to before this claim took it over. */
+  previousAssignee: actorRefSchema.nullable(),
+  /** `parent` when the dead run was a SCOPED run over this container: the whole
+   *  scope resumes on `branch`, the session branch. */
+  mode: z.enum(['card', 'parent']),
+  /** The dead scope run's legs already landed — never re-dispatched. */
+  landedKeys: z.array(workItemKeySchema),
+  /** The dead scope run's legs still in flight — In Progress and now the caller's.
+   *  The ready set lists only To Do leaves, so the resumed drain runs these too. */
+  resumedKeys: z.array(workItemKeySchema),
+});
+export type V1WorkItemContinueClaim = z.infer<typeof workItemContinueClaimSchema>;
+
+/** Map the continue claim to the wire — field by field, never a spread. */
+export function presentWorkItemContinueClaim(
+  dto: WorkItemContinueClaimDto,
+): V1WorkItemContinueClaim {
+  const ref = (a: { id: string; name: string } | null) =>
+    a === null ? null : { id: a.id, name: a.name };
+  return {
+    key: dto.key,
+    title: dto.title,
+    outcome: dto.outcome,
+    reason: dto.reason,
+    parentKey: dto.parentKey,
+    runId: dto.runId,
+    holder: ref(dto.holder),
+    startedAt: dto.startedAt,
+    deadRun:
+      dto.deadRun === null
+        ? null
+        : {
+            id: dto.deadRun.id,
+            command: dto.deadRun.command,
+            origin: dto.deadRun.origin,
+            status: dto.deadRun.status,
+            stopReason: dto.deadRun.stopReason,
+            lastHeardAt: dto.deadRun.lastHeardAt,
+            dispatcher: ref(dto.deadRun.dispatcher),
+          },
+    branch: dto.branch,
+    pullRequest:
+      dto.pullRequest === null
+        ? null
+        : {
+            repo: dto.pullRequest.repo,
+            number: dto.pullRequest.number,
+            url: dto.pullRequest.url,
+            headRef: dto.pullRequest.headRef,
+          },
+    previousAssignee: ref(dto.previousAssignee),
+    mode: dto.mode,
+    landedKeys: [...dto.landedKeys],
+    resumedKeys: [...dto.resumedKeys],
   };
 }

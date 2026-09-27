@@ -100,6 +100,16 @@ export interface LadderKeys {
   readonly approvedKey: string | null;
 }
 
+/** A project's {@link LadderKeys}, resolved from its status list by literal key. */
+export function ladderKeysFrom(statuses: ReadonlyArray<{ key: string }>): LadderKeys {
+  const keyOf = (key: string) => statuses.find((s) => s.key === key)?.key ?? null;
+  return {
+    reviewKey: keyOf('in_review'),
+    implementedKey: keyOf('implemented'),
+    approvedKey: keyOf('approved'),
+  };
+}
+
 /**
  * Where a status sits on the ladder's scale.
  *

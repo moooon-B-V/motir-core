@@ -541,57 +541,59 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `api`
 
-| Operation                                                | Verbs | Gate today                                         | Permission | Decision     | Why |
-| -------------------------------------------------------- | ----- | -------------------------------------------------- | ---------- | ------------ | --- |
-| `/api/v1/dispatch-runs`                                  | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
-| `/api/v1/dispatch-runs/[id]/close`                       | —     | RLS (the run's own workspace)                      | —          | token-scoped | R1  |
-| `/api/v1/dispatch-runs/[id]/close-out-prompt`            | —     | `assertPermission` (`project:browse`)              | —          | token-scoped | R1  |
-| `/api/v1/dispatch-runs/[id]/events`                      | —     | RLS (the run's own workspace)                      | —          | token-scoped | R1  |
-| `/api/v1/folders/[folderId]`                             | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
-| `/api/v1/me`                                             | —     | — none —                                           | —          | token-scoped | R1  |
-| `/api/v1/plans/[planId]`                                 | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
-| `/api/v1/plans/[planId]/status`                          | —     | `aiPlanEditsService.getOutcome` (transitive)       | —          | token-scoped | R1  |
-| `/api/v1/projects`                                       | —     | — none —                                           | —          | token-scoped | R1  |
-| `/api/v1/projects/[projectKey]`                          | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
-| `/api/v1/projects/[projectKey]/backlog`                  | —     | — none —                                           | —          | token-scoped | R1  |
-| `/api/v1/projects/[projectKey]/backlog/work-items`       | —     | — none —                                           | —          | token-scoped | R1  |
-| `/api/v1/projects/[projectKey]/folders`                  | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
-| `/api/v1/projects/[projectKey]/designs`                  | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
-| `/api/v1/projects/[projectKey]/plan-session`             | —     | `assertCanEdit`                                    | —          | token-scoped | R1  |
-| `/api/v1/projects/[projectKey]/plan-session/submissions` | —     | — none —                                           | —          | token-scoped | R1  |
-| `/api/v1/projects/[projectKey]/plan-session/turns`       | —     | `assertCanEdit`                                    | —          | token-scoped | R1  |
-| `/api/v1/projects/[projectKey]/ready`                    | —     | — none —                                           | —          | token-scoped | R1  |
-| `/api/v1/projects/[projectKey]/repositories`             | —     | `assertCanBrowse` (via `projectRepoSetService`)    | —          | token-scoped | R1  |
-| `/api/v1/projects/[projectKey]/sprints`                  | —     | — none —                                           | —          | token-scoped | R1  |
-| `/api/v1/projects/[projectKey]/work-items`               | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
-| `/api/v1/projects/[projectKey]/work-items/count`         | —     | `assertCanBrowse` (via `projectsService.getByKey`) | —          | token-scoped | R1  |
-| `/api/v1/scope-claims`                                   | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
-| `/api/v1/sessions/complete`                              | —     | — none —                                           | —          | token-scoped | R1  |
-| `/api/v1/sprints/[sprintId]`                             | —     | — none —                                           | —          | token-scoped | R1  |
-| `/api/v1/sprints/[sprintId]/complete`                    | —     | — none —                                           | —          | token-scoped | R1  |
-| `/api/v1/sprints/[sprintId]/start`                       | —     | — none —                                           | —          | token-scoped | R1  |
-| `/api/v1/sprints/[sprintId]/work-items`                  | —     | — none —                                           | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]`                               | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/activity`                      | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/approval-gate`                 | —     | `assertCanBrowse` (via `projectsService.getByKey`) | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/archive`                       | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/attachments`                   | —     | `assertCanBrowse`, `attachment:create`             | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/design`                        | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/designs`                       | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/claim`                         | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/comments`                      | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/dispatch-prompt`               | —     | — none —                                           | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/how-to-test`                   | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/expansions`                    | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/implementation`                | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/integration`                   | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/links`                         | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/plan-approval`                 | —     | `assertCanBrowse`, `ai:decide_plan`                | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/pull-requests`                 | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/repair`                        | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/restore`                       | —     | `assertCanBrowse`, `assertCanEdit`                 | —          | token-scoped | R1  |
-| `/api/v1/work-items/[key]/transitions`                   | —     | `assertCanBrowse`                                  | —          | token-scoped | R1  |
-| `/api/v1/workspaces`                                     | —     | — none —                                           | —          | token-scoped | R1  |
+| Operation                                                | Verbs | Gate today                                             | Permission | Decision     | Why |
+| -------------------------------------------------------- | ----- | ------------------------------------------------------ | ---------- | ------------ | --- |
+| `/api/v1/dispatch-runs`                                  | —     | `assertCanBrowse`, `assertCanEdit`                     | —          | token-scoped | R1  |
+| `/api/v1/dispatch-runs/[id]/close`                       | —     | RLS (the run's own workspace)                          | —          | token-scoped | R1  |
+| `/api/v1/dispatch-runs/[id]/close-out-prompt`            | —     | `assertPermission` (`project:browse`)                  | —          | token-scoped | R1  |
+| `/api/v1/dispatch-runs/[id]/events`                      | —     | RLS (the run's own workspace)                          | —          | token-scoped | R1  |
+| `/api/v1/dispatch-runs/[id]/heartbeat`                   | —     | RLS (the run's own workspace) + the run's own operator | —          | token-scoped | R1  |
+| `/api/v1/folders/[folderId]`                             | —     | `assertCanBrowse`, `assertCanEdit`                     | —          | token-scoped | R1  |
+| `/api/v1/me`                                             | —     | — none —                                               | —          | token-scoped | R1  |
+| `/api/v1/plans/[planId]`                                 | —     | `assertCanBrowse`                                      | —          | token-scoped | R1  |
+| `/api/v1/plans/[planId]/status`                          | —     | `aiPlanEditsService.getOutcome` (transitive)           | —          | token-scoped | R1  |
+| `/api/v1/projects`                                       | —     | — none —                                               | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]`                          | —     | `assertCanBrowse`                                      | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/backlog`                  | —     | — none —                                               | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/backlog/work-items`       | —     | — none —                                               | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/folders`                  | —     | `assertCanBrowse`, `assertCanEdit`                     | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/designs`                  | —     | `assertCanBrowse`                                      | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/plan-session`             | —     | `assertCanEdit`                                        | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/plan-session/submissions` | —     | — none —                                               | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/plan-session/turns`       | —     | `assertCanEdit`                                        | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/ready`                    | —     | — none —                                               | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/repositories`             | —     | `assertCanBrowse` (via `projectRepoSetService`)        | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/sprints`                  | —     | — none —                                               | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/work-items`               | —     | `assertCanBrowse`, `assertCanEdit`                     | —          | token-scoped | R1  |
+| `/api/v1/projects/[projectKey]/work-items/count`         | —     | `assertCanBrowse` (via `projectsService.getByKey`)     | —          | token-scoped | R1  |
+| `/api/v1/scope-claims`                                   | —     | `assertCanBrowse`, `assertCanEdit`                     | —          | token-scoped | R1  |
+| `/api/v1/sessions/complete`                              | —     | — none —                                               | —          | token-scoped | R1  |
+| `/api/v1/sprints/[sprintId]`                             | —     | — none —                                               | —          | token-scoped | R1  |
+| `/api/v1/sprints/[sprintId]/complete`                    | —     | — none —                                               | —          | token-scoped | R1  |
+| `/api/v1/sprints/[sprintId]/start`                       | —     | — none —                                               | —          | token-scoped | R1  |
+| `/api/v1/sprints/[sprintId]/work-items`                  | —     | — none —                                               | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]`                               | —     | `assertCanBrowse`                                      | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/activity`                      | —     | `assertCanBrowse`                                      | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/approval-gate`                 | —     | `assertCanBrowse` (via `projectsService.getByKey`)     | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/archive`                       | —     | `assertCanBrowse`, `assertCanEdit`                     | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/attachments`                   | —     | `assertCanBrowse`, `attachment:create`                 | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/design`                        | —     | `assertCanBrowse`                                      | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/designs`                       | —     | `assertCanBrowse`                                      | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/claim`                         | —     | `assertCanBrowse`, `assertCanEdit`                     | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/comments`                      | —     | `assertCanBrowse`                                      | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/dispatch-prompt`               | —     | — none —                                               | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/how-to-test`                   | —     | `assertCanBrowse`                                      | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/expansions`                    | —     | `assertCanBrowse`                                      | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/implementation`                | —     | `assertCanBrowse`, `assertCanEdit`                     | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/integration`                   | —     | `assertCanBrowse`                                      | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/links`                         | —     | `assertCanBrowse`, `assertCanEdit`                     | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/plan-approval`                 | —     | `assertCanBrowse`, `ai:decide_plan`                    | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/pull-requests`                 | —     | `assertCanBrowse`, `assertCanEdit`                     | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/continue`                      | —     | `assertCanBrowse`, `assertCanEdit`                     | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/repair`                        | —     | `assertCanBrowse`, `assertCanEdit`                     | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/restore`                       | —     | `assertCanBrowse`, `assertCanEdit`                     | —          | token-scoped | R1  |
+| `/api/v1/work-items/[key]/transitions`                   | —     | `assertCanBrowse`                                      | —          | token-scoped | R1  |
+| `/api/v1/workspaces`                                     | —     | — none —                                               | —          | token-scoped | R1  |
 
 ### `attachment`
 
