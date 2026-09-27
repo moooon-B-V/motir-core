@@ -1504,6 +1504,34 @@ export const workItemRepository = {
   },
 
   /**
+   * The `fixReason` BACKFILL's candidates in one workspace (Story MOTIR-6588 ·
+   * MOTIR-6603), ordered by id: every card whose status is in the `in_progress`
+   * CATEGORY (archived ones INCLUDED, so the sweep can count its abstention), plus
+   * every card still carrying a non-null `fixReason` whatever its status, so a
+   * stale reason on a card that has since left the category is cleared too.
+   *
+   * The category is joined from `workflow_status` on the card's own project and
+   * status key — statuses are per-project vocabulary, so a hardcoded key list would
+   * miss a customer's own in-progress statuses. Raw because Prisma has no relation
+   * between `work_item.status` and `workflow_status`. `work_item` has no system arm:
+   * the caller binds `workspaceId` first, or this returns nothing.
+   */
+  async listFixReasonBackfillCandidateIds(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT w."id"
+        FROM "work_item" w
+        LEFT JOIN "workflow_status" s
+          ON s."project_id" = w."projectId" AND s."key" = w."status"
+       WHERE w."workspaceId" = ${workspaceId}
+         AND (s."category" = 'in_progress' OR w."fixReason" IS NOT NULL)
+       ORDER BY w."id" ASC`);
+    return rows.map((r) => r.id);
+  },
+
+  /**
    * WHICH REPOSITORIES HAS EACH OF THESE PROJECTS NAMED ON ITS WORK — the
    * evidence that a project has CHOSEN a repository rather than merely being
    * allowed to reach one (MOTIR-4821).

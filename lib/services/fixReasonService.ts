@@ -45,7 +45,7 @@ import {
  * that has not started or has finished is not waiting on a repair, whatever its pull
  * requests say.
  */
-async function deriveFixReason(
+export async function deriveFixReason(
   item: {
     id: string;
     projectId: string;
