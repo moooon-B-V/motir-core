@@ -60,6 +60,7 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
     scopeLabel: null,
     status: 'succeeded',
     stopReason: 'completed',
+    lastHeartbeatAt: null,
     agent: 'opencode',
     model: 'claude-sonnet-5',
     startedAt: '2026-09-26T14:00:00.000Z',

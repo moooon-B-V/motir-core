@@ -72,6 +72,7 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
     scopeLabel: null,
     status: 'succeeded',
     stopReason: 'completed',
+    lastHeartbeatAt: null,
     agent: 'claude',
     model: 'claude-opus-5',
     startedAt: '2026-09-26T14:02:11.000Z',
@@ -275,7 +276,12 @@ describe('the header holds exactly one thing', () => {
   });
 
   it('a LIVE LOCAL run: nothing — it runs on somebody’s machine', async () => {
-    await mount({ runs: [run({ status: 'running', endedAt: null })] });
+    // Live under MOTIR-6526's rule: a local run is alive while it heartbeats.
+    await mount({
+      runs: [
+        run({ status: 'running', endedAt: null, lastHeartbeatAt: new Date().toISOString() }),
+      ],
+    });
     expect(screen.queryByTestId('run-hosted-door')).toBeNull();
     expect(screen.queryByTestId('hosted-run-cancel')).toBeNull();
   });
