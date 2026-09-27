@@ -406,7 +406,7 @@
       .panel {
         margin-bottom: 8px;
       }
-      
+
       .mono {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       }
@@ -465,12 +465,12 @@
         background: transparent;
         color: var(--el-text);
       }
-      
+
       .btn-secondary {
         border: 1px solid var(--el-button-border);
         color: var(--el-text);
       }
-      
+
       .btn-sm {
         height: var(--height-btn-sm);
         padding-inline: var(--spacing-btn-x-sm);
@@ -493,7 +493,7 @@
         cursor: pointer;
       }
       /* Card */
-      
+
       /* Pill */
       .pill {
         display: inline-flex;
@@ -511,19 +511,16 @@
         color: var(--el-text-secondary);
         border-color: var(--el-chip-border);
       }
-      
-      
-      
+
       /* Input + FormField */
-      
-      
+
       .helper {
         font-size: 14px;
         line-height: 1.5;
         color: var(--el-text-helper);
         margin: 0;
       }
-      
+
       /* SectionLabel */
       .eyebrow {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -534,36 +531,27 @@
         color: var(--el-text-eyebrow);
       }
       /* Spinner */
-      
+
       .link {
         color: var(--el-link);
         text-decoration: none;
         font-weight: 500;
       }
       /* QuietAction — the shipped RepositoryRow affordance */
-      
+
       /* Combobox trigger */
-      
-      
-      
-      
-      
+
       /* ⚠️ --el-text-secondary, not --el-text-muted (MOTIR-4674). This rule was
          carried over from takeover.mock.html and never exercised in this asset;
          the picker is its first use, and muted is 4.12:1 on
          --el-option-active-bg — the surface an ACTIVE option paints. */
-      
+
       /* ⚠️ --el-text-eyebrow, not --el-text-faint (MOTIR-4674). Same story as
          `.opt .sub` above — carried over, never exercised, and the picker's two
          SEGMENT headings are the information the whole panel turns on, so they
          are not decoration. Faint clears AA on no surface at all. */
-      
+
       /* Modal */
-      
-      
-      
-      
-      
 
       /* ═══ THE SHIPPED REPOSITORY ROW — mirrored from RepositoryRow.tsx ═══
          A FLEX pair (min-w-0 flex-1 main + shrink-0 aside) at
@@ -587,9 +575,7 @@
         background: var(--el-success-surface);
         border-color: var(--el-border-soft);
       }
-      
-      
-      
+
       .row-main {
         display: flex;
         min-width: 0;
@@ -615,10 +601,7 @@
       .row-state.ok svg {
         color: var(--el-success);
       }
-      
-      
-      
-      
+
       .repo-link {
         display: flex;
         min-width: 0;
@@ -634,11 +617,11 @@
         font-size: 14px;
         color: var(--el-link);
       }
-      
+
       .repo-link .ghm {
         color: var(--el-icon-muted);
       }
-      
+
       .row-aside {
         display: flex;
         flex: none;
@@ -646,8 +629,6 @@
         gap: 4px;
         align-self: flex-start;
       }
-      
-      
 
       /* ═══ THE ROOM — /settings/project/repositories ═══ */
       .settings {
@@ -728,45 +709,15 @@
       }
 
       /* callouts — every fill a palette token */
-      
-      
-      
-      
-      
-      
-      
-      
-      
 
       /* the COSTS block — the ADR's three real costs, before the commit */
-      
-      
-      
-      
-      
-      
-      
 
       /* IdentityHeader — mirrored from gitSettingsPrimitives.tsx (rendered) */
-      
-      
-      
-      
-      
-      
+
       /* GrantRow — mirrored from gitSettingsPrimitives.tsx (rendered) */
-      
-      
-      
-      
-      
 
       /* the DOOR strip + host-surface repros */
-      
-      
-      
-      
-      
+
       .lands {
         margin-top: 14px;
         border-radius: var(--radius-card);
@@ -779,30 +730,13 @@
         color: var(--el-text);
       }
       /* the DOOR itself, haloed so the reader SEES it */
-      
-      
+
       /* the step canvas (repository-set step repro) */
-      
-      
-      
-      
+
       /* the billing card repro */
-      
-      
-      
-      
-      
-      
-      
-      
-      
 
       /* galleries */
-      
-      
-      
-      
-      
+
       figure {
         margin: 0;
         display: flex;
@@ -819,7 +753,6 @@
         color: var(--el-text-eyebrow);
       }
       @media (max-width: 980px) {
-        
         .settings {
           grid-template-columns: 1fr;
         }
@@ -894,10 +827,7 @@
       /* ══ AMENDMENT MOTIR-4674 — the room's DOOR, its picker, and the
             project-side removal (Panels 5–9) ══ */
       /* the pane head becomes a two-slot row: the title block, and the door */
-      
-      
-      
-      
+
       /* the connected row's ONE action — a quiet danger affordance, NOT a
          filled destructive button: it unlinks one row and nothing else, so its
          weight has to read lighter than the organisation's own removal.
@@ -916,19 +846,15 @@
         cursor: pointer;
       }
       /* the picker's option row: the repo name, then its state */
-      
-      
-      
+
       /* `already indexed · shared` — the state that carries the whole promise
          of the tier move. A neutral chip, because it is a FACT about the
          repository rather than a step in a flow. */
-      
-      
+
       /* a repository this project already has: listed, legible, unpickable.
          `opacity` is the shipped disabled treatment and 1.4.3 exempts a
          disabled control, so the ink is not measured here. */
-      
-      
+
       .connected .branch {
         flex: none;
         border-radius: var(--radius-control);
@@ -950,24 +876,17 @@
       /* The room's empty state — the shipped EmptyState primitive
          (packages/design-system/src/components/ui/EmptyState.tsx): a Card,
          centred, muted icon over a serif title over the copy. */
-      
+
       a.btn {
         text-decoration: none;
       }
-      
-      
-      
-      
+
       .summary {
         font-size: 14px;
         color: var(--el-text-helper);
       }
       /* the shape ladder — which registries answer, per project shape */
-      
-      
-      
-      
-    
+
       .state-label {
         margin: 0 0 8px;
         font-size: 12px;
@@ -1393,55 +1312,110 @@
             d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.09 1.84 1.24 1.84 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.39 1.24-3.23-.13-.3-.54-1.53.11-3.19 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.05.14 3 .4 2.29-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.89.12 3.19.77.84 1.23 1.92 1.23 3.23 0 4.62-2.81 5.64-5.49 5.94.43.37.82 1.1.82 2.22 0 1.6-.02 2.89-.02 3.29 0 .32.22.7.83.58A12.01 12.01 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z"
           />
         </symbol>
-        <g id="i-cloud" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
-      </g>
-        <g id="i-updown" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="m7 15 5 5 5-5" /><path d="m7 9 5-5 5 5" />
-      </g>
-        <g id="i-alert" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><path d="M12 9v4" /><path d="M12 17h.01" />
-      </g>
+        <g
+          id="i-cloud"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+        </g>
+        <g
+          id="i-updown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m7 15 5 5 5-5" />
+          <path d="m7 9 5-5 5 5" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+          />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
       </defs>
     </svg>
 
     <div class="board">
       <header>
         <h1>Repositories — where Motir’s app can write</h1>
-        <p><b>MOTIR-6518 (third draft) · a DELTA</b> on <code class="k">design/repository-set/repositories-room.mock.html</code> (MOTIR-4674, the room as MOTIR-4954 reshaped it), drawn to <code class="k">docs/decisions/hosted-run-runs-the-cli-as-the-app.md</code>. A hosted run writes as <b>Motir’s GitHub App</b>, never as a person — the person pressing Run hosted needs no GitHub account, so nothing here asks them to link, connect or reconnect one, and <b>Settings → Account → Git is not touched</b>. What remains is a fact about each <b>connected</b> repository: can Motir Integration write there, and if not, who has to do what.</p>
+        <p>
+          <b>MOTIR-6518 (third draft) · a DELTA</b> on
+          <code class="k">design/repository-set/repositories-room.mock.html</code> (MOTIR-4674, the
+          room as MOTIR-4954 reshaped it), drawn to
+          <code class="k">docs/decisions/hosted-run-runs-the-cli-as-the-app.md</code>. A hosted run
+          writes as <b>Motir’s GitHub App</b>, never as a person — the person pressing Run hosted
+          needs no GitHub account, so nothing here asks them to link, connect or reconnect one, and
+          <b>Settings → Account → Git is not touched</b>. What remains is a fact about each
+          <b>connected</b> repository: can Motir Integration write there, and if not, who has to do
+          what.
+        </p>
       </header>
 
-      <div class="panel-label">Panel 1 · <b>Project settings → Repositories</b> — each connected repository, with its one hosted-runs line</div>
+      <div class="panel-label">
+        Panel 1 · <b>Project settings → Repositories</b> — each connected repository, with its one
+        hosted-runs line
+      </div>
       <div class="panel">
         <div class="settings">
           <div class="set-rail">
             <div class="grp">
               <div class="h">General</div>
-              <div class="rail-row"><svg class="i"><use href="#i-sliders-horizontal" /></svg>Details</div>
-              <div class="rail-row active"><svg class="i"><use href="#i-folder-git-2" /></svg>Repositories</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
             </div>
             <div class="grp">
               <div class="h">Access</div>
-              <div class="rail-row"><svg class="i"><use href="#i-users" /></svg>Members &amp; access</div>
-              <div class="rail-row"><svg class="i"><use href="#i-key-round" /></svg>Code access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>Code access
+              </div>
             </div>
           </div>
           <div class="set-pane">
             <div class="pane-head">
               <div class="eyebrow">Project settings</div>
               <h3>Repositories</h3>
-              <p>Only the repositories Acme booking works on — whether Motir hosts them or moooon does.</p>
+              <p>
+                Only the repositories Acme booking works on — whether Motir hosts them or moooon
+                does.
+              </p>
               <p class="summary">0 moving · 1 hosted by Motir · 3 yours</p>
             </div>
-<div class="section">
+            <div class="section">
               <div class="seclabel">Hosted by Motir</div>
-              <p class="hint">Motir created these and pays for their CI. Move any of them to your own GitHub whenever you want.</p>
+              <p class="hint">
+                Motir created these and pays for their CI. Move any of them to your own GitHub
+                whenever you want.
+              </p>
               <div class="rows">
                 <div class="row created">
                   <div class="row-main">
                     <div class="row-head">
                       <span class="pill pill-neutral mono">api</span>
-                      <span class="row-state ok"><svg class="i"><use href="#i-circle-check-big" /></svg>Created</span>
+                      <span class="row-state ok"
+                        ><svg class="i"><use href="#i-circle-check-big" /></svg>Created</span
+                      >
                     </div>
                     <div class="repo-link">
                       <svg class="gh ghm"><use href="#i-github" /></svg>
@@ -1450,7 +1424,9 @@
                     <p class="helper">Hosted by Motir · seeded from the Motir Next.js starter.</p>
                   </div>
                   <div class="row-aside">
-                    <button class="icon-btn" type="button" aria-label="Repository actions"><svg class="i"><use href="#i-ellipsis" /></svg></button>
+                    <button class="icon-btn" type="button" aria-label="Repository actions">
+                      <svg class="i"><use href="#i-ellipsis" /></svg>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1463,39 +1439,66 @@
                   <li class="agent-li" id="repo-acme-inc-acme-booking-web">
                     <div class="li-top">
                       <svg class="i lg"><use href="#i-folder-git-2" /></svg>
-                      <span class="repo"><span class="owner">acme-inc/</span><span class="nm">acme-booking-web</span></span>
+                      <span class="repo"
+                        ><span class="owner">acme-inc/</span
+                        ><span class="nm">acme-booking-web</span></span
+                      >
                       <span class="branch">main</span>
                       <button class="quiet-danger" type="button">Remove from this project</button>
                     </div>
                     <div class="agent-line">
                       <svg class="i sm agent-ok"><use href="#i-circle-check-big" /></svg>
-                      <span>Hosted runs can write here — Motir’s app pushes their branches and opens their pull requests.</span>
+                      <span
+                        >Hosted runs can write here — Motir’s app pushes their branches and opens
+                        their pull requests.</span
+                      >
                     </div>
                   </li>
                   <li class="agent-li" id="repo-acme-labs-acme-infra">
                     <div class="li-top">
                       <svg class="i lg"><use href="#i-folder-git-2" /></svg>
-                      <span class="repo"><span class="owner">acme-labs/</span><span class="nm">acme-infra</span></span>
+                      <span class="repo"
+                        ><span class="owner">acme-labs/</span
+                        ><span class="nm">acme-infra</span></span
+                      >
                       <span class="branch">trunk</span>
                       <button class="quiet-danger" type="button">Remove from this project</button>
                     </div>
                     <div class="agent-line agent-line--warn" role="status">
                       <svg class="i sm agent-warn"><use href="#i-triangle-alert" /></svg>
-                      <span class="agent-copy"><b>Needs updated permissions.</b> Motir Integration on acme-labs can’t write yet — an owner of acme-labs accepts its updated permissions on GitHub. Until then a hosted run that touches this repository is refused before anything starts.</span>
-                      <button class="btn btn-secondary btn-sm" type="button"><svg class="i sm"><use href="#i-external-link" /></svg>Review permissions on GitHub</button>
+                      <span class="agent-copy"
+                        ><b>Needs updated permissions.</b> Motir Integration on acme-labs can’t
+                        write yet — an owner of acme-labs accepts its updated permissions on GitHub.
+                        Until then a hosted run that touches this repository is refused before
+                        anything starts.</span
+                      >
+                      <button class="btn btn-secondary btn-sm" type="button">
+                        <svg class="i sm"><use href="#i-external-link" /></svg>Review permissions on
+                        GitHub
+                      </button>
                     </div>
                   </li>
                   <li class="agent-li" id="repo-acme-inc-design-tokens">
                     <div class="li-top">
                       <svg class="i lg"><use href="#i-folder-git-2" /></svg>
-                      <span class="repo"><span class="owner">acme-inc/</span><span class="nm">design-tokens</span></span>
+                      <span class="repo"
+                        ><span class="owner">acme-inc/</span
+                        ><span class="nm">design-tokens</span></span
+                      >
                       <span class="branch">main</span>
                       <button class="quiet-danger" type="button">Remove from this project</button>
                     </div>
                     <div class="agent-line agent-line--warn" role="status">
                       <svg class="i sm agent-warn"><use href="#i-triangle-alert" /></svg>
-                      <span class="agent-copy"><b>Motir Integration can no longer reach acme-inc/design-tokens.</b> Its installation was removed or suspended, or no longer includes this repository. Reconnect it on GitHub; until then a hosted run that touches it is refused.</span>
-                      <button class="btn btn-secondary btn-sm" type="button"><svg class="i sm"><use href="#i-external-link" /></svg>Reconnect</button>
+                      <span class="agent-copy"
+                        ><b>Motir Integration can no longer reach acme-inc/design-tokens.</b> Its
+                        installation was removed or suspended, or no longer includes this
+                        repository. Reconnect it on GitHub; until then a hosted run that touches it
+                        is refused.</span
+                      >
+                      <button class="btn btn-secondary btn-sm" type="button">
+                        <svg class="i sm"><use href="#i-external-link" /></svg>Reconnect
+                      </button>
                     </div>
                   </li>
                 </ul>
@@ -1504,32 +1507,67 @@
           </div>
         </div>
       </div>
-      <div class="lands"><b>One line per connected repository.</b> The <b>Hosted by Motir</b> row carries none: Motir writes there with its own app (<code class="k">motir-studio</code>), so there is nothing to accept or reconnect. <b>Review permissions on GitHub</b> opens the installation’s own settings page (<code class="k">githubInstallationManageUrl</code>), where GitHub shows the pending permission request. <b>Reconnect</b> hands off to GitHub’s install screen for Motir Integration (<code class="k">githubAppInstallUrl</code>), where the repository is added back to the installation — repository selection happens on GitHub, never in a picker here.</div>
-      <p class="panel-note"><b>The three states, and why each looks as it does.</b> <i>Ready</i> is a quiet fact. <i>Needs updated permissions</i> and <i>can no longer reach</i> are the warning surface, because each is the one state that refuses a run. The permission line is <b>per installation</b>, so it appears on every row of that GitHub account at once — here <code class="k">acme-labs</code>, while <code class="k">acme-inc</code> has already accepted. Its copy names <b>who</b> can fix it — an owner of that GitHub account — because the admin reading this room often isn’t one, and the person who pressed Run hosted may not be on GitHub at all. A repository that is not connected at all is the shipped room’s own business and draws nothing new.</p>
+      <div class="lands">
+        <b>One line per connected repository.</b> The <b>Hosted by Motir</b> row carries none: Motir
+        writes there with its own app (<code class="k">motir-studio</code>), so there is nothing to
+        accept or reconnect. <b>Review permissions on GitHub</b> opens the installation’s own
+        settings page (<code class="k">githubInstallationManageUrl</code>), where GitHub shows the
+        pending permission request. <b>Reconnect</b> hands off to GitHub’s install screen for Motir
+        Integration (<code class="k">githubAppInstallUrl</code>), where the repository is added back
+        to the installation — repository selection happens on GitHub, never in a picker here.
+      </div>
+      <p class="panel-note">
+        <b>The three states, and why each looks as it does.</b> <i>Ready</i> is a quiet fact.
+        <i>Needs updated permissions</i> and <i>can no longer reach</i> are the warning surface,
+        because each is the one state that refuses a run. The permission line is
+        <b>per installation</b>, so it appears on every row of that GitHub account at once — here
+        <code class="k">acme-labs</code>, while <code class="k">acme-inc</code> has already
+        accepted. Its copy names <b>who</b> can fix it — an owner of that GitHub account — because
+        the admin reading this room often isn’t one, and the person who pressed Run hosted may not
+        be on GitHub at all. A repository that is not connected at all is the shipped room’s own
+        business and draws nothing new.
+      </p>
 
-      <div class="panel-label">Panel 1b · <b>Back from GitHub</b> — the shipped <code class="k">GitConnectBanner</code>, with the <code class="k">installed</code> line revised</div>
+      <div class="panel-label">
+        Panel 1b · <b>Back from GitHub</b> — the shipped <code class="k">GitConnectBanner</code>,
+        with the <code class="k">installed</code> line revised
+      </div>
       <div class="panel">
         <div class="settings">
           <div class="set-rail">
             <div class="grp">
               <div class="h">General</div>
-              <div class="rail-row"><svg class="i"><use href="#i-sliders-horizontal" /></svg>Details</div>
-              <div class="rail-row active"><svg class="i"><use href="#i-folder-git-2" /></svg>Repositories</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>Details
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>Repositories
+              </div>
             </div>
             <div class="grp">
               <div class="h">Access</div>
-              <div class="rail-row"><svg class="i"><use href="#i-users" /></svg>Members &amp; access</div>
-              <div class="rail-row"><svg class="i"><use href="#i-key-round" /></svg>Code access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>Code access
+              </div>
             </div>
           </div>
           <div class="set-pane">
             <div class="banner-stack">
-              <div class="settings-banner settings-banner--success" role="status">GitHub App installed — Motir can now read your selected repositories, and its app pushes hosted runs’ branches and opens their pull requests.</div>
+              <div class="settings-banner settings-banner--success" role="status">
+                GitHub App installed — Motir can now read your selected repositories, and its app
+                pushes hosted runs’ branches and opens their pull requests.
+              </div>
             </div>
             <div class="pane-head">
               <div class="eyebrow">Project settings</div>
               <h3>Repositories</h3>
-              <p>Only the repositories Acme booking works on — whether Motir hosts them or moooon does.</p>
+              <p>
+                Only the repositories Acme booking works on — whether Motir hosts them or moooon
+                does.
+              </p>
               <p class="summary">0 moving · 1 hosted by Motir · 3 yours</p>
             </div>
             <div class="section">
@@ -1540,25 +1578,37 @@
                   <li class="agent-li" id="repo-acme-inc-acme-booking-web">
                     <div class="li-top">
                       <svg class="i lg"><use href="#i-folder-git-2" /></svg>
-                      <span class="repo"><span class="owner">acme-inc/</span><span class="nm">acme-booking-web</span></span>
+                      <span class="repo"
+                        ><span class="owner">acme-inc/</span
+                        ><span class="nm">acme-booking-web</span></span
+                      >
                       <span class="branch">main</span>
                       <button class="quiet-danger" type="button">Remove from this project</button>
                     </div>
                     <div class="agent-line">
                       <svg class="i sm agent-ok"><use href="#i-circle-check-big" /></svg>
-                      <span>Hosted runs can write here — Motir’s app pushes their branches and opens their pull requests.</span>
+                      <span
+                        >Hosted runs can write here — Motir’s app pushes their branches and opens
+                        their pull requests.</span
+                      >
                     </div>
                   </li>
                   <li class="agent-li" id="repo-acme-inc-design-tokens">
                     <div class="li-top">
                       <svg class="i lg"><use href="#i-folder-git-2" /></svg>
-                      <span class="repo"><span class="owner">acme-inc/</span><span class="nm">design-tokens</span></span>
+                      <span class="repo"
+                        ><span class="owner">acme-inc/</span
+                        ><span class="nm">design-tokens</span></span
+                      >
                       <span class="branch">main</span>
                       <button class="quiet-danger" type="button">Remove from this project</button>
                     </div>
                     <div class="agent-line">
                       <svg class="i sm agent-ok"><use href="#i-circle-check-big" /></svg>
-                      <span>Hosted runs can write here — Motir’s app pushes their branches and opens their pull requests.</span>
+                      <span
+                        >Hosted runs can write here — Motir’s app pushes their branches and opens
+                        their pull requests.</span
+                      >
                     </div>
                   </li>
                 </ul>
@@ -1567,23 +1617,62 @@
           </div>
         </div>
       </div>
-      <p class="panel-note"><b>One copy change.</b> <code class="k">github.banner.installed</code> said Motir <i>can now read</i> your selected repositories; with Motir Integration asking for write, that is no longer the whole truth, so it now says the app also pushes hosted runs’ branches and opens their pull requests. Every other <code class="k">?github=</code> status (<code class="k">lib/github/bannerStatus.ts</code>) is unchanged and renders verbatim in its shipped tone. Accepting updated permissions happens on GitHub’s installation page and may not redirect back; the row simply reads <i>ready</i> on the next load, so the row, not the banner, is the record.</p>
+      <p class="panel-note">
+        <b>One copy change.</b> <code class="k">github.banner.installed</code> said Motir
+        <i>can now read</i> your selected repositories; with Motir Integration asking for write,
+        that is no longer the whole truth, so it now says the app also pushes hosted runs’ branches
+        and opens their pull requests. Every other <code class="k">?github=</code> status (<code
+          class="k"
+          >lib/github/bannerStatus.ts</code
+        >) is unchanged and renders verbatim in its shipped tone. Accepting updated permissions
+        happens on GitHub’s installation page and may not redirect back; the row simply reads
+        <i>ready</i> on the next load, so the row, not the banner, is the record.
+      </p>
 
-      <div class="panel-label">Panel 2 · <b>Run hosted, refused</b> — the run section’s refused slot (MOTIR-684), listing every repository of the run that Motir’s app can’t write</div>
+      <div class="panel-label">
+        Panel 2 · <b>Run hosted, refused</b> — the run section’s refused slot (MOTIR-684), listing
+        every repository of the run that Motir’s app can’t write
+      </div>
       <div class="panel">
         <div class="refused-grid">
           <div class="secCard">
             <div class="secHead">
               <h2>Run</h2>
               <span class="secSub">— a card that spans two repositories</span>
-              <span class="hxDoor"><span class="hxCombo" role="combobox" aria-label="Model"><span class="hxComboVal">claude-opus-5-5</span><span class="hxComboSec">Default</span><svg class="hxComboChev" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-updown" /></svg></span><button class="hxBtn primary" type="button"><svg class="hxIc" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cloud" /></svg>Run hosted</button></span>
+              <span class="hxDoor"
+                ><span class="hxCombo" role="combobox" aria-label="Model"
+                  ><span class="hxComboVal">claude-opus-5-5</span
+                  ><span class="hxComboSec">Default</span
+                  ><svg class="hxComboChev" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-updown" /></svg></span
+                ><button class="hxBtn primary" type="button">
+                  <svg class="hxIc" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-cloud" /></svg
+                  >Run hosted
+                </button></span
+              >
             </div>
             <div class="secBody">
               <div class="notice warn" role="alert">
-                <svg class="hxIc hxWarnIc" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
-                <div class="body"><strong>Not started — Motir’s app can’t write to 1 of this run’s 2 repositories.</strong><span>Nothing was booted and nothing was charged. Each repository below says what fixes it; an owner of the GitHub account may have to do it.</span>
+                <svg class="hxIc hxWarnIc" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-alert" />
+                </svg>
+                <div class="body">
+                  <strong
+                    >Not started — Motir’s app can’t write to 1 of this run’s 2
+                    repositories.</strong
+                  ><span
+                    >Nothing was booted and nothing was charged. Each repository below says what
+                    fixes it; an owner of the GitHub account may have to do it.</span
+                  >
                   <ul class="refused-list">
-                    <li><span class="rr-repo">acme-labs/acme-infra</span><span class="rr-why">hosted runs on acme-labs/acme-infra need Motir Integration’s updated permissions — an owner of acme-labs accepts them on GitHub</span><a class="link" href="#repo-acme-labs-acme-infra">Open in Repositories</a></li>
+                    <li>
+                      <span class="rr-repo">acme-labs/acme-infra</span
+                      ><span class="rr-why"
+                        >hosted runs on acme-labs/acme-infra need Motir Integration’s updated
+                        permissions — an owner of acme-labs accepts them on GitHub</span
+                      ><a class="link" href="#repo-acme-labs-acme-infra">Open in Repositories</a>
+                    </li>
                   </ul>
                 </div>
               </div>
@@ -1593,15 +1682,47 @@
             <div class="secHead">
               <h2>Run</h2>
               <span class="secSub">— a parent whose children touch three repositories</span>
-              <span class="hxDoor"><span class="hxCombo" role="combobox" aria-label="Model"><span class="hxComboVal">claude-opus-5-5</span><span class="hxComboSec">Default</span><svg class="hxComboChev" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-updown" /></svg></span><button class="hxBtn primary" type="button"><svg class="hxIc" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-cloud" /></svg>Run hosted</button></span>
+              <span class="hxDoor"
+                ><span class="hxCombo" role="combobox" aria-label="Model"
+                  ><span class="hxComboVal">claude-opus-5-5</span
+                  ><span class="hxComboSec">Default</span
+                  ><svg class="hxComboChev" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-updown" /></svg></span
+                ><button class="hxBtn primary" type="button">
+                  <svg class="hxIc" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-cloud" /></svg
+                  >Run hosted
+                </button></span
+              >
             </div>
             <div class="secBody">
               <div class="notice warn" role="alert">
-                <svg class="hxIc hxWarnIc" viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert" /></svg>
-                <div class="body"><strong>Not started — Motir’s app can’t write to 2 of this run’s 3 repositories.</strong><span>Nothing was booted and nothing was charged. Each repository below says what fixes it; an owner of the GitHub account may have to do it.</span>
+                <svg class="hxIc hxWarnIc" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-alert" />
+                </svg>
+                <div class="body">
+                  <strong
+                    >Not started — Motir’s app can’t write to 2 of this run’s 3
+                    repositories.</strong
+                  ><span
+                    >Nothing was booted and nothing was charged. Each repository below says what
+                    fixes it; an owner of the GitHub account may have to do it.</span
+                  >
                   <ul class="refused-list">
-                    <li><span class="rr-repo">acme-inc/design-tokens</span><span class="rr-why">Motir Integration can no longer reach acme-inc/design-tokens — reconnect it in the Repositories room</span><a class="link" href="#repo-acme-inc-design-tokens">Open in Repositories</a></li>
-                    <li><span class="rr-repo">acme-labs/acme-infra</span><span class="rr-why">hosted runs on acme-labs/acme-infra need Motir Integration’s updated permissions — an owner of acme-labs accepts them on GitHub</span><a class="link" href="#repo-acme-labs-acme-infra">Open in Repositories</a></li>
+                    <li>
+                      <span class="rr-repo">acme-inc/design-tokens</span
+                      ><span class="rr-why"
+                        >Motir Integration can no longer reach acme-inc/design-tokens — reconnect it
+                        in the Repositories room</span
+                      ><a class="link" href="#repo-acme-inc-design-tokens">Open in Repositories</a>
+                    </li>
+                    <li>
+                      <span class="rr-repo">acme-labs/acme-infra</span
+                      ><span class="rr-why"
+                        >hosted runs on acme-labs/acme-infra need Motir Integration’s updated
+                        permissions — an owner of acme-labs accepts them on GitHub</span
+                      ><a class="link" href="#repo-acme-labs-acme-infra">Open in Repositories</a>
+                    </li>
                   </ul>
                 </div>
               </div>
@@ -1609,7 +1730,16 @@
           </div>
         </div>
       </div>
-      <p class="panel-note"><b>A run is refused as a whole and explained per repository.</b> A hosted run covers every repository its card touches — several for a multi-repository card, the union of the children’s for a parent — and it is checked before anything is minted or booted. The notice keeps the refused slot’s <i>Not started —</i> prefix, counts the repositories it can’t write, and lists each one with the decision’s reason <b>verbatim</b> and a link to <b>that repository’s row in the Repositories room</b>, not straight to GitHub: the person who pressed Run hosted may not be the GitHub owner who has to act, and the room names who is. A repository Motir created never appears here.</p>
+      <p class="panel-note">
+        <b>A run is refused as a whole and explained per repository.</b> A hosted run covers every
+        repository its card touches — several for a multi-repository card, the union of the
+        children’s for a parent — and it is checked before anything is minted or booted. The notice
+        keeps the refused slot’s <i>Not started —</i> prefix, counts the repositories it can’t
+        write, and lists each one with the decision’s reason <b>verbatim</b> and a link to
+        <b>that repository’s row in the Repositories room</b>, not straight to GitHub: the person
+        who pressed Run hosted may not be the GitHub owner who has to act, and the room names who
+        is. A repository Motir created never appears here.
+      </p>
     </div>
   </body>
 </html>
