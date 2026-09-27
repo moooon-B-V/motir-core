@@ -542,6 +542,16 @@ export interface DispatchPrompt {
   workflowMode: DispatchWorkflowMode;
   sessionBranch: string | null;
   /**
+   * The branch the prompt tells the agent to create for its work — the same name
+   * in every repository — or `null` for a manual item (MOTIR-6539). The CLI names
+   * it on `checkout_ready` and checkpoints it while the agent works.
+   *
+   * OPTIONAL on the wire for the same reason `targetRepos` is: a server older
+   * than MOTIR-6539 sends no such key, and absent reads as "nothing to
+   * checkpoint", never as a crash.
+   */
+  workBranch?: string | null;
+  /**
    * OPTIONAL on the wire, deliberately: the CLI is published separately from the
    * server and is routinely pointed at a self-hosted Motir older than itself. A
    * server predating MOTIR-2079 sends no such key, which must read as "nothing to

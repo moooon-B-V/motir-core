@@ -370,6 +370,7 @@ export const dispatchPromptService = {
       targetRepos,
       workflowMode: assembled.workflowMode,
       sessionBranch: assembled.sessionBranch,
+      workBranch: assembled.workBranch,
       // Handed over SEPARATELY as well as rendered into the prompt: the prompt
       // reaches the agent, this reaches the human watching the CLI. Always an
       // array, never omitted.

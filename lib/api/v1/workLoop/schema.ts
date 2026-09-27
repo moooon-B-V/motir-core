@@ -374,6 +374,18 @@ export const dispatchPromptSchema = z.object({
   workflowMode: dispatchWorkflowModeSchema,
   /** The session branch the prompt instructs, or `null` in `per_item_pr` mode. */
   sessionBranch: z.string().nullable(),
+  /**
+   * The branch the prompt tells the agent to create for its work — the SAME name
+   * in every repository the item ships in — or `null` for a manual item, which
+   * has no branch (MOTIR-6539). The pull request comes from it in `per_item_pr`
+   * mode and from `sessionBranch` in `session_lineage` mode. Additive under §8.
+   *
+   * OPTIONAL in the schema though this server always sends it: the `motir` CLI is
+   * published separately and is routinely pointed at an older self-hosted Motir,
+   * whose payload has no such key — absent must validate, and read as "no branch
+   * to checkpoint", never as a malformed response.
+   */
+  workBranch: z.string().nullable().optional(),
   advisories: z.array(dispatchAdvisorySchema),
 });
 export type V1DispatchPrompt = z.infer<typeof dispatchPromptSchema>;
@@ -401,6 +413,7 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
     })),
     workflowMode: dto.workflowMode,
     sessionBranch: dto.sessionBranch,
+    workBranch: dto.workBranch,
     advisories: dto.advisories.map((advisory) => {
       if (isBlockerCountAdvisory(advisory)) {
         return {

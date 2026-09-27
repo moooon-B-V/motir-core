@@ -12,6 +12,7 @@ import {
   type DeliveryOptions,
 } from './dispatch.js';
 import { withProjectSession, type ProjectSession } from '../session.js';
+import { legBranches, startCheckpoints } from '../checkpoint.js';
 import { runAgent } from '../agentRun.js';
 import {
   createDispatchRunReporter,
@@ -1162,6 +1163,8 @@ export interface DispatchOneInput {
    * (MOTIR-6560). Absent for `auto` and a local scope.
    */
   prepareCheckouts?: (cwds: string[]) => void;
+  /** The checkpoint interval (MOTIR-6539) — the tests' seam; one minute otherwise. */
+  checkpointIntervalMs?: number;
 }
 
 /**
@@ -1265,6 +1268,19 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
     ...input.targets.map((other) => other.cwd).filter((cwd) => cwd !== target.cwd),
   ]);
   echoPromptIfAsked(input.opts, item.key, dispatch);
+  // Every repository of the leg with its branch, named before the agent exists —
+  // the same event `run` / `next` / `batch` emit from the dispatch leg (MOTIR-6539).
+  // The checkouts are already in place here: the drain ensured them.
+  const legTargets = input.targets.length > 0 ? input.targets : [target];
+  reporter.event({
+    kind: 'checkout_ready',
+    workItemKey: item.key,
+    data: {
+      repositories: legTargets.map((t) => t.targetRepo),
+      failures: 0,
+      branches: legBranches(dispatch, legTargets),
+    },
+  });
   reporter.event({ kind: 'prompt_issued', workItemKey: item.key });
 
   const started = clock();
@@ -1276,12 +1292,22 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
   // The producer for the `log` event kind (MOTIR-3961). `null` unless the
   // operator passed `--report-log`, and then the spawn is unchanged.
   const logTee = createLegLogTee(reporter, item.key);
+  // The agent's commits reach origin as it makes them (MOTIR-6539) — stopped,
+  // with one last push, however the agent ends.
+  const checkpoints = startCheckpoints({
+    key: item.key,
+    targets: legTargets,
+    workBranch: dispatch.workBranch ?? null,
+    reporter,
+    run,
+    ...(input.checkpointIntervalMs ? { intervalMs: input.checkpointIntervalMs } : {}),
+  });
   const result = await runAgentFn({
     command: agent.parsed,
     prompt: dispatch.prompt,
     cwd: target.cwd,
     ...(logTee ? { onOutput: logTee.write } : {}),
-  });
+  }).finally(() => checkpoints.stop());
   // The tail, BEFORE the exit event — same ordering as `dispatchLeg`.
   logTee?.flush();
   const durationMs = clock() - started;

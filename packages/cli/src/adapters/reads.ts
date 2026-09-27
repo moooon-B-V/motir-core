@@ -582,6 +582,10 @@ export function toDispatchPrompt(body: PromptBody): DispatchPrompt {
         }),
     workflowMode: body.workflowMode,
     sessionBranch: body.sessionBranch,
+    // MOTIR-6539 — carried because the run NAMES it on `checkout_ready` and
+    // checkpoints it while the agent works. Absent from an older server stays
+    // absent, and absent means "nothing to checkpoint".
+    ...(body.workBranch === undefined ? {} : { workBranch: body.workBranch }),
     advisories: body.advisories as DispatchAdvisory[],
   };
 }

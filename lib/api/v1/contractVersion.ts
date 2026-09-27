@@ -641,5 +641,19 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.42.0` at `a51c5476f`, so this claims `1.43.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
+ *
+ * - `1.44.0` — MOTIR-6539 adds `workBranch` (nullable) to the `DispatchPrompt`
+ *   component `getWorkItemDispatchPrompt` answers: the branch the prompt tells the
+ *   agent to CREATE for its work — the same name in every repository the item
+ *   ships in — or `null` for a manual item. A runner names it on `checkout_ready`
+ *   before the agent exists, and pushes it as the agent commits so a run that dies
+ *   leaves its work on origin.
+ *
+ *   Additive: one new nullable field on an existing component (§8's allowed list);
+ *   nothing existing changes meaning, and `sessionBranch` still names the lineage.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.43.0` at `7b087b907`, so this claims `1.44.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.43.0';
+export const V1_CONTRACT_VERSION = '1.44.0';

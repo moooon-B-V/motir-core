@@ -13,6 +13,7 @@ import type { ParsedAgentCommand } from './agentProfiles.js';
 import { createLegLogTee } from './agentLogTee.js';
 import { fetchPresignedAsset, materializeDesignsFor } from './designFiles.js';
 import { nullDispatchRunReporter, type DispatchRunReporter } from './dispatchRunReporter.js';
+import { legBranches, startCheckpoints } from './checkpoint.js';
 
 // THE DISPATCH LEG (Story MOTIR-3655 · MOTIR-3695) — the one implementation of
 // "materialize, spawn the agent, and decide what actually happened."
@@ -133,6 +134,8 @@ export interface DispatchLegInput {
    * cloned them. Absent for a local run, whose checkouts are the operator's.
    */
   prepareCheckouts?: (cwds: string[]) => void;
+  /** The checkpoint interval (MOTIR-6539) — the tests' seam; one minute otherwise. */
+  checkpointIntervalMs?: number;
 }
 
 export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchLegVerdict> {
@@ -164,6 +167,8 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
     data: {
       repositories: over.map((t) => t.targetRepo),
       failures: materialized.failures.length,
+      // Every repository's branch, named before the agent exists (MOTIR-6539).
+      branches: legBranches(dispatch, over),
     },
   });
   if (materialized.failures.length > 0) return settle({ kind: 'checkout_unavailable' });
@@ -183,6 +188,16 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
   // The producer for the `log` event kind (MOTIR-3961). `null` unless the
   // operator passed `--report-log`, and then the spawn is unchanged.
   const logTee = createLegLogTee(reporter, key);
+  // The agent's commits reach origin as it makes them, so a run that dies keeps
+  // its work (MOTIR-6539). Stopped — with one last push — however the agent ends.
+  const checkpoints = startCheckpoints({
+    key,
+    targets: over,
+    workBranch: dispatch.workBranch ?? null,
+    reporter,
+    ...(input.run ? { run: input.run } : {}),
+    ...(input.checkpointIntervalMs ? { intervalMs: input.checkpointIntervalMs } : {}),
+  });
   const result = await runAgentFn({
     command: agent,
     prompt: dispatch.prompt,
@@ -195,7 +210,7 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
       fetchAsset: fetchPresignedAsset,
     }),
     ...(logTee ? { onOutput: logTee.write } : {}),
-  });
+  }).finally(() => checkpoints.stop());
   // The tail, BEFORE the exit event, so the transcript a reader sees ends where
   // the agent stopped rather than after the verdict that describes it.
   logTee?.flush();

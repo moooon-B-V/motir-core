@@ -146,6 +146,12 @@ export interface DispatchPromptDto {
   /** The session branch the prompt instructs, or `null` in `per_item_pr` mode. */
   sessionBranch: string | null;
   /**
+   * The branch the prompt tells the agent to create for its work — the same name
+   * in every repository — or `null` for a MANUAL item (MOTIR-6539). See
+   * `AssembledDispatchPrompt.workBranch`.
+   */
+  workBranch: string | null;
+  /**
    * The `likely-missing-edge` PROSE-vs-GRAPH advisories for this item
    * (MOTIR-2079) — each an item the card's ACCEPTANCE CRITERIA name but that it
    * carries no `blocked_by` edge to. Always PRESENT, `[]` when there are none.
