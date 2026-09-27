@@ -1281,7 +1281,14 @@ export const workItemRepository = {
       // written, shared with the count and the watermark beside it.
       where: homeMembershipWhere(userId, workspaceId, projectScopes, { slice, since, sortField }),
       select: HOME_WORK_ITEM_SELECT,
-      orderBy: homeOrderBy(sortField),
+      // TO FIX orders by REASON first (design § 30, _Order_): the enum's declaration
+      // order IS the priority (`FIX_REASON_PRIORITY`), and Postgres sorts an enum by
+      // it — then the work tabs' kind order within a reason. In the read, never on
+      // the client, so the page boundary stays exact.
+      orderBy:
+        slice.fixReason === 'set'
+          ? [{ fixReason: 'asc' }, ...homeOrderBy(sortField)]
+          : homeOrderBy(sortField),
       skip,
       take,
     });

@@ -7964,7 +7964,34 @@
     "live": {
       "new": "New",
       "decidedElsewhere": "Decided elsewhere",
-      "reconnecting": "Reconnecting…"
+      "reconnecting": "Reconnecting…",
+      "cleared": "Cleared"
+    },
+    "toFix": {
+      "reason": {
+        "queueFailed": "Failed in the merge queue · <d>{detail}</d>",
+        "queueFailedBare": "Failed in the merge queue",
+        "conflicted": "Conflicts with <d>{base}</d>",
+        "conflictedNoBase": "Conflicts with its base branch",
+        "ciFailed": "CI failed · <d>{check}</d>",
+        "ciFailedBare": "CI failed",
+        "changesRequested": "Changes requested by <b>{name}</b> — “{note}”",
+        "changesRequestedNoNote": "Changes requested by <b>{name}</b>",
+        "changesRequestedAnon": "Changes requested"
+      },
+      "queueReason": {
+        "CI_FAILURE": "checks failed",
+        "CI_TIMEOUT": "checks timed out",
+        "MERGE_CONFLICT": "merge conflict",
+        "INVALID_MERGE_COMMIT": "no merge commit could be built"
+      },
+      "affected": "{affected} of {total} pull requests affected",
+      "copyAria": "Copy the repair command for {key}",
+      "copyTooltip": "Copy <cmd>{command}</cmd>",
+      "toast": {
+        "title": "Copied",
+        "body": "Paste {command} into your terminal."
+      }
     }
   },
   "approvalRecords": {
@@ -9111,8 +9138,8 @@
         "unchanged": "Nothing changed on your side? <b>Queue again</b> approves these same commits once more and puts them back in the merge queue.",
         "cannotLand": "These commits cannot land as they stand. <b>motir fix</b> hands the repair to an agent; a push brings the question back once its checks pass.",
         "failed": {
-          "checks": "<b>{pr}</b> left the merge queue: <b>{check}</b> failed.",
-          "timedOut": "<b>{pr}</b> left the merge queue: <b>{check}</b> timed out.",
+          "checks": "<b>{pr}</b> left the merge queue: <d>{check}</d> failed.",
+          "timedOut": "<b>{pr}</b> left the merge queue: <d>{check}</d> timed out.",
           "mergeCommit": "<b>{pr}</b> left the merge queue: the queue could not build a merge commit for it.",
           "held": "These commits cannot land as they stand, so Motir is not asking again. <b>{key}</b> is held at Implemented, at this head."
         },

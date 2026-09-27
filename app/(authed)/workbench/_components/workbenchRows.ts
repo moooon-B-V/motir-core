@@ -1,3 +1,4 @@
+import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { HomeWorkItemRowDto } from '@/lib/dto/home';
 import type { StatusCategoryDto, WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
@@ -60,6 +61,13 @@ export interface WorkbenchRowView {
    * query. It is null on the other four tabs by construction.
    */
   completedAt: string | null;
+  /**
+   * WHY the card is stuck until something is repaired, and what the row names for it
+   * (`WorkItem.fixReason` + `fixDetail`, MOTIR-6600) — the To fix tab's FIX LINE
+   * (`design-notes.md` § 30, Panel 2). `null` when nothing is to fix, and on a row
+   * whose stored detail did not survive the mapper (the pair is null together).
+   */
+  fix: { reason: WorkItemFixReasonDto; detail: FixDetailDto } | null;
 }
 
 /**
@@ -107,6 +115,10 @@ export function toWorkbenchRowViews(
       statusCategory: status?.category ?? null,
       ciState: row.ciState,
       completedAt: row.completedAt,
+      fix:
+        row.fixReason !== null && row.fixDetail !== null
+          ? { reason: row.fixReason, detail: row.fixDetail }
+          : null,
     };
   });
 }

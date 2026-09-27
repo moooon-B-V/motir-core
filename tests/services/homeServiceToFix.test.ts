@@ -133,6 +133,19 @@ describe('To fix and In progress PARTITION the in-progress set', () => {
     expect((await homeService.tabCounts(hctx(fx))).toFix).toBe(0);
   });
 
+  it('lists by REASON PRIORITY first — queue, conflict, red, sent back (design § 30, Order)', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'ORD' });
+    // Created in the REVERSE of the priority, so neither id nor kind order can pass it.
+    const sentBack = await card(fx, 'sent back', 'in_review', 'changes_requested');
+    const red = await card(fx, 'red', 'implemented', 'ci_failed');
+    const conflict = await card(fx, 'conflict', 'implemented', 'conflicted');
+    const queue = await card(fx, 'queue', 'implemented', 'queue_failed');
+
+    const page = await homeService.listToFix(hctx(fx));
+
+    expect(page.items.map((r) => r.id)).toEqual([queue.id, conflict.id, red.id, sentBack.id]);
+  });
+
   it('pages like the other tabs, with the shipped total and clamp', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'PGE' });
     for (let i = 0; i < 3; i++) await card(fx, `stuck ${i}`, 'implemented', 'ci_failed');

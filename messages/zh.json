@@ -7960,7 +7960,34 @@
     "live": {
       "new": "新增",
       "decidedElsewhere": "已由他人决定",
-      "reconnecting": "正在重新连接…"
+      "reconnecting": "正在重新连接…",
+      "cleared": "已解除"
+    },
+    "toFix": {
+      "reason": {
+        "queueFailed": "在合并队列中失败 · <d>{detail}</d>",
+        "queueFailedBare": "在合并队列中失败",
+        "conflicted": "与 <d>{base}</d> 冲突",
+        "conflictedNoBase": "与其目标分支冲突",
+        "ciFailed": "CI 未通过 · <d>{check}</d>",
+        "ciFailedBare": "CI 未通过",
+        "changesRequested": "<b>{name}</b> 要求修改 ——“{note}”",
+        "changesRequestedNoNote": "<b>{name}</b> 要求修改",
+        "changesRequestedAnon": "已要求修改"
+      },
+      "queueReason": {
+        "CI_FAILURE": "检查未通过",
+        "CI_TIMEOUT": "检查超时",
+        "MERGE_CONFLICT": "合并冲突",
+        "INVALID_MERGE_COMMIT": "无法构建合并提交"
+      },
+      "affected": "{total} 个拉取请求中有 {affected} 个受影响",
+      "copyAria": "复制 {key} 的修复命令",
+      "copyTooltip": "复制 <cmd>{command}</cmd>",
+      "toast": {
+        "title": "已复制",
+        "body": "请将 {command} 粘贴到终端。"
+      }
     }
   },
   "approvalRecords": {
@@ -9107,8 +9134,8 @@
         "unchanged": "你这边没有任何改动？<b>重新排队</b>会再次批准这些相同的提交，并把它们放回合并队列。",
         "cannotLand": "这些提交按现状无法合入。<b>motir fix</b> 会把修复交给智能体；推送新的提交后，检查通过时会再次询问。",
         "failed": {
-          "checks": "<b>{pr}</b> 离开了合并队列：<b>{check}</b> 未通过。",
-          "timedOut": "<b>{pr}</b> 离开了合并队列：<b>{check}</b> 超时。",
+          "checks": "<b>{pr}</b> 离开了合并队列：<d>{check}</d> 未通过。",
+          "timedOut": "<b>{pr}</b> 离开了合并队列：<d>{check}</d> 超时。",
           "mergeCommit": "<b>{pr}</b> 离开了合并队列：队列无法为它构建合并提交。",
           "held": "这些提交按现状无法合并，因此 Motir 不再征求批准。<b>{key}</b> 停留在“已实现”，保持在这个提交上。"
         },
