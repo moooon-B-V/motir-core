@@ -84,6 +84,10 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // above: the rollup, the children aggregate and the story gate all run
       // against a real database.
       'ci.yml:story-4905-coverage',
+      // MOTIR-692's hosted-agent-run coverage lane (Story MOTIR-683): the story
+      // gate and the per-card hosted-run tests it measures run against a real
+      // database.
+      'ci.yml:story-683-coverage',
       'ci.yml:test',
     ]);
   });
