@@ -79,9 +79,10 @@ describe('the new columns, as the migration leaves them', () => {
 
   it('reads access_scope `full` on a membership inserted without naming it', async () => {
     const t = await tenant();
-    // The old build's insert: raw SQL that knows nothing of `access_scope`.
+    // The old build's insert: raw SQL that knows nothing of `access_scope`. It
+    // names `workspace_role`, which is NOT NULL since MOTIR-6561.
     await adminDb.$executeRaw`
-      INSERT INTO "workspace_membership" ("id", "userId", "workspaceId", "role", "updatedAt")
+      INSERT INTO "workspace_membership" ("id", "userId", "workspaceId", "workspace_role", "updatedAt")
       VALUES ('pas-old-build-row', ${t.member}, ${t.workspaceId}, 'member', now())`;
     const row = await adminDb.workspaceMembership.findUniqueOrThrow({
       where: { userId_workspaceId: { userId: t.member, workspaceId: t.workspaceId } },
