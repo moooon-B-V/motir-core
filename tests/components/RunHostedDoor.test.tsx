@@ -278,9 +278,7 @@ describe('the header holds exactly one thing', () => {
   it('a LIVE LOCAL run: nothing — it runs on somebody’s machine', async () => {
     // Live under MOTIR-6526's rule: a local run is alive while it heartbeats.
     await mount({
-      runs: [
-        run({ status: 'running', endedAt: null, lastHeartbeatAt: new Date().toISOString() }),
-      ],
+      runs: [run({ status: 'running', endedAt: null, lastHeartbeatAt: new Date().toISOString() })],
     });
     expect(screen.queryByTestId('run-hosted-door')).toBeNull();
     expect(screen.queryByTestId('hosted-run-cancel')).toBeNull();
