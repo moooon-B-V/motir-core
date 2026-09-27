@@ -4,6 +4,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectKeyAliasRepository } from '@/lib/repositories/projectKeyAliasRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { resolveWorkspaceRole } from '@/lib/workspaces/roles';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import {
@@ -412,10 +413,8 @@ async function resolveActiveProjectInContext(
         return first ? toProjectDTO(first) : null;
       }
 
-      let pinnedHere: Awaited<ReturnType<typeof projectRepository.findById>> = null;
       if (membership.activeProjectId) {
         const pinned = await projectRepository.findById(membership.activeProjectId, tx);
-        if (pinned && pinned.workspaceId === workspaceId) pinnedHere = pinned;
         // Accept the pinned project whether archived or not (#29.2): an
         // archived active project is surfaced (with archivedAt set) so the
         // shell shows the "Archived" pill. Only a genuinely unresolvable
@@ -441,22 +440,22 @@ async function resolveActiveProjectInContext(
       // A MEMBER with no project — the healable state, told apart from the
       // `null` above (MOTIR-4870). `getActiveProject` is what acts on it.
       if (projects.length === 0) return NO_PROJECT_IN_WORKSPACE;
-      // Recover only to a project the member can ENTER (MOTIR-6319). A workspace
-      // that has projects, none of them enterable, is NOT the healable state —
-      // healing would create a project for someone who may not have one. Nor can
-      // it be `null` yet: every authed page answers a null project with
-      // `/sign-in`, which bounces a signed-in reader straight back (MOTIR-4870's
-      // invariant — a redirect loop, measured in CI). So until the no-project
-      // shell lands (MOTIR-6548), it resolves to the project they were on —
-      // UNPERSISTED — and each page's own browse gate renders the no-access state
-      // over it. Nothing leaks: the pin cannot be forged any more
-      // (`setActiveProject`), and no page reads the project past its gate.
+      // Recover only to a project the member can ENTER (MOTIR-6319), taking the
+      // first in the switcher's own order (`filterBrowsable` keeps its input's
+      // order, and `findByWorkspace` is the order `listProjects` returns) — so the
+      // fallback cannot disagree with the switcher about which projects exist for
+      // this person. A workspace that has projects, none of them enterable, is
+      // NOT the healable state: healing would create a project for someone who
+      // may not have one. It resolves to NO project (Story MOTIR-6169 ·
+      // MOTIR-6548), and every project-scoped page sends that reader to the
+      // no-project landing (`NO_PROJECT_PATH`) rather than to `/sign-in`, which
+      // would bounce a signed-in reader straight back.
       const [first] = await projectAccessService.filterBrowsable(
         projects,
         { userId, workspaceId },
         tx,
       );
-      if (!first) return toProjectDTO(pinnedHere ?? projects[0]!);
+      if (!first) return null;
 
       if (membership.activeProjectId) {
         // The pointer was SET but didn't resolve — a real inconsistency
@@ -593,7 +592,7 @@ export const projectsService = {
   async ensureDefaultProject(input: {
     workspaceId: string;
     actorUserId: string;
-  }): Promise<ProjectDTO> {
+  }): Promise<ProjectDTO | null> {
     await projectsService.assertMembership(input.actorUserId, input.workspaceId);
 
     // The default project is named for its WORKSPACE. Not for the user (a
@@ -630,8 +629,19 @@ export const projectsService = {
             // Re-read INSIDE the lock — this is the idempotency check, and the
             // whole point of taking the lock first.
             const existing = await projectRepository.findByWorkspace(input.workspaceId, tx);
-            const first = existing[0];
-            if (first) return first;
+            // A workspace that HAS projects answers with the first one the CALLER
+            // can enter, or with nothing (Story MOTIR-6169 · MOTIR-6548): a Limited
+            // member added to no project must not be handed someone else's project,
+            // and must not be given a new one either. Only an EMPTY workspace is
+            // healed by a create, exactly as before.
+            if (existing.length > 0) {
+              const [enterable] = await projectAccessService.filterBrowsable(
+                existing,
+                { userId: input.actorUserId, workspaceId: input.workspaceId },
+                tx,
+              );
+              return enterable ?? null;
+            }
 
             return insertProjectWithSeedsInTx(
               {
@@ -645,7 +655,7 @@ export const projectsService = {
             );
           },
         );
-        return toProjectDTO(project);
+        return project ? toProjectDTO(project) : null;
       } catch (err) {
         if (isUniqueViolation(err) || err instanceof ReservedIdentifierSentinel) {
           identifier = identifierWithSuffix(identifierBase, attempt + 1);
@@ -1118,6 +1128,28 @@ export const projectsService = {
    * it names are read in the same snapshot, so a concurrent setActiveProject
    * can't shear the result.
    */
+  /**
+   * Whether the no-project shell offers this person a door to CREATE a project
+   * (Story MOTIR-6169 · MOTIR-6548 · `design/shell/no-project--limited.mock.html`
+   * S3). There is no create-project permission in the catalogue — any workspace
+   * member may create one — so the door follows ENTRY instead: it is withheld
+   * from a LIMITED member (not a Manager), who would be handed a project they
+   * are not added to and so could not enter. Everyone else keeps it: a Full
+   * member whose every project is Members only, a Manager, and the org Owner /
+   * an Admin reaching a workspace they never joined (no membership row).
+   */
+  async canOfferCreateProject(userId: string, workspaceId: string): Promise<boolean> {
+    return withWorkspaceContext({ userId, workspaceId }, async (tx) => {
+      const membership = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
+        userId,
+        workspaceId,
+        tx,
+      );
+      if (!membership) return true;
+      return resolveWorkspaceRole(membership) === 'manager' || membership.accessScope !== 'limited';
+    });
+  },
+
   async getActiveProject(userId: string, workspaceId: string): Promise<ProjectDTO | null> {
     const resolved = await resolveActiveProjectInContext(userId, workspaceId);
     if (resolved !== NO_PROJECT_IN_WORKSPACE) return resolved;

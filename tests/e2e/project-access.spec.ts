@@ -169,36 +169,38 @@ test.describe('project-access — gating end-to-end', () => {
     await db.$disconnect();
   });
 
-  test('@smoke a private project denies a non-member (no-access + hidden in switcher); granting membership lets them in', async ({
+  test('@smoke a private project denies a non-member (the no-project landing + hidden in switcher); granting membership lets them in', async ({
     page,
   }) => {
     const tenant = await seedTenant('pa-owner-1@example.com');
-    // A genuine non-member: a workspace member with NO project membership. Pin
-    // the (soon-private) project active so the active-project routes resolve it
-    // — the "made private while pinned" path 6.4.6 renders the no-access state
-    // for, rather than a crash.
+    // A genuine non-member: a workspace member with NO project membership, pinned
+    // to the (soon-private) project — the "made private while pinned" path. The
+    // workspace's only project stops being one they can enter, so they resolve NO
+    // active project and every project-scoped route lands them on the no-project
+    // shell (Story MOTIR-6169 · MOTIR-6548), where 6.4.6 used to render the
+    // board's no-access state over a project they could not open.
     const outsider = await makeUser('pa-outsider@example.com', 'Nora Nonmember');
     await addToWorkspace(outsider.id, tenant.workspaceId);
     await pinActiveProject(outsider.id, tenant);
     // Set private DIRECTLY (not go-private) so the outsider stays a non-member.
     await setAccessLevel(tenant, 'private');
 
-    await signIn(page, outsider.email, PWD);
+    await signIn(page, outsider.email, PWD, { landing: 'no-project' });
 
-    // ── Denied: the board renders the no-access state, not the board ──────────
+    // ── Denied: the board route lands on the no-project shell ─────────────────
     await page.goto('/boards');
-    await expect(page.getByText(/access to this project/i)).toBeVisible();
-    await expect(page.getByText(/this project is private/i)).toBeVisible();
+    await expect(page).toHaveURL(/\/no-project$/);
+    await expect(page.getByRole('heading', { name: /not in a project yet/i })).toBeVisible();
     await expect(page.getByTestId('board')).toHaveCount(0);
 
-    // ── Denied: the issue list also renders the no-access state ──────────────
+    // ── Denied: so does the issue list ─────────────────────────────────────────
     await page.goto('/items');
-    await expect(page.getByText(/access to this project/i)).toBeVisible();
+    await expect(page).toHaveURL(/\/no-project$/);
 
     // ── Hidden: the private project is not a switch target ────────────────────
     await openSwitcher(page);
     await expect(
-      switcherList(page),
+      switcherPopover(page),
       "a non-member's switcher must not list the private project",
     ).not.toContainText(PROJECT_NAME);
     await page.keyboard.press('Escape');

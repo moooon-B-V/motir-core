@@ -361,5 +361,4 @@ export const CONTROL_EXEMPTIONS: Record<string, ControlExemption> = {
     kind: 'known-gap',
     card: 'MOTIR-6168',
   },
-  'app/(authed)/_components/ProjectSwitcher.tsx': { kind: 'known-gap', card: 'MOTIR-6319' },
 };

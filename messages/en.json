@@ -1207,6 +1207,12 @@
           "description": "Answer questions about the plan, docs and work items"
         }
       }
+    },
+    "noProject": {
+      "title": "You’re not in a project yet",
+      "body": "A Manager of {workspace} can add you to a project. You’ll see it here as soon as they do.",
+      "switcherEmpty": "You haven’t been added to a project in {workspace} yet.",
+      "create": "Create a project"
     }
   },
   "issueViews": {

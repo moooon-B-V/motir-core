@@ -10,6 +10,7 @@ import { ProjectDetailsCard } from './_components/ProjectDetailsCard';
 import { BuildInPublicPromoCard } from './_components/BuildInPublicPromoCard';
 import { guardSettingsPage } from './_guard';
 import { isCloud } from '@/lib/billing/availability';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // Project-settings AREA landing — the registry's `details` entry. Story 6.5 ·
 // 6.5.3 shipped this read-only; Story 6.8 · 6.8.4 grows it into the EDITABLE
@@ -31,10 +32,10 @@ export default async function ProjectSettingsPage() {
   const t = await getTranslations('settings');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
   // protection: this page is still one typed URL away once its rail row is

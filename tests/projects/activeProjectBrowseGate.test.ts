@@ -111,15 +111,15 @@ describe('getActiveProject', () => {
     expect(await activeOf(s.outsider.id, s.fx.workspaceId)).toBe(open.id);
   });
 
-  it('with NOTHING enterable, resolves to the project they were on without persisting it — the page gates render no-access over it (MOTIR-6548 draws the shell)', async () => {
-    // `null` here would loop: every authed page answers a null project with
-    // `/sign-in`, which bounces a signed-in reader back (MOTIR-4870's invariant).
+  it('with NOTHING enterable, resolves to NO project and leaves the stale pointer unread (MOTIR-6548)', async () => {
+    // Every project-scoped page sends this reader to the no-project landing
+    // (`NO_PROJECT_PATH`) rather than to `/sign-in`, which bounced a signed-in
+    // reader straight back — the loop MOTIR-6319's first cut hit in CI.
     const s = await setup();
     await pinFor(s.outsider.id, s.fx.workspaceId, s.fx.projectId);
 
-    const resolved = await projectsService.getActiveProject(s.outsider.id, s.fx.workspaceId);
-    expect(resolved?.id).toBe(s.fx.projectId);
-    // …and it grants nothing: the project's reads still refuse them.
+    expect(await projectsService.getActiveProject(s.outsider.id, s.fx.workspaceId)).toBeNull();
+    // …and the project's reads still refuse them.
     await expect(
       workItemsService.listCandidateParents(s.fx.projectId, 'subtask', s.outsiderCtx),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);

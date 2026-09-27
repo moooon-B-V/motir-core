@@ -19,6 +19,7 @@ import { guardSettingsPage } from '../_guard';
 import { MonitoringLoading } from './_components/MonitoringStates';
 import { MonitoringLoadError } from './_components/MonitoringLoadError';
 import { MonitoringRoom, type PollLineView } from './_components/MonitoringRoom';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // THE MONITORING ROOM (Story MOTIR-4928 · MOTIR-5262). Layout source of truth:
 // `design/monitoring/monitoring-room.mock.html` panels 1, 1b, 2–5, 8, 9 and 10,
@@ -52,7 +53,7 @@ export default async function MonitoringPage({ searchParams }: MonitoringPagePro
   if (!session) redirect('/sign-in');
 
   const ctx = await getActiveProject();
-  if (!ctx) redirect('/sign-in');
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   // THE DESTINATION GUARD — the key comes from the registry entry `monitoring`.
   const refused = await guardSettingsPage('monitoring', ctx);

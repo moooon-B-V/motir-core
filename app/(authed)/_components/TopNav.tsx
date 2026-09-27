@@ -89,9 +89,14 @@ export interface TopNavProps {
   workspaces: WorkspaceSummaryDTO[];
   activeWorkspaceId: string | null;
   /** The active project — the LAST tier of the bar's context path (MOTIR-2556).
-   *  Null when the workspace has none, which the tier renders as its
-   *  create-first door. */
+   *  Null when the reader can enter none of the workspace's projects (MOTIR-6548):
+   *  the tier then reads "No project", its switcher opens empty, and the bar's
+   *  work-item Create is not rendered — there is no project to create into. */
   activeProject: ProjectDTO | null;
+  /** Whether the empty switcher offers "Create project" (MOTIR-6548 · S2 / S3) —
+   *  `projectsService.canOfferCreateProject`. Read only while there is no active
+   *  project; defaults to the door being offered, as it always was. */
+  canCreateProject?: boolean;
   /** Non-archived projects in the workspace — the project tier's switch
    *  targets. */
   projects: ProjectDTO[];
@@ -153,6 +158,7 @@ export async function TopNav({
   workspaces,
   activeWorkspaceId,
   activeProject,
+  canCreateProject = true,
   projects,
   aiConfigured,
   user,
@@ -266,6 +272,7 @@ export async function TopNav({
             cloudBilling={cloudBilling}
             placement="bar"
             activeProject={activeProject}
+            canCreateProject={canCreateProject}
             projects={projects}
             aiConfigured={aiConfigured}
           />
@@ -302,7 +309,9 @@ export async function TopNav({
           ) : buildingInPublic ? (
             <BuildingInPublicHeaderLink placement="bar" />
           ) : null}
-          <CreateIssueButton />
+          {/* It creates a work item INTO the active project, so with none there
+              is nothing to create into (MOTIR-6548 · no-project shell S1). */}
+          {activeProject ? <CreateIssueButton /> : null}
           <CommandPaletteTrigger />
           <ReportButton display="shell" />
           <ThemeToggle placement="bar" />

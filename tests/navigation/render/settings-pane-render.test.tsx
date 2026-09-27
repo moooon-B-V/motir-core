@@ -150,7 +150,7 @@ describe('/settings/project/automation — the branches no structural test reach
     // permission read, so nothing downstream is reached.
     getActiveProject.mockResolvedValue(null);
 
-    await expect(renderTree(ProjectAutomationPage)).rejects.toThrow('REDIRECT:/sign-in');
+    await expect(renderTree(ProjectAutomationPage)).rejects.toThrow('REDIRECT:/no-project');
     expect(getPermissions).not.toHaveBeenCalled();
   });
 

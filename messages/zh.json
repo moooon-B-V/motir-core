@@ -1207,6 +1207,12 @@
           "description": "回答关于计划、文档与工作项的问题"
         }
       }
+    },
+    "noProject": {
+      "title": "你尚未加入任何项目",
+      "body": "{workspace} 的管理者可以将你添加到项目中。一旦添加，你就会在这里看到它。",
+      "switcherEmpty": "你尚未被添加到 {workspace} 的任何项目。",
+      "create": "创建项目"
     }
   },
   "issueViews": {

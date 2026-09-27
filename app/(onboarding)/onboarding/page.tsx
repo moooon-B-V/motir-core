@@ -8,6 +8,7 @@ import { migrateOnboardingService } from '@/lib/services/migrateOnboardingServic
 import { readOnboardingSubstrate } from '@/lib/services/onboardingSubstrateService';
 import { shouldRouteToMigrateWizard } from '@/lib/onboarding/migrateHandoff';
 import { OnboardingEntrance } from '@/components/onboarding/OnboardingEntrance';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The onboarding ENTRANCE route (Subtask 7.22.4 / MOTIR-1462) — the new-vs-existing
 // fork the user lands on at `/onboarding`, designed by MOTIR-1461
@@ -49,10 +50,10 @@ export default async function OnboardingEntrancePage({
   if (!session) redirect('/sign-in');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   // Onboarding-ran gate (Subtask 7.4 / MOTIR-1264): a project whose first plan was
   // approved + materialized has already produced its work-item tree — it never

@@ -216,7 +216,7 @@ describe('/code — the page’s own branches', () => {
     // keeping: the gate runs BEFORE any code context is resolved.
     getActiveProject.mockResolvedValue(null);
 
-    await expect(renderAt()).rejects.toThrow('REDIRECT:/sign-in');
+    await expect(renderAt()).rejects.toThrow('REDIRECT:/no-project');
     expect(resolveCodeContextState).not.toHaveBeenCalled();
   });
 

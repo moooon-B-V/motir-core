@@ -30,6 +30,7 @@ import { BoardSwitcher } from './_components/BoardSwitcher';
 import { BoardFilterControls } from './_components/BoardFilterControls';
 import { BoardAppliedFilterBar } from './_components/BoardAppliedFilterBar';
 import { BoardFilterUiProvider } from './_components/BoardFilterUiContext';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The Kanban board surface (Story 3.2 · Subtask 3.2.2) — the surface the sidebar
 // "Boards" link + the Cmd-K "Go to Boards" entry open (Story 1.5; no nav wiring
@@ -72,10 +73,10 @@ export default async function BoardsPage({
   const t = await getTranslations('boards');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   // Story 6.4.6 — the active project may be one the actor can no longer browse
   // (e.g. it was made private while pinned). Gate the board read on canBrowse and
