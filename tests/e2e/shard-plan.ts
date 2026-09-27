@@ -675,6 +675,17 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'plan-change-planner-turn.spec.ts': 7.6,
   'plan-decision-permission.spec.ts': 4.5,
   'plan-detail-refined.spec.ts': 10.0,
+  // Bug MOTIR-6697 (Story MOTIR-6577) — PROMOTED out of the acceptance lane (it was
+  // `acceptance-plan-difficulty.spec.ts`, MOTIR-6095's receipt; the disposition is in
+  // docs/acceptance-lane-triage.md). Two tests: an agent-authored plan read on the
+  // list, the peek and the canvas, approved, and read back on two item pages; and a
+  // plan with no difficulty at all. ESTIMATED, not measured — the run that promoted
+  // it built no production bundle: the same `seedAgentAuthoredPlan` +
+  // `authorPlanOverMcp` as `agent-authored-plan.spec.ts` (18.0) with more page
+  // loads (six peeks, two item pages, the second test's three views). Rounded UP,
+  // because under-estimating unbalances the bin-packer. RE-MEASURE from the first
+  // green `playwright-report-bulk-*` artifact that includes it.
+  'plan-difficulty.spec.ts': 30.0,
   // MOTIR-6281 — a brand-new spec, ESTIMATED rather than measured: one
   // `seedPlanShapes` (the bulk of `plan-shapes.spec.ts`'s 14.0 s), one sign-in and
   // one plan-page load at two widths. Rounded UP, because under-estimating
