@@ -40,6 +40,8 @@ function item(over: Partial<ReadyItemDto> & { key: string; kind: WorkItemKindDto
     type: null,
     executor: null,
     difficulty: null,
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     descriptionMd: null,
     ...over,
   };

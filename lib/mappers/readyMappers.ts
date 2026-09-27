@@ -98,6 +98,8 @@ export function toReadyItemDto(row: WorkItem, ctx: ReadyItemContext): ReadyItemD
     type: row.type,
     executor: row.executor,
     difficulty: row.difficulty,
+    obsolescence: row.obsolescence,
+    obsolescenceNoteMd: row.obsolescenceNoteMd,
     // Ship the full body ONLY for a manual row (the *Show instruction* modal's
     // source — 8.8.5/8.8.10); an agent-runnable row carries `null` so the list
     // payload stays lean (the 7.0.3 split decision). One predicate with the

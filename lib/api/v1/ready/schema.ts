@@ -3,6 +3,7 @@ import { InvalidRequestError } from '@/lib/api/v1/errors';
 import {
   actorRefSchema,
   dependencyEdgesSchema,
+  obsolescenceSchema,
   presentDependencyEdges,
   workItemKeySchema,
 } from '@/lib/api/v1/workItems/schema';
@@ -135,6 +136,15 @@ export const readyItemSchema = z.object({
   /** How hard the leaf is to reason about (Story MOTIR-6016); `null` when unset. */
   difficulty: z.enum(WORK_ITEM_DIFFICULTIES).nullable(),
   /**
+   * The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6581); `null` when the card is
+   * current. The SAME schema instance the work-item resource declares, so the
+   * document `$ref`s one `WorkItemObsolescence` component from here too. It does
+   * not gate readiness. ADDITIVE under §8.
+   */
+  obsolescence: obsolescenceSchema.nullable(),
+  /** Why the card is marked, in Markdown; `null` when there is no note. */
+  obsolescenceNoteMd: z.string().nullable(),
+  /**
    * The assignee's id — KEPT alongside `assignee` rather than replaced by it.
    *
    * Removing it would be a §8 violation (a field taken away), and it is the
@@ -179,6 +189,8 @@ export function presentReadyItem(
     type: item.type,
     executor: item.executor,
     difficulty: item.difficulty,
+    obsolescence: item.obsolescence,
+    obsolescenceNoteMd: item.obsolescenceNoteMd,
     assigneeId: item.assignee?.id ?? null,
     // From the SAME `item.assignee` the id comes from — the service already
     // read it, so this is a mapper widening and not a second query. `avatarUrl`

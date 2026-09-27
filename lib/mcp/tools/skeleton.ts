@@ -157,7 +157,10 @@ export function registerSkeleton(server: McpServer, resolveContext: McpContextRe
         'work item’s key, kind, title, status and parent, plus the `id` and `revision` a ' +
         'plan proposal anchors on, and the `folderId` of an item FILED in a folder beside the ' +
         'project’s `folders` (each with its name path), so work the team put away is not read ' +
-        'as an ordinary root. This is what to call FIRST when you need to know what a ' +
+        'as an ordinary root. Each row also carries `obsolescence` (`outdated` · ' +
+        '`deprecated`, null while the card is still true of the code — the mark only; ' +
+        'read the note with get_work_item), and no marked row is hidden or re-ordered. ' +
+        'This is what to call FIRST when you need to know what a ' +
         'project already contains; it REPLACES paging `search_work_items` fifty flat rows at a ' +
         'time and re-parenting them client-side, and it is not a second way to list items — it ' +
         'carries no descriptions, no assignees and no filters. `total`, `returned` and ' +

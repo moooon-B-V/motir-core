@@ -2392,6 +2392,21 @@ model WorkItem {
   sprintId              String?
   backlogRank           String?                       @db.Text
   archivedAt            DateTime?
+  // OBSOLESCENCE (Story MOTIR-6574 · MOTIR-6579) — whether the card is still true
+  // of the code: `outdated` (its text no longer describes what the code does —
+  // the capability lives on in another shape) or `deprecated` (the direction or
+  // feature was retired or overturned on purpose — do not build on it), plus a
+  // Markdown note saying what moved and why. Four things about it:
+  //   - KIND-AGNOSTIC and STATUS-AGNOSTIC — unlike `difficulty` (leaf-only), like
+  //     `triagedAt`: any kind in any status, a `done` epic or an archived card
+  //     alike, may carry it. Marking FINISHED work is the field's purpose, so the
+  //     service applies no kind predicate and no done/archived refusal to it.
+  //   - NULLABLE with NO backfill: every existing row reads NULL (not marked).
+  //   - A CLOSED enum because it is a fixed scale both planners branch on.
+  //   - The SUPERSEDERS are a LINK KIND (`supersedes`, the sibling card), not a
+  //     column here. MADR's `deprecated` / `superseded by` status is the reference.
+  obsolescence          WorkItemObsolescence?
+  obsolescenceNoteMd    String?                       @db.Text
   // Triage marker (Story 6.11 · Subtask 6.11.3, per docs/decisions/triage-model.md
   // §1). NON-NULL ⇔ the item lives in the triage inbox and has NOT graduated to
   // the planned tree; NULL ⇔ a normal, graduated (or never-triage) item. Set at
@@ -3110,6 +3125,14 @@ enum WorkItemLinkKind {
   relates_to
   duplicates
   clones
+  // `from` SUPERSEDES `to` (Story MOTIR-6574 · MOTIR-6580): `from` is the NEWER
+  // work item, `to` the OLDER one it replaces. Directed, with NO reciprocal row
+  // (the inverse `superseded_by` is read off the `to` end, the way `blocks` is
+  // read off `is_blocked_by`). Descriptive only — it gates nothing: readiness,
+  // the ready set and the cycle trigger read `is_blocked_by` alone. The MARK
+  // itself lives on the older item's own `obsolescence` column; this edge says
+  // WHICH item took over.
+  supersedes
 
   @@map("work_item_link_kind")
 }
@@ -3247,6 +3270,19 @@ enum WorkItemDifficulty {
   high
 
   @@map("work_item_difficulty")
+}
+
+/// Whether a work item is still TRUE OF THE CODE (Story MOTIR-6574 · MOTIR-6579)
+/// — a CLOSED two-step scale, `outdated` · `deprecated`, settable on any kind in
+/// any status and nullable (not marked). Closed because both planners branch on
+/// its members: extensible only by an explicit enum addition + migration, and
+/// `lib/issues/obsolescence.ts`'s `WORK_ITEM_OBSOLESCENCES` is asserted total
+/// against it at compile time.
+enum WorkItemObsolescence {
+  outdated
+  deprecated
+
+  @@map("work_item_obsolescence")
 }
 
 /// A per-project, customizable issue status (Story 2.2). Every project owns an

@@ -242,6 +242,9 @@ describe('advancedBuilderFields (the registry-driven field menu)', () => {
       // Story MOTIR-6016 · MOTIR-6100: the Difficulty field, registry-ordered
       // right after `type`, admitted by the `difficulty-select` editor kind.
       'difficulty',
+      // Story MOTIR-6574 · MOTIR-6583: the Obsolescence field, registry-ordered
+      // right after `difficulty`, admitted by the `obsolescence-select` editor kind.
+      'obsolescence',
       'assignee',
       'reporter',
       'sprint',

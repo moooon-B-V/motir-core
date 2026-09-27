@@ -563,6 +563,10 @@
       "medium": "中",
       "high": "高"
     },
+    "obsolescence": {
+      "outdated": "已过时",
+      "deprecated": "已弃用"
+    },
     "priority": {
       "highest": "最高",
       "high": "高",
@@ -575,7 +579,9 @@
       "blocks": "阻塞",
       "relates_to": "关联",
       "duplicates": "重复",
-      "clones": "克隆"
+      "clones": "克隆",
+      "supersedes": "取代",
+      "superseded_by": "被取代"
     },
     "role": {
       "owner": "所有者",
@@ -1622,6 +1628,8 @@
       "type": "工作类型",
       "executor": "执行者",
       "difficulty": "难度",
+      "obsolescence": "失效状态",
+      "obsolescenceNoteMd": "失效说明",
       "targetRepo": "目标仓库",
       "targetRepos": "仓库",
       "folderId": "文件夹",
@@ -1638,7 +1646,8 @@
       "is_blocked_by": "被阻塞",
       "relates_to": "关联",
       "duplicates": "重复",
-      "clones": "克隆"
+      "clones": "克隆",
+      "supersedes": "取代"
     }
   },
   "attachments": {

@@ -599,6 +599,10 @@ describe('contract discipline — additive only', () => {
         'inheritedSessionBranch',
         'key',
         'kind',
+        // The OBSOLESCENCE mark (MOTIR-6581) rides the ready ROW too, so the
+        // dispatch superset inherits both halves — additive, like difficulty.
+        'obsolescence',
+        'obsolescenceNoteMd',
         'parentKey',
         'priority',
         'runCommand',

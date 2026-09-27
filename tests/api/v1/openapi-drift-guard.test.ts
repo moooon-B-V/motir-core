@@ -338,7 +338,16 @@ describe('every operation’s REAL response validates against its declared schem
     const created = await drive(
       'createWorkItem',
       () => import('@/app/api/v1/projects/[projectKey]/work-items/route'),
-      send(`/api/v1/projects/${pk}/work-items`, 'POST', { kind: 'story', title: 'A story' }),
+      // MARKED at birth (MOTIR-6581), so every read of this item below — the
+      // collection row, the detail, the update answer — validates a NON-null
+      // obsolescence against the `$ref`'d `WorkItemObsolescence` component,
+      // rather than only the `null` branch every unmarked item exercises.
+      send(`/api/v1/projects/${pk}/work-items`, 'POST', {
+        kind: 'story',
+        title: 'A story',
+        obsolescence: 'outdated',
+        obsolescenceNoteMd: 'Kept for the drift guard.',
+      }),
       { projectKey: pk },
     );
     const key = (created.body as { key: string }).key;
@@ -400,16 +409,21 @@ describe('every operation’s REAL response validates against its declared schem
     await drive(
       'createWorkItemLink',
       () => import('@/app/api/v1/work-items/[key]/links/route'),
+      // `superseded_by` (MOTIR-6580) — the newest relationship member, driven so
+      // its request AND the echoed response are validated against the spec.
       send(`/api/v1/work-items/${key}/links`, 'POST', {
         toKey: otherKey,
-        relationship: 'relates_to',
+        relationship: 'superseded_by',
       }),
       { key },
     );
     await drive(
       'deleteWorkItemLink',
       () => import('@/app/api/v1/work-items/[key]/links/route'),
-      send(`/api/v1/work-items/${key}/links?toKey=${otherKey}&relationship=relates_to`, 'DELETE'),
+      send(
+        `/api/v1/work-items/${key}/links?toKey=${otherKey}&relationship=superseded_by`,
+        'DELETE',
+      ),
       { key },
     );
     // MOTIR-5048 — the delivery LINK. Its one precondition is a repository

@@ -190,6 +190,11 @@ const SUPPORTED_EDITOR_KINDS: ReadonlySet<FilterValueEditorKind> = new Set([
   // the menu HERE, in the same change as its registry entry, for the reason the
   // two comments above record.
   'difficulty-select',
+  // Story MOTIR-6574 · MOTIR-6583: the Obsolescence field — admitted HERE in the
+  // same change as its registry entry (the two comments above), so the AST
+  // validates and the builder offers it. Its value editor's options, the applied
+  // summary and the labels are the person's story's (MOTIR-6575).
+  'obsolescence-select',
   'member-select',
   'sprint-select',
   'label-select',
