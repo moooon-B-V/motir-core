@@ -10,10 +10,7 @@ import {
   type GateVerb,
 } from '@/components/approvals/ApprovalGateControl';
 import { useRefusalVerb, type DesignRefusalFacts } from '@/components/approvals/RefusalReason';
-import {
-  asksToReplanAfterPress,
-  useRefusalReplanSlots,
-} from '@/components/approvals/RefusalReplan';
+import { asksAfterPress, useRefusalReplanSlots } from '@/components/approvals/RefusalReplan';
 import { useOptimisticStatusWriter } from '@/app/(authed)/items/[key]/_components/OptimisticStatusProvider';
 import type {
   approveAndMergeAction,
@@ -584,7 +581,7 @@ export function DevelopmentGateFrame({
     // An ACCEPTANCE asks after a Re-plan (never after a Re-run, which `motir fix` serves).
     // `router.refresh()` below re-reads the page: the withdrawn merge band and the repair
     // part are the server's (the overlay host re-reads its own rows).
-    if (asksToReplanAfterPress(result.gate)) setReplanAsk(result.gate.id);
+    if (asksAfterPress(result.gate)) setReplanAsk(result.gate.id);
     router.refresh();
     return null;
   }

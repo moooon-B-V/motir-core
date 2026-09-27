@@ -225,7 +225,9 @@ describe('workItemsService.getProjectRoadmap — dependency edges (per level)', 
     // The edge is returned FROM this level (blocked end A2 ∈ level); its blocker is
     // off-level → the canvas anchors a red signal to a chip naming it.
     const lvl = await workItemsService.getProjectRoadmap(fx.projectId, f.A.id, fx.ctx);
-    expect(lvl.edges).toEqual([{ blockedId: f.A2.id, blockerId: f.B1.id }]);
+    // Story A is not `blocked_by` Story B, so the parents do not carry the edge: it
+    // is UNCOVERED, the disposition the canvas flags (MOTIR-6359).
+    expect(lvl.edges).toEqual([{ blockedId: f.A2.id, blockerId: f.B1.id, coverage: 'uncovered' }]);
     expect(lvl.offLevelBlockers).toEqual([
       {
         id: f.B1.id,

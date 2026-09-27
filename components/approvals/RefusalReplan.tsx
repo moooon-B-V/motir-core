@@ -7,7 +7,12 @@ import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils/cn';
 import { isPlainPrimaryClick } from '@/lib/hooks/useOpenPlanningWorkspace';
-import { isRefusalSeedGate, type RefusalSeedGateFacts } from '@/lib/planning/refusalSeed';
+import {
+  isPickSeedGate,
+  isRefusalSeedGate,
+  type RefusalSeedGateFacts,
+} from '@/lib/planning/refusalSeed';
+import { fetchPlanningSeed } from '@/lib/planning/planningSeedClient';
 import { useOpenRefusalReplan } from './useOpenRefusalReplan';
 
 // A REFUSAL ASKS, THEN HANDS OFF (Story MOTIR-6068 · Subtask MOTIR-6211; ADR
@@ -62,16 +67,34 @@ export function asksToReplanAfterPress(gate: RefusalReplanGateFacts): boolean {
   return isRefusalSeedGate(gate) && gate.decisionSource !== 'github';
 }
 
+/** The PICK's sibling (story MOTIR-6069 · MOTIR-6436): a Choose pressed in Motir,
+ *  with its stamp, ASKS to plan the follow-up. A GitHub-decided gate asks nothing. */
+export function asksToPlanAfterPress(
+  gate: RefusalReplanGateFacts & { chosenOption: unknown },
+): boolean {
+  return isPickSeedGate(gate) && gate.decisionSource !== 'github';
+}
+
+/** What a press site asks after: a refusal's re-plan OR a pick's follow-up plan. */
+export function asksAfterPress(gate: RefusalReplanGateFacts & { chosenOption: unknown }): boolean {
+  return asksToReplanAfterPress(gate) || asksToPlanAfterPress(gate);
+}
+
+/** Whether the seeded door and ask speak for a refusal (`replan`), an acceptance refusal
+ *  that asks for a REMEDY (`remedy`, MOTIR-6506), or a pick (`plan`). */
+export type SeedDoorIntent = 'plan' | 'replan' | 'remedy';
+
+/** The two refusal copy sets — the intents a REFUSAL can take. */
+export type RefusalReplanMode = Extract<SeedDoorIntent, 'replan' | 'remedy'>;
+
 /**
- * WHICH WORDS the ask and the door speak (Story MOTIR-6071 · Subtask MOTIR-6506; design
+ * WHICH WORDS a refusal's ask and door speak (Story MOTIR-6071 · Subtask MOTIR-6506; design
  * `approval-control--acceptance-verdict.mock.html` panels 7–8). `replan` — every shipped
  * refusal, and a story run's acceptance sent back with **Re-plan**. `remedy` — an
  * acceptance sent back with NO verdict: a finished story has nothing left to re-run, so
  * the planner is offered to plan a remedy for it. KEYED OFF THE GATE'S VERDICT, which is
  * the run-shape fact the press recorded: a story run's refusal always carries one.
  */
-export type RefusalReplanMode = 'replan' | 'remedy';
-
 export function refusalReplanModeOf(gate: RefusalSeedGateFacts): RefusalReplanMode {
   return gate.kind === 'acceptance_result' && gate.refusalVerdict !== 're_plan'
     ? 'remedy'
@@ -83,6 +106,11 @@ export function refusalReplanModeOf(gate: RefusalSeedGateFacts): RefusalReplanMo
 const DOOR_FACE =
   'inline-flex h-(--height-btn-sm) shrink-0 items-center gap-1.5 rounded-(--radius-badge) border px-(--spacing-btn-x-sm) font-sans text-xs font-semibold whitespace-nowrap transition-colors focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 border-(--el-border-strong) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text)';
 
+/** A pick opens NEW work, so its door is `WorkItemPlanEntrance`'s accent-outlined PLAN
+ *  face (design MOTIR-6432), never the subdued Re-plan face above. */
+const PLAN_DOOR_FACE =
+  'inline-flex h-(--height-btn-sm) shrink-0 items-center gap-1.5 rounded-(--radius-badge) border px-(--spacing-btn-x-sm) font-sans text-xs font-semibold whitespace-nowrap transition-colors focus-visible:ring-(--focus-ring-color) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 border-(--el-accent) text-(--el-accent-on-surface) hover:bg-(--el-tint-lavender)';
+
 /**
  * **Re-plan with AI** — a real `<Link>` whose `href` is the seeded planner's address, so a
  * ⌘-click opens it in a new tab; a plain click is one address replace through
@@ -93,17 +121,23 @@ export function RefusalReplanDoor({
   gateId,
   itemKey,
   focusOnMount = false,
-  mode = 'replan',
+  intent = 'replan',
 }: {
   gateId: string;
   itemKey: string;
   /** Not now just replaced the ask with this door: it takes focus (design 0f). */
   focusOnMount?: boolean;
-  /** The copy set — *Re-plan with AI*, or *Plan a remedy with AI* (MOTIR-6506). */
-  mode?: RefusalReplanMode;
+  /** `plan` — a pick's *Plan with AI* door (MOTIR-6436); `remedy` — *Plan a remedy with
+   *  AI* on an acceptance refused on a finished story (MOTIR-6506). */
+  intent?: SeedDoorIntent;
 }) {
+  const plan = intent === 'plan';
   const t = useTranslations(
-    mode === 'remedy' ? 'approvalGate.acceptanceResult.remedyDoor' : 'approvalGate.replanDoor',
+    plan
+      ? 'approvalGate.planDoor'
+      : intent === 'remedy'
+        ? 'approvalGate.acceptanceResult.remedyDoor'
+        : 'approvalGate.replanDoor',
   );
   const { hrefFor, open } = useOpenRefusalReplan();
   const ref = useRef<HTMLAnchorElement>(null);
@@ -117,15 +151,15 @@ export function RefusalReplanDoor({
       // Names the work item and contains the visible text (WCAG 2.5.3), as the entrance's
       // `replanAria` does.
       aria-label={t('aria', { item: itemKey })}
-      data-testid="refusal-replan-door"
+      data-testid={plan ? 'pick-plan-door' : 'refusal-replan-door'}
       data-depth="key"
-      data-mode={mode}
+      data-mode={intent}
       onClick={(event) => {
         if (!isPlainPrimaryClick(event)) return;
         event.preventDefault();
         open(gateId);
       }}
-      className={DOOR_FACE}
+      className={plan ? PLAN_DOOR_FACE : DOOR_FACE}
     >
       <Sparkles className="size-3.5 shrink-0" aria-hidden />
       {t('label')}
@@ -150,22 +184,39 @@ export function RefusalReplanAsk({
   sectioned,
   onAnswered,
   onNotNow,
-  mode = 'replan',
+  intent = 'replan',
 }: {
   gateId: string;
   itemKey: string;
-  /** The copy set — *Re-plan {key} with Motir AI?*, or *Plan a remedy for {key} with
-   *  Motir AI?* (MOTIR-6506). The two consequence lines are the same in both. */
-  mode?: RefusalReplanMode;
   /** The frame's `section` form — the band is a hairline divider in the host card. */
   sectioned: boolean;
   /** Yes was pressed — the press site forgets the ask as the planner opens. */
   onAnswered: () => void;
   onNotNow: () => void;
+  /** `plan` — a pick's ask (MOTIR-6436): the planner STARTS on yes, nothing to send.
+   *  `remedy` — an acceptance refused on a finished story (MOTIR-6506): *Plan a remedy
+   *  for {key} with Motir AI?*; its two consequence lines are the Re-plan ask's. */
+  intent?: SeedDoorIntent;
 }) {
+  const plan = intent === 'plan';
   const t = useTranslations('approvalGate.replanAsk');
+  const tp = useTranslations('approvalGate.planAsk');
   const tRemedy = useTranslations('approvalGate.acceptanceResult.remedyAsk');
-  const words = mode === 'remedy' ? tRemedy : t;
+  const words = intent === 'remedy' ? tRemedy : t;
+  // WHERE the pick's planner opens is resolved on the SERVER (MOTIR-6433's anchor):
+  // the ask renders what the seed read returns rather than guessing from the tree.
+  // Until it answers, the line waits; a failure leaves it out rather than guess.
+  const [anchor, setAnchor] = useState<{ key: string | null } | null>(null);
+  useEffect(() => {
+    if (!plan) return;
+    const controller = new AbortController();
+    fetchPlanningSeed(gateId, controller.signal)
+      .then((seed) => {
+        if (!controller.signal.aborted && seed) setAnchor({ key: seed.anchorKey });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [plan, gateId]);
   const { open } = useOpenRefusalReplan();
   const tHandoff = useTranslations('planningWorkspace.handoff');
   const titleId = useId();
@@ -196,19 +247,30 @@ export function RefusalReplanAsk({
       ref={groupRef}
       role="group"
       aria-labelledby={titleId}
-      data-testid="refusal-replan-ask"
-      data-mode={mode}
+      data-testid={plan ? 'pick-plan-ask' : 'refusal-replan-ask'}
+      data-mode={intent}
       className={cn(
         sectioned && 'mt-3',
         'border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3',
       )}
     >
       <p id={titleId} className="text-[13px] font-semibold text-(--el-text)">
-        {words('title', { key: itemKey })}
+        {plan ? tp('title') : words('title', { key: itemKey })}
       </p>
       <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)">
-        <li>{t('opens', { key: itemKey })}</li>
-        <li>{t('unsent')}</li>
+        {plan ? (
+          <>
+            {anchor ? (
+              <li>{anchor.key ? tp('opens', { key: anchor.key }) : tp('opensProject')}</li>
+            ) : null}
+            <li>{tp('nothingToSend')}</li>
+          </>
+        ) : (
+          <>
+            <li>{t('opens', { key: itemKey })}</li>
+            <li>{t('unsent')}</li>
+          </>
+        )}
       </ul>
       <div className="mt-3 flex flex-wrap justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onNotNow}>
@@ -225,7 +287,7 @@ export function RefusalReplanAsk({
           }}
           leftIcon={<Sparkles className="size-3.5 shrink-0" aria-hidden />}
         >
-          {words('yes')}
+          {plan ? tp('yes') : words('yes')}
         </Button>
       </div>
     </div>
@@ -244,7 +306,7 @@ export function useRefusalReplanSlots({
   replan,
   sectioned,
 }: {
-  gate: RefusalSeedGateFacts & { id: string };
+  gate: RefusalSeedGateFacts & { id: string; chosenOption?: unknown };
   itemKey: string;
   replan: RefusalReplanProps | undefined;
   sectioned: boolean;
@@ -254,8 +316,14 @@ export function useRefusalReplanSlots({
   // Not now moves focus to the door that replaces the ask (design 0f) — and only then:
   // an ordinary render of a decided record never steals focus.
   const [focusDoor, setFocusDoor] = useState(false);
-  if (!replan?.canReplan || !isRefusalSeedGate(gate)) return { door: null, ask: null };
-  const mode = refusalReplanModeOf(gate);
+  // A refusal re-plans; a PICK plans its follow-up (MOTIR-6436) through the same
+  // slots, with its own words and door face.
+  const intent: SeedDoorIntent | null = isRefusalSeedGate(gate)
+    ? refusalReplanModeOf(gate)
+    : isPickSeedGate({ ...gate, chosenOption: gate.chosenOption ?? null })
+      ? 'plan'
+      : null;
+  if (!replan?.canReplan || intent === null) return { door: null, ask: null };
   if (replan.asking) {
     return {
       door: null,
@@ -264,7 +332,7 @@ export function useRefusalReplanSlots({
           gateId={gate.id}
           itemKey={itemKey}
           sectioned={sectioned}
-          mode={mode}
+          intent={intent}
           onAnswered={() => replan.onAskDone?.()}
           onNotNow={() => {
             setFocusDoor(true);
@@ -281,7 +349,7 @@ export function useRefusalReplanSlots({
           gateId={gate.id}
           itemKey={itemKey}
           focusOnMount={focusDoor}
-          mode={mode}
+          intent={intent}
         />
       </span>
     ),

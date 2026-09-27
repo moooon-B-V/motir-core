@@ -64,7 +64,12 @@ describe('buildSessionRowViews', () => {
   });
 
   it('passes the seed through untouched (MOTIR-6209)', async () => {
-    const seed = { cardKey: 'ACME-44', gateKind: 'decision_choice' } as const;
+    const seed = {
+      cardKey: 'ACME-44',
+      gateKind: 'decision_choice',
+      origin: 'refusal',
+      chosenLabel: null,
+    } as const;
     const [view] = await buildSessionRowViews([dto({ seed })]);
     expect(view!.seed).toEqual(seed);
   });

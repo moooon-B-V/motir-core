@@ -5,6 +5,7 @@ import { getActiveProject } from '@/lib/projects';
 import { aiAskService } from '@/lib/services/aiAskService';
 import { mapPlanChangeError, noActiveProject, readSessionId } from '../plan-change/_errors';
 import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
+import { PlanSeedNotApplicableError } from '@/lib/planChange/errors';
 
 // POST /api/ai/ask — the project conversation's ONE DOOR for a user turn
 // (Story MOTIR-1343 · MOTIR-1819; contract in
@@ -61,6 +62,7 @@ export async function POST(req: Request): Promise<Response> {
     flip?: unknown;
     isAnswer?: unknown;
     sessionId?: unknown;
+    seedGateId?: unknown;
   };
   // The conversation the client holds (MOTIR-6023; AMENDMENT 17 §2). Optional
   // here: with none, the caller's resumable project-wide session is used, and a
@@ -81,12 +83,22 @@ export async function POST(req: Request): Promise<Response> {
         { status: 400 },
       );
     }
+    const seedGateId =
+      typeof body.seedGateId === 'string' && body.seedGateId.trim().length > 0
+        ? body.seedGateId.trim()
+        : null;
     const result = await aiAskService.submitTurn(body.body, ctx, {
       isAnswer: body.isAnswer === true,
       ...(sessionId ? { sessionId } : {}),
+      ...(seedGateId && !sessionId ? { seedGateId } : {}),
     });
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
+    // A pick's project-anchored first turn whose gate may not seed the project
+    // scope (MOTIR-6435) — the same one-body 422 the anchored plan route answers.
+    if (err instanceof PlanSeedNotApplicableError) {
+      return NextResponse.json({ code: 'SEED_NOT_APPLICABLE' }, { status: 422 });
+    }
     const mapped = mapPlanChangeError(err);
     if (mapped) return mapped;
     throw err;

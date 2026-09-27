@@ -479,7 +479,7 @@ describe('Story run → Re-plan: nothing moves, the merge is held, the planner i
     ).toBe(0);
 
     // THE SEED — anchored on the story, the re-plan-all turn quoting the reason.
-    const seed = await planningSeedService.getRefusalSeed(decided.gate.id, pctx, 'en');
+    const seed = await planningSeedService.getPlanningSeed(decided.gate.id, pctx, 'en');
     expect(seed).toMatchObject({
       gateId: decided.gate.id,
       gateKind: 'acceptance_result',
@@ -496,14 +496,14 @@ describe('Story run → Re-plan: nothing moves, the merge is held, the planner i
     // A planner session started from it is stamped with the gate.
     const started = await planChangeSessionsService.startSeededWithFirstTurn(
       pctx,
-      buildScope([seed.anchorKey]),
+      buildScope([run.story.identifier]),
       seed.firstTurn,
       seed.gateId,
     );
     const row = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: started.id } });
     expect(row.seedGateId).toBe(decided.gate.id);
     expect(
-      (await planningSeedService.getRefusalSeed(decided.gate.id, pctx, 'en')).seededSessionId,
+      (await planningSeedService.getPlanningSeed(decided.gate.id, pctx, 'en')).seededSessionId,
     ).toBe(started.id);
     // The one move is the PLANNER's, not the refusal's: opening the session takes the
     // story's planning-target lock (MOTIR-5643's `in_review → planning` edge). The
@@ -570,7 +570,7 @@ describe('the verdict rule on a story run', () => {
       repairClass: 'ci',
     });
     // …and no seed.
-    await expect(planningSeedService.getRefusalSeed(gate.id, pctx, 'en')).rejects.toBeInstanceOf(
+    await expect(planningSeedService.getPlanningSeed(gate.id, pctx, 'en')).rejects.toBeInstanceOf(
       PlanningSeedNotFoundError,
     );
   });
@@ -638,7 +638,7 @@ describe('a FINISHED story — every child merged, no delivery of its own', () =
     ).toBe(0);
     expect(await holds(story.id)).toBe(false);
 
-    const seed = await planningSeedService.getRefusalSeed(gate.id, pctx, 'en');
+    const seed = await planningSeedService.getPlanningSeed(gate.id, pctx, 'en');
     expect(seed).toMatchObject({
       gateId: gate.id,
       gateKind: 'acceptance_result',

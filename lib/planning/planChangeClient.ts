@@ -324,10 +324,20 @@ export async function submitAskTurn(
   /** The conversation the rail holds (MOTIR-6023). Absent on a first turn,
    *  which starts the session. */
   sessionId: string | null = null,
+  /** A PICK's project-anchored first turn (MOTIR-6435): the gate it is seeded
+   *  from, so the session it starts is stamped and the door can return to it.
+   *  Rides only when there is no `sessionId`; a gate that may not seed the project
+   *  scope answers `422 SEED_NOT_APPLICABLE`. */
+  seedGateId: string | null = null,
 ): Promise<AskSubmitResponse | AskRedirectResponse> {
   return post<AskSubmitResponse | AskRedirectResponse>(
     '/api/ai/ask',
-    { body, isAnswer, ...(sessionId ? { sessionId } : {}) },
+    {
+      body,
+      isAnswer,
+      ...(sessionId ? { sessionId } : {}),
+      ...(seedGateId && !sessionId ? { seedGateId } : {}),
+    },
     signal,
   );
 }

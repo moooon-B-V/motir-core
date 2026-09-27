@@ -598,3 +598,140 @@ describe('buildWorkItemLevel — a cap-dropped level MEMBER (MOTIR-5043)', () =>
     expect(nodes.some((n) => n.id === 'M')).toBe(true);
   });
 });
+
+// ── MOTIR-6359 · an off-level edge draws by its DISPOSITION ───────────────────
+// Design `design/roadmap/design-notes.md` § "Covered cross-parent edges
+// (MOTIR-6015)" (MOTIR-6353). The service computes each off-level edge's
+// disposition with the validators' own predicates; the builder only reads it. So
+// these cases hand the builder a DTO with `coverage` already set — the same shape
+// `getProjectRoadmap` produces (tests/integration/work-items/roadmap-edge-coverage).
+describe('buildWorkItemLevel — off-level edge disposition (MOTIR-6359)', () => {
+  const Y = {
+    id: 'Y',
+    identifier: 'MOTIR-804',
+    title: 'Tokenise a card',
+    parentTitle: 'Payments API',
+  };
+  const Z = {
+    id: 'Z',
+    identifier: 'MOTIR-829',
+    title: 'Audit the payment',
+    parentTitle: 'Audit log',
+  };
+  const X = item({ id: 'X', kind: 'subtask', parentId: 'B' });
+
+  function flagText(nodes: ReturnType<typeof buildWorkItemLevel>['nodes'], id: string) {
+    render(<>{nodes.find((n) => n.id === id)!.content}</>);
+    const text = screen.queryByTestId(A1_FLAG)?.textContent ?? '';
+    cleanup();
+    return text;
+  }
+
+  it('UNCOVERED: the shipped treatment — cross dep, danger anchor, flag (sheet 1)', () => {
+    const { nodes, deps } = buildWorkItemLevel({
+      items: [X],
+      edges: [{ blockedId: 'X', blockerId: 'Y', coverage: 'uncovered' }],
+      offLevelBlockers: [Y],
+    });
+    expect(deps).toEqual([{ from: 'Y', to: 'X', variant: 'cross' }]);
+    expect(flagText(nodes, 'X')).toContain('blocked elsewhere');
+    render(<>{nodes.find((n) => n.id === 'Y')!.content}</>);
+    expect(document.querySelector('[data-anchor-tone]')?.getAttribute('data-anchor-tone')).toBe(
+      'danger',
+    );
+  });
+
+  it('COVERED: none of the three — no dep, no anchor, no flag (sheet 2)', () => {
+    const { nodes, deps } = buildWorkItemLevel({
+      items: [X],
+      edges: [{ blockedId: 'X', blockerId: 'Y', coverage: 'covered' }],
+      offLevelBlockers: [{ ...Y, isDone: true }],
+    });
+    expect(deps).toEqual([]);
+    expect(nodes.some((n) => n.id === 'Y')).toBe(false);
+    expect(flagText(nodes, 'X')).not.toContain('blocked elsewhere');
+  });
+
+  it('MIXED: keeps the flag, and mints exactly ONE anchor — the uncovered blocker (sheet 3)', () => {
+    const { nodes, deps } = buildWorkItemLevel({
+      items: [X],
+      edges: [
+        { blockedId: 'X', blockerId: 'Y', coverage: 'covered' },
+        { blockedId: 'X', blockerId: 'Z', coverage: 'uncovered' },
+      ],
+      offLevelBlockers: [Y, Z],
+    });
+    expect(deps).toEqual([{ from: 'Z', to: 'X', variant: 'cross' }]);
+    expect(nodes.filter((n) => n.id === 'Y' || n.id === 'Z').map((n) => n.id)).toEqual(['Z']);
+    expect(flagText(nodes, 'X')).toContain('blocked elsewhere');
+  });
+
+  it('CROSS-LEVEL is flagged like an uncovered edge (MOTIR-6509)', () => {
+    const { deps } = buildWorkItemLevel({
+      items: [X],
+      edges: [{ blockedId: 'X', blockerId: 'Y', coverage: 'cross_level' }],
+      offLevelBlockers: [Y],
+    });
+    expect(deps).toEqual([{ from: 'Y', to: 'X', variant: 'cross' }]);
+  });
+
+  it('EXEMPT: an ordinary arrow from a NEUTRAL anchor, and no flag (sheet 7)', () => {
+    const R = item({ id: 'R', kind: 'task', parentId: null });
+    const F = {
+      id: 'F',
+      identifier: 'MOTIR-871',
+      title: 'Secrets store',
+      parentTitle: null,
+      folderPath: ['Ops', 'Infra'],
+    };
+    const open = buildWorkItemLevel({
+      items: [R],
+      edges: [{ blockedId: 'R', blockerId: 'F', coverage: 'exempt' }],
+      offLevelBlockers: [{ ...F, isDone: false }],
+    });
+    expect(open.deps).toEqual([{ from: 'F', to: 'R', variant: 'pending' }]);
+    expect(flagText(open.nodes, 'R')).not.toContain('blocked elsewhere');
+    render(<>{open.nodes.find((n) => n.id === 'F')!.content}</>);
+    expect(document.querySelector('[data-anchor-tone]')?.getAttribute('data-anchor-tone')).toBe(
+      'neutral',
+    );
+    // The folder line (MOTIR-5713 decision 7) survives on the neutral anchor.
+    expect(screen.getByTestId('anchor-folder').textContent).toContain('Infra');
+    cleanup();
+
+    const done = buildWorkItemLevel({
+      items: [R],
+      edges: [{ blockedId: 'R', blockerId: 'F', coverage: 'exempt' }],
+      offLevelBlockers: [{ ...F, isDone: true }],
+    });
+    expect(done.deps).toEqual([{ from: 'F', to: 'R', variant: 'firm' }]);
+  });
+
+  it('one blocker with a flagged AND an exempt edge keeps the DANGER anchor', () => {
+    const W = item({ id: 'W', kind: 'subtask', parentId: 'B' });
+    const { nodes } = buildWorkItemLevel({
+      items: [X, W],
+      edges: [
+        { blockedId: 'X', blockerId: 'Y', coverage: 'exempt' },
+        { blockedId: 'W', blockerId: 'Y', coverage: 'uncovered' },
+      ],
+      offLevelBlockers: [Y],
+    });
+    render(<>{nodes.find((n) => n.id === 'Y')!.content}</>);
+    expect(document.querySelector('[data-anchor-tone]')?.getAttribute('data-anchor-tone')).toBe(
+      'danger',
+    );
+  });
+
+  it('SPRINT scope ignores the disposition — its own arm decides, unchanged', () => {
+    const { deps } = buildWorkItemLevel(
+      {
+        items: [X],
+        edges: [{ blockedId: 'X', blockerId: 'Y', coverage: 'covered' }],
+        offLevelBlockers: [{ ...Y, isDone: false, inActiveSprint: false }],
+      },
+      { scope: 'sprint' },
+    );
+    expect(deps).toEqual([{ from: 'Y', to: 'X', variant: 'cross' }]);
+  });
+});

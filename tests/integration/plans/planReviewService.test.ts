@@ -2320,6 +2320,9 @@ describe('planReviewService — the blockers a proposal names, NAMED', () => {
         title: 'The blocker elsewhere',
         isDone: true,
         parentNodeId: there.id,
+        // The two stories are not linked, so over the projection the edge is
+        // UNCOVERED — flagged whatever the blocker's status (MOTIR-6362).
+        coverage: 'uncovered',
       },
     ]);
   });
@@ -2359,6 +2362,7 @@ describe('planReviewService — the blockers a proposal names, NAMED', () => {
         title: 'A card the plan adds there',
         isDone: false,
         parentNodeId: there.id,
+        coverage: 'uncovered',
       },
     ]);
   });
@@ -2386,6 +2390,7 @@ describe('planReviewService — the blockers a proposal names, NAMED', () => {
         title: 'Its new blocker',
         isDone: false,
         parentNodeId: there.id,
+        coverage: 'uncovered',
       },
     ]);
   });
@@ -2423,6 +2428,9 @@ describe('planReviewService — the blockers a proposal names, NAMED', () => {
         title: 'Design the acceptance-video gate',
         isDone: false,
         parentNodeId: epic.id,
+        // Both land under the same epic: siblings, so the edge needs no parent
+        // edge (MOTIR-6362).
+        coverage: 'exempt',
       },
     ]);
   });
