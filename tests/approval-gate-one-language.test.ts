@@ -280,6 +280,10 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
         'lib/services/decisionConfirmationGateService.ts',
         'lib/services/decisionDocumentCaptureService.ts',
         'lib/services/designEvidenceService.ts',
+        // MOTIR-6595 (`approval-gates.md` §4 FIFTH AMENDMENT, point 4): the operator
+        // convergence withdraws a gate the OLD rule re-asked from a queue failure, with
+        // cause `queue_failed` — product-written, no actor, never a decision.
+        'lib/services/ejectedCardConvergenceService.ts',
         'lib/services/pullRequestApprovalGates.ts',
       ],
     },
