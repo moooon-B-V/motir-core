@@ -450,7 +450,7 @@ describe('cancel — revoked and closed now, torn down by its supervisor at the 
     await workspacesService.addMember({
       userId: admin.id,
       workspaceId: fx.workspaceId,
-      workspaceRole: 'admin',
+      workspaceRole: 'manager',
     });
     requireCompliantWorkspaceContext.mockResolvedValue({
       ok: true,
