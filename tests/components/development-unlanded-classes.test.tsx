@@ -64,9 +64,12 @@ const REASKED: ApprovalGateDTO = {
 };
 const STORY = recordDto();
 
+/** A standing exit. The default is BRANCH PROTECTION — the queue failure that still
+ *  RE-ASKS: since the FIFTH AMENDMENT (MOTIR-6596) `CI_FAILURE` and its siblings are
+ *  CAN'T-LAND, so the tests of the re-ask's own machinery eject for a setting. */
 function queueExit(over: Partial<PullRequestQueueExitDTO> = {}): PullRequestQueueExitDTO {
   return {
-    rawReason: 'CI_FAILURE',
+    rawReason: 'BRANCH_PROTECTIONS',
     disposition: 'failure',
     headSha: GATEWAY_SHA,
     exitedAt: '2026-09-19T15:00:00.000Z',
@@ -164,15 +167,55 @@ const rowButton = (name: string) => within(gatewayRow()).queryByRole('button', {
 const fixPart = () => screen.getByRole('group', { name: en.github.development.fix.aria.part });
 
 describe('the row draws the class, and offers only what that class allows', () => {
-  it('RETRYABLE, a queue failure: Left the queue, Queue again, and `motir fix` beside it', () => {
-    renderBlock(
-      { members: members({ exit: queueExit(), requeueable: true }) },
-      { repair: repairOffer() },
-    );
+  // ⚠️ AMENDED by MOTIR-6596 (§4 FIFTH AMENDMENT; design § 31 panel 1): a queue FAILURE is
+  // CAN'T-LAND. The row keeps § 22's *Left the queue* pill and offers NOTHING — no *Queue
+  // again*, no *Retry merge*, no Approve — the failed check is named and `motir fix` is
+  // the way forward. The CLASS decides, so every failure reason reads the same shape.
+  it.each([
+    ['CI_FAILURE', 'CI complete', 'checks'],
+    ['CI_TIMEOUT', 'CI complete', 'timedOut'],
+    ['INVALID_MERGE_COMMIT', null, 'mergeCommit'],
+    ['GIT_TREE_INVALID', null, 'mergeCommit'],
+  ] as const)(
+    'CAN’T LAND, a queue %s: held — Left the queue, no verb, the failure named, and `motir fix`',
+    (rawReason, check, sentenceKey) => {
+      renderBlock(
+        {
+          members: members({
+            exit: queueExit({
+              rawReason,
+              failingCheckName: check,
+              failingCheckUrl: check
+                ? 'https://github.com/moooon/motir-gateway/actions/runs/1'
+                : null,
+            }),
+          }),
+        },
+        { repair: repairOffer(), status: 'implemented' },
+      );
+
+      expect(within(gatewayRow()).getByText(pra.outcome.leftQueue)).toBeTruthy();
+      expect(rowButton(pra.outcome.queueAgain)).toBeNull();
+      expect(rowButton(pra.outcome.retry)).toBeNull();
+      expect(
+        screen.getByText(
+          whole(
+            plain(fill(pra.exit.failed[sentenceKey], { pr: GATEWAY_NAME, check: check ?? '' })),
+          ),
+        ),
+      ).toBeTruthy();
+      expect(
+        screen.getByText(whole(plain(fill(pra.exit.failed.held, { key: 'ACME-12' })))),
+      ).toBeTruthy();
+      expect(fixPart().textContent).toContain('motir fix ACME-12');
+    },
+  );
+
+  it('RETRYABLE, a failure that still re-asks (a setting): Left the queue, Queue again, the re-ask', () => {
+    renderBlock({ members: members({ exit: queueExit(), requeueable: true }) });
 
     expect(within(gatewayRow()).getByText(pra.outcome.leftQueue)).toBeTruthy();
     expect(rowButton(pra.outcome.queueAgain)).toBeTruthy();
-    expect(fixPart().textContent).toContain('motir fix ACME-12');
   });
 
   it('RETRYABLE, a neutral removal: the same verb, and NO `motir fix` — no code change is implied', () => {
@@ -365,7 +408,11 @@ describe('the row draws the class, and offers only what that class allows', () =
     // The record band: the reason, its failing check, and that the approval was SPENT.
     expect(
       screen.getByText(
-        whole(plain(fill(pra.exit.left, { pr: GATEWAY_NAME, reason: pra.exit.reason.CI_FAILURE }))),
+        whole(
+          plain(
+            fill(pra.exit.left, { pr: GATEWAY_NAME, reason: pra.exit.reason.BRANCH_PROTECTIONS }),
+          ),
+        ),
       ),
     ).toBeTruthy();
     expect(
@@ -398,7 +445,11 @@ describe('the re-asked record band opens with the approval that was spent', () =
 
     const line = screen.getByText(whole(earlierLine('Ada L.', 2)));
     const exit = screen.getByText(
-      whole(plain(fill(pra.exit.left, { pr: GATEWAY_NAME, reason: pra.exit.reason.CI_FAILURE }))),
+      whole(
+        plain(
+          fill(pra.exit.left, { pr: GATEWAY_NAME, reason: pra.exit.reason.BRANCH_PROTECTIONS }),
+        ),
+      ),
     );
     // Panel 1's order: the provenance, then the exit it explains.
     expect(line.compareDocumentPosition(exit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

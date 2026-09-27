@@ -257,7 +257,8 @@ describe('a member the merge queue threw out (MOTIR-5721)', () => {
     const left = text.indexOf(`${EJECTED.repo} · #${EJECTED.number} left the merge queue.`);
     expect(own).toBeGreaterThanOrEqual(0);
     expect(left).toBeGreaterThan(own);
-    expect(within(part()).getByTestId('repair-which').textContent).toBe(plain(fix.which.checks));
+    // A queue FAILURE is CAN'T-LAND (MOTIR-6596, design § 31): the FAILED sentence.
+    expect(within(part()).getByTestId('repair-which').textContent).toBe(plain(fix.which.failed));
   });
 
   it('a member red on its OWN checks that also carries an exit stays on the failing line, and adds no sentence', () => {
@@ -272,7 +273,7 @@ describe('a member the merge queue threw out (MOTIR-5721)', () => {
     expect(within(part()).queryByTestId('repair-which')).toBeNull();
   });
 
-  it('a failure that is neither a check nor a conflict reads the OTHER sentence', () => {
+  it('a failure that is neither a check nor a conflict reads the same FAILED sentence, then the re-arm line', () => {
     renderPart({
       state: 'offer',
       repairClass: 'ci',
@@ -282,7 +283,9 @@ describe('a member the merge queue threw out (MOTIR-5721)', () => {
       ],
       lastGaveUp: null,
     });
-    expect(within(part()).getByTestId('repair-which').textContent).toBe(plain(fix.which.other));
+    expect(within(part()).getByTestId('repair-which').textContent).toBe(plain(fix.which.failed));
+    // § 31 panel 1: nothing is asked until a push goes green, and the part says so.
+    expect(part().textContent).toContain(fix.rearm);
   });
 
   it('with several ejected members a CONFLICT wins', () => {

@@ -57,15 +57,14 @@ function isEjectedOnly(pr: RepairPullRequestRefDto): boolean {
   return pr.queueExit !== null && pr.ci !== 'failing';
 }
 
-/** Which of § 26's three sentences applies. A conflict wins: *Queue again*
- *  cannot land that member, whatever the others need. */
-function whichVariant(
-  ejected: readonly RepairPullRequestRefDto[],
-): 'conflict' | 'checks' | 'other' {
+/** Which which-to-use sentence applies. A conflict wins: approving again cannot land
+ *  that member, whatever the others need. Every other member the part names left the queue
+ *  for a FAILURE — CAN'T-LAND since the FIFTH AMENDMENT (MOTIR-6596, design § 31) — and it
+ *  takes a new head too. § 26's *Approve sends the same commits once more* is retired:
+ *  nothing offers that press any more. */
+function whichVariant(ejected: readonly RepairPullRequestRefDto[]): 'conflict' | 'failed' {
   const reasons = ejected.map((pr) => pr.queueExit!.rawReason);
-  if (reasons.includes('MERGE_CONFLICT')) return 'conflict';
-  if (reasons.some((r) => r === 'CI_FAILURE' || r === 'CI_TIMEOUT')) return 'checks';
-  return 'other';
+  return reasons.includes('MERGE_CONFLICT') ? 'conflict' : 'failed';
 }
 
 function PrLine({
@@ -329,6 +328,15 @@ export function RepairFixPart({
           />
           {!sentBack && repair.failing.some(isEjectedOnly) ? (
             <WhichToUse ejected={repair.failing.filter(isEjectedOnly)} />
+          ) : null}
+          {/* § 31 panel 1 (MOTIR-6596): a member held by a queue FAILURE, with no conflict
+              anywhere (whose `Command` already says it), ends on the re-arm line — nothing
+              is asked until a push goes green. */}
+          {!sentBack &&
+          repair.failing.some(isEjectedOnly) &&
+          !repair.failing.some((pr) => pr.conflict !== null) &&
+          whichVariant(repair.failing.filter(isEjectedOnly)) === 'failed' ? (
+            <p className="text-xs leading-normal text-(--el-text-secondary)">{t('rearm')}</p>
           ) : null}
         </>
       ) : null}

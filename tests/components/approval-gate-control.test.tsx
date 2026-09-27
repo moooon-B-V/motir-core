@@ -282,11 +282,11 @@ describe('H · refused — every member of the union renders in place, with a ne
       refusal: { tag: 'MERGE_APP_PERMISSION_MISSING', permission: null },
       expect: /not allowed to merge here\..*the permission GitHub asked for/,
     },
-    // A queue FAILURE's Queue again refusal (MOTIR-6594). Its own sentence is MOTIR-6596's;
-    // until then it reads as the unexpected refusal does, so the union stays total.
+    // A queue FAILURE's Queue again refusal (MOTIR-6594 · MOTIR-6596): named as a failure,
+    // never as the conflict it is not, with `motir fix` as the next action.
     {
       refusal: { tag: 'MERGE_QUEUE_FAILED_NEEDS_FIX', reason: 'CI_FAILURE' },
-      expect: /could not be recorded\..*Check your connection and try again/,
+      expect: /failed in the merge queue\..*nothing was queued.*motir fix/,
     },
     { refusal: { tag: 'UNEXPECTED' }, expect: /could not be recorded/ },
   ];

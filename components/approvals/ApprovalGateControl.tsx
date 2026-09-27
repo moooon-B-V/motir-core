@@ -777,10 +777,10 @@ export function useRefusalCopy(
     case 'MERGE_REQUEUE_NEEDS_APPROVAL':
       headline = t('mergeRequeueNeedsApproval.title');
       break;
-    // Its sentence is the UI card's (MOTIR-6596); until it lands the refusal reads as
-    // the unexpected one does, so the union stays total.
+    // A queue FAILURE's Queue again (MOTIR-6594 · MOTIR-6596; design § 31): named as a
+    // failure, never as the conflict it is not.
     case 'MERGE_QUEUE_FAILED_NEEDS_FIX':
-      headline = t('unexpected.title');
+      headline = t('mergeQueueFailedNeedsFix.title');
       break;
     case 'MERGE_APP_PERMISSION_MISSING':
       headline = t('mergeAppPermissionMissing.title');
@@ -953,7 +953,7 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
     case 'MERGE_REQUEUE_NEEDS_APPROVAL':
       return 'mergeRequeueNeedsApproval';
     case 'MERGE_QUEUE_FAILED_NEEDS_FIX':
-      return 'unexpected';
+      return 'mergeQueueFailedNeedsFix';
     case 'MERGE_APP_PERMISSION_MISSING':
       return 'mergeAppPermissionMissing';
   }

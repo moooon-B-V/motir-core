@@ -20,6 +20,7 @@ import type { PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
 import type { DesignRefusalFacts } from '@/components/approvals/RefusalReason';
 import { HowToTestBlock } from '@/components/howToTest/HowToTestBlock';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
+import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import { GithubMark } from '@/components/icons/GithubMark';
 import { RepairFixPart } from './RepairFixPart';
 import {
@@ -765,13 +766,27 @@ export function DevelopmentSectionBody({
         currentHeads={currentHeads}
         // What splits a `member_closed` withdrawal into merged and closed (MOTIR-5884):
         // the state each ROW already draws, never a second read.
-        rowStates={rows.map((row) => ({
-          repo: row.repo,
-          number: row.number,
-          state: row.pr.state,
-          conflicted: row.pr.conflicted,
-          baseRef: row.pr.baseRef,
-        }))}
+        rowStates={rows.map((row) => {
+          // What names the member in a `queue_failed` withdrawal (MOTIR-6596; design § 31
+          // panel 5): its delivery's STANDING queue exit, a failure the class holds — read
+          // off the delivery the block already has, never a second read.
+          const exit = deliveries.find(
+            (d) =>
+              d.pullRequest.repo.toLowerCase() === row.repo.toLowerCase() &&
+              d.pullRequest.number === row.number,
+          )?.queueExit;
+          return {
+            repo: row.repo,
+            number: row.number,
+            state: row.pr.state,
+            conflicted: row.pr.conflicted,
+            baseRef: row.pr.baseRef,
+            leftQueue:
+              !!exit &&
+              exit.rawReason !== 'MERGE_CONFLICT' &&
+              classOfQueueExit(exit.rawReason) === 'cant_land',
+          };
+        })}
         terminal={cardTerminal}
         actions={gateActions}
         layout={gateLayout}
