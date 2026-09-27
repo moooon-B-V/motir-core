@@ -55,7 +55,12 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { gateSetFor } from '@/lib/services/gateSetFor';
 import { summarizeGateSubjects } from '@/lib/approvalGates/subjectSummary';
 import { HOME_PAGE_SIZE, type HomeActorContext } from '@/lib/services/homeService';
-import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/context';
+import {
+  VISITOR_ACTOR_ID,
+  visitorServiceContext,
+  type VisitorReadContext,
+} from '@/lib/visitor/context';
+import { personName } from '@/lib/people/personLabel';
 import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -689,6 +694,43 @@ function approvalRoomViews(held: ReadonlySet<PermissionKey>, ctx: HomeActorConte
   });
 }
 
+/**
+ * Whether a read runs on a Visitor's narrowed service context (MOTIR-6645) — the
+ * one actor every label below must name by display name only (MOTIR-6646).
+ */
+function isVisitorActor(ctx: { userId: string }): boolean {
+  return ctx.userId === VISITOR_ACTOR_ID;
+}
+
+/**
+ * The routed person's label for THIS reader: a member's keeps the shipped
+ * `name || email` rule; a Visitor's is the name or the neutral label, never the
+ * email (MOTIR-6646).
+ */
+function routedLabelFor(
+  ctx: { userId: string },
+  user: Parameters<typeof routedToDisplayName>[0],
+): string | null {
+  if (!isVisitorActor(ctx)) return routedToDisplayName(user);
+  return user ? personName(user.name) : null;
+}
+
+/**
+ * The deciders' display names by id, for a Visitor's read (MOTIR-6646). The
+ * stored `decidedByLabel` is `"Name <email>"` and is NEVER parsed for a Visitor:
+ * the name comes from the user row, and a decider with no row left reads as the
+ * neutral label.
+ */
+async function visitorDeciderNames(
+  ids: ReadonlyArray<string | null>,
+  tx: Prisma.TransactionClient,
+): Promise<(id: string | null) => string | null> {
+  const wanted = [...new Set(ids.filter((id): id is string => id !== null))];
+  const users = wanted.length > 0 ? await userRepository.findByIds(wanted, tx) : [];
+  const byId = new Map(users.map((u) => [u.id, personName(u.name)]));
+  return (id) => (id === null ? null : (byId.get(id) ?? personName(null)));
+}
+
 export const approvalGatesService = {
   /**
    * The gate of one KIND the approval FRAME renders, WHATEVER STATE IT IS IN,
@@ -860,13 +902,22 @@ export const approvalGatesService = {
       const offersRefusalVerdict =
         row.state === 'awaiting' ? await refusalVerdictOfferFor(row, tx) : false;
 
+      const gateDto = toApprovalGateDto(row, item.descriptionMd, offersRefusalVerdict);
+      const earlierDto = earlier ? toEarlierApprovalDto(earlier) : null;
+      // A Visitor reads every person by name only (MOTIR-6646).
+      const decider = isVisitorActor(ctx)
+        ? await visitorDeciderNames([row.decidedById, earlier?.decidedById ?? null], tx)
+        : null;
       return {
-        gate: toApprovalGateDto(row, item.descriptionMd, offersRefusalVerdict),
+        gate: decider ? { ...gateDto, decidedByLabel: decider(row.decidedById) } : gateDto,
         canDecide,
         stamp,
         movedSince,
-        routedToLabel: routedToDisplayName(routedTo),
-        earlierApproval: earlier ? toEarlierApprovalDto(earlier) : null,
+        routedToLabel: routedLabelFor(ctx, routedTo),
+        earlierApproval:
+          earlierDto && decider && earlier
+            ? { ...earlierDto, decidedByLabel: decider(earlier.decidedById) }
+            : earlierDto,
         settingsDoor: settingsDoorFor(
           isRegisteredGateKind(input.kind) ? handlerFor(input.kind).settingsDoor : undefined,
           held,
@@ -924,16 +975,18 @@ export const approvalGatesService = {
           ? movedAsReaderSees(stampMoved(input.since, stampInputs), PLAN_KIND)
           : [];
 
+      const decider = isVisitorActor(ctx) ? await visitorDeciderNames([row.decidedById], tx) : null;
       return {
         gate: {
           ...toApprovalGateDto(row),
+          ...(decider ? { decidedByLabel: decider(row.decidedById) } : {}),
           // Only a question still being asked can be held (§11.5c).
           held: row.state === 'awaiting' ? await readPlanGateHeld(plan.id, tx) : null,
         },
         canDecide,
         stamp,
         movedSince,
-        routedToLabel: routedToDisplayName(routedTo),
+        routedToLabel: routedLabelFor(ctx, routedTo),
         earlierApproval: null,
         settingsDoor: null,
       };
@@ -971,7 +1024,9 @@ export const approvalGatesService = {
         gateId: gate.id,
         kind: gate.kind,
         noteMd: gate.noteMd,
-        decidedByLabel: gate.decidedByLabel,
+        decidedByLabel: isVisitorActor(ctx)
+          ? (await visitorDeciderNames([gate.decidedById], tx))(gate.decidedById)
+          : gate.decidedByLabel,
         decidedAt: gate.decidedAt.toISOString(),
         decisionSource: gate.decisionSource,
         refusalVerdict: gate.refusalVerdict,
@@ -1546,6 +1601,14 @@ export const approvalGatesService = {
           : Promise.resolve([]),
       ]);
 
+      // A Visitor names each decider from the user row, never the stored label (MOTIR-6646).
+      const decider = visitor
+        ? await visitorDeciderNames(
+            decidedRows.map((row) => row.decidedById),
+            tx,
+          )
+        : null;
+
       // ONE subject query per KIND on the page, across BOTH sections.
       const subjects = await summarizeGateSubjects([...awaitingRows, ...decidedRows], tx);
 
@@ -1582,7 +1645,7 @@ export const approvalGatesService = {
                   )
                 : canDecideCardlessGate(row.kind, held),
             // A routed user whose row has gone resolves to nothing, as on the item page.
-            routedToDisplayName(usersById.get(recordRoutedToId(row)) ?? null),
+            routedLabelFor(ctx, usersById.get(recordRoutedToId(row)) ?? null),
           ),
         ),
       );
@@ -1594,9 +1657,10 @@ export const approvalGatesService = {
         sections: {
           awaiting: { items: awaitingItems, total: awaitingTotal },
           decided: {
-            items: decidedRows.map((row) =>
-              toApprovalRecordDecidedRowDto(row, subjects.get(row.id) ?? null),
-            ),
+            items: decidedRows.map((row) => {
+              const dto = toApprovalRecordDecidedRowDto(row, subjects.get(row.id) ?? null);
+              return decider ? { ...dto, decidedByLabel: decider(row.decidedById) } : dto;
+            }),
             total: decidedTotal,
           },
         },

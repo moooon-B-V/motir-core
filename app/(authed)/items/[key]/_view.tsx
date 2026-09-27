@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { personDisplayName } from '@/lib/people/personLabel';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { Archive } from 'lucide-react';
@@ -368,7 +369,16 @@ export default async function ItemView({
   const routedMember = pendingDecision?.routedToId
     ? members.find((m) => m.userId === pendingDecision.routedToId)
     : undefined;
-  const routedToName = routedMember ? routedMember.name || routedMember.email : null;
+  // Named by display name only — never the email (MOTIR-6646).
+  const routedToName = routedMember ? personDisplayName(routedMember) : null;
+  // The pickers' CANDIDATE lists exist only for a reader who holds the key the
+  // picker's control writes with — `watcher:manage` for adding watchers,
+  // `comment:add` for the composer's mentions. A reader without it (a Viewer, and
+  // every Visitor) is handed none, so no roster of people crosses the wire for a
+  // control they do not have (MOTIR-6646).
+  const candidateRoster = members.map((m) => ({ id: m.userId, name: m.name, email: m.email }));
+  const watcherCandidates = held.has('watcher:manage') ? candidateRoster : [];
+  const mentionCandidates = held.has('comment:add') ? candidateRoster : [];
 
   // Archived state (Story 2.9 · Subtask 2.9.6) — an archived item's detail page
   // renders (the read doesn't filter `archivedAt`), so it gets a top-of-main
@@ -498,11 +508,7 @@ export default async function ItemView({
                       initialCount={detail.watcherCount}
                       initialWatching={detail.viewerIsWatching}
                       currentUserId={ctx.userId}
-                      candidates={members.map((m) => ({
-                        id: m.userId,
-                        name: m.name,
-                        email: m.email,
-                      }))}
+                      candidates={watcherCandidates}
                     />
                     {/* 2.8.4: the ⋯ actions menu — Edit details · Copy link · Archive
                 · Delete… (Edit folded in here). Permission-gated: Edit/Archive
@@ -687,11 +693,7 @@ export default async function ItemView({
                       currentUserId={ctx.userId}
                       currentUserName={pageCtx.actorName ?? ''}
                       workflowStatuses={detail.workflow.statuses}
-                      mentionCandidates={members.map((m) => ({
-                        id: m.userId,
-                        name: m.name,
-                        email: m.email,
-                      }))}
+                      mentionCandidates={mentionCandidates}
                       activityTab={activityTab}
                     />
                   </Suspense>

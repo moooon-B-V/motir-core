@@ -1,3 +1,4 @@
+import { personDisplayName } from '@/lib/people/personLabel';
 import type {
   WorkItemKindDto,
   WorkItemListItemDto,
@@ -134,7 +135,7 @@ export function collectTreeIds(nodes: WorkItemTreeNodeDto[]): string[] {
 function buildLookups(workflow: WorkflowDto, members: WorkspaceMemberDTO[]) {
   return {
     statusByKey: new Map<string, WorkflowStatusDto>(workflow.statuses.map((s) => [s.key, s])),
-    nameById: new Map(members.map((m) => [m.userId, m.name || m.email])),
+    nameById: new Map(members.map((m) => [m.userId, personDisplayName(m)])),
   };
 }
 

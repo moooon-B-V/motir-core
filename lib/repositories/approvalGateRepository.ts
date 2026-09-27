@@ -1415,6 +1415,9 @@ const AWAITING_GATE_SELECT = {
 const RECORD_GATE_SELECT = {
   ...AWAITING_GATE_SELECT,
   decidedAt: true,
+  // The decider's id — a Visitor's read names them from the user row, never the
+  // stored `Name <email>` label (MOTIR-6646).
+  decidedById: true,
   decidedByLabel: true,
   // The room's person cell says WHERE a decision was made as well as who
   // (MOTIR-5599) — the two are one question in a 144px cell.

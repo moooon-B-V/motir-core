@@ -151,6 +151,7 @@
     "codeLanguage": "Language"
   },
   "common": {
+    "personFallback": "Project member",
     "close": "Close",
     "dialog": "Dialog",
     "retry": "Try again",

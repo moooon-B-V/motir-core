@@ -151,6 +151,7 @@
     "codeLanguage": "语言"
   },
   "common": {
+    "personFallback": "项目成员",
     "close": "关闭",
     "dialog": "对话框",
     "retry": "重试",

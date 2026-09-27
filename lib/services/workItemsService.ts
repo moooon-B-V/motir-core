@@ -111,6 +111,7 @@ import {
 import { readMembership } from '@/lib/workspaces/membershipGate';
 import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
 import type { VisitorReadContext } from '@/lib/visitor/context';
+import { personName } from '@/lib/people/personLabel';
 import {
   isVisitorContext,
   openVisitorRead,
@@ -7060,12 +7061,20 @@ export const workItemsService = {
       readCtx,
     );
     return {
-      items: window.map((r) =>
-        toReadyItemDto(r, {
-          ...rowReadyContext(r),
+      items: window.map((r) => {
+        const context = rowReadyContext(r);
+        // A Visitor's Ready rows name the assignee by display name only — never
+        // the email or its local part (MOTIR-6646).
+        const assignee =
+          hidden && context.assignee
+            ? { ...context.assignee, name: personName(r.assigneeName), email: '' }
+            : context.assignee;
+        return toReadyItemDto(r, {
+          ...context,
+          assignee,
           inheritedSessionBranch: lineages[r.id] ?? null,
-        }),
-      ),
+        });
+      }),
       nextCursor,
     };
   },

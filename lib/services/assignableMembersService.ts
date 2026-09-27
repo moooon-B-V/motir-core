@@ -8,6 +8,8 @@ import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { toWorkspaceMemberDTO } from '@/lib/mappers/workspaceMappers';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import { toPersonLabel, type PersonLabel } from '@/lib/people/personLabel';
+import { VISITOR_ACTOR_ID, type VisitorReadContext } from '@/lib/visitor/context';
 
 // assignableMembersService — the set of people the assignee / reporter pickers,
 // the mention gates and every other "who can be in this project?" question may
@@ -39,36 +41,59 @@ export const assignableMembersService = {
     accessMode: ProjectAccessMode;
     ctx: WorkspaceContext;
   }): Promise<WorkspaceMemberDTO[]> {
-    return withWorkspaceContext(input.ctx, async (tx) => {
-      const [members, addedIds, workspace] = await Promise.all([
-        workspaceMembershipRepository.findMembersByWorkspace(input.ctx.workspaceId, tx),
-        projectMembershipRepository.findUserIdsByProject(input.projectId, tx),
-        workspaceRepository.findByIdInTx(input.ctx.workspaceId, tx),
-      ]);
-      // The org's Owner and Admins enter every project as Managers
-      // (`composeOwnerReach`); their org rows are other people's rows, admitted
-      // once the workspace's own organization is bound — a trusted resolution.
-      let orgManagers = new Set<string>();
-      if (workspace) {
-        await bindOrganizationContext(tx, workspace.organizationId);
-        orgManagers = new Set(
-          await organizationMembershipRepository.findManagerUserIdsByOrganization(
-            workspace.organizationId,
-            tx,
-          ),
-        );
-      }
-      const added = new Set(addedIds);
-      return members
-        .filter((m) =>
-          canEnter({
-            accessMode: input.accessMode,
-            workspaceRole: orgManagers.has(m.userId) ? 'manager' : m.workspaceRole,
-            accessScope: m.accessScope,
-            addedToProject: added.has(m.userId),
-          }),
-        )
-        .map(toWorkspaceMemberDTO);
+    return (await enteringMembers(input)).map(toWorkspaceMemberDTO);
+  },
+
+  /**
+   * The same people, NAME ONLY, for a Visitor (Story MOTIR-6170 · MOTIR-6646) —
+   * the lookup behind the assignee column, the board cards and the quick view.
+   * No email and no email local part: a person with no name reads as the
+   * neutral label ({@link toPersonLabel}).
+   */
+  async listPersonLabels(ctx: VisitorReadContext): Promise<PersonLabel[]> {
+    const rows = await enteringMembers({
+      projectId: ctx.project.id,
+      accessMode: 'public',
+      ctx: { userId: VISITOR_ACTOR_ID, workspaceId: ctx.project.workspaceId },
     });
+    return rows.map((row) => toPersonLabel(row.user));
   },
 };
+
+/**
+ * The workspace members who can ENTER the project, in the workspace's own order,
+ * as membership rows — {@link assignableMembersService.list} maps them to the
+ * member DTO, {@link assignableMembersService.listPersonLabels} to names only.
+ */
+async function enteringMembers(input: {
+  projectId: string;
+  accessMode: ProjectAccessMode;
+  ctx: WorkspaceContext;
+}) {
+  return withWorkspaceContext(input.ctx, async (tx) => {
+    const [members, addedIds, workspace] = await Promise.all([
+      workspaceMembershipRepository.findMembersByWorkspace(input.ctx.workspaceId, tx),
+      projectMembershipRepository.findUserIdsByProject(input.projectId, tx),
+      workspaceRepository.findByIdInTx(input.ctx.workspaceId, tx),
+    ]);
+    let orgManagers = new Set<string>();
+    if (workspace) {
+      await bindOrganizationContext(tx, workspace.organizationId);
+      orgManagers = new Set(
+        await organizationMembershipRepository.findManagerUserIdsByOrganization(
+          workspace.organizationId,
+          tx,
+        ),
+      );
+    }
+    const added = new Set(addedIds);
+    return members.filter((m) =>
+      canEnter({
+        accessMode: input.accessMode,
+        workspaceRole: orgManagers.has(m.userId) ? 'manager' : m.workspaceRole,
+        accessScope: m.accessScope,
+        addedToProject: added.has(m.userId),
+      }),
+    );
+  });
+}

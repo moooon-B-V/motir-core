@@ -1,5 +1,6 @@
 'use client';
 
+import { personDisplayName } from '@/lib/people/personLabel';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -642,7 +643,7 @@ export function CoreFieldsPanel({
           />
         ) : assignee ? (
           <span className="flex items-center gap-2">
-            <Avatar name={assignee.name || assignee.email} />
+            <Avatar name={personDisplayName(assignee)} />
             <span className="truncate">{assignee.name}</span>
           </span>
         ) : (
@@ -653,7 +654,7 @@ export function CoreFieldsPanel({
       <FieldCard label={t('reporter')} editable={false}>
         {reporter ? (
           <span className="flex items-center gap-2">
-            <Avatar name={reporter.name || reporter.email} />
+            <Avatar name={personDisplayName(reporter)} />
             <span className="truncate">{reporter.name}</span>
             {reporterIsSelf ? <Pill tone="neutral">{t('you')}</Pill> : null}
           </span>

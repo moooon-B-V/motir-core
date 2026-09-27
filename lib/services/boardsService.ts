@@ -54,6 +54,7 @@ import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { VisitorReadContext } from '@/lib/visitor/context';
 import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
+import { personName } from '@/lib/people/personLabel';
 import {
   ApprovalGatePendingBoardMoveError,
   PlanTargetHeldBoardMoveError,
@@ -465,6 +466,7 @@ export const boardsService = {
         sprintScopeId,
         boardFilter,
         excludeIds,
+        !member,
       ),
       boardStatusKeys.length
         ? withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
@@ -1781,6 +1783,8 @@ async function buildSwimlanes(
   filter?: ResolvedBoardFilter,
   // A Visitor's private-epic exclusion (MOTIR-6644): lanes count visible cards only.
   excludeIds?: readonly string[],
+  // A Visitor's lanes name people by display name only (MOTIR-6646).
+  nameOnly = false,
 ): Promise<BoardSwimlaneDto[]> {
   if (groupBy === 'none' || statusKeys.length === 0) return [];
 
@@ -1809,7 +1813,11 @@ async function buildSwimlanes(
     );
     const assigneeIds = rows.map((r) => r.assigneeId).filter((id): id is string => id !== null);
     const users = await userRepository.findByIds(assigneeIds);
-    const nameById = new Map(users.map((u) => [u.id, u.name?.trim() || u.email]));
+    // A member's lane keeps its `name || email` label; a Visitor's never reads the
+    // email and falls back to the neutral label (MOTIR-6646).
+    const nameById = new Map(
+      users.map((u) => [u.id, nameOnly ? personName(u.name) : u.name?.trim() || u.email]),
+    );
     const lanes: BoardSwimlaneDto[] = rows
       .filter((r) => r.assigneeId !== null)
       .map((r) => ({
