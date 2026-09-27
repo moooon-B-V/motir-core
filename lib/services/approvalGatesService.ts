@@ -55,6 +55,9 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { gateSetFor } from '@/lib/services/gateSetFor';
 import { summarizeGateSubjects } from '@/lib/approvalGates/subjectSummary';
 import { HOME_PAGE_SIZE, type HomeActorContext } from '@/lib/services/homeService';
+import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/context';
+import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -1446,7 +1449,16 @@ export const approvalGatesService = {
    * WITHOUT the records: the room's failed-read face keeps the switch, so the
    * other view stays one press away.
    */
-  async recordViews(ctx: HomeActorContext): Promise<RoomView[]> {
+  async recordViews(ctx: HomeActorContext | VisitorReadContext): Promise<RoomView[]> {
+    // A Visitor's room is decided from the Visitor key set alone (MOTIR-6645):
+    // `approval:view_any` and nothing that acts ⇒ Project only.
+    if (isVisitorContext(ctx)) {
+      openVisitorRead(ctx.project.id, ctx);
+      return availableRoomViews({
+        hasViewKey: ctx.permissions.has('approval:view_any'),
+        canAct: false,
+      });
+    }
     return withWorkspaceContext(ctx, async (tx) => {
       const routing = await routingScope(ctx, tx);
       if (routing.projectIds.length === 0) return [];
@@ -1456,16 +1468,39 @@ export const approvalGatesService = {
   },
 
   async listRecords(
-    ctx: HomeActorContext,
+    reader: HomeActorContext | VisitorReadContext,
     options: ApprovalQueueListOptions & { view?: RoomView | null } = {},
   ): Promise<ApprovalRecordsPageDto> {
     const pageSize = clampApprovalQueueLimit(options.limit);
+    // A VISITOR (Story MOTIR-6170 · MOTIR-6645) reads their one public project's
+    // records on a narrowed service context, holding the Visitor key set, decides
+    // nothing, and never sees a record on a private epic's descendant or on a
+    // withheld plan. A member's read is unchanged.
+    const visitor = isVisitorContext(reader) ? reader : null;
+    if (visitor) openVisitorRead(visitor.project.id, visitor, 'approval:view_any');
+    const ctx: HomeActorContext = visitor
+      ? { ...visitorServiceContext(visitor), projectId: visitor.project.id }
+      : (reader as HomeActorContext);
     return withWorkspaceContext(ctx, async (tx) => {
-      const routing = await routingScope(ctx, tx);
+      const routing = visitor
+        ? { projectIds: [visitor.project.id], userId: ctx.userId }
+        : await routingScope(ctx, tx);
       const browsable = routing.projectIds.length > 0;
-      const held = browsable
-        ? await projectAccessService.getPermissions(ctx.projectId, ctx, tx)
-        : new Set<PermissionKey>();
+      const held = visitor
+        ? visitor.permissions
+        : browsable
+          ? await projectAccessService.getPermissions(ctx.projectId, ctx, tx)
+          : new Set<PermissionKey>();
+      const withheld = visitor
+        ? {
+            workItemIds: [...visitor.hiddenIds],
+            planIds: await planChangeSessionRepository.findWithheldPlanIds(
+              visitor.project.id,
+              [...visitor.hiddenIds],
+              tx,
+            ),
+          }
+        : null;
       // THE VIEW (MOTIR-6333): the reader ASKS, this read SERVES. `project` needs
       // `approval:view_any`; `mine` needs a way to act (`APPROVAL_ACT_PERMISSIONS`).
       // A view the reader lacks falls back to the one they have; a reader with
@@ -1488,6 +1523,7 @@ export const approvalGatesService = {
       const scope: ApprovalRecordsScope = {
         ...routing,
         fullView: served === 'project',
+        ...(withheld ? { withheld } : {}),
       };
 
       const awaitingTotal = await approvalGateRepository.countRecordsAwaiting(scope, tx);
@@ -1534,15 +1570,17 @@ export const approvalGatesService = {
             subjects.get(row.id) ?? null,
             // A card-less row (MOTIR-6034; ADR §11.6) is decided on its kind's
             // permission alone — there is no card for the relationship half to read.
-            row.workItem
-              ? await canDecideGate(
-                  { ...row.workItem, projectId: ctx.projectId },
-                  row.kind,
-                  ctx,
-                  tx,
-                  held,
-                )
-              : canDecideCardlessGate(row.kind, held),
+            visitor
+              ? false
+              : row.workItem
+                ? await canDecideGate(
+                    { ...row.workItem, projectId: ctx.projectId },
+                    row.kind,
+                    ctx,
+                    tx,
+                    held,
+                  )
+                : canDecideCardlessGate(row.kind, held),
             // A routed user whose row has gone resolves to nothing, as on the item page.
             routedToDisplayName(usersById.get(recordRoutedToId(row)) ?? null),
           ),

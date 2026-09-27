@@ -1304,6 +1304,32 @@ export type AwaitingOnItemRow = Prisma.ApprovalGateGetPayload<{
  */
 export interface ApprovalRecordsScope extends AwaitingRoutingScope {
   fullView: boolean;
+  /**
+   * A Visitor's WITHHOLDING (Story MOTIR-6170 · MOTIR-6645): a record on a
+   * private epic's descendant, and a card-less `plan_approval` record whose plan
+   * is withheld, are in neither section and in no count. Absent ⇒ no clause.
+   */
+  withheld?: { workItemIds: readonly string[]; planIds: readonly string[] };
+}
+
+/** The withholding clause of {@link ApprovalRecordsScope.withheld}, or `{}`. */
+function recordsWithheldWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateWhereInput {
+  const w = scope.withheld;
+  if (!w || (w.workItemIds.length === 0 && w.planIds.length === 0)) return {};
+  // Under `AND`, never a top-level `NOT`: the awaiting predicate already carries
+  // one (`CARRIED_MERGE_GATE_EXCLUDED`), and a spread would silently replace it.
+  // ⚠️ NULL-SAFE ON PURPOSE: a card-less gate has `work_item_id IS NULL`, and
+  // `NOT (work_item_id IN (…))` is NULL for it — which would drop EVERY plan gate.
+  return {
+    AND: [
+      ...(w.workItemIds.length > 0
+        ? [{ OR: [{ workItemId: null }, { workItemId: { notIn: [...w.workItemIds] } }] }]
+        : []),
+      ...(w.planIds.length > 0
+        ? [{ NOT: { kind: 'plan_approval' as const, subjectId: { in: [...w.planIds] } } }]
+        : []),
+    ],
+  };
 }
 
 /**
@@ -1314,7 +1340,12 @@ export interface ApprovalRecordsScope extends AwaitingRoutingScope {
  */
 function recordsAwaitingWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateWhereInput {
   if (!scope.fullView) return awaitingRoutedToWhere(scope);
-  return { projectId: { in: scope.projectIds }, state: 'awaiting', ...CARRIED_MERGE_GATE_EXCLUDED };
+  return {
+    projectId: { in: scope.projectIds },
+    state: 'awaiting',
+    ...CARRIED_MERGE_GATE_EXCLUDED,
+    ...recordsWithheldWhere(scope),
+  };
 }
 
 /**
@@ -1329,6 +1360,7 @@ function recordsDecidedWhere(scope: ApprovalRecordsScope): Prisma.ApprovalGateWh
     // plan a person DECLINED (MOTIR-6037; design Part XXII §22.3, Panel 3).
     state: { in: ['approved', 'changes_requested', 'overturned', 'declined'] },
     ...(scope.fullView ? {} : { decidedById: scope.userId }),
+    ...recordsWithheldWhere(scope),
   };
 }
 
