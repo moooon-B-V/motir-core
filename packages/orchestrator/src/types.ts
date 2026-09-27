@@ -399,9 +399,25 @@ export interface ContainerOrchestrator {
   /** The crash-safe sweeper: destroy every container this orchestrator owns that
    *  is older than `olderThan`, returning one usage record each. Called on a
    *  schedule. It queries the PROVIDER, never in-process state — the case it
-   *  exists for is the process that held that state having died. */
-  reap(olderThan: Date, resolve: UsageAttributionResolver): Promise<ContainerUsage[]>;
+   *  exists for is the process that held that state having died.
+   *
+   *  `spare` (MOTIR-6450) is asked FIRST, before attribution or destruction: a
+   *  container it answers `true` for is left running and yields no record. It is
+   *  how a legitimate long-lived container — a hosted run still holding its fleet
+   *  slot, with no wall-clock limit but its own backstop — survives a sweep whose
+   *  age cutoff was sized for CI jobs. Absent, nothing is spared. */
+  reap(
+    olderThan: Date,
+    resolve: UsageAttributionResolver,
+    spare?: ReapSparePredicate,
+  ): Promise<ContainerUsage[]>;
 }
+
+/** Whether the reaper must leave a container it found running (MOTIR-6450). A
+ *  predicate that throws spares nothing it has not already answered for — the
+ *  adapter treats a throw as "do not spare", because the reaper is the backstop
+ *  that stops a leak billing. */
+export type ReapSparePredicate = (handle: ContainerHandle) => Promise<boolean>;
 
 /**
  * The attribution a usage row carries, threaded into `teardown` rather than

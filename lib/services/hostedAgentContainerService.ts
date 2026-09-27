@@ -234,9 +234,18 @@ export interface HostedAgentSupervisionOptions {
    * container through the ordinary settle (`job_timed_out`), so nothing about the
    * teardown differs from a timeout. A read that throws is treated as alive: an
    * unanswered question never ends a paying run.
+   *
+   * A verdict may instead name `gate_revoked` (MOTIR-6450): a person cancelled the
+   * run, the end path already closed it and revoked its credentials, and the
+   * supervisor — the one owner of this container — tears it down at this poll
+   * with the cancel's own teardown reason.
    */
-  liveness?: (session: HostedAgentSession, now: Date) => Promise<string | null>;
+  liveness?: (session: HostedAgentSession, now: Date) => Promise<HostedAgentLivenessVerdict>;
 }
+
+/** What {@link HostedAgentSupervisionOptions.liveness} answers: `null` while the
+ *  run may go on; a detail (settled `job_timed_out`); or a cancel. */
+export type HostedAgentLivenessVerdict = string | { reason: 'gate_revoked'; detail: string } | null;
 
 /**
  * ONE hosted-agent container — everything the boot needs, already resolved by
@@ -786,10 +795,10 @@ export const hostedAgentContainerService = {
               done: true,
               verdict: {
                 done: true,
-                reason: 'job_timed_out',
+                reason: typeof stalled === 'string' ? 'job_timed_out' : stalled.reason,
                 startedAt: state.startedAt ? state.startedAt.toISOString() : null,
                 exitCode: null,
-                failureDetail: stalled,
+                failureDetail: typeof stalled === 'string' ? stalled : stalled.detail,
               },
             };
           }
@@ -889,7 +898,7 @@ export const hostedAgentContainerService = {
 async function livenessVerdict(
   session: HostedAgentSession,
   options: HostedAgentSupervisionOptions,
-): Promise<string | null> {
+): Promise<HostedAgentLivenessVerdict> {
   if (!options.liveness) return null;
   const now = options.now ?? ((): Date => new Date());
   try {

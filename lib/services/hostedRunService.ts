@@ -9,9 +9,12 @@ import {
   type RunRepository,
 } from '@/lib/github/runGitCredential';
 import {
+  HostedRunAlreadyEndedError,
   HostedRunBootFailedError,
+  HostedRunCancelForbiddenError,
   HostedRunCardNotReadyError,
   HostedRunCreditsUnavailableError,
+  HostedRunNotFoundError,
   HostedRunOutOfCreditsError,
   HostedRunRepositoryNotWritableError,
   type RunGitWriteRefusal,
@@ -21,6 +24,7 @@ import {
   HOSTED_RUN_TIMEOUT_MS,
   latestRunCredentialExpiry,
 } from '@/lib/hostedRuns/limits';
+import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
 import type { MemoizingSteps } from '@/lib/jobs/supervision/inProcessSteps';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import type { HostedRunSuperviseData } from '@/lib/jobs/types';
@@ -36,11 +40,13 @@ import {
   hostedAgentContainerService,
   type HostedAgentContainerOutcome,
   type HostedAgentContainerRequest,
+  type HostedAgentLivenessVerdict,
   type HostedAgentSession,
   type HostedAgentSupervisionOptions,
 } from '@/lib/services/hostedAgentContainerService';
 import { hostedRunKeyService } from '@/lib/services/hostedRunKeyService';
 import { hostedRunModelService, toOpenCodeModel } from '@/lib/services/hostedRunModelService';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { runCredentialService } from '@/lib/services/runCredentialService';
@@ -98,16 +104,26 @@ export interface HostedRunStartOptions {
 }
 
 /**
- * How a hosted run ended, as the END PATH names it (MOTIR-6450 owns the path;
- * this card defines the seam and the start path's one caller of it).
+ * How a hosted run ended, as the END PATH names it (MOTIR-6450).
+ *
+ * ⚠️ THERE IS NO `succeeded`, AND THAT IS THE POINT. The CLI in the container
+ * decides success: it closes the run it adopted `succeeded` exactly as a local run
+ * does, after linking its pull requests and moving its cards. The container's
+ * exit code is the CLI's own, so an `exited` container is only a container that
+ * stopped by itself — a run still OPEN at that moment is a CRASH (the CLI died
+ * before closing it; `20` means the launcher never reached the CLI at all), and
+ * it is closed `failed`, never `succeeded`.
  */
 export type HostedRunEndOutcome =
-  | 'succeeded'
+  | 'exited'
   | 'failed'
   | 'cancelled'
   | 'backstop'
   | 'stall'
   | 'lost_supervision';
+
+/** The exit code the image's launcher uses when it never reached the CLI. */
+export const HOSTED_LAUNCHER_NEVER_REACHED_CLI = 20;
 
 /** What {@link hostedRunService.endHostedRun} did — never a throw. JSON, because the
  *  supervisor memoizes it. */
@@ -124,10 +140,7 @@ export function hostedRunEndStepId(dispatchRunId: string): string {
   return `hosted-run-end:${dispatchRunId}`;
 }
 
-/** The fleet dispatch id of a run's container — one run, one container. */
-export function hostedRunDispatchId(dispatchRunId: string): string {
-  return `hosted-run:${dispatchRunId}`;
-}
+export { hostedRunDispatchId };
 
 /** The `failureDetail` a stall settles with, and how the end path tells it apart. */
 export const HOSTED_RUN_STALL_DETAIL = `stalled: no agent output for ${
@@ -181,9 +194,13 @@ function endOutcomeFor(outcome: HostedAgentContainerOutcome): {
     };
   }
   if (outcome.reason === 'job_completed') {
-    return outcome.exitCode === 0
-      ? { outcome: 'succeeded', detail: 'the container exited 0' }
-      : { outcome: 'failed', detail: `the container exited ${String(outcome.exitCode)}` };
+    return {
+      outcome: 'exited',
+      detail:
+        outcome.exitCode === HOSTED_LAUNCHER_NEVER_REACHED_CLI
+          ? `the container exited ${HOSTED_LAUNCHER_NEVER_REACHED_CLI}: the launcher never reached the CLI`
+          : `the container exited ${String(outcome.exitCode)}`,
+    };
   }
   if (outcome.reason === 'job_timed_out') {
     return outcome.failureDetail === HOSTED_RUN_STALL_DETAIL
@@ -210,13 +227,27 @@ const CLOSE_FOR: Record<
     status: 'succeeded' | 'failed' | 'cancelled' | 'timed_out';
   }
 > = {
-  succeeded: { stopReason: 'completed', status: 'succeeded' },
+  exited: { stopReason: 'halted', status: 'failed' },
   failed: { stopReason: 'halted', status: 'failed' },
   cancelled: { stopReason: 'interrupted', status: 'cancelled' },
   backstop: { stopReason: 'abandoned', status: 'timed_out' },
   stall: { stopReason: 'abandoned', status: 'timed_out' },
   lost_supervision: { stopReason: 'abandoned', status: 'timed_out' },
 };
+
+/** The word the run's closing `log` line names an end by — "crash" for a
+ *  container that exited with its run still open. */
+const END_LABEL: Record<HostedRunEndOutcome, string> = {
+  exited: 'crash',
+  failed: 'failed',
+  cancelled: 'cancelled',
+  backstop: 'backstop',
+  stall: 'stalled',
+  lost_supervision: 'lost supervision',
+};
+
+/** The `failureDetail` a cancelled run's container is torn down with. */
+export const HOSTED_RUN_CANCEL_DETAIL = 'cancelled';
 
 /** A request for a container that is already booted — the supervisor's. Its env
  *  and image are empty on purpose: the boot step replays the session (the
@@ -513,7 +544,7 @@ export const hostedRunService = {
       {
         ...options,
         booted: data.session,
-        liveness: (session, now) => this.stallDetail(data.dispatchRunId, session, now),
+        liveness: (session, now) => this.livenessOf(data.dispatchRunId, session, now),
       },
     );
     const end = endOutcomeFor(outcome);
@@ -521,6 +552,63 @@ export const hostedRunService = {
       this.endHostedRun(data.dispatchRunId, end.outcome, end.detail),
     );
     return outcome;
+  },
+
+  /**
+   * What the supervisor reads before each poll (MOTIR-6450): a run a person
+   * CANCELLED — closed `cancelled` by {@link cancel} — is torn down now with the
+   * cancel's teardown reason; otherwise the stall read decides.
+   */
+  async livenessOf(
+    dispatchRunId: string,
+    session: HostedAgentSession,
+    now: Date,
+  ): Promise<HostedAgentLivenessVerdict> {
+    const run = await withWorkspaceServiceContext(session.attribution.workspaceId, (tx) =>
+      dispatchRunRepository.findById(dispatchRunId, tx),
+    );
+    if (run?.status === 'cancelled') {
+      return { reason: 'gate_revoked', detail: HOSTED_RUN_CANCEL_DETAIL };
+    }
+    return this.stallDetail(dispatchRunId, session, now);
+  },
+
+  /**
+   * CANCEL a running hosted run (MOTIR-6450) — the dispatcher or a project admin.
+   *
+   * It ends the run through {@link endHostedRun} at once: the gateway key, the run
+   * credential and every git token are revoked, so the agent can spend and push
+   * nothing more, and the run is closed `cancelled`. The CONTAINER is torn down by
+   * its supervisor at the next poll (at most `AGENT_MAX_POLL_INTERVAL_MS`), with
+   * the cancel's `gate_revoked` reason, then charged and released as every settled
+   * container is — the supervisor stays the ONE owner of the machine, so a cancel
+   * racing a poll can never tear it down twice or meter it twice.
+   *
+   * Refuses — each before anything is revoked — a run that does not exist or is in
+   * another workspace (404), is not hosted (404), is not the caller's to cancel
+   * (403), or has already ended (409). A cancel racing the CLI's own close resolves
+   * to whichever close landed first; the other is a no-op.
+   */
+  async cancel(dispatchRunId: string, ctx: ServiceContext): Promise<{ dispatchRunId: string }> {
+    const run = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      dispatchRunRepository.findById(dispatchRunId, tx),
+    );
+    if (!run || run.workspaceId !== ctx.workspaceId || run.origin !== 'hosted') {
+      throw new HostedRunNotFoundError(dispatchRunId);
+    }
+    if (run.createdById !== ctx.userId) {
+      try {
+        await projectAccessService.assertCanManage(run.projectId, ctx);
+      } catch (err) {
+        // A member who cannot even browse the project sees no run (no existence
+        // leak); one who can but is not an admin is refused.
+        if (err instanceof ProjectNotFoundError) throw new HostedRunNotFoundError(dispatchRunId);
+        throw new HostedRunCancelForbiddenError(dispatchRunId);
+      }
+    }
+    if (run.status !== 'running') throw new HostedRunAlreadyEndedError(dispatchRunId, run.status);
+    await this.endHostedRun(dispatchRunId, 'cancelled', 'cancelled by a person');
+    return { dispatchRunId };
   },
 
   /**
@@ -541,20 +629,30 @@ export const hostedRunService = {
   },
 
   /**
-   * THE END PATH'S SEAM (MOTIR-6450 owns the path; MOTIR-690 defines this minimal
-   * form and calls it from the two places it ends a run: a start that failed after
-   * the run opened, and a supervision whose container settled).
+   * THE END PATH (MOTIR-6450) — the ONE function every way a hosted run ends
+   * calls: a start that failed after the run opened, a supervision whose
+   * container settled (the CLI's exit, a stall, the backstop), a person's
+   * cancel, and a lost supervision chain the sweep found.
    *
-   * Revokes the gateway key, the run credential and every recorded git token, then
-   * closes the run ONLY IF it is still open — the CLI in the container closes the
-   * run it adopted, exactly as a local run does — with a `log` event naming which
-   * end it was. It links no pull request and writes NO work-item status: the CLI
-   * already did both on success, and no other end moves a card (the run-dies
-   * decision). Idempotent, and never a throw: each step's failure is recorded.
+   * ⚠️ THE CONTAINER IS SETTLED BY ITS OWNER, BEFORE THIS IS CALLED. The
+   * supervisor's settle step and the sweep's settler each tear it down, record
+   * its usage, charge it and release its slot, and only then end the run here; a
+   * cancel ends the run first and the supervisor tears the machine down at its
+   * next poll (see {@link cancel}). One owner per container is what makes a
+   * teardown, a usage row and a release happen exactly once.
    *
-   * ⚠️ WHAT IT DOES NOT DO YET, and MOTIR-6450 adds: tear down a container still
-   * running (a cancel), the cancel route, the lost-supervision route into it, and
-   * the reaper guard.
+   * Then, unconditionally: revoke the gateway key, the run credential and every
+   * recorded git token. Then close the run ONLY IF it is still open — the CLI in
+   * the container closes the run it adopted, exactly as a local run does — with a
+   * `log` event naming which end it was (crash, failed, cancelled, stalled,
+   * backstop, lost supervision) and any revocation that failed. A run the CLI
+   * already closed keeps its status; the ingest refuses events on a closed run, so
+   * nothing more is written to it.
+   *
+   * It links NO pull request and writes NO work-item status, on any end: on
+   * success the CLI already did both, and no other end moves a card (the run-dies
+   * decision). Idempotent — revocations are, and the close is skipped for a run
+   * already closed — and never a throw.
    */
   async endHostedRun(
     dispatchRunId: string,
@@ -593,7 +691,7 @@ export const hostedRunService = {
           [
             {
               kind: 'log',
-              body: `[motir] hosted run ended (${outcome}): ${detail}${
+              body: `[motir] hosted run ended (${END_LABEL[outcome]}): ${detail}${
                 failures.length > 0 ? ` — ${failures.join('; ')}` : ''
               }\n`,
               data: { end: outcome },

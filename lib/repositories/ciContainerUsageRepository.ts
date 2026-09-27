@@ -292,6 +292,30 @@ export const ciContainerUsageRepository = {
   },
 
   /**
+   * The dispatch run a LIVE hosted-agent container serves, by its handle
+   * (MOTIR-6450) — the reaper's question "is this machine a hosted run still in
+   * progress?". Live = the row has no `container_stopped_at` yet (it is an
+   * accrual checkpoint, not a settle). Null for any other container.
+   */
+  async findLiveAgentRunByHandle(
+    containerProvider: string,
+    handleId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ dispatchRunId: string } | null> {
+    const row = await tx.ciContainerUsage.findFirst({
+      where: {
+        containerProvider,
+        handleId,
+        workload: 'agent',
+        containerStoppedAt: null,
+        dispatchRunId: { not: null },
+      },
+      select: { dispatchRunId: true },
+    });
+    return row?.dispatchRunId ? { dispatchRunId: row.dispatchRunId } : null;
+  },
+
+  /**
    * ONE dispatch run's machine time (MOTIR-6448) — Σ `billable_seconds` and
    * Σ `cost_usd` over every row naming the run, and whether all of them are
    * settled. Live while the container runs (a checkpoint row's figure is its

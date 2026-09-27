@@ -14,6 +14,7 @@ import {
   type HostedAgentSession,
 } from '@/lib/services/hostedAgentContainerService';
 import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
+import { hostedRunService } from '@/lib/services/hostedRunService';
 import { isSupervisionKind, type SupervisionKind } from '@/lib/jobs/supervision/driver';
 
 // THE ABANDONED-SUPERVISION SWEEP (Story MOTIR-3778 · Subtask MOTIR-3830) — the
@@ -176,6 +177,17 @@ export const SUPERVISION_SETTLERS: Record<SupervisionKind, SupervisionSettler> =
       // run whose own pass already charged it is deduplicated on `externalRef`.
       if (outcome.outcome === 'settled' && agent.dispatchRunId !== null) {
         await hostedRunChargeService.chargeMachineTime(agent.dispatchRunId);
+      }
+      // A LOST supervision is a run that died (MOTIR-6450): it ends through the one
+      // end path — every credential revoked, the run closed (`timed_out`) unless the
+      // CLI closed it, its cards unmoved. Even when the teardown FAILED: revoking is
+      // what stops the spend, and the reaper remains the backstop for the machine.
+      if (agent.dispatchRunId !== null) {
+        await hostedRunService.endHostedRun(
+          agent.dispatchRunId,
+          'lost_supervision',
+          abandoned.failureDetail,
+        );
       }
       return outcome;
     },

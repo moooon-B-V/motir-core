@@ -188,3 +188,35 @@ export class HostedRunBootFailedError extends Error {
     this.name = 'HostedRunBootFailedError';
   }
 }
+
+/** No hosted run by that id in the caller's workspace (MOTIR-6450) — also what a
+ *  LOCAL run answers, since only a hosted run can be cancelled here. → 404. */
+export class HostedRunNotFoundError extends Error {
+  readonly code = 'hosted_run_not_found' as const;
+  constructor(readonly dispatchRunId: string) {
+    super(`No hosted run ${dispatchRunId}.`);
+    this.name = 'HostedRunNotFoundError';
+  }
+}
+
+/** Only the person who dispatched a hosted run, or a project admin, may cancel
+ *  it (MOTIR-6450). → 403. */
+export class HostedRunCancelForbiddenError extends Error {
+  readonly code = 'hosted_run_cancel_forbidden' as const;
+  constructor(readonly dispatchRunId: string) {
+    super('Only the person who started this run, or a project admin, can cancel it.');
+    this.name = 'HostedRunCancelForbiddenError';
+  }
+}
+
+/** The hosted run has already ended — there is nothing to cancel (MOTIR-6450). → 409. */
+export class HostedRunAlreadyEndedError extends Error {
+  readonly code = 'hosted_run_already_ended' as const;
+  constructor(
+    readonly dispatchRunId: string,
+    readonly status: string,
+  ) {
+    super(`This run has already ended (${status}).`);
+    this.name = 'HostedRunAlreadyEndedError';
+  }
+}

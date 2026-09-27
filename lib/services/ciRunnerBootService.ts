@@ -5,6 +5,9 @@ import {
   CI_RUNNER_INTENT_COMPLETED,
   CI_RUNNER_INTENT_FAILED,
 } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
+import { ciContainerUsageRepository } from '@/lib/repositories/ciContainerUsageRepository';
+import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
+import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
 import {
   ciRunnerAdmissionService,
   type AdmissionDeferralReason,
@@ -827,27 +830,51 @@ export const ciRunnerBootService = {
     const olderThan = options.olderThan ?? new Date(now().getTime() - DEFAULT_REAP_AFTER_MS);
 
     const orchestrator = getOrchestrator();
-    const usages = await orchestrator.reap(olderThan, async (handle) => {
-      const intent = await withSystemContext((tx) =>
-        intents.findByContainerId(handle.provider, handle.id, tx),
+    // ⚠️ A HOSTED RUN IS NOT AN ORPHAN FOR BEING OLD (MOTIR-6450). This cutoff is
+    // sized for a CI job; a hosted run has no wall-clock limit but its own 12-hour
+    // backstop, so a healthy one outlives it by design. It is spared while it
+    // still holds its fleet slot — the reservation its own settle releases — and a
+    // machine that has lost its slot (the slot expired, or was never taken) is an
+    // orphan like any other and is reaped.
+    const spare = async (handle: { provider: string; id: string }): Promise<boolean> => {
+      const live = await withSystemContext((tx) =>
+        ciContainerUsageRepository.findLiveAgentRunByHandle(handle.provider, handle.id, tx),
       );
-      if (!intent || !intent.projectId) return null;
-      const workflowJobId = Number(intent.jobId);
-      if (!Number.isInteger(workflowJobId)) return null;
-      return {
-        orgId: intent.organizationId,
-        workspaceId: intent.workspaceId,
-        projectId: intent.projectId,
-        repoFullName: `${intent.repoOwner}/${intent.repoName}`,
-        workload: CI_RUNNER_WORKLOAD,
-        workflowJobId,
-        size: FLEET_CONTAINER_SIZE,
-        // A reaped container's start instant is whatever the provider still
-        // reports; this process never observed it (that is what made it an
-        // orphan), so there is nothing honest to fall back to.
-        observedStartedAt: intent.startedAt,
-      };
-    });
+      if (!live) return false;
+      const slot = await withSystemContext((tx) =>
+        fleetInFlightSlotRepository.findByRef(
+          'hosted_agent' satisfies FleetWorkloadKind,
+          hostedRunDispatchId(live.dispatchRunId),
+          tx,
+        ),
+      );
+      return slot !== null && slot.expiresAt.getTime() > now().getTime();
+    };
+    const usages = await orchestrator.reap(
+      olderThan,
+      async (handle) => {
+        const intent = await withSystemContext((tx) =>
+          intents.findByContainerId(handle.provider, handle.id, tx),
+        );
+        if (!intent || !intent.projectId) return null;
+        const workflowJobId = Number(intent.jobId);
+        if (!Number.isInteger(workflowJobId)) return null;
+        return {
+          orgId: intent.organizationId,
+          workspaceId: intent.workspaceId,
+          projectId: intent.projectId,
+          repoFullName: `${intent.repoOwner}/${intent.repoName}`,
+          workload: CI_RUNNER_WORKLOAD,
+          workflowJobId,
+          size: FLEET_CONTAINER_SIZE,
+          // A reaped container's start instant is whatever the provider still
+          // reports; this process never observed it (that is what made it an
+          // orphan), so there is nothing honest to fall back to.
+          observedStartedAt: intent.startedAt,
+        };
+      },
+      spare,
+    );
 
     for (const usage of usages) {
       await recordContainerUsage(usage);

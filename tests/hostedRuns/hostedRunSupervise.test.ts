@@ -221,12 +221,14 @@ describe('the supervision job — boot replayed, never repeated', () => {
       result = await pass(data, memo, store, now);
     expect(result).toEqual({ outcome: 'settled', reason: 'job_completed' });
 
-    // The end path ran: key and credential revoked, the run closed (the CLI never did).
+    // The end path ran: key and credential revoked, the run closed. The CLI never
+    // closed it, so the exit — 0 or not — is a crash, never a success (MOTIR-6450:
+    // success is the CLI's to record, and the exit code is the CLI's own).
     expect(revoked).toEqual([data.dispatchRunId]);
     expect(await adminDb.apiToken.count({ where: { dispatchRunId: data.dispatchRunId } })).toBe(0);
     expect(await runOf(data.dispatchRunId)).toMatchObject({
-      status: 'succeeded',
-      stopReason: 'completed',
+      status: 'failed',
+      stopReason: 'halted',
     });
     // Replaying the finished job ends nothing twice.
     await pass(data, memo, store, now);
