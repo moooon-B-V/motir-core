@@ -489,7 +489,10 @@ test('a mark with a title beside it is refused and the review is unaffected; a p
   await expect(page.getByTestId('mark-holds-status')).toHaveCount(0);
   for (const label of ['Mark', 'Note', 'Supersedes', 'Superseded by']) {
     await expect(
-      page.getByTestId('plan-proposal-list').locator('dt', { hasText: new RegExp(`^${label}$`) }),
+      page
+        .getByRole('main')
+        .getByTestId('plan-proposal-list')
+        .locator('dt', { hasText: new RegExp(`^${label}$`) }),
     ).toHaveCount(0);
   }
   await page.goto(`/plans/${empty.planId}?view=canvas`);
