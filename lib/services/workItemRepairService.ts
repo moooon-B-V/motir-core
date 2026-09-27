@@ -130,22 +130,26 @@ async function standingExitsAtHead(
 }
 
 /**
- * COULD A CODE CHANGE ANSWER THIS OUTCOME? (§4 FOURTH AMENDMENT, point 6; MOTIR-5803.)
+ * COULD A CODE CHANGE ANSWER THIS OUTCOME? (§4 FOURTH AMENDMENT, point 6; MOTIR-5803;
+ * narrowed by the FIFTH AMENDMENT, MOTIR-6594.)
  *
  * `motir fix` hands the pull request to an agent that changes code and pushes, so the
  * question is not whether the merge failed but whether the CODE is a plausible cause:
  *
- *  · a queue FAILURE whose class is `retryable` — the checks failed or timed out, the
- *    merge commit or tree could not be built: yes, the code may be at fault;
- *  · `cant_land` — a conflict: the code MUST change, and this is the only way forward;
+ *  · `cant_land` — a conflict, or a queue FAILURE (the checks failed or timed out, the
+ *    merge commit or tree could not be built): yes, and a new head is the only way
+ *    forward;
  *  · `setting` (branch protection, a missing app permission) and every NEUTRAL removal
  *    (`MANUAL`, `QUEUE_CLEARED`, `ROLL_BACK`, an unmapped reason): no. Nothing in the
  *    repository is wrong, and a person is what is needed.
+ *
+ * ⚠️ THE `retryable && failure` ARM IS GONE, NOT FORGOTTEN. Before the FIFTH AMENDMENT
+ * the four failures were `retryable`, and that arm is what admitted them; they are
+ * `cant_land` now, and no `retryable` reason is a failure, so the arm could never answer
+ * true again.
  */
-function repairableOutcome(exit: { rawReason: string; disposition: string }): boolean {
-  const landingClass = classOfQueueExit(exit.rawReason);
-  if (landingClass === 'cant_land') return true;
-  return landingClass === 'retryable' && exit.disposition === 'failure';
+function repairableOutcome(exit: { rawReason: string }): boolean {
+  return classOfQueueExit(exit.rawReason) === 'cant_land';
 }
 
 /** One open member as a repair hands it over — the claim's wire row. */
@@ -214,6 +218,12 @@ async function evaluate(
   // fresh approve-to-merge gate, and `motir fix` is the answer only where the code may be
   // at fault. An ordinary In Review card is waiting on a person, not on a repair, so it is
   // refused below as `not_failing`.
+  //
+  // ⚠️ SINCE THE FIFTH AMENDMENT (MOTIR-6594) A LIVE FAILURE NEVER REACHES IN REVIEW —
+  // it holds the card at Implemented. What this admission still serves is a card the OLD
+  // rule re-asked: at In Review, holding a gate raised from a standing failure exit. It
+  // stays admitted until the convergence (MOTIR-6595) has moved it to Implemented; after
+  // that the admission finds only neutral and setting outcomes, and refuses them.
   const inReview = rank === RUNG_RANK.in_review;
   if (item.archivedAt !== null || (rank !== RUNG_RANK.implemented && !inReview)) {
     return { ok: false, reason: 'not_implemented', runTargetKey: null, failing: [] };

@@ -39,6 +39,9 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+/** A standing exit. A `failure` defaults to BRANCH PROTECTION — the failure that still
+ *  RE-ASKS: since the FIFTH AMENDMENT (MOTIR-6594) a queue failure such as `CI_FAILURE`
+ *  is CAN'T-LAND, and population A is the re-asking kind. */
 async function exitOn(
   pullRequestId: string,
   opts: { disposition?: 'failure' | 'neutral'; headSha?: string; rawReason?: string } = {},
@@ -47,7 +50,8 @@ async function exitOn(
     data: {
       pullRequestId,
       deliveryId: `guid-${randomToken(8)}`,
-      rawReason: opts.rawReason ?? (opts.disposition === 'neutral' ? 'MANUAL' : 'CI_FAILURE'),
+      rawReason:
+        opts.rawReason ?? (opts.disposition === 'neutral' ? 'MANUAL' : 'BRANCH_PROTECTIONS'),
       disposition: opts.disposition ?? 'failure',
       headSha: opts.headSha ?? HEAD,
       exitedAt: new Date(Date.now() + 60_000),
@@ -140,12 +144,17 @@ async function theFixture() {
   const auto = await makeWorkItemFixture({ name: 'Auto', identifier: 'AUT' });
   await setMode(auto, 'auto');
 
-  // A · implemented, a RETRYABLE exit standing at the head.
+  // A · implemented, a SETTING exit standing at the head (a re-asking failure).
   const atHead = await strandedCard(manual, 'at-head');
   // B · implemented, a CONFLICT: already where the new rules put it.
   const conflict = await greenCard(manual, 'conflict');
   await exitOn(conflict.pr.id, { rawReason: 'MERGE_CONFLICT' });
   await setStatus(conflict.card.id, 'implemented');
+  // B · and since the FIFTH AMENDMENT (MOTIR-6594) a queue FAILURE at Implemented is
+  // counted with it, not moved back to In Review.
+  const failed = await greenCard(manual, 'ci-failure');
+  await exitOn(failed.pr.id, { rawReason: 'CI_FAILURE' });
+  await setStatus(failed.card.id, 'implemented');
   // C · approved, a NEUTRAL removal standing: the removal spent the approval.
   const neutral = await greenCard(manual, 'neutral');
   await exitOn(neutral.pr.id, { disposition: 'neutral' });
@@ -180,6 +189,7 @@ async function theFixture() {
   return {
     atHead,
     conflict,
+    failed,
     neutral,
     unrecorded,
     moved,
@@ -212,6 +222,8 @@ describe('ejectedCardConvergenceService.converge', () => {
     expect(converged.has(cards.conflict.card.id)).toBe(false);
     const reasonOf = (id: string) => report.skipped.find((s) => s.workItemId === id)?.reason;
     expect(reasonOf(cards.conflict.card.id)).toBe('cant_land_held');
+    expect(converged.has(cards.failed.card.id)).toBe(false);
+    expect(reasonOf(cards.failed.card.id)).toBe('cant_land_held');
     expect(reasonOf(cards.moved.card.id)).toBe('head_moved');
     expect(reasonOf(cards.inAuto.card.id)).toBe('auto_mode');
     expect(reasonOf(cards.alreadyAsked.card.id)).toBe('already_in_review');
@@ -248,6 +260,8 @@ describe('ejectedCardConvergenceService.converge', () => {
     // B — the conflict holds it at Implemented, and nothing is asked.
     expect(await statusOf(cards.conflict.card.id)).toBe('implemented');
     expect(await awaiting(cards.conflict.card.id)).toEqual([]);
+    expect(await statusOf(cards.failed.card.id)).toBe('implemented');
+    expect(await awaiting(cards.failed.card.id)).toEqual([]);
     // C — the neutral removal spent the approval, so the card asks again.
     expect(await statusOf(cards.neutral.card.id)).toBe('in_review');
     expect(await awaiting(cards.neutral.card.id)).toHaveLength(1);
