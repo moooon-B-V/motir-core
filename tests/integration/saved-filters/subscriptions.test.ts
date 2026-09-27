@@ -68,7 +68,7 @@ async function makeTeam(): Promise<Team> {
     await workspacesService.addMember({
       userId: user.id,
       workspaceId: fx.workspaceId,
-      role: 'member',
+      workspaceRole: 'member',
     });
     await addToProjectAs({
       key,

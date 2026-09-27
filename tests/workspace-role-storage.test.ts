@@ -73,7 +73,11 @@ async function makeTenants(): Promise<Fixture> {
   const w1 = await workspacesService.createWorkspace({ name: 'WRS 1', ownerUserId: owner1.id });
   const w2 = await workspacesService.createWorkspace({ name: 'WRS 2', ownerUserId: owner2.id });
   await adminDb.workspaceMembership.create({
-    data: { userId: member1.id, workspaceId: w1.workspace.id, role: 'member' },
+    data: {
+      userId: member1.id,
+      workspaceId: w1.workspace.id,
+      workspaceRole: 'member',
+    },
   });
   const roleW1 = await adminDb.workspaceRoleDefinition.create({
     data: {
@@ -131,15 +135,16 @@ async function asAppRole<T>(
 }
 
 describe('the new columns and tables land BESIDE the old ones', () => {
-  it('a membership written without the new columns reads NULL for both — nothing is backfilled', async () => {
-    // A row as the still-serving old build writes it (the service writers set the
-    // workspace role since MOTIR-6462, so the raw admin insert stands in for it).
+  it('a membership carries its workspace role, and no custom role for a built-in', async () => {
+    // Since MOTIR-6561 the workspace role is NOT NULL, so the pre-6168 shape — a
+    // row with only the legacy column — cannot be written any more; the
+    // migration's own test (`tests/migrations/workspaceRoleNotNull.test.ts`)
+    // holds that refusal.
     const fx = await makeTenants();
     const m = await adminDb.workspaceMembership.findUnique({
       where: { userId_workspaceId: { userId: fx.member1, workspaceId: fx.w1 } },
     });
-    expect(m?.role).toBe('member');
-    expect(m?.workspaceRole).toBeNull();
+    expect(m?.workspaceRole).toBe('member');
     expect(m?.roleDefinitionId).toBeNull();
   });
 
@@ -343,8 +348,6 @@ describe('workspaceMembershipRepository — the workspace-role writers and reade
       where: { userId_workspaceId: { userId: fx.member1, workspaceId: fx.w1 } },
     });
     expect([m?.workspaceRole, m?.roleDefinitionId]).toEqual(['viewer', null]);
-    // The legacy column is untouched by the new writer.
-    expect(m?.role).toBe('member');
   });
 
   it('setWorkspaceRole issues exactly ONE statement against workspace_membership', async () => {
@@ -380,18 +383,21 @@ describe('workspaceMembershipRepository — the workspace-role writers and reade
     expect(statements).toEqual(['update']);
   });
 
-  it('countManagers counts workspace_role = manager rows only — never the legacy owner, never NULL', async () => {
+  it('countManagers counts workspace_role = manager rows only — never the legacy owner', async () => {
     const fx = await makeTenants();
-    // The creator is written as a Manager since MOTIR-6462; put W1's rows back to
-    // the deploy-window shape — the legacy `owner` with `workspace_role` NULL.
+    // The creator is written as a Manager since MOTIR-6462; demote W1's rows to
+    // Member while the legacy column still says `owner`.
     await adminDb.workspaceMembership.updateMany({
       where: { workspaceId: fx.w1 },
-      data: { workspaceRole: null },
+      data: { workspaceRole: 'member' },
     });
+    // The legacy value, written raw — nothing in the app writes it (MOTIR-6562).
+    await adminDb.$executeRaw`
+      UPDATE "workspace_membership" SET "role" = 'owner' WHERE "workspaceId" = ${fx.w1}`;
     const before = await adminDb.$transaction((tx) =>
       workspaceMembershipRepository.countManagers(fx.w1, tx),
     );
-    // The W1 owner is `role = 'owner'` with `workspace_role` NULL: not counted.
+    // The W1 owner is `role = 'owner'` with `workspace_role = 'member'`: not counted.
     expect(before).toBe(0);
     await adminDb.$transaction(async (tx) => {
       await workspaceMembershipRepository.setWorkspaceRole(

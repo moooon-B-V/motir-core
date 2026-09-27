@@ -330,11 +330,11 @@ describe('guard: the permission is ONE key, at the service tier', () => {
     await workspacesService.addMember({
       userId: viewer.id,
       workspaceId: fx.workspaceId,
-      role: 'viewer',
+      workspaceRole: 'viewer',
     });
     await withWorkspaceContext(fx.ctx, (tx) =>
       projectMembershipRepository.create(
-        { workspaceId: fx.workspaceId, projectId: fx.projectId, userId: viewer.id, role: 'viewer' },
+        { workspaceId: fx.workspaceId, projectId: fx.projectId, userId: viewer.id },
         tx,
       ),
     );

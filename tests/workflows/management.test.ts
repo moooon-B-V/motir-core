@@ -77,7 +77,11 @@ describe('assertProjectAdmin gate', () => {
       name: 'WF Member',
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: member.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     await expect(
       workflowsService.setPolicyMode({

@@ -63,7 +63,8 @@ export async function seedGenerationTestProject(
   // Enrol the team (mirrors the `motir` project enrolment). `createProject` does
   // NOT create a ProjectMembership, so a plain create per user is correct and —
   // because the clear pass deletes the workspace (cascading its projects +
-  // memberships) — idempotent across reseeds. Owner → `admin`, the rest → `member`.
+  // memberships) — idempotent across reseeds. A project membership carries no role
+  // (MOTIR-6464); nothing writes the legacy column (MOTIR-6562).
   // Bound (MOTIR-2868) on the workspace being enrolled into — `project_membership`
   // is gated `workspace_id = current_setting('app.workspace_id', true)` for ALL
   // verbs, so the bare transaction this replaced had every INSERT refused.
@@ -75,7 +76,6 @@ export async function seedGenerationTestProject(
           workspaceId: input.workspaceId,
           projectId: project.id,
           userId,
-          role: userId === input.ownerUserId ? 'admin' : 'member',
         },
         tx,
       );

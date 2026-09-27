@@ -136,14 +136,17 @@ describe('reconcile — the refusals and failures that are not the binder’s wo
       data: { name: 'Viewer', email: `viewer-gate-${Date.now()}@example.com` },
     });
     await adminDb.workspaceMembership.create({
-      data: { workspaceId: fx.workspaceId, userId: viewer.id, role: 'member' },
+      data: {
+        workspaceId: fx.workspaceId,
+        userId: viewer.id,
+        workspaceRole: 'member',
+      },
     });
     await adminDb.projectMembership.create({
       data: {
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
         userId: viewer.id,
-        role: 'viewer',
       },
     });
     await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');

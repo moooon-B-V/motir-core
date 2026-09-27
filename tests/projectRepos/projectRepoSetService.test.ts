@@ -1193,7 +1193,11 @@ describe('access gating', () => {
       data: { email: 'repo-set-viewer@example.com', name: 'Viewer', emailVerified: true },
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: viewer.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: viewer.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'limited' } });
     const viewerCtx = { userId: viewer.id, workspaceId: fx.workspaceId };
@@ -1217,14 +1221,17 @@ describe('access gating', () => {
       data: { email: 'repo-set-member@example.com', name: 'Member', emailVerified: true },
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: member.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     await adminDb.projectMembership.create({
       data: {
         userId: member.id,
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
-        role: 'member',
       },
     });
     const memberCtx = { userId: member.id, workspaceId: fx.workspaceId };
@@ -1250,7 +1257,11 @@ describe('access gating', () => {
       data: { email: 'repo-set-outsider@example.com', name: 'Out', emailVerified: true },
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: outsider.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: outsider.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
     await expect(

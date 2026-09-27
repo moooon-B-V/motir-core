@@ -162,7 +162,7 @@ async function planWithAdd(
 async function colleague(fx: WorkItemFixture, role: 'viewer' | null): Promise<string> {
   const user = await createTestUser();
   await adminDb.workspaceMembership.create({
-    data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
+    data: { userId: user.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
   });
   if (role) {
     await addToProjectAs({

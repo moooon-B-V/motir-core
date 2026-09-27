@@ -77,7 +77,7 @@ async function makeFixture(slug: string) {
 // Add a brand-new user to the workspace as a plain `member`, returning the user.
 async function addWorkspaceMember(workspaceId: string, email: string, name = 'Member') {
   const user = await makeUser(email, name);
-  await workspacesService.addMember({ userId: user.id, workspaceId, role: 'member' });
+  await workspacesService.addMember({ userId: user.id, workspaceId, workspaceRole: 'member' });
   return user;
 }
 
@@ -108,8 +108,7 @@ describe('addMember', () => {
     const persisted = await withWorkspaceServiceContext(workspace.id, (tx) =>
       projectMembershipRepository.findByUserAndProject(alice.id, project.id, tx),
     );
-    // The legacy column is still NOT NULL, so it is written — and always `member`.
-    expect(persisted?.role).toBe('member');
+    // No legacy role is written (MOTIR-6562); the pointer stays empty.
     expect(persisted?.roleDefinitionId).toBeNull();
     expect(persisted?.workspaceId).toBe(workspace.id);
   });
@@ -335,7 +334,7 @@ describe('removeMember', () => {
     const { workspace, key, owner, ownerCtx, project } = await makeFixture('remove-lastadmin');
     const sole = await addWorkspaceMember(workspace.id, 'sole-remove@example.com');
     await adminDb.projectMembership.create({
-      data: { workspaceId: workspace.id, projectId: project.id, userId: sole.id, role: 'admin' },
+      data: { workspaceId: workspace.id, projectId: project.id, userId: sole.id },
     });
     const removed = await projectMembersService.removeMember({
       key,

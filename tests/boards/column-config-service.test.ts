@@ -76,7 +76,7 @@ async function makeFixture(label: string): Promise<Fixture> {
     name: 'Config Member',
   });
   await adminDb.workspaceMembership.create({
-    data: { userId: member.id, workspaceId, role: 'member' },
+    data: { userId: member.id, workspaceId, workspaceRole: 'member' },
   });
 
   const board = await withWorkspaceServiceContext(workspaceId, (tx) =>

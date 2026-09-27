@@ -85,7 +85,7 @@ async function enrolMember(fx: WorkItemFixture, slug: string) {
   await workspacesService.addMember({
     userId: user.id,
     workspaceId: fx.workspaceId,
-    role: 'member',
+    workspaceRole: 'member',
   });
   return user;
 }

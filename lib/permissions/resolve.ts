@@ -56,9 +56,8 @@ export interface ProjectPermissionInputs {
   accessLevel: ProjectAccessLevel;
   /**
    * The actor's WORKSPACE ROLE, or null if they are not a member of the project's
-   * workspace. Read through `resolveWorkspaceRole` (`lib/workspaces/roles.ts`), so
-   * a membership the old build wrote during the deploy window resolves by the
-   * legacy mapping; the org Owner arrives here as `manager` (MOTIR-6308).
+   * workspace — the membership's stored `workspaceRole` (NOT NULL since
+   * MOTIR-6561); the org Owner arrives here as `manager` (MOTIR-6308).
    */
   workspaceRole: WorkspaceRole | null;
   /**

@@ -93,7 +93,7 @@ test.beforeAll(async () => {
   });
   await workspacesService.addMember({ userId: member.id, workspaceId });
   await adminDb.projectMembership.create({
-    data: { userId: member.id, projectId: first.id, workspaceId, role: 'member' },
+    data: { userId: member.id, projectId: first.id, workspaceId },
   });
   await pinActiveProject(member.id, first.id);
 });

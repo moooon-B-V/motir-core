@@ -51,7 +51,7 @@ async function memberWithRole(fx: WorkItemFixture, role: 'viewer' | 'member', em
   await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
   await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
     projectMembershipRepository.create(
-      { workspaceId: fx.workspaceId, projectId: fx.projectId, userId: user.id, role },
+      { workspaceId: fx.workspaceId, projectId: fx.projectId, userId: user.id },
       tx,
     ),
   );

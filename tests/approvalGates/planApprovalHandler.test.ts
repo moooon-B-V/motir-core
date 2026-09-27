@@ -300,8 +300,8 @@ describe('ROUTING (§11.6) — the requester, else the workspace owner, else nob
     // (The stand-in is the oldest MANAGER since MOTIR-6462, so a legacy `admin`
     // would stand in; the row is made a plain Member instead.)
     await adminDb.workspaceMembership.updateMany({
-      where: { workspaceId: fx.workspaceId, role: 'owner' },
-      data: { role: 'member', workspaceRole: 'member' },
+      where: { workspaceId: fx.workspaceId, workspaceRole: 'manager' },
+      data: { workspaceRole: 'member' },
     });
     await withWorkspaceContext(fx.ctx, async (tx) => {
       expect(

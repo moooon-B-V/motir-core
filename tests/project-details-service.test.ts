@@ -77,7 +77,7 @@ async function makeFixture(slug: string, identifier = 'PROD') {
 
 async function addWorkspaceMember(workspaceId: string, email: string) {
   const user = await makeUser(email, 'Member');
-  await workspacesService.addMember({ userId: user.id, workspaceId, role: 'member' });
+  await workspacesService.addMember({ userId: user.id, workspaceId, workspaceRole: 'member' });
   return user;
 }
 

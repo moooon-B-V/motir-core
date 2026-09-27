@@ -1,5 +1,4 @@
 import { randomBytes } from 'node:crypto';
-import type { MemberRole } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
@@ -16,7 +15,12 @@ import { verificationRepository } from '@/lib/repositories/verificationRepositor
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { readMembership } from '@/lib/workspaces/membershipGate';
-import { legacyToWorkspaceRole } from '@/lib/workspaces/roles';
+import {
+  legacyToWorkspaceRole,
+  type LegacyMemberRole,
+  WORKSPACE_ROLES,
+  type WorkspaceRole,
+} from '@/lib/workspaces/roles';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
@@ -39,7 +43,7 @@ import {
 //
 // Tokens live in the Verification table (Subtask 1.1.3) with the
 // `workspace-invite:` identifier prefix. The `value` column carries
-// JSON `{ workspaceId, email, role, inviterUserId }`. The existing
+// JSON `{ workspaceId, email, workspaceRole, role, inviterUserId }`. The existing
 // `@@index([identifier])` makes prefix-scoped lookups (validate,
 // rate-limit) cheap.
 
@@ -52,11 +56,26 @@ export const INVITE_RATE_LIMIT = {
 
 const TOKEN_BYTES = 24;
 
+// The payload's role, across a release boundary (MOTIR-6562). A token minted by
+// this build carries `workspaceRole` — the role the membership is created with —
+// AND the legacy `role`, so a machine still on the previous image during the
+// rollout (or after a rollback) can redeem it. A token minted BEFORE this build
+// carries `role` only; it lives at most `INVITE_EXPIRY_MS`, and accept maps it.
+// The legacy arm goes with the phase-3 DROP card (MOTIR-6569).
 interface InvitePayload {
   workspaceId: string;
   email: string;
-  role: MemberRole;
+  workspaceRole?: WorkspaceRole;
+  role?: LegacyMemberRole;
   inviterUserId: string;
+}
+
+const LEGACY_MEMBER_ROLES: readonly string[] = ['owner', 'admin', 'member', 'viewer'];
+
+/** The workspace role an invite lands as: the new key, else the pre-release token's mapped one. */
+function invitedWorkspaceRole(payload: InvitePayload): WorkspaceRole {
+  if (payload.workspaceRole) return payload.workspaceRole;
+  return legacyToWorkspaceRole(payload.role!);
 }
 
 function normalizeEmail(email: string): string {
@@ -73,12 +92,22 @@ function parsePayload(value: string): InvitePayload | null {
     if (
       typeof parsed.workspaceId !== 'string' ||
       typeof parsed.email !== 'string' ||
-      typeof parsed.role !== 'string' ||
       typeof parsed.inviterUserId !== 'string'
     ) {
       return null;
     }
-    return parsed;
+    const hasWorkspaceRole =
+      parsed.workspaceRole !== undefined &&
+      (WORKSPACE_ROLES as readonly string[]).includes(parsed.workspaceRole);
+    const hasLegacyRole = parsed.role !== undefined && LEGACY_MEMBER_ROLES.includes(parsed.role);
+    // A payload naming neither role is not an invite this build can honour.
+    if (!hasWorkspaceRole && !hasLegacyRole) return null;
+    // Keep only a role this build recognises, so accept never reads a stray value.
+    return {
+      ...parsed,
+      workspaceRole: hasWorkspaceRole ? parsed.workspaceRole : undefined,
+      role: hasLegacyRole ? parsed.role : undefined,
+    };
   } catch {
     return null;
   }
@@ -200,6 +229,7 @@ export const workspaceInvitesService = {
     const payload: InvitePayload = {
       workspaceId: args.workspaceId,
       email,
+      workspaceRole: 'member',
       role: 'member',
       inviterUserId: args.inviterUserId,
     };
@@ -365,8 +395,7 @@ export const workspaceInvitesService = {
             workspaceId: payload.workspaceId,
             // Every invite is minted `member` (`invite` above), so an accepted
             // invite lands as a workspace Member (MOTIR-6462).
-            workspaceRole: legacyToWorkspaceRole(payload.role),
-            role: payload.role,
+            workspaceRole: invitedWorkspaceRole(payload),
           },
           tx,
         );

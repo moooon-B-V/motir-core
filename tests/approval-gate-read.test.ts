@@ -121,7 +121,7 @@ async function designSubtaskWithGate(
 async function plainMember() {
   const user = await createTestUser();
   await adminDb.workspaceMembership.create({
-    data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
+    data: { userId: user.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
   });
   return user;
 }
@@ -259,7 +259,11 @@ describe('canDecide — the AUTHORITY answer, and it agrees with the door', () =
     const assignee = await createTestUser();
     const admin = await createTestUser();
     await adminDb.workspaceMembership.create({
-      data: { userId: admin.id, workspaceId: fx.workspaceId, role: 'admin' },
+      data: {
+        userId: admin.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'manager',
+      },
     });
     const { item } = await designSubtaskWithGate({ assigneeId: assignee.id });
 
@@ -351,7 +355,11 @@ describe('canDecide AGREES WITH THE DOOR over the whole authority matrix (MOTIR-
         else if (row.relationship === 'admin') {
           const admin = await createTestUser();
           await adminDb.workspaceMembership.create({
-            data: { userId: admin.id, workspaceId: fx.workspaceId, role: 'admin' },
+            data: {
+              userId: admin.id,
+              workspaceId: fx.workspaceId,
+              workspaceRole: 'manager',
+            },
           });
           actorId = admin.id;
         } else actorId = (await plainMember()).id;
@@ -560,7 +568,6 @@ describe('canDecide holds the KIND’s permission FLOOR, as the door does (MOTIR
         userId: user.id,
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
-        role: 'viewer',
       },
     });
     await setWorkspaceRoleFor(user.id, fx.workspaceId, 'viewer');

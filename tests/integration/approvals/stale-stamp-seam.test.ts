@@ -232,7 +232,11 @@ describe('what nobody was deciding about never moves the stamp', () => {
 
     const other = await createTestUser();
     await adminDb.workspaceMembership.create({
-      data: { userId: other.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: other.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     await workItemsService.updateWorkItem(card.id, { assigneeId: fx.ownerId }, fx.ctx);
     expect((await read()).stamp).toBe(shown.stamp);

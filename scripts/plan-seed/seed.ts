@@ -278,7 +278,7 @@ async function main() {
     await workspacesService.addMember({
       userId: userIdByEmail.get(u.email)!,
       workspaceId: workspace.id,
-      role: 'member',
+      workspaceRole: 'member',
     });
   }
 
@@ -363,7 +363,6 @@ async function main() {
           workspaceId: workspace.id,
           projectId: project.id,
           userId: userIdByEmail.get(u.email)!,
-          role: u.email === OWNER_EMAIL ? 'admin' : 'member',
         },
         tx,
       );

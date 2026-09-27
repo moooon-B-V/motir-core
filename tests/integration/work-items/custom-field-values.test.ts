@@ -423,7 +423,7 @@ describe('setValue — permission matrix', () => {
     await workspacesService.addMember({
       userId: viewer.id,
       workspaceId: fx.workspaceId,
-      role: 'viewer',
+      workspaceRole: 'viewer',
     });
     await withWorkspaceContext(fx.ctx, (tx) =>
       projectMembershipRepository.create(
@@ -431,7 +431,6 @@ describe('setValue — permission matrix', () => {
           workspaceId: fx.workspaceId,
           projectId: fx.projectId,
           userId: viewer.id,
-          role: 'viewer',
         },
         tx,
       ),

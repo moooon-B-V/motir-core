@@ -459,7 +459,7 @@ describe('the two arms that only run when something moves underneath (MOTIR-5600
     await recordReview(members.web);
     await recordReview(members.api);
     await adminDb.workspaceMembership.deleteMany({
-      where: { workspaceId: fx.workspaceId, role: 'owner' },
+      where: { workspaceId: fx.workspaceId, workspaceRole: 'manager' },
     });
 
     const outcome = await evaluateForWorkItem(item.id, fx.workspaceId);

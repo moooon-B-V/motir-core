@@ -233,7 +233,7 @@ describe('membership direction (6.10.2 §5, asymmetric)', () => {
       data: { name: 'Acme Beta', slug: 'acme-beta-org-only', organizationId: orgId },
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: other.id, workspaceId: second.id, role: 'owner' },
+      data: { userId: other.id, workspaceId: second.id, workspaceRole: 'manager' },
     });
     await adminDb.organizationMembership.create({
       data: { organizationId: orgId, userId: other.id, role: 'member' },
@@ -282,7 +282,7 @@ describe('membership direction (6.10.2 §5, asymmetric)', () => {
       where: { userId_workspaceId: { userId: invitee.id, workspaceId: workspace.id } },
     });
     expect(wsm).not.toBeNull();
-    expect(wsm!.role).toBe('member');
+    expect(wsm!.workspaceRole).toBe('member');
 
     // The point of the arm: they can actually reach the workspace now.
     const access = await organizationsService.resolveWorkspaceAccess(invitee.id, workspace.id);
@@ -528,7 +528,7 @@ describe('provisioning + the user-orgs surface', () => {
     const wsm = await adminDb.workspaceMembership.findUnique({
       where: { userId_workspaceId: { userId: user.id, workspaceId: workspace.id } },
     });
-    expect(wsm!.role).toBe('owner');
+    expect(wsm!.workspaceRole).toBe('manager');
   });
 
   it('lists the orgs a user belongs to and resolves the active one with its role', async () => {

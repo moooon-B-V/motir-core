@@ -1770,10 +1770,10 @@ model Project {
 /// the `owner` row is the workspace founder, who always has access to every
 /// project regardless of project membership.
 model WorkspaceMembership {
-  id               String         @id @default(cuid())
+  id               String        @id @default(cuid())
   userId           String
   workspaceId      String
-  role             MemberRole     @default(member)
+  role             MemberRole    @default(member)
   /// The member's currently-active project within this workspace. Clears
   /// to NULL (onDelete: SetNull) — not cascades — when that project is
   /// archived/deleted, so losing a project never removes the membership.
@@ -1781,26 +1781,25 @@ model WorkspaceMembership {
   activeProjectId  String?
   /// The person's ONE workspace role (Story MOTIR-6168 · MOTIR-6457) — Manager,
   /// Member or Viewer, the same in every project of the workspace
-  /// (`docs/decisions/role-model.md` §2). Added BESIDE the legacy `role`: NULL
-  /// means "not migrated yet — derive it from `role`", which is what keeps a row
-  /// the still-serving old build writes during the deploy window correct. It
-  /// has NO default on purpose: a default would silently hand `member` to a row
-  /// the old build creates as `owner`. The follow-up contract story makes it
-  /// NOT NULL once no NULL remains.
+  /// (`docs/decisions/role-model.md` §2). NOT NULL since MOTIR-6561, which
+  /// backfilled the deploy window's stragglers and deleted the fallback that read
+  /// the legacy `role` — this column is now the ONLY place a role is read from.
+  /// It has NO default on purpose: every writer names the role, and a default
+  /// would hide one that forgot to.
   ///
   /// ⚠️ This column and `roleDefinitionId` MOVE TOGETHER, and
   /// `workspaceMembershipRepository.setWorkspaceRole` is their only writer. A
   /// membership on a workspace custom role carries `workspaceRole =
   /// CUSTOM_WORKSPACE_ROLE_TIER` (`member`, `lib/workspaces/roles.ts`).
-  workspaceRole    WorkspaceRole? @map("workspace_role")
+  workspaceRole    WorkspaceRole @map("workspace_role")
   /// The workspace CUSTOM role this membership holds, or NULL for a built-in.
   /// `onDelete: Restrict` for the reason `ProjectMembership.roleDefinitionId`
   /// gives: Cascade would drop the member, SetNull would silently re-grant, so
   /// the DATABASE refuses and the only route to deleting a held role is the
   /// service's reassign-then-delete path.
-  roleDefinitionId String?        @map("role_definition_id")
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  roleDefinitionId String?       @map("role_definition_id")
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace      Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

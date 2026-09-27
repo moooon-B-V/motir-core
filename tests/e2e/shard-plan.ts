@@ -640,6 +640,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'jobs-postgres-engine.spec.ts': 24.8,
   'jobs-scheduled-engine.spec.ts': 14.6,
   'labels-components-watch.spec.ts': 28.5,
+  // MOTIR-6564 — ESTIMATED, not measured: seven serial cases, ten sign-ins and a
+  // workspace created through the UI; priced from `workspace-flows.spec.ts`'s
+  // per-sign-in cost and rounded UP. Replace with its measured CI time.
+  'legacy-role-storage.spec.ts': 60.0,
   'legal-gone-selfhost.spec.ts': 3.0,
   'link-search-flow.spec.ts': 14.6,
   'member-facing-permissions.spec.ts': 7.7,
