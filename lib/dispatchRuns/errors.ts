@@ -178,3 +178,30 @@ export class RunFoundReportReasonInvalidError extends Error {
     this.name = 'RunFoundReportReasonInvalidError';
   }
 }
+
+/**
+ * 422 — a dispatch prompt was asked to CONTINUE a run it cannot continue
+ * (MOTIR-6531): the run is still open, it succeeded, it holds no leg for this work
+ * item, or it is not this caller's workspace's (RLS answers nothing, and this is
+ * the same answer — never a 404 that would confirm another tenant's run exists).
+ *
+ * 422 rather than 400: v1's statuses are a closed set with no 400, and every
+ * "refused before anything was written, here is what to fix" on this API is a 422
+ * (`lib/api/v1/errors.ts`).
+ */
+export class ContinueFromInvalidError extends Error {
+  readonly code = 'CONTINUE_FROM_INVALID';
+  constructor(
+    runId: string,
+    readonly why: 'unknown' | 'still_running' | 'succeeded',
+  ) {
+    super(
+      why === 'still_running'
+        ? `Run ${runId} is still open; only a run that has ended can be continued.`
+        : why === 'succeeded'
+          ? `Run ${runId} succeeded; there is nothing to continue.`
+          : `Run ${runId} is not a run of this work item.`,
+    );
+    this.name = 'ContinueFromInvalidError';
+  }
+}

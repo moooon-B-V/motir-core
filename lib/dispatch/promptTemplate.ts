@@ -298,6 +298,25 @@ export interface ChangesRequestedForPrompt extends LatestRefusalDTO {
   key: string;
 }
 
+/**
+ * The run a CONTINUE picks up (Story MOTIR-6526 · MOTIR-6531) — the dead run and
+ * where its work is, as the service resolved them. Set only when the prompt is
+ * asked for with `continueFrom`; absent, the prompt is a fresh run's.
+ */
+export interface ContinueFromForPrompt {
+  deadRunId: string;
+  /** How it ended, in words — `the run stopped reporting (no heartbeat)`, … */
+  endedHow: string;
+  /** Its last heartbeat, else its end, else its start — ISO-8601. */
+  lastHeardAt: string;
+  /** Who ran it, or null when that account is gone. */
+  dispatcherName: string | null;
+  /** The branch its work is on — the one this run checks out. */
+  branch: string;
+  /** The open pull request it left, when there is one. */
+  pullRequest: { repo: string; number: number; url: string } | null;
+}
+
 export interface DispatchPromptSource {
   /** The `PROD-<n>` identifier. */
   key: string;
@@ -418,6 +437,12 @@ export interface DispatchPromptSource {
    * claim true rather than merely restated. See the header.
    */
   findingsPolicy?: FindingsPolicy;
+  /**
+   * The dead run this prompt CONTINUES (MOTIR-6531). When set, the prompt carries
+   * the CONTINUE block and a git workflow that checks the dead run's branch out
+   * instead of cutting one. Absent for every fresh run.
+   */
+  continueFrom?: ContinueFromForPrompt | null;
 }
 
 /** The assembled prompt plus the workflow variant it ended up carrying. */
@@ -1278,6 +1303,10 @@ function contextSection(
   // block, directly above the card body it changes how to read.
   facts.push(...changesRequestedSection(src.changesRequested ?? []));
 
+  // THE RUN THIS ONE CONTINUES (MOTIR-6531) — beside the refusal and for the same
+  // reason: the story of a previous attempt, read before the card body.
+  facts.push(...continueSection(src.continueFrom ?? null));
+
   facts.push('', 'CARD DESCRIPTION');
   facts.push('', narrative.length > 0 ? narrative : '(The card carries no description body.)');
   return facts;
@@ -1296,6 +1325,39 @@ const REFUSAL_VERDICT_LINE: Record<NonNullable<LatestRefusalDTO['refusalVerdict'
   revise: 'Revise — the reviewer asked for this work to be revised.',
   re_plan: 'Re-plan — the reviewer judged the plan around this work wrong.',
 };
+
+/**
+ * CONTINUE (Story MOTIR-6526 · MOTIR-6531; `run-death-keeps-work.md` §4) — the
+ * agent is not starting this work item, it is CARRYING ON a run that died. It is
+ * told whose run, how it ended, where the work is, and the rules of inheriting
+ * it: read what is there first, keep what is right, and do not start again.
+ *
+ * NULL renders nothing: almost every run is a fresh one.
+ */
+function continueSection(cf: ContinueFromForPrompt | null): string[] {
+  if (cf === null) return [];
+  return [
+    '',
+    'CONTINUE — you are carrying on a run that DIED, not starting fresh',
+    '',
+    `  The previous run (${cf.deadRunId}) was run by ${cf.dispatcherName ?? 'somebody no longer resolvable'}.`,
+    `  It ended: ${cf.endedHow}. Last heard from ${cf.lastHeardAt}.`,
+    `  Its work is on the branch ${cf.branch}.`,
+    ...(cf.pullRequest
+      ? [
+          `  It left an open pull request: ${cf.pullRequest.repo} #${cf.pullRequest.number}`,
+          `  (${cf.pullRequest.url}).`,
+        ]
+      : []),
+    '',
+    "  You are CONTINUING someone else's work:",
+    '    - read `git log origin/main..HEAD` and `git status` FIRST, before changing',
+    '      anything, and understand what is already done;',
+    '    - keep what is right; do not start over and do not redo finished work;',
+    '    - do NOT create a new branch — the GIT WORKFLOW below checks this one out;',
+    '    - do NOT open a second pull request — reuse the one that is open, if any.',
+  ];
+}
 
 /**
  * CHANGES REQUESTED (Story MOTIR-6070 · Subtask MOTIR-6422; ADR `approval-gates.md`
@@ -1496,6 +1558,7 @@ function multiRepoPrBlocks(
       `  3. cd ${wt}, install dependencies, and do THIS repository's half of the work here.`,
       '  4. Stage with explicit `git add <path>` — never `-A`.',
       `  5. Commit with a Conventional Commits subject that carries ${src.key}.`,
+      ...checkpointLines(branch, '  '),
       `  6. Push the branch and open a pull request against ${repo.defaultBranch ?? 'main'}.`,
       `     Put ${src.key} in the TITLE as well, as a label for a human reading a`,
       '     list — it is not what links the pull request.',
@@ -1576,6 +1639,7 @@ function multiRepoSessionLineageWorkflow(
       `  3. cd ${wt}, install dependencies, and do THIS repository's half of the work here.`,
       '  4. Stage with explicit `git add <path>` — never `-A`.',
       `  5. Commit with a Conventional Commits subject that carries ${src.key}.`,
+      ...checkpointLines(branch, '  '),
       `  6. Integrate the commit into ${sessionBranch} and push that branch.`,
     );
   });
@@ -1657,6 +1721,20 @@ export function linkingStep(
   ];
 }
 
+/**
+ * THE CHECKPOINT (MOTIR-6531) — every run pushes its branch after each commit, so
+ * a run that dies leaves its commits on origin for `motir continue`. Rendered as a
+ * continuation of the COMMIT step rather than a numbered step of its own, so no
+ * later step renumbers. It opens no pull request, so no CI promotion or card link
+ * fires mid-run.
+ */
+function checkpointLines(branch: string, pad = ''): string[] {
+  return [
+    `${pad}   CHECKPOINT: push the branch after EVERY commit — \`git push -u origin ${branch}\`.`,
+    `${pad}   It keeps your work safe if this run dies; it opens no pull request.`,
+  ];
+}
+
 /** The per-item-PR GIT WORKFLOW: branch from `origin/main`, one PR, stop. */
 function perItemPrWorkflow(src: DispatchPromptSource): string[] {
   const branch = `${branchPrefix(src.type)}/${src.key}-${branchSlug(src.title)}`;
@@ -1669,6 +1747,7 @@ function perItemPrWorkflow(src: DispatchPromptSource): string[] {
     '3. Stage with explicit `git add <path>` — never `-A`, so concurrent work in',
     '   other worktrees, or unrelated local edits, cannot ride along in your commit.',
     `4. Commit with a Conventional Commits subject that carries ${src.key}.`,
+    ...checkpointLines(branch),
     '5. Push the branch and open a pull request against main. Put',
     `   ${src.key} in the TITLE as well — a human scanning a pull-request list`,
     '   reads it there — but the title is a LABEL, not what links the pull',
@@ -1692,6 +1771,7 @@ function sessionLineageWorkflow(src: DispatchPromptSource, sessionBranch: string
     `2. cd ${dir}, install dependencies, and do ALL the work inside this worktree.`,
     '3. Stage with explicit `git add <path>` — never `-A`.',
     `4. Commit with a Conventional Commits subject that carries ${src.key}.`,
+    ...checkpointLines(branch),
     `5. Integrate the commit into ${sessionBranch} and push that branch.`,
     `6. Report it: call the mark_integrated tool with key ${src.key} and`,
     `   sessionBranch ${sessionBranch}.`,
@@ -2481,7 +2561,62 @@ const MANUAL_CLOSING = [
  * byte: that is the whole back-compatibility promise of MOTIR-3132, and putting
  * the choice in one function is what makes it checkable rather than asserted.
  */
+/**
+ * The CONTINUE GIT WORKFLOW (MOTIR-6531) — CHECK OUT the dead run's branch, never
+ * cut one. Selected whenever the prompt continues a dead run, for a per-item card
+ * and a lineage card alike (a lineage card keeps integrating into its session
+ * branch). The branch the agent works on is the whole difference between
+ * continuing and starting over, and the agent only knows what this says: a prompt
+ * that still told it to branch from main would undo the resume (MOTIR-6322).
+ */
+function continueWorkflow(
+  src: DispatchPromptSource,
+  cf: ContinueFromForPrompt,
+  sessionBranch: string | null,
+): string[] {
+  const branch = cf.branch;
+  const dir = worktreeDir(src.targetRepo, src.key);
+  const base = sessionBranch ?? 'main';
+  const lines = [
+    `This is a CONTINUE: the work is already on ${branch}. Check that branch out —`,
+    'never create a new one.',
+    '',
+    '1. git fetch origin',
+    `2. If the worktree ${dir} already exists and is on ${branch}, use it. Otherwise:`,
+    `   git worktree add ${dir} ${branch}`,
+    `   (it tracks origin/${branch}; this checks the EXISTING branch out).`,
+    `3. cd ${dir}, install dependencies, and read \`git log origin/${base}..HEAD\` and`,
+    '   `git status` BEFORE changing anything.',
+    `4. git merge origin/${base}, and resolve any conflict.`,
+    '5. Finish the work. Stage with explicit `git add <path>` — never `-A`.',
+    `6. Commit with a Conventional Commits subject that carries ${src.key}.`,
+    ...checkpointLines(branch),
+  ];
+  if (sessionBranch !== null) {
+    return [
+      ...lines,
+      `7. Integrate the commit into ${sessionBranch} and push that branch.`,
+      `8. Report it: call the mark_integrated tool with key ${src.key} and`,
+      `   sessionBranch ${sessionBranch}.`,
+      '9. Do NOT open a pull request of your own. The session pull request from',
+      `   ${sessionBranch} usually already exists (\`gh pr list --head ${sessionBranch}\`);`,
+      '   open it only if it does not.',
+      ...linkingStep(src, sessionBranch, 10),
+      '11. STOP. Do not merge that pull request and do not delete the branch.',
+    ];
+  }
+  return [
+    ...lines,
+    `7. Push ${branch}. Open a pull request against main ONLY if none is open for it`,
+    `   (\`gh pr list --head ${branch}\`) — a continue never opens a second one. Put`,
+    `   ${src.key} in the TITLE as well, as a label.`,
+    ...linkingStep(src, branch, 8),
+    '9. STOP at the open pull request. Do not merge it and do not delete the branch.',
+  ];
+}
+
 function gitWorkflow(src: DispatchPromptSource, sessionBranch: string | null): string[] {
+  if (src.continueFrom) return continueWorkflow(src, src.continueFrom, sessionBranch);
   const repos = multiRepoSet(src);
   if (sessionBranch !== null) {
     return repos
@@ -2607,6 +2742,6 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
     ...closing,
   ];
 
-  const branch = manual ? null : (sessionBranch ?? cardBranch(src));
+  const branch = manual ? null : (src.continueFrom?.branch ?? sessionBranch ?? cardBranch(src));
   return { prompt: lines.join('\n') + '\n', workflowMode, sessionBranch, branch };
 }

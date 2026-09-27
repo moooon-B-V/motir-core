@@ -104,7 +104,7 @@ function statusRefusal(
  * The same resolution the CONTINUE prompt uses (MOTIR-6531), so the claim and the
  * prompt name one branch.
  */
-async function resolveBranch(
+export async function resolveContinueBranch(
   itemId: string,
   run: LatestRunForWorkItem,
   tx: Prisma.TransactionClient,
@@ -137,6 +137,27 @@ async function resolveBranch(
   const opened = await dispatchRunEventRepository.findLatestOfKind(run.id, 'run_opened', tx);
   const openedBranch = (opened?.data as { branch?: unknown } | null)?.branch;
   return { branch: typeof openedBranch === 'string' ? openedBranch : null, pullRequest: null };
+}
+
+/**
+ * How a dead run ended, in the words the CONTINUE prompt hands the next agent.
+ * Read off the stop reason first (it says WHY), then the status.
+ */
+export function endedHow(run: {
+  status: string;
+  stopReason: string | null;
+  origin: string;
+}): string {
+  if (run.status === 'running' || run.stopReason === 'abandoned') {
+    return 'the run stopped reporting (no heartbeat reached Motir)';
+  }
+  if (run.stopReason === 'interrupted') return 'it was stopped from its terminal';
+  if (run.status === 'failed') return 'the agent exited with an error';
+  if (run.status === 'cancelled') return 'it was cancelled';
+  if (run.status === 'timed_out' && run.origin === 'hosted') {
+    return 'the hosted run stalled or reached its time limit';
+  }
+  return `it ended ${run.status}`;
 }
 
 type Evaluation =
@@ -193,7 +214,7 @@ async function evaluate(
     run.scopeWorkItemId !== null && run.scopeWorkItemId !== item.id
       ? (run.scope?.identifier ?? null)
       : null;
-  const { branch, pullRequest } = await resolveBranch(item.id, run, tx);
+  const { branch, pullRequest } = await resolveContinueBranch(item.id, run, tx);
   const refusal: Exclude<WorkItemContinueRefusal, 'run_alive' | 'no_dead_run'> | null =
     refusalByStatus === 'use_fix'
       ? 'use_fix'
@@ -278,7 +299,9 @@ export const workItemContinueService = {
 
         if (verdict.kind === 'continuing') {
           const mine = verdict.run.createdById === ctx.userId;
-          const branch = mine ? (await resolveBranch(item.id, verdict.run, tx)).branch : null;
+          const branch = mine
+            ? (await resolveContinueBranch(item.id, verdict.run, tx)).branch
+            : null;
           return {
             key: item.identifier,
             title: item.title,

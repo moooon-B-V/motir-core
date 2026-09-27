@@ -626,6 +626,11 @@
  *   — the CONTINUE claim `motir continue <key>` makes on a work item whose last run
  *   died (`WorkItemContinueClaim` component; a refusal is a 200 with an `outcome`),
  *   and `continue` as a member of the `DispatchCommand` vocabulary.
+ *   MOTIR-6531 adds one optional query parameter to `getWorkItemDispatchPrompt`,
+ *   `continueFrom` (a dead run's id): the prompt then CONTINUES that run on its
+ *   branch; an invalid one is `CONTINUE_FROM_INVALID` (422). Every git workflow
+ *   also gains a checkpoint instruction (push after each commit) — prompt TEXT,
+ *   not contract.
  *
  *   Additive: a NEW operation and NEW nullable fields (§8's allowed list); no
  *   existing field changes meaning. Gated on `work_item:edit`, a key

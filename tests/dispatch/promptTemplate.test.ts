@@ -2671,3 +2671,90 @@ describe('the BRANCH the prompt instructs (MOTIR-6530) — what a local run reco
     expect(assembleDispatchPrompt(source({ type: 'manual', executor: 'human' })).branch).toBeNull();
   });
 });
+
+describe('the CHECKPOINT step (MOTIR-6531) — every git workflow pushes after each commit', () => {
+  const variants = {
+    'per-item': source(),
+    'session lineage': source({ sessionBranch: 'motir/auto-4' }),
+    'multi-repo per-item': source({
+      targetRepos: [
+        { name: 'motir-core', defaultBranch: 'main' },
+        { name: 'motir-ai', defaultBranch: 'main' },
+      ],
+    }),
+    'multi-repo lineage': source({
+      sessionBranch: 'motir/auto-4',
+      targetRepos: [
+        { name: 'motir-core', defaultBranch: 'main' },
+        { name: 'motir-ai', defaultBranch: 'main' },
+      ],
+    }),
+  };
+
+  it.each(Object.entries(variants))('%s carries the checkpoint instruction', (_name, src) => {
+    const { prompt, branch } = assembleDispatchPrompt(src);
+    expect(prompt).toContain('CHECKPOINT: push the branch after EVERY commit');
+    expect(prompt).toContain('it opens no pull request.');
+    // It pushes the WORK branch, never the session branch.
+    expect(prompt).toContain('`git push -u origin subtask/PROD-7-add-the-ready-set-filter-bar`');
+    expect(branch).not.toBeNull();
+  });
+
+  it('a manual item has no git workflow, so no checkpoint either', () => {
+    const { prompt } = assembleDispatchPrompt(source({ type: 'manual', executor: 'human' }));
+    expect(prompt).not.toContain('CHECKPOINT');
+  });
+});
+
+describe('the CONTINUE block and workflow (MOTIR-6531)', () => {
+  const continueFrom = {
+    deadRunId: 'run_dead',
+    endedHow: 'the run stopped reporting (no heartbeat reached Motir)',
+    lastHeardAt: '2026-09-27T14:02:00.000Z',
+    dispatcherName: 'Mara S.',
+    branch: 'subtask/PROD-7-earlier-work',
+    pullRequest: { repo: 'acme/web', number: 131, url: 'https://github.com/acme/web/pull/131' },
+  };
+
+  /** The GIT WORKFLOW section's text. */
+  const gitSection = (prompt: string) =>
+    prompt.slice(prompt.indexOf('\nGIT WORKFLOW'), prompt.indexOf('\nREPORTING THE OUTCOME'));
+
+  it('renders the dead run’s end, last heard, dispatcher, branch and open pull request', () => {
+    const { prompt, branch } = assembleDispatchPrompt(source({ continueFrom }));
+    expect(prompt).toContain('CONTINUE — you are carrying on a run that DIED, not starting fresh');
+    expect(prompt).toContain('run_dead) was run by Mara S.');
+    expect(prompt).toContain('It ended: the run stopped reporting (no heartbeat reached Motir).');
+    expect(prompt).toContain('Last heard from 2026-09-27T14:02:00.000Z.');
+    expect(prompt).toContain('Its work is on the branch subtask/PROD-7-earlier-work.');
+    expect(prompt).toContain('acme/web #131');
+    expect(prompt).toContain('do NOT create a new branch');
+    expect(branch).toBe('subtask/PROD-7-earlier-work');
+  });
+
+  it('the git section CHECKS THE BRANCH OUT — no `-b` anywhere, and a second PR is refused', () => {
+    const git = gitSection(assembleDispatchPrompt(source({ continueFrom })).prompt);
+    expect(git).not.toMatch(/(^|\s)-b(\s|$)/m);
+    expect(git).toContain('git worktree add ../motir-core-prod-7 subtask/PROD-7-earlier-work');
+    expect(git).toContain('git merge origin/main');
+    expect(git).toContain('`gh pr list --head subtask/PROD-7-earlier-work`');
+    expect(git).toContain('CHECKPOINT: push the branch after EVERY commit');
+    expect(git).toContain('LINK it: call the link_pull_request tool with key PROD-7');
+  });
+
+  it('a lineage card keeps integrating into its session branch', () => {
+    const git = gitSection(
+      assembleDispatchPrompt(source({ continueFrom, sessionBranch: 'motir/auto-9' })).prompt,
+    );
+    expect(git).not.toMatch(/(^|\s)-b(\s|$)/m);
+    expect(git).toContain('git merge origin/motir/auto-9');
+    expect(git).toContain('Integrate the commit into motir/auto-9 and push that branch.');
+    expect(git).toContain('mark_integrated');
+  });
+
+  it('without continueFrom the fresh prompt carries NO continue block', () => {
+    const { prompt } = assembleDispatchPrompt(source());
+    expect(prompt).not.toContain('CONTINUE — you are carrying on');
+    expect(gitSection(prompt)).toMatch(/-b subtask\/PROD-7/);
+  });
+});

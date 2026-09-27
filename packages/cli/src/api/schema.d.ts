@@ -8011,6 +8011,8 @@ export interface operations {
                 sessionBranch?: string;
                 /** @description `1` when THIS run’s loop is willing to approve a submitted re-plan itself and carry on (`motir auto --auto-approve-replan`). It adds a section telling the agent that a correction kept to its own card and that card’s siblings may be approved unattended, while anything wider — anchored at a container, or at nothing — goes to a person and stops the run, and that BOTH are legitimate. ⚠️ It changes the TEXT only: the agent’s tools, anchor and single submit are identical either way, and the bound on what may be approved is the LOOP’s, enforced over the plan that comes back. Absent means no, and it is ignored when `findingsPolicy` disables `replan` — approving a plan the agent was told not to submit is not a lane. */
                 autoApproveReplan?: string;
+                /** @description The id of a DEAD run of this item to CONTINUE (MOTIR-6531, `motir continue`). The prompt then carries a CONTINUE block — how that run ended, when it was last heard from, who ran it, its branch and its open pull request — and a git workflow that CHECKS THAT BRANCH OUT instead of cutting one. The branch is the item’s open pull request’s head, else the one the run recorded on `checkout_ready`. A run that is still open, that succeeded, that holds no leg for this item or that belongs to another workspace is `CONTINUE_FROM_INVALID` (422). */
+                continueFrom?: string;
             };
             header?: never;
             path: {

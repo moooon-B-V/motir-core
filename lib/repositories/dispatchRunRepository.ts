@@ -247,6 +247,40 @@ export const dispatchRunRepository = {
     });
   },
 
+  /**
+   * ONE run by id, in the same projection as {@link findLatestForWorkItem}, but
+   * only when it holds a leg for (or is scoped to) this work item — the run a
+   * dispatch prompt's `continueFrom` names (MOTIR-6531). Null otherwise, including
+   * for another workspace's run, which RLS hides.
+   */
+  async findForWorkItemById(
+    id: string,
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<LatestRunForWorkItem | null> {
+    return tx.dispatchRun.findFirst({
+      where: {
+        id,
+        OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }],
+      },
+      select: {
+        id: true,
+        command: true,
+        origin: true,
+        status: true,
+        stopReason: true,
+        startedAt: true,
+        endedAt: true,
+        lastHeartbeatAt: true,
+        createdById: true,
+        createdBy: { select: { id: true, name: true } },
+        scopeWorkItemId: true,
+        scope: { select: { identifier: true } },
+        cards: { where: { workItemId }, select: { id: true, sessionBranch: true }, take: 1 },
+      },
+    });
+  },
+
   /** One run's starter — the name a continue says it took over from (MOTIR-6532). */
   async findRunStarterById(
     id: string,

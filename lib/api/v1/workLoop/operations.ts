@@ -103,6 +103,20 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
           'approving a plan the agent was told not to submit is not a lane.',
         schema: z.string(),
       },
+      {
+        name: 'continueFrom',
+        in: 'query',
+        required: false,
+        description:
+          'The id of a DEAD run of this item to CONTINUE (MOTIR-6531, `motir continue`). The ' +
+          'prompt then carries a CONTINUE block — how that run ended, when it was last heard ' +
+          'from, who ran it, its branch and its open pull request — and a git workflow that ' +
+          'CHECKS THAT BRANCH OUT instead of cutting one. The branch is the item\u2019s open ' +
+          'pull request\u2019s head, else the one the run recorded on `checkout_ready`. A run ' +
+          'that is still open, that succeeded, that holds no leg for this item or that belongs ' +
+          'to another workspace is `CONTINUE_FROM_INVALID` (422).',
+        schema: z.string(),
+      },
     ],
     response: {
       status: 200,
