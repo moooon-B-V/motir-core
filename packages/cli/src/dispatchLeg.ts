@@ -127,6 +127,12 @@ export interface DispatchLegInput {
    * Reporting is best-effort by construction: none of these calls can throw.
    */
   reporter?: DispatchRunReporter;
+  /**
+   * Prepare the materialized checkouts before the spawn — a HOSTED run's code
+   * graph (MOTIR-6560), which its container can only build once the CLI has
+   * cloned them. Absent for a local run, whose checkouts are the operator's.
+   */
+  prepareCheckouts?: (cwds: string[]) => void;
 }
 
 export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchLegVerdict> {
@@ -161,6 +167,7 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
     },
   });
   if (materialized.failures.length > 0) return settle({ kind: 'checkout_unavailable' });
+  input.prepareCheckouts?.(over.map((target) => target.cwd));
 
   // BEFORE the spawn (MOTIR-3052) — the run you most want the transcript for is
   // the one whose agent is about to be killed.

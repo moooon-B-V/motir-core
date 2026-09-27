@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { spawn, spawnSync } from 'node:child_process';
-import { createServer, type IncomingMessage, type Server } from 'node:http';
+import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import {
   chmodSync,
@@ -12,77 +12,110 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cliArgs, readLaunch, REQUIRED_INPUTS, SETUP_FAILED } from './entrypoint.js';
 
-// The hosted-agent image's smoke test (Story MOTIR-683 · Subtask MOTIR-687).
+// The hosted-agent image's smoke test (Story MOTIR-683 · MOTIR-687, rewritten
+// for the CLI-running image by MOTIR-6560).
 //
-// The entrypoint is driven end to end against STUBS of everything a real run
-// injects: a stub Motir API (the dispatch prompt and the shared ingest), a stub
-// gateway (`/v1/messages`), a stub GitHub (`POST /repos/{o}/{r}/pulls`), a local
-// bare git remote, and a FAKE AGENT standing in for `opencode` — a script that
-// makes one model call exactly as OpenCode would from the config it was handed,
-// edits one file, and records what it saw.
+// `docs/decisions/hosted-run-runs-the-cli-as-the-app.md` §1: the image runs the
+// Motir CLI's own `motir run` on the run the server opened. So this drives the
+// REAL chain — `node entrypoint.ts` → the real CLI (from source, through tsx) →
+// a fake OpenCode — for the three run shapes the decision names, and checks
+// each ends in one pull request per repository with the event sequence a local
+// run records:
 //
-// Two layers, one scenario:
-//   1. PROCESS level — `node entrypoint.ts` on the host, with a fake `codegraph`
-//      beside the fake agent. Runs everywhere, including the CLI package lane.
-//   2. IMAGE level — the same scenario inside the built image, with the REAL
-//      codegraph and the image's own user. Runs when `MOTIR_HOSTED_AGENT_IMAGE`
-//      names a built image (the `hosted-agent-image.yml` workflow sets it);
-//      skipped otherwise, because building an image is that workflow's job.
+//   1. a one-repository LEAF;
+//   2. a LEAF that spans two repositories;
+//   3. a PARENT with two children in two repositories (a scope run: one session
+//      branch per repository, a DRAFT pull request per repository opened at the
+//      first child that lands, marked READY at the close-out).
+//
+// What stands in for what:
+//   - a stub MOTIR answering every route the hosted CLI calls, with bodies the
+//     CLI's own response validators accept, and recording every request;
+//   - LOCAL BARE REMOTES for GitHub. The CLI's hosted git setup keys everything
+//     on `https://github.com/<owner>/<name>` — the credential helper and each
+//     repository's App-bot identity (`includeIf hasconfig:remote.*.url:…`) —
+//     so the clone URLs the stub hands out ARE those URLs, and git's own
+//     `url.<bare>.insteadOf https://github.com/<owner>/<name>` redirects the
+//     transport to the bare remote. The CLI reads the redirect from
+//     `GIT_CONFIG_SYSTEM`; the agent's environment is allow-listed without it,
+//     so the fake agent passes the same file with `-c include.path=…` on its
+//     push. The remote URL recorded in every checkout stays the GitHub one, so
+//     the identity `includeIf` is exercised for real. (A file transport asks
+//     no credential; the helper itself is proved by `test/hostedGit.test.ts`.)
+//   - a fake `gh` behind the CLI's REAL `gh` shim, which keeps the pull
+//     requests in a JSON file and records the token each call was given;
+//   - a fake `opencode` that makes one model call exactly as OpenCode would
+//     from the egress document it was handed, then commits and pushes in every
+//     checkout its prompt names and — on a leaf — opens the pull request;
+//   - a fake `codegraph` that makes the index directory the real one makes.
+//
+// Two layers:
+//   1. PROCESS — everything above as processes on the host. Runs everywhere.
+//   2. IMAGE — the built image's own contents (the CLI, `gh`, git ≥ 2.36, the
+//      pinned OpenCode, codegraph, a non-root user), and the launcher refusing
+//      a boot with no inputs. Runs when `MOTIR_HOSTED_AGENT_IMAGE` names a built
+//      image (`hosted-agent-image.yml` sets it); skipped otherwise.
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ENTRYPOINT = join(HERE, 'entrypoint.ts');
-const EGRESS_CONFIG = join(HERE, 'opencode.egress.json');
+const CLI_ROOT = join(HERE, '..', '..');
+const CLI_SRC_INDEX = join(CLI_ROOT, 'src', 'index.ts');
+const TSX = join(CLI_ROOT, '..', '..', 'node_modules', '.bin', 'tsx');
 const IMAGE = process.env.MOTIR_HOSTED_AGENT_IMAGE?.trim() || null;
 
-const RUN_ID = 'run_smoke_1';
-const KEY = 'ACME-7';
-const REPO = 'acme/widget';
-const RUN_TOKEN = 'motir_run_token_smoke';
-const GIT_TOKEN = 'ghs_smoke_git_token';
+const RUN_TOKEN = 'mrt_smoke_run_credential';
 const RUN_KEY = 'sk-smoke-run-key';
-const AUTHOR = { name: 'Dana Dispatcher', email: 'dana@example.com' };
+const OWNER = 'usr_dispatcher';
+const DISPATCHER = 'Dana Dispatcher';
+const MODEL = 'anthropic/claude-smoke-1';
 
-// The gateway's egress contract §2, pinned here as well as in the file the
-// entrypoint reads — so an edit to that file is a visible, deliberate change to
-// the security boundary rather than a silent one.
-const EGRESS_CONTRACT_SECTION_2 = {
-  $schema: 'https://opencode.ai/config.json',
-  enabled_providers: ['anthropic'],
-  provider: {
-    anthropic: {
-      options: {
-        baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
-        apiKey: '{env:MOTIR_RUN_KEY}',
-      },
-    },
+const BOTS: Record<string, { name: string; email: string }> = {
+  'acme/app-a': {
+    name: 'motir-studio[bot]',
+    email: '101+motir-studio[bot]@users.noreply.github.com',
   },
-  share: 'disabled',
-  autoupdate: false,
+  'acme/app-b': {
+    name: 'motir-integration[bot]',
+    email: '202+motir-integration[bot]@users.noreply.github.com',
+  },
 };
 
-// ── The fake agent ─────────────────────────────────────────────────────────
-// Node, not shell, so it can parse the config the way OpenCode does. Its mode
-// comes from the PROMPT (the only channel the entrypoint forwards unchanged),
-// and it records what it saw under $HOME, the only writable place it is sure to
-// inherit.
+// ── The fakes ──────────────────────────────────────────────────────────────
+
+/**
+ * The fake OpenCode. Its instructions come from the PROMPT (the one channel the
+ * CLI forwards unchanged): `FAKE:closeout` is the close-out's How-to-test agent,
+ * which does nothing; otherwise `FAKE:key=`, `FAKE:mode=pr|session` and
+ * `FAKE:repos=` say what to change and how to deliver it.
+ */
 const FAKE_OPENCODE = `#!/usr/bin/env node
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const args = process.argv.slice(2);
 if (args[0] === '--version') { console.log('fake'); process.exit(0); }
 const model = args[args.indexOf('--model') + 1];
-const prompt = args[args.length - 1];
+const fileAt = args.indexOf('--file');
+const prompt = fileAt >= 0 ? fs.readFileSync(args[fileAt + 1], 'utf8') : args[args.length - 1];
 const configText = process.env.OPENCODE_CONFIG_CONTENT || '';
-const record = {
-  args,
+fs.appendFileSync(path.join(process.env.HOME, 'agent-records.jsonl'), JSON.stringify({
   cwd: process.cwd(),
+  model,
   envKeys: Object.keys(process.env).sort(),
-  configText,
-};
-fs.writeFileSync(path.join(process.env.HOME, 'fake-agent-record.json'), JSON.stringify(record));
+  leaksRunToken: Object.values(process.env).some((v) => String(v).includes(${JSON.stringify(RUN_TOKEN)})),
+  closeout: prompt.includes('FAKE:closeout'),
+}) + '\\n');
+if (prompt.includes('FAKE:closeout')) process.exit(0);
+const marker = (name) => (new RegExp('FAKE:' + name + '=([^\\\\s]+)').exec(prompt) || [])[1];
+const key = marker('key');
+const mode = marker('mode');
+const repos = (marker('repos') || '').split(',').filter(Boolean);
+const redirect = ['-c', 'include.path=' + path.join(process.env.HOME, 'smoke-redirect.gitconfig')];
+const git = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 const sub = (s) => s.replace(/\\{env:([A-Z_]+)\\}/g, (_, n) => process.env[n] || '');
 const options = JSON.parse(configText).provider.anthropic.options;
 (async () => {
@@ -92,124 +125,545 @@ const options = JSON.parse(configText).provider.anthropic.options;
     body: JSON.stringify({ model: model.split('/')[1], max_tokens: 8, messages: [{ role: 'user', content: 'hi' }] }),
   });
   console.log('model call answered ' + res.status);
-  for (let i = 0; i < 40; i += 1) console.log('working on step ' + i + ' ' + 'x'.repeat(80));
-  if (prompt.includes('FAKE:fail')) {
-    console.error('boom: the fake agent failed on purpose');
-    process.exit(3);
+  if (prompt.includes('FAKE:fail')) { console.error('boom: the fake agent failed on purpose'); process.exit(3); }
+  const root = path.dirname(process.cwd());
+  for (const repo of repos) {
+    const dir = path.join(root, repo);
+    fs.writeFileSync(path.join(dir, key + '.txt'), 'work for ' + key + ' in ' + repo + '\\n');
+    if (mode === 'pr') git(dir, 'switch', '-c', 'hosted/' + key);
+    // A session run integrates on the run's session branch, as its prompt says.
+    if (mode === 'session') {
+      const branch = marker('branch');
+      git(dir, ...redirect, 'fetch', 'origin', '+refs/heads/' + branch + ':refs/remotes/origin/' + branch);
+      git(dir, 'switch', '-C', branch, 'origin/' + branch);
+    }
+    git(dir, 'add', key + '.txt');
+    git(dir, 'commit', '-m', key + ': the change in ' + repo);
+    git(dir, ...redirect, 'push', '-u', 'origin', 'HEAD');
+    if (mode === 'session') git(dir, ...redirect, 'fetch', 'origin');
+    if (mode === 'pr') {
+      execFileSync('gh', ['pr', 'create', '--base', 'main', '--title', key + ' in ' + repo, '--body', 'Delivers ' + key + '.'], { cwd: dir, stdio: 'inherit' });
+    }
   }
-  fs.writeFileSync(path.join(process.cwd(), 'hello.txt'), 'hello from the fake agent\\n');
   process.exit(0);
 })().catch((err) => { console.error(err); process.exit(4); });
 `;
 
-// A stand-in `codegraph` for the PROCESS layer only: `init` makes the index
-// directory the real one makes, `install` writes the MCP stanza it writes.
+/** The fake `gh`: pull requests kept in $HOME/fake-gh.json, per repository and head. */
+const FAKE_GH = `#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const args = process.argv.slice(2);
+const store = path.join(process.env.HOME, 'fake-gh.json');
+const state = fs.existsSync(store) ? JSON.parse(fs.readFileSync(store, 'utf8')) : { prs: [], calls: [] };
+// The RAW remote URL — \`git remote get-url\` would apply the test's insteadOf rewrite.
+const origin = execFileSync('git', ['config', '--get', 'remote.origin.url'], { encoding: 'utf8' }).trim();
+const repo = origin.replace(/^https:\\/\\/github\\.com\\//, '').replace(/\\.git$/, '');
+const branch = () => execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' }).trim();
+const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
+state.calls.push({ args, repo, token: process.env.GH_TOKEN || null });
+const find = (head) => state.prs.find((p) => p.repo === repo && p.head === head && p.state === 'open');
+let out = '';
+if (args[0] === 'pr' && args[1] === 'list') {
+  const pr = find(flag('--head'));
+  if (pr) out = flag('--json') === 'isDraft' ? String(pr.draft) : pr.url;
+} else if (args[0] === 'pr' && args[1] === 'create') {
+  const head = flag('--head') || branch();
+  const number = state.prs.length + 1;
+  const pr = { repo, head, number, url: 'https://github.com/' + repo + '/pull/' + number, draft: args.includes('--draft'), title: flag('--title'), body: flag('--body'), state: 'open' };
+  state.prs.push(pr);
+  out = pr.url;
+} else if (args[0] === 'pr' && args[1] === 'edit') {
+  const pr = find(args[2]);
+  if (pr) { pr.title = flag('--title') || pr.title; pr.body = flag('--body') || pr.body; }
+} else if (args[0] === 'pr' && args[1] === 'ready') {
+  const pr = find(args[2]);
+  if (pr) pr.draft = false;
+}
+fs.writeFileSync(store, JSON.stringify(state));
+if (out) console.log(out);
+`;
+
 const FAKE_CODEGRAPH = `#!/bin/sh
 case "$1" in
   init) mkdir -p "$2/.codegraph" && echo db > "$2/.codegraph/codegraph.db" ;;
-  install) mkdir -p "$HOME/.config/opencode" && printf '{"mcp":{"codegraph":{"type":"local","command":["codegraph","serve","--mcp"]}}}' > "$HOME/.config/opencode/opencode.jsonc" ;;
   --version) echo fake ;;
 esac
 exit 0
 `;
 
-// ── Stubs ──────────────────────────────────────────────────────────────────
+// ── Scenarios ──────────────────────────────────────────────────────────────
 
-type Recorded = { method: string; path: string; headers: IncomingMessage['headers']; body: string };
+type Card = {
+  key: string;
+  kind: 'story' | 'subtask';
+  repos: string[];
+  parentKey: string | null;
+  children: string[];
+  status: string;
+};
 
-type Stub = { server: Server; url: string; requests: Recorded[]; prompt: string };
+type Scenario = {
+  name: string;
+  runId: string;
+  /** The card the launcher is booted with — the leaf, or the parent. */
+  key: string;
+  command: 'run' | 'run_scope';
+  /** The run's legs, in the run's own order. */
+  legs: string[];
+  cards: Record<string, Card>;
+};
+
+const leafCard = (key: string, repos: string[], parentKey: string | null = null): Card => ({
+  key,
+  kind: 'subtask',
+  repos,
+  parentKey,
+  children: [],
+  status: 'in_progress',
+});
+
+const SCENARIOS: Scenario[] = [
+  {
+    name: 'a one-repository leaf',
+    runId: 'run_smoke_leaf1',
+    key: 'ACME-7',
+    command: 'run',
+    legs: ['ACME-7'],
+    cards: { 'ACME-7': leafCard('ACME-7', ['app-a']) },
+  },
+  {
+    name: 'a leaf that spans two repositories',
+    runId: 'run_smoke_leaf2',
+    key: 'ACME-8',
+    command: 'run',
+    legs: ['ACME-8'],
+    cards: { 'ACME-8': leafCard('ACME-8', ['app-a', 'app-b']) },
+  },
+  {
+    name: 'a parent with two children in two repositories',
+    runId: 'run_smoke_parent',
+    key: 'ACME-10',
+    command: 'run_scope',
+    legs: ['ACME-11', 'ACME-12'],
+    cards: {
+      'ACME-10': {
+        key: 'ACME-10',
+        kind: 'story',
+        repos: ['app-a', 'app-b'],
+        parentKey: null,
+        children: ['ACME-11', 'ACME-12'],
+        status: 'in_progress',
+      },
+      'ACME-11': leafCard('ACME-11', ['app-a'], 'ACME-10'),
+      'ACME-12': leafCard('ACME-12', ['app-b'], 'ACME-10'),
+    },
+  },
+];
+
+// ── The stub Motir (and gateway) ───────────────────────────────────────────
+
+const NOW = '2026-09-27T00:00:00Z';
+const cloneUrl = (repo: string) => `https://github.com/acme/${repo}.git`;
+
+type Recorded = { method: string; path: string; auth: string | undefined; body: unknown };
+
+type Stub = {
+  server: Server;
+  url: string;
+  requests: Recorded[];
+  events: { kind: string; workItemKey?: string }[];
+  closed: unknown[];
+  scenario: Scenario | null;
+  modelCalls: { apiKey: string | undefined }[];
+  /** Every request the stub could not answer — a route the CLI called that it lacks. */
+  misses: string[];
+};
+
+function workItemDetail(s: Scenario, key: string) {
+  const card = s.cards[key]!;
+  return {
+    key,
+    kind: card.kind,
+    type: card.kind === 'story' ? null : 'code',
+    title: `Card ${key}`,
+    status: card.status,
+    priority: 'high',
+    assigneeId: OWNER,
+    reporterId: OWNER,
+    dueDate: null,
+    estimateMinutes: null,
+    storyPoints: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    descriptionMd: null,
+    parentKey: card.parentKey,
+    folderId: null,
+    folderPath: null,
+    ancestorKeys: card.parentKey ? [card.parentKey] : [],
+    children: card.children.map((child) => ({
+      key: child,
+      kind: 'subtask',
+      title: `Card ${child}`,
+      status: s.cards[child]!.status,
+      priority: 'high',
+      assigneeId: OWNER,
+      estimateMinutes: null,
+      storyPoints: null,
+      parentKey: key,
+      archived: false,
+      // ACME-12 waits on ACME-11, so the drain's order is the run's order.
+      dependencies: {
+        blockedBy:
+          child === 'ACME-12'
+            ? [{ key: 'ACME-11', title: 'Card ACME-11', status: 'in_progress' }]
+            : [],
+        blocks: [],
+      },
+    })),
+    links: { blockedBy: [], blocks: [], relatesTo: [], duplicates: [], clones: [] },
+    readiness: {
+      ready: true,
+      openBlockers: [],
+      blockedByAncestorKey: null,
+      blockedByAncestorTitle: null,
+    },
+    labels: [],
+    components: [],
+    commentCount: 0,
+    sprintId: null,
+    targetRepo: card.repos[0] ?? null,
+    targetRepos: card.repos,
+    targetRepositories: [],
+    executor: card.kind === 'story' ? null : 'coding_agent',
+    difficulty: null,
+    planningSource: null,
+    planningHarness: null,
+    planningModel: null,
+    implementationSource: null,
+    implementationHarness: null,
+    implementationModel: null,
+    archivedAt: null,
+    deliveries: [],
+  };
+}
+
+function dispatchRun(s: Scenario, status: 'running' | 'succeeded') {
+  return {
+    id: s.runId,
+    projectId: 'prj_acme',
+    command: s.command,
+    origin: 'hosted',
+    scopeWorkItemId: s.command === 'run_scope' ? 'wi_acme_10' : null,
+    scopeLabel: s.command === 'run_scope' ? s.key : null,
+    status,
+    stopReason: null,
+    agent: 'opencode',
+    model: MODEL.split('/')[1],
+    startedAt: NOW,
+    endedAt: status === 'running' ? null : NOW,
+    createdById: OWNER,
+    cards: s.legs.map((leg, position) => ({
+      id: `card_${leg}`,
+      key: leg,
+      workItemId: `wi_${leg}`,
+      position,
+      disposition: 'queued',
+      skipReason: null,
+      sessionBranch: null,
+      startedAt: null,
+      endedAt: null,
+      exitCode: null,
+    })),
+    seq: 0,
+  };
+}
+
+function prompt(s: Scenario, key: string, sessionBranch: string | null) {
+  const card = s.cards[key]!;
+  const mode = sessionBranch ? 'session' : 'pr';
+  return {
+    key,
+    prompt:
+      `Build ${key}. FAKE:key=${key} FAKE:mode=${mode} FAKE:repos=${card.repos.join(',')}` +
+      (sessionBranch ? ` FAKE:branch=${sessionBranch}` : ''),
+    parentKey: card.parentKey,
+    targetRepo: card.repos[0] ?? null,
+    targetRepoCloneUrl: card.repos[0] ? cloneUrl(card.repos[0]) : null,
+    targetRepoDefaultBranch: 'main',
+    targetRepos: card.repos.map((repo) => ({
+      name: repo,
+      cloneUrl: cloneUrl(repo),
+      defaultBranch: 'main',
+      delivery: 'awaiting',
+    })),
+    workflowMode: sessionBranch ? 'session_lineage' : 'per_item_pr',
+    sessionBranch,
+    advisories: [],
+  };
+}
 
 async function startStub(): Promise<Stub> {
-  const stub: Stub = { server: undefined as unknown as Server, url: '', requests: [], prompt: '' };
+  const stub: Stub = {
+    server: undefined as unknown as Server,
+    url: '',
+    requests: [],
+    events: [],
+    closed: [],
+    scenario: null,
+    modelCalls: [],
+    misses: [],
+  };
   stub.server = createServer((req, res) => {
-    let body = '';
-    req.on('data', (c: Buffer) => (body += c.toString('utf8')));
+    let raw = '';
+    req.on('data', (c: Buffer) => (raw += c.toString('utf8')));
     req.on('end', () => {
-      const path = req.url ?? '';
-      stub.requests.push({ method: req.method ?? '', path, headers: req.headers, body });
+      const url = new URL(req.url ?? '/', 'http://stub');
+      const path = url.pathname;
+      const method = req.method ?? '';
+      let body: unknown = null;
+      try {
+        body = raw ? JSON.parse(raw) : null;
+      } catch {
+        body = raw;
+      }
+      stub.requests.push({ method, path, auth: req.headers.authorization, body });
       const json = (status: number, payload: unknown) => {
         res.writeHead(status, { 'content-type': 'application/json' });
         res.end(JSON.stringify(payload));
       };
-      if (req.method === 'GET' && path === `/api/v1/work-items/${KEY}/dispatch-prompt`) {
-        if (req.headers.authorization !== `Bearer ${RUN_TOKEN}`) return json(401, {});
-        return json(200, { key: KEY, prompt: stub.prompt });
+      // The gateway: the fake agent's one model call, keyed on the run key.
+      if (method === 'POST' && path === '/v1/messages') {
+        stub.modelCalls.push({ apiKey: req.headers['x-api-key'] as string | undefined });
+        return json(200, { id: 'msg_smoke', type: 'message', content: [] });
       }
-      if (req.method === 'POST' && path === `/api/v1/dispatch-runs/${RUN_ID}/events`) {
-        if (req.headers.authorization !== `Bearer ${RUN_TOKEN}`) return json(401, {});
-        return json(200, { appended: 1 });
+      const s = stub.scenario;
+      if (!s) return json(500, { message: 'no scenario' });
+      if (req.headers.authorization !== `Bearer ${RUN_TOKEN}`)
+        return json(401, { code: 'unauthenticated' });
+      const m = (re: RegExp) => re.exec(path);
+      let hit: RegExpExecArray | null;
+      if (method === 'GET' && path === '/api/v1/me') {
+        return json(200, {
+          user: { id: OWNER, name: DISPATCHER, email: 'dana@example.com' },
+          workspaceId: 'ws_acme',
+          permissions: [],
+        });
       }
-      if (req.method === 'POST' && path === '/v1/messages') {
-        return json(200, { id: 'msg_1', type: 'message', content: [] });
+      if (method === 'GET' && path === `/api/v1/dispatch-runs/${s.runId}`) {
+        return json(200, dispatchRun(s, 'running'));
       }
-      if (req.method === 'POST' && path === `/repos/${REPO}/pulls`) {
-        return json(201, { html_url: `https://github.com/${REPO}/pull/42`, number: 42 });
+      if (method === 'POST' && path === `/api/v1/dispatch-runs/${s.runId}/events`) {
+        const events =
+          (body as { events?: { kind: string; workItemKey?: string }[] })?.events ?? [];
+        stub.events.push(...events);
+        return json(200, {
+          runId: s.runId,
+          appended: events.length,
+          seq: stub.events.length,
+          cards: [],
+        });
       }
-      json(404, { path });
+      if (method === 'POST' && path === `/api/v1/dispatch-runs/${s.runId}/close`) {
+        stub.closed.push(body);
+        return json(200, dispatchRun(s, 'succeeded'));
+      }
+      if (method === 'GET' && path === `/api/v1/dispatch-runs/${s.runId}/close-out-prompt`) {
+        return json(200, {
+          runId: s.runId,
+          targetKey: s.key,
+          prompt: 'Write How to test. FAKE:closeout',
+          landedKeys: s.legs,
+        });
+      }
+      if (method === 'POST' && path === `/api/v1/dispatch-runs/${s.runId}/git-credential`) {
+        const repos = [...new Set(Object.values(s.cards).flatMap((c) => c.repos))];
+        return json(200, {
+          credentials: repos.map((repo) => ({
+            repository: `acme/${repo}`,
+            token: `ghs_token_for_${repo}`,
+            expiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+            authorName: BOTS[`acme/${repo}`]!.name,
+            authorEmail: BOTS[`acme/${repo}`]!.email,
+          })),
+          dispatchedBy: DISPATCHER,
+        });
+      }
+      if (method === 'POST' && path === '/api/v1/sessions/complete') {
+        const b = body as { sessionBranch: string; keys?: string[] };
+        return json(200, {
+          sessionBranch: b.sessionBranch,
+          results: (b.keys ?? []).map((key) => ({ key, outcome: 'completed' })),
+        });
+      }
+      if ((hit = m(/^\/api\/v1\/work-items\/([A-Z0-9-]+)(\/[a-z-]+)?$/))) {
+        const key = hit[1]!;
+        const sub = hit[2] ?? '';
+        const card = s.cards[key];
+        if (!card) return json(404, { code: 'not_found' });
+        if (method === 'GET' && sub === '') return json(200, workItemDetail(s, key));
+        if (method === 'GET' && sub === '/designs') return json(200, { designs: [] });
+        if (method === 'GET' && sub === '/how-to-test') return json(200, { key, record: null });
+        if (method === 'GET' && sub === '/dispatch-prompt') {
+          return json(200, prompt(s, key, url.searchParams.get('sessionBranch')));
+        }
+        if (method === 'POST' && sub === '/claim') {
+          card.status = 'in_progress';
+          return json(200, {
+            key,
+            title: `Card ${key}`,
+            outcome: 'mine',
+            claimed: true,
+            status: { key: 'in_progress', category: 'in_progress' },
+            assignee: { id: OWNER, name: DISPATCHER },
+            transitionedBy: null,
+            transitionedAt: null,
+          });
+        }
+        if (method === 'POST' && sub === '/transitions') {
+          card.status = (body as { status?: string })?.status ?? card.status;
+          return json(200, workItemDetail(s, key));
+        }
+        if (method === 'POST' && sub === '/integration') {
+          card.status = 'implemented';
+          return json(200, {
+            key,
+            status: 'implemented',
+            sessionBranch: (body as { sessionBranch?: string })?.sessionBranch ?? null,
+            updatedAt: NOW,
+            implementationSource: null,
+            implementationHarness: 'opencode',
+            implementationModel: null,
+          });
+        }
+        if (method === 'POST' && sub === '/pull-requests') {
+          const b = body as { url?: string; repo?: string; number?: number; title?: string };
+          return json(200, {
+            key,
+            created: true,
+            pullRequest: {
+              repo: b.repo ?? 'acme/app-a',
+              number: b.number ?? 1,
+              title: b.title ?? key,
+              url: b.url ?? 'https://github.com/acme/app-a/pull/1',
+              state: 'open',
+              ci: null,
+            },
+          });
+        }
+      }
+      if (method === 'GET' && path === '/api/v1/projects/ACME/work-items') {
+        return json(200, { items: [], nextCursor: null });
+      }
+      stub.misses.push(`${method} ${path}`);
+      return json(404, { code: 'not_found', message: `the stub has no ${method} ${path}` });
     });
   });
-  await new Promise<void>((resolve) => stub.server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((r) => stub.server.listen(0, '127.0.0.1', () => r()));
   stub.url = `http://127.0.0.1:${(stub.server.address() as AddressInfo).port}`;
   return stub;
 }
 
-/**
- * Remove a scenario's temp tree. Best-effort: the image layer leaves files the
- * container's own user wrote, which the host user may not be able to delete.
- */
-function cleanup(root: string): void {
-  try {
-    rmSync(root, { recursive: true, force: true });
-  } catch {
-    // the OS temp reaper has it
-  }
+// ── The world a scenario runs in ───────────────────────────────────────────
+
+const temps: string[] = [];
+function tempDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  temps.push(dir);
+  return dir;
 }
 
-function sh(cmd: string, args: string[], cwd?: string): string {
-  const res = spawnSync(cmd, args, { cwd, encoding: 'utf8' });
-  if (res.status !== 0) throw new Error(`${cmd} ${args.join(' ')}: ${res.stderr}`);
+function git(cwd: string, ...args: string[]): string {
+  const res = spawnSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' },
+  });
+  if (res.status !== 0) throw new Error(`git ${args.join(' ')}: ${res.stderr}`);
   return res.stdout;
 }
 
-/** A bare remote with one commit on `main`. */
-function makeRemote(root: string): string {
-  const seed = join(root, 'seed');
-  const remote = join(root, 'remote.git');
-  mkdirSync(seed);
-  sh('git', ['init', '-q', '-b', 'main'], seed);
-  writeFileSync(join(seed, 'README.md'), '# widget\n');
-  sh('git', ['add', '.'], seed);
-  sh('git', ['-c', 'user.name=seed', '-c', 'user.email=seed@x', 'commit', '-qm', 'init'], seed);
-  sh('git', ['clone', '-q', '--bare', seed, remote]);
-  return remote;
-}
+type World = {
+  env: NodeJS.ProcessEnv;
+  home: string;
+  workspace: string;
+  remotes: Record<string, string>;
+};
 
-function runInputs(stub: Stub): Record<string, string> {
-  return {
-    MOTIR_DISPATCH_RUN_ID: RUN_ID,
-    MOTIR_WORK_ITEM_KEY: KEY,
-    MOTIR_WORK_ITEM_TITLE: 'Add a greeting',
-    MOTIR_REPOSITORY: REPO,
-    MOTIR_BASE_REF: 'main',
+/** Bare remotes seeded with one commit on `main`, the fakes on PATH, and the redirect. */
+function makeWorld(stub: Stub): World {
+  const root = tempDir('hosted-smoke-');
+  const home = join(root, 'home');
+  const workspace = join(root, 'workspace');
+  const bin = join(root, 'bin');
+  for (const dir of [home, workspace, bin]) mkdirSync(dir, { recursive: true });
+  const remotes: Record<string, string> = {};
+  const redirect: string[] = [];
+  for (const repo of ['app-a', 'app-b']) {
+    const seed = join(root, `seed-${repo}`);
+    mkdirSync(seed);
+    git(seed, 'init', '-q', '-b', 'main');
+    writeFileSync(join(seed, 'README.md'), `# ${repo}\n`);
+    git(seed, 'add', 'README.md');
+    git(
+      seed,
+      '-c',
+      'user.name=Seed',
+      '-c',
+      'user.email=seed@example.com',
+      'commit',
+      '-q',
+      '-m',
+      'seed',
+    );
+    const bare = join(root, `${repo}.git`);
+    git(root, 'clone', '-q', '--bare', seed, bare);
+    remotes[repo] = bare;
+    redirect.push(`[url "${bare}"]`, `\tinsteadOf = https://github.com/acme/${repo}.git`);
+    redirect.push(`[url "${bare}"]`, `\tinsteadOf = https://github.com/acme/${repo}`);
+  }
+  const redirectFile = join(home, 'smoke-redirect.gitconfig');
+  writeFileSync(redirectFile, `${redirect.join('\n')}\n`);
+  const write = (name: string, body: string) => {
+    writeFileSync(join(bin, name), body);
+    chmodSync(join(bin, name), 0o755);
+  };
+  write('opencode', FAKE_OPENCODE);
+  write('gh', FAKE_GH);
+  write('codegraph', FAKE_CODEGRAPH);
+  // The launcher execs `MOTIR_CLI_BIN`: the CLI from source, as the image runs it built.
+  write('motir', `#!/bin/sh\nexec "${TSX}" "${CLI_SRC_INDEX}" "$@"\n`);
+
+  const env: NodeJS.ProcessEnv = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (k.startsWith('GIT_') || k.startsWith('MOTIR_') || k === 'GH_TOKEN' || k === 'GITHUB_TOKEN')
+      continue;
+    env[k] = v;
+  }
+  Object.assign(env, {
+    PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+    HOME: home,
+    MOTIR_CONFIG_HOME: join(home, '.motir'),
+    MOTIR_CLI_BIN: join(bin, 'motir'),
+    MOTIR_WORKSPACE: workspace,
     MOTIR_API_URL: stub.url,
     MOTIR_RUN_TOKEN: RUN_TOKEN,
-    MOTIR_GIT_TOKEN: GIT_TOKEN,
-    MOTIR_GIT_AUTHOR_NAME: AUTHOR.name,
-    MOTIR_GIT_AUTHOR_EMAIL: AUTHOR.email,
     MOTIR_GATEWAY_URL: stub.url,
     MOTIR_RUN_KEY: RUN_KEY,
-    MOTIR_MODEL: 'anthropic/claude-opus-5-5',
-    MOTIR_GITHUB_API_URL: stub.url,
-  };
+    MOTIR_MODEL: MODEL,
+    GIT_CONFIG_SYSTEM: redirectFile,
+    GIT_TERMINAL_PROMPT: '0',
+  });
+  return { env, home, workspace, remotes };
 }
 
-function runProcess(
-  args: string[],
-  env: NodeJS.ProcessEnv,
-  command = process.execPath,
-): Promise<{ code: number; stderr: string; stdout: string }> {
+function launch(env: NodeJS.ProcessEnv): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', ENTRYPOINT], {
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (c: Buffer) => (stdout += c.toString('utf8')));
@@ -218,335 +672,300 @@ function runProcess(
   });
 }
 
-type Event = {
-  kind: string;
-  workItemKey?: string;
-  body?: string;
-  exitCode?: number;
-  data?: Record<string, unknown>;
-};
+type Pr = { repo: string; head: string; draft: boolean; body: string; state: string };
+const readPrs = (
+  home: string,
+): { prs: Pr[]; calls: { args: string[]; repo: string; token: string | null }[] } =>
+  existsSync(join(home, 'fake-gh.json'))
+    ? JSON.parse(readFileSync(join(home, 'fake-gh.json'), 'utf8'))
+    : { prs: [], calls: [] };
 
-function eventsOf(stub: Stub): Event[] {
-  return stub.requests
-    .filter((r) => r.path === `/api/v1/dispatch-runs/${RUN_ID}/events`)
-    .flatMap((r) => (JSON.parse(r.body) as { events: Event[] }).events);
-}
-
-/** The event kinds in order, with consecutive `log` events collapsed to one. */
-function kindSequence(events: Event[]): string[] {
-  return events.map((e) => e.kind).filter((k, i, all) => !(k === 'log' && all[i - 1] === 'log'));
-}
-
-function remoteBranches(remote: string): string[] {
-  return sh('git', ['--git-dir', remote, 'for-each-ref', '--format=%(refname:short)', 'refs/heads'])
+const readAgents = (
+  home: string,
+): { envKeys: string[]; leaksRunToken: boolean; closeout: boolean; model: string }[] =>
+  readFileSync(join(home, 'agent-records.jsonl'), 'utf8')
     .trim()
     .split('\n')
-    .filter(Boolean)
-    .sort();
-}
+    .map((line) => JSON.parse(line));
 
-// ── The shared assertions ──────────────────────────────────────────────────
+// ── Layer 0: the launcher's own decisions ──────────────────────────────────
 
-function assertDelivered(stub: Stub, remote: string, home: string, repoDir: string | null): void {
-  const events = eventsOf(stub);
-  // AC3 — the phases, in order, through the shared ingest.
-  expect(
-    kindSequence(
-      events.filter((e) => !(e.kind === 'log' && e.body?.startsWith('[motir-hosted-agent]'))),
-    ),
-  ).toEqual(['checkout_ready', 'agent_started', 'log', 'agent_exited', 'delivery_linked']);
-  expect(events.every((e) => e.workItemKey === KEY)).toBe(true);
-  expect(events.find((e) => e.kind === 'agent_exited')?.exitCode).toBe(0);
-  expect(events.find((e) => e.kind === 'delivery_linked')?.data).toMatchObject({
-    url: `https://github.com/${REPO}/pull/42`,
-    number: 42,
+describe('the hosted launcher (MOTIR-6560)', () => {
+  const full = (over: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
+    MOTIR_DISPATCH_RUN_ID: 'run_1',
+    MOTIR_WORK_ITEM_KEY: 'ACME-7',
+    MOTIR_API_URL: 'https://motir.example',
+    MOTIR_RUN_TOKEN: RUN_TOKEN,
+    MOTIR_GATEWAY_URL: 'https://gateway.example',
+    MOTIR_RUN_KEY: RUN_KEY,
+    MOTIR_MODEL: MODEL,
+    ...over,
   });
-  // Every log body fits the ingest's 16 KiB ceiling.
-  for (const e of events.filter((x) => x.kind === 'log')) {
-    expect(Buffer.byteLength(e.body ?? '')).toBeLessThanOrEqual(16 * 1024);
-  }
 
-  // AC3 — one pushed branch, carrying the dispatcher as author AND committer.
-  const branch = `hosted/${KEY}-${RUN_ID}`;
-  expect(remoteBranches(remote)).toEqual([branch, 'main']);
-  const who = sh('git', [
-    '--git-dir',
-    remote,
-    'log',
-    '-1',
-    '--format=%an <%ae>|%cn <%ce>',
-    branch,
-  ]).trim();
-  expect(who).toBe(`${AUTHOR.name} <${AUTHOR.email}>|${AUTHOR.name} <${AUTHOR.email}>`);
-  const files = sh('git', ['--git-dir', remote, 'ls-tree', '-r', '--name-only', branch])
-    .trim()
-    .split('\n');
-  expect(files.sort()).toEqual(['README.md', 'hello.txt']);
-
-  // AC3 — exactly one pull-request call, head → base, with the git credential.
-  const prCalls = stub.requests.filter((r) => r.path === `/repos/${REPO}/pulls`);
-  expect(prCalls).toHaveLength(1);
-  expect(prCalls[0]!.headers.authorization).toBe(`Bearer ${GIT_TOKEN}`);
-  expect(JSON.parse(prCalls[0]!.body)).toMatchObject({
-    head: branch,
-    base: 'main',
-    title: `${KEY} Add a greeting`,
+  it('runs `motir run <KEY>` by default and `motir continue <KEY>` in continue mode', () => {
+    expect(cliArgs(readLaunch(full()))).toEqual(['run', 'ACME-7']);
+    expect(cliArgs(readLaunch(full({ MOTIR_RUN_MODE: 'continue' })))).toEqual([
+      'continue',
+      'ACME-7',
+    ]);
   });
-  expect(JSON.parse(prCalls[0]!.body).body).toContain(AUTHOR.name);
 
-  // AC5 — the config OpenCode was handed IS the egress contract §2 document,
-  // and every model call went to the stub gateway's `/v1/messages` with the
-  // run key alone.
-  const record = JSON.parse(readFileSync(join(home, 'fake-agent-record.json'), 'utf8')) as {
-    args: string[];
-    envKeys: string[];
-    configText: string;
-  };
-  expect(JSON.parse(record.configText)).toEqual(EGRESS_CONTRACT_SECTION_2);
-  expect(record.args.slice(0, 3)).toEqual(['run', '--model', 'anthropic/claude-opus-5-5']);
-  const modelCalls = stub.requests.filter(
-    (r) => r.headers['x-api-key'] !== undefined || r.path.startsWith('/v1/'),
-  );
-  expect(modelCalls.length).toBeGreaterThan(0);
-  for (const call of modelCalls) {
-    expect(call.method).toBe('POST');
-    expect(call.path).toBe('/v1/messages');
-    expect(call.headers['x-api-key']).toBe(RUN_KEY);
-  }
+  it('names EVERY missing input at once, and refuses a bad key or mode', () => {
+    expect(() => readLaunch({})).toThrow(
+      `missing required input(s): ${REQUIRED_INPUTS.join(', ')}`,
+    );
+    expect(() => readLaunch(full({ MOTIR_WORK_ITEM_KEY: 'not a key' }))).toThrow(/work item key/);
+    expect(() => readLaunch(full({ MOTIR_RUN_MODE: 'retry' }))).toThrow(/"run" or "continue"/);
+  });
 
-  // Only the model credential reaches the agent's environment.
-  expect(record.envKeys).toContain('MOTIR_RUN_KEY');
-  for (const secret of ['MOTIR_RUN_TOKEN', 'MOTIR_GIT_TOKEN', 'MOTIR_API_URL']) {
-    expect(record.envKeys).not.toContain(secret);
-  }
-
-  // AC6 — codegraph initialised on the checkout, its sync hooks installed, its
-  // MCP server registered with OpenCode, and its index kept out of the commit.
-  if (repoDir) {
-    expect(existsSync(join(repoDir, '.codegraph'))).toBe(true);
-    for (const hook of ['post-merge', 'post-checkout']) {
-      expect(readFileSync(join(repoDir, '.git', 'hooks', hook), 'utf8')).toContain(
-        'codegraph sync',
-      );
+  it('reads no repository, base ref, git token or git author', () => {
+    const source = readFileSync(ENTRYPOINT, 'utf8');
+    for (const retired of [
+      'MOTIR_REPOSITORY',
+      'MOTIR_BASE_REF',
+      'MOTIR_GIT_TOKEN',
+      'MOTIR_GIT_AUTHOR_NAME',
+      'MOTIR_GIT_AUTHOR_EMAIL',
+    ]) {
+      expect(source.includes(`env.${retired}`) || source.includes(`'${retired}'`)).toBe(false);
     }
-  }
-  expect(readFileSync(join(home, '.config', 'opencode', 'opencode.jsonc'), 'utf8')).toContain(
-    'codegraph',
-  );
-  expect(files.some((f) => f.startsWith('.codegraph'))).toBe(false);
+  });
 
-  // The git token never landed in the checkout's config.
-  if (repoDir)
-    expect(readFileSync(join(repoDir, '.git', 'config'), 'utf8')).not.toContain(GIT_TOKEN);
-}
+  it('exits 20 and starts nothing when an input is missing', async () => {
+    const res = await launch({ PATH: process.env.PATH ?? '', MOTIR_CLI_BIN: '/nonexistent/motir' });
+    expect(res.code).toBe(SETUP_FAILED);
+    expect(res.stderr).toContain('missing required input(s): MOTIR_DISPATCH_RUN_ID');
+  });
+});
 
-function assertAgentFailed(stub: Stub, remote: string): void {
-  const events = eventsOf(stub);
-  const exited = events.find((e) => e.kind === 'agent_exited');
-  // AC4 — `agent_exited` with the exit code and the log tail …
-  expect(exited?.exitCode).toBe(3);
-  expect(String(exited?.data?.logTail)).toContain('boom: the fake agent failed on purpose');
-  // … and no push, no pull request, no delivery.
-  expect(events.some((e) => e.kind === 'delivery_linked')).toBe(false);
-  expect(remoteBranches(remote)).toEqual(['main']);
-  expect(stub.requests.some((r) => r.path.includes('/pulls'))).toBe(false);
-}
+// ── Layer 1: the three run shapes, as processes ────────────────────────────
 
-// ── Layer 1: the process ───────────────────────────────────────────────────
-
-describe('the hosted-agent entrypoint, as a process (MOTIR-687)', () => {
+describe('the hosted image, as processes: the launcher runs the real CLI (MOTIR-6560)', () => {
   let stub: Stub;
-  let root: string;
 
   beforeAll(async () => {
     stub = await startStub();
   });
   afterAll(async () => {
-    await new Promise<void>((resolve) => stub.server.close(() => resolve()));
+    await new Promise<void>((r) => stub.server.close(() => r()));
+  });
+  afterEach(() => {
+    for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
 
-  function scenario(mode: 'succeed' | 'fail') {
-    root = mkdtempSync(join(tmpdir(), 'hosted-agent-smoke-'));
-    const bin = join(root, 'bin');
-    const home = join(root, 'home');
-    const workspace = join(root, 'workspace');
-    mkdirSync(bin);
-    mkdirSync(home);
-    writeFileSync(join(bin, 'opencode'), FAKE_OPENCODE);
-    writeFileSync(join(bin, 'codegraph'), FAKE_CODEGRAPH);
-    chmodSync(join(bin, 'opencode'), 0o755);
-    chmodSync(join(bin, 'codegraph'), 0o755);
-    const remote = makeRemote(root);
+  function arm(s: Scenario): World {
+    // Fresh card statuses per scenario — the stub mutates them as the run goes.
+    for (const card of Object.values(s.cards)) card.status = 'in_progress';
+    stub.scenario = s;
     stub.requests.length = 0;
-    stub.prompt = `Build ${KEY}. FAKE:${mode}`;
-    const env: NodeJS.ProcessEnv = {
-      PATH: `${bin}:${process.env.PATH ?? ''}`,
-      HOME: home,
-      ...runInputs(stub),
-      MOTIR_WORKSPACE: workspace,
-      MOTIR_GIT_REMOTE_URL: remote,
-    };
-    return { env, remote, home, repoDir: join(workspace, 'repo') };
+    stub.events.length = 0;
+    stub.closed.length = 0;
+    stub.modelCalls.length = 0;
+    stub.misses.length = 0;
+    const world = makeWorld(stub);
+    world.env.MOTIR_DISPATCH_RUN_ID = s.runId;
+    world.env.MOTIR_WORK_ITEM_KEY = s.key;
+    return world;
   }
 
-  const node = ['--experimental-strip-types', '--disable-warning=ExperimentalWarning', ENTRYPOINT];
+  /** What every shape shares: adopted, never opened; closed once; nothing off-route. */
+  function expectAdoptedAndClosed(s: Scenario) {
+    const paths = stub.requests.map((r) => `${r.method} ${r.path}`);
+    expect(paths).toContain(`GET /api/v1/dispatch-runs/${s.runId}`);
+    expect(paths).not.toContain('POST /api/v1/dispatch-runs');
+    expect(stub.requests.filter((r) => r.path === '/api/v1/workspaces')).toEqual([]);
+    // Every Motir call carried the run credential (the gateway call carries the run key).
+    const motir = stub.requests.filter((r) => r.path.startsWith('/api/'));
+    expect(motir.filter((r) => r.auth !== `Bearer ${RUN_TOKEN}`)).toEqual([]);
+    expect(paths.filter((p) => p === `POST /api/v1/dispatch-runs/${s.runId}/close`)).toHaveLength(
+      1,
+    );
+    // The stub answered everything the CLI asked — no route fell through.
+    expect(stub.misses).toEqual([]);
+  }
 
-  it('runs a card to a pull request, reporting every phase through the shared ingest', async () => {
-    const s = scenario('succeed');
-    const result = await runProcess(node, s.env);
-    expect(result.code, result.stderr).toBe(0);
-    assertDelivered(stub, s.remote, s.home, s.repoDir);
-    cleanup(root);
-  });
+  /** Every agent the CLI spawned: OpenCode on the run model, never holding the run credential. */
+  function expectAgentsConfined(home: string) {
+    const agents = readAgents(home);
+    expect(agents.length).toBeGreaterThan(0);
+    for (const agent of agents) {
+      expect(agent.model).toBe(MODEL);
+      expect(agent.leaksRunToken).toBe(false);
+      expect(agent.envKeys).not.toContain('MOTIR_RUN_TOKEN');
+      expect(agent.envKeys).not.toContain('GH_TOKEN');
+    }
+    // The model call went through the gateway on the run key, as the egress document says.
+    expect(stub.modelCalls.length).toBeGreaterThan(0);
+    expect(stub.modelCalls.every((c) => c.apiKey === RUN_KEY)).toBe(true);
+  }
 
-  it('reports a failed agent with its log tail and pushes nothing', async () => {
-    const s = scenario('fail');
-    const result = await runProcess(node, s.env);
-    expect(result.code).toBe(10);
-    assertAgentFailed(stub, s.remote);
-    cleanup(root);
-  });
+  /** The commit on a remote branch: its author is the repository's App bot. */
+  function authorOn(bare: string, ref: string): string {
+    return git(bare, 'log', '-1', '--format=%an <%ae>', ref).trim();
+  }
 
-  it('refuses to start without its inputs, naming them, and calls nothing', async () => {
-    const s = scenario('succeed');
-    const env = { ...s.env };
-    delete env.MOTIR_RUN_KEY;
-    delete env.MOTIR_GIT_TOKEN;
-    const result = await runProcess(node, env);
-    expect(result.code).toBe(20);
-    expect(result.stderr).toContain('MOTIR_RUN_KEY');
-    expect(result.stderr).toContain('MOTIR_GIT_TOKEN');
-    expect(stub.requests).toEqual([]);
-    cleanup(root);
-  });
+  it('a one-repository leaf: one pull request, committed as the App, the shared event sequence', async () => {
+    const s = SCENARIOS[0]!;
+    const world = arm(s);
+    const res = await launch(world.env);
+    expect(res.code, res.stderr + res.stdout).toBe(0);
+    expectAdoptedAndClosed(s);
+    expectAgentsConfined(world.home);
 
-  it('refuses a model outside the anthropic provider before anything runs', async () => {
-    const s = scenario('succeed');
-    const result = await runProcess(node, { ...s.env, MOTIR_MODEL: 'claude-opus-5-5' });
-    expect(result.code).toBe(20);
-    expect(result.stderr).toContain('MOTIR_MODEL');
-    expect(stub.requests).toEqual([]);
-    cleanup(root);
-  });
+    const { prs, calls } = readPrs(world.home);
+    expect(prs.map((p) => `${p.repo} ${p.head}`)).toEqual(['acme/app-a hosted/ACME-7']);
+    // `gh` got THAT repository's token, for that one call, through the CLI's shim.
+    expect(calls.filter((c) => c.args[1] === 'create').map((c) => c.token)).toEqual([
+      'ghs_token_for_app-a',
+    ]);
+    expect(authorOn(world.remotes['app-a']!, 'hosted/ACME-7')).toBe(
+      `${BOTS['acme/app-a']!.name} <${BOTS['acme/app-a']!.email}>`,
+    );
+    // The checkout was indexed, and the index never reached the commit.
+    expect(existsSync(join(world.workspace, 'app-a', '.codegraph'))).toBe(true);
+    expect(
+      git(world.remotes['app-a']!, 'ls-tree', '-r', '--name-only', 'hosted/ACME-7'),
+    ).not.toContain('.codegraph');
 
-  it('ships the egress contract §2 document verbatim', () => {
-    expect(JSON.parse(readFileSync(EGRESS_CONFIG, 'utf8'))).toEqual(EGRESS_CONTRACT_SECTION_2);
-  });
+    const kinds = stub.events.map((e) => e.kind);
+    for (const kind of ['checkout_ready', 'agent_started', 'agent_exited'])
+      expect(kinds).toContain(kind);
+    expect(kinds.indexOf('checkout_ready')).toBeLessThan(kinds.indexOf('agent_started'));
+    expect(kinds.indexOf('agent_started')).toBeLessThan(kinds.indexOf('agent_exited'));
+    expect(kinds).not.toContain('run_opened');
+    expect(s.cards['ACME-7']!.status).toBe('implemented');
+  }, 120_000);
+
+  it('a leaf across two repositories: both cloned as siblings, one pull request in each, each as its own App', async () => {
+    const s = SCENARIOS[1]!;
+    const world = arm(s);
+    const res = await launch(world.env);
+    expect(res.code, res.stderr + res.stdout).toBe(0);
+    expectAdoptedAndClosed(s);
+    expectAgentsConfined(world.home);
+
+    expect(existsSync(join(world.workspace, 'app-a', '.git'))).toBe(true);
+    expect(existsSync(join(world.workspace, 'app-b', '.git'))).toBe(true);
+    const { prs, calls } = readPrs(world.home);
+    expect(prs.map((p) => p.repo).sort()).toEqual(['acme/app-a', 'acme/app-b']);
+    expect(
+      calls
+        .filter((c) => c.args[1] === 'create')
+        .map((c) => `${c.repo} ${c.token}`)
+        .sort(),
+    ).toEqual(['acme/app-a ghs_token_for_app-a', 'acme/app-b ghs_token_for_app-b']);
+    for (const repo of ['app-a', 'app-b']) {
+      const bot = BOTS[`acme/${repo}`]!;
+      expect(authorOn(world.remotes[repo]!, 'hosted/ACME-8')).toBe(`${bot.name} <${bot.email}>`);
+    }
+    expect(s.cards['ACME-8']!.status).toBe('implemented');
+  }, 120_000);
+
+  it('a parent: its children in order on one session branch per repository, a draft per repository made ready at close-out', async () => {
+    const s = SCENARIOS[2]!;
+    const world = arm(s);
+    const res = await launch(world.env);
+    expect(res.code, res.stderr + res.stdout).toBe(0);
+    expectAdoptedAndClosed(s);
+    expectAgentsConfined(world.home);
+
+    // No scope claim and no ready-set read: the legs are the run's.
+    const paths = stub.requests.map((r) => `${r.method} ${r.path}`);
+    expect(paths.some((p) => p.includes('scope-claims'))).toBe(false);
+    expect(paths.some((p) => p.endsWith('/ready'))).toBe(false);
+    // Each child integrated, in the run's order.
+    const integrated = stub.requests
+      .filter((r) => r.method === 'POST' && r.path.endsWith('/integration'))
+      .map((r) => r.path.split('/')[4]);
+    expect(integrated).toEqual(['ACME-11', 'ACME-12']);
+    const branches = new Set(
+      stub.requests
+        .filter((r) => r.path.endsWith('/integration'))
+        .map((r) => (r.body as { sessionBranch: string }).sessionBranch),
+    );
+    expect(branches.size).toBe(1);
+    const [session] = [...branches] as [string];
+
+    // One pull request per repository, opened as a DRAFT and READY at the end.
+    const { prs, calls } = readPrs(world.home);
+    expect(prs.map((p) => `${p.repo} ${p.head}`).sort()).toEqual([
+      `acme/app-a ${session}`,
+      `acme/app-b ${session}`,
+    ]);
+    expect(
+      calls.filter((c) => c.args[1] === 'create').every((c) => c.args.includes('--draft')),
+    ).toBe(true);
+    // The CLI's own `gh` calls went through its shim, each with its repository's token.
+    expect(
+      calls
+        .filter((c) => c.args[1] === 'create')
+        .map((c) => `${c.repo} ${c.token}`)
+        .sort(),
+    ).toEqual(['acme/app-a ghs_token_for_app-a', 'acme/app-b ghs_token_for_app-b']);
+    expect(prs.every((p) => p.draft === false)).toBe(true);
+    // Every pull request names the dispatcher (the CLI's hosted attribution).
+    expect(prs.every((p) => p.body.includes(DISPATCHER))).toBe(true);
+    for (const repo of ['app-a', 'app-b']) {
+      const bot = BOTS[`acme/${repo}`]!;
+      expect(authorOn(world.remotes[repo]!, session)).toBe(`${bot.name} <${bot.email}>`);
+    }
+    // The close-out's How-to-test agent ran, once, after the children.
+    const agents = readAgents(world.home);
+    expect(agents.filter((a) => a.closeout)).toHaveLength(1);
+    expect(agents.at(-1)!.closeout).toBe(true);
+    expect(s.cards['ACME-11']!.status).toBe('implemented');
+    expect(s.cards['ACME-12']!.status).toBe('implemented');
+  }, 180_000);
+
+  it('continue mode reaches the CLI as `motir continue <KEY>`, and the CLI answers for it', async () => {
+    const s = SCENARIOS[0]!;
+    const world = arm(s);
+    world.env.MOTIR_RUN_MODE = 'continue';
+    const res = await launch(world.env);
+    // `motir continue` is the run-dies story's; until it ships the CLI refuses
+    // the command, non-zero, and nothing is pushed or opened.
+    expect(res.code).not.toBe(0);
+    expect(res.stderr).toContain('motir continue ACME-7');
+    expect(readPrs(world.home).prs).toEqual([]);
+  }, 60_000);
 });
 
 // ── Layer 2: the image ─────────────────────────────────────────────────────
 
-describe.skipIf(!IMAGE)('the hosted-agent IMAGE (MOTIR-687)', () => {
+describe.skipIf(!IMAGE)('the hosted-agent IMAGE (MOTIR-6560)', () => {
   const image = IMAGE ?? '';
-  let stub: Stub;
-
-  beforeAll(async () => {
-    stub = await startStub();
-  });
-  afterAll(async () => {
-    await new Promise<void>((resolve) => stub.server.close(() => resolve()));
-  });
-
   const inImage = (cmd: string) =>
     spawnSync('docker', ['run', '--rm', '--entrypoint', 'sh', image, '-c', cmd], {
       encoding: 'utf8',
     });
 
-  it('carries OpenCode 1.18.32 and no other agent CLI', () => {
-    // AC1.
-    expect(inImage('opencode --version').stdout.trim()).toBe('1.18.32');
-    for (const other of [
-      'claude',
-      'codex',
-      'kimi',
-      'aider',
-      'goose',
-      'cursor-agent',
-      'gemini',
-      'agy',
-    ]) {
-      expect(inImage(`command -v ${other}`).status, `${other} is on the PATH`).not.toBe(0);
-    }
-  });
-
-  it('runs as a non-root user', () => {
-    expect(inImage('id -u').stdout.trim()).not.toBe('0');
-  });
-
-  function containerScenario(mode: 'succeed' | 'fail') {
-    const root = mkdtempSync(join(tmpdir(), 'hosted-agent-image-'));
-    const bin = join(root, 'bin');
-    const home = join(root, 'home');
-    mkdirSync(bin);
-    mkdirSync(home);
-    writeFileSync(join(bin, 'opencode'), FAKE_OPENCODE);
-    chmodSync(join(bin, 'opencode'), 0o755);
-    // The mounted remote is owned by the host user, not the image's; allowing
-    // it is test setup, not something a real run needs.
-    writeFileSync(join(home, '.gitconfig'), '[safe]\n\tdirectory = *\n');
-    const remote = makeRemote(root);
-    sh('chmod', ['-R', 'a+rwX', root]);
-    stub.requests.length = 0;
-    stub.prompt = `Build ${KEY}. FAKE:${mode}`;
-    const env = { ...runInputs(stub), MOTIR_GIT_REMOTE_URL: '/remote.git', HOME: '/agent-home' };
-    const args = [
-      'run',
-      '--rm',
-      '--network',
-      'host',
-      '-v',
-      `${bin}:/fake-bin:ro`,
-      '-v',
-      `${home}:/agent-home`,
-      '-v',
-      `${remote}:/remote.git`,
-      '-e',
-      'PATH=/fake-bin:/usr/local/bin:/usr/bin:/bin',
-      ...Object.entries(env).flatMap(([k, v]) => ['-e', `${k}=${v}`]),
-      image,
-    ];
-    return { root, remote, home, args };
-  }
-
-  it('runs a card to a pull request inside the image, with the real codegraph', async () => {
-    const s = containerScenario('succeed');
-    const result = await runProcess(s.args, process.env, 'docker');
-    expect(result.code, result.stderr).toBe(0);
-    assertDelivered(stub, s.remote, s.home, null);
-    cleanup(s.root);
-  }, 120_000);
-
-  it('exits non-zero inside the image when the agent fails, pushing nothing', async () => {
-    const s = containerScenario('fail');
-    const result = await runProcess(s.args, process.env, 'docker');
-    expect(result.code).toBe(10);
-    assertAgentFailed(stub, s.remote);
-    cleanup(s.root);
-  }, 120_000);
-
-  it('initialises codegraph on the checkout and installs its sync hooks (real codegraph)', () => {
-    // AC6, against the real binary: the entrypoint's clone, then its codegraph
-    // step, observed from inside the same container.
-    const root = mkdtempSync(join(tmpdir(), 'hosted-agent-cg-'));
-    const remote = makeRemote(root);
-    sh('chmod', ['-R', 'a+rwX', root]);
-    const res = spawnSync(
-      'docker',
-      [
-        'run',
-        '--rm',
-        '--entrypoint',
-        'sh',
-        '-v',
-        `${remote}:/remote.git`,
-        image,
-        '-c',
-        'git config --global --add safe.directory "*" && git clone -q /remote.git /workspace/repo && ' +
-          'codegraph init /workspace/repo >/dev/null && test -d /workspace/repo/.codegraph && echo indexed',
-      ],
-      { encoding: 'utf8' },
+  it('carries the Motir CLI, gh, git ≥ 2.36, OpenCode 1.18.32 and codegraph — and no other agent CLI', () => {
+    const res = inImage(
+      'motir --version && gh --version && git --version && opencode --version && codegraph --version; ' +
+        'for a in claude codex aider goose cursor-agent kimi; do command -v "$a" && echo "UNEXPECTED $a"; done; true',
     );
-    expect(res.stdout).toContain('indexed');
-    cleanup(root);
-  }, 120_000);
+    expect(res.status, res.stderr).toBe(0);
+    expect(res.stdout).toMatch(/gh version/);
+    expect(res.stdout).toMatch(/^1\.18\.32$/m);
+    const gitVersion = /git version (\d+)\.(\d+)/.exec(res.stdout);
+    expect(gitVersion).not.toBeNull();
+    const [major, minor] = [Number(gitVersion![1]), Number(gitVersion![2])];
+    expect(major > 2 || (major === 2 && minor >= 36)).toBe(true);
+    expect(res.stdout).not.toContain('UNEXPECTED');
+  });
+
+  it('runs as a non-root user with /workspace as its workspace', () => {
+    const res = inImage('id -u && echo "$MOTIR_WORKSPACE" && test -w /workspace && echo writable');
+    expect(res.status, res.stderr).toBe(0);
+    const [uid, workspace, writable] = res.stdout.trim().split('\n');
+    expect(uid).not.toBe('0');
+    expect(workspace).toBe('/workspace');
+    expect(writable).toBe('writable');
+  });
+
+  it('its launcher refuses a boot with no inputs, naming them, with exit 20', () => {
+    const res = spawnSync('docker', ['run', '--rm', image], { encoding: 'utf8' });
+    expect(res.status).toBe(SETUP_FAILED);
+    expect(res.stderr).toContain('missing required input(s): MOTIR_DISPATCH_RUN_ID');
+  });
 });

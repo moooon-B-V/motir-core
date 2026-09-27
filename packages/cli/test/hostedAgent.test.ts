@@ -1,9 +1,8 @@
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runAgent } from '../src/agentRun.js';
 import { resetHostedRun, setActiveHostedRun } from '../src/hostedAttribution.js';
@@ -18,8 +17,27 @@ import {
 // THE HOSTED RUN'S AGENT (MOTIR-6559) — OpenCode, launched by the CLI on the
 // run's model through the gateway key, on an ALLOW-LISTED environment (AC3).
 
-const HERE = fileURLToPath(new URL('.', import.meta.url));
-const EGRESS_FILE = join(HERE, '..', 'sandbox', 'hosted', 'opencode.egress.json');
+/**
+ * The gateway's egress contract §2 (`motir-gateway` `docs/hosted-run-egress.md`),
+ * pinned HERE as well as in the CLI — so an edit to `EGRESS_DOCUMENT` is a
+ * visible, deliberate change to the security boundary rather than a silent one.
+ * (The hosted image carried its own copy until MOTIR-6560; the CLI now owns the
+ * only one, and this literal is what holds it to the contract.)
+ */
+const EGRESS_CONTRACT_SECTION_2 = {
+  $schema: 'https://opencode.ai/config.json',
+  enabled_providers: ['anthropic'],
+  provider: {
+    anthropic: {
+      options: {
+        baseURL: '{env:MOTIR_GATEWAY_URL}/v1',
+        apiKey: '{env:MOTIR_RUN_KEY}',
+      },
+    },
+  },
+  share: 'disabled',
+  autoupdate: false,
+};
 
 const RUN_KEY = 'rk_live_the_gateway_key';
 const RUN_TOKEN = 'mrt_the_run_credential';
@@ -71,15 +89,13 @@ describe('hostedOpenCodeAgent (AC3)', () => {
     expect(env['GIT_CONFIG_GLOBAL']).toBe('/tmp/state/gitconfig');
   });
 
-  it('the egress document the CLI owns is the one the hosted image still carries (pinned until MOTIR-6560)', () => {
-    expect(EGRESS_DOCUMENT).toEqual(JSON.parse(readFileSync(EGRESS_FILE, 'utf8')));
+  it('the egress document the CLI owns is the egress contract §2, verbatim', () => {
+    expect(EGRESS_DOCUMENT).toEqual(EGRESS_CONTRACT_SECTION_2);
   });
 
   it('configures OpenCode with exactly the egress contract document', () => {
     const env = hostedAgentEnv(containerEnv());
-    expect(JSON.parse(env['OPENCODE_CONFIG_CONTENT']!)).toEqual(
-      JSON.parse(readFileSync(EGRESS_FILE, 'utf8')),
-    );
+    expect(JSON.parse(env['OPENCODE_CONFIG_CONTENT']!)).toEqual(EGRESS_CONTRACT_SECTION_2);
     expect(JSON.parse(egressConfig()).provider.anthropic.options.apiKey).toBe(
       '{env:MOTIR_RUN_KEY}',
     );

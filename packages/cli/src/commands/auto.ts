@@ -1157,6 +1157,11 @@ export interface DispatchOneInput {
    * construction: none of these calls can throw.
    */
   reporter?: DispatchRunReporter;
+  /**
+   * Prepare the card's checkouts before the spawn — a HOSTED run's code graph
+   * (MOTIR-6560). Absent for `auto` and a local scope.
+   */
+  prepareCheckouts?: (cwds: string[]) => void;
 }
 
 /**
@@ -1255,6 +1260,10 @@ export async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneR
   // agent then fails, times out or is killed. One block per dispatched item, in
   // dispatch order — this function is `auto`'s loop AND the scoped drain's, so
   // both transcripts are produced by the same line.
+  input.prepareCheckouts?.([
+    target.cwd,
+    ...input.targets.map((other) => other.cwd).filter((cwd) => cwd !== target.cwd),
+  ]);
   echoPromptIfAsked(input.opts, item.key, dispatch);
   reporter.event({ kind: 'prompt_issued', workItemKey: item.key });
 

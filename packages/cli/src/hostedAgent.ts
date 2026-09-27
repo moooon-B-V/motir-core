@@ -52,9 +52,9 @@ const MAX_ARGV_PROMPT_BYTES = 100 * 1024;
 /**
  * The gateway's egress contract §2 document (`motir-gateway`
  * `docs/hosted-run-egress.md`), verbatim — MOVED here from the hosted
- * entrypoint's `opencode.egress.json`, which stays only while that entrypoint
- * still launches OpenCode itself (MOTIR-6560 retires both) and is pinned equal
- * to this by `test/hostedAgent.test.ts`.
+ * entrypoint's `opencode.egress.json`, which MOTIR-6560 deleted with the
+ * entrypoint's own OpenCode launch. This is the only copy; `test/hostedAgent.test.ts`
+ * pins it to the contract.
  */
 export const EGRESS_DOCUMENT = {
   $schema: 'https://opencode.ai/config.json',

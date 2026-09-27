@@ -1,52 +1,61 @@
 # The hosted agent image
 
-The container Motir boots, once per dispatched card, to run that card with
-OpenCode and hand back a pull request (Story MOTIR-683 · Subtask MOTIR-687).
-`entrypoint.ts` is the whole program; `docs/decisions/hosted-agent-run.md` is the
-decision it implements; the gateway's `docs/hosted-run-egress.md` fixes how
-OpenCode is configured, and `opencode.egress.json` is that document verbatim.
+The container Motir boots, once per hosted run, to run the Motir CLI's own
+`motir run` on the run the server opened (Story MOTIR-683 · MOTIR-687, made to
+run the CLI by MOTIR-6560). `docs/decisions/hosted-run-runs-the-cli-as-the-app.md`
+is the decision it implements: a leaf, a leaf that spans several repositories and
+a parent worked through its children all run exactly as they do on a laptop.
+
+`entrypoint.ts` is only a launcher. Everything a run does — reading its cards,
+cloning every repository it touches, indexing each checkout with codegraph,
+launching OpenCode on the gateway key per the egress contract, pushing, opening
+and linking one pull request per repository, and closing the run — is the CLI's
+(`packages/cli/src/hostedMode.ts`, `hostedAgent.ts`, `hostedGit.ts`,
+`hostedCodegraph.ts`).
 
 ## The run's inputs
 
 Everything arrives as environment at boot. Nothing is baked into the image.
 
-| variable                                           | what it is                                                                      |
-| -------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `MOTIR_DISPATCH_RUN_ID`                            | the `DispatchRun.id` — the one id the run carries everywhere                    |
-| `MOTIR_WORK_ITEM_KEY`                              | the card, e.g. `MOTIR-683`                                                      |
-| `MOTIR_WORK_ITEM_TITLE`                            | optional — the card's title, for the commit and the pull request                |
-| `MOTIR_REPOSITORY`                                 | `owner/name` on GitHub                                                          |
-| `MOTIR_BASE_REF`                                   | the branch to clone and to open the pull request against                        |
-| `MOTIR_API_URL`                                    | Motir's origin, for the dispatch prompt and the shared ingest                   |
-| `MOTIR_RUN_TOKEN`                                  | the run's Motir credential (MOTIR-688)                                          |
-| `MOTIR_GIT_TOKEN`                                  | the run's GitHub credential (MOTIR-6449)                                        |
-| `MOTIR_GIT_AUTHOR_NAME` / `MOTIR_GIT_AUTHOR_EMAIL` | the dispatcher, as the author of every commit                                   |
-| `MOTIR_GATEWAY_URL`                                | the gateway's origin, no trailing `/v1` (egress contract §2)                    |
-| `MOTIR_RUN_KEY`                                    | the per-run gateway key (MOTIR-689) — the ONLY one of these the agent ever sees |
-| `MOTIR_MODEL`                                      | the model in OpenCode's form, `anthropic/<bare gateway id>` (decision §7)       |
+| variable                | what it is                                                                    |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `MOTIR_DISPATCH_RUN_ID` | the `DispatchRun.id` the server opened — the CLI ADOPTS it, never opens one   |
+| `MOTIR_WORK_ITEM_KEY`   | the dispatched card, e.g. `MOTIR-683` — a leaf, or a parent run as its scope  |
+| `MOTIR_API_URL`         | Motir's origin, for every call the CLI makes                                  |
+| `MOTIR_RUN_TOKEN`       | the run's Motir credential (MOTIR-688), reaching only the run's own cards     |
+| `MOTIR_GATEWAY_URL`     | the gateway's origin, no trailing `/v1` (egress contract §2)                  |
+| `MOTIR_RUN_KEY`         | the per-run gateway key (MOTIR-689) — the ONLY credential the agent ever sees |
+| `MOTIR_MODEL`           | the model in OpenCode's form, `anthropic/<bare gateway id>` (decision §7)     |
+| `MOTIR_RUN_MODE`        | optional — `run` (the default) or `continue` for a dead run's branch          |
 
-`MOTIR_WORKSPACE`, `MOTIR_GIT_REMOTE_URL` and `MOTIR_GITHUB_API_URL` exist so the
-smoke test can point the run at stubs; a real run leaves them unset.
+There is no repository, base ref, git token or git author among them: the run's
+repositories come from its cards, and GitHub is reached only through the CLI's
+credential helper on the run's git-credential route, as Motir's App.
+
+`MOTIR_WORKSPACE` (default `/workspace`) and `MOTIR_CLI_BIN` (default `motir`)
+exist so the smoke test can point the launcher at a scratch workspace and at the
+CLI's source; a real run leaves them unset.
 
 ## What the end path reads
 
-| exit | meaning                                                                       |
-| ---- | ----------------------------------------------------------------------------- |
-| `0`  | the agent exited 0, its work was pushed and the pull request opened           |
-| `10` | the agent exited non-zero (its log tail is on `agent_exited`); nothing pushed |
-| `11` | the agent exited 0 and changed nothing; nothing pushed                        |
-| `20` | an input was missing or malformed, or a setup step (prompt, clone) failed     |
-| `21` | the work could not be committed, pushed or opened as a pull request           |
+The container exits with the CLI's own code: `0` when the run completed, the
+agent's code when it failed, non-zero on a halted run. `20` means the launcher
+refused its inputs and never reached the CLI. A killed CLI exits `128 + signal`.
+The CLI closes the run it adopted; the server's end path closes it only when the
+CLI never did.
 
 ## Building and testing it
 
+The build context is the repository root, because the CLI is built from this
+checkout:
+
 ```sh
-docker build -t motir-hosted-agent:local packages/cli/sandbox/hosted
+docker build -t motir-hosted-agent:local -f packages/cli/sandbox/hosted/Dockerfile .
 MOTIR_HOSTED_AGENT_IMAGE=motir-hosted-agent:local \
   pnpm --filter @motir/cli exec vitest run sandbox/hosted/smoke.test.ts
 ```
 
-Without `MOTIR_HOSTED_AGENT_IMAGE` the smoke test still drives the entrypoint as
-a process (no Docker needed) and skips its image layer.
+Without `MOTIR_HOSTED_AGENT_IMAGE` the smoke test still drives the launcher and
+the CLI as processes (no Docker needed) and skips its image layer.
 `.github/workflows/hosted-agent-image.yml` builds, proves and — on `main` —
 publishes it by digest.

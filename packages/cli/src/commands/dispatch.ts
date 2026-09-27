@@ -16,6 +16,7 @@ import {
 } from '../agentProfiles.js';
 import { runAgent } from '../agentRun.js';
 import { hostedOpenCodeAgent } from '../hostedAgent.js';
+import { prepareHostedCheckouts } from '../hostedCodegraph.js';
 import { runDispatchLeg } from '../dispatchLeg.js';
 import { createDispatchRunReporter } from '../dispatchRunReporter.js';
 import { runCiWatchPhase, type CiWatchOutcome } from '../ciWatch.js';
@@ -453,6 +454,9 @@ async function deliver(input: DeliverInput): Promise<void> {
       echoPromptIfAsked(opts, key, dispatch);
     },
     ...(deps.run ? { run: deps.run } : {}),
+    // A hosted container's checkouts are fresh clones: index them before the
+    // agent starts, as the image's entrypoint used to (MOTIR-6560).
+    ...(input.adoptedRunId ? { prepareCheckouts: hostedCheckoutPreparer } : {}),
   });
 
   if (verdict.kind === 'checkout_unavailable') {
@@ -686,6 +690,15 @@ export async function nextCommand(opts: NextOptions, deps: DeliveryDeps = {}): P
  */
 export async function resolveOwnerId(client: MotirClient): Promise<string> {
   return (await client.whoami()).user.id;
+}
+
+/**
+ * A hosted run's per-checkout preparation (MOTIR-6560): its code graph, built
+ * once the CLI has cloned the checkout and before the agent is spawned on it.
+ * Best-effort — every failure is a line on the transcript, never a stop.
+ */
+function hostedCheckoutPreparer(cwds: string[]): void {
+  prepareHostedCheckouts(cwds, (line) => info(line));
 }
 
 /**
@@ -964,6 +977,7 @@ export async function runCommand(
         // A hosted workspace starts EMPTY: every repository a leg ships in is
         // cloned before its session branch is made, as `motir auto` does.
         materialize: adopted !== null,
+        ...(adopted ? { prepareCheckouts: hostedCheckoutPreparer } : {}),
       });
       // ⚠️ THE CLOSE-OUT RE-READS THE CONTAINER'S CHILDREN FIRST (Bug
       // MOTIR-3268). The claim was taken at t=0; a bug filed mid-drain

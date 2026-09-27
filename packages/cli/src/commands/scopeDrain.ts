@@ -102,6 +102,8 @@ export interface ScopeDrainInput {
    * are the operator's — so a local run is unchanged by this card.
    */
   materialize?: boolean;
+  /** Prepare each leg's checkouts before its spawn — a hosted run's code graph (MOTIR-6560). */
+  prepareCheckouts?: (cwds: string[]) => void;
 }
 
 /**
@@ -334,6 +336,7 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
           opts,
           onIntegrated: (k) => repo?.forEach((s) => s.keys.push(k)),
           reporter,
+          ...(input.prepareCheckouts ? { prepareCheckouts: input.prepareCheckouts } : {}),
         });
 
         if (outcome.kind === 'skipped') {

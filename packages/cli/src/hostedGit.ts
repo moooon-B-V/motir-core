@@ -381,7 +381,13 @@ function ghRepository(args: string[], cwd: string): string | null {
     if ((a === '-R' || a === '--repo') && args[i + 1]) return githubRepository(args[i + 1]!);
     if (a.startsWith('--repo=')) return githubRepository(a.slice('--repo='.length));
   }
-  const origin = spawnSync('git', ['remote', 'get-url', 'origin'], { cwd, encoding: 'utf8' });
+  // The CONFIGURED url, not `git remote get-url`: the latter applies any
+  // `url.<base>.insteadOf` rewrite, and the repository a token is for is the one
+  // the remote NAMES (MOTIR-6560).
+  const origin = spawnSync('git', ['config', '--get', 'remote.origin.url'], {
+    cwd,
+    encoding: 'utf8',
+  });
   return origin.status === 0 ? githubRepository(origin.stdout) : null;
 }
 

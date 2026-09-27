@@ -1,8 +1,9 @@
 # The HOSTED AGENT image — build, prove, publish (Story MOTIR-683 · Subtask MOTIR-687).
 #
 # `packages/cli/sandbox/hosted/` is the one-shot container Motir boots per
-# dispatched card: OpenCode, pinned and configured per the gateway's egress
-# contract, and nothing else agent-shaped. This workflow is its whole lane:
+# hosted run: the Motir CLI's own `motir run`, with OpenCode pinned and
+# configured per the gateway's egress contract, and nothing else agent-shaped
+# (MOTIR-6560). This workflow is its whole lane:
 #
 #   - on a PULL REQUEST touching it: build the image, prove it carries no
 #     credential, and run the smoke test against the BUILT image. No push.
@@ -12,14 +13,14 @@
 #     §6), never a tag. The push is a LATER STEP of the job that just proved the
 #     image, so a green build is the publish gate.
 #
-# ── Why it gates on the hosted folder alone ─────────────────────────────────
-# Unlike the sandbox and runner images (`COPY . .` from the repository root,
-# which is why `ci.yml`'s `changes` job treats every path as their input), this
-# image's build context IS `packages/cli/sandbox/hosted/`: nothing outside it is
-# copied in. So a change anywhere else cannot change the image, and the path
-# filter below is its complete input set — plus this file and the two composite
-# actions it runs.
-#
+# ── What it gates on ────────────────────────────────────────────────────────
+# Since MOTIR-6560 the image runs the Motir CLI built from THIS checkout, so its
+# build context is the repository root (as the sandbox and runner images'
+# are) and the CLI's source is an input: a change to `packages/cli/**` changes
+# what a hosted run does and rebuilds the image. The workspace manifests and the
+# lockfile are inputs too, because the builder stage installs with
+# `--frozen-lockfile`, and `.dockerignore` decides what the context carries.
+
 # ── Where the image is read from ────────────────────────────────────────────
 # `ghcr.io/moooon-b-v/motir-hosted-agent`. Its recipe is in this public
 # repository, so by `docs/decisions/fleet-image-pull.md` §1 it is published
@@ -32,14 +33,22 @@ name: Hosted agent image
 on:
   pull_request:
     paths:
-      - 'packages/cli/sandbox/hosted/**'
+      - 'packages/cli/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.dockerignore'
       - '.github/workflows/hosted-agent-image.yml'
       - '.github/actions/buildx/**'
       - '.github/actions/pnpm/**'
   push:
     branches: [main]
     paths:
-      - 'packages/cli/sandbox/hosted/**'
+      - 'packages/cli/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.dockerignore'
       - '.github/workflows/hosted-agent-image.yml'
       - '.github/actions/buildx/**'
       - '.github/actions/pnpm/**'
@@ -75,7 +84,7 @@ jobs:
       - name: Build the image
         uses: docker/build-push-action@v6
         with:
-          context: packages/cli/sandbox/hosted
+          context: .
           file: packages/cli/sandbox/hosted/Dockerfile
           tags: ${{ env.LOCAL_TAG }}
           load: true
@@ -142,7 +151,7 @@ jobs:
         id: push
         uses: docker/build-push-action@v6
         with:
-          context: packages/cli/sandbox/hosted
+          context: .
           file: packages/cli/sandbox/hosted/Dockerfile
           push: true
           tags: |

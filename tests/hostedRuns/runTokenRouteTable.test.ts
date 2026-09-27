@@ -129,6 +129,9 @@ const RUN_PATH_FILES = [
   'hostedMode.ts',
   // The hosted run's GitHub access — the git-credential route (MOTIR-6559).
   'hostedGit.ts',
+  // Each hosted checkout's code graph (MOTIR-6560) — no server call today, listed
+  // so one added later is checked against the table like every other.
+  'hostedCodegraph.ts',
 ];
 
 /** Client method → the operations it calls, following `this.<method>` hops. */
