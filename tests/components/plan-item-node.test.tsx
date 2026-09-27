@@ -4,7 +4,11 @@ import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanItemNode } from '@/components/planning/PlanItemNode';
 import { WorkItemNode } from '@/components/planning/WorkItemNode';
-import { mergePlanLevel, proposalsAtLevel } from '@/components/planning/planLevel';
+import {
+  mergePlanLevel,
+  proposalsAtLevel,
+  withProjectedCoverage,
+} from '@/components/planning/planLevel';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { arrivalLevel } from '@/components/planning/PlanReviewCanvas';
 import type { PlanCanvasLevel } from '@/components/planning/planLevel';
@@ -1859,5 +1863,139 @@ describe('mergePlanLevel — the anchor of a `cross` edge the plan DELETES (bug 
 
     expect(merged.nodes.some((n) => n.id === 'wi-a')).toBe(true);
     expect(merged.nodes.some((n) => n.id === 'wi-b')).toBe(true);
+  });
+});
+
+// ── MOTIR-6362 · a proposal's off-level edge draws by its PROJECTED disposition ─
+// The review model judges each proposal blocker over the projected tree
+// (`planReviewService`, pinned in tests/integration/plans/planReviewEdgeCoverage);
+// the merge only reads `stub.coverage`, exactly as the builder reads the roadmap's.
+describe('mergePlanLevel — projected edge disposition (MOTIR-6362)', () => {
+  const STUB = {
+    nodeId: 'wi-y',
+    identifier: 'MOTIR-804',
+    title: 'Tokenise a card',
+    isDone: false,
+    parentNodeId: 'wi-a',
+  };
+  const committed = (): PlanCanvasLevel =>
+    buildWorkItemLevel({
+      items: [
+        {
+          id: 'wi-x',
+          parentId: 'wi-b',
+          identifier: 'MOTIR-812',
+          title: 'Charge',
+          kind: 'subtask',
+          status: 'todo',
+          hasChildren: false,
+        },
+      ],
+      edges: [],
+      offLevelBlockers: [],
+    });
+  const proposal = (coverage?: 'covered' | 'exempt' | 'uncovered' | 'cross_level') =>
+    item({
+      planItemId: 'pi_r',
+      nodeId: 'pi_r',
+      parentNodeId: 'wi-b',
+      blockedByNodeIds: ['wi-y'],
+      blockerStubs: [{ ...STUB, ...(coverage ? { coverage } : {}) }],
+    });
+  const chip = (level: PlanCanvasLevel, id: string) => {
+    renderWithIntl(<>{level.nodes.find((n) => n.id === id)!.content}</>);
+    const hit = screen.queryByTestId('cross-blocked-flag') !== null;
+    cleanup();
+    return hit;
+  };
+
+  it('UNCOVERED keeps the flag: cross dep, anchor, chip', () => {
+    const level = mergePlanLevel(committed(), [proposal('uncovered')], 'wi-b');
+    expect(level.deps).toContainEqual({ from: 'wi-y', to: 'pi_r', variant: 'cross' });
+    expect(level.nodes.some((n) => n.id === 'wi-y')).toBe(true);
+    expect(chip(level, 'pi_r')).toBe(true);
+  });
+
+  it('no disposition (a decided plan, an older server) keeps the flag', () => {
+    const level = mergePlanLevel(committed(), [proposal()], 'wi-b');
+    expect(level.deps).toContainEqual({ from: 'wi-y', to: 'pi_r', variant: 'cross' });
+  });
+
+  it('COVERED draws nothing: no dep, no anchor, no chip', () => {
+    const level = mergePlanLevel(committed(), [proposal('covered')], 'wi-b');
+    expect(level.deps.filter((d) => d.from === 'wi-y')).toEqual([]);
+    expect(level.nodes.some((n) => n.id === 'wi-y')).toBe(false);
+    expect(chip(level, 'pi_r')).toBe(false);
+  });
+
+  it('EXEMPT: a pending arrow from a NEUTRAL anchor, and no chip', () => {
+    const level = mergePlanLevel(committed(), [proposal('exempt')], 'wi-b');
+    expect(level.deps).toContainEqual({ from: 'wi-y', to: 'pi_r', variant: 'pending' });
+    const anchor = level.nodes.find((n) => n.id === 'wi-y')!;
+    expect(anchor.anchor).toBe(true);
+    renderWithIntl(<>{anchor.content}</>);
+    expect(document.querySelector('[data-anchor-tone]')?.getAttribute('data-anchor-tone')).toBe(
+      'neutral',
+    );
+    cleanup();
+    expect(chip(level, 'pi_r')).toBe(false);
+  });
+
+  it('a committed NEUTRAL anchor is recognised as an anchor, not a card on the level', () => {
+    const withExempt = buildWorkItemLevel({
+      items: [
+        {
+          id: 'wi-r',
+          parentId: null,
+          identifier: 'MOTIR-870',
+          title: 'Rotate',
+          kind: 'task',
+          status: 'todo',
+          hasChildren: false,
+        },
+      ],
+      edges: [{ blockedId: 'wi-r', blockerId: 'wi-f', coverage: 'exempt' }],
+      offLevelBlockers: [
+        { id: 'wi-f', identifier: 'MOTIR-871', title: 'Secrets', parentTitle: null },
+      ],
+    });
+    // A proposal blocked by the SAME filed blocker takes the off-level path
+    // (so its own disposition decides), rather than a within-level arrow to a
+    // node that is only an anchor.
+    const p = item({
+      planItemId: 'pi_n',
+      nodeId: 'pi_n',
+      parentNodeId: null,
+      blockedByNodeIds: ['wi-f'],
+      blockerStubs: [
+        {
+          nodeId: 'wi-f',
+          identifier: 'MOTIR-871',
+          title: 'Secrets',
+          isDone: false,
+          parentNodeId: null,
+          coverage: 'exempt',
+        },
+      ],
+    });
+    const level = mergePlanLevel(withExempt, [p], null);
+    expect(level.nodes.filter((n) => n.id === 'wi-f')).toHaveLength(1);
+    expect(level.deps).toContainEqual({ from: 'wi-f', to: 'pi_n', variant: 'pending' });
+  });
+
+  it('withProjectedCoverage overrides exactly the re-judged committed edges', () => {
+    const data: RoadmapLevelData = {
+      items: [],
+      edges: [
+        { blockedId: 'b1', blockerId: 'a1', coverage: 'covered' },
+        { blockedId: 'b2', blockerId: 'a2', coverage: 'uncovered' },
+      ],
+      offLevelBlockers: [],
+    };
+    expect(withProjectedCoverage(data, new Map())).toBe(data);
+    expect(withProjectedCoverage(data, new Map([['b1 a1', 'uncovered']])).edges).toEqual([
+      { blockedId: 'b1', blockerId: 'a1', coverage: 'uncovered' },
+      { blockedId: 'b2', blockerId: 'a2', coverage: 'uncovered' },
+    ]);
   });
 });

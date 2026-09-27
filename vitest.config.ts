@@ -934,6 +934,11 @@ export default defineConfig({
         // validity verdicts and the reads answer, and blended into the validity
         // service's number it would be invisible.
         'lib/services/planProjectionService.ts',
+        // Story MOTIR-6352 · MOTIR-6373 — the off-level edge DISPOSITION, the one
+        // place the validators' verdict becomes a drawing decision for BOTH
+        // canvases (the roadmap read and the plan review). A branch here that no
+        // test reaches is a canvas flag nobody checked against the validator.
+        'lib/workItems/edgeDisposition.ts',
         // Bug MOTIR-3123 — the FINISHABILITY engine itself. It was in neither
         // half of this config until now, so the ≥90%-per-file gate had never
         // applied to the file that answers "can this plan be finished?" — the
@@ -4570,6 +4575,8 @@ export default defineConfig({
         // measured number — a threshold nobody can land a new branch under is a
         // ratchet, and this file is the one both halves of the story read.
         'lib/services/planProjectionService.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-6352 · MOTIR-6373 — the edge disposition, at the same floor.
+        'lib/workItems/edgeDisposition.ts': { branches: 90, functions: 90, lines: 90 },
         // Bug MOTIR-3123 — the finishability engine, MEASURED FIRST on this
         // branch over its FULL consumer set (`tests/integration/plans/
         // planValidityService` + `tests/integration/ai/validatePlanRoutes` +

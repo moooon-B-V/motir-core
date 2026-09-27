@@ -168,6 +168,7 @@ const SEED_VERB_KEY: Record<PlanSessionSeedGateKindDto, string> = {
  *  A null seed draws nothing — not dimmed, not labelled. */
 function SeedLink({ seed }: { seed: PlanSessionSeedDto }) {
   const t = useTranslations('aiPlanning.sessions');
+  if (seed.origin === 'pick') return <PickSeedLink seed={seed} />;
   return (
     <Link
       href={`/items/${seed.cardKey}`}
@@ -185,6 +186,35 @@ function SeedLink({ seed }: { seed: PlanSessionSeedDto }) {
         ·
       </span>
       <span>{t(SEED_VERB_KEY[seed.gateKind])}</span>
+    </Link>
+  );
+}
+
+/** A PICK-seeded session (MOTIR-6434; MOTIR-6432's design, sheet 3):
+ *  `Follow-up to {KEY} · chose {label}`, a link to the CHOICE work item — never
+ *  the refusal's `Re-plan of` wording. The label truncates at `max-w-[10rem]`;
+ *  the whole label is on the link's accessible name. */
+function PickSeedLink({ seed }: { seed: PlanSessionSeedDto }) {
+  const t = useTranslations('aiPlanning.sessions');
+  const label = seed.chosenLabel ?? '';
+  return (
+    <Link
+      href={`/items/${seed.cardKey}`}
+      aria-label={t('seed.pickAria', { key: seed.cardKey, label })}
+      data-testid="plan-session-seed"
+      data-seed-origin="pick"
+      className="relative z-10 inline-flex items-center gap-1 rounded-(--radius-control) text-(--el-text-secondary) underline decoration-(--el-border-strong) underline-offset-2 hover:text-(--el-text) hover:decoration-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+    >
+      <span>
+        {t.rich('seed.pickLabel', {
+          key: seed.cardKey,
+          mono: (chunks) => <span className="font-mono">{chunks}</span>,
+        })}
+      </span>
+      <span className="text-(--el-text-faint)" aria-hidden>
+        ·
+      </span>
+      <span className="max-w-[10rem] truncate">{t('seed.chose', { label })}</span>
     </Link>
   );
 }
