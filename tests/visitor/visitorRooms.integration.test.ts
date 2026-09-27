@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
@@ -16,6 +16,11 @@ import { truncateAuthTables } from '../helpers/db';
 // Visitor its Project view alone, omits every record that joins C, and answers a
 // withheld record read by id exactly as an unknown id; a member's rooms are
 // unchanged.
+
+// Each case builds a whole public project with a private subtree and then drives
+// several multi-read services; under a parallel run the first case of the file
+// also pays module warm-up, and it measured 12s against the 15s default.
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 let previousCloud: string | undefined;
 beforeEach(async () => {

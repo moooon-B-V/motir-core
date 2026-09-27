@@ -4874,6 +4874,9 @@ export const workItemRepository = {
     workspaceId: string,
     statistic: EstimationStatistic,
     tx?: Prisma.TransactionClient,
+    /** A Visitor's private-epic exclusion (MOTIR-6652): the walk neither counts
+     *  nor descends through a withheld row. Absent ⇒ no clause. */
+    excludeIds?: readonly string[],
   ): Promise<{ total: number }> {
     const client = tx ?? dbRead;
     const total = pointsAggExpr(statistic, 's', false);
@@ -4884,12 +4887,14 @@ export const workItemRepository = {
           WHERE w."parentId" = ${parentId}
             AND w."workspaceId" = ${workspaceId}
             AND w."archivedAt" IS NULL
+            AND ${notExcludedSql('w', excludeIds)}
         UNION ALL
         SELECT c."id", c."storyPoints", c."estimateMinutes"
           FROM "work_item" c
           JOIN subtree p ON c."parentId" = p."id"
           WHERE c."workspaceId" = ${workspaceId}
             AND c."archivedAt" IS NULL
+            AND ${notExcludedSql('c', excludeIds)}
       )
       SELECT ${total}::float8 AS "total" FROM subtree s`;
     return rows[0] ?? { total: 0 };

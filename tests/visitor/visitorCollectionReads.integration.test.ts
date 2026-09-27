@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import { boardsService } from '@/lib/services/boardsService';
@@ -17,6 +17,11 @@ import { truncateAuthTables } from '../helpers/db';
 // Visitor context returns none of the three hidden ids and counts only what it
 // shows; called with a member's context it returns exactly what it always did,
 // hidden rows included.
+
+// Each case builds a whole public project with a private subtree and then drives
+// several multi-read services; under a parallel run the first case of the file
+// also pays module warm-up, and it measured 12s against the 15s default.
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 let previousCloud: string | undefined;
 beforeEach(async () => {

@@ -57,3 +57,30 @@ export function stripPrivateEpicTells<T extends EpicTells>(
     childrenHidden: true,
   };
 }
+
+/**
+ * The text a Visitor reads in place of a work-item chip whose target is withheld
+ * (MOTIR-6652, `epic-privacy.md` §3). Plain text rather than a link: a chip keeps
+ * its label — usually the target's key or title — in the Markdown itself, so the
+ * token has to leave the body, not only lose its resolution.
+ */
+export const WITHHELD_WORK_ITEM_LABEL = 'Unavailable item';
+
+/** Matches one `[label](motir:<id>)` token, the id captured (cf. `WORKITEM_TOKEN_RE`). */
+const WORK_ITEM_TOKEN = /\[[^\]\[]*\]\(motir:([A-Za-z0-9_-]+)\)/g;
+
+/**
+ * A Markdown body as a Visitor reads it: every work-item chip naming a withheld
+ * item replaced by {@link WITHHELD_WORK_ITEM_LABEL}, so neither the target's
+ * label, key nor id crosses the wire. Every other chip, and all other text, is
+ * untouched. `null` stays `null`.
+ */
+export function redactWithheldWorkItemRefs<T extends string | null>(
+  markdown: T,
+  hidden: ReadonlySet<string>,
+): T {
+  if (markdown === null || hidden.size === 0) return markdown;
+  return markdown.replace(WORK_ITEM_TOKEN, (token, id: string) =>
+    hidden.has(id) ? WITHHELD_WORK_ITEM_LABEL : token,
+  ) as T;
+}

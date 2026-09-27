@@ -514,6 +514,10 @@ export interface IssueDetailDto {
   ancestors: WorkItemSummaryDto[];
   parent: WorkItemSummaryDto | null;
   children: WorkItemSummaryDto[];
+  /** A PRIVATE epic read by a Visitor (MOTIR-6652, `epic-privacy.md` §4): its
+   *  children are withheld, so `children` is empty and the item's sizing is
+   *  nulled. Absent on every member read and every other item. */
+  childrenHidden?: true;
   blockedBy: RelationshipLinkDto[];
   blocks: RelationshipLinkDto[];
   relatesTo: RelationshipLinkDto[];

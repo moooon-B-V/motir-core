@@ -111,7 +111,12 @@ import {
 import { readMembership } from '@/lib/workspaces/membershipGate';
 import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
 import type { VisitorReadContext } from '@/lib/visitor/context';
-import { isVisitorContext, openVisitorRead, stripPrivateEpicTells } from '@/lib/visitor/readScope';
+import {
+  isVisitorContext,
+  openVisitorRead,
+  redactWithheldWorkItemRefs,
+  stripPrivateEpicTells,
+} from '@/lib/visitor/readScope';
 import {
   CANCELLED_STATUS_KEY,
   MOTIR_SEED_BURST_END,
@@ -724,8 +729,12 @@ function toRelationshipGroups(
 function keepRelationshipTargetsInProject(
   rows: RelationshipTargetRows,
   projectId: string,
+  // A Visitor's private-epic exclusion (MOTIR-6652): a far end in it is dropped
+  // exactly like one in another project — the edge and its count go with it.
+  hidden?: ReadonlySet<string>,
 ): RelationshipTargetRows {
-  const keep = (batch: WorkItem[]): WorkItem[] => batch.filter((r) => r.projectId === projectId);
+  const keep = (batch: WorkItem[]): WorkItem[] =>
+    batch.filter((r) => r.projectId === projectId && !hidden?.has(r.id));
   return {
     blockerRows: keep(rows.blockerRows),
     blockingRows: keep(rows.blockingRows),
@@ -1212,6 +1221,17 @@ async function openCollectionRead(
   if (key === 'project:browse') await projectAccessService.assertCanBrowse(projectId, ctx);
   else await projectAccessService.assertPermission(projectId, ctx, key);
   return { workspaceId: project.workspaceId, visitor: false };
+}
+
+/** An item's two Markdown bodies as a Visitor reads them — withheld chips redacted (MOTIR-6652). */
+function redactVisitorItem<
+  T extends { descriptionMd: string | null; explanationMd: string | null },
+>(dto: T, hidden: ReadonlySet<string>): T {
+  return {
+    ...dto,
+    descriptionMd: redactWithheldWorkItemRefs(dto.descriptionMd, hidden),
+    explanationMd: redactWithheldWorkItemRefs(dto.explanationMd, hidden),
+  };
 }
 
 /** A lazy-tree row as a Visitor sees it — a private epic's tells stripped (§4). */
@@ -5800,7 +5820,8 @@ export const workItemsService = {
    */
   async getReadiness(
     workItemId: string,
-    ctx: ServiceContext,
+    // Only the workspace is read — a Visitor's detail passes its project's.
+    ctx: Pick<ServiceContext, 'workspaceId'>,
   ): Promise<{
     ready: boolean;
     openBlockerIds: Set<string>;
@@ -6187,20 +6208,31 @@ export const workItemsService = {
   async getIssueDetail(
     projectId: string,
     identifier: string,
-    ctx: ServiceContext,
+    ctx: ServiceContext | VisitorReadContext,
   ): Promise<IssueDetailDto> {
-    const item = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    // A VISITOR (MOTIR-6652) reads one public project; any other project, and any
+    // item in the private-epic hidden set, answers EXACTLY as an unknown key does
+    // — the same `WorkItemNotFoundError`, never a refusal that confirms the key.
+    const visitor = isVisitorContext(ctx) ? ctx : null;
+    if (visitor && visitor.project.id !== projectId) throw new WorkItemNotFoundError(identifier);
+    const workspaceId = visitor ? visitor.project.workspaceId : (ctx as ServiceContext).workspaceId;
+    const item = await withWorkspaceServiceContext(workspaceId, (tx) =>
       workItemRepository.findByIdentifier(projectId, identifier, tx),
     );
-    if (!item || item.workspaceId !== ctx.workspaceId) {
+    if (!item || item.workspaceId !== workspaceId) {
       throw new WorkItemNotFoundError(identifier);
     }
-    await projectAccessService.assertCanBrowse(item.projectId, ctx);
+    if (visitor) {
+      if (visitor.hiddenIds.has(item.id)) throw new WorkItemNotFoundError(identifier);
+    } else {
+      await projectAccessService.assertCanBrowse(item.projectId, ctx as ServiceContext);
+    }
+    const hidden = visitor ? visitor.hiddenIds : null;
 
     // The detail fan-out is ONE contiguous run of this method's own reads, so it
     // opens ONE bound transaction (docs/decisions/bound-read-transaction-shape.md).
     // `workflowsService.getWorkflow` is a SERVICE call and stays outside it.
-    const workflow = await workflowsService.getWorkflow(projectId, ctx.workspaceId);
+    const workflow = await workflowsService.getWorkflow(projectId, workspaceId);
     const [
       ancestorRows,
       childRows,
@@ -6210,11 +6242,11 @@ export const workItemsService = {
       customFieldRows,
       watcherCount,
       viewerIsWatching,
-    ] = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => [
+    ] = await withWorkspaceServiceContext(workspaceId, async (tx) => [
       // The breadcrumb chain (root→self, item excluded) — one CTE, workspace-
       // scoped. The immediate parent is `ancestors`' last element; we surface it
       // separately too so the 2.4.2 rail's Parent field need not re-derive it.
-      await workItemRepository.findAncestors(item.id, ctx.workspaceId, tx),
+      await workItemRepository.findAncestors(item.id, workspaceId, tx),
       await workItemRepository.findChildren(item.id, tx),
       // The seven relationship batches, from the SHARED assembly the AI boundary
       // also reads (MOTIR-4063) — one query per group, riding this fan-out.
@@ -6232,7 +6264,7 @@ export const workItemsService = {
       // same operation. No N+1, no second round-trip.
       await customFieldDefinitionRepository.listWithValuesForWorkItem(
         item.projectId,
-        ctx.workspaceId,
+        workspaceId,
         item.id,
         tx,
       ),
@@ -6240,7 +6272,10 @@ export const workItemsService = {
       // point reads riding the same fan-out, so the watch control renders
       // from the detail read with no extra round-trip.
       await watcherRepository.countByWorkItem(item.id, tx),
-      await watcherRepository.existsFor(item.id, ctx.userId, tx),
+      // A Visitor watches nothing (they cannot write a watcher row).
+      visitor
+        ? false
+        : await watcherRepository.existsFor(item.id, (ctx as ServiceContext).userId, tx),
     ]);
 
     // The seven relationship batches are THIS method's own reads and share ONE
@@ -6248,9 +6283,17 @@ export const workItemsService = {
     // is a service call and opens its own, per the call-into-another-service
     // clause in the transaction-shape ADR.
     const { targetRows, archivedActor, placementPath } = await withWorkspaceServiceContext(
-      ctx.workspaceId,
+      workspaceId,
       async (tx) => ({
-        targetRows: await resolveRelationshipTargetRows(linkRows, tx),
+        // A Visitor's far ends are kept to their project and out of the hidden
+        // set, so an edge to a private epic's descendant never reaches them.
+        targetRows: visitor
+          ? keepRelationshipTargetsInProject(
+              await resolveRelationshipTargetRows(linkRows, tx),
+              projectId,
+              visitor.hiddenIds,
+            )
+          : await resolveRelationshipTargetRows(linkRows, tx),
         // Who archived it (2.9.6) — ONLY for an archived item; an active item
         // skips the read entirely (no extra round-trip on the common path). The
         // banner names the actor from this; the timestamp rides `item.archivedAt`.
@@ -6263,7 +6306,7 @@ export const workItemsService = {
         placementPath: await readPlacementPath(item.folderId, ancestorRows, tx),
       }),
     );
-    const readiness = await this.getReadiness(item.id, ctx);
+    const readiness = await this.getReadiness(item.id, { workspaceId });
 
     const placement = toWorkItemPlacementDto(item.folderId, ancestorRows, placementPath);
     const ancestors = placement.ancestors;
@@ -6280,7 +6323,7 @@ export const workItemsService = {
         ? null
         : (ancestors.find((a) => a.id === readiness.blockedByAncestorId) ?? null);
 
-    const itemRepositories = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    const itemRepositories = await withWorkspaceServiceContext(workspaceId, (tx) =>
       workItemRepoRepository.listByWorkItem(item.id, tx),
     );
 
@@ -6288,12 +6331,23 @@ export const workItemsService = {
       // The resolved repository REFERENCES (MOTIR-3041) ride the detail shape,
       // which is the read that can guarantee the join — the same place
       // `repoDelivery` already lives, and for the same reason.
-      item: toWorkItemDto(item, itemRepositories),
+      item: visitor
+        ? redactVisitorItem(
+            stripPrivateEpicTells(toWorkItemDto(item, itemRepositories), item.publicChildrenHidden),
+            visitor.hiddenIds,
+          )
+        : toWorkItemDto(item, itemRepositories),
       folderId: placement.folderId,
       placementFolder: placement.placementFolder,
       ancestors,
       parent: placement.parent,
-      children: childRows.map(toWorkItemSummaryDto),
+      // A Visitor's child panel names no hidden child; a private epic's is empty.
+      children: (hidden ? childRows.filter((c) => !hidden.has(c.id)) : childRows).map(
+        toWorkItemSummaryDto,
+      ),
+      ...(visitor && item.kind === 'epic' && item.publicChildrenHidden
+        ? { childrenHidden: true as const }
+        : {}),
       ...linkGroups,
       readiness: { ready: readiness.ready, openBlockers, blockedByAncestor },
       choiceBody: choiceBodyOf(item),
@@ -6924,7 +6978,7 @@ export const workItemsService = {
   async resolveReferenceSummaries(
     refs: WorkItemRefs,
     activeProjectId: string,
-    ctx: ServiceContext,
+    ctx: ServiceContext | VisitorReadContext,
   ): Promise<WorkItemRefMap> {
     return resolveWorkItemRefSummaries(refs, activeProjectId, ctx);
   },
