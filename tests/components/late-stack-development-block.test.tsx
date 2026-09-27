@@ -126,6 +126,7 @@ function reads(): LateReads {
     // No monitor links, no connection — the Errors section draws nothing (MOTIR-5732).
     monitorIssueLinks: [],
     monitorHasConnection: false,
+    continueView: { state: 'none' },
     // Not a decision card — no decision gate, no document (MOTIR-5678).
     decisionGate: {
       gate: null,

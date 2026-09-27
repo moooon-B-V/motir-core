@@ -187,12 +187,14 @@ test.describe('a run that dies keeps its work — motir continue', () => {
         await expect(part).toContainText(richPattern(c.branch, { branch: branchOf(seed.main) }));
         await expect(part).toContainText(richPattern(c.safe, { status: 'In Progress' }));
         await expect(part.getByText(`motir continue ${key}`, { exact: true })).toBeVisible();
-        // The run section says it too, pointing down to the part.
-        await expect(page.getByTestId('run-died-line')).toBeVisible();
+        // The run section says it too, pointing down to the part — found by ROLE, so
+        // only the live subtree's copy can match (the page-rooted-locator guard).
+        const diedLine = page.getByRole('status').filter({ hasText: /This run died/ });
+        await expect(diedLine).toBeVisible();
         // ⚠️ NOTHING MOVED — the committed status, and the rail.
         expect((await readCard(adaApi, key)).status).toBe('in_progress');
         await expect(statusCard(page)).toContainText('In Progress');
-        await page.getByTestId('run-died-line').scrollIntoViewIfNeeded();
+        await diedLine.scrollIntoViewIfNeeded();
         await beat();
         await part.scrollIntoViewIfNeeded();
       },
