@@ -41,6 +41,8 @@ import { projectRepoTakeoverService } from './projectRepoTakeoverService';
 import { readReportedCheckSet } from './checkSetReconcile';
 import { repoDeploymentService } from './repoDeploymentService';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
+import { resolveDeliveredWorkItems } from './changeRequestWorkItems';
+import { recomputeWorkItemFixReason } from './fixReasonService';
 import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { evaluateForPullRequest } from './pullRequestReviewSync';
@@ -1158,6 +1160,11 @@ async function withdrawGatesOnSynchronize(body: Record<string, unknown>): Promis
         // The approve-and-merge gate over the set this pull request belongs to
         // (MOTIR-5482) — the card's only gate since MOTIR-5611.
         await withdrawPullRequestApprovalGatesOnHeadMove(row.id, tx, headSha);
+        // A cleared reading ends a CONFLICTED to-fix reason, and a new head ends a
+        // standing Request changes (MOTIR-6602).
+        for (const ref of await resolveDeliveredWorkItems(row.id, tx)) {
+          await recomputeWorkItemFixReason(ref.id, tx);
+        }
       }
     });
   } catch (err) {
