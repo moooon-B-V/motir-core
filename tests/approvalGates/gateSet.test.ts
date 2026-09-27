@@ -446,6 +446,23 @@ describe('resolveGateSet — the FOURTH AMENDMENT: a failure ejection re-asks th
     expect(set.awaited).toEqual([]);
   });
 
+  // ⚠️ AND WHATEVER THE LATEST GATE SAYS (MOTIR-6595). The convergence withdraws a gate the
+  // OLD rule re-asked from a queue failure, so the latest merge gate is `superseded` — or
+  // there is none — and without the clause the reconcile would ask over the refused commits.
+  it.each([
+    ['a SUPERSEDED latest gate', { ...decided(WORK_ITEM, SET, 'superseded'), decidedAt: null }],
+    ['NO merge gate at all', null],
+  ] as const)('a CAN’T-LAND outcome raises NOTHING over %s either', (_label, latestMergeGate) => {
+    const set = resolveGateSet(
+      input({
+        latestMergeGate,
+        members: GREEN_ONE,
+        standingUnlandedOutcome: { at: EXIT_AFTER, landingClass: 'cant_land' },
+      }),
+    );
+    expect(set.awaited).toEqual([]);
+  });
+
   it('a SETTING outcome re-asks, exactly as a retryable one does', () => {
     const set = resolveGateSet(
       input({

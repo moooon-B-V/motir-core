@@ -53,7 +53,7 @@ async function actorFor(
 // `settleUnlandedOutcome` — the entry point a live queue exit and a live host refusal
 // both call — so there is no second version of the rule to drift.
 //
-// THE FOUR POPULATIONS, each checked per card under its row lock:
+// THE FIVE POPULATIONS, each checked per card under its row lock:
 //
 //   A. `implemented` with a standing RETRYABLE or SETTING exit at a member's current
 //      head → `in_review` plus ONE fresh gate.
@@ -68,12 +68,25 @@ async function actorFor(
 //      asked again. RETRYABLE is the safe default: a person is asked, and can still
 //      reach for `motir fix` from the page.
 //
+//   E. `in_review` holding an AWAITING merge gate, with a standing CAN'T-LAND exit at a
+//      member's current head (Story MOTIR-6587 · MOTIR-6595; §4 FIFTH AMENDMENT, point
+//      4). Since the FIFTH AMENDMENT a queue FAILURE is can't-land, but before it the four
+//      failures were RETRYABLE, so the card was re-asked: it sits on To approve over the
+//      commits the queue refused. The awaiting gate is withdrawn with the cause
+//      `queue_failed` — a DECIDED gate is somebody's answer and is never touched — and
+//      the card is settled `cant_land`, which holds it at `implemented` with `motir fix`.
+//
+// Since the FIFTH AMENDMENT population B also holds an `implemented` card with a standing
+// queue FAILURE exit: it is already where the new rule puts it.
+//
 // A card failing a clause is SKIPPED AND COUNTED by the clause — never silently dropped.
 //
-// IDEMPOTENT BY CONSTRUCTION: a converged card is at `in_review`, so a second apply
-// skips it as `already_in_review` and converges 0; population D writes its refusal row
-// only for a member with no outcome, and the row it writes IS an outcome. The dry run
-// takes the same path and writes nothing. Each card commits in its own transaction.
+// IDEMPOTENT BY CONSTRUCTION: a converged A/C/D card is at `in_review`, so a second apply
+// skips it as `already_in_review` and converges 0; a converged E card is at
+// `implemented` with its exit standing, so a second apply counts it `cant_land_held`;
+// population D writes its refusal row only for a member with no outcome, and the row it
+// writes IS an outcome. The dry run takes the same path and writes nothing. Each card
+// commits in its own transaction.
 
 export type ConvergeSkipReason =
   /** A push moved the member's head: the outcome no longer stands, and the next green
@@ -83,6 +96,9 @@ export type ConvergeSkipReason =
   | 'auto_mode'
   /** Already where a live outcome leaves it. */
   | 'already_in_review'
+  /** Population E's shape, but its merge gate is DECIDED rather than awaiting: a person
+   *  answered it, and a sweep does not overrule them (MOTIR-6595). */
+  | 'gate_decided'
   /** Population B: a CAN'T-LAND outcome holds the card at `implemented`, which is
    *  exactly where the new rules put it. Counted, never moved. */
   | 'cant_land_held'
@@ -105,6 +121,10 @@ export interface ConvergeReport {
   /** Cards delivered by a pull request whose latest exit is a standing failure. */
   scanned: number;
   converged: { workItemId: string; identifier: string }[];
+  /** The subset of `converged` that is population E — a gate the OLD rule re-asked from
+   *  a queue failure, withdrawn `queue_failed` (MOTIR-6595). Counted apart, because it is
+   *  the one population that moves a card AWAY from To approve. */
+  withdrawnQueueFailed: { workItemId: string; identifier: string }[];
   skipped: { workItemId: string; identifier: string; reason: ConvergeSkipReason }[];
   failed: { workItemId: string; error: string }[];
 }
@@ -115,6 +135,7 @@ export const ejectedCardConvergenceService = {
       dryRun: opts.dryRun,
       scanned: 0,
       converged: [],
+      withdrawnQueueFailed: [],
       skipped: [],
       failed: [],
     };
@@ -170,8 +191,7 @@ export const ejectedCardConvergenceService = {
           if (item.archivedAt !== null) return skip('archived');
           const mode = (await projectRepository.findPrMergeMode(item.projectId, tx))?.prMergeMode;
           if (mode !== 'manual') return skip('auto_mode');
-          if (item.status === 'in_review') return skip('already_in_review');
-          if (item.status !== 'implemented' && item.status !== 'approved') {
+          if (!['in_review', 'implemented', 'approved'].includes(item.status)) {
             return skip('other_status');
           }
 
@@ -180,18 +200,55 @@ export const ejectedCardConvergenceService = {
             'pull_request_approval',
             tx,
           );
-          if (gate?.state !== 'approved' || !gate.decidedAt) return skip('no_approved_gate');
-
           const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx);
           const latestExits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
             deliveries.map((d) => d.githubPullRequestId),
             tx,
           );
-          const latestRefusals =
-            await githubPullRequestMergeRefusalRepository.findLatestByPullRequests(
-              deliveries.map((d) => d.githubPullRequestId),
+
+          // POPULATION E (MOTIR-6595): `in_review` over a CAN'T-LAND exit — a gate the OLD
+          // rule re-asked from a queue failure. Every other `in_review` card is where a
+          // live outcome leaves it.
+          if (item.status === 'in_review') {
+            const cantLand = deliveries.flatMap((d) => {
+              const exit = latestExits.get(d.githubPullRequestId);
+              if (!exit || exit.requeuedAt !== null) return [];
+              if (classOfQueueExit(exit.rawReason) !== 'cant_land') return [];
+              const head = liveRowsAtLatestSha([...d.pullRequest.checkRuns])[0]?.commitSha;
+              return [{ standing: queueExitStandsAtHead(exit, head) }];
+            });
+            if (cantLand.length === 0) return skip('already_in_review');
+            // A push moved the head: the exit no longer describes the code, and the gate
+            // is asking about NEW commits — the question a person should be asked.
+            if (!cantLand.some((c) => c.standing)) return skip('head_moved');
+            if (gate?.state !== 'awaiting') return skip('gate_decided');
+            if (opts.dryRun) {
+              return { kind: 'converged', item, move: null, population: 'E' } as const;
+            }
+            const ctx = await actorFor(item, tx);
+            // The gate first, under the lock `lockCard` took: withdrawn with the cause the
+            // item page reads back. `settleUnlandedOutcome` then holds the card at
+            // `implemented` and raises nothing.
+            await approvalGateRepository.supersedeAwaitingByWorkItem(
+              item.id,
+              'pull_request_approval',
+              'queue_failed',
               tx,
             );
+            const settled = await settleUnlandedOutcome(item, 'cant_land', ctx, tx);
+            if (settled.raised) {
+              // Rolls the withdrawal back with it: asking again over the refused commits
+              // is the state this population exists to end.
+              throw new Error('the hold raised an approve-to-merge gate');
+            }
+            return {
+              kind: 'converged',
+              item,
+              move: settled.transition,
+              actorId: ctx.userId,
+              population: 'E',
+            } as const;
+          }
 
           // The STANDING outcome, if there is one — the rule `deliverySet.ts` owns, read
           // over every disposition (populations A, B and C).
@@ -202,14 +259,24 @@ export const ejectedCardConvergenceService = {
               ? [{ exit: exit!, landingClass: classOfQueueExit(exit!.rawReason) }]
               : [];
           });
+          // POPULATION B: a can't-land outcome already holds the card at `implemented`,
+          // which is where the new rules put it — a conflict, a queue failure (the FIFTH
+          // AMENDMENT), or a card population E has already converged, whose latest gate is
+          // the one it withdrew. Nothing to do, and saying so is the point. Asked BEFORE
+          // the approved gate, because it is true whatever the latest gate says.
+          if (standing[0]?.landingClass === 'cant_land' && item.status === 'implemented') {
+            return skip('cant_land_held');
+          }
+
+          if (gate?.state !== 'approved' || !gate.decidedAt) return skip('no_approved_gate');
+          const latestRefusals =
+            await githubPullRequestMergeRefusalRepository.findLatestByPullRequests(
+              deliveries.map((d) => d.githubPullRequestId),
+              tx,
+            );
 
           if (standing.length > 0) {
             const landingClass = standing[0]!.landingClass;
-            // POPULATION B: a conflict already holds the card at `implemented`, which is
-            // where the new rules put it. Nothing to do, and saying so is the point.
-            if (landingClass === 'cant_land' && item.status === 'implemented') {
-              return skip('cant_land_held');
-            }
             if (opts.dryRun) return { kind: 'converged', item, move: null } as const;
             const ctx = await actorFor(item, tx);
             const settled = await settleUnlandedOutcome(item, landingClass, ctx, tx);
@@ -282,6 +349,9 @@ export const ejectedCardConvergenceService = {
           continue;
         }
         report.converged.push(ref);
+        if ('population' in outcome && outcome.population === 'E') {
+          report.withdrawnQueueFailed.push(ref);
+        }
         // Post-commit, never inside the transaction — a rollback must not have notified.
         if (outcome.move && 'actorId' in outcome) {
           await sendEvent('work-item/transitioned', {
