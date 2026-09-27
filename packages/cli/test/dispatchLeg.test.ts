@@ -191,3 +191,45 @@ describe('the verdicts', () => {
     expect(verdict.kind === 'succeeded' && verdict.suspects).toHaveLength(1);
   });
 });
+
+describe('checkout_ready names the BRANCH the leg’s work will be on (MOTIR-6530)', () => {
+  async function checkoutEvent(sessionBranch: string | null, branch: string | undefined) {
+    const events: Array<{ kind: string; data?: unknown }> = [];
+    const primary = target();
+    await runDispatchLeg({
+      client: {
+        getWorkItem: async () => ({ item: { status: 'in_progress' } }) as never,
+        listWorkItemDesigns: async () => ({ designs: [] }),
+      },
+      rootDir: ROOT,
+      key: 'PROD-1',
+      dispatch: { ...PROMPT, ...(branch === undefined ? {} : { branch }) } as DispatchPrompt,
+      agent: { command: 'fake-agent', binary: 'fake-agent', args: [] },
+      targets: [primary],
+      primary,
+      sessionBranch,
+      onMaterialization: () => undefined,
+      beforeSpawn: () => undefined,
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      run: git(true),
+      reporter: {
+        event: (e: { kind: string; data?: unknown }) => events.push(e),
+      } as never,
+    });
+    return events.find((e) => e.kind === 'checkout_ready')!.data as { branch: string | null };
+  }
+
+  it('carries the per-card branch the payload names', async () => {
+    expect((await checkoutEvent(null, 'subtask/PROD-1-the-card')).branch).toBe(
+      'subtask/PROD-1-the-card',
+    );
+  });
+
+  it('carries the session branch on a lineage run', async () => {
+    expect((await checkoutEvent('motir/auto-7', 'motir/auto-7')).branch).toBe('motir/auto-7');
+  });
+
+  it('is null — never invented — when an older server names no branch', async () => {
+    expect((await checkoutEvent(null, undefined)).branch).toBeNull();
+  });
+});

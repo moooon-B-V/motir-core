@@ -6700,6 +6700,53 @@
         "howConflict": "代理会在拉取请求自己的分支上变基或解决冲突、推送，检查随即重新运行。",
         "rearm": "这里没有可批准的东西。推送会移动 HEAD 并重新武装这个问题；下一次检查全绿时，会就新的提交提出一次合并审批。"
       },
+      "continue": {
+        "title": "继续这项工作",
+        "aria": {
+          "part": "继续这项工作"
+        },
+        "died": {
+          "pill": "运行已中断"
+        },
+        "reason": {
+          "lapsed": "运行已停止上报——最后一次联系在<when></when>。",
+          "interrupted": "运行已在其终端中被停止（<when></when>）。",
+          "failed": "智能体出错退出（<when></when>）。",
+          "cancelled": "运行已被取消（<when></when>）。",
+          "stalled": "托管智能体停滞——15 分钟无输出（<when></when>）。",
+          "backstop": "托管运行已达 12 小时上限（<when></when>）。"
+        },
+        "ranBy": "由 <b>{name}</b> 通过 <mono>{command}</mono> 运行 · <when></when>开始",
+        "ranBySomeone": "通过 <mono>{command}</mono> 运行 · <when></when>开始",
+        "branch": "其工作位于 <ref>{branch}</ref>",
+        "branchWithPr": "其工作位于 <ref>{branch}</ref> 以及拉取请求 <b>{pr}</b> 中",
+        "safe": "没有丢失任何内容，也没有任何变动：此工作项仍为<b>{status}</b>。",
+        "lead": "在终端中继续：",
+        "how": "智能体会检出该分支，阅读已提交的内容，合并最新的 main，并在一个拉取请求中完成此工作项。",
+        "startOver": "或者重新开始：将 <b>{target}</b> 设为待办并重新运行。",
+        "nothingPushed": "其分支从未推送，因此没有可继续的内容。",
+        "continuing": {
+          "pill": "继续中",
+          "by": "<b>{name}</b> 正在继续 · <when></when>开始",
+          "byYou": "<b>你</b>正在继续 · <when></when>开始",
+          "bySomeone": "正在继续 · <when></when>开始",
+          "tookOver": "接手自 <b>{name}</b> 的运行",
+          "on": "位于 <ref>{branch}</ref>",
+          "why": "同一时间只运行一个继续。完成后，此工作项会像 <mono>motir run</mono> 之后一样继续推进。"
+        },
+        "implemented": {
+          "line": "运行在打开拉取请求之后停止上报（<when></when>）。",
+          "pr": "拉取请求已打开，因此没有可继续的内容：接下来由其检查决定。",
+          "fix": "如果检查失败，<mono>motir fix {key}</mono> 会将修复交给智能体——届时上方会出现“修复检查”。"
+        },
+        "child": {
+          "line": "负责此工作项的运行在<when></when>停止上报。",
+          "pointer": "它是作为 <link>{key}</link> 的一部分运行的，因此从那里继续——整个运行会在其分支上恢复，并跳过已完成的部分："
+        },
+        "loading": "正在检查此工作项的运行是否仍在进行",
+        "error": "无法检查此工作项的运行是否仍在进行。",
+        "retry": "重试"
+      },
       "emptyTitle": "暂无关联的拉取请求",
       "emptyDescription": "使用此处的“+关联拉取请求”，或通过 MCP 调用 <mono>link_pull_request</mono> 来添加 PR，并显示实时 PR 与 CI 状态。",
       "autoLinkCaption": "通过 MCP 调用 <mono>link_pull_request</mono> 或使用 <mono>motir auto</mono> 会话分支进行关联。",
@@ -8582,7 +8629,8 @@
       "succeeded": "已成功",
       "failed": "已失败",
       "cancelled": "已取消",
-      "timed_out": "已超时"
+      "timed_out": "已超时",
+      "died": "运行已中断"
     },
     "command": {
       "next": "motir next",
@@ -8590,7 +8638,8 @@
       "run_scope": "motir run '<'scope>",
       "batch": "motir batch",
       "auto": "motir auto",
-      "fix": "motir fix"
+      "fix": "motir fix",
+      "continue": "motir continue"
     },
     "skipReason": {
       "needsPlanning": "已跳过 — 需要规划。",
@@ -8697,7 +8746,8 @@
     "indexEmptyMineBody": "当你用 motir next、motir run 或 motir batch 派发工作时，你的每一次运行都会出现在这里——正在进行的，以及此前的每一次。",
     "indexEmptyBodyRead": "当本项目的工作通过 motir next、motir run 或 motir batch 派发时，每一次运行都会出现在这里——正在进行的，以及此前的每一次。",
     "noneRunningMine": "当前没有你发起的正在运行的任务。",
-    "nonePastMine": "你发起的运行还没有已完成的。"
+    "nonePastMine": "你发起的运行还没有已完成的。",
+    "runDied": "此运行已中断——最后一次联系在<b><when></when></b>。其工作保留在分支上；请在下方“开发”中继续。"
   },
   "repositoryPicker": {
     "add": "添加仓库",

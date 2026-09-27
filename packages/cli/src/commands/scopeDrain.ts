@@ -26,6 +26,7 @@ import { nullDispatchRunReporter, type DispatchRunReporter } from '../dispatchRu
 import type { runAgent } from '../agentRun.js';
 import type { DispatchItem, MotirClient } from '../client.js';
 import type { ProjectSession } from '../session.js';
+import { bindInterruptSignals, closeRunAndExit, type InterruptSignal } from '../interrupt.js';
 
 // The DRAIN of a claimed scope (Story MOTIR-3001 · MOTIR-3199) — the back half
 // of `motir run <scope>`. It starts holding a set of cards this run already
@@ -89,6 +90,11 @@ export interface ScopeDrainInput {
    * skipped ones entirely.
    */
   reporter?: DispatchRunReporter;
+  /**
+   * `branch` is a DEAD run's session branch being resumed (MOTIR-6535): reuse it,
+   * and merge `origin/main` into it before the first child. Unset for a fresh run.
+   */
+  resumeBranch?: boolean;
 }
 
 /**
@@ -113,7 +119,7 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
   const records: DispatchRecord[] = [];
   const skipped: SkipRecord[] = [];
   const planning: PlanningRecord[] = [];
-  const repos = new RepoSessions(branch, run);
+  const repos = new RepoSessions(branch, run, { mergeBaseOnReuse: input.resumeBranch === true });
   /** Cards that have LANDED — what an in-scope blocker is satisfied by. */
   const satisfied = new Set<string>();
   /**
@@ -136,14 +142,20 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
     keys.map((k) => `${heldGates.get(k) as GateKind} ${k}`).join(', ');
 
   let interrupted = false;
-  const onSigint = (): void => {
-    if (interrupted) process.exit(130);
+  // A SIGTERM, or a SECOND Ctrl-C, ends the process NOW — after closing the run
+  // `interrupted` with what is queued flushed, so the record says it was stopped
+  // rather than reading `running` until its heartbeat lapses (MOTIR-6530).
+  const onSignal = (signal: InterruptSignal): void => {
+    if (interrupted || signal === 'SIGTERM') {
+      void closeRunAndExit(reporter, signal);
+      return;
+    }
     interrupted = true;
     info('');
     info('Interrupt received — finishing up and opening the session pull request(s).');
     info('Press Ctrl-C again to exit immediately.');
   };
-  process.on('SIGINT', onSigint);
+  const detachInterrupt = bindInterruptSignals(onSignal);
 
   let stopReason: StopReason = 'drained';
   /**
@@ -399,7 +411,7 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
       pass = order.filter((k) => blockedSkips.has(k));
     }
   } finally {
-    process.off('SIGINT', onSigint);
+    detachInterrupt();
   }
 
   // Whatever is STILL held was not approved by the time the run ended — its

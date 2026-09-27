@@ -90,6 +90,8 @@ export interface LockedDispatchRunTerminalState {
   status: DispatchRun['status'];
   stopReason: DispatchRun['stopReason'];
   endedAt: Date | null;
+  /** Who opened it — the heartbeat's owner check (MOTIR-6528). */
+  createdById: string | null;
 }
 
 /** An open run and who started it — the holder a refused repair claim names. */
@@ -106,6 +108,24 @@ export interface LatestDispatchRun extends RunningDispatchRunHolder {
   status: DispatchRunStatus;
   stopReason: DispatchRun['stopReason'];
   endedAt: Date | null;
+}
+
+/** What {@link dispatchRunRepository.findLatestForWorkItem} returns. */
+export interface LatestRunForWorkItem {
+  id: string;
+  command: DispatchCommand;
+  origin: DispatchRun['origin'];
+  status: DispatchRunStatus;
+  stopReason: DispatchRun['stopReason'];
+  startedAt: Date;
+  endedAt: Date | null;
+  lastHeartbeatAt: Date | null;
+  createdById: string | null;
+  createdBy: { id: string; name: string } | null;
+  scopeWorkItemId: string | null;
+  scope: { identifier: string } | null;
+  /** The leg naming the work item — empty for a scoped run's container. */
+  cards: Array<{ id: string; sessionBranch: string | null }>;
 }
 
 export const dispatchRunRepository = {
@@ -209,6 +229,86 @@ export const dispatchRunRepository = {
         createdById: true,
         createdBy: { select: { id: true, name: true } },
       },
+    });
+  },
+
+  /**
+   * The NEWEST run of ANY command that holds a leg for this work item or is SCOPED
+   * to it, with everything the continue claim reads about it (MOTIR-6532): its
+   * liveness columns, its starter, its scope, and the leg naming this item (none
+   * for a scoped run's container). Null when the item has never been run.
+   */
+  async findLatestForWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<LatestRunForWorkItem | null> {
+    return tx.dispatchRun.findFirst({
+      where: { OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }] },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        command: true,
+        origin: true,
+        status: true,
+        stopReason: true,
+        startedAt: true,
+        endedAt: true,
+        lastHeartbeatAt: true,
+        createdById: true,
+        createdBy: { select: { id: true, name: true } },
+        scopeWorkItemId: true,
+        scope: { select: { identifier: true } },
+        cards: {
+          where: { workItemId },
+          select: { id: true, sessionBranch: true },
+          take: 1,
+        },
+      },
+    });
+  },
+
+  /**
+   * ONE run by id, in the same projection as {@link findLatestForWorkItem}, but
+   * only when it holds a leg for (or is scoped to) this work item — the run a
+   * dispatch prompt's `continueFrom` names (MOTIR-6531). Null otherwise, including
+   * for another workspace's run, which RLS hides.
+   */
+  async findForWorkItemById(
+    id: string,
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<LatestRunForWorkItem | null> {
+    return tx.dispatchRun.findFirst({
+      where: {
+        id,
+        OR: [{ scopeWorkItemId: workItemId }, { cards: { some: { workItemId } } }],
+      },
+      select: {
+        id: true,
+        command: true,
+        origin: true,
+        status: true,
+        stopReason: true,
+        startedAt: true,
+        endedAt: true,
+        lastHeartbeatAt: true,
+        createdById: true,
+        createdBy: { select: { id: true, name: true } },
+        scopeWorkItemId: true,
+        scope: { select: { identifier: true } },
+        cards: { where: { workItemId }, select: { id: true, sessionBranch: true }, take: 1 },
+      },
+    });
+  },
+
+  /** One run's starter — the name a continue says it took over from (MOTIR-6532). */
+  async findRunStarterById(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ createdBy: { id: string; name: string } | null } | null> {
+    return tx.dispatchRun.findUnique({
+      where: { id },
+      select: { createdBy: { select: { id: true, name: true } } },
     });
   },
 
@@ -348,7 +448,8 @@ export const dispatchRunRepository = {
       SELECT "id",
              "status",
              "stop_reason" AS "stopReason",
-             "ended_at"    AS "endedAt"
+             "ended_at"    AS "endedAt",
+             "created_by_id" AS "createdById"
         FROM "dispatch_run"
        WHERE "id" = ${id}
        FOR UPDATE
@@ -363,6 +464,36 @@ export const dispatchRunRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRun> {
     return tx.dispatchRun.update({ where: { id }, data });
+  },
+
+  /**
+   * Record that the run is alive (MOTIR-6528). `tx` required — a write, and one
+   * the locked terminal read must precede, so a heartbeat can never land on a
+   * run the lapse reap has just closed.
+   */
+  async touchHeartbeat(id: string, at: Date, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.dispatchRun.update({ where: { id }, data: { lastHeartbeatAt: at } });
+  },
+
+  /**
+   * The LAPSE REAP's cross-tenant discovery read (MOTIR-6528): LOCAL runs still
+   * `running` whose last heartbeat is older than the cut-off, oldest first.
+   *
+   * A null heartbeat never matches — a run opened by a CLI that never heartbeats
+   * stays on the 12-hour age reap, and a HOSTED run's liveness is its
+   * supervision. Same `withSystemContext` contract as
+   * {@link listStaleRunningAcrossWorkspaces}: read-only, every write re-binds.
+   */
+  async listLapsedLocalRunningAcrossWorkspaces(
+    heartbeatBefore: Date,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<DispatchRun[]> {
+    return tx.dispatchRun.findMany({
+      where: { status: 'running', origin: 'local', lastHeartbeatAt: { lt: heartbeatBefore } },
+      orderBy: { lastHeartbeatAt: 'asc' },
+      take,
+    });
   },
 
   /**
@@ -412,7 +543,13 @@ export const dispatchRunRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRun[]> {
     return tx.dispatchRun.findMany({
-      where: { status: 'running', startedAt: { lt: startedBefore } },
+      // ⚠️ `lastHeartbeatAt: null` (MOTIR-6528): a HEARTBEATING run is alive for
+      // as long as it keeps reporting, however long it runs
+      // (`run-death-keeps-work.md` §1), so the age reap is for the runs that
+      // cannot prove they are alive — a legacy CLI's, and a hosted run's, whose
+      // 12 hours is the spend backstop. A heartbeating run that goes silent is
+      // the lapse reap's.
+      where: { status: 'running', startedAt: { lt: startedBefore }, lastHeartbeatAt: null },
       orderBy: { startedAt: 'asc' },
       take,
     });

@@ -802,6 +802,11 @@ not only a ready one — so re-printing an in-progress item's prompt is safe.
 **Output** — `structuredContent`:
 `{ key, prompt, targetRepo, targetRepoCloneUrl, targetRepoDefaultBranch, workflowMode, sessionBranch, advisories }`.
 
+- **`branch`** — the branch the prompt tells the agent to work on (MOTIR-6530): the
+  session branch in `session_lineage` mode, else the item's own per-item branch, and on
+  a CONTINUE (MOTIR-6531) the dead run's branch; `null` for a manual item. A local run
+  records it on its leg's `checkout_ready` event, which is where `motir continue` finds it.
+
 - **`advisories`** — see [the dispatch advisories](#the-dispatch-advisories).
   Always present, `[]` when there are none. The same content the `prompt` already
   renders in its CONTEXT section, handed over separately so a client can warn the

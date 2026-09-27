@@ -1,5 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 import { expect, request } from '@playwright/test';
+import { adminDb } from '@/tests/helpers/adminDb';
 
 // DRIVING A RUN WITHOUT AN AGENT (Story MOTIR-1789 · MOTIR-1800).
 //
@@ -89,4 +90,24 @@ export async function closeRun(
   const res = await api.post(`/api/v1/dispatch-runs/${runId}/close`, { data: { stopReason } });
   const text = await res.text();
   expect(res.status(), `close → ${text.slice(0, 400)}`).toBe(200);
+}
+
+/** Report the run alive, as the reporter's heartbeat timer does (MOTIR-6528). */
+export async function heartbeat(api: APIRequestContext, runId: string): Promise<void> {
+  const res = await api.post(`/api/v1/dispatch-runs/${runId}/heartbeat`);
+  const text = await res.text();
+  expect(res.status(), `heartbeat → ${text.slice(0, 400)}`).toBe(204);
+}
+
+/**
+ * THE ONE SEEDED FIELD (MOTIR-6536): move a run's `lastHeartbeatAt` into the past,
+ * so the liveness rule reads it lapsed. A lapse is five minutes of silence; a spec
+ * cannot wait five minutes, and no server clock is moved — so the record is set to
+ * what five minutes of silence would have left behind, and nothing else is touched.
+ */
+export async function lapseRun(runId: string, minutesAgo: number): Promise<void> {
+  await adminDb.dispatchRun.update({
+    where: { id: runId },
+    data: { lastHeartbeatAt: new Date(Date.now() - minutesAgo * 60_000) },
+  });
 }

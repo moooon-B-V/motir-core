@@ -2,6 +2,8 @@ import { registerGitProvider } from '../registry';
 import { gitlabConnectionService } from '@/lib/services/gitlabConnectionService';
 import { gitlabBaseUrl } from '@/lib/gitlab/gitlabOAuth';
 import {
+  CHANGED_FILES_MAX,
+  CHANGED_FILES_TIMEOUT_MS,
   COMMIT_COMPARE_TIMEOUT_MS,
   REPO_FILE_MAX_BYTES,
   REPO_FILE_READ_TIMEOUT_MS,
@@ -9,6 +11,11 @@ import {
 } from '../provider';
 import { byteLength, describeBody, normalizeRepoFilePath } from '../fileRead';
 import { RepoFileReadError } from '../errors';
+import {
+  GitlabConnectionNotFoundError,
+  GitlabOAuthNotConfiguredError,
+  GitlabTokenRefreshError,
+} from '@/lib/gitlab/errors';
 import type {
   ChangeRequestLifecycle,
   CiConclusion,
@@ -20,6 +27,8 @@ import type {
   NormalizedStatusEvent,
   RepoFileReadResult,
   CommitComparison,
+  ChangedFile,
+  ChangedFilesResult,
   DeploymentState,
   NormalizedDeploymentStatus,
 } from '../types';
@@ -132,6 +141,63 @@ const ZERO_SHA = '0'.repeat(40);
  * lands on `null` rather than on a number nobody can vouch for.
  */
 const GITLAB_COMPARE_MAX_COMMITS = 1000;
+
+// ─── listChangedFiles (MOTIR-6619) ───────────────────────────────────────────
+
+/** One `diffs[]` entry → a {@link ChangedFile}, or null when it carries no path.
+ *  GitLab states the change as three booleans rather than one word; a deletion
+ *  is named by its OLD path (its new path is the same string, but the old one is
+ *  the one that existed). NAMES ONLY: the entry's `diff` hunk is never read. */
+function gitlabChangedFile(value: unknown): ChangedFile | null {
+  const diff = asRecord(value);
+  if (!diff) return null;
+  const newPath = typeof diff['new_path'] === 'string' ? diff['new_path'] : '';
+  const oldPath = typeof diff['old_path'] === 'string' ? diff['old_path'] : '';
+  if (diff['deleted_file'] === true) {
+    const path = oldPath || newPath;
+    return path ? { path, status: 'removed' } : null;
+  }
+  if (!newPath) return null;
+  if (diff['new_file'] === true) return { path: newPath, status: 'added' };
+  if (diff['renamed_file'] === true && oldPath && oldPath !== newPath) {
+    return { path: newPath, status: 'renamed', previousPath: oldPath };
+  }
+  return { path: newPath, status: 'modified' };
+}
+
+/**
+ * A failed token read, as a named absence — the GitLab twin of the GitHub
+ * provider's mint mapping. An OAuth app not wired on this deployment, or a
+ * connection row that is gone, is `not_connected`; a refresh the host rejected is
+ * `revoked`; anything else is `host_error`.
+ */
+function gitlabTokenFailure(
+  err: unknown,
+  refs: { base: string; head: string },
+): ChangedFilesResult {
+  if (
+    err instanceof GitlabOAuthNotConfiguredError ||
+    err instanceof GitlabConnectionNotFoundError
+  ) {
+    return { outcome: 'not_connected', ...refs };
+  }
+  if (err instanceof GitlabTokenRefreshError) return { outcome: 'revoked', ...refs };
+  return {
+    outcome: 'host_error',
+    ...refs,
+    detail: err instanceof Error ? err.message : 'the connection token could not be read',
+  };
+}
+
+/** `…/-/compare/<from-sha>...<to-sha>` — the SHAs GitLab resolved the two refs to,
+ *  read off the response's `web_url`. Only the hex groups are kept. */
+function gitlabCompareShas(webUrl: unknown): { baseSha: string | null; headSha: string | null } {
+  const m =
+    typeof webUrl === 'string'
+      ? /\/compare\/([0-9a-f]{7,64})\.\.\.([0-9a-f]{7,64})(?:$|[?#])/i.exec(webUrl)
+      : null;
+  return { baseSha: m?.[1] ?? null, headSha: m?.[2] ?? null };
+}
 
 export const gitlabProvider: GitProvider = {
   id: 'gitlab',
@@ -254,6 +320,103 @@ export const gitlabProvider: GitProvider = {
       return { behindBy: null, reason: 'inexact' };
     }
     return { behindBy: commits.length };
+  },
+
+  /**
+   * `GET /api/v4/projects/:id/repository/compare?from=<base>&to=<head>` — the
+   * endpoint {@link compareCommits} counts `commits[]` from, read here for
+   * `diffs[]` (MOTIR-6619). GitLab's default (`straight=false`) compares from
+   * the MERGE BASE, which is GitHub's three-dot — so the two hosts list the same
+   * paths for the same branch.
+   *
+   * ⚠️ THE CAP IS OURS HERE. GitLab applies no 300-file limit of its own, so
+   * without {@link CHANGED_FILES_MAX} the same branch would list 300 paths on
+   * one host and 900 on the other — a session learning a different fact about a
+   * branch because of where it is hosted.
+   *
+   * Status → outcome: 404 `Ref Not Found` is `no_such_ref`; a 404 naming the
+   * PROJECT, and 401 / 403, are `revoked` (the token can no longer see it); a
+   * 200 with `compare_timeout: true` is `too_large` — GitLab gave up building
+   * the diff, so its partial list is not an answer; everything else, and no
+   * answer within {@link CHANGED_FILES_TIMEOUT_MS}, is `host_error`.
+   */
+  async listChangedFiles(
+    installationId: string,
+    owner: string,
+    name: string,
+    base: string,
+    head: string,
+  ): Promise<ChangedFilesResult> {
+    const refs = { base, head };
+    let token: string;
+    try {
+      ({ token } = await gitlabConnectionService.getAccessToken(installationId));
+    } catch (err) {
+      return gitlabTokenFailure(err, refs);
+    }
+    const project = encodeURIComponent(`${owner}/${name}`);
+    const url =
+      `${gitlabBaseUrl()}/api/v4/projects/${project}/repository/compare` +
+      `?from=${encodeURIComponent(base)}&to=${encodeURIComponent(head)}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), CHANGED_FILES_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'GET',
+        headers: { authorization: `Bearer ${token}`, 'user-agent': 'motir' },
+        signal: controller.signal,
+      });
+    } catch (err) {
+      return {
+        outcome: 'host_error',
+        ...refs,
+        detail: controller.signal.aborted
+          ? `no response within ${CHANGED_FILES_TIMEOUT_MS}ms`
+          : err instanceof Error
+            ? err.message
+            : 'unknown',
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (res.status === 404) {
+      const body = await res.text().catch(() => '');
+      return /project/i.test(body)
+        ? { outcome: 'revoked', ...refs }
+        : { outcome: 'no_such_ref', ...refs };
+    }
+    if (res.status === 401 || res.status === 403) return { outcome: 'revoked', ...refs };
+    if (!res.ok) {
+      return { outcome: 'host_error', ...refs, detail: `GitLab compare returned ${res.status}` };
+    }
+
+    const body = asRecord(await res.json().catch(() => null));
+    if (body?.['compare_timeout'] === true) return { outcome: 'too_large', ...refs };
+    const rawDiffs = body?.['diffs'];
+    if (!body || !Array.isArray(rawDiffs)) {
+      return { outcome: 'host_error', ...refs, detail: 'GitLab compare returned no diffs list' };
+    }
+    const files = rawDiffs
+      .map(gitlabChangedFile)
+      .filter((f): f is ChangedFile => f !== null)
+      .slice(0, CHANGED_FILES_MAX);
+    const shas = gitlabCompareShas(body['web_url']);
+    const headCommit = asRecord(body['commit'])?.['id'];
+    return {
+      outcome: 'ok',
+      ...refs,
+      files,
+      truncated: rawDiffs.length >= CHANGED_FILES_MAX,
+      baseSha: shas.baseSha,
+      headSha:
+        shas.headSha ??
+        (typeof headCommit === 'string' && /^[0-9a-f]{7,64}$/i.test(headCommit)
+          ? headCommit
+          : null),
+    };
   },
 
   async readFileAtRef(

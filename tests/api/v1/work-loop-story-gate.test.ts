@@ -196,6 +196,15 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     'MOTIR-5358 — the HOW TO TEST read serves the CLI’s close-out summary. The agent WRITES the ' +
     'record through `publish_test_instructions` and gets its receipt back from that tool; it has ' +
     'no use for reading it again. `project:browse`, the key `howToTestService` asserts.',
+  claimWorkItemContinue:
+    'MOTIR-6532 — the CONTINUE claim serves `motir continue <key>`, a CLI command, exactly as the ' +
+    'repair claim serves `motir fix`; a mirrored tool would be a second implementation with no ' +
+    'caller, and the card adds no MCP tool. `work_item:edit` — it opens a dispatch run and ' +
+    're-assigns the card, a write — and it writes no status.',
+  heartbeatDispatchRun:
+    'MOTIR-6528 — the HEARTBEAT is the CLI reporter’s own liveness signal, sent by the process ' +
+    'that holds the run; an agent never beats for a run, so a tool would have no caller. ' +
+    '`work_item:edit`, mirroring the rest of the ingest.',
   closeDispatchRun:
     'MOTIR-1789 · MOTIR-1792 — the same argument again, plus a mechanical one: the close is ' +
     'guarded by a row lock it shares with the server’s own abandoned-run reap, and a second ' +
@@ -257,7 +266,8 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // 20 since MOTIR-4906: the run's close-out prompt (MOTIR-5357) and the How
     // to test read (MOTIR-5358), both READS the CLI makes for the operator's loop.
     // 21 since MOTIR-5464: the REPAIR claim `motir fix` makes.
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(21);
+    // 23 since MOTIR-6526: the HEARTBEAT (MOTIR-6528) and the CONTINUE claim (MOTIR-6532).
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(23);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {

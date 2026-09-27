@@ -191,3 +191,18 @@ export class ContainerHasOpenChildrenError extends CliError {
     this.name = 'ContainerHasOpenChildrenError';
   }
 }
+
+/**
+ * 409 `DISPATCH_RUN_TERMINAL` — the run this process is reporting into was
+ * already CLOSED on the server (MOTIR-6530). Most often by the lapse reap: the
+ * machine went silent for five minutes, the server read the run as dead and
+ * closed it `abandoned`. Typed on the CODE, like the refusal above, because the
+ * reporter's answer to it — stop beating, say so once — differs from its answer
+ * to every other failure, which is to keep going silently.
+ */
+export class DispatchRunClosedError extends CliError {
+  constructor(message: string) {
+    super(message, { exitCode: 1 });
+    this.name = 'DispatchRunClosedError';
+  }
+}

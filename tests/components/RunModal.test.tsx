@@ -81,6 +81,7 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
     startedAt: '2026-08-30T14:02:00.000Z',
     endedAt: '2026-08-30T14:20:04.000Z',
     createdById: null,
+    lastHeartbeatAt: null,
     cards: [leg()],
     seq: 12,
     ...over,

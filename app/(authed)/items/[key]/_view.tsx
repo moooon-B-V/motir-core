@@ -628,6 +628,9 @@ export default async function ItemView({
                       repoDelivery={deliveryView.repos}
                       deliveries={deliveryView.deliveries}
                       statusCategory={statusCategory}
+                      statusLabel={
+                        detail.workflow.statuses.find((s) => s.key === item.status)?.label ?? null
+                      }
                       canReplan={canEdit && !isArchived}
                       parentIdentifier={detail.parent?.identifier ?? null}
                     />

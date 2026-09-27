@@ -588,25 +588,25 @@ export const publicProjectsService = {
     // Here `resolvePublicProject` has already returned it, so there is something honest
     // to bind, and binding the project's own workspace is not the cross-tenant widening
     // that migration rejected `withSystemContext` for.
-    const board = await withWorkspaceServiceContext(workspaceId, (tx) =>
-      boardRepository.findDefaultForProject(projectId, workspaceId, tx),
-    );
-    if (!board) {
+    //
+    // MOTIR-6653 — the board lookup and the three reads of the board it resolves
+    // share one binding (the project's own workspace), so they share ONE
+    // transaction, run one after the other: one pool slot per render, not four.
+    // They used to be a `Promise.all` of three `withWorkspaceServiceContext`s, the
+    // shape MOTIR-6627 removed from `getOverview` after it drained the pool —
+    // `docs/decisions/bound-read-transaction-shape.md` is the rule.
+    const loaded = await withWorkspaceServiceContext(workspaceId, async (tx) => {
+      const board = await boardRepository.findDefaultForProject(projectId, workspaceId, tx);
+      if (!board) return null;
+      const columns = await boardColumnRepository.findByBoard(board.id, workspaceId, tx);
+      const mappings = await boardColumnStatusRepository.findByBoard(board.id, workspaceId, tx);
+      const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId, tx);
+      return { board, columns, mappings, statuses };
+    });
+    if (!loaded) {
       return { boardId: '', name: '', columns: [], cap: PUBLIC_BOARD_CAP, truncated: false };
     }
-
-    // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
-    // The gate and the default-board lookup are both awaited above; all three
-    // arms are peer reads of a board already resolved.
-    const [columns, mappings, statuses] = await Promise.all([
-      withWorkspaceServiceContext(workspaceId, (tx) =>
-        boardColumnRepository.findByBoard(board.id, workspaceId, tx),
-      ),
-      withWorkspaceServiceContext(workspaceId, (tx) =>
-        boardColumnStatusRepository.findByBoard(board.id, workspaceId, tx),
-      ),
-      workflowsService.listStatusesByProject(projectId, workspaceId),
-    ]);
+    const { board, columns, mappings, statuses } = loaded;
 
     const statusById = new Map(statuses.map((s) => [s.id, s]));
     const categoryByKey = new Map(statuses.map((s) => [s.key, s.category]));
