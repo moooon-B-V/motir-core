@@ -144,7 +144,11 @@ describe('POST /api/upload/project-image', () => {
     const fx = await makeWorkItemFixture();
     const member = await createTestUser({ email: 'member-upload@example.com' });
     await adminDb.workspaceMembership.create({
-      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: member.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     signInAs(fx, member.id);
 

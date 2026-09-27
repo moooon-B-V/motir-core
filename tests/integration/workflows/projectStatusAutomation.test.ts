@@ -274,7 +274,11 @@ describe('Project status-automation — validation + gates (MOTIR-1618)', () => 
     const fx = await makeFixture();
     const member = await createTestUser({ email: 'member@example.com' });
     await adminDb.workspaceMembership.create({
-      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: member.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
 
     // Browse-scoped read: an ordinary member sees the configuration.

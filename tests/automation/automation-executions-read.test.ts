@@ -241,7 +241,7 @@ describe('listExecutions — admin gate + cross-tenant hide', () => {
     await workspacesService.addMember({
       userId: member.id,
       workspaceId: fx.workspaceId,
-      role: 'member',
+      workspaceRole: 'member',
     });
     await addToProjectAs({
       key: fx.projectIdentifier,

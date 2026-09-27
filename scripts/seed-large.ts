@@ -106,7 +106,7 @@ async function ensureBoardMembers(workspaceId: string, count: number): Promise<s
         password: SEED_PASSWORD,
         name: `Board Member ${i + 1}`,
       }));
-    await workspacesService.addMember({ userId: user.id, workspaceId, role: 'member' });
+    await workspacesService.addMember({ userId: user.id, workspaceId, workspaceRole: 'member' });
     ids.push(user.id);
   }
   return ids;

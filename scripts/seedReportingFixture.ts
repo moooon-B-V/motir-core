@@ -344,7 +344,7 @@ export async function seedReportingFixture(): Promise<ReportingSeedManifest> {
     await workspacesService.addMember({
       userId: user.id,
       workspaceId: workspace.id,
-      role: 'member',
+      workspaceRole: 'member',
     });
     memberIds.push(user.id);
   }
@@ -371,7 +371,6 @@ export async function seedReportingFixture(): Promise<ReportingSeedManifest> {
           workspaceId: workspace.id,
           projectId: project.id,
           userId,
-          role: userId === owner.id ? 'admin' : 'member',
         },
         tx,
       );

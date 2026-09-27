@@ -281,7 +281,6 @@ describe('`tx` is threaded into the gate reads', () => {
           projectId: s.projectId,
           userId: promoted.id,
           workspaceId: s.workspaceId,
-          role: 'admin',
         },
       });
       await setWorkspaceRoleFor(promoted.id, s.workspaceId, 'admin');

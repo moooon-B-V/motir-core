@@ -78,7 +78,7 @@ async function nonAdminWriter(caller: V1ProjectCaller): Promise<V1Caller> {
   await workspacesService.addMember({
     userId: user.id,
     workspaceId: caller.workspace.id,
-    role: 'viewer',
+    workspaceRole: 'viewer',
   });
   return withTokenFor(user, caller.workspace, { scopes: ['read', 'sprints:write'] });
 }

@@ -317,7 +317,11 @@ describe('board config API routes (Subtask 3.3.3)', () => {
       name: 'Member',
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: member.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     session.current = {
       user: { id: member.id, email: 'board-routes-member@example.com', name: 'Member' },

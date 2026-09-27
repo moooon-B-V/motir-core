@@ -340,7 +340,7 @@ describe('⚠️ the bound read spans every workspace, not the active one', () =
       data: { organizationId, userId: outsider.id, role: ORGANIZATION_ROLE.member },
     });
     await adminDb.workspaceMembership.create({
-      data: { workspaceId: quiet.id, userId: outsider.id, role: 'member' },
+      data: { workspaceId: quiet.id, userId: outsider.id, workspaceRole: 'member' },
     });
 
     const dto = await twoFactorPolicyService.resolveRequirement(outsider.id);

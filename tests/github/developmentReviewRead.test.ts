@@ -192,7 +192,11 @@ describe('the row names NO reviewer (MOTIR-5602, amended at design review)', () 
       name: 'Ada Lovelace',
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: user.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     await adminDb.githubIdentity.create({
       data: {

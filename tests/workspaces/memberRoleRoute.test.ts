@@ -80,7 +80,7 @@ async function build(): Promise<Fixture> {
   await workspacesService.addMember({
     userId: viewer.id,
     workspaceId: workspace.id,
-    role: 'viewer',
+    workspaceRole: 'viewer',
   });
   const custom = await user('custom');
   await workspacesService.addMember({ userId: custom.id, workspaceId: workspace.id });

@@ -92,7 +92,7 @@ describe('the (admin) layout returns 404 for', () => {
     await workspacesService.addMember({
       userId: member.id,
       workspaceId: workspace.id,
-      role: 'member',
+      workspaceRole: 'member',
     });
     currentSession = { user: { id: member.id } };
 

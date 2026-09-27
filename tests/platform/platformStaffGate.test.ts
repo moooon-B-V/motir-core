@@ -151,7 +151,7 @@ describe('requirePlatformStaff — the three DENIAL cases', () => {
     await workspacesService.addMember({
       userId: member.id,
       workspaceId: workspace.id,
-      role: 'member',
+      workspaceRole: 'member',
     });
     currentSession = { user: { id: member.id } };
 
@@ -172,7 +172,7 @@ describe('requirePlatformStaff — the three DENIAL cases', () => {
     const membership = await adminDb.workspaceMembership.findFirstOrThrow({
       where: { userId: owner.id, workspaceId: workspace.id },
     });
-    expect(membership.role).toBe('owner');
+    expect(membership.workspaceRole).toBe('manager');
     const orgMembership = await adminDb.organizationMembership.findFirstOrThrow({
       where: { userId: owner.id },
     });

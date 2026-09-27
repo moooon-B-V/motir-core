@@ -38,13 +38,13 @@ async function setup() {
   await workspacesService.addMember({
     userId: wsAdmin.id,
     workspaceId: fx.workspaceId,
-    role: 'admin',
+    workspaceRole: 'manager',
   });
   const member = await createTestUser();
   await workspacesService.addMember({
     userId: member.id,
     workspaceId: fx.workspaceId,
-    role: 'member',
+    workspaceRole: 'member',
   });
   const orgAdmin = await createTestUser();
   await organizationsService.addMember({

@@ -3,7 +3,6 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { CUSTOM_ROLE_TIER } from '@/lib/permissions/builtinRoles';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
@@ -18,9 +17,8 @@ import { truncateAuthTables } from './helpers/db';
 //   * `project_membership.role_definition_id` backfills NULL on deploy and its
 //     FK REFUSES to delete a role somebody holds (the `Restrict` that is the
 //     whole point of the column);
-//   * the repository leaves, including the PAIRED-COLUMN invariant: a
-//     membership with a non-null `role_definition_id` always carries
-//     `role = CUSTOM_ROLE_TIER`.
+//   * the repository leaves. (The PAIRED-COLUMN invariant — a pointer always
+//     beside `role = CUSTOM_ROLE_TIER` — went with the legacy writes, MOTIR-6562.)
 //
 // The permission-set validity, the cap, the name rules and the reassign
 // transaction are the SERVICE's (MOTIR-2472) — deliberately not under test
@@ -271,11 +269,9 @@ describe('project_membership.role_definition_id — the deploy backfill and the 
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
         userId: fx.userA1Id,
-        role: 'viewer',
       },
     });
     expect(membership.roleDefinitionId).toBeNull();
-    expect(membership.role).toBe('viewer');
 
     // And across the whole table: no row anywhere carries a pointer yet.
     const withPointer = await adminDb.projectMembership.count({
@@ -291,7 +287,6 @@ describe('project_membership.role_definition_id — the deploy backfill and the 
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
         userId: fx.userA1Id,
-        role: CUSTOM_ROLE_TIER,
         roleDefinitionId: fx.roleW1Id,
       },
     });
@@ -311,7 +306,6 @@ describe('project_membership.role_definition_id — the deploy backfill and the 
       where: { userId_projectId: { userId: fx.userA1Id, projectId: fx.projectP1Id } },
     });
     expect(survivor?.roleDefinitionId).toBe(fx.roleW1Id);
-    expect(survivor?.role).toBe(CUSTOM_ROLE_TIER);
   });
 
   it('a role definition nobody holds deletes cleanly', async () => {

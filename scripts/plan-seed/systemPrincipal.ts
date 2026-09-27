@@ -63,7 +63,7 @@ export async function seedSystemPrincipal(
   // case; this one runs after.
   await withWorkspaceServiceContext(input.workspaceId, async (tx: Prisma.TransactionClient) => {
     await workspaceMembershipRepository.create(
-      { userId: user.id, workspaceId: input.workspaceId, workspaceRole: 'member', role: 'member' },
+      { userId: user.id, workspaceId: input.workspaceId, workspaceRole: 'member' },
       tx,
     );
     await projectMembershipRepository.create(
@@ -71,7 +71,6 @@ export async function seedSystemPrincipal(
         workspaceId: input.workspaceId,
         projectId: input.projectId,
         userId: user.id,
-        role: 'member',
       },
       tx,
     );

@@ -35,7 +35,7 @@ export async function seedOverlayVideo(slug: string): Promise<OverlayVideoSeed> 
     select: { organizationId: true },
   });
   const owner = await adminDb.workspaceMembership.findFirstOrThrow({
-    where: { workspaceId: base.workspaceId, role: 'owner' },
+    where: { workspaceId: base.workspaceId, workspaceRole: 'manager' },
     select: { userId: true },
   });
   const ctx = { userId: owner.userId, workspaceId: base.workspaceId };
