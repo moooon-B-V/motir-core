@@ -2617,6 +2617,18 @@ export default defineConfig({
         'lib/services/workItemCiStateBackfillService.ts',
         'components/github/ciStateMeta.ts',
         'components/github/CiStateBadge.tsx',
+        // ── Story MOTIR-6588 · TO FIX ON THE WORKBENCH (gate MOTIR-6606) ──
+        // The modules this story WROTE, measured before being pinned (the numbers
+        // are in the `thresholds` note). The pre-existing files it widened by a call
+        // or a slice each — `workItemRepository`, `workItemsService`, the writer
+        // services, `homeService` — are not gated here, for the reason MOTIR-5469's
+        // note above gives.
+        'lib/services/fixReasonService.ts',
+        'lib/services/repairPredicate.ts',
+        'lib/workItems/fixReason.ts',
+        'lib/mappers/fixReasonMappers.ts',
+        'lib/services/workItemFixReasonBackfillService.ts',
+        'app/(authed)/workbench/_components/WorkbenchFixLine.tsx',
         // ── Story MOTIR-6156 · THE MULTI-LINE COMPOSER (Subtask MOTIR-6239) ──
         // MEASURED on this branch before being pinned, per this list's own rule:
         // 97.11 statements / 90.43 branches / 100 functions / 100 lines, over the
@@ -5886,6 +5898,49 @@ export default defineConfig({
           statements: 90,
         },
         'components/github/CiStateBadge.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ── Story MOTIR-6588 · TO FIX (gate MOTIR-6606) ─────────────────────────
+        // MEASURED on the parent branch over the story's own specs (21 files / 386
+        // tests), lines / branches / functions:
+        //   fixReasonService 100 / 95.45 / 100 · repairPredicate 100 / 97.5 / 100 ·
+        //   workItems/fixReason 100 / 97.14 / 100 · fixReasonMappers 100 / 94.73 / 100 ·
+        //   workItemFixReasonBackfillService 100 / 95.65 / 100 · WorkbenchFixLine 100 / 100 / 100.
+        // Pinned at the project's 90 floor, not at the reading.
+        'lib/services/fixReasonService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/repairPredicate.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/workItems/fixReason.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/fixReasonMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/workItemFixReasonBackfillService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/(authed)/workbench/_components/WorkbenchFixLine.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,
