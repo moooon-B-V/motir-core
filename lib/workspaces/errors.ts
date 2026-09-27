@@ -55,6 +55,55 @@ export class InviteTargetAlreadyMemberError extends Error {
   }
 }
 
+/**
+ * A Limited member tried to send an invite (Story MOTIR-6169 · MOTIR-6546). A
+ * contractor who enters only the projects they were added to must not be able to
+ * bring in a colleague who arrives Full and sees every project they cannot — the
+ * reference product's rule too (a Linear guest cannot invite). → 403.
+ */
+export class InviteNotAllowedForScopeError extends Error {
+  readonly code = 'INVITE_NOT_ALLOWED_FOR_SCOPE' as const;
+  constructor(userId: string, workspaceId: string) {
+    super(
+      `User ${userId} has Limited access to workspace ${workspaceId}, so cannot invite people.`,
+    );
+    this.name = 'InviteNotAllowedForScopeError';
+  }
+}
+
+/** A Limited invite, or one naming projects, from someone who is not a Manager. → 403. */
+export class InviteScopeForbiddenError extends Error {
+  readonly code = 'INVITE_SCOPE_FORBIDDEN' as const;
+  constructor(userId: string, workspaceId: string) {
+    super(
+      `Only a Manager of workspace ${workspaceId} can invite someone with Limited access or into specific projects (user ${userId} is not one).`,
+    );
+    this.name = 'InviteScopeForbiddenError';
+  }
+}
+
+/**
+ * Projects named on a FULL invite — meaningless, since Full already enters every
+ * project that is not Members only, and a Members-only project is joined by
+ * adding the person afterwards. → 400.
+ */
+export class InviteProjectsRequireLimitedError extends Error {
+  readonly code = 'INVITE_PROJECTS_REQUIRE_LIMITED' as const;
+  constructor() {
+    super('Projects can only be named on an invite with Limited access.');
+    this.name = 'InviteProjectsRequireLimitedError';
+  }
+}
+
+/** A project named on an invite that is not a live project of this workspace. → 400. */
+export class InviteProjectInvalidError extends Error {
+  readonly code = 'INVITE_PROJECT_INVALID' as const;
+  constructor(projectId: string) {
+    super(`Project ${projectId} is not a live project of this workspace.`);
+    this.name = 'InviteProjectInvalidError';
+  }
+}
+
 export class InviteRateLimitedError extends Error {
   readonly code = 'RATE_LIMITED' as const;
   constructor(public readonly max: number) {

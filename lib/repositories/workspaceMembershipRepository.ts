@@ -376,6 +376,8 @@ export const workspaceMembershipRepository = {
       workspaceRole: WorkspaceRole;
       /** The legacy column, still NOT NULL until the contract story drops it. */
       role: MemberRole;
+      /** Full or Limited (Story MOTIR-6169); the column defaults to `full` when omitted. */
+      accessScope?: WorkspaceAccessScope;
     },
     tx: Prisma.TransactionClient,
   ): Promise<WorkspaceMembership> {

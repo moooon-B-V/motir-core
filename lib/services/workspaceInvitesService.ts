@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { MemberRole } from '@/generated/prisma/client';
+import type { MemberRole, WorkspaceAccessScope } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
@@ -15,7 +15,10 @@ import { userRepository } from '@/lib/repositories/userRepository';
 import { verificationRepository } from '@/lib/repositories/verificationRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
-import { readMembership } from '@/lib/workspaces/membershipGate';
+import { readMembership, readReachRole } from '@/lib/workspaces/membershipGate';
+import { projectRepository } from '@/lib/repositories/projectRepository';
+import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
+import { asAccessScope } from '@/lib/projects/accessMode';
 import { legacyToWorkspaceRole } from '@/lib/workspaces/roles';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { organizationsService } from '@/lib/services/organizationsService';
@@ -23,10 +26,15 @@ import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
 import { isEmailShape } from '@/lib/utils/email';
 import {
   AlreadyMemberError,
+  InvalidAccessScopeError,
   InvalidEmailError,
   InviteEmailMismatchError,
   InviteExpiredOrMissingError,
+  InviteNotAllowedForScopeError,
+  InviteProjectInvalidError,
+  InviteProjectsRequireLimitedError,
   InviteRateLimitedError,
+  InviteScopeForbiddenError,
   InviteTargetAlreadyMemberError,
   NotAMemberError,
 } from '@/lib/workspaces/errors';
@@ -39,7 +47,9 @@ import {
 //
 // Tokens live in the Verification table (Subtask 1.1.3) with the
 // `workspace-invite:` identifier prefix. The `value` column carries
-// JSON `{ workspaceId, email, role, inviterUserId }`. The existing
+// JSON `{ workspaceId, email, role, inviterUserId, accessScope, projectIds }`
+// (the last two since Story MOTIR-6169 · MOTIR-6546; a payload written before
+// that parses as `full` / `[]`). The existing
 // `@@index([identifier])` makes prefix-scoped lookups (validate,
 // rate-limit) cheap.
 
@@ -57,6 +67,10 @@ interface InvitePayload {
   email: string;
   role: MemberRole;
   inviterUserId: string;
+  /** Full or Limited (Story MOTIR-6169 · MOTIR-6546). */
+  accessScope: WorkspaceAccessScope;
+  /** The projects a Limited invite joins on accept — empty on a Full one. */
+  projectIds: string[];
 }
 
 function normalizeEmail(email: string): string {
@@ -78,7 +92,15 @@ function parsePayload(value: string): InvitePayload | null {
     ) {
       return null;
     }
-    return parsed;
+    // An invite sent before MOTIR-6546 carries neither field: it is a FULL invite
+    // naming no project, exactly what every invite meant then.
+    return {
+      ...parsed,
+      accessScope: asAccessScope(parsed.accessScope) ?? 'full',
+      projectIds: Array.isArray(parsed.projectIds)
+        ? parsed.projectIds.filter((id): id is string => typeof id === 'string')
+        : [],
+    };
   } catch {
     return null;
   }
@@ -146,14 +168,54 @@ export const workspaceInvitesService = {
     inviterName: string;
     workspaceId: string;
     targetEmail: string;
+    /** Full (the default) or Limited — Story MOTIR-6169 · MOTIR-6546. */
+    accessScope?: unknown;
+    /** For a Limited invite, the projects the person joins on accept. */
+    projectIds?: readonly string[];
   }): Promise<SendInviteResultDTO> {
     const email = normalizeEmail(args.targetEmail);
     if (!isEmailShape(email)) throw new InvalidEmailError();
+    const accessScope = args.accessScope === undefined ? 'full' : asAccessScope(args.accessScope);
+    if (!accessScope) throw new InvalidAccessScopeError(String(args.accessScope));
+    const projectIds = [...new Set(args.projectIds ?? [])];
+    if (accessScope === 'full' && projectIds.length > 0) {
+      throw new InviteProjectsRequireLimitedError();
+    }
 
     // Inviter must be a workspace member.
     const inviterMembership = await readMembership(args.inviterUserId, args.workspaceId);
     if (!inviterMembership) {
       throw new NotAMemberError(args.inviterUserId, args.workspaceId);
+    }
+
+    // THE SCOPE RULES (MOTIR-6546) — the escalation a Limited scope would
+    // otherwise open. A Manager (the org Owner and Admins compose in as one) may
+    // send any invite; a Full non-Manager only a Full one, as before; a Limited
+    // member none at all — a contractor must not bring in a colleague who arrives
+    // Full and sees every project they cannot.
+    const inviterIsManager =
+      (await readReachRole(args.inviterUserId, args.workspaceId)) === 'manager';
+    if (!inviterIsManager) {
+      if (inviterMembership.accessScope === 'limited') {
+        throw new InviteNotAllowedForScopeError(args.inviterUserId, args.workspaceId);
+      }
+      if (accessScope === 'limited' || projectIds.length > 0) {
+        throw new InviteScopeForbiddenError(args.inviterUserId, args.workspaceId);
+      }
+    }
+    if (projectIds.length > 0) {
+      // Every named project must be a live project of THIS workspace — read
+      // under the workspace binding, so another workspace's project is simply
+      // absent and refused like a missing one.
+      const found = await withWorkspaceContext(
+        { userId: args.inviterUserId, workspaceId: args.workspaceId },
+        (tx) => projectRepository.findManyLiveByIds(projectIds, tx),
+      );
+      const live = new Set(
+        found.filter((p) => p.workspaceId === args.workspaceId).map((p) => p.id),
+      );
+      const bad = projectIds.find((id) => !live.has(id));
+      if (bad) throw new InviteProjectInvalidError(bad);
     }
 
     // Block invites to addresses already in the workspace. Only
@@ -202,6 +264,8 @@ export const workspaceInvitesService = {
       email,
       role: 'member',
       inviterUserId: args.inviterUserId,
+      accessScope,
+      projectIds,
     };
     await db.$transaction(async (tx) => {
       await verificationRepository.create(
@@ -337,6 +401,7 @@ export const workspaceInvitesService = {
     }
 
     let organizationId: string | null = null;
+    let skippedProjects: string[] = [];
     await db.$transaction(async (tx) => {
       // BIND THE TENANT GUCs (MOTIR-2777). The tenant-root INSERT policies from
       // `20260810001000_tenant_root_insert_policies` admit a membership row on two
@@ -367,6 +432,9 @@ export const workspaceInvitesService = {
             // invite lands as a workspace Member (MOTIR-6462).
             workspaceRole: legacyToWorkspaceRole(payload.role),
             role: payload.role,
+            // The scope rides the SAME insert, so a Limited invitee never exists
+            // for a moment as a Full member (MOTIR-6546).
+            accessScope: payload.accessScope,
           },
           tx,
         );
@@ -411,6 +479,25 @@ export const workspaceInvitesService = {
           tx,
         );
       }
+      // A Limited invite's projects join in the SAME transaction (MOTIR-6546):
+      // there is no window in which the person is a Limited member of nothing. A
+      // project archived since the send is skipped and named back; one deleted
+      // since has nothing left to name.
+      if (payload.projectIds.length > 0) {
+        const named = await projectRepository.findManyByIds(payload.projectIds, tx);
+        const inWorkspace = named.filter((p) => p.workspaceId === payload.workspaceId);
+        const live = inWorkspace.filter((p) => p.archivedAt == null);
+        skippedProjects = inWorkspace.filter((p) => p.archivedAt != null).map((p) => p.name);
+        await projectMembershipRepository.createManySkipDuplicates(
+          live.map((p) => ({
+            workspaceId: payload.workspaceId,
+            projectId: p.id,
+            userId: sessionUser.id,
+            role: 'member' as const,
+          })),
+          tx,
+        );
+      }
       await verificationRepository.deleteByIdentifier(INVITE_IDENTIFIER_PREFIX + token, tx);
     });
 
@@ -420,7 +507,7 @@ export const workspaceInvitesService = {
     // set, so it no-ops for an already-member or a non-scaled org.
     if (organizationId) await enqueueScaledTrackerSeatSync(organizationId);
 
-    return { workspaceId: payload.workspaceId };
+    return { workspaceId: payload.workspaceId, skippedProjects };
   },
 };
 
