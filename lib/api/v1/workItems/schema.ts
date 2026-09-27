@@ -188,7 +188,9 @@ const implementationSourceSchema = z.enum(IMPLEMENTATION_SOURCES);
 
 /**
  * The relationship vocabulary on the wire — the shipped `work_item_link` set.
- * `blocked_by` is the edge the ready set reads.
+ * `blocked_by` is the edge the ready set reads. `supersedes` / `superseded_by`
+ * (MOTIR-6580) are the two directions of the one `supersedes` edge: "A supersedes
+ * B" means A is the NEWER item that replaces B. It gates nothing.
  */
 export const relationshipSchema = z.enum([
   'blocked_by',
@@ -196,6 +198,8 @@ export const relationshipSchema = z.enum([
   'relates_to',
   'duplicates',
   'clones',
+  'supersedes',
+  'superseded_by',
 ]);
 export type V1Relationship = z.infer<typeof relationshipSchema>;
 
@@ -264,7 +268,7 @@ export type V1DependencyEdges = z.infer<typeof dependencyEdgesSchema>;
  * Extracted so {@link workItemSummarySchema} can carry `dependencies` without
  * {@link workItemDetailSchema} inheriting it. The detail already publishes the
  * item's own edges as `links.blockedBy` / `links.blocks` — richer refs, and the
- * five groups rather than two — so a second block there would be a redundant
+ * seven groups rather than two — so a second block there would be a redundant
  * field a client has to pick between. The detail's edge projection lands on its
  * CHILDREN ({@link workItemChildSchema}), which is the sub-graph nothing else
  * carries.
@@ -326,14 +330,18 @@ export const workItemLinkSchema = z.object({
 });
 export type WorkItemLink = z.infer<typeof workItemLinkSchema>;
 
-/** All five edge groups. An empty group is `[]`, never an absent key — to a
- *  typed client those are different things. */
+/** All seven edge groups. An empty group is `[]`, never an absent key — to a
+ *  typed client those are different things. `supersedes` holds the OLDER items
+ *  this one replaces, `supersededBy` the NEWER items that replace it
+ *  (MOTIR-6580). */
 export const workItemLinkGroupsSchema = z.object({
   blockedBy: z.array(workItemRefSchema),
   blocks: z.array(workItemRefSchema),
   relatesTo: z.array(workItemRefSchema),
   duplicates: z.array(workItemRefSchema),
   clones: z.array(workItemRefSchema),
+  supersedes: z.array(workItemRefSchema),
+  supersededBy: z.array(workItemRefSchema),
 });
 export type WorkItemLinkGroups = z.infer<typeof workItemLinkGroupsSchema>;
 
@@ -759,6 +767,8 @@ export function presentWorkItemDetail(
       ...detail.relatesTo,
       ...detail.duplicates,
       ...detail.clones,
+      ...detail.supersedes,
+      ...detail.supersededBy,
     ].map((link) => link.item),
   ]) {
     keyById.set(row.id, row.identifier);
@@ -797,6 +807,8 @@ export function presentWorkItemDetail(
       relatesTo: detail.relatesTo.map((link) => ref(link.item)),
       duplicates: detail.duplicates.map((link) => ref(link.item)),
       clones: detail.clones.map((link) => ref(link.item)),
+      supersedes: detail.supersedes.map((link) => ref(link.item)),
+      supersededBy: detail.supersededBy.map((link) => ref(link.item)),
     },
     readiness: {
       ready: detail.readiness.ready,
@@ -845,10 +857,10 @@ export function presentWorkItemDetail(
   };
 }
 
-/** Present the five edge groups on their own — the `GET …/links` body (11.2.9),
+/** Present the seven edge groups on their own — the `GET …/links` body (11.2.9),
  *  reusing the SAME declaration the detail resource nests. */
 export function presentWorkItemLinkGroups(detail: IssueDetailDto): WorkItemLinkGroups {
-  // No child edges and no deliveries: `links` is the item's OWN five edge groups
+  // No child edges and no deliveries: `links` is the item's OWN seven edge groups
   // and reads neither, so this presenter owes no projection of either.
   return presentWorkItemDetail(detail, 0, {}, []).links;
 }

@@ -400,16 +400,21 @@ describe('every operation’s REAL response validates against its declared schem
     await drive(
       'createWorkItemLink',
       () => import('@/app/api/v1/work-items/[key]/links/route'),
+      // `superseded_by` (MOTIR-6580) — the newest relationship member, driven so
+      // its request AND the echoed response are validated against the spec.
       send(`/api/v1/work-items/${key}/links`, 'POST', {
         toKey: otherKey,
-        relationship: 'relates_to',
+        relationship: 'superseded_by',
       }),
       { key },
     );
     await drive(
       'deleteWorkItemLink',
       () => import('@/app/api/v1/work-items/[key]/links/route'),
-      send(`/api/v1/work-items/${key}/links?toKey=${otherKey}&relationship=relates_to`, 'DELETE'),
+      send(
+        `/api/v1/work-items/${key}/links?toKey=${otherKey}&relationship=superseded_by`,
+        'DELETE',
+      ),
       { key },
     );
     // MOTIR-5048 — the delivery LINK. Its one precondition is a repository

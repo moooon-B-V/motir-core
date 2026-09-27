@@ -361,6 +361,8 @@ function workItemDetail(key) {
       relatesTo: [],
       duplicates: [],
       clones: [],
+      supersedes: [],
+      supersededBy: [],
     },
     readiness: {
       ready: true,

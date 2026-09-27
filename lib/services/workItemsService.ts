@@ -100,7 +100,7 @@ import {
   QUICK_SEARCH_MAX_LIMIT,
   QUICK_SEARCH_MIN_QUERY_LENGTH,
 } from '@/lib/workItems/quickSearch';
-import { relationshipToLink } from '@/lib/workItems/linkRelationships';
+import { relationshipStorage, relationshipToLink } from '@/lib/workItems/linkRelationships';
 import {
   withSystemContext,
   withWorkspaceContext,
@@ -590,8 +590,8 @@ function clampBound(n: number | undefined, lo: number, hi: number, fallback: num
  * Pair each resolved linked item (key-ASC) with the `work_item_link.id` of the
  * edge that points at it, so the 2.4.9 inline remove can target the exact link.
  * `endpoint` is which end of the edge holds the linked item: `toId` for OUT
- * edges (blocked-by / relates-to / duplicates / clones), `fromId` for the
- * reverse IN edge (blocks). The (item, endpoint, kind) triple is unique, so the
+ * edges (blocked-by / relates-to / duplicates / clones / supersedes), `fromId`
+ * for the reverse IN edges (blocks, superseded-by). The (item, endpoint, kind) triple is unique, so the
  * map is 1:1.
  */
 function toRelationshipLinks(
@@ -605,13 +605,15 @@ function toRelationshipLinks(
     .map((r) => ({ linkId: linkIdByItem.get(r.id) ?? '', item: toWorkItemSummaryDto(r) }));
 }
 
-/** The five link-row batches of one item, before their far ends are resolved. */
+/** The seven link-row batches of one item, before their far ends are resolved. */
 type RelationshipLinkRows = {
   blockedByLinks: WorkItemLink[];
   blocksLinks: WorkItemLink[];
   relatesLinks: WorkItemLink[];
   duplicatesLinks: WorkItemLink[];
   clonesLinks: WorkItemLink[];
+  supersedesLinks: WorkItemLink[];
+  supersededByLinks: WorkItemLink[];
 };
 
 /** The far-end rows of {@link RelationshipLinkRows}, batch by batch. */
@@ -621,12 +623,15 @@ type RelationshipTargetRows = {
   relatesRows: WorkItem[];
   duplicatesRows: WorkItem[];
   clonesRows: WorkItem[];
+  supersedesRows: WorkItem[];
+  supersededByRows: WorkItem[];
 };
 
 /**
- * Phase 1 of the five-group assembly: ONE query per group, never one per link.
- * `blocks` is the IN edge of `is_blocked_by`, which is why it is the only batch
- * read `findByToItem`; the other three are OUT edges.
+ * Phase 1 of the seven-group assembly: ONE query per group, never one per link.
+ * `blocks` is the IN edge of `is_blocked_by` and `supersededBy` the IN edge of
+ * `supersedes` (MOTIR-6580: `from` is the NEWER item), which is why those two
+ * are the batches read `findByToItem`; the other five are OUT edges.
  *
  * Takes an already-bound `tx` so a caller can fold it into its own transaction
  * (the one-transaction-per-service-method shape,
@@ -642,10 +647,12 @@ async function readRelationshipLinkRows(
     relatesLinks: await workItemLinkRepository.findByFromItem(itemId, 'relates_to', tx),
     duplicatesLinks: await workItemLinkRepository.findByFromItem(itemId, 'duplicates', tx),
     clonesLinks: await workItemLinkRepository.findByFromItem(itemId, 'clones', tx),
+    supersedesLinks: await workItemLinkRepository.findByFromItem(itemId, 'supersedes', tx),
+    supersededByLinks: await workItemLinkRepository.findByToItem(itemId, 'supersedes', tx),
   };
 }
 
-/** Phase 2: resolve each batch's far end — five batched `findByIds`, never one
+/** Phase 2: resolve each batch's far end — seven batched `findByIds`, never one
  *  round trip per link. */
 async function resolveRelationshipTargetRows(
   links: RelationshipLinkRows,
@@ -672,6 +679,14 @@ async function resolveRelationshipTargetRows(
       links.clonesLinks.map((l) => l.toId),
       tx,
     ),
+    supersedesRows: await workItemRepository.findByIds(
+      links.supersedesLinks.map((l) => l.toId),
+      tx,
+    ),
+    supersededByRows: await workItemRepository.findByIds(
+      links.supersededByLinks.map((l) => l.fromId),
+      tx,
+    ),
   };
 }
 
@@ -686,6 +701,8 @@ function toRelationshipGroups(
     relatesTo: toRelationshipLinks(links.relatesLinks, rows.relatesRows, 'toId'),
     duplicates: toRelationshipLinks(links.duplicatesLinks, rows.duplicatesRows, 'toId'),
     clones: toRelationshipLinks(links.clonesLinks, rows.clonesRows, 'toId'),
+    supersedes: toRelationshipLinks(links.supersedesLinks, rows.supersedesRows, 'toId'),
+    supersededBy: toRelationshipLinks(links.supersededByLinks, rows.supersededByRows, 'fromId'),
   };
 }
 
@@ -709,6 +726,8 @@ function keepRelationshipTargetsInProject(
     relatesRows: keep(rows.relatesRows),
     duplicatesRows: keep(rows.duplicatesRows),
     clonesRows: keep(rows.clonesRows),
+    supersedesRows: keep(rows.supersedesRows),
+    supersededByRows: keep(rows.supersededByRows),
   };
 }
 
@@ -5869,7 +5888,7 @@ export const workItemsService = {
   },
 
   /**
-   * ALL FIVE relationship groups of one item (MOTIR-4063) — the SAME assembly
+   * ALL SEVEN relationship groups of one item (MOTIR-4063) — the SAME assembly
    * `getIssueDetail` renders, without the twelve other reads a detail page buys.
    *
    * The caller has already resolved and GATED the item (it is passing an id, so
@@ -6007,7 +6026,9 @@ export const workItemsService = {
    * Link groups: `blockedBy` = items this item `is_blocked_by` (its OUT edges of
    * that kind); `blocks` = items blocked by it (the IN edges); `relatesTo` /
    * `duplicates` / `clones` = its OUT edges of those kinds (`relates_to` persists
-   * a reciprocal row, so its OUT set already covers both directions). Each group
+   * a reciprocal row, so its OUT set already covers both directions);
+   * `supersedes` = the OLDER items this one replaces (OUT `supersedes` edges) and
+   * `supersededBy` = the NEWER items that replace it (IN edges). Each group
    * is `key ASC`-ordered. `readiness` is the 2.4.5 ready/blocked verdict —
    * `getReadiness` classifies each blocker against ITS OWN project's terminal set
    * (2.2.6 / finding #21), and `openBlockers` re-projects the open ids back onto
@@ -6047,7 +6068,7 @@ export const workItemsService = {
       // separately too so the 2.4.2 rail's Parent field need not re-derive it.
       await workItemRepository.findAncestors(item.id, ctx.workspaceId, tx),
       await workItemRepository.findChildren(item.id, tx),
-      // The five relationship batches, from the SHARED assembly the AI boundary
+      // The seven relationship batches, from the SHARED assembly the AI boundary
       // also reads (MOTIR-4063) — one query per group, riding this fan-out.
       await readRelationshipLinkRows(item.id, tx),
       // The issue's labels (5.4.2) — one bounded query riding the same
@@ -6074,7 +6095,7 @@ export const workItemsService = {
       await watcherRepository.existsFor(item.id, ctx.userId, tx),
     ]);
 
-    // The five relationship batches are THIS method's own reads and share ONE
+    // The seven relationship batches are THIS method's own reads and share ONE
     // bound transaction (the 5-wide fan-out MOTIR-2799 measured); `getReadiness`
     // is a service call and opens its own, per the call-into-another-service
     // clause in the transaction-shape ADR.
@@ -6673,20 +6694,19 @@ export const workItemsService = {
       throw new WorkItemNotFoundError(currentItemId);
     }
 
+    // Which end of the directed storage edge the current item sits on — the
+    // inverse relationships (`blocks`, `superseded_by`) read the IN edges.
+    const storage = relationshipStorage(relationship);
     const linkedIds =
-      relationship === 'blocks'
+      storage.currentIs === 'to'
         ? (
             await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-              workItemLinkRepository.findByToItem(currentItemId, 'is_blocked_by', tx),
+              workItemLinkRepository.findByToItem(currentItemId, storage.kind, tx),
             )
           ).map((l) => l.fromId)
         : (
             await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-              workItemLinkRepository.findByFromItem(
-                currentItemId,
-                relationship === 'blocked_by' ? 'is_blocked_by' : relationship,
-                tx,
-              ),
+              workItemLinkRepository.findByFromItem(currentItemId, storage.kind, tx),
             )
           ).map((l) => l.toId);
 

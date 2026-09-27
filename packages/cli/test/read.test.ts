@@ -178,6 +178,8 @@ describe('motir show', () => {
       relatesTo: [],
       duplicates: [],
       clones: [],
+      supersedes: [],
+      supersededBy: [],
     },
   });
 

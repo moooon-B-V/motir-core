@@ -347,7 +347,15 @@ export function v1Detail(key: string, over: Record<string, unknown> = {}) {
     folderPath: null,
     ancestorKeys: [],
     children: [],
-    links: { blockedBy: [], blocks: [], relatesTo: [], duplicates: [], clones: [] },
+    links: {
+      blockedBy: [],
+      blocks: [],
+      relatesTo: [],
+      duplicates: [],
+      clones: [],
+      supersedes: [],
+      supersededBy: [],
+    },
     readiness: {
       ready: true,
       openBlockers: [],

@@ -22,7 +22,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // cannot express a dependency at all.
 //
 // ── One declaration for the group shape ─────────────────────────────────────
-// The five groups are presented by the SAME function the detail resource nests
+// The seven groups are presented by the SAME function the detail resource nests
 // (`presentWorkItemLinkGroups`), so "the links sub-resource" and "the links
 // inside the item" are literally one declaration. Two shapes for one concept is
 // how they drift.
@@ -33,7 +33,7 @@ const linkBodySchema = z
 
 export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async (ctx) => {
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
-  // ONE service call: the aggregate already resolves all five groups. Assembling
+  // ONE service call: the aggregate already resolves all seven groups. Assembling
   // them from several reads would be both slower and a second place for the
   // shape to diverge.
   const detail = await workItemsService.getIssueDetail(projectId, identifier, ctx.service);
@@ -82,9 +82,10 @@ export const DELETE = withV1Route<{ key: string }>(
  * Resolve a `(path key, toKey, relationship)` triple to the DIRECTED storage
  * edge the service consumes.
  *
- * There are five user-facing relationships but only four storage kinds —
- * `blocked_by` and `blocks` are the two DIRECTIONS of one `is_blocked_by` edge —
- * and `relationshipToLink` is the shipped mapping, REUSED rather than re-derived
+ * There are seven user-facing relationships but only five storage kinds —
+ * `blocked_by` and `blocks` are the two DIRECTIONS of one `is_blocked_by` edge,
+ * `supersedes` and `superseded_by` the two of one `supersedes` edge — and
+ * `relationshipToLink` is the shipped mapping, REUSED rather than re-derived
  * so the API and the web app write the same row for the same request.
  *
  * The two items may live in different projects of the same workspace (the link

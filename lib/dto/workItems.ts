@@ -386,12 +386,15 @@ export interface RelationshipLinkDto {
 }
 
 /**
- * ALL FIVE relationship groups of one work item, each `key ASC` (MOTIR-4063).
+ * ALL SEVEN relationship groups of one work item, each `key ASC` (MOTIR-4063,
+ * widened by MOTIR-6580).
  *
  * `blockedBy` = items this item `is_blocked_by` (its OUT edges of that kind);
  * `blocks` = the items it blocks (the IN edges of the same kind); `relatesTo` /
  * `duplicates` / `clones` = its OUT edges of those kinds (`relates_to` persists
- * a reciprocal row, so its OUT set already covers both directions).
+ * a reciprocal row, so its OUT set already covers both directions);
+ * `supersedes` / `supersededBy` = the OUT / IN edges of the directed
+ * `supersedes` kind (`from` is the NEWER item, no reciprocal).
  *
  * ⚠️ The five are ONE CONCEPT and were, until MOTIR-4063, THREE ROUTES: the item
  * detail assembled all five for the UI/MCP, the AI boundary carried none of them
@@ -407,6 +410,10 @@ export interface RelationshipLinkGroups {
   relatesTo: RelationshipLinkDto[];
   duplicates: RelationshipLinkDto[];
   clones: RelationshipLinkDto[];
+  /** The OLDER items this one replaces — its OUT `supersedes` edges (MOTIR-6580). */
+  supersedes: RelationshipLinkDto[];
+  /** The NEWER items that replace this one — its IN `supersedes` edges. */
+  supersededBy: RelationshipLinkDto[];
 }
 
 /**
@@ -512,6 +519,10 @@ export interface IssueDetailDto {
   relatesTo: RelationshipLinkDto[];
   duplicates: RelationshipLinkDto[];
   clones: RelationshipLinkDto[];
+  /** See {@link RelationshipLinkGroups.supersedes} (MOTIR-6580). */
+  supersedes: RelationshipLinkDto[];
+  /** See {@link RelationshipLinkGroups.supersededBy} (MOTIR-6580). */
+  supersededBy: RelationshipLinkDto[];
   readiness: ReadinessVerdictDto;
   /**
    * A CHOICE'S BODY, parsed (Story MOTIR-4914 · MOTIR-5891) — the options, or the

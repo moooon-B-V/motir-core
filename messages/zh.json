@@ -579,7 +579,9 @@
       "blocks": "阻塞",
       "relates_to": "关联",
       "duplicates": "重复",
-      "clones": "克隆"
+      "clones": "克隆",
+      "supersedes": "取代",
+      "superseded_by": "被取代"
     },
     "role": {
       "owner": "所有者",
@@ -1644,7 +1646,8 @@
       "is_blocked_by": "被阻塞",
       "relates_to": "关联",
       "duplicates": "重复",
-      "clones": "克隆"
+      "clones": "克隆",
+      "supersedes": "取代"
     }
   },
   "attachments": {

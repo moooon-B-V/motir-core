@@ -47,7 +47,15 @@ const WORK_ITEM_DETAIL = {
   folderPath: null,
   ancestorKeys: ['MOTIR-2'],
   children: [],
-  links: { blockedBy: [], blocks: [], relatesTo: [], duplicates: [], clones: [] },
+  links: {
+    blockedBy: [],
+    blocks: [],
+    relatesTo: [],
+    duplicates: [],
+    clones: [],
+    supersedes: [],
+    supersededBy: [],
+  },
   readiness: {
     ready: true,
     openBlockers: [],

@@ -96,6 +96,7 @@ const LINK_KIND_KEYS: Record<string, string> = {
   relates_to: 'relates_to',
   duplicates: 'duplicates',
   clones: 'clones',
+  supersedes: 'supersedes',
 };
 
 export function ActivityEntryRow({

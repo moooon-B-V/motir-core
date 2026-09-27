@@ -126,7 +126,7 @@ export interface paths {
         };
         /**
          * Read a work item’s relationship edges
-         * @description All five edge groups. An empty group is `[]`, never an absent key — to a typed client those are different things.
+         * @description All seven edge groups. An empty group is `[]`, never an absent key — to a typed client those are different things. `supersedes` lists the older work items this one replaces; `supersededBy` the newer ones that replace it.
          *
          *     Requires the `project:browse` permission.
          */
@@ -134,7 +134,7 @@ export interface paths {
         put?: never;
         /**
          * Create a relationship edge
-         * @description Link this work item to another by key. Creating an edge that already exists is a 409 — the body is valid, the state is not what the request assumed.
+         * @description Link this work item to another by key. Creating an edge that already exists is a 409 — the body is valid, the state is not what the request assumed. `supersedes` records that this (newer) work item replaces `toKey`; `superseded_by` writes the same edge from the older end. Neither gates readiness — only `blocked_by` / `blocks` do.
          *
          *     Requires the `work_item:edit` permission.
          */
@@ -1341,6 +1341,34 @@ export interface components {
                     parentKey: string | null;
                     archived: boolean;
                 }[];
+                supersedes: {
+                    key: string;
+                    /** @enum {string} */
+                    kind: "epic" | "story" | "task" | "subtask" | "bug";
+                    title: string;
+                    status: string;
+                    /** @enum {string} */
+                    priority: "lowest" | "low" | "medium" | "high" | "highest";
+                    assigneeId: string | null;
+                    estimateMinutes: number | null;
+                    storyPoints: number | null;
+                    parentKey: string | null;
+                    archived: boolean;
+                }[];
+                supersededBy: {
+                    key: string;
+                    /** @enum {string} */
+                    kind: "epic" | "story" | "task" | "subtask" | "bug";
+                    title: string;
+                    status: string;
+                    /** @enum {string} */
+                    priority: "lowest" | "low" | "medium" | "high" | "highest";
+                    assigneeId: string | null;
+                    estimateMinutes: number | null;
+                    storyPoints: number | null;
+                    parentKey: string | null;
+                    archived: boolean;
+                }[];
             };
             readiness: {
                 ready: boolean;
@@ -1464,6 +1492,34 @@ export interface components {
                 archived: boolean;
             }[];
             clones: {
+                key: string;
+                /** @enum {string} */
+                kind: "epic" | "story" | "task" | "subtask" | "bug";
+                title: string;
+                status: string;
+                /** @enum {string} */
+                priority: "lowest" | "low" | "medium" | "high" | "highest";
+                assigneeId: string | null;
+                estimateMinutes: number | null;
+                storyPoints: number | null;
+                parentKey: string | null;
+                archived: boolean;
+            }[];
+            supersedes: {
+                key: string;
+                /** @enum {string} */
+                kind: "epic" | "story" | "task" | "subtask" | "bug";
+                title: string;
+                status: string;
+                /** @enum {string} */
+                priority: "lowest" | "low" | "medium" | "high" | "highest";
+                assigneeId: string | null;
+                estimateMinutes: number | null;
+                storyPoints: number | null;
+                parentKey: string | null;
+                archived: boolean;
+            }[];
+            supersededBy: {
                 key: string;
                 /** @enum {string} */
                 kind: "epic" | "story" | "task" | "subtask" | "bug";
@@ -3468,7 +3524,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The five edge groups. */
+            /** @description The seven edge groups. */
             200: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -3600,7 +3656,7 @@ export interface operations {
                 "application/json": {
                     toKey: string;
                     /** @enum {string} */
-                    relationship: "blocked_by" | "blocks" | "relates_to" | "duplicates" | "clones";
+                    relationship: "blocked_by" | "blocks" | "relates_to" | "duplicates" | "clones" | "supersedes" | "superseded_by";
                 };
             };
         };
@@ -3624,7 +3680,7 @@ export interface operations {
                     "application/json": {
                         toKey: string;
                         /** @enum {string} */
-                        relationship: "blocked_by" | "blocks" | "relates_to" | "duplicates" | "clones";
+                        relationship: "blocked_by" | "blocks" | "relates_to" | "duplicates" | "clones" | "supersedes" | "superseded_by";
                     };
                 };
             };
@@ -3769,7 +3825,7 @@ export interface operations {
                 /** @description The other endpoint’s key. */
                 toKey: string;
                 /** @description The relationship to remove. */
-                relationship: "blocked_by" | "blocks" | "relates_to" | "duplicates" | "clones";
+                relationship: "blocked_by" | "blocks" | "relates_to" | "duplicates" | "clones" | "supersedes" | "superseded_by";
             };
             header?: never;
             path: {

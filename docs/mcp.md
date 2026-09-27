@@ -816,7 +816,11 @@ shape the detail page reads.
 
 **Output** — `structuredContent`: the `IssueDetailDto` aggregate: the item
 (description, status, priority, assignee, …), its parent, children, dependency
-links, and a readiness verdict. The **item** additionally carries
+links, and a readiness verdict. The link groups are `blockedBy`, `blocks`,
+`relatesTo`, `duplicates`, `clones`, **`supersedes`** (the older items this one
+replaces) and **`supersededBy`** (the newer items that replace it) — each an
+array of `{ linkId, item }`, `[]` when empty. The text block prints
+`Supersedes: …` / `Superseded by: …` lines when either group is non-empty. The **item** additionally carries
 [`commentCount`](#the-commentcount-field) — how much discussion this card has,
 so the [`get_work_item_activity`](#get_work_item_activity) round-trip is only
 paid when there is something to read. The child rows do **not** carry it: this
@@ -2021,17 +2025,28 @@ and one `CLI_TOKEN_GRANT` already carries. The grant is **not** widened.
 
 Create a relationship between two work items — the primitive for the **dependency
 edges** the plan is built on. The `relationship` is read `fromKey <relationship>
-toKey` and uses the same five UI relationship kinds as the relationships panel
-(`blocked_by` / `blocks` / `relates_to` / `duplicates` / `clones`); `blocks` is
-the inverse direction of `blocked_by`, both stored as the single `is_blocked_by`
+toKey` and is one of seven relationships (`blocked_by` / `blocks` / `relates_to`
+/ `duplicates` / `clones` / `supersedes` / `superseded_by`); `blocks` is the
+inverse direction of `blocked_by`, both stored as the single `is_blocked_by`
 edge. An `is_blocked_by` link removes the blocked item from the ready set
 (`list_ready` / `next_ready` honor it) and renders the inverse edge on the other
 item. Targets may live in **another project in the same workspace**.
 
+**`supersedes` / `superseded_by`** (MOTIR-6580) record that one work item
+REPLACES another. `A supersedes B` means A is the NEWER item and B the OLDER one
+it replaces; `B superseded_by A` writes the very same stored row
+(`from` = A, `to` = B, kind `supersedes`) from the older end. It is directed with
+no reciprocal row, and it **gates nothing** — readiness, the ready set and the
+claim doors read `is_blocked_by` alone, and there is no cycle guard on it. The
+older item's own mark (`outdated` / `deprecated`) is a separate field; this edge
+says which item took over. `get_work_item` lists the edge under `supersedes` on
+the newer item and under `supersededBy` on the older one.
+
 Re-creating an existing link is **idempotent** (a success no-op, not an error). A
-**self** link, a dependency **cycle** (`is_blocked_by` only), or a
-**cross-workspace** link returns a typed error naming the violation. The link is
-an edit of the FROM item, so the same Story-6.4 edit gate as the UI applies.
+**self** link (any relationship), a dependency **cycle** (`is_blocked_by` only),
+or a **cross-workspace** link returns a typed error naming the violation. The
+link is an edit of the FROM item, so the same Story-6.4 edit gate as the UI
+applies.
 
 **A dependency SHOULD join two items on the SAME LEVEL** (Story MOTIR-6015 ·
 MOTIR-6369). The level is **position, not kind** (MOTIR-6387,
@@ -2055,11 +2070,11 @@ until somebody re-wires it to the same-level item really waited on. Only the pla
 gate refuses one (`INVALID_PLAN_REF_GRAPH` / `cross_level`): a planner may not
 author it. `relates_to`, `duplicates` and `clones` are never judged.
 
-| Input          | Type                                                                   | Required | Notes                                                     |
-| -------------- | ---------------------------------------------------------------------- | -------- | --------------------------------------------------------- |
-| `fromKey`      | string                                                                 | yes      | The first item's identifier, e.g. `"ACME-3"`.             |
-| `toKey`        | string                                                                 | yes      | The second item's identifier (may be in another project). |
-| `relationship` | `"blocked_by" \| "blocks" \| "relates_to" \| "duplicates" \| "clones"` | yes      | Read `fromKey <relationship> toKey`.                      |
+| Input          | Type                                                                                                      | Required | Notes                                                     |
+| -------------- | --------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------- |
+| `fromKey`      | string                                                                                                    | yes      | The first item's identifier, e.g. `"ACME-3"`.             |
+| `toKey`        | string                                                                                                    | yes      | The second item's identifier (may be in another project). |
+| `relationship` | `"blocked_by" \| "blocks" \| "relates_to" \| "duplicates" \| "clones" \| "supersedes" \| "superseded_by"` | yes      | Read `fromKey <relationship> toKey`.                      |
 
 **Output** — `structuredContent`: the created `WorkItemLinkDto` (plus the
 `relationship`). For an idempotent no-op, `{ idempotent: true, relationship }`.
@@ -2068,13 +2083,16 @@ author it. `relates_to`, `duplicates` and `clones` are never judged.
 
 Remove a relationship between two work items, addressed by the same `fromKey` +
 `toKey` + `relationship` used to create it. **Idempotent** — removing a link that
-is already absent succeeds as a no-op. Same edit gate as the UI link path.
+is already absent succeeds as a no-op. Same edit gate as the UI link path. Either
+direction of a directed pair names the same row: `A supersedes B` and
+`B superseded_by A` both remove the one `supersedes` edge (likewise
+`blocked_by` / `blocks`).
 
-| Input          | Type                                                                   | Required | Notes                         |
-| -------------- | ---------------------------------------------------------------------- | -------- | ----------------------------- |
-| `fromKey`      | string                                                                 | yes      | The first item's identifier.  |
-| `toKey`        | string                                                                 | yes      | The second item's identifier. |
-| `relationship` | `"blocked_by" \| "blocks" \| "relates_to" \| "duplicates" \| "clones"` | yes      | The relationship to remove.   |
+| Input          | Type                                                                                                      | Required | Notes                         |
+| -------------- | --------------------------------------------------------------------------------------------------------- | -------- | ----------------------------- |
+| `fromKey`      | string                                                                                                    | yes      | The first item's identifier.  |
+| `toKey`        | string                                                                                                    | yes      | The second item's identifier. |
+| `relationship` | `"blocked_by" \| "blocks" \| "relates_to" \| "duplicates" \| "clones" \| "supersedes" \| "superseded_by"` | yes      | The relationship to remove.   |
 
 **Output** — `structuredContent`: `{ removed: boolean, relationship }` — `removed`
 is `false` when no such link existed (the idempotent no-op).

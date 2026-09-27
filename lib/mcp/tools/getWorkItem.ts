@@ -92,6 +92,14 @@ function summarize(
           .map((b) => b.identifier)
           .join(', ')}`,
   );
+  // The SUPERSEDES pair (MOTIR-6580): which items this one replaces, and which
+  // replace it — printed only when present, so an ordinary card reads as before.
+  if (detail.supersedes.length > 0) {
+    lines.push(`Supersedes: ${detail.supersedes.map((l) => l.item.identifier).join(', ')}`);
+  }
+  if (detail.supersededBy.length > 0) {
+    lines.push(`Superseded by: ${detail.supersededBy.map((l) => l.item.identifier).join(', ')}`);
+  }
   if (it.descriptionMd) {
     lines.push('', it.descriptionMd);
   }
@@ -246,7 +254,10 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
       description:
         'Read a single work item by its identifier (e.g. "ACME-7"): full detail including ' +
         'description, status, priority, assignee, parent/children, dependency links, and a ' +
-        'readiness verdict. Honors the same access checks as the UI. The payload declares the ' +
+        'readiness verdict. The link groups include `supersedes` (the older items this one ' +
+        'replaces) and `supersededBy` (the newer items that replace it), beside `blockedBy` / ' +
+        '`blocks` / `relatesTo` / `duplicates` / `clones`. Honors the same access checks as the ' +
+        'UI. The payload declares the ' +
         "item's OWN folder placement as `folderId` + `folderPath` (names root-first) — both null " +
         'for an unfiled item, and for a child of a filed item, whose ancestry travels as keys. ' +
         CHILD_EDGE_BLOCK_DESCRIPTION +

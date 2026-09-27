@@ -3126,6 +3126,14 @@ enum WorkItemLinkKind {
   relates_to
   duplicates
   clones
+  // `from` SUPERSEDES `to` (Story MOTIR-6574 · MOTIR-6580): `from` is the NEWER
+  // work item, `to` the OLDER one it replaces. Directed, with NO reciprocal row
+  // (the inverse `superseded_by` is read off the `to` end, the way `blocks` is
+  // read off `is_blocked_by`). Descriptive only — it gates nothing: readiness,
+  // the ready set and the cycle trigger read `is_blocked_by` alone. The MARK
+  // itself lives on the older item's own `obsolescence` column; this edge says
+  // WHICH item took over.
+  supersedes
 
   @@map("work_item_link_kind")
 }

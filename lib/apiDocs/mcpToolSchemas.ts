@@ -1220,9 +1220,17 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       toKey: { $ref: '#/properties/fromKey' },
       relationship: {
         type: 'string',
-        enum: ['blocked_by', 'blocks', 'relates_to', 'duplicates', 'clones'],
+        enum: [
+          'blocked_by',
+          'blocks',
+          'relates_to',
+          'duplicates',
+          'clones',
+          'supersedes',
+          'superseded_by',
+        ],
         description:
-          'The relationship FROM the first item TO the second, read "fromKey <relationship> toKey": "blocked_by" (fromKey is blocked by toKey — the dependency edge that holds fromKey out of the ready set), "blocks" (the inverse — fromKey blocks toKey), "relates_to", "duplicates", or "clones".',
+          'The relationship FROM the first item TO the second, read "fromKey <relationship> toKey": "blocked_by" (fromKey is blocked by toKey — the dependency edge that holds fromKey out of the ready set), "blocks" (the inverse — fromKey blocks toKey), "relates_to", "duplicates", "clones", "supersedes" (fromKey is the NEWER work item that replaces toKey), or "superseded_by" (the inverse — fromKey is the OLDER item, replaced by toKey). The supersedes pair is one stored edge read from either end; it gates nothing.',
       },
     },
     required: ['fromKey', 'toKey', 'relationship'],
@@ -2141,9 +2149,17 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       toKey: { $ref: '#/properties/fromKey' },
       relationship: {
         type: 'string',
-        enum: ['blocked_by', 'blocks', 'relates_to', 'duplicates', 'clones'],
+        enum: [
+          'blocked_by',
+          'blocks',
+          'relates_to',
+          'duplicates',
+          'clones',
+          'supersedes',
+          'superseded_by',
+        ],
         description:
-          'The relationship FROM the first item TO the second, read "fromKey <relationship> toKey": "blocked_by" (fromKey is blocked by toKey — the dependency edge that holds fromKey out of the ready set), "blocks" (the inverse — fromKey blocks toKey), "relates_to", "duplicates", or "clones".',
+          'The relationship FROM the first item TO the second, read "fromKey <relationship> toKey": "blocked_by" (fromKey is blocked by toKey — the dependency edge that holds fromKey out of the ready set), "blocks" (the inverse — fromKey blocks toKey), "relates_to", "duplicates", "clones", "supersedes" (fromKey is the NEWER work item that replaces toKey), or "superseded_by" (the inverse — fromKey is the OLDER item, replaced by toKey). The supersedes pair is one stored edge read from either end; it gates nothing.',
       },
     },
     required: ['fromKey', 'toKey', 'relationship'],
