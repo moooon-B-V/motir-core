@@ -357,8 +357,10 @@ describe('a run that DIED (MOTIR-6534 · design `design/runs` § Run died, Panel
     const line = screen.getByTestId('run-died-line');
     expect(line.textContent).toMatch(/This run died — last heard from .+ ago/);
     expect(line.textContent).toContain('continue it from Development below');
-    // The pill reads the liveness rule, not the row's stale status.
-    expect(screen.getByText('Run died')).toBeTruthy();
+    // The pills read the liveness rule, not the row's stale status — the header's
+    // and the history row's alike.
+    expect(screen.getAllByText('Run died')).toHaveLength(2);
+    expect(screen.queryByText('Running')).toBeNull();
     // A dead run gets no stream: nothing is writing to it.
     await Promise.resolve();
     expect(streamCalls()).toEqual([]);

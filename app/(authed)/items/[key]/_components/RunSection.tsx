@@ -334,9 +334,15 @@ export function RunSection({
               key={run.id}
               className="flex min-w-0 items-center gap-2 border-t border-(--el-border-soft) py-(--spacing-control-y) first:border-t-0"
             >
-              <RunTonePill tone={RUN_STATUS_TONE[run.status]}>
-                {t(`runStatus.${run.status}`)}
-              </RunTonePill>
+              {/* A row still reading `running` whose run is not alive says so, as the
+                  header pill does — the list never contradicts it. */}
+              {run.status === 'running' && !isRunAlive(run, new Date(mountedAt)) ? (
+                <RunTonePill tone="timedout">{t('runStatus.died')}</RunTonePill>
+              ) : (
+                <RunTonePill tone={RUN_STATUS_TONE[run.status]}>
+                  {t(`runStatus.${run.status}`)}
+                </RunTonePill>
+              )}
               <Link className="min-w-0 truncate text-(--el-link) underline" href={runHref(run.id)}>
                 {t(`command.${run.command}`)}
               </Link>

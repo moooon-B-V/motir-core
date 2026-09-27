@@ -57,13 +57,23 @@ function When({ iso, now }: { iso: string; now: number }) {
 }
 
 /** The part's frame — § 21's `Part`: a soft rule, an `h4`, and a pill beside it. */
-function Frame({ pill, children }: { pill?: ReactNode; children: ReactNode }) {
+function Frame({
+  state,
+  pill,
+  children,
+}: {
+  /** What the part is showing — `data-state`, the signal a spec waits on (as § 21's part). */
+  state: string;
+  pill?: ReactNode;
+  children: ReactNode;
+}) {
   const t = useTranslations('github.development.continue');
   return (
     <div
       role="group"
       aria-label={t('aria.part')}
       data-testid="continue-part"
+      data-state={state}
       className="mt-4 flex min-w-0 flex-col gap-2 border-t border-(--el-border-soft) pt-4"
     >
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -114,7 +124,7 @@ function DiedPill() {
 export function ContinuePartSkeleton() {
   const t = useTranslations('github.development.continue');
   return (
-    <Frame>
+    <Frame state="loading">
       <div role="status" aria-label={t('loading')} className="flex flex-col gap-2">
         <div className="h-3 w-[70%] rounded-(--radius-pill) bg-(--el-muted)" />
         <div className="h-3 w-[45%] rounded-(--radius-pill) bg-(--el-muted)" />
@@ -151,7 +161,7 @@ export function ContinuePart({
 
   if (view.state === 'error') {
     return (
-      <Frame>
+      <Frame state="error">
         <Line
           icon={<CircleX className={`${iconClass} text-(--el-danger-on-surface)`} aria-hidden />}
         >
@@ -169,6 +179,7 @@ export function ContinuePart({
   if (view.state === 'continuing') {
     return (
       <Frame
+        state="continuing"
         pill={
           <Pill status="in-progress">
             <CircleEllipsis className="h-3 w-3" aria-hidden />
@@ -209,7 +220,7 @@ export function ContinuePart({
 
   if (refusal === 'use_fix') {
     return (
-      <Frame pill={<DiedPill />}>
+      <Frame state="use_fix" pill={<DiedPill />}>
         <Line icon={<TriangleAlert className={iconClass} aria-hidden />}>
           {t.rich('implemented.line', { when: when(deadRun.lastHeardAt) })}
         </Line>
@@ -224,7 +235,7 @@ export function ContinuePart({
   if (refusal === 'continue_the_parent' && view.parentKey) {
     const parentKey = view.parentKey;
     return (
-      <Frame pill={<DiedPill />}>
+      <Frame state="continue_the_parent" pill={<DiedPill />}>
         <Line icon={<TriangleAlert className={iconClass} aria-hidden />}>
           {t.rich('child.line', { when: when(deadRun.lastHeardAt) })}
         </Line>
@@ -262,7 +273,10 @@ export function ContinuePart({
       });
 
   return (
-    <Frame pill={<DiedPill />}>
+    <Frame
+      state={refusal === null && view.branch !== null ? 'died' : 'no_branch'}
+      pill={<DiedPill />}
+    >
       <Line icon={<TriangleAlert className={iconClass} aria-hidden />}>
         {t.rich(`reason.${view.reason}`, { when: when(deadRun.lastHeardAt) })}
       </Line>
