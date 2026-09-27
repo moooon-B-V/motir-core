@@ -248,7 +248,10 @@ export const estimationService = {
   async sprintBoardPoints(
     sprintId: string,
     columns: Array<{ id: string; statusKeys: string[] }>,
-    ctx: ServiceContext,
+    // Only the workspace is read — a Visitor's board passes its project's.
+    ctx: Pick<ServiceContext, 'workspaceId'>,
+    // A Visitor's private-epic exclusion (MOTIR-6644): the sums count visible items.
+    excludeIds?: readonly string[],
   ): Promise<{ points: SprintPointsDto; columnPoints: Record<string, number> }> {
     const { committed, completed, perStatus } = await withWorkspaceServiceContext(
       ctx.workspaceId,
@@ -261,6 +264,7 @@ export const estimationService = {
           ctx.workspaceId,
           statistic,
           tx,
+          excludeIds,
         );
         return {
           ...sums,
@@ -269,6 +273,7 @@ export const estimationService = {
             ctx.workspaceId,
             statistic,
             tx,
+            excludeIds,
           ),
         };
       },

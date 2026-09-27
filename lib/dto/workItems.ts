@@ -682,6 +682,8 @@ export interface ProjectTreeFilter {
  * (`hasChildren === children.length > 0`).
  */
 export interface WorkItemTreeNodeDto {
+  /** See {@link WorkItemListItemDto.childrenHidden} — a Visitor's private epic. */
+  childrenHidden?: true;
   id: string;
   parentId: string | null;
   kind: WorkItemKindDto;
@@ -789,6 +791,9 @@ export interface RoadmapProgressDto {
  * status, independent of its meter).
  */
 export interface RoadmapNodeDto {
+  /** A Visitor's PRIVATE epic (MOTIR-6644, `epic-privacy.md` §4): its level is
+   *  withheld, so it has no drill and no progress. Absent on every member read. */
+  childrenHidden?: true;
   id: string;
   parentId: string | null;
   kind: WorkItemKindDto;
@@ -1009,6 +1014,10 @@ export interface WorkItemListItemDto {
   /** The agile STORY-POINT estimate (Story 4.3.4) — rendered by the inline
    *  `EstimateBadge` in the List view's Points column. */
   storyPoints: number | null;
+  /** A PRIVATE epic's row as a Visitor reads it (MOTIR-6644, `epic-privacy.md`
+   *  §4): its children are withheld and its sizing nulled. Absent on every
+   *  member read and on every other row. */
+  childrenHidden?: true;
   /** ISO-8601 last-modified stamp — the `expectedUpdatedAt` an inline edit
    *  (Subtask 2.5.5) submits for optimistic concurrency on `updateIssueAction`.
    *  `WorkItemTreeRowDto` inherits it for the lazy Tree's inline edits. */

@@ -52,6 +52,8 @@ import type {
 } from '@/lib/dto/boards';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { VisitorReadContext } from '@/lib/visitor/context';
+import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
 import {
   ApprovalGatePendingBoardMoveError,
   PlanTargetHeldBoardMoveError,
@@ -231,19 +233,30 @@ export const boardsService = {
    */
   async getBoard(
     projectId: string,
-    ctx: ServiceContext,
+    ctx: ServiceContext | VisitorReadContext,
     boardId?: string,
     filter?: BoardFilterInput,
   ): Promise<BoardProjectionDto> {
     // Project access gate (6.4.3): the board projection is a read of the
     // project — a non-browser (a non-member of a private project) gets a 404,
     // never the board. Runs first so a hidden project never leaks its board.
-    await projectAccessService.assertCanBrowse(projectId, ctx);
+    // A VISITOR (MOTIR-6644) is gated to their one public project and reads every
+    // column, count and lane with the private-epic descendants withheld; a
+    // member's read carries no exclusion, byte for byte as before.
+    const member = isVisitorContext(ctx) ? null : ctx;
+    const excludeIds = member
+      ? undefined
+      : openVisitorRead(projectId, ctx as VisitorReadContext).excludeIds;
+    if (member) await projectAccessService.assertCanBrowse(projectId, member);
+    // Every read below binds the PROJECT's workspace and nothing about the actor.
+    const readCtx = {
+      workspaceId: member ? member.workspaceId : (ctx as VisitorReadContext).project.workspaceId,
+    };
 
-    const board = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    const board = await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
       boardId
-        ? boardRepository.findById(boardId, ctx.workspaceId, tx)
-        : boardRepository.findDefaultForProject(projectId, ctx.workspaceId, tx),
+        ? boardRepository.findById(boardId, readCtx.workspaceId, tx)
+        : boardRepository.findDefaultForProject(projectId, readCtx.workspaceId, tx),
     );
     // A selected board must live in the active project (the workspace gate is
     // already in the repo read); the default lookup is project-scoped by query.
@@ -258,19 +271,24 @@ export const boardsService = {
     // which case every read below is byte-for-byte the unfiltered projection.
     // Resolved before the scrum no-sprint early return so an invalid filter is
     // rejected consistently regardless of the board's sprint state.
-    const boardFilter = await resolveBoardFilter(projectId, filter, ctx);
+    // A saved filter is its owner's; a Visitor's board takes an inline filter only.
+    const boardFilter = member
+      ? await resolveBoardFilter(projectId, filter, member)
+      : filter && !filter.savedFilterId
+        ? await resolveBoardFilter(projectId, filter, readCtx)
+        : undefined;
 
     // The board's own two reads share ONE bound transaction; the workflow LIST is
     // a service call and opens its own (the call-into-another-service clause in
     // the transaction-shape ADR).
     const { columns, mappings } = await withWorkspaceServiceContext(
-      ctx.workspaceId,
+      readCtx.workspaceId,
       async (tx) => ({
-        columns: await boardColumnRepository.findByBoard(board.id, ctx.workspaceId, tx),
-        mappings: await boardColumnStatusRepository.findByBoard(board.id, ctx.workspaceId, tx),
+        columns: await boardColumnRepository.findByBoard(board.id, readCtx.workspaceId, tx),
+        mappings: await boardColumnStatusRepository.findByBoard(board.id, readCtx.workspaceId, tx),
       }),
     );
-    const statuses = await workflowsService.listStatusesByProject(projectId, ctx.workspaceId);
+    const statuses = await workflowsService.listStatusesByProject(projectId, readCtx.workspaceId);
 
     const statusById = new Map(statuses.map((s) => [s.id, s]));
     const terminalKeys = terminalKeySet(statuses);
@@ -307,8 +325,8 @@ export const boardsService = {
     // below is byte-for-byte the 3.1.4 projection.
     const activeSprint =
       board.type === BoardType.scrum
-        ? await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-            sprintRepository.findActiveByProject(projectId, ctx.workspaceId, tx),
+        ? await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
+            sprintRepository.findActiveByProject(projectId, readCtx.workspaceId, tx),
           )
         : null;
 
@@ -373,9 +391,10 @@ export const boardsService = {
           terminal,
           doneSince,
           cap,
-          ctx,
+          readCtx,
           sprintScopeId,
           boardFilter,
+          excludeIds,
         );
       }),
     );
@@ -385,7 +404,7 @@ export const boardsService = {
     const allRows = built.flatMap((b) => b.rows);
     const readyById = await workItemsService.getReadinessForItems(
       allRows.map((r) => r.id),
-      ctx,
+      readCtx,
     );
 
     // The decision-waiting marker (Story MOTIR-4908 · MOTIR-5876): which cards have
@@ -394,17 +413,25 @@ export const boardsService = {
     // REPLACED the "Awaiting acceptance" batch (MOTIR-1636, retired by MOTIR-5877):
     // every pending receipt raises an `acceptance_result` gate, so this read already
     // knows it, and the board's query count is what it was before the marker.
-    const pendingById = await approvalGatesService.pendingDecisionsFor(
-      { projectId, workItemIds: allRows.map((r) => r.id) },
-      ctx,
-    );
+    // A Visitor decides nothing, so no card is waiting on them — the marker
+    // names the reader's own gates, and a Visitor has none.
+    const pendingById: Awaited<ReturnType<typeof approvalGatesService.pendingDecisionsFor>> = member
+      ? await approvalGatesService.pendingDecisionsFor(
+          { projectId, workItemIds: allRows.map((r) => r.id) },
+          member,
+        )
+      : new Map();
 
     // The PLAN HOLD, up front (Story MOTIR-6017 · MOTIR-6268): which loaded cards an
     // undecided plan holds at Planning, and per holding plan its label and held
     // count. ONE batched lease read over the `planning` cards only (no read at all
     // when the board holds none), through the same `planHoldFor` the move's refusal
     // applies — the board draws the hold before anyone drags.
-    const planHoldRead = await planTargetLockService.readBoardPlanHolds(projectId, allRows, ctx);
+    const planHoldRead = await planTargetLockService.readBoardPlanHolds(
+      projectId,
+      allRows,
+      readCtx,
+    );
     const planHolds: Record<string, BoardPlanHoldSummaryDto> = {};
     for (const [planId, plan] of planHoldRead.plans) {
       planHolds[planId] = {
@@ -429,13 +456,21 @@ export const boardsService = {
     // The board read is already gated, and all three arms are bounded reads
     // over a row set resolved above — none of them refuses.
     const [swimlaneKeyByCard, swimlanes, boardTotal] = await Promise.all([
-      resolveSwimlaneKeys(groupBy, allRows, ctx),
-      buildSwimlanes(groupBy, projectId, boardStatusKeys, ctx, sprintScopeId, boardFilter),
+      resolveSwimlaneKeys(groupBy, allRows, readCtx),
+      buildSwimlanes(
+        groupBy,
+        projectId,
+        boardStatusKeys,
+        readCtx,
+        sprintScopeId,
+        boardFilter,
+        excludeIds,
+      ),
       boardStatusKeys.length
-        ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        ? withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
             workItemRepository.countProjectIssues(
               projectId,
-              ctx.workspaceId,
+              readCtx.workspaceId,
               {
                 statuses: boardStatusKeys,
                 ...(sprintScopeId ? { sprintId: sprintScopeId } : {}),
@@ -444,6 +479,7 @@ export const boardsService = {
                 ...(boardFilter
                   ? { ast: boardFilter.ast, filterReferents: boardFilter.referents }
                   : {}),
+                ...(excludeIds ? { excludeIds } : {}),
               },
               tx,
             ),
@@ -460,7 +496,8 @@ export const boardsService = {
       const { points, columnPoints } = await estimationService.sprintBoardPoints(
         activeSprint.id,
         built.map((b) => ({ id: b.col.id, statusKeys: b.statusKeys })),
-        ctx,
+        readCtx,
+        excludeIds,
       );
       sprint = toSprintSummaryDto(activeSprint, points, columnPoints, new Date());
     }
@@ -1558,12 +1595,16 @@ type ResolvedBoardFilter = { ast: FilterAst; referents?: ProjectFilterReferents 
 async function resolveBoardFilter(
   projectId: string,
   filter: BoardFilterInput | undefined,
-  ctx: ServiceContext,
+  // A member's context, or — for a Visitor's inline filter (MOTIR-6644), which
+  // never carries a saved filter — only the project's workspace.
+  ctx: ServiceContext | Pick<ServiceContext, 'workspaceId'>,
 ): Promise<ResolvedBoardFilter | undefined> {
   if (!filter) return undefined;
 
   let ast: FilterAst | undefined;
   if (filter.savedFilterId) {
+    /* istanbul ignore next -- defensive: `getBoard` resolves a saved filter for a member only */
+    if (!('userId' in ctx)) return undefined;
     // Saved filters resolve by the project's IDENTIFIER (the `PROD`-style key),
     // not its id — `getBoard` already browse-gated the project, so this read is
     // for the key only.
@@ -1610,9 +1651,11 @@ async function buildColumnCards(
   terminal: boolean,
   doneSince: Date,
   cap: number,
-  ctx: ServiceContext,
+  ctx: Pick<ServiceContext, 'workspaceId'>,
   sprintId?: string,
   filter?: ResolvedBoardFilter,
+  // A Visitor's private-epic exclusion (MOTIR-6644) — the count AND the cards.
+  excludeIds?: readonly string[],
 ): Promise<{
   col: BoardColumn;
   statusKeys: string[];
@@ -1637,6 +1680,7 @@ async function buildColumnCards(
         statuses: statusKeys,
         ...(sprintId ? { sprintId } : {}),
         ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
+        ...(excludeIds ? { excludeIds } : {}),
       },
       tx,
     ),
@@ -1650,6 +1694,7 @@ async function buildColumnCards(
         updatedSince: terminal ? doneSince : undefined,
         sprintId,
         ...(filter ? { ast: filter.ast, referents: filter.referents } : {}),
+        ...(excludeIds ? { excludeIds } : {}),
       },
       tx,
     ),
@@ -1697,7 +1742,7 @@ const PRIORITY_LANE_ORDER = ['highest', 'high', 'medium', 'low', 'lowest'];
 async function resolveSwimlaneKeys(
   groupBy: BoardSwimlaneGroupByDto,
   rows: WorkItem[],
-  ctx: ServiceContext,
+  ctx: Pick<ServiceContext, 'workspaceId'>,
 ): Promise<Map<string, string>> {
   const keyByCard = new Map<string, string>();
   if (groupBy === 'none' || rows.length === 0) return keyByCard;
@@ -1731,9 +1776,11 @@ async function buildSwimlanes(
   groupBy: BoardSwimlaneGroupByDto,
   projectId: string,
   statusKeys: string[],
-  ctx: ServiceContext,
+  ctx: Pick<ServiceContext, 'workspaceId'>,
   sprintId?: string,
   filter?: ResolvedBoardFilter,
+  // A Visitor's private-epic exclusion (MOTIR-6644): lanes count visible cards only.
+  excludeIds?: readonly string[],
 ): Promise<BoardSwimlaneDto[]> {
   if (groupBy === 'none' || statusKeys.length === 0) return [];
 
@@ -1741,7 +1788,13 @@ async function buildSwimlanes(
   // so a filtered, grouped board's lanes + counts reflect only matching cards
   // (a lane whose cards all fail the filter disappears). `undefined` → the
   // byte-for-byte unfiltered 3.3.4 aggregate.
-  const laneFilter = filter ? { ast: filter.ast, referents: filter.referents } : undefined;
+  const laneFilter =
+    filter || excludeIds
+      ? {
+          ...(filter ? { ast: filter.ast, referents: filter.referents } : {}),
+          ...(excludeIds ? { excludeIds } : {}),
+        }
+      : undefined;
 
   if (groupBy === 'assignee') {
     const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>

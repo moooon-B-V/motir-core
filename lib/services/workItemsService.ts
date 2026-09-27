@@ -110,6 +110,8 @@ import {
 } from '@/lib/workspaces/context';
 import { readMembership } from '@/lib/workspaces/membershipGate';
 import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
+import type { VisitorReadContext } from '@/lib/visitor/context';
+import { isVisitorContext, openVisitorRead, stripPrivateEpicTells } from '@/lib/visitor/readScope';
 import {
   CANCELLED_STATUS_KEY,
   MOTIR_SEED_BURST_END,
@@ -251,7 +253,9 @@ import type {
   WorkItemImplementationProvenanceInput,
   WorkItemRepositoryDto,
   WorkItemPlacementDto,
+  WorkItemTreeRowDto,
 } from '@/lib/dto/workItems';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import {
   buildProseVsGraphAdvisories,
   type ProseAdvisorySubject,
@@ -1082,7 +1086,13 @@ function repoFilterIsActive(f: RepoIssueFilter): boolean {
   );
 }
 
-function assembleProjectForest(rows: WorkItemForestRow[], prune: boolean): WorkItemTreeNodeDto[] {
+function assembleProjectForest(
+  rows: WorkItemForestRow[],
+  prune: boolean,
+  // A Visitor's forest (MOTIR-6644): a private epic's node is marked and its
+  // sizing nulled; its withheld children never reached `rows`.
+  visitor = false,
+): WorkItemTreeNodeDto[] {
   const childrenByParent = new Map<string, WorkItemForestRow[]>();
   const roots: WorkItemForestRow[] = [];
   for (const row of rows) {
@@ -1106,7 +1116,8 @@ function assembleProjectForest(rows: WorkItemForestRow[], prune: boolean): WorkI
     }
     // Ancestor retention: drop only an unmatched node with no surviving child.
     if (prune && !row.matched && children.length === 0) return null;
-    return toWorkItemTreeNodeDto(row, children);
+    const node = toWorkItemTreeNodeDto(row, children);
+    return visitor ? stripPrivateEpicTells(node, row.publicChildrenHidden) : node;
   };
 
   const forest: WorkItemTreeNodeDto[] = [];
@@ -1179,10 +1190,44 @@ function clampTreePage(params: { take?: number; offset?: number }): {
 
 /** Turn a `take + 1` fetch + the level's total into one level page: `hasMore`
  * iff the extra row came back, then map the first `take` rows to DTOs. */
-function buildTreeLevel(rows: WorkItemTreeRow[], take: number, total: number): TreeLevelDto {
+/**
+ * The gate of a COLLECTION read a Visitor can reach (Story MOTIR-6170 ·
+ * MOTIR-6644). A member's context runs the read's existing gate unchanged — the
+ * project must resolve in their workspace (`ProjectNotFoundError` otherwise, no
+ * existence leak), then `key` — and yields NO `excludeIds`, so the repository
+ * reads its "no clause" exactly as before (`epic-privacy.md` §5: members
+ * bypass). A Visitor's context is gated by {@link openVisitorRead} and yields the
+ * private-epic exclusion set (§3).
+ */
+async function openCollectionRead(
+  projectId: string,
+  ctx: ServiceContext | VisitorReadContext,
+  key: PermissionKey = 'project:browse',
+): Promise<{ workspaceId: string; excludeIds?: readonly string[]; visitor: boolean }> {
+  if (isVisitorContext(ctx)) return { ...openVisitorRead(projectId, ctx, key), visitor: true };
+  const project = await readProject(projectId, ctx);
+  if (!project || project.workspaceId !== ctx.workspaceId) {
+    throw new ProjectNotFoundError(projectId);
+  }
+  if (key === 'project:browse') await projectAccessService.assertCanBrowse(projectId, ctx);
+  else await projectAccessService.assertPermission(projectId, ctx, key);
+  return { workspaceId: project.workspaceId, visitor: false };
+}
+
+/** A lazy-tree row as a Visitor sees it — a private epic's tells stripped (§4). */
+function toVisitorTreeRowDto(row: WorkItemTreeRow): WorkItemTreeRowDto {
+  return stripPrivateEpicTells(toWorkItemTreeRowDto(row), row.publicChildrenHidden);
+}
+
+function buildTreeLevel(
+  rows: WorkItemTreeRow[],
+  take: number,
+  total: number,
+  visitor = false,
+): TreeLevelDto {
   const hasMore = rows.length > take;
   const page = hasMore ? rows.slice(0, take) : rows;
-  return { rows: page.map(toWorkItemTreeRowDto), hasMore, total };
+  return { rows: page.map(visitor ? toVisitorTreeRowDto : toWorkItemTreeRowDto), hasMore, total };
 }
 
 /** One BAND of a folder-holding level: its full count, and a reader for a page inside it. */
@@ -1241,6 +1286,8 @@ async function readFolderLevel(
   workspaceId: string,
   folderId: string | null,
   params: { sort: IssueSort; take?: number; offset?: number },
+  // A Visitor's private-epic exclusion (MOTIR-6644) — absent for a member.
+  excludeIds?: readonly string[],
 ): Promise<TreeLevelDto> {
   const { take, offset } = clampTreePage(params);
   return withWorkspaceServiceContext(workspaceId, async (tx) => {
@@ -1260,6 +1307,7 @@ async function readFolderLevel(
         tx,
         undefined,
         folderLevel,
+        excludeIds,
       ),
       read: async (page) =>
         (
@@ -1268,12 +1316,12 @@ async function readFolderLevel(
             workspaceId,
             null,
             params.sort,
-            page,
+            { ...page, excludeIds },
             null,
             tx,
             folderLevel,
           )
-        ).map(toWorkItemTreeRowDto),
+        ).map(excludeIds ? toVisitorTreeRowDto : toWorkItemTreeRowDto),
     });
     const folders = folderBand();
     const bands = await Promise.all(
@@ -1290,6 +1338,58 @@ async function readFolderLevel(
     const workItemTotal = total - (await folders).total;
     return { rows, hasMore: offset + rows.length < total, total, workItemTotal };
   });
+}
+
+/**
+ * One parent's children for a VISITOR's lazy tree (MOTIR-6644). The parent must
+ * be a live row of the Visitor's project and must not itself be withheld — a
+ * hidden parent is the same `WorkItemNotFoundError` a missing one is, so its
+ * id confirms nothing. A private epic's own level is EMPTY (its children are all
+ * in the hidden set), which is what `epic-privacy.md` §4 asks of the drill.
+ */
+async function listVisitorChildIssues(
+  parentId: string,
+  params: { sort: IssueSort; take?: number; offset?: number },
+  ctx: VisitorReadContext,
+): Promise<TreeLevelDto> {
+  const { workspaceId, excludeIds } = openVisitorRead(ctx.project.id, ctx);
+  const projectId = ctx.project.id;
+  const parent = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRepository.findById(parentId, tx),
+  );
+  if (
+    !parent ||
+    parent.projectId !== projectId ||
+    parent.archivedAt !== null ||
+    ctx.hiddenIds.has(parent.id)
+  ) {
+    throw new WorkItemNotFoundError(parentId);
+  }
+  const { take, offset } = clampTreePage(params);
+  const [rows, total] = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    Promise.all([
+      workItemRepository.findProjectTreeLevel(
+        projectId,
+        workspaceId,
+        parentId,
+        params.sort,
+        { take, offset, excludeIds },
+        null,
+        tx,
+      ),
+      workItemRepository.countProjectTreeLevel(
+        projectId,
+        workspaceId,
+        parentId,
+        null,
+        tx,
+        undefined,
+        undefined,
+        excludeIds,
+      ),
+    ]),
+  );
+  return buildTreeLevel(rows, take, total, true);
 }
 
 /**
@@ -4586,23 +4686,26 @@ export const workItemsService = {
   async getProjectTree(
     projectId: string,
     filter: ProjectTreeFilter,
-    ctx: ServiceContext,
+    ctx: ServiceContext | VisitorReadContext,
   ): Promise<WorkItemTreeNodeDto[]> {
-    const project = await readProject(projectId, ctx);
-    if (!project || project.workspaceId !== ctx.workspaceId) {
-      throw new ProjectNotFoundError(projectId);
-    }
-    await projectAccessService.assertCanBrowse(projectId, ctx);
+    // A Visitor's forest drops every private-epic descendant from the recursion
+    // (MOTIR-6644) and marks the epic's own node; a member's is unchanged.
+    const { workspaceId, excludeIds, visitor } = await openCollectionRead(projectId, ctx);
 
     const referents = filter.ast
-      ? await loadFilterReferents(projectId, project.workspaceId, filter.ast)
+      ? await loadFilterReferents(projectId, workspaceId, filter.ast)
       : undefined;
     const repoFilter = buildRepoFilter(filter, referents);
-    const rows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
-      workItemRepository.findProjectForest(projectId, project.workspaceId, repoFilter, tx),
+    const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      workItemRepository.findProjectForest(
+        projectId,
+        workspaceId,
+        excludeIds ? { ...repoFilter, excludeIds } : repoFilter,
+        tx,
+      ),
     );
 
-    return assembleProjectForest(rows, repoFilterIsActive(repoFilter));
+    return assembleProjectForest(rows, repoFilterIsActive(repoFilter), visitor);
   },
 
   /**
@@ -4632,7 +4735,7 @@ export const workItemsService = {
   async getProjectRoadmap(
     projectId: string,
     parentId: string | null,
-    ctx: ServiceContext,
+    ctx: ServiceContext | VisitorReadContext,
     opts: {
       scope?: 'project' | 'sprint';
       all?: boolean;
@@ -4658,16 +4761,18 @@ export const workItemsService = {
         'A roadmap level is one parent’s children or one folder’s contents — name only one.',
       );
     }
-    const project = await readProject(projectId, ctx);
-    if (!project || project.workspaceId !== ctx.workspaceId) {
-      throw new ProjectNotFoundError(projectId);
-    }
     // `report:view` (MOTIR-2351) — the roadmap is a project-scoped analytics
     // read, so it asks the reports key rather than the generic browse predicate.
     // The two admit the same actors by decision (`report:view` is browse-wide),
     // so nobody's access moves; what changes is that the inventory row can name
-    // the key this read actually asks for.
-    await projectAccessService.assertPermission(projectId, ctx, 'report:view');
+    // the key this read actually asks for. A Visitor holds it (the Viewer set)
+    // and reads the level with every private-epic descendant withheld
+    // (MOTIR-6644); a member's read carries no exclusion.
+    const opened = await openCollectionRead(projectId, ctx, 'report:view');
+    const project = { workspaceId: opened.workspaceId };
+    const { excludeIds } = opened;
+    // Everything below binds the PROJECT's workspace and nothing about the actor.
+    const readCtx = { workspaceId: opened.workspaceId };
 
     // Sprint scope (MOTIR-1381): when the caller asks for the active-sprint
     // slice, resolve the one active sprint (partial-unique `state = 'active'`).
@@ -4755,6 +4860,7 @@ export const workItemsService = {
             take,
             offset: 0,
             ...(ids !== undefined ? { ids } : {}),
+            excludeIds,
           },
           sprintId,
           tx,
@@ -4774,6 +4880,7 @@ export const workItemsService = {
           tx,
           ids,
           folderLevel,
+          excludeIds,
         ),
       ),
     ]);
@@ -4835,7 +4942,7 @@ export const workItemsService = {
     const startableKeys = new Set(statuses.filter((s) => s.category === 'todo').map((s) => s.key));
     const readyById = await workItemsService.getReadinessForItems(
       rows.map((r) => r.id),
-      ctx,
+      readCtx,
     );
     // SPRINT-membership flag (MOTIR-1379 follow-up): in sprint scope the root
     // level shows only in-sprint members, but drilling into a committed root
@@ -4852,25 +4959,33 @@ export const workItemsService = {
     // workflow status, and `implemented` / `planning` once they were added to the
     // default one — collapsed to `todo` and rendered as "To Do".
     const statusByKey = new Map(statuses.map((s) => [s.key, s]));
-    const nodes = rows.map((r) =>
-      toRoadmapNodeDto(
+    const nodes = rows.map((r) => {
+      const node = toRoadmapNodeDto(
         r,
         doneKeys.has(r.status),
         r.hasChildren ? (progressById.get(r.id) ?? { done: 0, total: 0, verified: 0 }) : null,
         startableKeys.has(r.status) && (readyById.get(r.id) ?? true),
         sprintId != null && r.sprintId === sprintId,
         statusByKey.get(r.status) ?? null,
-      ),
-    );
+      );
+      // A Visitor's private epic keeps its node, marked, with no drill (§4).
+      return opened.visitor && r.kind === 'epic' && r.publicChildrenHidden
+        ? { ...node, hasChildren: false, progress: null, childrenHidden: true as const }
+        : node;
+    });
 
     // The `is_blocked_by` edges FROM this level's items (the canvas draws the
     // within-level ones as arrows; an off-level blocker flags a cross-story dep).
-    const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    const allEdges = await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
       workItemLinkRepository.findBlockedByEdges(
         rows.map((r) => r.id),
         tx,
       ),
     );
+    // A Visitor never sees an edge to a withheld blocker — its stub would name a
+    // private epic's descendant (MOTIR-6644, `epic-privacy.md` §3).
+    const hidden = excludeIds ? new Set(excludeIds) : null;
+    const edges = hidden ? allEdges.filter((e) => !hidden.has(e.blockerId)) : allEdges;
 
     // A blocker NOT on this level needs a NAMING stub so the canvas can anchor the
     // signal to a chip (MOTIR-1331). The stub carries `isDone` + `inActiveSprint`
@@ -4881,7 +4996,7 @@ export const workItemsService = {
     const offLevelIds = [
       ...new Set(edges.map((e) => e.blockerId).filter((id) => !levelIds.has(id))),
     ];
-    const offLevelStubs = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    const offLevelStubs = await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
       workItemRepository.findRoadmapBlockerStubs(offLevelIds, tx),
     );
     // WHERE a FILED off-level blocker lives (Bug MOTIR-5710 · MOTIR-5739, design
@@ -4890,12 +5005,12 @@ export const workItemsService = {
     // reads for the whole level — the effective folders, then their paths — and
     // none at all when no blocker is off the level. Carried whether or not the
     // caller asked for folders: it is a fact about the blocker, true on every canvas.
-    const folderPathByStub = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+    const folderPathByStub = await withWorkspaceServiceContext(readCtx.workspaceId, async (tx) => {
       const effective = await workItemRepository.findEffectiveFolderIds(offLevelIds, tx);
       const folderIds = [
         ...new Set(effective.map((e) => e.folderId).filter((f): f is string => f !== null)),
       ];
-      const paths = await folderRepository.findPathsByIds(folderIds, ctx.workspaceId, tx);
+      const paths = await folderRepository.findPathsByIds(folderIds, readCtx.workspaceId, tx);
       const pathByFolder = new Map(paths.map((p) => [p.id, p.path]));
       return new Map(
         effective.map((e) => [e.id, e.folderId ? (pathByFolder.get(e.folderId) ?? null) : null]),
@@ -4992,7 +5107,7 @@ export const workItemsService = {
             new Set(offLevelBlockers.map((b) => b.id)),
             rows,
             offLevelStubs,
-            ctx,
+            readCtx,
           )
         : edges;
 
@@ -5046,18 +5161,18 @@ export const workItemsService = {
   async getProjectIssuesList(
     projectId: string,
     params: { sort: IssueSort; filter?: ProjectTreeFilter; page?: number; pageSize?: number },
-    ctx: ServiceContext,
+    ctx: ServiceContext | VisitorReadContext,
   ): Promise<PagedIssueListDto> {
-    const project = await readProject(projectId, ctx);
-    if (!project || project.workspaceId !== ctx.workspaceId) {
-      throw new ProjectNotFoundError(projectId);
-    }
-    await projectAccessService.assertCanBrowse(projectId, ctx);
+    // A Visitor's list — and its FilterAST search, which is this same read —
+    // never matches or counts a private-epic descendant (MOTIR-6644).
+    const opened = await openCollectionRead(projectId, ctx);
+    const project = { workspaceId: opened.workspaceId };
 
     const referents = params.filter?.ast
       ? await loadFilterReferents(projectId, project.workspaceId, params.filter.ast)
       : undefined;
-    const repoFilter = buildRepoFilter(params.filter ?? {}, referents);
+    const built = buildRepoFilter(params.filter ?? {}, referents);
+    const repoFilter = opened.excludeIds ? { ...built, excludeIds: opened.excludeIds } : built;
     const pageSize = clampIssuePageSize(params.pageSize);
 
     // Count the filtered set first so an out-of-range ?page CLAMPS to the last
@@ -5081,7 +5196,12 @@ export const workItemsService = {
       ),
     );
 
-    return { items: rows.map(toWorkItemListItemDto), total, page, pageSize };
+    const items = rows.map((row) =>
+      opened.visitor
+        ? stripPrivateEpicTells(toWorkItemListItemDto(row), row.publicChildrenHidden)
+        : toWorkItemListItemDto(row),
+    );
+    return { items, total, page, pageSize };
   },
 
   /**
@@ -5263,17 +5383,14 @@ export const workItemsService = {
   async listRootIssues(
     projectId: string,
     params: { sort: IssueSort; take?: number; offset?: number },
-    ctx: ServiceContext,
+    ctx: ServiceContext | VisitorReadContext,
   ): Promise<TreeLevelDto> {
-    const project = await readProject(projectId, ctx);
-    if (!project || project.workspaceId !== ctx.workspaceId) {
-      throw new ProjectNotFoundError(projectId);
-    }
-    await projectAccessService.assertCanBrowse(projectId, ctx);
+    const { workspaceId, excludeIds } = await openCollectionRead(projectId, ctx);
     // The root holds the project's unfiled EPICS, then its root FOLDERS, then its
     // other unfiled work items (MOTIR-5550); an item filed in a folder is shown
-    // inside that folder instead (MOTIR-5314).
-    return readFolderLevel(projectId, project.workspaceId, null, params);
+    // inside that folder instead (MOTIR-5314). A Visitor's root keeps a private
+    // epic's row and strips its tells (MOTIR-6644).
+    return readFolderLevel(projectId, workspaceId, null, params, excludeIds);
   },
 
   /**
@@ -5285,8 +5402,9 @@ export const workItemsService = {
   async listChildIssues(
     parentId: string,
     params: { sort: IssueSort; take?: number; offset?: number },
-    ctx: ServiceContext,
+    ctx: ServiceContext | VisitorReadContext,
   ): Promise<TreeLevelDto> {
+    if (isVisitorContext(ctx)) return listVisitorChildIssues(parentId, params, ctx);
     const parent = await readWorkItem(parentId, ctx);
     if (!parent || parent.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(parentId);
@@ -5325,8 +5443,18 @@ export const workItemsService = {
   async listFolderLevel(
     folderId: string,
     params: { sort: IssueSort; take?: number; offset?: number },
-    ctx: ServiceContext,
+    ctx: ServiceContext | VisitorReadContext,
   ): Promise<TreeLevelDto> {
+    if (isVisitorContext(ctx)) {
+      // A Visitor's folder must belong to their one public project (MOTIR-6644);
+      // any other id is the same not-found a missing folder is.
+      const { workspaceId, excludeIds } = openVisitorRead(ctx.project.id, ctx);
+      const folder = await withWorkspaceServiceContext(workspaceId, (tx) =>
+        folderRepository.findById(folderId, tx),
+      );
+      if (!folder || folder.projectId !== ctx.project.id) throw new FolderNotFoundError(folderId);
+      return readFolderLevel(folder.projectId, workspaceId, folder.id, params, excludeIds);
+    }
     const folder = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       folderRepository.findById(folderId, tx),
     );
@@ -5790,7 +5918,8 @@ export const workItemsService = {
    */
   async getReadinessForItems(
     itemIds: string[],
-    ctx: ServiceContext,
+    // Only the workspace is read — a Visitor's roadmap passes its project's.
+    ctx: Pick<ServiceContext, 'workspaceId'>,
   ): Promise<Map<string, boolean>> {
     const ready = new Map<string, boolean>(itemIds.map((id) => [id, true]));
     if (itemIds.length === 0) return ready;
@@ -6829,24 +6958,37 @@ export const workItemsService = {
   async listReady(
     projectId: string,
     filter: ReadyListFilter,
-    ctx: ServiceContext,
+    ctx: ServiceContext | VisitorReadContext,
   ): Promise<{ items: ReadyItemDto[]; nextCursor: string | null }> {
-    const project = await readProject(projectId, ctx);
-    if (!project || project.workspaceId !== ctx.workspaceId) {
-      throw new ProjectNotFoundError(projectId);
+    let workspaceId: string;
+    let hidden: ReadonlySet<string> | null = null;
+    if (isVisitorContext(ctx)) {
+      // A Visitor's Ready set never lists a private epic's descendant (MOTIR-6644,
+      // `epic-privacy.md` §3); the cursor pages over what remains, so a page and
+      // its successor never disagree about what is in the set.
+      workspaceId = openVisitorRead(projectId, ctx).workspaceId;
+      hidden = ctx.hiddenIds;
+    } else {
+      const project = await readProject(projectId, ctx);
+      if (!project || project.workspaceId !== ctx.workspaceId) {
+        throw new ProjectNotFoundError(projectId);
+      }
+      // The tenant gate above is the WORKSPACE's; the project's own gate is browse
+      // (MOTIR-6319, measured: an outsider to a Members-only project was handed its
+      // ready leaves). Refused as not-found, like the tenant gate.
+      await assertBrowseAsNotFound(projectId, ctx);
+      workspaceId = project.workspaceId;
     }
-    // The tenant gate above is the WORKSPACE's; the project's own gate is browse
-    // (MOTIR-6319, measured: an outsider to a Members-only project was handed its
-    // ready leaves). Refused as not-found, like the tenant gate.
-    await assertBrowseAsNotFound(projectId, ctx);
+    const readCtx = { workspaceId };
     const limit = clampReadyLimit(filter.limit);
     const cursor = filter.cursor ? decodeReadyCursor(filter.cursor) : undefined;
     // `allowSoftBlock` (MOTIR-6366) is read HERE and only here: it is passed to
     // the walk as its own argument rather than riding the facet object, so the
     // three dispatch reads below cannot inherit it through a spread filter.
-    const all = await collectReadyLeaves(projectId, project.workspaceId, ctx, filter, {
+    const collected = await collectReadyLeaves(projectId, workspaceId, readCtx, filter, {
       allowSoftBlock: filter.allowSoftBlock === true,
     });
+    const all = hidden ? collected.filter((r) => !hidden.has(r.id)) : collected;
     const start = cursor ? all.findIndex((r) => isAfterReadyCursor(r, cursor)) : 0;
     const begin = start === -1 ? all.length : start;
     const window = all.slice(begin, begin + limit);
@@ -6861,7 +7003,7 @@ export const workItemsService = {
     // one readiness computation per row of every page.
     const lineages = await workItemsService.getInheritedSessionBranches(
       window.map((r) => r.id),
-      ctx,
+      readCtx,
     );
     return {
       items: window.map((r) =>
@@ -6891,7 +7033,7 @@ export const workItemsService = {
    */
   async getInheritedSessionBranches(
     itemIds: string[],
-    ctx: ServiceContext,
+    ctx: Pick<ServiceContext, 'workspaceId'>,
   ): Promise<Record<string, string | null>> {
     const byItem: Record<string, string | null> = {};
     for (const id of itemIds) byItem[id] = null;
@@ -7545,7 +7687,7 @@ const EXPANSION_NUDGE_THRESHOLD = 3;
 async function collectReadyLeaves(
   projectId: string,
   workspaceId: string,
-  ctx: ServiceContext,
+  ctx: Pick<ServiceContext, 'workspaceId'>,
   facets: {
     kinds?: WorkItemKind[];
     assigneeId?: string | null;
@@ -7857,7 +7999,7 @@ async function buildReadyDispatchDto(
  */
 async function computeOwnBlockerReadiness(
   itemIds: string[],
-  ctx: ServiceContext,
+  ctx: Pick<ServiceContext, 'workspaceId'>,
 ): Promise<Map<string, boolean>> {
   const ready = new Map<string, boolean>(itemIds.map((id) => [id, true]));
   if (itemIds.length === 0) return ready;
@@ -8024,7 +8166,7 @@ async function withRoadmapEdgeCoverage(
   offLevelIds: ReadonlySet<string>,
   rows: ReadonlyArray<{ id: string; parentId: string | null; kind: string }>,
   stubs: ReadonlyArray<{ id: string; parentId: string | null; kind: string }>,
-  ctx: ServiceContext,
+  ctx: Pick<ServiceContext, 'workspaceId'>,
 ): Promise<RoadmapEdgeDto[]> {
   const offEdges = edges.filter((e) => offLevelIds.has(e.blockerId));
   if (offEdges.length === 0) return [...edges];
