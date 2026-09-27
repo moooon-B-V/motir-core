@@ -50,7 +50,8 @@ describe('/items is left alone on purpose (MOTIR-3444)', () => {
   });
 
   it('renders its toolbar BEFORE the boundary, with only the tree section behind it', () => {
-    const src = read('items', 'page.tsx');
+    // The page's body is `_view.tsx` since MOTIR-6643.
+    const src = read('items', '_view.tsx');
 
     const firstSuspense = src.indexOf('<Suspense');
     expect(firstSuspense).toBeGreaterThan(-1);

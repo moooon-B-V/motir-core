@@ -35,7 +35,8 @@ function waveContaining(src: string, ...needles: string[]): string | null {
 }
 
 describe('/roadmap — its two reads stay SERIAL, deliberately (MOTIR-3445)', () => {
-  const src = read('roadmap', 'page.tsx');
+  // The page's body is `_view.tsx` since MOTIR-6643.
+  const src = read('roadmap', '_view.tsx');
 
   // ⚠️ THIS PAGE GETS NO DIFF, AND THAT IS THE MEASURED RESULT.
   //
@@ -65,7 +66,9 @@ describe('/roadmap — its two reads stay SERIAL, deliberately (MOTIR-3445)', ()
   });
 
   it('keeps the browse gate ahead of both', () => {
-    expect(src.indexOf('projectAccessService.getCapabilities')).toBeLessThan(
+    // The gate reads the reader's permission set (MOTIR-6643).
+    expect(src.indexOf('pageCtx.permissions()')).toBeGreaterThan(-1);
+    expect(src.indexOf('pageCtx.permissions()')).toBeLessThan(
       src.indexOf('workItemsService.getProjectRoadmap'),
     );
     expect(src).toContain('caps.canBrowse');
@@ -73,7 +76,7 @@ describe('/roadmap — its two reads stay SERIAL, deliberately (MOTIR-3445)', ()
 });
 
 describe('/plans/[id] — the two follow-on reads are one wave (MOTIR-3445)', () => {
-  const src = read('plans', '[id]', 'page.tsx');
+  const src = read('plans', '[id]', '_view.tsx');
 
   it('issues the project resolution and the establish view together', () => {
     const wave = waveContaining(src, 'assertProjectInWorkspace', 'getEstablishView');
@@ -103,24 +106,28 @@ describe('the two pages that were ALREADY one wave (MOTIR-3445)', () => {
     // The reads are the SESSION list's since MOTIR-6025; the landing row joined
     // the same wave rather than following it.
     const wave = waveContaining(
-      read('plans', 'page.tsx'),
+      read('plans', '_view.tsx'),
       'planSessionsService.listSessions',
       'planSessionsService.countSessionsByPlanState',
-      'planSessionsService.getSessionRow',
+      // The landing row, through its named seam (MOTIR-6643).
+      'readLandingRow',
     );
     expect(wave).not.toBeNull();
   });
 
-  it('/boards resolves its seven filter-chrome reads together', () => {
+  it('/boards resolves its six filter-chrome reads together', () => {
+    // The saved-filter tier stopped being a read in this wave with MOTIR-6643: it
+    // is derived from the permission set the page's gate already holds.
+    const src = read('boards', '_view.tsx');
+    expect(src).toContain('savedFilterCapabilitiesFromPermissions(held)');
     const wave = waveContaining(
-      read('boards', 'page.tsx'),
+      src,
       'assignableMembersService.list',
       'workflowsService.getWorkflow',
       'sprintsService.listByProject',
       'customFieldsService.listFields',
       'componentsService.listComponents',
       'labelsService.resolveByIds',
-      'projectAccessService.getSavedFilterCapabilities',
     );
     expect(wave).not.toBeNull();
   });
