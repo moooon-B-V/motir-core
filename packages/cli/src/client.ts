@@ -1701,6 +1701,12 @@ export class MotirClient {
        * parameter existed.
        */
       autoApproveReplan?: boolean;
+      /**
+       * A DEAD run's id (MOTIR-6533) — `motir continue` asks for the CONTINUE
+       * prompt: the dead run's story and a git workflow that checks its branch
+       * out instead of cutting one. Omitted, the request is unchanged.
+       */
+      continueFrom?: string;
     } = {},
   ): Promise<DispatchPrompt> {
     // A GET, which is what a pure read should have looked like all along: the
@@ -1716,6 +1722,7 @@ export class MotirClient {
         // Same rule, same reason (MOTIR-4085): absent means no, so only the one
         // lane that HAS an auto-approving loop ever sends it.
         ...(opts.autoApproveReplan ? { autoApproveReplan: '1' } : {}),
+        ...(opts.continueFrom ? { continueFrom: opts.continueFrom } : {}),
       },
     });
     return toDispatchPrompt(body);

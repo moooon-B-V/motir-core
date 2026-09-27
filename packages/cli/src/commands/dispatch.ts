@@ -10,7 +10,7 @@ import {
 } from '../agentProfiles.js';
 import { runAgent } from '../agentRun.js';
 import { runDispatchLeg } from '../dispatchLeg.js';
-import { createDispatchRunReporter } from '../dispatchRunReporter.js';
+import { createDispatchRunReporter, type DispatchRunReporter } from '../dispatchRunReporter.js';
 import { bindInterruptSignals, closeRunAndExit, type InterruptSignal } from '../interrupt.js';
 import { runCiWatchPhase, type CiWatchOutcome } from '../ciWatch.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
@@ -272,12 +272,21 @@ export function echoPromptIfAsked(
   errVerbatim(dispatch.prompt);
 }
 
-interface DeliverInput {
+export interface DeliverInput {
   session: ProjectSession;
   /** Which command converged here — the one thing `next` and `run` differ in
    *  that the run RECORD has to know, so a person reading a run page can tell a
-   *  picked card from a named one. */
-  command: 'next' | 'run';
+   *  picked card from a named one. `continue` (MOTIR-6533) arrives with its run
+   *  already open — see {@link DeliverInput.reporter}. */
+  command: 'next' | 'run' | 'continue';
+  /**
+   * A reporter that ALREADY holds this delivery's run (MOTIR-6533). `motir
+   * continue`'s run is opened by the server's continue claim, inside the lock that
+   * decided the takeover, so it is ADOPTED rather than opened here — and the
+   * server wrote its `run_opened` event. Absent for `next` / `run`, which open
+   * their own.
+   */
+  reporter?: DispatchRunReporter;
   key: string;
   title: string | null;
   dispatch: DispatchPrompt;
@@ -290,7 +299,7 @@ interface DeliverInput {
  * This is the ONE place both `next` and `run` converge, so their behaviour can
  * never drift.
  */
-async function deliver(input: DeliverInput): Promise<void> {
+export async function deliver(input: DeliverInput): Promise<void> {
   const { session, key, title, dispatch, opts, deps } = input;
   const { client, link, serverUrl, projectKey } = session;
 
@@ -383,7 +392,10 @@ async function deliver(input: DeliverInput): Promise<void> {
   // reporter swallows its own failures by construction; there is deliberately no
   // error handling at this call site, because handling would imply there is
   // something a caller could do.
-  const reporter = createDispatchRunReporter({ client, reportLogBodies: opts.reportLog === true });
+  const adopted = input.reporter !== undefined;
+  const reporter =
+    input.reporter ??
+    createDispatchRunReporter({ client, reportLogBodies: opts.reportLog === true });
   await reporter.open({
     projectKey,
     command: input.command,
@@ -395,7 +407,8 @@ async function deliver(input: DeliverInput): Promise<void> {
     // no test can reach and a reader has to stop and disprove.
     agent: agent.parsed.binary,
   });
-  reporter.event({ kind: 'run_opened', data: { command: input.command, key } });
+  // An adopted run's `run_opened` was written by the server that opened it.
+  if (!adopted) reporter.event({ kind: 'run_opened', data: { command: input.command, key } });
 
   // ⚠️ A STOP IS A DECISION, AND THE RECORD SAYS SO (MOTIR-6530): Ctrl-C or a
   // SIGTERM closes the run `interrupted` after flushing what is queued, rather

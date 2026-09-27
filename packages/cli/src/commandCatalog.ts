@@ -575,6 +575,28 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
     ],
   },
   {
+    path: 'continue',
+    // Story MOTIR-6526 · MOTIR-6533 — the command the item page offers on a work
+    // item whose last run DIED (`run-death-keeps-work.md` §4): carry the work on,
+    // on the dead run's branch, from any machine. Beside `fix` — the work loop's
+    // other takeover of a card somebody else's run left.
+    signature: '<key>',
+    description:
+      'Carry on a work item whose last run died, on the branch it left — from any machine, without starting it over.',
+    helpGroup: HELP_GROUP.workLoop,
+    options: [
+      {
+        flags: '--agent <cmd>',
+        description: 'Run THIS agent command on the continue (overrides MOTIR_AGENT).',
+      },
+      {
+        flags: '--report-log',
+        description:
+          'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',
+      },
+    ],
+  },
+  {
     path: 'auto',
     signature: '',
     description: 'Drain the ready set unattended: one item at a time onto a session branch.',
