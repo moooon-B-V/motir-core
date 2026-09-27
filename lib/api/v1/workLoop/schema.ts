@@ -374,6 +374,16 @@ export const dispatchPromptSchema = z.object({
   workflowMode: dispatchWorkflowModeSchema,
   /** The session branch the prompt instructs, or `null` in `per_item_pr` mode. */
   sessionBranch: z.string().nullable(),
+  /**
+   * The branch the prompt tells the agent to work on (MOTIR-6530) — the session
+   * branch, else the card's per-item branch; `null` for a manual item.
+   *
+   * ⚠️ OPTIONAL in the contract though this server always sends it: the CLI
+   * validates responses against this schema and is routinely pointed at an older
+   * Motir, which sends no such key — a required field would turn that skew into a
+   * refused dispatch rather than a run that simply does not know its branch.
+   */
+  branch: z.string().nullable().optional(),
   advisories: z.array(dispatchAdvisorySchema),
 });
 export type V1DispatchPrompt = z.infer<typeof dispatchPromptSchema>;
@@ -401,6 +411,7 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
     })),
     workflowMode: dto.workflowMode,
     sessionBranch: dto.sessionBranch,
+    branch: dto.branch,
     advisories: dto.advisories.map((advisory) => {
       if (isBlockerCountAdvisory(advisory)) {
         return {

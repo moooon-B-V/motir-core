@@ -1,6 +1,7 @@
 import { normalizeServerUrl } from './config/userConfig.js';
 import type { DesignsResponse } from './designFiles.js';
 import { V1Transport } from './transport.js';
+import { DispatchRunClosedError } from './errors.js';
 import { encodeFilterParam } from './adapters/filterParam.js';
 import {
   toActivityAllPage,
@@ -539,6 +540,13 @@ export interface DispatchPrompt {
   }[];
   workflowMode: DispatchWorkflowMode;
   sessionBranch: string | null;
+  /**
+   * The branch the prompt tells the agent to work on (MOTIR-6530) — the session
+   * branch, else the card's per-item branch; `null` for a manual item. OPTIONAL
+   * for the same reason `advisories` is: a server older than this CLI sends none,
+   * and absent reads as "not known", never as a crash.
+   */
+  branch?: string | null;
   /**
    * OPTIONAL on the wire, deliberately: the CLI is published separately from the
    * server and is routinely pointed at a self-hosted Motir older than itself. A
@@ -1988,6 +1996,21 @@ export class MotirClient {
   async workItemHowToTest(key: string): Promise<HowToTestRecord | null> {
     const body = await this.v1.request('getWorkItemHowToTest', { path: { key } });
     return body.record;
+  }
+
+  /**
+   * HEARTBEAT — the run is still alive (MOTIR-6530). `closed` when the server has
+   * already closed the run (`DISPATCH_RUN_TERMINAL`), so the reporter can stop;
+   * every other failure throws, for the reporter to swallow.
+   */
+  async heartbeatDispatchRun(runId: string): Promise<'ok' | 'closed'> {
+    try {
+      await this.v1.request('heartbeatDispatchRun', { path: { id: runId } });
+      return 'ok';
+    } catch (err) {
+      if (err instanceof DispatchRunClosedError) return 'closed';
+      throw err;
+    }
   }
 
   /** CLOSE the run with its stop reason. The status is DERIVED server-side. */

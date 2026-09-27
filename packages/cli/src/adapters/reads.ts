@@ -580,6 +580,8 @@ export function toDispatchPrompt(body: PromptBody): DispatchPrompt {
         }),
     workflowMode: body.workflowMode,
     sessionBranch: body.sessionBranch,
+    // MOTIR-6530 — absent from an older server stays absent.
+    ...(body.branch === undefined ? {} : { branch: body.branch }),
     advisories: body.advisories as DispatchAdvisory[],
   };
 }

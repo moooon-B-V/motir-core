@@ -146,6 +146,12 @@ export interface DispatchPromptDto {
   /** The session branch the prompt instructs, or `null` in `per_item_pr` mode. */
   sessionBranch: string | null;
   /**
+   * The branch the prompt tells the agent to work on (MOTIR-6530): the session
+   * branch in `session_lineage` mode, else the card's per-item branch; `null` for a
+   * manual item. A local run writes it onto its leg's `checkout_ready` event.
+   */
+  branch: string | null;
+  /**
    * The `likely-missing-edge` PROSE-vs-GRAPH advisories for this item
    * (MOTIR-2079) — each an item the card's ACCEPTANCE CRITERIA name but that it
    * carries no `blocked_by` edge to. Always PRESENT, `[]` when there are none.

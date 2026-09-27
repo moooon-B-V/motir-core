@@ -2653,3 +2653,21 @@ describe('THE CARD IS WRONG — the report_unbuildable_target step (MOTIR-6287)'
     },
   );
 });
+
+describe('the BRANCH the prompt instructs (MOTIR-6530) — what a local run records on checkout_ready', () => {
+  it('is the card’s per-item branch in `per_item_pr` mode, and the prompt names that same branch', () => {
+    const { prompt, branch } = assembleDispatchPrompt(source());
+    expect(branch).toBe('subtask/PROD-7-add-the-ready-set-filter-bar');
+    expect(prompt).toContain(branch!);
+  });
+
+  it('is the session branch in `session_lineage` mode', () => {
+    expect(assembleDispatchPrompt(source({ sessionBranch: 'motir/auto-9' })).branch).toBe(
+      'motir/auto-9',
+    );
+  });
+
+  it('is null for a MANUAL item, which has no branch at all', () => {
+    expect(assembleDispatchPrompt(source({ type: 'manual', executor: 'human' })).branch).toBeNull();
+  });
+});

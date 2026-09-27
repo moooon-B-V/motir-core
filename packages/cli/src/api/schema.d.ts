@@ -1746,6 +1746,7 @@ export interface components {
             /** @enum {string} */
             workflowMode: "per_item_pr" | "session_lineage";
             sessionBranch: string | null;
+            branch?: string | null;
             advisories: ({
                 /** @constant */
                 kind: "shape";

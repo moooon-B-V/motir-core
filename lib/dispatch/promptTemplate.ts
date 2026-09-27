@@ -431,6 +431,14 @@ export interface AssembledDispatchPrompt {
    * would tell the CLI to route human work onto a git lineage it will never touch.
    */
   sessionBranch: string | null;
+  /**
+   * The branch the prompt tells the agent to work on (MOTIR-6530) — the session
+   * branch in `session_lineage` mode, else the card's own per-item branch
+   * ({@link cardBranch}); `null` for a MANUAL item, which has none. It is what a
+   * local run records on its leg's `checkout_ready` event, so a run that dies
+   * leaves the branch its work is on in the record rather than only in a prompt.
+   */
+  branch: string | null;
 }
 
 /**
@@ -2599,5 +2607,6 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
     ...closing,
   ];
 
-  return { prompt: lines.join('\n') + '\n', workflowMode, sessionBranch };
+  const branch = manual ? null : (sessionBranch ?? cardBranch(src));
+  return { prompt: lines.join('\n') + '\n', workflowMode, sessionBranch, branch };
 }

@@ -76,6 +76,7 @@ import {
 import { deriveAgentHarness } from '../agentProfiles.js';
 import { runCiWatchPhase } from '../ciWatch.js';
 import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
+import { bindInterruptSignals, closeRunAndExit, type InterruptSignal } from '../interrupt.js';
 
 // `motir auto` — THE SEQUENTIAL WHILE LOOP (Story 7.9 · Subtask 7.9.4 ·
 // MOTIR-882). Drain the ready set unattended: one item per iteration, strictly
@@ -510,14 +511,20 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
   const repos = new RepoSessions(branch, run);
 
   let interrupted = false;
-  const onSigint = (): void => {
-    if (interrupted) process.exit(130);
+  // A SIGTERM, or a SECOND Ctrl-C, ends the process NOW — after closing the run
+  // `interrupted` with what is queued flushed, so the record says it was stopped
+  // rather than reading `running` until its heartbeat lapses (MOTIR-6530).
+  const onSignal = (signal: InterruptSignal): void => {
+    if (interrupted || signal === 'SIGTERM') {
+      void closeRunAndExit(reporter, signal);
+      return;
+    }
     interrupted = true;
     info('');
     info('Interrupt received — finishing up and opening the session pull request(s).');
     info('Press Ctrl-C again to exit immediately.');
   };
-  process.on('SIGINT', onSigint);
+  const detachInterrupt = bindInterruptSignals(onSignal);
 
   let stopReason: StopReason = 'drained';
   try {
@@ -856,7 +863,7 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       }
     }
   } finally {
-    process.off('SIGINT', onSigint);
+    detachInterrupt();
   }
 
   // Whatever the loop queued reaches the server before the command closes the

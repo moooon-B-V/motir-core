@@ -618,8 +618,12 @@
  *   the `DispatchRun` component: `lastHeartbeatAt` (nullable), when the run last did.
  *   `DISPATCH_RUN_TERMINAL` (409) answers a heartbeat on a closed run;
  *   `DISPATCH_RUN_NOT_FOUND` (404) an unknown, cross-tenant or another operator's run.
+ *   MOTIR-6530 adds one field to the `DispatchPrompt` component, `branch`
+ *   (nullable): the branch the prompt tells the agent to work on — the session
+ *   branch, else the card's per-item branch — which a local run records on its
+ *   leg's `checkout_ready` event.
  *
- *   Additive: a NEW operation and a NEW nullable field (§8's allowed list); no
+ *   Additive: a NEW operation and NEW nullable fields (§8's allowed list); no
  *   existing field changes meaning. Gated on `work_item:edit`, a key
  *   `CLI_TOKEN_GRANT` already carries, so the grant is NOT widened.
  *
