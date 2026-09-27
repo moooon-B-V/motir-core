@@ -110,8 +110,9 @@ import {
 } from '@/lib/workspaces/context';
 import { readMembership } from '@/lib/workspaces/membershipGate';
 import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
-import type { VisitorReadContext } from '@/lib/visitor/context';
 import { personName } from '@/lib/people/personLabel';
+import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/context';
+import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import {
   isVisitorContext,
   openVisitorRead,
@@ -6594,6 +6595,83 @@ export const workItemsService = {
       designEvidence,
     );
     return { ...view, heldTransitions, planHold, mergeMembers };
+  },
+
+  /**
+   * The quick-view peek for a VISITOR (Story MOTIR-6170 · MOTIR-6647) — the same
+   * `QuickViewData` a member's peek answers, composed only from reads that already
+   * serve a Visitor: the redacted detail and chip map (MOTIR-6652, a hidden key is
+   * `WorkItemNotFoundError`), names only for people (MOTIR-6646 — the member list
+   * never leaves this method, only the name map `toQuickViewData` builds from it),
+   * the project's sprint and component names, and its estimation config. The
+   * Development surface is left EMPTY — no pull request, delivery, design result,
+   * merge members, held transition or plan hold — because none of those reads
+   * has a Visitor path; a Visitor edits nothing (`canEdit` false).
+   */
+  async getVisitorQuickView(
+    identifier: string,
+    ctx: VisitorReadContext,
+    locale: Locale,
+  ): Promise<QuickViewData> {
+    const { workspaceId } = openVisitorRead(ctx.project.id, ctx);
+    const projectId = ctx.project.id;
+    const svc = visitorServiceContext(ctx);
+    const [detail, people, sprintRows, componentRows, estimationConfig] = await allSettledOrThrow([
+      this.getIssueDetail(projectId, identifier, ctx),
+      assignableMembersService.listPersonLabels(ctx),
+      withWorkspaceServiceContext(workspaceId, (tx) =>
+        sprintRepository.listByProject(projectId, workspaceId, tx),
+      ),
+      withWorkspaceServiceContext(workspaceId, (tx) =>
+        componentRepository.listByProject(projectId, tx),
+      ),
+      estimationService.getEstimationConfig(projectId, svc),
+    ]);
+    let sprintName: string | null = null;
+    if (detail.item.sprintId && detail.item.kind !== 'epic') {
+      const sprint = await withWorkspaceServiceContext(workspaceId, (tx) =>
+        sprintRepository.findById(detail.item.sprintId as string, workspaceId, tx),
+      );
+      sprintName = sprint?.name ?? null;
+    }
+    const prefix = detail.item.identifier.slice(
+      0,
+      detail.item.identifier.length - String(detail.item.key).length - 1,
+    );
+    const workItemRefs = await this.resolveReferenceSummaries(
+      parseWorkItemRefs(
+        [detail.item.title, detail.item.descriptionMd].filter(Boolean).join('\n'),
+        prefix,
+      ),
+      projectId,
+      ctx,
+    );
+    const folderPath = await this.getFolderPath(detail.folderId, svc);
+    const view = toQuickViewData(
+      detail,
+      // NAMES ONLY: `toQuickViewData` reads a member only to build its name map,
+      // so an email-free row is all it is handed.
+      people.map((p) => ({ userId: p.id, name: p.name, email: '' }) as WorkspaceMemberDTO),
+      locale,
+      sprintName,
+      workItemRefs,
+      prefix,
+      [],
+      false,
+      sprintRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        state: row.state,
+        sequence: row.sequence,
+      })),
+      componentRows.map(toComponentDto),
+      estimationConfig,
+      [],
+      [],
+      folderPath,
+      null,
+    );
+    return { ...view, heldTransitions: [], planHold: null, mergeMembers: [] };
   },
 
   /**
