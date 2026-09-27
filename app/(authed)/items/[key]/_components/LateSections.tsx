@@ -16,6 +16,7 @@ import { AcceptanceDevelopmentSlot } from '@/components/acceptance/AcceptanceDev
 import type { DevelopmentGateRead } from '@/components/github/DevelopmentGateFrame';
 import { DesignResultPanel } from './DesignResultPanel';
 import { RunSection } from './RunSection';
+import { ContinuePart } from '@/components/github/ContinuePart';
 import { formatRunTimes } from './runTimes';
 import { formatRunInstant } from '@/lib/runs/runClock';
 import {
@@ -251,9 +252,13 @@ export async function LateUpperSections({
   repoDelivery,
   deliveries,
   statusCategory,
+  statusLabel = null,
   canReplan = false,
   parentIdentifier = null,
 }: LateProps & {
+  /** The card's status, in words — the continue part's *nothing moved* line names it
+   *  (MOTIR-6534). */
+  statusLabel?: string | null;
   /** The session's user — only to say whether the design gate is ROUTED to the
    *  reader (the band's sentence, MOTIR-5229). Authority stays `canDecide`. */
   currentUserId: string;
@@ -427,6 +432,15 @@ export async function LateUpperSections({
               // THE FIX PART (MOTIR-5466, design § 21): below the rows, above How to
               // test — the copyable `motir fix`, a repair in progress, or a give-up.
               repair={r.repair}
+              // THE CONTINUE PART (MOTIR-6534, design `design/runs` § Run died): a
+              // run that died, the copyable `motir continue`, or who is continuing.
+              continuePart={
+                <ContinuePart
+                  view={r.continueView}
+                  itemIdentifier={itemIdentifier}
+                  statusLabel={statusLabel ?? ''}
+                />
+              }
               designResult={
                 designInDevelopment ? (
                   <DesignResultPanel

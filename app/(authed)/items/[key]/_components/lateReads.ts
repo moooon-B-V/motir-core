@@ -23,6 +23,8 @@ import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
+import { workItemContinueService } from '@/lib/services/workItemContinueService';
+import type { ContinuePartView } from '@/components/github/ContinuePart';
 import { monitorIssueService } from '@/lib/services/monitorIssueService';
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
@@ -196,6 +198,13 @@ export interface LateReads {
    */
   repair: WorkItemRepairViewDto | null;
   /**
+   * What the Development block and the run section say about a run that DIED
+   * (Story MOTIR-6526 · MOTIR-6534, design `design/runs` § Run died) — read through
+   * the continue claim's own evaluation. `{ state: 'error' }` on a failed read:
+   * the part then says so and offers the retry (Panel D8).
+   */
+  continueView: ContinuePartView;
+  /**
    * The card's monitor-ERROR links (Story MOTIR-4932 · MOTIR-5732, design
    * `design/monitoring` §14). `null` on a failed read — the Errors section then
    * renders its own ErrorState, and only in a project that HAS a connection.
@@ -348,6 +357,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       howToTest,
       mergeGate,
       repair,
+      continueView,
       monitorIssueLinks,
       monitorHasConnection,
       decisionGate,
@@ -547,6 +557,13 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
           return null;
         }
       })(),
+      (async (): Promise<ContinuePartView> => {
+        try {
+          return await workItemContinueService.getContinueView(itemId, ctx);
+        } catch {
+          return { state: 'error' };
+        }
+      })(),
       (async () => {
         try {
           return await monitorIssueService.listForWorkItem(itemId, ctx);
@@ -587,6 +604,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       howToTest,
       mergeGate,
       repair,
+      continueView,
       monitorIssueLinks,
       monitorHasConnection,
       decisionGate,

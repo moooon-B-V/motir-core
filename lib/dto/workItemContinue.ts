@@ -58,6 +58,8 @@ export interface DeadRunDto {
   status: DispatchRunStatus;
   /** Null for a run the claim found lapsed and closed itself (then `abandoned`). */
   stopReason: DispatchStopReason | null;
+  /** When it started — the *run by* line names it. */
+  startedAt: string;
   /** When it was last heard from: its last heartbeat, else its end, else its start. */
   lastHeardAt: string;
   /** Who ran it (null when that account has since been deleted). */
@@ -107,6 +109,15 @@ export interface WorkItemContinueClaimDto {
   landedKeys: string[];
 }
 
+/** How a run ended without success, as the *run died* marker's reason line says it. */
+export type RunDiedReason =
+  | 'lapsed'
+  | 'interrupted'
+  | 'failed'
+  | 'cancelled'
+  | 'stalled'
+  | 'backstop';
+
 /**
  * What the item page draws about a run that died (MOTIR-6534; design
  * `design/runs/design-notes.md` § Run died). Derived from the SAME evaluation the
@@ -124,6 +135,8 @@ export type WorkItemContinueViewDto =
   | {
       state: 'died';
       deadRun: DeadRunDto;
+      /** How it ended — the design's reason line (D3). */
+      reason: RunDiedReason;
       branch: string | null;
       pullRequest: ContinuePullRequestDto | null;
       /** Null when the claim would take it; otherwise the refusal it would give

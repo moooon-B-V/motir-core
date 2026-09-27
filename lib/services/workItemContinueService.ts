@@ -4,6 +4,7 @@ import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
   ContinuePullRequestDto,
   DeadRunDto,
+  RunDiedReason,
   WorkItemContinueClaimDto,
   WorkItemContinueRefusal,
   WorkItemContinueViewDto,
@@ -65,6 +66,7 @@ function toDeadRun(run: LatestRunForWorkItem): DeadRunDto {
     origin: run.origin,
     status: run.status,
     stopReason: run.stopReason,
+    startedAt: run.startedAt.toISOString(),
     lastHeardAt: (run.lastHeartbeatAt ?? run.endedAt ?? lastHeardFrom(run)).toISOString(),
     dispatcher: actor(run.createdBy),
   };
@@ -166,6 +168,27 @@ export function endedHow(run: {
     return 'the hosted run stalled or reached its time limit';
   }
   return `it ended ${run.status}`;
+}
+
+/**
+ * The reason line's key (MOTIR-6534, design D3). A hosted `timed_out` is split by
+ * its closing `log` line: the 12-hour backstop names itself, anything else is the
+ * stall watchdog.
+ */
+async function diedReason(
+  run: LatestRunForWorkItem,
+  tx: Prisma.TransactionClient,
+): Promise<RunDiedReason> {
+  if (run.status === 'running' || run.stopReason === 'abandoned') return 'lapsed';
+  if (run.stopReason === 'interrupted') return 'interrupted';
+  if (run.status === 'failed') return 'failed';
+  if (run.status === 'cancelled') return 'cancelled';
+  if (run.origin === 'hosted') {
+    const last = await dispatchRunEventRepository.findLatestOfKind(run.id, 'log', tx);
+    const message = String((last?.data as { message?: unknown } | null)?.message ?? '');
+    return /12[- ]hour|backstop/i.test(message) ? 'backstop' : 'stalled';
+  }
+  return 'lapsed';
 }
 
 type Evaluation =
@@ -496,6 +519,7 @@ export const workItemContinueService = {
         return {
           state: 'died',
           deadRun: toDeadRun(verdict.run),
+          reason: await diedReason(verdict.run, tx),
           branch: verdict.branch,
           pullRequest: verdict.pullRequest,
           refusal: verdict.refusal,

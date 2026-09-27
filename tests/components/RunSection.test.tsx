@@ -109,7 +109,16 @@ describe('⚠️ it opens NO stream unless this card has a LIVE run', () => {
   });
 
   it('a RUNNING run opens exactly one stream, resuming from its seq', async () => {
-    mount([run({ status: 'running', stopReason: null, endedAt: null, seq: 12 })]);
+    mount([
+      run({
+        status: 'running',
+        stopReason: null,
+        endedAt: null,
+        seq: 12,
+        // Alive by `isRunAlive`: heard from a moment ago.
+        lastHeartbeatAt: new Date().toISOString(),
+      }),
+    ]);
     await Promise.resolve();
     expect(streamCalls()).toHaveLength(1);
     expect(streamCalls()[0]).toContain('/api/dispatch-runs/run_1/stream');
@@ -173,10 +182,8 @@ describe('the states the design draws', () => {
     expect(screen.getByText('Re-planned')).toBeTruthy();
   });
 
-  it('a REPORTING-OFFLINE run says the RECORD is incomplete, not the run', () => {
-    mount([run({ status: 'timed_out', stopReason: 'abandoned', endedAt: null })]);
-    expect(screen.getByText(/record is incomplete, not the run/i)).toBeTruthy();
-  });
+  // A reaped (`timed_out`) run used to say "the record is incomplete, not the run";
+  // since MOTIR-6534 the died line takes that note's place — asserted below.
 });
 
 describe('the line that says this card is one of N', () => {
@@ -332,5 +339,50 @@ describe('it renders no pull request and derives no CI state', () => {
     expect(html).not.toMatch(/#\d{3,}/);
     expect(html.toLowerCase()).not.toContain('checks passed');
     expect(html.toLowerCase()).not.toContain('ci ');
+  });
+});
+
+describe('a run that DIED (MOTIR-6534 · design `design/runs` § Run died, Panel R1)', () => {
+  const lapsed = () =>
+    run({
+      status: 'running',
+      stopReason: null,
+      endedAt: null,
+      // Last heard from ten minutes ago — past the five-minute lapse.
+      lastHeartbeatAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+    });
+
+  it('a LAPSED run still reading `running` says Run died, before any sweep closed it', async () => {
+    mount([lapsed()]);
+    const line = screen.getByTestId('run-died-line');
+    expect(line.textContent).toMatch(/This run died — last heard from .+ ago/);
+    expect(line.textContent).toContain('continue it from Development below');
+    // The pill reads the liveness rule, not the row's stale status.
+    expect(screen.getByText('Run died')).toBeTruthy();
+    // A dead run gets no stream: nothing is writing to it.
+    await Promise.resolve();
+    expect(streamCalls()).toEqual([]);
+  });
+
+  it('the died line takes the reporting-offline note’s place on a reaped run', () => {
+    mount([run({ status: 'timed_out', stopReason: 'abandoned', endedAt: null })]);
+    expect(screen.getByTestId('run-died-line')).toBeTruthy();
+    expect(screen.queryByText(/This run stopped reporting/)).toBeNull();
+  });
+
+  it('an ALIVE run and a SUCCEEDED run show no died line', () => {
+    mount([run({ status: 'succeeded' })]);
+    expect(screen.queryByTestId('run-died-line')).toBeNull();
+    cleanup();
+    mount([
+      run({
+        status: 'running',
+        stopReason: null,
+        endedAt: null,
+        lastHeartbeatAt: new Date().toISOString(),
+      }),
+    ]);
+    expect(screen.queryByTestId('run-died-line')).toBeNull();
+    expect(screen.queryByText('Run died')).toBeNull();
   });
 });
