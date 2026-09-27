@@ -171,7 +171,13 @@ describe('the SEED link — Re-plan of {KEY} · {verb} (MOTIR-6209, design MOTIR
     ['decision_confirmation', 'Overturn'],
     ['decision_choice', 'None of these'],
   ] as const)('%s reads `Re-plan of ACME-44 · %s` and opens the work item', (gateKind, verb) => {
-    renderWithIntl(<SessionRow view={view({ seed: { cardKey: 'ACME-44', gateKind } })} />);
+    renderWithIntl(
+      <SessionRow
+        view={view({
+          seed: { cardKey: 'ACME-44', gateKind, origin: 'refusal', chosenLabel: null },
+        })}
+      />,
+    );
 
     const link = screen.getByRole('link', {
       name: 'Open ACME-44, the work item this conversation re-plans',
@@ -185,7 +191,16 @@ describe('the SEED link — Re-plan of {KEY} · {verb} (MOTIR-6209, design MOTIR
 
   it('is raised above the stretched title link, so the two doors do not collide', () => {
     renderWithIntl(
-      <SessionRow view={view({ seed: { cardKey: 'ACME-44', gateKind: 'decision_approval' } })} />,
+      <SessionRow
+        view={view({
+          seed: {
+            cardKey: 'ACME-44',
+            gateKind: 'decision_approval',
+            origin: 'refusal',
+            chosenLabel: null,
+          },
+        })}
+      />,
     );
     const link = screen.getByTestId('plan-session-seed');
     expect(link.className).toContain('relative');
@@ -204,12 +219,42 @@ describe('the SEED link — Re-plan of {KEY} · {verb} (MOTIR-6209, design MOTIR
   it('zh reads `ACME-44 的重新规划 · 推翻`', () => {
     renderWithIntl(
       <SessionRow
-        view={view({ seed: { cardKey: 'ACME-44', gateKind: 'decision_confirmation' } })}
+        view={view({
+          seed: {
+            cardKey: 'ACME-44',
+            gateKind: 'decision_confirmation',
+            origin: 'refusal',
+            chosenLabel: null,
+          },
+        })}
       />,
       { locale: 'zh', messages: zhMessages },
     );
     const link = screen.getByRole('link', { name: '打开 ACME-44，即此对话重新规划的工作项' });
     expect(link.textContent).toBe('ACME-44 的重新规划·推翻');
+  });
+
+  it('a PICK reads `Follow-up to ACME-42 · chose {label}`, opens the CHOICE, and never says re-plan (MOTIR-6434)', () => {
+    renderWithIntl(
+      <SessionRow
+        view={view({
+          seed: {
+            cardKey: 'ACME-42',
+            gateKind: 'decision_choice',
+            origin: 'pick',
+            chosenLabel: 'Managed object storage',
+          },
+        })}
+      />,
+    );
+    const link = screen.getByRole('link', {
+      name: 'Open ACME-42, the choice this conversation is the follow-up to (chose Managed object storage)',
+    });
+    expect(link.getAttribute('href')).toBe('/items/ACME-42');
+    expect(link.textContent).toBe('Follow-up to ACME-42·chose Managed object storage');
+    expect(link.textContent).not.toMatch(/re-plan|none of these/i);
+    expect(within(link).getByText('ACME-42').className).toBe('font-mono');
+    expect(within(link).getByText('chose Managed object storage').className).toContain('truncate');
   });
 
   it('a row with no seed draws nothing extra — the same meta line and links as before', () => {

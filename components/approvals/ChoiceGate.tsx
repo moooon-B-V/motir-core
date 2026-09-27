@@ -332,8 +332,9 @@ export function ChoiceGateFrame({
   // the body may have changed since, and the record must say what was picked then.
   const chosen = gate.state === 'approved' ? gate.chosenOption : null;
   const gates = plain(port.followUpMd);
-  // None of these offers the seeded planner (§10h): the door on the record, or — for the
-  // reader who has just pressed it — the ask in its place.
+  // None of these offers the seeded planner (§10h), and so does an option CHOSEN
+  // (MOTIR-6436 — its follow-up planning): the door on the record, or — for the reader
+  // who has just pressed it — the ask in its place.
   const { door, ask } = useRefusalReplanSlots({
     gate,
     itemKey: identifier,
@@ -385,7 +386,7 @@ export function ChoiceGateFrame({
           ? [
               t('confirm.record', { label: selected.label, bestFor: selected.bestFor }),
               t('confirm.done', { key: identifier }),
-              t('confirm.followUp', { gates }),
+              t('confirm.askPlan', { gates }),
             ]
           : []
       }
@@ -420,9 +421,15 @@ export function ChoiceGateFrame({
               <span className="text-(--el-text)">{t('record.askedBecause')}</span>
               <Chip tint="lavender">{situationLabel(chosen.situation)}</Chip>
             </span>
+            {/* What the choice gates stays as INFORMATION; the word *owed* goes, and the
+                door is how to start it (design MOTIR-6432 panel 1). */}
             <span className="basis-full text-(--el-text)">
-              {t('record.followUp', { gates: plain(chosen.followUp) })}
+              {t.rich('record.gates', {
+                gates: plain(chosen.followUp),
+                b: (chunks) => <b>{chunks}</b>,
+              })}
             </span>
+            {door}
           </>
         ) : (
           door

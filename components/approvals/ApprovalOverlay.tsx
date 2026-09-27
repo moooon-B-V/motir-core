@@ -21,11 +21,7 @@ import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import { DecisionConfirmGateFrame } from '@/components/approvals/DecisionConfirmGate';
 import { StatusPill } from '@/components/issues/StatusPill';
 import { useRefusalVerb, type DesignRefusalFacts } from './RefusalReason';
-import {
-  asksToReplanAfterPress,
-  useRefusalReplanSlots,
-  type RefusalReplanProps,
-} from './RefusalReplan';
+import { asksAfterPress, useRefusalReplanSlots, type RefusalReplanProps } from './RefusalReplan';
 import {
   ApprovalGateControl,
   type ApprovalGateControlProps,
@@ -837,8 +833,9 @@ export function ApprovalOverlay() {
           statusWritten: result.statusWritten,
         });
         // A refusal that offers the seeded planner ASKS first (§10h; the design gate's
-        // amendment of 2026-09-25) — nothing opens until the reader says yes.
-        if (asksToReplanAfterPress(result.gate)) setReplanAsk(result.gate.id);
+        // amendment of 2026-09-25), and so does an option CHOSEN (MOTIR-6436) — nothing
+        // opens until the reader says yes.
+        if (asksAfterPress(result.gate)) setReplanAsk(result.gate.id);
         router.refresh();
         return null;
       };

@@ -1392,8 +1392,21 @@ export function usePlanChangeConversation({
         queued: [],
       }));
       stoppingRef.current = false;
+      // A pick seeded at the PROJECT (MOTIR-6435) carries its gate on the send that
+      // has no session yet, exactly as the anchored branch above does.
+      const heldProjectSession = stateRef.current.session?.id ?? null;
+      const projectSeed = heldProjectSession ? null : seedRef.current;
       await runAsk((signal) =>
-        submitAskTurn(body, signal, isAnswer, stateRef.current.session?.id ?? null),
+        projectSeed
+          ? submitAskTurn(body, signal, isAnswer, heldProjectSession, projectSeed).catch(
+              (err: unknown) => {
+                if (err instanceof PlanEditsClientError && err.code === 'SEED_NOT_APPLICABLE') {
+                  seedRef.current = null;
+                }
+                throw err;
+              },
+            )
+          : submitAskTurn(body, signal, isAnswer, heldProjectSession),
       );
     },
     [run, runAsk],
