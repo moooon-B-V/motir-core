@@ -39,6 +39,9 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+/** A standing exit. A `failure` defaults to BRANCH PROTECTION — the failure that still
+ *  RE-ASKS: since the FIFTH AMENDMENT (MOTIR-6594) a queue failure such as `CI_FAILURE`
+ *  is CAN'T-LAND, and population A is the re-asking kind. */
 async function exitOn(
   pullRequestId: string,
   opts: { disposition?: 'failure' | 'neutral'; headSha?: string; rawReason?: string } = {},
@@ -47,7 +50,8 @@ async function exitOn(
     data: {
       pullRequestId,
       deliveryId: `guid-${randomToken(8)}`,
-      rawReason: opts.rawReason ?? (opts.disposition === 'neutral' ? 'MANUAL' : 'CI_FAILURE'),
+      rawReason:
+        opts.rawReason ?? (opts.disposition === 'neutral' ? 'MANUAL' : 'BRANCH_PROTECTIONS'),
       disposition: opts.disposition ?? 'failure',
       headSha: opts.headSha ?? HEAD,
       exitedAt: new Date(Date.now() + 60_000),
@@ -140,12 +144,17 @@ async function theFixture() {
   const auto = await makeWorkItemFixture({ name: 'Auto', identifier: 'AUT' });
   await setMode(auto, 'auto');
 
-  // A · implemented, a RETRYABLE exit standing at the head.
+  // A · implemented, a SETTING exit standing at the head (a re-asking failure).
   const atHead = await strandedCard(manual, 'at-head');
   // B · implemented, a CONFLICT: already where the new rules put it.
   const conflict = await greenCard(manual, 'conflict');
   await exitOn(conflict.pr.id, { rawReason: 'MERGE_CONFLICT' });
   await setStatus(conflict.card.id, 'implemented');
+  // B · and since the FIFTH AMENDMENT (MOTIR-6594) a queue FAILURE at Implemented is
+  // counted with it, not moved back to In Review.
+  const failed = await greenCard(manual, 'ci-failure');
+  await exitOn(failed.pr.id, { rawReason: 'CI_FAILURE' });
+  await setStatus(failed.card.id, 'implemented');
   // C · approved, a NEUTRAL removal standing: the removal spent the approval.
   const neutral = await greenCard(manual, 'neutral');
   await exitOn(neutral.pr.id, { disposition: 'neutral' });
@@ -180,6 +189,7 @@ async function theFixture() {
   return {
     atHead,
     conflict,
+    failed,
     neutral,
     unrecorded,
     moved,
@@ -212,6 +222,8 @@ describe('ejectedCardConvergenceService.converge', () => {
     expect(converged.has(cards.conflict.card.id)).toBe(false);
     const reasonOf = (id: string) => report.skipped.find((s) => s.workItemId === id)?.reason;
     expect(reasonOf(cards.conflict.card.id)).toBe('cant_land_held');
+    expect(converged.has(cards.failed.card.id)).toBe(false);
+    expect(reasonOf(cards.failed.card.id)).toBe('cant_land_held');
     expect(reasonOf(cards.moved.card.id)).toBe('head_moved');
     expect(reasonOf(cards.inAuto.card.id)).toBe('auto_mode');
     expect(reasonOf(cards.alreadyAsked.card.id)).toBe('already_in_review');
@@ -248,6 +260,8 @@ describe('ejectedCardConvergenceService.converge', () => {
     // B — the conflict holds it at Implemented, and nothing is asked.
     expect(await statusOf(cards.conflict.card.id)).toBe('implemented');
     expect(await awaiting(cards.conflict.card.id)).toEqual([]);
+    expect(await statusOf(cards.failed.card.id)).toBe('implemented');
+    expect(await awaiting(cards.failed.card.id)).toEqual([]);
     // C — the neutral removal spent the approval, so the card asks again.
     expect(await statusOf(cards.neutral.card.id)).toBe('in_review');
     expect(await awaiting(cards.neutral.card.id)).toHaveLength(1);
@@ -296,5 +310,139 @@ describe('ejectedCardConvergenceService.converge', () => {
     expect(yml).toMatch(/workflow_dispatch:\s*\n\s*inputs:\s*\n\s*dry_run:/);
     expect(yml).toMatch(/dry_run:[\s\S]*?default: true/);
     expect(yml).toContain('pnpm db:converge:unlanded-cards --dry-run');
+  });
+});
+
+// ── POPULATION E (Story MOTIR-6587 · MOTIR-6595; §4 FIFTH AMENDMENT, point 4) ──────────
+// A queue FAILURE is CAN'T-LAND now, but before the amendment it was RETRYABLE, so the card
+// was asked again: it sits at In Review holding an AWAITING gate over the commits the queue
+// refused. The sweep withdraws that gate (`queue_failed`) and holds the card at Implemented.
+describe('population E — a gate the OLD rule re-asked from a queue failure', () => {
+  /** In Review, the first approval decided, a SECOND gate awaiting (the old re-ask), and a
+   *  standing exit of `rawReason` at `exitHead`. `decided` makes that second gate an answer
+   *  a person already gave. */
+  async function reaskedCard(
+    fx: WorkItemFixture,
+    title: string,
+    opts: { rawReason: string; exitHead?: string; decided?: boolean },
+  ) {
+    const built = await greenCard(fx, title);
+    await exitOn(built.pr.id, {
+      rawReason: opts.rawReason,
+      disposition: ['MANUAL', 'QUEUE_CLEARED', 'ROLL_BACK'].includes(opts.rawReason)
+        ? 'neutral'
+        : 'failure',
+      headSha: opts.exitHead ?? HEAD,
+    });
+    const reask = await adminDb.approvalGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: built.card.id,
+        kind: KIND,
+        subjectId: built.card.id,
+        subjectVersion: built.gate.subjectVersion,
+        routedToId: fx.ownerId,
+        ...(opts.decided
+          ? { state: 'changes_requested', decidedById: fx.ownerId, decidedAt: new Date() }
+          : {}),
+      },
+    });
+    await setStatus(built.card.id, 'in_review');
+    return { ...built, reask };
+  }
+
+  async function fixtureE() {
+    const manual = await makeWorkItemFixture({ name: 'Manual', identifier: 'MAN' });
+    await setMode(manual, 'manual');
+    const auto = await makeWorkItemFixture({ name: 'Auto', identifier: 'AUT' });
+    await setMode(auto, 'auto');
+    return {
+      failed: await reaskedCard(manual, 'ci-failure', { rawReason: 'CI_FAILURE' }),
+      timedOut: await reaskedCard(manual, 'ci-timeout', { rawReason: 'CI_TIMEOUT' }),
+      moved: await reaskedCard(manual, 'moved', {
+        rawReason: 'CI_FAILURE',
+        exitHead: 'a'.repeat(40),
+      }),
+      decided: await reaskedCard(manual, 'decided', { rawReason: 'CI_FAILURE', decided: true }),
+      neutral: await reaskedCard(manual, 'neutral', { rawReason: 'MANUAL' }),
+      setting: await reaskedCard(manual, 'setting', { rawReason: 'BRANCH_PROTECTIONS' }),
+      inAuto: await reaskedCard(auto, 'auto', { rawReason: 'CI_FAILURE' }),
+    };
+  }
+
+  const reasonIn = (report: { skipped: { workItemId: string; reason: string }[] }, id: string) =>
+    report.skipped.find((s) => s.workItemId === id)?.reason;
+
+  it('the DRY RUN names exactly the queue-failure cards, says why for the rest, and writes nothing', async () => {
+    const cards = await fixtureE();
+    const before = {
+      items: await adminDb.workItem.findMany({ orderBy: { id: 'asc' } }),
+      gates: await adminDb.approvalGate.findMany({ orderBy: { id: 'asc' } }),
+    };
+
+    const report = await ejectedCardConvergenceService.converge({ dryRun: true });
+
+    expect(report.failed).toEqual([]);
+    const ids = (list: { workItemId: string }[]) => list.map((c) => c.workItemId).sort();
+    const expected = [cards.failed.card.id, cards.timedOut.card.id].sort();
+    expect(ids(report.converged)).toEqual(expected);
+    expect(ids(report.withdrawnQueueFailed)).toEqual(expected);
+    expect(reasonIn(report, cards.moved.card.id)).toBe('head_moved');
+    expect(reasonIn(report, cards.decided.card.id)).toBe('gate_decided');
+    expect(reasonIn(report, cards.neutral.card.id)).toBe('already_in_review');
+    expect(reasonIn(report, cards.setting.card.id)).toBe('already_in_review');
+    expect(reasonIn(report, cards.inAuto.card.id)).toBe('auto_mode');
+
+    expect(await adminDb.workItem.findMany({ orderBy: { id: 'asc' } })).toEqual(before.items);
+    expect(await adminDb.approvalGate.findMany({ orderBy: { id: 'asc' } })).toEqual(before.gates);
+  });
+
+  it('APPLY withdraws the re-asked gate `queue_failed` and holds the card at Implemented; decided rows are untouched; a second apply converges 0', async () => {
+    const cards = await fixtureE();
+    const firstApproval = await adminDb.approvalGate.findUniqueOrThrow({
+      where: { id: cards.failed.gate.id },
+    });
+    const decidedReask = await adminDb.approvalGate.findUniqueOrThrow({
+      where: { id: cards.decided.reask.id },
+    });
+    const dry = await ejectedCardConvergenceService.converge({ dryRun: true });
+
+    const report = await ejectedCardConvergenceService.converge({ dryRun: false });
+
+    expect(report.failed).toEqual([]);
+    // The dry run predicted exactly what the apply did.
+    expect(report.converged.map((c) => c.workItemId).sort()).toEqual(
+      dry.converged.map((c) => c.workItemId).sort(),
+    );
+    expect(report.skipped).toEqual(dry.skipped);
+
+    for (const card of [cards.failed, cards.timedOut]) {
+      expect(await statusOf(card.card.id)).toBe('implemented');
+      expect(await awaiting(card.card.id)).toEqual([]);
+      expect(
+        await adminDb.approvalGate.findUniqueOrThrow({ where: { id: card.reask.id } }),
+      ).toMatchObject({ state: 'superseded', supersededCause: 'queue_failed', decidedAt: null });
+    }
+    // The approval before it is history, byte for byte.
+    expect(
+      await adminDb.approvalGate.findUniqueOrThrow({ where: { id: cards.failed.gate.id } }),
+    ).toEqual(firstApproval);
+    // A person's answer is never overruled.
+    expect(await statusOf(cards.decided.card.id)).toBe('in_review');
+    expect(
+      await adminDb.approvalGate.findUniqueOrThrow({ where: { id: cards.decided.reask.id } }),
+    ).toEqual(decidedReask);
+    // Neutral and setting still re-ask, exactly as before; a moved head and auto mode stay.
+    for (const card of [cards.neutral, cards.setting, cards.moved, cards.inAuto]) {
+      expect(await statusOf(card.card.id)).toBe('in_review');
+      expect(await awaiting(card.card.id)).toHaveLength(1);
+    }
+
+    const again = await ejectedCardConvergenceService.converge({ dryRun: false });
+    expect(again.converged).toEqual([]);
+    expect(again.withdrawnQueueFailed).toEqual([]);
+    expect(reasonIn(again, cards.failed.card.id)).toBe('cant_land_held');
+    expect(reasonIn(again, cards.timedOut.card.id)).toBe('cant_land_held');
   });
 });

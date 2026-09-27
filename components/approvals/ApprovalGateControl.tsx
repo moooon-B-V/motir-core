@@ -777,6 +777,11 @@ export function useRefusalCopy(
     case 'MERGE_REQUEUE_NEEDS_APPROVAL':
       headline = t('mergeRequeueNeedsApproval.title');
       break;
+    // A queue FAILURE's Queue again (MOTIR-6594 · MOTIR-6596; design § 31): named as a
+    // failure, never as the conflict it is not.
+    case 'MERGE_QUEUE_FAILED_NEEDS_FIX':
+      headline = t('mergeQueueFailedNeedsFix.title');
+      break;
     case 'MERGE_APP_PERMISSION_MISSING':
       headline = t('mergeAppPermissionMissing.title');
       break;
@@ -947,6 +952,8 @@ function refusalKeyOf(tag: Exclude<GateRefusal['tag'], 'UNEXPECTED'>): string {
       return 'mergeAlreadyRequeued';
     case 'MERGE_REQUEUE_NEEDS_APPROVAL':
       return 'mergeRequeueNeedsApproval';
+    case 'MERGE_QUEUE_FAILED_NEEDS_FIX':
+      return 'mergeQueueFailedNeedsFix';
     case 'MERGE_APP_PERMISSION_MISSING':
       return 'mergeAppPermissionMissing';
   }

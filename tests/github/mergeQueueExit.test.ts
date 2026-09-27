@@ -47,8 +47,10 @@ import type { NormalizedMergeQueueExit } from '@/lib/git/types';
 
 // THE EJECTION ARM (Story MOTIR-5461 · MOTIR-5632; `docs/decisions/approval-gates.md`
 // §4 THIRD AMENDMENT, decisions 1–4, 6 and 9 — and, since Story MOTIR-5799 · MOTIR-5805,
-// the FOURTH AMENDMENT: a manual FAILURE re-asks the merge question on ONE fresh gate at
-// `in_review`, and approving it re-queues), on a REAL Postgres, through the real
+// the FOURTH AMENDMENT: a manual un-landed exit re-asks the merge question on ONE fresh
+// gate at `in_review`, and approving it re-queues — except, since the FIFTH AMENDMENT
+// (MOTIR-6594), a queue FAILURE, which holds the card at `implemented` and asks nothing),
+// on a REAL Postgres, through the real
 // webhook service — the door a GitHub delivery walks. The `dequeued` bodies are the
 // REAL deliveries MOTIR-5627 captured (`tests/fixtures/github/merge-queue/`), with only
 // the installation, the repository id, the number and the head re-pointed at this
@@ -59,6 +61,15 @@ const INSTALLATION_ID = 'inst-queue-exit';
 const REPO_PROVIDER_ID = '993';
 const INSTALLATION = { id: INSTALLATION_ID, account: { login: 'moooon', type: 'Organization' } };
 const KIND = 'pull_request_approval';
+/**
+ * A FAILURE that still RE-ASKS. Since the FIFTH AMENDMENT (MOTIR-6594) the queue's own
+ * failures (`CI_FAILURE`, `CI_TIMEOUT`, `INVALID_MERGE_COMMIT`, `GIT_TREE_INVALID`) are
+ * CAN'T-LAND and hold the card at Implemented, so the tests about the RE-ASK's mechanics
+ * — its idempotency, the promotion hold beside it, approving it, a design card's merge
+ * gate — eject for branch protection: a `failure` disposition (so the card reads red and
+ * the promotion holds) whose class is `setting` (so the question comes back).
+ */
+const REASK = 'BRANCH_PROTECTIONS';
 
 type Captured = 'dequeued-ci-failure' | 'dequeued-manual' | 'dequeued-merge';
 
@@ -247,7 +258,9 @@ afterAll(async () => {
 });
 
 describe('a FAILURE removal', () => {
-  it('in a manual project: one exit row, the queued record cleared, the card back at IN REVIEW with ONE fresh gate over the same commits, the approval untouched', async () => {
+  // §4 FIFTH AMENDMENT (MOTIR-6594): a queue FAILURE is CAN'T-LAND. Yue, 2026-09-27:
+  // *"when a PR failed in the merge queue, we should not open a new approval gate"*.
+  it('in a manual project: one exit row, the queued record cleared, the card HELD at IMPLEMENTED with NO gate, the approval untouched', async () => {
     const { item, approved } = await approvedAndQueued('fail-manual@example.com');
     sent.length = 0;
 
@@ -262,7 +275,7 @@ describe('a FAILURE removal', () => {
       disposition: 'failure',
       rawReason: 'CI_FAILURE',
       moved: [item.identifier],
-      reasked: [item.identifier],
+      reasked: [],
       clearedQueuedOutcome: true,
     });
     const [row, ...more] = await exits(11);
@@ -279,22 +292,13 @@ describe('a FAILURE removal', () => {
     expect((await pr(11)).mergeAuthority).toBe('gate');
     // The sibling approved at its own head stays in the queue.
     expect((await pr(12)).mergeOutcomeRef).toBe('queue:entry-12');
-    // §4 FOURTH AMENDMENT, point 1: back to review, where a fresh yes comes from.
-    expect(await statusOf(item.id)).toBe('in_review');
+    // Back to Implemented, where `motir fix` claims it — and NOTHING is asked.
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await awaitingGates(item.id)).toEqual([]);
 
-    // The decided gate is a record: byte-for-byte what it was…
+    // The decided gate is a record: byte-for-byte what it was.
     const after = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: approved.id } });
     expect(after).toEqual(approved);
-    // …and the merge question is asked AGAIN (point 2): exactly ONE awaiting gate over
-    // the SAME set version the approval named.
-    const [fresh, ...more2] = await awaitingGates(item.id);
-    expect(more2).toEqual([]);
-    expect(fresh).toMatchObject({
-      kind: KIND,
-      subjectId: item.id,
-      subjectVersion: approved.subjectVersion,
-    });
-    expect(fresh!.id).not.toBe(approved.id);
 
     // One transition event, after commit.
     expect(sent.filter((e) => e.name === 'work-item/transitioned')).toEqual([
@@ -302,10 +306,32 @@ describe('a FAILURE removal', () => {
         data: expect.objectContaining({
           workItemId: item.id,
           fromStatusKey: 'approved',
-          toStatusKey: 'in_review',
+          toStatusKey: 'implemented',
         }),
       }),
     ]);
+  });
+
+  it('a CI_FAILURE held at Implemented asks nothing on a green check at the SAME head, and ONE gate once a push goes green', async () => {
+    const { item, approved } = await approvedAndQueued('fail-rearm@example.com');
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }),
+      'guid-fail-rearm',
+    );
+
+    await laterCheck(11, 'sha-a', 'lint');
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await awaitingGates(item.id)).toEqual([]);
+
+    // A push moves the head, the exit stops standing, and the ordinary CI promotion asks
+    // ONE fresh question about the NEW commits.
+    await ci(11, 'sha-a2');
+
+    expect(await statusOf(item.id)).toBe('in_review');
+    const fresh = await awaitingGates(item.id);
+    expect(fresh).toHaveLength(1);
+    expect(fresh[0]!.subjectVersion).toBe('moooon/acme#11@sha-a2,moooon/acme#12@sha-b');
+    expect(fresh[0]!.id).not.toBe(approved.id);
   });
 
   it('in an auto project: the card moves from in_review to implemented, and NO gate is raised (unchanged)', async () => {
@@ -327,11 +353,12 @@ describe('a FAILURE removal', () => {
   });
 
   // ⚠️ BY CLASS, NOT BY DISPOSITION (§4 FOURTH AMENDMENT, point 2; MOTIR-5805). All
-  // five are `failure` rows; what differs is what a person can do about them.
+  // five are `failure` rows; what differs is what a person can do about them. Since the
+  // FIFTH AMENDMENT (MOTIR-6594) every queue failure but a setting is CAN'T-LAND.
   it.each([
-    ['CI_TIMEOUT', 'in_review', 1],
-    ['INVALID_MERGE_COMMIT', 'in_review', 1],
-    ['GIT_TREE_INVALID', 'in_review', 1],
+    ['CI_TIMEOUT', 'implemented', 0],
+    ['INVALID_MERGE_COMMIT', 'implemented', 0],
+    ['GIT_TREE_INVALID', 'implemented', 0],
     // A setting somebody can change: the same commits land once it is changed.
     ['BRANCH_PROTECTIONS', 'in_review', 1],
     // CAN'T LAND: the commits cannot combine, so the card is held and NOTHING is asked.
@@ -493,7 +520,7 @@ describe('NEUTRAL, UNKNOWN and LANDED removals', () => {
 describe('IDEMPOTENCY — keyed on the delivery GUID', () => {
   it('the same delivery twice writes one row, and the second answers duplicate', async () => {
     const { item } = await approvedAndQueued('dup@example.com');
-    const body = dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' });
+    const body = dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: REASK });
 
     await eject(body, 'guid-same');
     const second = await eject(body, 'guid-same');
@@ -507,7 +534,7 @@ describe('IDEMPOTENCY — keyed on the delivery GUID', () => {
 
   it('two deliveries at the same head and reason are two exits', async () => {
     const { item } = await approvedAndQueued('two@example.com');
-    const body = dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' });
+    const body = dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: REASK });
 
     await eject(body, 'guid-first');
     const second = await eject(body, 'guid-second');
@@ -522,7 +549,10 @@ describe('IDEMPOTENCY — keyed on the delivery GUID', () => {
 describe('the PROMOTION HOLD (decision 6) and the re-ask', () => {
   it('after a failure exit, a green check at the SAME head asks nothing twice — still ONE gate, still in_review', async () => {
     const { item } = await approvedAndQueued('hold@example.com');
-    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-hold');
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: REASK }),
+      'guid-hold',
+    );
     const [reasked] = await awaitingGates(item.id);
 
     const result = await laterCheck(11, 'sha-a', 'lint');
@@ -547,7 +577,10 @@ describe('the PROMOTION HOLD (decision 6) and the re-ask', () => {
 
   it('a push to a NEW head supersedes the re-asked gate `head moved`, and the next green raises exactly ONE over the new commits', async () => {
     const { item, approved } = await approvedAndQueued('rearm@example.com');
-    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-rearm');
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: REASK }),
+      'guid-rearm',
+    );
     const [reasked] = await awaitingGates(item.id);
 
     await ci(11, 'sha-a2');
@@ -572,7 +605,10 @@ describe('approving the re-asked gate', () => {
 
   async function ejected(email: string) {
     const out = await approvedAndQueued(email);
-    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), `g-${email}`);
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: REASK }),
+      `g-${email}`,
+    );
     const [reasked] = await awaitingGates(out.item.id);
     return { ...out, reasked: reasked! };
   }
@@ -748,7 +784,10 @@ describe('a DESIGN card the queue ejects', () => {
   it('leaves the DESIGN gate decided and re-asks ONLY the merge — one awaiting merge gate, standing alone', async () => {
     const { item, design } = await designedAndQueued('mq-design-eject@example.com');
 
-    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-d1');
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: REASK }),
+      'guid-d1',
+    );
 
     // §4 FOURTH AMENDMENT, point 2: the MERGE question is asked again, alone.
     expect(await statusOf(item.id)).toBe('in_review');
@@ -775,7 +814,10 @@ describe('a DESIGN card the queue ejects', () => {
     // re-publishing the asset is a reasonable-looking thing for it to do. It would
     // turn a commits problem into a shipped design nobody approved.
     const { s, item } = await designedAndQueued('mq-design-republish@example.com');
-    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-d2');
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: REASK }),
+      'guid-d2',
+    );
     expect(await statusOf(item.id)).toBe('in_review');
 
     const prefix = designPrefix(s.workspace.id, item.id);
@@ -826,7 +868,10 @@ describe('a DESIGN card the queue ejects', () => {
 
   it('a PUSH after the ejection re-arms the merge question and leaves the design alone', async () => {
     const { item, design } = await designedAndQueued('mq-design-push@example.com');
-    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-d3');
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: REASK }),
+      'guid-d3',
+    );
 
     await ci(11, 'sha-a2');
 
@@ -939,7 +984,10 @@ describe('an ejected card reads RED (MOTIR-5717)', () => {
 
   it('a further green check at the SAME head keeps the card red and moves nothing', async () => {
     const { item } = await approvedAndQueued('red-same-head@example.com');
-    await eject(dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }), 'guid-red-4');
+    await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a', reason: REASK }),
+      'guid-red-4',
+    );
 
     await laterCheck(11, 'sha-a', 'lint');
 

@@ -536,7 +536,10 @@ describe('SEAM 5 · an EJECTED member reads the same in the overlay (MOTIR-5635)
     // The overlay draws a DECIDED gate with nothing to press, as it does Retry merge — the
     // press lives on the item page (an ejected card is not in To approve, § 22).
     expect(within(row).queryByRole('button', { name: pra.outcome.queueAgain })).toBeNull();
-    expect(within(dialog).getByText(new RegExp(pra.exit.reason.CI_FAILURE))).toBeTruthy();
+    // A queue FAILURE is held (MOTIR-6596, design § 31 panel 2): the failed CHECK is named in
+    // the sentence, and the held line says why nothing is asked.
+    expect(dialog.textContent).toContain('left the merge queue: CI complete failed.');
+    expect(dialog.textContent).toContain('cannot land as they stand, so Motir is not asking again');
     expect(
       within(dialog)
         .getByRole('link', { name: pra.exit.openCheck.replace('{check}', 'CI complete') })

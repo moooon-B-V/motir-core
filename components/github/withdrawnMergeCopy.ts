@@ -42,6 +42,9 @@ export interface WithdrawnMember {
   conflicted?: boolean;
   /** The branch it targets, for `{base}`; null when the row never recorded one. */
   baseRef?: string | null;
+  /** A standing queue FAILURE holds it (MOTIR-6596) — what names the member in a
+   *  `queue_failed` withdrawal. Absent = no. */
+  leftQueue?: boolean;
 }
 
 const pra = (key: string, values: Record<string, string | number> = {}): WithdrawnMessage => ({
@@ -184,6 +187,19 @@ export function withdrawnMergeCopy({
         // raises a fresh gate on its next green, which is the whole point of withdrawing
         // rather than leaving the question standing over a commit that failed.
         return { ...unrecorded('ci_failed'), cite: reask };
+      case 'queue_failed': {
+        // A GATE THE OLD RULE RE-ASKED FROM A QUEUE FAILURE, withdrawn by the convergence
+        // (MOTIR-6595 · MOTIR-6596; design § 31 panel 5). The member is the one whose row
+        // still reads *Left the queue*; with none left to name, the shared sentence.
+        const failed = members.filter((m) => m.leftQueue === true);
+        if (failed.length === 0) return { ...unrecorded('queue_failed'), cite: reask };
+        const pr = nameList(failed.map((m) => m.name));
+        return {
+          meta: pra('meta.withdrawnQueueFailed', { count, pr }),
+          sentence: pra('withdrawn.portQueueFailed', { pr }),
+          cite: pra('withdrawn.citeQueueFailed'),
+        };
+      }
       case 'pulled_back':
         return {
           meta: pra('meta.withdrawnPulledBack', { count }),

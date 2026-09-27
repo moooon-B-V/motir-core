@@ -4886,6 +4886,10 @@ enum ApprovalGateSupersedeCause {
   /// The plan's LAST proposal was withdrawn, so the plan was discarded (ADR
   /// `approval-gates.md` §11.7).
   plan_discarded
+  /// The merge queue removed a member for a FAILURE at the commits the gate asked
+  /// about — CAN'T-LAND since `approval-gates.md` §4's FIFTH AMENDMENT (MOTIR-6595).
+  /// Only the convergence writes it, because a live failure raises no gate to withdraw.
+  queue_failed
 
   @@map("approval_gate_supersede_cause")
 }

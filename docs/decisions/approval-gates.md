@@ -121,6 +121,14 @@
   _Request changes … moves nothing_ and §5's line against 9.2; each carries a
   pointer. It strikes nothing.
 
+- **AMENDED 2026-09-27 (MOTIR-6591, for Story MOTIR-6587), at §4 — a merge-queue
+  FAILURE is CAN'T LAND.** §4's FIFTH AMENDMENT moves the queue reasons
+  `CI_FAILURE`, `CI_TIMEOUT`, `INVALID_MERGE_COMMIT` and `GIT_TREE_INVALID` from
+  retryable to can't-land: the card drops to `implemented` held at that head, no
+  gate is raised, `motir fix` repairs it, and only a new green head raises the next
+  gate. Neutral removals, setting outcomes and `auto` mode are unchanged. The
+  FOURTH AMENDMENT's affected sentences carry superseded notes; none is struck.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -1982,6 +1990,13 @@ An approval that does not merge is a note, not a gate.
 >   (MOTIR-5232): the action was never attempted, so nothing was spent and no row
 >   is written.
 >
+> **⚠️ SUPERSEDED by the FIFTH AMENDMENT below (MOTIR-6591, 2026-09-27)** for
+> the four queue FAILURE reasons in the RETRYABLE row — `CI_FAILURE`, `CI_TIMEOUT`,
+> `INVALID_MERGE_COMMIT`, `GIT_TREE_INVALID` — and for the _"a flaky check"_ in the
+> RETRYABLE sentence: those four are now CAN'T LAND AS IT STANDS, with
+> `MERGE_CONFLICT`. The NEUTRAL removals stay RETRYABLE, and the other three rows
+> stand. Kept visible as the record.
+>
 > **3. THE RE-ASKED GATE** is ONE fresh awaiting `pull_request_approval` gate over
 > the SAME delivery-set version, standing alone.
 >
@@ -2019,6 +2034,12 @@ An approval that does not merge is a note, not a gate.
 > offers neither verb. _Why:_ the familiar button is kept where people look for it,
 > and it is made to MEAN the fresh yes rather than a replay of the spent one.
 >
+> **⚠️ SUPERSEDED by the FIFTH AMENDMENT below (MOTIR-6591, 2026-09-27)** for a
+> queue FAILURE: a member whose standing exit is `CI_FAILURE`, `CI_TIMEOUT`,
+> `INVALID_MERGE_COMMIT` or `GIT_TREE_INVALID` is now a CAN'T-LAND member, so it
+> offers neither verb and _Queue again_ refuses it. The verbs stay the approve for a
+> NEUTRAL removal and a SETTING outcome. Kept visible as the record.
+>
 > **5. THE HOST'S REFUSAL IS RECORDED** on the pull request —
 > `GithubPullRequestMergeRefusal`: the `MergeRefusalCode`, the head it refused, the
 > gate whose approval it spent, and when — written in its own transaction after the
@@ -2037,6 +2058,12 @@ An approval that does not merge is a note, not a gate.
 > one gate over the new commits (MOTIR-5604's path, unchanged) — which is also how
 > a CAN'T-LAND card leaves its hold. _Why:_ `motir fix` sends an agent to change
 > code; against branch protection or a hand removal it has nothing to change.
+>
+> **⚠️ SUPERSEDED by the FIFTH AMENDMENT below (MOTIR-6591, 2026-09-27)** in its
+> first sentence's second half: a `CI_FAILURE` / `CI_TIMEOUT` /
+> `INVALID_MERGE_COMMIT` / `GIT_TREE_INVALID` card no longer reaches `in_review`,
+> so `motir fix` claims it at `implemented`, as a CAN'T-LAND card. The refusals
+> of a SETTING and a NEUTRAL card stand. Kept visible as the record.
 >
 > **7. THE EDGES.** After this amendment the ejection edges in the default workflow
 > read:
@@ -2079,6 +2106,13 @@ An approval that does not merge is a note, not a gate.
 > old one with no way back, and RETRYABLE is the safe default for an outcome nobody
 > recorded — a person is asked, and can still reach for `motir fix`.
 >
+> **⚠️ SUPERSEDED by the FIFTH AMENDMENT below (MOTIR-6591, 2026-09-27)** in its
+> first population for a queue FAILURE exit: a card at `implemented` with a
+> standing `CI_FAILURE` / `CI_TIMEOUT` / `INVALID_MERGE_COMMIT` /
+> `GIT_TREE_INVALID` exit is already in its new state, and is counted with the
+> `MERGE_CONFLICT` population rather than moved. The FIFTH AMENDMENT's point 4 adds
+> the population that runs the other way. Kept visible as the record.
+>
 > **10. `auto` MODE IS UNCHANGED.** No gate is raised, a failure exit still writes
 > `in_review → implemented`, and `requeueAutoMember` (MOTIR-5634) still
 > re-dispatches the same head on a person's press. _Why:_ there is no approval in
@@ -2100,6 +2134,103 @@ An approval that does not merge is a note, not a gate.
 > | 6 (surface) | MOTIR-5801 — the design · MOTIR-5806 — the frame and the overlay      |
 > | 7 (edges)   | MOTIR-5804 — the edges and their migration                            |
 > | 9           | MOTIR-5809 — the script · MOTIR-5810 — its production run             |
+
+> ### §4 — FIFTH AMENDMENT (MOTIR-6591, 2026-09-27): a merge-queue FAILURE is CAN'T LAND — `CI_FAILURE`, `CI_TIMEOUT`, `INVALID_MERGE_COMMIT` and `GIT_TREE_INVALID` join `MERGE_CONFLICT` at `implemented` with no gate; neutral and setting outcomes keep the re-ask
+>
+> **DECIDED BY THE REQUESTER (Yue, 2026-09-27).** Their words: _"when a PR failed
+> in the merge queue, we should not open a new approval gate"_. Story MOTIR-6587.
+>
+> **What this reverses.** For the four queue FAILURE reasons only, the FOURTH
+> AMENDMENT's re-ask: its point 2 RETRYABLE row, point 4's verbs, point 6's
+> `in_review` claim and point 9's first population, each carrying a superseded note
+> above. Nothing is struck and the FOURTH AMENDMENT's text is not edited. Every rule
+> below is for a `manual`-mode project, as the FOURTH's are.
+>
+> **1. WHAT MOVES.** The queue reasons `CI_FAILURE`, `CI_TIMEOUT`,
+> `INVALID_MERGE_COMMIT` and `GIT_TREE_INVALID` move from `retryable` to
+> `cant_land` in `lib/mergeQueue/queueExit.ts`. _Why:_ a failure says the commits as
+> they stand cannot land, so a second approval of the same head is a button
+> guaranteed to fail. A flaky failure, where the code is fine, is repaired the same
+> way: `motir fix` merges the default branch first (MOTIR-3744), so there is always
+> a new head and a new green run.
+>
+> The class table after this amendment, over every key of `QUEUE_EXIT_REASONS` and
+> every `MergeRefusalCode` (`lib/git/types.ts`):
+>
+> | source | reason                   | disposition | class after           | changed |
+> | ------ | ------------------------ | ----------- | --------------------- | ------- |
+> | queue  | `CI_FAILURE`             | failure     | `cant_land`           | **yes** |
+> | queue  | `CI_TIMEOUT`             | failure     | `cant_land`           | **yes** |
+> | queue  | `INVALID_MERGE_COMMIT`   | failure     | `cant_land`           | **yes** |
+> | queue  | `GIT_TREE_INVALID`       | failure     | `cant_land`           | **yes** |
+> | queue  | `MERGE_CONFLICT`         | failure     | `cant_land`           | no      |
+> | queue  | `BRANCH_PROTECTIONS`     | failure     | `setting`             | no      |
+> | queue  | `MANUAL`                 | neutral     | `retryable`           | no      |
+> | queue  | `QUEUE_CLEARED`          | neutral     | `retryable`           | no      |
+> | queue  | `ROLL_BACK`              | neutral     | `retryable`           | no      |
+> | queue  | `UNKNOWN_REMOVAL_REASON` | neutral     | `retryable`           | no      |
+> | queue  | an unrecognised string   | neutral     | `retryable`           | no      |
+> | queue  | `MERGE`                  | landed      | `landed`              | no      |
+> | queue  | `ALREADY_MERGED`         | landed      | `landed`              | no      |
+> | host   | `checks_not_green`       | —           | `cant_land`           | no      |
+> | host   | `conflict`               | —           | `cant_land`           | no      |
+> | host   | `branch_protected`       | —           | `setting`             | no      |
+> | host   | `app_permission_missing` | —           | `setting`             | no      |
+> | host   | `already_merged`         | —           | `landed`              | no      |
+> | host   | `subject_changed`        | —           | none (not an outcome) | no      |
+>
+> **2. WHAT THAT MEANS, SURFACE BY SURFACE — the shipped `cant_land` behaviour,
+> applied to four more reasons.** No new mechanism is introduced:
+>
+> - the card goes `approved → implemented`, HELD at that head (`settleUnlandedOutcome`);
+> - no gate is raised, and a green check at the SAME head raises none, because a
+>   failure disposition already holds the promotion (`queueExitHoldsAtHead`);
+> - _Queue again_ is refused for these reasons, with a refusal of their own
+>   (`MERGE_QUEUE_FAILED_NEEDS_FIX`) rather than `MERGE_CONFLICT`, so a CI failure is
+>   never reported as a conflict;
+> - `motir fix` claims the card at `implemented`;
+> - a push whose CI goes green raises ONE gate through the ordinary CI promotion
+>   (the FOURTH's point 6, unchanged).
+>
+> **3. WHAT DOES NOT MOVE, AND WHY.**
+>
+> - **NEUTRAL removals** (`MANUAL`, `QUEUE_CLEARED`, `ROLL_BACK`,
+>   `UNKNOWN_REMOVAL_REASON`, an unrecognised string) stay `retryable`: nothing
+>   failed, so asking again is the honest question.
+> - **SETTING outcomes** (`BRANCH_PROTECTIONS`, host `branch_protected` /
+>   `app_permission_missing`) stay `setting`: changing a setting is not a push, so
+>   without a gate nothing would ever bring the question back.
+> - **The host refusal classes** are already `cant_land` for `conflict` and
+>   `checks_not_green`, and are unchanged.
+> - **`auto` mode** is unchanged: no gate is raised, and `requeueAutoMember` still
+>   re-dispatches the same head on a person's press (the FOURTH's point 10).
+>
+> **4. THE CONVERGENCE.** A card already at `in_review` holding an AWAITING
+> `pull_request_approval` gate that was re-asked from one of the four reasons — a
+> standing, un-re-queued failure exit at the member's current head, later than the
+> card's last approval — is moved to `implemented` through the same
+> `settleUnlandedOutcome` a live exit runs, and that awaiting gate is withdrawn with
+> a new supersede cause, `queue_failed`. A decided gate row is never edited (§6a),
+> and a second run moves nothing. It runs through the MOTIR-5809 script and its
+> `workflow_dispatch`, operated after deploy.
+>
+> **5. SUPERSEDED TEXT.** The FOURTH AMENDMENT's point 2 RETRYABLE row and its
+> RETRYABLE sentence, point 4 for a failure, point 6's `in_review` claim and point
+> 9's first population carry a `⚠️ SUPERSEDED by the FIFTH AMENDMENT below` note,
+> in the form the FOURTH used on the THIRD. Sentences about the neutral and setting
+> classes are left unmarked.
+>
+> **Not decided here:** listing a failed card on a Workbench tab (the To fix story,
+> MOTIR-6588); the `→ planning` edges (MOTIR-5643); GitLab merge trains
+> (MOTIR-4608); any notification.
+>
+> **Which card builds which point** (Story MOTIR-6587):
+>
+> | points      | card                                                                       |
+> | ----------- | -------------------------------------------------------------------------- |
+> | 1, 2        | MOTIR-6594 — the class map, the refusal, `motir fix` and its help          |
+> | 2 (surface) | MOTIR-6593 — the design delta · MOTIR-6596 — the row, the overlay and copy |
+> | 4           | MOTIR-6595 — the convergence · MOTIR-6592 — its production run             |
 
 ### 5. The line against Story 9.2 — DECIDED BY THE PLANNER (rung 3, and it re-scopes existing cards)
 
