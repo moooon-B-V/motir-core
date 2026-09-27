@@ -8,6 +8,7 @@ import type { ReportScopeDto } from '@/lib/dto/reports';
 import { coercePeriod, coerceDaysBack, PERIOD_LABEL_KEY } from '@/lib/reports/reportPageView';
 import { ReportPageChrome } from '../_components/ReportPageChrome';
 import { AverageAgeReport, type AverageAgeResult } from '../_components/AverageAgeReport';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The Average-age report page (Story 8.8 · Subtask 8.8.13) — per
 // design/reports/more-reports.mock.html panel 2. Server Component: it resolves
@@ -27,10 +28,10 @@ export default async function AverageAgePage({
 
   const t = await getTranslations('reports');
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   const sp = await searchParams;
   const savedFilterId = sp.savedFilterId ?? null;

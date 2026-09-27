@@ -80,6 +80,7 @@ vi.mock('@/lib/services/projectsService', () => ({
   projectsService: {
     listProjects: vi.fn(async () => []),
     getActiveProject: vi.fn(async () => null),
+    canOfferCreateProject: vi.fn(async () => true),
   },
 }));
 vi.mock('@/lib/services/projectAccessService', () => ({

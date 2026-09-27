@@ -229,9 +229,9 @@ describe('a real comment mention is fanned in and read back through the feed (5.
   it('a recipient who has lost view access gets nothing — all-excluded fans in no rows', async () => {
     const j = await makeJourney();
     const comment = await mentionComment(j, j.bo);
-    // Take the project private AFTER the comment: it auto-enrolls the current
-    // members, but a member added now has no project access — "lost view access
-    // between the write and the fan-in".
+    // Take the project private AFTER the comment: going private adds nobody
+    // (Story MOTIR-6169), so a member added now has no project access — "lost
+    // view access between the write and the fan-in".
     await projectMembersService.setAccessLevel({
       key: j.fx.projectIdentifier,
       actorUserId: j.fx.ownerId,

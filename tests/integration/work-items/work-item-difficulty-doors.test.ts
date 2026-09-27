@@ -166,7 +166,13 @@ describe('one value, every door', () => {
     const svc = await workItemsService.getWorkItemByIdentifier(c.fixture.projectId, key, c.ctx);
     expect(svc.difficulty).toBe('high');
 
-    const qv = await workItemsService.getQuickView(c.fixture.projectId, key, 'open', c.ctx, 'en');
+    const qv = await workItemsService.getQuickView(
+      c.fixture.projectId,
+      key,
+      'workspace',
+      c.ctx,
+      'en',
+    );
     expect(qv.difficulty).toBe('high');
 
     expect(await restSearchKeys(c, is('is_any_of', ['high']))).toEqual([key]);

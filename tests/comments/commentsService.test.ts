@@ -190,7 +190,7 @@ describe('commentsService.addComment', () => {
     expect(events).toHaveLength(0);
   });
 
-  it('allows a plain workspace member to comment on a LIMITED project (view + comment, no edit)', async () => {
+  it('hides a legacy LIMITED project — Members only since MOTIR-6169 — from a plain workspace member who was not added', async () => {
     const s = await buildScenario();
     captureCommentEvents();
     await projectMembersService.setAccessLevel({
@@ -200,20 +200,35 @@ describe('commentsService.addComment', () => {
       level: 'limited',
     });
 
-    const dto = await commentsService.addComment(s.issue.id, { bodyMd: 'limited ok' }, s.memberCtx);
+    // `limited` used to mean "every workspace member views and comments"; the
+    // DECISION maps it to Members only (`role-model.md` Q1), so someone who was
+    // not added no longer enters it — the comment path hides it as not-found.
+    await expect(
+      commentsService.addComment(s.issue.id, { bodyMd: 'limited' }, s.memberCtx),
+    ).rejects.toBeInstanceOf(WorkItemNotFoundError);
+    // Someone added to it still comments.
+    const dto = await commentsService.addComment(s.issue.id, { bodyMd: 'limited ok' }, s.ownerCtx);
     expect(dto.bodyMd).toBe('limited ok');
   });
 
   it('hides a PRIVATE project from a non-member (404) and scopes mentions to project members', async () => {
     const s = await buildScenario();
     captureCommentEvents();
-    // Flip private: the then-current members (owner, member, viewer, projAdmin,
-    // mentionee) are auto-enrolled. The late joiner stays out.
+    // Flip private (Members only). Nobody is added by the flip since Story
+    // MOTIR-6169, so the mentionee is added explicitly; the late joiner stays out.
     await projectMembersService.setAccessLevel({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,
       ctx: s.ownerCtx,
       level: 'private',
+    });
+    await adminDb.projectMembership.create({
+      data: {
+        workspaceId: s.fx.workspaceId,
+        projectId: s.fx.projectId,
+        userId: s.mentionee.id,
+        role: 'member',
+      },
     });
     const outsider = await usersService.createUser({
       email: 'late@ex.com',

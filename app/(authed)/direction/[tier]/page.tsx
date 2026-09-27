@@ -7,6 +7,7 @@ import { isDirectionDocKind } from '@/lib/onboarding/directionDoc';
 import { findTierDoc, producedTierKinds } from '@/lib/onboarding/preplanClient';
 import type { PreplanStateDTO } from '@/lib/dto/aiPreplan';
 import { DirectionDocFullPage } from './_components/DirectionDocFullPage';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // GET /direction/[tier] (Subtask 7.20.14 / MOTIR-1355) — the read-only FULL PAGE
 // for one pre-plan direction-tier doc, reached from the tier-doc modal's
@@ -27,10 +28,10 @@ export default async function DirectionDocPage({ params }: { params: Promise<{ t
   if (!session) redirect('/sign-in');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   let state: PreplanStateDTO | null = null;
   let error = false;

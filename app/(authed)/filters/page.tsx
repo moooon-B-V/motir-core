@@ -5,6 +5,7 @@ import { getActiveProject } from '@/lib/projects';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { FiltersDirectory } from './_components/FiltersDirectory';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The Filters directory (Story 6.2 · Subtask 6.2.4) — the project-level manage
 // surface for saved filters, per design/work-items/saved-filters.mock.html
@@ -32,10 +33,10 @@ export default async function FiltersPage() {
   const t = await getTranslations('savedFilters');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   // Story 6.4.6 — gate on canBrowse; the same one resolve also yields the
   // share + admin tiers the row actions decide over (one round-trip).

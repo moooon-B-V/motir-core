@@ -14,6 +14,7 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { getActiveProject } from '@/lib/projects';
 import { dashboardsService } from '@/lib/services/dashboardsService';
 import { DashboardsHome } from './_components/DashboardsHome';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The "the dashboards page has rendered" marker, on BOTH branches — a bare
 // wrapper rather than one branch's root, so neither branch's own layout is
@@ -36,11 +37,11 @@ export default async function DashboardPage() {
   const ctx = await getWorkspaceContext();
   if (!ctx) redirect('/sign-in');
 
-  // UNREACHABLE for a signed-in reader (MOTIR-4870). The guard stays because
-  // the type does — the only null left is a session-less request, already
-  // answered above — and it redirects rather than rendering.
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
   const project = await getActiveProject();
-  if (!project) redirect('/sign-in');
+  if (!project) redirect(NO_PROJECT_PATH);
 
   const dashboards = await dashboardsService.listDashboards(ctx);
   return (

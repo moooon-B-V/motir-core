@@ -21,6 +21,7 @@ import { DISPATCH_RUN_LIVE_STATUSES, DISPATCH_RUN_PAST_STATUSES } from '@/lib/ru
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { RunsIndex } from './_components/RunsIndex';
 import { RunsIndexSkeleton } from './_components/RunsIndexSkeleton';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // THE RUNS INDEX (Story MOTIR-1789 · MOTIR-3923) — every run this project has
 // made, current and past. The surface that makes a run FINDABLE at all: before
@@ -82,10 +83,10 @@ export default async function RunsPage({
     getActiveProject(),
     searchParams,
   ]);
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   const projectKey = ctx.project.identifier;
   const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };

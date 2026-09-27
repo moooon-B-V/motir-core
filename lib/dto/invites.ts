@@ -14,6 +14,12 @@ export interface ValidateInviteResultDTO {
 
 export interface AcceptInviteResultDTO {
   workspaceId: string;
+  /**
+   * The projects a Limited invite named that were ARCHIVED between the send and
+   * the accept, so the person was not added to them (Story MOTIR-6169 ·
+   * MOTIR-6546). Empty on every other accept.
+   */
+  skippedProjects: string[];
 }
 
 // Discriminated result for the acceptance UI's initial page load. Lets

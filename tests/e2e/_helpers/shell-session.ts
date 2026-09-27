@@ -279,14 +279,40 @@ async function settleOnOnboardingEntrance(page: Page): Promise<void> {
 // the same place `signUp` lands (MOTIR-2654, then MOTIR-2921); callers that
 // need a different surface `goto` it afterwards, which is safe because sign-in
 // performs exactly ONE navigation (MOTIR-2645).
-export async function signIn(page: Page, email: string, password: string): Promise<void> {
+/**
+ * The no-project landing (Story MOTIR-6169 · MOTIR-6548): where a reader who can
+ * enter none of the workspace's projects settles — the Workbench forwards them
+ * there. The same two waits as `settleOnWorkbench`, on that address and its
+ * shell's heading.
+ */
+async function settleOnNoProject(page: Page): Promise<void> {
+  const landed = (url: URL) => url.pathname === '/no-project';
+  await page.waitForURL((url) => url.pathname.startsWith(RECONSENT_PATH) || landed(url), {
+    timeout: 30_000,
+  });
+  await clearReconsentHold(page);
+  await page.waitForURL(landed, { timeout: 30_000 });
+  // `getByRole` — the accessibility tree excludes a hidden, still-mounted
+  // previous subtree, where a page-rooted `getByTestId` would match both.
+  await expect(page.getByRole('heading', { name: /not in a project yet/i })).toBeVisible({
+    timeout: 30_000,
+  });
+}
+
+export async function signIn(
+  page: Page,
+  email: string,
+  password: string,
+  options: { landing?: 'workbench' | 'no-project' } = {},
+): Promise<void> {
   await startSignedOut(page);
   await page.goto('/sign-in');
   await page.getByPlaceholder('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Password').fill(password);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await settleOnWorkbench(page);
+  if (options.landing === 'no-project') await settleOnNoProject(page);
+  else await settleOnWorkbench(page);
 }
 
 /**

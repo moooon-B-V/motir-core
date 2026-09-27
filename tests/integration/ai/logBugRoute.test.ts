@@ -306,18 +306,19 @@ describe('the PROJECT bound — the token’s project, and only the token’s', 
     expect(await adminDb.workItem.count()).toBe(0);
   });
 
-  it('a LIMITED project the token’s user may browse but not edit is 403 PROJECT_ACCESS_DENIED', async () => {
+  it('a project the token’s user may browse but not edit is 403 PROJECT_ACCESS_DENIED', async () => {
+    // The browse-but-not-edit actor is a workspace VIEWER on an Open project.
+    // (It used to be a member not added to a `limited` project; `limited` is
+    // Members only since Story MOTIR-6169, so that actor no longer browses.)
     const fx = await makeFixture();
     const jobId = 'job_limited';
     await openPlan(fx, jobId);
-    await projectMembersService.setAccessLevel({
-      key: fx.projectIdentifier,
-      actorUserId: fx.ownerId,
-      ctx: fx.ctx,
-      level: 'limited',
-    });
     const outsider = await createTestUser();
     await workspacesService.addMember({ userId: outsider.id, workspaceId: fx.workspaceId });
+    await adminDb.workspaceMembership.update({
+      where: { userId_workspaceId: { userId: outsider.id, workspaceId: fx.workspaceId } },
+      data: { workspaceRole: 'viewer' },
+    });
 
     const res = await logBugPOST(
       req({

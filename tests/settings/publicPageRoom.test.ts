@@ -64,10 +64,10 @@ describe('the room island is mounted on the hero read (MOTIR-4171)', () => {
   });
 
   it('threads the access level and the PUBLIC host’s URL, never the app origin', () => {
-    // The not-yet-public band and the head link hang off `accessLevel`; the
+    // The not-yet-public band and the head link hang off `accessMode` (MOTIR-6547); the
     // link's host comes from `publicProjectUrl` (MOTIR-4242's accessor), which
     // is a server read the client island cannot make.
-    expect(src).toContain("isPublic={ctx.project.accessLevel === 'public'}");
+    expect(src).toContain("isPublic={ctx.project.accessMode === 'public'}");
     expect(src).toContain('publicPageUrl={publicProjectUrl(ctx.project.identifier)}');
     expect(src).not.toContain('window.location');
   });

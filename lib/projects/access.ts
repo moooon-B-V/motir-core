@@ -1,5 +1,14 @@
-import { hasPermission } from '@/lib/permissions/resolve';
+import { canEnter, hasPermission } from '@/lib/permissions/resolve';
 import type { ProjectPermissionInputs } from '@/lib/permissions/resolve';
+
+/**
+ * Whether the actor may ENTER the project (Story MOTIR-6169 · MOTIR-6543) — the
+ * one entry rule, re-exported beside {@link canBrowse}. They differ on exactly one
+ * cell: a non-entrant on a `public` project still BROWSES (the public read set)
+ * but does not ENTER. So every LISTING of "your projects" filters by `canEnter`,
+ * and every read gate keeps asking `canBrowse`.
+ */
+export { canEnter };
 
 // The project access POLICY — the eleven NAMED PREDICATES the product asks its
 // access questions through. Roughly 150 `assertCan*` call sites across `lib` and
@@ -10,14 +19,15 @@ import type { ProjectPermissionInputs } from '@/lib/permissions/resolve';
 // resolved PERMISSION SET: `lib/permissions/catalog.ts` names the permissions,
 // `lib/permissions/builtinRoles.ts` expresses each built-in role as a set over
 // them, and `lib/permissions/resolve.ts` turns the resolved facts — the access
-// level, the actor's WORKSPACE role (Story MOTIR-6168) and whether they were added
-// to the project — into the actor's effective set, including both shipped rails
-// (a workspace Manager always passes; a non-workspace-member never does) and the
-// per-level subtraction. Read those three files for the semantics; this file is the
+// MODE, the actor's WORKSPACE role (Story MOTIR-6168), their membership SCOPE and
+// whether they were added to the project (Story MOTIR-6169) — into the actor's
+// effective set: nothing beyond the public read set for someone who cannot ENTER,
+// the whole role-gated catalog for a Manager, and the role's set for any other
+// entrant. Read those three files for the semantics; this file is the
 // vocabulary the rest of the codebase speaks.
 //
-// `tests/permissions/accessParity.test.ts` is the truth table: every access level
-// × workspace role × added-or-not, each row's expected set written out.
+// `tests/permissions/accessParity.test.ts` is the truth table: every access mode
+// × workspace role × scope × added-or-not, each row's expected set written out.
 //
 // Still pure (no Prisma client, no IO), so it stays trivially unit-testable and
 // importable from anywhere; the IO half (resolving the inputs from the DB, then
@@ -39,8 +49,9 @@ export type ProjectAccessInputs = ProjectPermissionInputs;
  * Whether the actor may BROWSE (view) the project — its read paths (the project
  * read, the board projection, the issue list/detail). `public` admits ANYONE,
  * including an unauthenticated / cross-org actor — the single cross-org read
- * exception (Story 6.12); `open`/`limited` admit any workspace member; `private`
- * requires the actor to have been added. A workspace Manager always passes.
+ * exception (Story 6.12); otherwise it admits exactly the actors who can ENTER
+ * ({@link canEnter}) — a Manager always, anyone added, and a Full-scope member on
+ * a `workspace` project.
  */
 export function canBrowse(i: ProjectAccessInputs): boolean {
   return hasPermission(i, 'project:browse');
@@ -48,8 +59,8 @@ export function canBrowse(i: ProjectAccessInputs): boolean {
 
 /**
  * Whether the actor may EDIT the project's issues/board (create / move / assign /
- * update). An explicit project `viewer` is read-only everywhere; on `limited` and
- * `private` only project members (member/admin) edit. Every EXTERNAL / anonymous
+ * update). An entrant edits when their workspace role holds `work_item:edit` (a
+ * Viewer never does); a non-entrant never does. Every EXTERNAL / anonymous
  * public viewer is denied by the null-deny rail, so a public viewer NEVER edits —
  * their only writes are the three explicit grants below (Story 6.12 ADR §3).
  */
@@ -59,9 +70,8 @@ export function canEdit(i: ProjectAccessInputs): boolean {
 
 /**
  * Whether the actor may COMMENT on the project's issues (Story 5.1 — Jira's
- * "Add comments" permission). Sits BETWEEN browse and edit: on `limited` any
- * workspace member comments even though only project members edit; the explicit
- * read-only `viewer` project role never comments.
+ * "Add comments" permission). Held by an entrant whose workspace role carries
+ * `comment:add`; the read-only Viewer role never comments.
  */
 export function canComment(i: ProjectAccessInputs): boolean {
   return hasPermission(i, 'comment:add');
@@ -69,7 +79,7 @@ export function canComment(i: ProjectAccessInputs): boolean {
 
 // --- Public-project write grants (Story 6.12 · Subtask 6.12.3) --------------
 // The THREE — and only three — writes a PUBLIC-project viewer may perform. Each
-// decides over `accessLevel` ALONE and is INDEPENDENT of `canEdit`: a public
+// decides over `accessMode` ALONE and is INDEPENDENT of `canEdit`: a public
 // viewer is a non-member, so `canEdit` is false for every normal write, and
 // admitting these three is the whole point (ADR §3). In the permission model
 // they are LEVEL-GATED — held by every actor on a `public` project and by NO

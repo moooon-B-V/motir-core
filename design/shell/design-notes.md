@@ -4,17 +4,18 @@ The authed shell: the top bar, the persistent sidebar rail, the off-canvas drawe
 overlays the bar summons. This is the area's first `design-notes.md`; the five `.pen` assets beside it
 predate the three-file convention and are indexed below rather than rewritten.
 
-| Surface                                    | Asset                                                           | Card                        | State                                                                                                |
-| ------------------------------------------ | --------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Desktop shell @1440 — bar + rail + content | `desktop.pen` / `.png`                                          | MOTIR-53 (1.5.1)            | Stale in the right cluster only: draws 3 controls of the 8 that ship                                 |
-| Desktop shell, rail collapsed              | `desktop-collapsed.pen` / `.png`                                | MOTIR-53                    | Same                                                                                                 |
-| Narrow width — bar closed, drawer open     | `mobile-drawer.pen` / `.png`                                    | MOTIR-53                    | **Superseded by `top-bar.mock.html`** for the right cluster + the drawer's footer                    |
-| ⌘K command palette                         | `cmd-k.pen` / `.png`                                            | MOTIR-53                    | Current (panels: _Empty query_, _Filtered: 'iss'_)                                                   |
-| Shortcuts cheatsheet                       | `shortcuts.pen` / `.png`                                        | MOTIR-53                    | Current                                                                                              |
-| **The top bar's control budget**           | **`top-bar.mock.html` / `top-bar.png`**                         | **MOTIR-2374**              | **The design of record for what the bar carries at each width**                                      |
-| **The context row — the left cluster**     | **`context-row.mock.html` / `context-row.png`**                 | **MOTIR-2555**              | **The design of record for the `org › workspace › project` path, the rail head, and the brand tile** |
-| **The navigation-pending grammar**         | **`navigation-pending.mock.html` / `navigation-pending.png`**   | **MOTIR-3431**              | **The design of record for what the content area shows between the click and the arrival**           |
-| **The rail's BOTTOM section**              | **`rail-bottom-section.mock.html` / `rail-bottom-section.png`** | **MOTIR-4130** · MOTIR-4167 | **The design of record for every row that section renders, at all three widths, in both arms**       |
+| Surface                                           | Asset                                                           | Card                        | State                                                                                                |
+| ------------------------------------------------- | --------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Desktop shell @1440 — bar + rail + content        | `desktop.pen` / `.png`                                          | MOTIR-53 (1.5.1)            | Stale in the right cluster only: draws 3 controls of the 8 that ship                                 |
+| Desktop shell, rail collapsed                     | `desktop-collapsed.pen` / `.png`                                | MOTIR-53                    | Same                                                                                                 |
+| Narrow width — bar closed, drawer open            | `mobile-drawer.pen` / `.png`                                    | MOTIR-53                    | **Superseded by `top-bar.mock.html`** for the right cluster + the drawer's footer                    |
+| ⌘K command palette                                | `cmd-k.pen` / `.png`                                            | MOTIR-53                    | Current (panels: _Empty query_, _Filtered: 'iss'_)                                                   |
+| Shortcuts cheatsheet                              | `shortcuts.pen` / `.png`                                        | MOTIR-53                    | Current                                                                                              |
+| **The top bar's control budget**                  | **`top-bar.mock.html` / `top-bar.png`**                         | **MOTIR-2374**              | **The design of record for what the bar carries at each width**                                      |
+| **The context row — the left cluster**            | **`context-row.mock.html` / `context-row.png`**                 | **MOTIR-2555**              | **The design of record for the `org › workspace › project` path, the rail head, and the brand tile** |
+| **The navigation-pending grammar**                | **`navigation-pending.mock.html` / `navigation-pending.png`**   | **MOTIR-3431**              | **The design of record for what the content area shows between the click and the arrival**           |
+| **The rail's BOTTOM section**                     | **`rail-bottom-section.mock.html` / `rail-bottom-section.png`** | **MOTIR-4130** · MOTIR-4167 | **The design of record for every row that section renders, at all three widths, in both arms**       |
+| **The no-project shell (Limited, added to none)** | **`no-project--limited.mock.html`**                             | **MOTIR-6540**              | **The ONE no-project state that returns — a Limited member who can open nothing; see § below**       |
 
 ---
 
@@ -2185,3 +2186,50 @@ it is out of the ladder's shell-chrome row — the **platform-admin shell**
 carries the same `data-app-shell` hook and therefore inherits the atmosphere but has no
 `data-surface` chrome of its own, and the **other ten `[data-style]` values**, whose chrome this
 asset makes no claim about.
+
+## The no-project shell (MOTIR-6540)
+
+**Story MOTIR-6169 · design card MOTIR-6540 · built by MOTIR-6548.** A delta of `top-bar.mock.html`,
+drawn in **`design/shell/no-project--limited.mock.html`** (panels S1–S4). The shared vocabulary and the
+GIVES / TAKES are in `design/projects/design-notes.md` § _Access modes at the project (MOTIR-6540)_.
+Rendered first against `/items` and the top bar's project switcher at `origin/main` @ `c6cf7e5b4`.
+
+**Why it exists.** MOTIR-4815 made "you are always in a project" true, and MOTIR-4872 retired every
+no-project surface. That premise holds only while every member can open every project. A **Limited**
+member added to no project can open NOTHING in a workspace that has projects — `home-scope.md` §1's
+zero-projects frame, live again for one actor. This is that one state. It is **not** the retired
+create-first screen: its create door shows only to someone allowed to create a project.
+
+**Access path.** It is a landing, not a place you navigate to: the destination
+`lib/navigation/landing.ts` resolves after sign-in and after a workspace switch, and what every
+project-scoped route renders while there is no active project.
+
+### Panels
+
+- **S1 — the landing.** The top bar keeps the workspace switcher; the project crumb reads an italic
+  _No project_ (`--el-text-secondary`). The top bar's **Create** (a work item, into the active project)
+  is **not rendered** — there is no project to create into. The rail is the shipped rail; every
+  project-scoped row lands on this same shell. The home area is the shipped `EmptyState` (`Card`,
+  `FolderKanban` 48px in `--el-icon-muted`, serif title, `--el-text-secondary` body).
+- **S2 — the switcher opens on an empty list.** The shipped popover (_PROJECTS_ mono label) with one
+  sentence where rows would be, and no _Create project_ row. Still a labelled listbox.
+- **S3 — someone who MAY create projects.** _Create project_ returns to the switcher and the empty state
+  gains a primary **Create a project**. Shown only with the create permission.
+- **S4 — dark.**
+
+### Copy — `shell.noProject.*` (new; en + zh)
+
+| key (proposed)  | en                                                                                        | zh                                                                       |
+| --------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `crumb`         | No project                                                                                | 无项目                                                                   |
+| `title`         | You’re not in a project yet                                                               | 你尚未加入任何项目                                                       |
+| `body`          | A Manager of {workspace} can add you to a project. You’ll see it here as soon as they do. | {workspace} 的管理者可以将你添加到项目中。一旦添加，你就会在这里看到它。 |
+| `switcherEmpty` | You haven’t been added to a project in {workspace} yet.                                   | 你尚未被添加到 {workspace} 的任何项目。                                  |
+| `create`        | Create a project                                                                          | 创建项目                                                                 |
+
+### Tokens &amp; a11y
+
+`--el-*` only; `--radius-card/-control/-btn`, `--height-control`, `--shadow-card/-elevated`. The empty
+switcher is a `listbox` with `aria-label` _Projects_ and a text child, so it announces as empty rather
+than as nothing. `tests/navigation/no-create-project-screen-guard.test.ts` must stay green: this shell
+is not a create-first screen.

@@ -136,14 +136,23 @@ describe('mentionNotificationsService.fanOut — comment mentions', () => {
     const capture = captureEmailEvents();
     const comment = await addMentioningComment(s, s.member);
 
-    // Going private auto-enrolls the then-current workspace members; a user
-    // added AFTER the flip is a workspace member with no project membership —
-    // exactly "lost view access between write and send" for this issue.
+    // Going private adds nobody (Story MOTIR-6169): the member who should keep
+    // their view is ADDED to the project explicitly; a user added to the
+    // workspace AFTER the flip has no project membership — exactly "lost view
+    // access between write and send" for this issue.
     await projectMembersService.setAccessLevel({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,
       ctx: s.fx.ctx,
       level: 'private',
+    });
+    await adminDb.projectMembership.create({
+      data: {
+        workspaceId: s.fx.workspaceId,
+        projectId: s.fx.projectId,
+        userId: s.member.id,
+        role: 'member',
+      },
     });
     const lateMember = await usersService.createUser({
       email: 'late@example.com',
@@ -161,7 +170,7 @@ describe('mentionNotificationsService.fanOut — comment mentions', () => {
       source: { kind: 'comment', commentId: comment.id },
     });
 
-    // The auto-enrolled member still sees the private project; the late one
+    // The added member still sees the private project; the late one
     // does not — only the former is mailed.
     expect(result.notifiedUserIds).toEqual([s.member.id]);
     expect(capture.events).toHaveLength(1);

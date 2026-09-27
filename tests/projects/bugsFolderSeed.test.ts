@@ -114,10 +114,10 @@ describe('createProject seeds the Bugs folder', () => {
       actorUserId: owner.id,
     });
 
-    const destination = await destinationOf(project.id);
+    const destination = await destinationOf(project!.id);
     expect(destination).not.toBeNull();
     const folder = await adminDb.folder.findUniqueOrThrow({ where: { id: destination! } });
-    expect(folder).toMatchObject({ projectId: project.id, parentFolderId: null });
+    expect(folder).toMatchObject({ projectId: project!.id, parentFolderId: null });
   });
 });
 

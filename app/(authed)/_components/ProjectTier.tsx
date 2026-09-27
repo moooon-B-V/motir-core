@@ -31,33 +31,43 @@ import { ProjectSwitcher } from './ProjectSwitcher';
 // child refuses to shrink below its content and the label is overrun by the
 // next control instead of ellipsizing (measured at 768px; design § *The ladder*).
 
+// ⚠️ AND THE NULL CASE CAME BACK, NARROWLY (Story MOTIR-6169 · MOTIR-6548). A
+// reader who can enter none of the workspace's projects has no active project,
+// so the tier renders the switcher with none: an italic "No project" crumb, an
+// empty list, and the Create project row only for someone `canCreateProject`
+// allows (`design/shell/no-project--limited.mock.html` S1–S3). That is still NOT
+// the retired create-first door — the door is not offered to everyone.
+
 export interface ProjectTierProps {
-  /**
-   * The active project. Still nullable because `ShellTierNav` above it is, and
-   * re-typing that chain is not what this card is about — but the tier no
-   * longer OFFERS anything in the null case (MOTIR-4873). It renders nothing:
-   * absence, not a state with an affordance in it.
-   */
+  /** The active project — null for a reader who can enter none (MOTIR-6548). */
   activeProject: ProjectDTO | null;
   /** Non-archived projects in the workspace — the switch targets. */
   projects: ProjectDTO[];
   /** Whether the AI planning backend is configured — forwarded to the
    * ProjectSwitcher's "Plan a new project with AI" door gate. */
   aiConfigured?: boolean;
+  /** Whether the switcher offers "Create project" while there is no active
+   * project (MOTIR-6548). */
+  canCreateProject?: boolean;
+  /** The active workspace's name, for the empty switcher's sentence. */
+  workspaceName?: string;
 }
 
-export function ProjectTier({ activeProject, projects, aiConfigured = false }: ProjectTierProps) {
-  // No project ⇒ nothing here. Not a create-first door, not a placeholder: the
-  // state is not one the product produces for a member, and a tier that draws
-  // something for it is a tier teaching that it can happen.
-  if (!activeProject) return null;
-
+export function ProjectTier({
+  activeProject,
+  projects,
+  aiConfigured = false,
+  canCreateProject = true,
+  workspaceName,
+}: ProjectTierProps) {
   return (
     <ProjectSwitcher
       projects={projects}
-      activeProjectId={activeProject.id}
+      activeProjectId={activeProject?.id ?? null}
       activeProject={activeProject}
       aiConfigured={aiConfigured}
+      canCreateProject={activeProject ? true : canCreateProject}
+      workspaceName={workspaceName}
     />
   );
 }

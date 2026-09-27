@@ -88,6 +88,9 @@ export interface ShellTierNavProps {
   /** Whether AI planning is configured — gates the switcher's "Plan a new
    *  project with AI" door. Bar only. */
   aiConfigured?: boolean;
+  /** Whether the empty switcher offers "Create project" when there is no active
+   *  project (MOTIR-6548). Bar only. */
+  canCreateProject?: boolean;
 }
 
 /** The `›` between two tiers. `aria-hidden`: the path's meaning is carried by
@@ -111,6 +114,7 @@ export function ShellTierNav({
   activeProject = null,
   projects = [],
   aiConfigured = false,
+  canCreateProject = true,
 }: ShellTierNavProps) {
   // The reveal test, shared with the settings entry points and the standalone
   // route's own 404 gate (MOTIR-3502 · `lib/workspaces/tierDisclosure.ts`). The
@@ -169,7 +173,13 @@ export function ShellTierNav({
       <span className="hidden md:contents">
         <Separator />
       </span>
-      <ProjectTier activeProject={activeProject} projects={projects} aiConfigured={aiConfigured} />
+      <ProjectTier
+        activeProject={activeProject}
+        projects={projects}
+        aiConfigured={aiConfigured}
+        canCreateProject={canCreateProject}
+        workspaceName={workspaces.find((w) => w.id === activeWorkspaceId)?.name}
+      />
     </div>
   );
 }

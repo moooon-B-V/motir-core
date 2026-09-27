@@ -219,16 +219,16 @@ describe('SEAM 2 · store → read → SCREEN', () => {
 describe('SEAM 5 · the access level, against real Postgres', () => {
   // The per-level custom-role table moved to the WORKSPACE custom role
   // (getPermissions.integration, MOTIR-6459). The level rail's own control stays.
-  it('the level rail is INTACT beside it — a non-member still loses work_item:edit on `limited`', async () => {
+  it('the entry rule is INTACT beside it — a non-added member loses the project entirely on `limited` (Members only)', async () => {
     // The control for the test above. Without it, "the level subtracted nothing"
     // would be equally consistent with a resolution where the level subtracts
     // nothing from ANYONE — i.e. with the rail being broken outright.
     //
     // ⚠️ THE ACTOR HERE HAS NO PROJECT MEMBERSHIP, and that is the whole point:
-    // `limited` withholds `work_item:edit` from a workspace member who is not ON
-    // the project ("view + comment for any workspace member; only project members
-    // edit"). A project `member` keeps it at every level, so a membership-holder
-    // would have proved nothing.
+    // a legacy `limited` project resolves as Members only (Story MOTIR-6169), so a
+    // workspace member who is not ON the project does not enter it at all. A
+    // project member keeps their keys in every mode, so a membership-holder would
+    // have proved nothing.
     const fx = await build('seam5b');
     const sam = await usersService.createUser({
       email: 'sam-seam5b@ex.com',
@@ -251,7 +251,9 @@ describe('SEAM 5 · the access level, against real Postgres', () => {
       ctx: fx.ownerCtx,
       level: 'limited',
     });
-    expect((await resolvedFor(fx, sam.id)).has('work_item:edit')).toBe(false);
+    const onLimited = await resolvedFor(fx, sam.id);
+    expect(onLimited.has('work_item:edit')).toBe(false);
+    expect(onLimited.has('project:browse')).toBe(false);
   });
 });
 

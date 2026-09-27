@@ -661,5 +661,15 @@
  *   was `1.43.0` at `e3be83c90` (MOTIR-6501 · MOTIR-6502 took `1.42.0` / `1.43.0`), so
  *   this claims `1.44.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD.
+ *
+ * - `1.45.0` — MOTIR-6547 adds `accessMode` (`workspace` / `members` / `public`) to
+ *   the `Project` resource (Story MOTIR-6169): who may ENTER the project, the
+ *   authoritative access field. `accessLevel` stays, DERIVED from the mode
+ *   (`members` → `private`), so `limited` is never emitted again, and is marked
+ *   deprecated. Additive: one new field, and every existing field keeps its type.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.45.0` on top of
+ *   MOTIR-6581's `1.44.0` (it claimed `1.42.0`, then `1.44.0`, as siblings landed
+ *   first). If a sibling has taken it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.44.0';
+export const V1_CONTRACT_VERSION = '1.45.0';

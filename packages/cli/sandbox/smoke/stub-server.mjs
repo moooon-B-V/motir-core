@@ -192,7 +192,15 @@ function workspaces() {
 
 function projects() {
   return {
-    items: [{ key: PROJECT_KEY, name: 'Smoke', accessLevel: 'open', archived: false }],
+    items: [
+      {
+        key: PROJECT_KEY,
+        name: 'Smoke',
+        accessLevel: 'open',
+        accessMode: 'workspace',
+        archived: false,
+      },
+    ],
     nextCursor: null,
   };
 }

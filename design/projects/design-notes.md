@@ -4230,3 +4230,153 @@ Members card loses its role `Combobox` and role `Pill`, and the project rail los
 permissions** (its routes redirect to `/settings/workspace/roles`). The spec — panels 3a–3c, copy,
 tokens and the element → card allocation — is `design/workspaces/design-notes.md` § _Workspace roles_,
 where the rest of the same room is drawn. The access-level card is unchanged here; MOTIR-6169 owns it.
+
+## Access modes at the project — `access-members--access-modes.mock.html` (MOTIR-6540)
+
+**Story MOTIR-6169 · design card MOTIR-6540.** Roles live on the workspace (MOTIR-6168); ACCESS lives on
+the project. `docs/decisions/role-model.md` Q1 replaces the four access LEVELS (Building in public ·
+Open · Limited · Private) with three **access modes** on the project — **Open to the workspace ·
+Members only · Public** — and a **Full / Limited access scope** on each workspace membership. This
+design draws the three surfaces that change, one delta mock per area:
+
+| Surface                                                      | Delta mock (amends)                                                                                                                 | Spec section                                                                       | Builds it  |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ---------- |
+| Project **Access &amp; members**                             | `design/projects/access-members--access-modes.mock.html` (amends `access-members.mock.html` + `access-members--no-roles.mock.html`) | this section                                                                       | MOTIR-6550 |
+| Workspace **Members** — the Access column, invite            | `design/workspaces/workspace-roles--access-scope.mock.html` (amends `workspace-roles.mock.html`)                                    | `design/workspaces/design-notes.md` § _Access scope at the workspace (MOTIR-6540)_ | MOTIR-6551 |
+| The **no-project shell** (a Limited person added to nothing) | `design/shell/no-project--limited.mock.html` (amends `top-bar.mock.html`)                                                           | `design/shell/design-notes.md` § _The no-project shell (MOTIR-6540)_               | MOTIR-6548 |
+
+The base mocks are records and are not edited. All three were **rendered first**: `/settings/project/members`,
+`/settings/organization` (the Members fold-in and the shipped Invite modal) and the top bar's project
+switcher, at `origin/main` @ `c6cf7e5b4` on a `pnpm db:seed` tenant, and every panel composes what renders
+there. Each mock carries a **Theme** and a **Language · 语言** toggle and a nested dark panel.
+
+### The vocabulary — one set of words across the three surfaces
+
+| concept                    | en                    | zh           | where it is chosen                                                  |
+| -------------------------- | --------------------- | ------------ | ------------------------------------------------------------------- |
+| project mode `workspace`   | Open to the workspace | 开放给工作区 | the project's Access &amp; members                                  |
+| project mode `members`     | Members only          | 仅限成员     | the project's Access &amp; members                                  |
+| project mode `public`      | Public                | 公开         | the project's Access &amp; members (via the build-in-public dialog) |
+| membership scope `full`    | Full                  | 完全         | the workspace's Members, and the Invite modal                       |
+| membership scope `limited` | Limited               | 受限         | the workspace's Members, and the Invite modal                       |
+
+"Members only" (a project mode) and "Members" (the workspace page, and the project's people list) are
+different nouns that share a word; the mode is always written in full, never shortened to "Members".
+The retired level `limited` survives in exactly one sentence — the migration notice's reason line —
+and nowhere else.
+
+### The access path
+
+Project settings rail → **Members &amp; access** — the shipped rail entry, gated on `member:manage`
+(`lib/settings/projectSettingsNav.ts`). Unchanged; nothing new to reach.
+
+### Panels
+
+- **A1 — Open to the workspace, a Manager, populated.** The access card keeps the shipped radio-card
+  markup of `ProjectMembersSettings.tsx` — `Card`, a `role="radiogroup"` of bordered cards, each with an
+  icon tile (`--el-tint-mint` Users · `--el-tint-lavender` Lock · `--el-build-bg` Megaphone in
+  `--el-build-glyph`), a label, a one-line description and a radio dot. **There is no `RadioGroup`
+  primitive in `components/ui/*`; the card IS the radio** — build to this markup, not a new primitive.
+  The header pill names the current mode. Below it, the **Members** card (the people list) keeps Add and
+  Remove and gains two read-only chips per row: the workspace role (`--el-role-*` hues, as the workspace
+  page) and the scope (neutral `Pill`, `Lock` glyph on Limited). A **Manager row has no scope chip** —
+  scope is never read for a Manager.
+- **A2 — choosing Members only opens a confirm that names who loses access.** The radio does not flip:
+  the page first reads `GET /api/projects/<key>/access/preview?mode=members` (MOTIR-6544), then a `Modal`
+  lists exactly the Full, non-Manager members who are not added (avatar, name, email, role pill, scope
+  pill), says how many, and offers **Cancel** / **Make members only**. The switch adds nobody to the project.
+- **A3 — the same confirm when nobody loses access.** One sentence in place of the list; still a confirm.
+- **A4 — Members only with nobody added.** `Lock` glyph, _Only Managers can open this project_, and a
+  prompt to add people. (Under Open to the workspace the empty list keeps the shipped 3b copy.)
+- **A5 — Add people open.** The shipped searchable `Combobox`, scoped to workspace members not yet added;
+  the secondary line is email · role · scope, and a Manager is offered but marked _always enters_.
+- **A6 — read-only (no `project:manage_access`, no `member:manage`).** The mode is shown as TEXT — the
+  selected card alone, no radio — plus one `info-note`. The people list has no Add / Remove and carries
+  the shipped _Read-only_ pill. **A7** draws the split: `member:manage` without `project:manage_access`
+  (people controls on, mode read-only); the reverse is the mirror.
+- **A8 — saving → save failed.** Saving: `LoaderCircle` in place of the chosen card's radio, the group
+  disabled. Failed: the selection reverts and an error `Toast` names the mode the project is still in.
+- **A9 — loading.** An in-page skeleton behind the page's own gate (never a `loading.tsx`).
+- **A10 — Public.** Selected: the shipped _Live_ chip, and the shipped build-in-public manage row and
+  Public link card follow unchanged. `BuildInPublicDialog` / `StopBuildInPublicDialog` are re-pointed at
+  the mode (`public` on confirm, `workspace` on stop), not redrawn. **Self-hosted: Public is DISABLED
+  with an explanation.** ⚠️ The card called this "its existing cloud-only explanation"; the shipped page
+  has none — it removes the option off-cloud (MOTIR-4035). The copy below is new.
+- **A11 — dark.**
+
+### Copy catalogue — `settings.access.*` (new or changed; en + zh)
+
+| key (proposed)                            | en                                                                                                                                                                             | zh                                                                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `mode.workspace` / `.members` / `.public` | Open to the workspace / Members only / Public                                                                                                                                  | 开放给工作区 / 仅限成员 / 公开                                                                           |
+| `modeDesc.workspace`                      | Everyone in {workspaceName} with Full access can open it, plus the people added below.                                                                                         | {workspaceName} 中拥有完全访问权限的每个人都可以打开它，另加下方添加的人。                               |
+| `modeDesc.members`                        | Only the people added below can find or open it. Hidden from everyone else.                                                                                                    | 只有下方添加的人才能找到或打开它，对其他人隐藏。                                                         |
+| `modeDesc.public`                         | Open to the workspace, plus anyone with the link — the build-in-public page. Visitors read without an account and sign in only to submit, upvote or comment.                   | 开放给工作区，另加任何拥有链接的人——即公开构建页面。访客无需账号即可查看，仅在提交、点赞或评论时需登录。 |
+| `modeGroupLabel`                          | Project access mode                                                                                                                                                            | 项目访问模式                                                                                             |
+| `subtitle` (changed)                      | Control who can open {projectName}. Workspace Managers always can.                                                                                                             | 控制谁可以打开 {projectName}。工作区管理者始终可以。                                                     |
+| `accessSubheading` (changed)              | Who in the {workspaceName} workspace can open this project.                                                                                                                    | {workspaceName} 工作区中谁可以打开此项目。                                                               |
+| `publicUnavailable`                       | Publishing runs on Motir Cloud — this self-hosted install has no public site to publish to.                                                                                    | 公开发布依赖 Motir Cloud——此自托管实例没有可发布的公开站点。                                             |
+| `membersOnlyConfirmTitle`                 | Make {projectName} members only?                                                                                                                                               | 将 {projectName} 设为仅限成员？                                                                          |
+| `membersOnlyConfirmBody`                  | {count, plural, one {<b># person</b> will lose access} other {<b># people</b> will lose access}}. They have Full access to {workspaceName} but were not added to this project: | <b>{count} 人</b>将失去访问权限。他们拥有 {workspaceName} 的完全访问权限，但未被添加到此项目：           |
+| `membersOnlyConfirmHint`                  | Add anyone who should keep access first, or add them afterwards. Managers always keep access.                                                                                  | 如需保留某人的访问权限，请先添加，或之后再添加。管理者始终保有访问权限。                                 |
+| `membersOnlyConfirmNobody`                | Nobody loses access — everyone who can open {projectName} today was added to it or is a Manager.                                                                               | 没有人会失去访问权限——目前能打开 {projectName} 的每个人都已被添加或是管理者。                            |
+| `membersOnlyConfirmAction`                | Make members only                                                                                                                                                              | 设为仅限成员                                                                                             |
+| `modeChangedToast`                        | {projectName} is now {mode}                                                                                                                                                    | {projectName} 现为{mode}                                                                                 |
+| `changeAccessErrorBody`                   | {projectName} is still {mode}. Please try again.                                                                                                                               | {projectName} 仍为{mode}。请重试。                                                                       |
+| `membersFromWorkspaceRole` (changed)      | People added to this project. They can always open it, whatever the access mode. What each can do comes from their workspace role.                                             | 已添加到此项目的人。无论访问模式如何，他们始终可以打开它。每人能做什么取决于其工作区角色。               |
+| `addPeople` / `addPeopleSearch`           | Add people… / Search people…                                                                                                                                                   | 添加人员… / 搜索人员…                                                                                    |
+| `addPeopleFoot`                           | Workspace members who are not added yet. Managers enter every project anyway.                                                                                                  | 尚未添加的工作区成员。管理者本来就能进入每个项目。                                                       |
+| `alwaysEnters`                            | always enters                                                                                                                                                                  | 始终可进入                                                                                               |
+| `scope.full` / `scope.limited`            | Full / Limited                                                                                                                                                                 | 完全 / 受限                                                                                              |
+| `emptyMembersOnlyTitle` / `…Body`         | Only Managers can open this project / It is members only and nobody has been added yet. Add people to let them in.                                                             | 只有管理者可以打开此项目 / 此项目仅限成员，且尚未添加任何人。添加人员即可让他们进入。                    |
+| `readOnlyModeNote`                        | Only a workspace Manager can change who can open this project.                                                                                                                 | 只有工作区管理者可以更改谁能打开此项目。                                                                 |
+
+**Retired** once no call site names them: `access.level.*`, `access.levelDesc.*`, `access.goPrivateNote`,
+`access.levelGroupLabel`, `access.levelChangedToast`. Everything else on the page is shipped copy.
+
+### What each control is, and which card specifies its behaviour
+
+| Element                                   | Behaviour specified by                                 | Builds it  |
+| ----------------------------------------- | ------------------------------------------------------ | ---------- |
+| The three-mode radio cards, saving/failed | MOTIR-6544 (`PATCH …/access { accessMode }`)           | MOTIR-6550 |
+| The Members-only confirm (A2 / A3)        | MOTIR-6544 (the preview read)                          | MOTIR-6550 |
+| Who the mode admits                       | MOTIR-6543 (`canEnter`)                                | —          |
+| Add / Remove people                       | shipped `addMember` / `removeMember` (`member:manage`) | MOTIR-6550 |
+| Role + scope chips on each row            | MOTIR-6545 (`accessScope` on the workspace member DTO) | MOTIR-6550 |
+| Public + the build-in-public dialogs      | MOTIR-6544 (the two dialogs' call sites)               | MOTIR-6550 |
+
+### GIVES / TAKES — every card this design names
+
+- **MOTIR-6550** — TAKES panels A1–A11. Amended on the record: the mode control is the shipped radio-card
+  markup (no `RadioGroup` primitive exists), and Public's self-hosted explanation is NEW copy.
+- **MOTIR-6551** — TAKES the whole workspace delta (W1–W11). Amended: the invite's project picker is the
+  shipped `MultiSelectPicker`, and the migration notice gains two sub-heads, a widened title and an _Open
+  project access_ action per access row.
+- **MOTIR-6548** — TAKES the whole shell delta (S1–S4). Amended: the top bar's **Create** is not rendered
+  when there is no active project.
+- **MOTIR-6544** — GIVES A2 its list. Amended: each preview row carries the person's workspace role (or
+  custom role name) so the confirm can show it.
+- **MOTIR-6545** — GIVES W1 `accessScope` + `addedProjectCount` and W5's refusal; TAKES nothing drawn.
+- **MOTIR-6546** — GIVES W7–W9 their rules (Manager-only Limited, Limited members cannot invite); TAKES nothing drawn.
+- **MOTIR-6542** — GIVES W10 its `project_access_lost` rows; TAKES nothing drawn.
+- **MOTIR-6543** — GIVES every "who can open" sentence its meaning; TAKES nothing drawn.
+- **MOTIR-6170** (the Visitor) — Public's description names the Visitor's arrival; its chrome is that story's.
+- **MOTIR-6456** — amended, not edited: its 3a–3c people list gains chips here, and its access-card stub is
+  what A1 replaces.
+
+### Tokens &amp; a11y
+
+Colour is `--el-*` only (`--el-build-*`, `--el-chip-*`, `--el-warning-surface` and `--el-icon-muted` are
+`packages/design-system/theme.css`'s own, declared in each mock's token block); shape through
+`--radius-card/-input/-control/-badge/-btn/-modal`, `--height-control/-input/-btn-md`,
+`--spacing-card-padding/-control-x/-control-y/-chip-*`, `--shadow-card/-elevated/-modal`. Secondary ink is
+`--el-text-secondary` everywhere — the shipped `text-(--el-text-muted)` descriptions under each mode are
+drawn secondary, since they sit on white only while unselected. The mode control is a `radiogroup` of
+`radio`s with `aria-checked`; the disabled Public card carries `aria-disabled` and its reason in text. The
+confirm is a `dialog` whose initial focus is Cancel.
+
+### What this design does NOT decide
+
+Who may be added (every workspace member, as today); whether a project can be switched to Public by
+anyone but a Manager (it cannot — `project:manage_access`); the Visitor's own chrome (MOTIR-6170); and
+dropping `access_level` from the schema (MOTIR-6554).

@@ -1,4 +1,4 @@
-import { Prisma } from '@/generated/prisma/client';
+import { Prisma, type ProjectAccessMode } from '@/generated/prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -7,16 +7,29 @@ import { isCloud } from '@/lib/billing/availability';
 import {
   AlreadyProjectMemberError,
   InvalidAccessLevelError,
+  InvalidAccessModeError,
   NotAProjectMemberError,
   PublicAccessUnavailableError,
   TargetNotWorkspaceMemberError,
 } from '@/lib/projects/errors';
 import { resolveProjectByKeyWithAliasInTx } from '@/lib/projects/resolveByKey';
+import { accessModeOf, asAccessMode } from '@/lib/projects/accessMode';
 import { asAccessLevel } from '@/lib/projects/roles';
+import { bindOrganizationContext } from '@/lib/organizations/context';
+import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { PermissionKey } from '@/lib/permissions/catalog';
-import { toProjectAccessDTO, toProjectMemberDTO } from '@/lib/mappers/projectMemberMappers';
-import type { ProjectAccessDTO, ProjectMemberDTO } from '@/lib/dto/projectMembers';
+import {
+  toAccessLossPersonDTO,
+  toProjectAccessDTO,
+  toProjectMemberDTO,
+} from '@/lib/mappers/projectMemberMappers';
+import type {
+  AccessLossPersonDTO,
+  ProjectAccessDTO,
+  ProjectMemberDTO,
+} from '@/lib/dto/projectMembers';
 
 // projectMembersService — the write path for project membership + access
 // (Story 6.4 · Subtask 6.4.4). 4-layer: this service owns the transaction, the
@@ -26,7 +39,7 @@ import type { ProjectAccessDTO, ProjectMemberDTO } from '@/lib/dto/projectMember
 // ⚠️ A PROJECT MEMBERSHIP CARRIES NO ROLE (Story MOTIR-6168 · MOTIR-6464). Roles
 // live on the workspace — one per person, the same in every project — so a row
 // here means only "this person was added to this project", which is what a
-// `limited` / `private` project's access level reads. `setRole` and the
+// Members-only project and a Limited scope read (Story MOTIR-6169). `setRole` and the
 // last-project-admin guard are gone with the project admin they protected; the
 // legacy `role` column is still written (`member`, NOT NULL) until the contract
 // story drops it.
@@ -41,7 +54,8 @@ import type { ProjectAccessDTO, ProjectMemberDTO } from '@/lib/dto/projectMember
 // `projectAccessService.assertPermission` for a named key:
 //
 //   * `addMember` / `removeMember`              → `member:manage`
-//   * `setAccessLevel`                          → `project:manage_access`
+//   * `setAccessMode` / `setAccessLevel`
+//     / `previewAccessModeChange`               → `project:manage_access`
 //     Its own key on purpose: who is IN the project and how open the project is
 //     to the workspace are different decisions, and Jira separates them too.
 //   * `listMembers` / `getAccess`               → `project:browse`
@@ -119,6 +133,18 @@ export interface ActorScopedInput {
   ctx: WorkspaceContext;
 }
 
+/**
+ * The DECISION's level → mode mapping (`role-model.md` Q1), for the one release in
+ * which the shipped UI still sends a level. `accessModeOf` carries the same table
+ * for a stored row; this one maps a REQUEST.
+ */
+const LEVEL_TO_MODE = {
+  open: 'workspace',
+  limited: 'members',
+  private: 'members',
+  public: 'public',
+} as const satisfies Record<string, ProjectAccessMode>;
+
 export const projectMembersService = {
   /**
    * List a project's members as DTOs. BROWSE-gated (MOTIR-2295): any actor who
@@ -152,6 +178,27 @@ export const projectMembersService = {
       await assertPermission(input, project.id, 'project:browse', tx);
       return toProjectAccessDTO(project);
     });
+  },
+
+  /**
+   * What the project's Access & members page may OFFER this actor (Story
+   * MOTIR-6169 · MOTIR-6550, design A6 / A7): the mode control needs
+   * `project:manage_access`, the people controls `member:manage`. Named here, in
+   * the service, because a settings page names no permission key of its own —
+   * its guard reads the registry (`tests/settings/settings-destination-guard`).
+   * Every write re-asserts its key regardless; these only decide what renders.
+   */
+  async getPageCapabilities(
+    input: ActorScopedInput,
+  ): Promise<{ canManageAccess: boolean; canManageMembers: boolean }> {
+    const project = await withWorkspaceContext(input.ctx, (tx) =>
+      resolveProjectInTx(input.key, input.ctx, tx),
+    );
+    const held = await projectAccessService.getPermissions(project.id, input.ctx);
+    return {
+      canManageAccess: held.has('project:manage_access'),
+      canManageMembers: held.has('member:manage'),
+    };
   },
 
   /**
@@ -228,64 +275,116 @@ export const projectMembersService = {
   },
 
   /**
-   * Set the project's browse-access level (open / limited / private).
-   * Project-admin gated. Going PRIVATE adds every current workspace member to
-   * the project (skipping anyone already on it) — the Jira "go private → keep
-   * the people who had access" shape,
-   * so the owner + current users aren't locked out of a freshly-private project.
+   * Set the project's ACCESS MODE — Open to the workspace · Members only · Public
+   * (Story MOTIR-6169 · MOTIR-6544; `role-model.md` Q1). `project:manage_access`
+   * gated. Writes the mode and the legacy level TOGETHER through
+   * `projectRepository.setAccessMode`, and NEVER adds anybody to the project:
+   * "Members only" means the people deliberately added, so switching to it
+   * removes the project from every Full member who was not, at once. (The old
+   * `private` switch added every workspace member, which made it mean "everyone
+   * who was here when it was flipped" — the opposite.)
    */
-  async setAccessLevel(input: ActorScopedInput & { level: string }): Promise<ProjectAccessDTO> {
-    const level = asAccessLevel(input.level);
-    if (!level) throw new InvalidAccessLevelError(input.level);
+  async setAccessMode(input: ActorScopedInput & { mode: string }): Promise<ProjectAccessDTO> {
+    const mode = asAccessMode(input.mode);
+    if (!mode) throw new InvalidAccessModeError(input.mode);
 
-    // THE PUBLISH GATE (MOTIR-4035). `public` is the one level that publishes a
+    // THE PUBLISH GATE (MOTIR-4035). `public` is the one mode that publishes a
     // project to strangers, and that reading surface is a CLOUD capability
     // (Story MOTIR-3908) — off-cloud `app/api/public/*` serves nothing, so a
     // project made public there would be published into a void.
     //
-    // This is the ENFORCEMENT point, not the UI. `ProjectMembersSettings` also
-    // stops offering the level, but a stale client, a direct `PATCH` or a script
-    // must be refused too — defence in depth, and the service is the half that
-    // owns the invariant.
-    //
-    // BEFORE the transaction and before the permission assert, deliberately: the
-    // answer is a property of the BUILD, identical for every caller and every
-    // key, so it needs no project read and leaks nothing about one. Only
-    // `public` is gated — `open` / `limited` / `private` are how a self-hosted
-    // team shares work inside its own workspace, which is what self-hosting is
-    // for.
-    if (level === 'public' && !isCloud()) throw new PublicAccessUnavailableError();
+    // This is the ENFORCEMENT point, not the UI: a stale client, a direct `PATCH`
+    // or a script must be refused too. BEFORE the transaction and before the
+    // permission assert, deliberately: the answer is a property of the BUILD,
+    // identical for every caller and every key, so it needs no project read and
+    // leaks nothing about one. `workspace` and `members` are how a self-hosted
+    // team shares work inside its own workspace, which is what self-hosting is for.
+    if (mode === 'public' && !isCloud()) throw new PublicAccessUnavailableError();
 
     return withWorkspaceContext(input.ctx, async (tx) => {
       const project = await resolveProjectInTx(input.key, input.ctx, tx);
       await assertPermission(input, project.id, 'project:manage_access', tx);
 
-      if (level === 'private') {
-        const workspaceMembers = await workspaceMembershipRepository.findMembersByWorkspace(
-          input.ctx.workspaceId,
-          tx,
-        );
-        await projectMembershipRepository.createManySkipDuplicates(
-          workspaceMembers.map((m) => ({
-            workspaceId: input.ctx.workspaceId,
-            projectId: project.id,
-            userId: m.userId,
-          })),
-          tx,
-        );
-      }
-
       // Stamp `madePublicAt` only on the transition INTO `public` (Subtask
       // 6.13.4 — the project square's Recent rank's "newest" axis). A re-save of
       // an already-public project keeps its original go-public moment.
-      const stampMadePublicAt = level === 'public' && project.accessLevel !== 'public';
-      const updated = await projectRepository.setAccessLevel(
-        project.id,
-        level,
-        { stampMadePublicAt },
-        tx,
-      );
+      const stampMadePublicAt = mode === 'public' && accessModeOf(project) !== 'public';
+      const updated = await projectRepository.setAccessMode(project.id, mode, tx, {
+        stampMadePublicAt,
+      });
       return toProjectAccessDTO(updated);
+    });
+  },
+
+  /**
+   * The legacy LEVEL setter, kept as a thin adapter onto {@link setAccessMode}
+   * for the one release in which the shipped UI still sends `{ accessLevel }`.
+   * The level is mapped by the DECISION's table — `limited` and `private` both
+   * land at Members only — and validated as a level first, so a bad level keeps
+   * its own error.
+   */
+  async setAccessLevel(input: ActorScopedInput & { level: string }): Promise<ProjectAccessDTO> {
+    const level = asAccessLevel(input.level);
+    if (!level) throw new InvalidAccessLevelError(input.level);
+    return projectMembersService.setAccessMode({
+      key: input.key,
+      actorUserId: input.actorUserId,
+      ctx: input.ctx,
+      mode: LEVEL_TO_MODE[level],
+    });
+  },
+
+  /**
+   * Who would LOSE entry if the project switched to `mode` — the list the
+   * Members-only confirm shows (MOTIR-6540 panel A2). Behind the same key as the
+   * write, `project:manage_access`. For `members`: every Full-scope workspace
+   * member who is not a Manager (the org Owner and Admins included, who read as
+   * Managers) and was not added — exactly the people {@link canEnter} admits on
+   * `workspace` and refuses on `members`. For any other target: nobody, because
+   * `workspace` and `public` admit everyone `members` does.
+   *
+   * A READ, not a lock: the confirm is advisory and the write is the mode change
+   * alone, so there is no read-derived write to guard.
+   */
+  async previewAccessModeChange(
+    input: ActorScopedInput & { mode: string },
+  ): Promise<AccessLossPersonDTO[]> {
+    const mode = asAccessMode(input.mode);
+    if (!mode) throw new InvalidAccessModeError(input.mode);
+
+    return withWorkspaceContext(input.ctx, async (tx) => {
+      const project = await resolveProjectInTx(input.key, input.ctx, tx);
+      await assertPermission(input, project.id, 'project:manage_access', tx);
+      if (mode !== 'members') return [];
+
+      const [members, addedIds, workspace] = await Promise.all([
+        workspaceMembershipRepository.findMembersByWorkspace(input.ctx.workspaceId, tx),
+        projectMembershipRepository.findUserIdsByProject(project.id, tx),
+        workspaceRepository.findByIdInTx(input.ctx.workspaceId, tx),
+      ]);
+      // The org's Owner and Admins are other people's org rows, admitted only
+      // once the workspace's own organization is bound — a trusted resolution
+      // (the workspace row just read), never request input.
+      let orgManagers = new Set<string>();
+      if (workspace) {
+        await bindOrganizationContext(tx, workspace.organizationId);
+        orgManagers = new Set(
+          await organizationMembershipRepository.findManagerUserIdsByOrganization(
+            workspace.organizationId,
+            tx,
+          ),
+        );
+      }
+      const added = new Set(addedIds);
+      return members
+        .filter(
+          (m) =>
+            m.accessScope === 'full' &&
+            m.workspaceRole !== 'manager' &&
+            !orgManagers.has(m.userId) &&
+            !added.has(m.userId),
+        )
+        .map(toAccessLossPersonDTO);
     });
   },
 };

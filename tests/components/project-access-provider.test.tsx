@@ -3,7 +3,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, afterEach } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
+import type {
+  ProjectAccessMode,
+  WorkspaceAccessScope,
+  WorkspaceRole,
+} from '@/generated/prisma/client';
 import {
   ProjectAccessProvider,
   useProjectAccess,
@@ -39,15 +43,24 @@ import { PERMISSIONS, type PermissionKey } from '@/lib/permissions/catalog';
 // the whitelist-of-names lesson). It is used here for a PRESENCE claim it can
 // actually discharge, and it is load-bearing only because half 1 sits under it.
 
-const ACCESS_LEVELS: ProjectAccessLevel[] = ['public', 'open', 'limited', 'private'];
-// The policy's input space since MOTIR-6459: the workspace role (or none) and
-// whether the actor was added to the project — 4 levels × 4 roles × 2 = 32.
+const ACCESS_MODES: ProjectAccessMode[] = ['public', 'workspace', 'members'];
+// The policy's input space since MOTIR-6169: the access mode, the workspace role
+// (or none), the membership scope and whether the actor was added to the project
+// — 3 modes × 4 roles × 2 scopes × 2 = 48.
 const WORKSPACE_ROLES: (WorkspaceRole | null)[] = ['manager', 'member', 'viewer', null];
+const SCOPES: WorkspaceAccessScope[] = ['full', 'limited'];
 const ADDED: boolean[] = [true, false];
 
-const GRID: ProjectAccessInputs[] = ACCESS_LEVELS.flatMap((accessLevel) =>
+const GRID: ProjectAccessInputs[] = ACCESS_MODES.flatMap((accessMode) =>
   WORKSPACE_ROLES.flatMap((workspaceRole) =>
-    ADDED.map((addedToProject) => ({ accessLevel, workspaceRole, addedToProject })),
+    SCOPES.flatMap((scope) =>
+      ADDED.map((addedToProject) => ({
+        accessMode,
+        workspaceRole,
+        accessScope: workspaceRole == null ? null : scope,
+        addedToProject,
+      })),
+    ),
   ),
 );
 
@@ -67,12 +80,12 @@ function viaPermissionSet(i: ProjectAccessInputs) {
 }
 
 describe('the layout substitution is behaviour-neutral', () => {
-  it('covers all 32 access-level × workspace-role × added combinations', () => {
-    expect(GRID).toHaveLength(32);
+  it('covers all 48 access-mode × workspace-role × scope × added combinations', () => {
+    expect(GRID).toHaveLength(48);
   });
 
   it.each(GRID)(
-    'level=$accessLevel workspace=$workspaceRole added=$addedToProject — the set derives the same three booleans',
+    'mode=$accessMode workspace=$workspaceRole scope=$accessScope added=$addedToProject — the set derives the same three booleans',
     (inputs) => {
       expect(viaPermissionSet(inputs)).toEqual(viaPredicates(inputs));
     },

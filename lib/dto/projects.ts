@@ -17,13 +17,18 @@ export interface ProjectDTO {
    */
   archivedAt: string | null;
   /**
-   * The project's browse-access level (Story 6.4 — open / limited / private;
-   * Story 6.12 adds `public`). Surfaced on the DTO so the active-project consumer
-   * branches WITHOUT a second round-trip: the 6.4.6 assignable-users scoping
-   * reads this to decide whether the assignee/reporter pickers list project
-   * members (`private`) or the whole workspace (`open`/`limited`/`public`). The
-   * browse/edit POLICY itself is computed server-side (`projectAccessService`);
-   * this is only the level.
+   * The project's ACCESS MODE (Story MOTIR-6169) — `workspace` (Open to the
+   * workspace), `members` (Members only) or `public`. Surfaced on the DTO so the
+   * active-project consumer branches WITHOUT a second round-trip: the
+   * assignable-users scoping reads it to offer exactly the people who can enter.
+   * The browse/edit POLICY itself is computed server-side
+   * (`projectAccessService`); this is only the mode.
+   */
+  accessMode: 'workspace' | 'members' | 'public';
+  /**
+   * @deprecated The legacy level, DERIVED from the mode (`levelForMode`), so
+   * `limited` is never emitted again. Kept while callers still read it; the
+   * contract story removes it with the column.
    */
   accessLevel: 'open' | 'limited' | 'private' | 'public';
   /**

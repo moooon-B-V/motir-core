@@ -413,7 +413,14 @@ describe('the default seams are the real ones', () => {
 
 describe('the login auto-link', () => {
   const oneProject = [
-    { key: 'PROD', id: 'p1', name: 'Prodect', slug: 'prodect', accessLevel: 'open' },
+    {
+      key: 'PROD',
+      id: 'p1',
+      name: 'Prodect',
+      slug: 'prodect',
+      accessLevel: 'open',
+      accessMode: 'workspace',
+    },
   ];
   const linkFile = (dir: string): string => join(dir, '.motir.json');
 

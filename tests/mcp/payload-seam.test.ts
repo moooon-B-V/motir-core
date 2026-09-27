@@ -825,6 +825,7 @@ describe('presentMcpProjectRow', () => {
     slug: 'motir',
     identifier: 'PROD',
     archivedAt: null as string | null,
+    accessMode: 'workspace' as const,
     accessLevel: 'open' as const,
     // The project MARK (MOTIR-2676) — deliberately NOT published by the MCP row
     // or by v1's `Project`, so the widening assertion below must keep holding
@@ -845,6 +846,7 @@ describe('presentMcpProjectRow', () => {
     expect(row.key).toBe('PROD');
     expect(row.id).toBe('proj-1');
     expect(row.slug).toBe('motir');
+    expect(row.accessMode).toBe('workspace');
     expect(row.accessLevel).toBe('open');
   });
 
