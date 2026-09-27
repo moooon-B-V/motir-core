@@ -61,6 +61,8 @@ function summary(overrides: Partial<WorkItemSummaryDto> = {}): WorkItemSummaryDt
     estimateMinutes: null,
     storyPoints: null,
     archivedAt: null,
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     ...overrides,
   };
 }

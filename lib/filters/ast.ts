@@ -29,6 +29,10 @@ export type BuiltInFilterFieldId =
   /** How hard a leaf is to reason about (Story MOTIR-6016). Nullable: epics,
    *  stories and every unset leaf are `null`, addressed by the empty pair. */
   | 'difficulty'
+  /** Whether the card is still TRUE OF THE CODE (Story MOTIR-6574 ·
+   *  MOTIR-6583) — `outdated` · `deprecated`. Nullable: every unmarked card is
+   *  `null`, addressed by the empty pair, and `is_none_of` includes it. */
+  | 'obsolescence'
   | 'assignee'
   | 'reporter'
   | 'sprint'

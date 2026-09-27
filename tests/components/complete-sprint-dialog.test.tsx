@@ -54,6 +54,8 @@ function issue(over: Partial<WorkItemSummaryDto> = {}): WorkItemSummaryDto {
     estimateMinutes: null,
     storyPoints: 5,
     archivedAt: null,
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     ...over,
   };
 }

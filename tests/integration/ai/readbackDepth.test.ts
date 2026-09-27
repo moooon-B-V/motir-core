@@ -471,14 +471,33 @@ describe('aiBoundaryService — the graph-traversal boundary', () => {
     // which is what lets the two repositories deploy in either order.
     // `decision` (MOTIR-5958) is the next additive key: null on an item that is not a
     // `human` decision, which is every item here.
-    const { blockedBy, blocks, relatesTo, duplicates, clones, decision, ...before } = res.item;
+    // `supersedes` / `supersededBy` (MOTIR-6580) are two more additive link keys.
+    const {
+      blockedBy,
+      blocks,
+      relatesTo,
+      duplicates,
+      clones,
+      supersedes,
+      supersededBy,
+      decision,
+      ...before
+    } = res.item;
     expect(decision).toBeNull();
     expect(before).toEqual(
       await workItemsService.getWorkItemByIdentifier(fx.projectId, item.identifier, fx.ctx),
     );
     // An item with no links reports EMPTY arrays, never absent keys — the
     // consumer distinguishes "none" from "not readable" on exactly that.
-    expect([blockedBy, blocks, relatesTo, duplicates, clones]).toEqual([[], [], [], [], []]);
+    expect([blockedBy, blocks, relatesTo, duplicates, clones, supersedes, supersededBy]).toEqual([
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+    ]);
   });
 
   it('getItem WITHHOLDS a link whose far end is in another project', async () => {
@@ -545,11 +564,12 @@ describe('aiBoundaryService — the graph-traversal boundary', () => {
     try {
       const res = await aiBoundaryService.getItem(fx.projectId, target.identifier, fx.ctx);
       expect(res.item.relatesTo).toHaveLength(6);
-      // Four OUT-edge batches + one IN-edge batch + five far-end resolves. The
-      // link COUNT does not appear in any of those numbers.
-      expect(fromItem).toHaveBeenCalledTimes(4);
-      expect(toItem).toHaveBeenCalledTimes(1);
-      expect(byIds).toHaveBeenCalledTimes(5);
+      // Five OUT-edge batches + two IN-edge batches (`blocks`, `supersededBy` —
+      // MOTIR-6580) + seven far-end resolves. The link COUNT does not appear in
+      // any of those numbers.
+      expect(fromItem).toHaveBeenCalledTimes(5);
+      expect(toItem).toHaveBeenCalledTimes(2);
+      expect(byIds).toHaveBeenCalledTimes(7);
     } finally {
       fromItem.mockRestore();
       toItem.mockRestore();

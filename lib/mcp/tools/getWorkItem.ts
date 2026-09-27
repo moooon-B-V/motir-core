@@ -13,6 +13,7 @@ import type { IssueDetailDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { CHILD_EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
+import { obsolescenceLines } from '../obsolescence';
 import { derived } from '../payloads/define';
 import { getWorkItemPayload, presentMcpWorkItemChild } from '../payloads/workItems';
 import { TEMP_REF_HELP, normalizeProjectedTarget, planIdField } from './planRef';
@@ -91,6 +92,24 @@ function summarize(
       : `Readiness: blocked by ${detail.readiness.openBlockers
           .map((b) => b.identifier)
           .join(', ')}`,
+  );
+  // The SUPERSEDES pair (MOTIR-6580): which items this one replaces, and which
+  // replace it — printed only when present, so an ordinary card reads as before.
+  if (detail.supersedes.length > 0) {
+    lines.push(`Supersedes: ${detail.supersedes.map((l) => l.item.identifier).join(', ')}`);
+  }
+  if (detail.supersededBy.length > 0) {
+    lines.push(`Superseded by: ${detail.supersededBy.map((l) => l.item.identifier).join(', ')}`);
+  }
+  // The OBSOLESCENCE mark (MOTIR-6582): `obsolescence: outdated — superseded by …`
+  // and the note's first line, on a MARKED card only — an unmarked card gains no
+  // line, and nothing about the rest of the block changes.
+  lines.push(
+    ...obsolescenceLines({
+      obsolescence: it.obsolescence,
+      obsolescenceNoteMd: it.obsolescenceNoteMd,
+      supersededByKeys: detail.supersededBy.map((l) => l.item.identifier),
+    }),
   );
   if (it.descriptionMd) {
     lines.push('', it.descriptionMd);
@@ -246,7 +265,10 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
       description:
         'Read a single work item by its identifier (e.g. "ACME-7"): full detail including ' +
         'description, status, priority, assignee, parent/children, dependency links, and a ' +
-        'readiness verdict. Honors the same access checks as the UI. The payload declares the ' +
+        'readiness verdict. The link groups include `supersedes` (the older items this one ' +
+        'replaces) and `supersededBy` (the newer items that replace it), beside `blockedBy` / ' +
+        '`blocks` / `relatesTo` / `duplicates` / `clones`. Honors the same access checks as the ' +
+        'UI. The payload declares the ' +
         "item's OWN folder placement as `folderId` + `folderPath` (names root-first) — both null " +
         'for an unfiled item, and for a child of a filed item, whose ancestry travels as keys. ' +
         CHILD_EDGE_BLOCK_DESCRIPTION +
@@ -254,6 +276,11 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
         COMMENT_COUNT_DESCRIPTION +
         ' ' +
         ITEM_ONLY_COMMENT_COUNT_NOTE +
+        ' The item and every child row carry the OBSOLESCENCE mark — `obsolescence` ' +
+        '(`outdated` · `deprecated`, null while the card is still true of the code) and ' +
+        '`obsolescenceNoteMd` (why) — and the text block prints `obsolescence: <mark> — ' +
+        'superseded by <keys>` plus the note’s first line on a marked card. Informational ' +
+        'only: a marked child is never hidden or re-ordered.' +
         ' A committed item also carries `errors`: every monitor issue linked to it, with the ' +
         'facts and the latest event’s EVIDENCE Motir has stored — exception, stack frames, tags, ' +
         'request line — and `evidence.state` (`present`, `no_exception` or `never_read`, plus ' +

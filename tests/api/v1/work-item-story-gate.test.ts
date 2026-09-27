@@ -595,6 +595,8 @@ describe('gate — coverage top-up: the schema module', () => {
       estimateMinutes: null,
       storyPoints: null,
       archivedAt: null,
+      obsolescence: null,
+      obsolescenceNoteMd: null,
     });
 
     expect(ref.parentKey).toBeNull();

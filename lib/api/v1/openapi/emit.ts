@@ -19,7 +19,11 @@ import {
   type V1Parameter,
   type V1ResponseBody,
 } from '@/lib/api/v1/openapi/operation';
-import { V1_OPERATIONS, V1_RESOURCE_COMPONENTS } from '@/lib/api/v1/openapi/registry';
+import {
+  V1_OPERATIONS,
+  V1_RESOURCE_COMPONENTS,
+  V1_SHARED_SCHEMAS,
+} from '@/lib/api/v1/openapi/registry';
 import {
   V1_PERMISSION_EXTENSION,
   V1_SECURITY_SCHEME_NAME,
@@ -79,10 +83,48 @@ type JsonObject = { [key: string]: Json };
  * sees. `$schema` is stripped — legal inside a 3.1 component, but noise that no
  * reader or generator needs repeated on every shape.
  */
-export function toOpenApiSchema(schema: z.ZodType, io: 'input' | 'output' = 'output'): JsonObject {
-  const emitted = z.toJSONSchema(schema, { io, reused: 'inline' }) as JsonObject;
+export function toOpenApiSchema(
+  schema: z.ZodType,
+  io: 'input' | 'output' = 'output',
+  sharedRefs?: ReadonlyMap<z.ZodType, string>,
+): JsonObject {
+  const emitted = z.toJSONSchema(schema, {
+    io,
+    reused: 'inline',
+    ...(sharedRefs ? { override: sharedRefOverride(schema, sharedRefs) } : {}),
+  }) as JsonObject;
   const { $schema: _discarded, ...rest } = emitted;
   return rest;
+}
+
+/**
+ * The `override` hook that turns every embedded SHARED schema into a `$ref` to
+ * its named component (MOTIR-6581) — matched by schema INSTANCE, so an enum that
+ * merely has the same members is never mistaken for it.
+ *
+ * OPT-IN, and only the document opts in: `toOpenApiSchema`'s other callers
+ * (`lib/apiDocs/reference.ts`, the public API's emitter) render a schema on its
+ * own, with no `components` to resolve a `$ref` against, so they keep the
+ * inlined form. The ROOT is never replaced — that is the component's own body.
+ */
+function sharedRefOverride(
+  root: z.ZodType,
+  sharedRefs: ReadonlyMap<z.ZodType, string>,
+): NonNullable<Parameters<typeof z.toJSONSchema>[1]>['override'] {
+  return (ctx) => {
+    const zodSchema = ctx.zodSchema as unknown as z.ZodType;
+    if (zodSchema === root) return;
+    const name = sharedRefs.get(zodSchema);
+    if (name === undefined) return;
+    const target = ctx.jsonSchema as Record<string, unknown>;
+    for (const key of Object.keys(target)) delete target[key];
+    target['$ref'] = `#/components/schemas/${name}`;
+  };
+}
+
+/** {@link toOpenApiSchema} as the DOCUMENT uses it — shared schemas `$ref`ed. */
+function documentSchema(schema: z.ZodType, io: 'input' | 'output' = 'output'): JsonObject {
+  return toOpenApiSchema(schema, io, V1_SHARED_SCHEMAS);
 }
 
 /** A `$ref` to a named component schema. */
@@ -104,7 +146,7 @@ function componentNameFor(schema: z.ZodType): string | undefined {
 /** A schema object for a response/request body: a `$ref` when we have one. */
 function bodySchema(schema: z.ZodType): JsonObject {
   const name = componentNameFor(schema);
-  return name ? schemaRef(name) : toOpenApiSchema(schema);
+  return name ? schemaRef(name) : documentSchema(schema);
 }
 
 /**
@@ -176,7 +218,7 @@ function responseBodySchema(body: V1ResponseBody): JsonObject | undefined {
  * emitted document rather than against zod (MOTIR-2345 / MOTIR-2320).
  */
 function compositionBase(schema: z.ZodType): JsonObject {
-  const { additionalProperties: _composable, ...rest } = toOpenApiSchema(schema);
+  const { additionalProperties: _composable, ...rest } = documentSchema(schema);
   return rest;
 }
 
@@ -186,7 +228,7 @@ function sharedResponseHeaders(): JsonObject {
   for (const header of V1_SHARED_RESPONSE_HEADERS) {
     headers[header.name] = {
       description: header.description,
-      schema: toOpenApiSchema(header.schema),
+      schema: documentSchema(header.schema),
     };
   }
   return headers;
@@ -203,7 +245,7 @@ function parameterObject(parameter: V1Parameter): JsonObject {
     // a reader must not have to know that `type: array` implies repeated keys,
     // and a declaration that says so cannot be quietly changed by a default.
     ...(parameter.explode === undefined ? {} : { explode: parameter.explode }),
-    schema: toOpenApiSchema(parameter.schema, 'input'),
+    schema: documentSchema(parameter.schema, 'input'),
   };
 }
 
@@ -268,7 +310,7 @@ function operationObject(operation: V1Operation): JsonObject {
               // body can have the same Zod shape, and only the operation knows
               // which wire form it accepts.
               [operation.requestBody.contentType ?? 'application/json']: {
-                schema: toOpenApiSchema(operation.requestBody.schema, 'input'),
+                schema: documentSchema(operation.requestBody.schema, 'input'),
               },
             },
           },
@@ -328,7 +370,13 @@ export function emitOpenApiDocument(options: EmitOptions = {}): JsonObject {
 
   const resourceComponents: JsonObject = {};
   for (const [name, schema] of Object.entries(V1_RESOURCE_COMPONENTS)) {
-    resourceComponents[name] = toOpenApiSchema(schema);
+    resourceComponents[name] = documentSchema(schema);
+  }
+  // The named field vocabularies every carrier `$ref`s (MOTIR-6581). Emitted
+  // AFTER the resources, in registration order, so the document stays
+  // deterministic; `mergeSharedSchemas` already refused a clashing name.
+  for (const [schema, name] of V1_SHARED_SCHEMAS) {
+    resourceComponents[name] = documentSchema(schema);
   }
 
   return {
