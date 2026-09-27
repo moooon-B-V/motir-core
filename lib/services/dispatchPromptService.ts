@@ -19,10 +19,14 @@ import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { parseDecisionRecord } from '@/lib/approvalGates/decisionRecord';
-import type {
-  ChangesRequestedForPrompt,
-  ConfirmedDecisionForPrompt,
+import {
+  obsolescenceNoteFirstLine,
+  type ChangesRequestedForPrompt,
+  type ConfirmedDecisionForPrompt,
+  type ObsoleteNeighbour,
 } from '@/lib/dispatch/promptTemplate';
+import { splitPlanBody } from '@/lib/markdown/planBody';
+import { parseWorkItemKeys, parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 
 // The DISPATCH-PROMPT read (Story 7.9 · MOTIR-1802) — resolve everything the
@@ -60,6 +64,89 @@ async function resolveBlockerKeys(workItemId: string, workspaceId: string): Prom
     .slice()
     .sort((a, b) => a.key - b.key)
     .map((r) => r.identifier);
+}
+
+/**
+ * The MARKED neighbours of a work item (Story MOTIR-6576 · MOTIR-6657) — its
+ * parent, its `is_blocked_by` blockers and the work items its `## Context refs`
+ * name, kept only where they carry an obsolescence mark, each with the keys of
+ * the work items that superseded it. The dispatched card itself is never among
+ * them: only a finished card carries a mark (MOTIR-6575).
+ *
+ * BOUNDED, whatever the card names: one bound transaction and at most four reads
+ * — the blocker edges (the SAME `is_blocked_by` edges `resolveBlockerKeys` reads,
+ * so the two never disagree), the bare context-ref keys, the union of every
+ * neighbour id, and the superseders of the marked ones.
+ *
+ * Context refs resolve INSIDE the card's own project: a `[label](motir:<id>)`
+ * chip or a bare `<PROJECTKEY>-<n>` key naming another project's item, an
+ * unknown key and a non-work-item ref (a path) all yield nothing. A work item
+ * named twice keeps its FIRST role, in the order parent → blocker → context ref.
+ */
+async function resolveObsoleteNeighbours(
+  item: { id: string; projectId: string; parentId: string | null; descriptionMd: string | null },
+  projectIdentifier: string,
+  workspaceId: string,
+): Promise<ObsoleteNeighbour[]> {
+  const refs = splitPlanBody(item.descriptionMd).contextRefs;
+  // One ordered list of what the refs name, a chip's id or a bare key, in the
+  // order the card names them.
+  const named: Array<{ id: string } | { key: string }> = [];
+  for (const ref of refs) {
+    for (const id of parseWorkItemTokenIds(ref)) named.push({ id });
+    for (const key of parseWorkItemKeys(ref, projectIdentifier)) named.push({ key });
+  }
+
+  return withWorkspaceServiceContext(workspaceId, async (tx) => {
+    const blockerLinks = await workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by', tx);
+    const keys = [...new Set(named.flatMap((n) => ('key' in n ? [n.key] : [])))];
+    const keyRows = await workItemRepository.findByIdentifiers(item.projectId, keys, tx);
+    const idOfKey = new Map(keyRows.map((r) => [r.identifier, r.id]));
+
+    const roles: Array<{ id: string; role: ObsoleteNeighbour['role'] }> = [];
+    if (item.parentId) roles.push({ id: item.parentId, role: 'parent' });
+    for (const link of blockerLinks) roles.push({ id: link.toId, role: 'blocker' });
+    for (const n of named) {
+      const id = 'id' in n ? n.id : idOfKey.get(n.key);
+      if (id) roles.push({ id, role: 'context ref' });
+    }
+
+    const rows = await workItemRepository.findByIds([...new Set(roles.map((r) => r.id))], tx);
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const seen = new Set<string>([item.id]);
+    const marked: Array<{ role: ObsoleteNeighbour['role']; row: (typeof rows)[number] }> = [];
+    const blockers: typeof marked = [];
+    for (const { id, role } of roles) {
+      const row = byId.get(id);
+      if (!row || seen.has(id)) continue;
+      seen.add(id);
+      // A context ref resolves inside the card's own project only.
+      if (role === 'context ref' && row.projectId !== item.projectId) continue;
+      if (row.obsolescence === null) continue;
+      // Blockers are listed in ascending key order, as the Depends-on line lists them.
+      (role === 'blocker' ? blockers : marked).push({ role, row });
+    }
+    blockers.sort((a, b) => a.row.key - b.row.key);
+    const parentFirst = marked.filter((m) => m.role === 'parent');
+    const ordered = [...parentFirst, ...blockers, ...marked.filter((m) => m.role !== 'parent')];
+    if (ordered.length === 0) return [];
+
+    const superseders = await workItemLinkRepository.findSupersedersOf(
+      ordered.map((m) => m.row.id),
+      tx,
+    );
+    return ordered.map(({ role, row }) => ({
+      role,
+      key: row.identifier,
+      title: row.title,
+      mark: row.obsolescence as ObsoleteNeighbour['mark'],
+      supersededByKeys: superseders
+        .filter((s) => s.toId === row.id)
+        .sort((a, b) => a.supersederKey - b.supersederKey)
+        .map((s) => s.supersederIdentifier),
+      noteFirstLine: obsolescenceNoteFirstLine(row.obsolescenceNoteMd),
+    }));
+  });
 }
 
 /**
@@ -228,6 +315,7 @@ export const dispatchPromptService = {
       confirmedDecisions,
       errorEvidence,
       ownRefusal,
+      obsoleteNeighbours,
     ] = await allSettledOrThrow([
       item.parentId
         ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -288,6 +376,13 @@ export const dispatchPromptService = {
       // was sent back, when the latest decided gate is `changes_requested`. No
       // refusal path: a refusal that could not be read never stops a dispatch.
       approvalGatesService.latestRefusalFor(item.id, ctx).catch(() => null),
+      // The MARKED neighbours (MOTIR-6657) — the finished parent, blockers and
+      // context refs that are no longer true of the code. No refusal path, like
+      // the design read: a failure renders no obsolescence line and never stops
+      // a dispatch.
+      resolveObsoleteNeighbours(item, project.identifier, ctx.workspaceId).catch(
+        () => [] as ObsoleteNeighbour[],
+      ),
     ]);
 
     // …and its RUN TARGET's, when this card is a leg of a run launched against
@@ -323,6 +418,7 @@ export const dispatchPromptService = {
       confirmedDecisions,
       errorEvidence,
       changesRequested,
+      obsoleteNeighbours,
       parent: parentRow ? { key: parentRow.identifier, title: parentRow.title } : null,
       projectName: project.name,
       projectKey: project.identifier,

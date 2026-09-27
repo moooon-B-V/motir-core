@@ -581,6 +581,31 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * The work items that SUPERSEDE any of `toIds` — the `supersedes` edges whose
+   * `to` is the OLDER item and whose `from` is the newer one (MOTIR-6580) —
+   * resolved to the superseder's key in the same round-trip (MOTIR-6657, the
+   * dispatch prompt's obsolete-neighbour lines). ONE read for every marked
+   * neighbour, however many there are; archived superseders are left out.
+   * `tx` is REQUIRED: the edges sit behind the workspace policy, so an unbound
+   * read answers nothing rather than failing.
+   */
+  async findSupersedersOf(
+    toIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ toId: string; supersederKey: number; supersederIdentifier: string }>> {
+    if (toIds.length === 0) return [];
+    const rows = await tx.workItemLink.findMany({
+      where: { toId: { in: toIds }, kind: 'supersedes', fromItem: { archivedAt: null } },
+      select: { toId: true, fromItem: { select: { key: true, identifier: true } } },
+    });
+    return rows.map((r) => ({
+      toId: r.toId,
+      supersederKey: r.fromItem.key,
+      supersederIdentifier: r.fromItem.identifier,
+    }));
+  },
+
+  /**
    * Create a link. Required `tx`. The DB triggers validate cycle /
    * self-link / workspace consistency on insert; their SQLSTATE-23514
    * rejections and a P2002 unique violation are translated to typed errors
