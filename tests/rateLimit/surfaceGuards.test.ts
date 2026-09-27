@@ -248,28 +248,35 @@ describe('the auth surface', () => {
 
 // ── PUBLIC WRITE ─────────────────────────────────────────────────────────────
 
-// MOTIR-6642 — a Visitor's reads, per IP, in their own bucket.
+// MOTIR-6642 / MOTIR-6666 — a Visitor's reads, per signed-in person, in their own bucket.
 describe('the public-read surface', () => {
-  const read = (ip: string) =>
+  const read = (ip = '198.51.100.21') =>
     new Request('http://localhost/p/ACME/board', { headers: { 'x-forwarded-for': ip } });
 
-  it('answers 429 with RATE_LIMITED once one IP has spent its budget, and a second IP is unaffected', async () => {
+  it('answers 429 with RATE_LIMITED once one person has spent their budget, and a second person is unaffected', async () => {
     process.env['MOTIR_PUBLIC_READ_RATE_LIMIT'] = '2';
     await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
-    expect(await enforcePublicReadRateLimit(read('198.51.100.21'))).toBeNull();
-    expect(await enforcePublicReadRateLimit(read('198.51.100.21'))).toBeNull();
-    const refused = await enforcePublicReadRateLimit(read('198.51.100.21'));
+    expect(await enforcePublicReadRateLimit(read(), 'user-a')).toBeNull();
+    expect(await enforcePublicReadRateLimit(read(), 'user-a')).toBeNull();
+    const refused = await enforcePublicReadRateLimit(read(), 'user-a');
     expect(refused!.status).toBe(429);
     await expect(refused!.json()).resolves.toMatchObject({ code: RATE_LIMITED_CODE });
-    expect(await enforcePublicReadRateLimit(read('198.51.100.22'))).toBeNull();
+    expect(await enforcePublicReadRateLimit(read(), 'user-b')).toBeNull();
+  });
+
+  it('is keyed on the person, not the IP — one person from two addresses shares one budget', async () => {
+    process.env['MOTIR_PUBLIC_READ_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
+    expect(await enforcePublicReadRateLimit(read('203.0.113.1'), 'user-c')).toBeNull();
+    expect(await enforcePublicReadRateLimit(read('203.0.113.2'), 'user-c')).not.toBeNull();
   });
 
   it('does not share a bucket with public-write — reading never spends the write allowance', async () => {
     process.env['MOTIR_PUBLIC_READ_RATE_LIMIT'] = '1';
     process.env['MOTIR_PUBLIC_WRITE_RATE_LIMIT'] = '1';
     await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
-    expect(await enforcePublicReadRateLimit(read('203.0.113.77'))).toBeNull();
-    expect(await enforcePublicReadRateLimit(read('203.0.113.77'))).not.toBeNull();
+    expect(await enforcePublicReadRateLimit(read('203.0.113.77'), 'user-d')).toBeNull();
+    expect(await enforcePublicReadRateLimit(read('203.0.113.77'), 'user-d')).not.toBeNull();
     expect(
       await enforcePublicWriteRateLimit(
         new Request('http://localhost/api/public-requests/abc/upvote', {

@@ -3,14 +3,13 @@ import { db } from '@/lib/db';
 import { activityService } from '@/lib/services/activityService';
 import { commentsService } from '@/lib/services/commentsService';
 import { estimationService } from '@/lib/services/estimationService';
-import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { parseWorkItemRefs } from '@/lib/mentions/workItemRefs';
-import type { VisitorReadContext } from '@/lib/visitor/context';
 import { WITHHELD_WORK_ITEM_LABEL } from '@/lib/visitor/readScope';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { consentedVisitor } from './_consentedVisitor';
 import { truncateAuthTables } from '../helpers/db';
 
 // The single WORK-ITEM PAGE as a Visitor reads it (Story MOTIR-6170 ·
@@ -87,10 +86,9 @@ async function fixture() {
   await commentsService.addComment(V.id, { bodyMd: `See ${chip} for context.` }, fx.ctx);
   await adminDb.workItem.update({ where: { id: E.id }, data: { publicChildrenHidden: true } });
 
-  const verdict = await projectAccessService.resolveVisitor(identifier, null);
-  if (verdict.kind !== 'visitor') throw new Error(`expected a visitor, got ${verdict.kind}`);
+  const visitorCtx = await consentedVisitor(identifier);
   const hiddenItems = [C1, C2, G];
-  return { fx, visitor: verdict.ctx as VisitorReadContext, E, C1, C2, G, V, O, hiddenItems };
+  return { fx, visitor: visitorCtx, E, C1, C2, G, V, O, hiddenItems };
 }
 
 /** Every string a hidden item could be named by — id, key and title. */

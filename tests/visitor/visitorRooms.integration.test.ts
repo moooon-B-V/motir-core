@@ -4,10 +4,9 @@ import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { planReviewService } from '@/lib/services/planReviewService';
 import { planSessionsService } from '@/lib/services/planSessionsService';
-import { projectAccessService } from '@/lib/services/projectAccessService';
-import type { VisitorReadContext } from '@/lib/visitor/context';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { consentedVisitor } from './_consentedVisitor';
 import { truncateAuthTables } from '../helpers/db';
 
 // Plans, Approvals and Runs as a Visitor reads them (Story MOTIR-6170 ·
@@ -102,12 +101,11 @@ async function roomsFixture() {
   const runOnC = await run(hidden.id);
   const runOnV = await run(visible.id);
 
-  const verdict = await projectAccessService.resolveVisitor(identifier, null);
-  if (verdict.kind !== 'visitor') throw new Error(`expected a visitor, got ${verdict.kind}`);
+  const visitorCtx = await consentedVisitor(identifier);
   return {
     fx,
     identifier,
-    visitor: verdict.ctx as VisitorReadContext,
+    visitor: visitorCtx,
     sessions: { hidden: s1.id, visible: s2.id },
     plans: { hidden: p1.id, visible: p2.id },
     gates: { onC: gateOnC.id, onV: gateOnV.id, onP1: gateOnP1.id, onP2: gateOnP2.id },

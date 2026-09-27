@@ -4,7 +4,6 @@ import { assignableMembersService } from '@/lib/services/assignableMembersServic
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { boardsService } from '@/lib/services/boardsService';
 import { componentsService } from '@/lib/services/componentsService';
-import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import {
   PERSON_FALLBACK_LABEL,
@@ -12,9 +11,10 @@ import {
   personName,
   toPersonLabel,
 } from '@/lib/people/personLabel';
-import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/context';
+import { visitorServiceContext } from '@/lib/visitor/context';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { consentedVisitor } from './_consentedVisitor';
 import { truncateAuthTables } from '../helpers/db';
 
 // A Visitor sees names, never emails (Story MOTIR-6170 · MOTIR-6646). Every
@@ -130,12 +130,11 @@ async function fixture() {
       routedToId: nameless.id,
     },
   });
-  const verdict = await projectAccessService.resolveVisitor(identifier, null);
-  if (verdict.kind !== 'visitor') throw new Error(`expected a visitor, got ${verdict.kind}`);
+  const visitorCtx = await consentedVisitor(identifier);
   return {
     fx,
     identifier,
-    visitor: verdict.ctx as VisitorReadContext,
+    visitor: visitorCtx,
     ada,
     nameless,
     byAda,

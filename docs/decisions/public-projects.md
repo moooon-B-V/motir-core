@@ -536,3 +536,21 @@ public_request:comment }`, the grants motir.co's act routes still assert (§3). 
 - **Rate limited per IP.** A Visitor's reads spend the `public-read` scope
   (`lib/rateLimit/publicReadGuard.ts`), keyed on the client IP and separate from `public-write`, so
   reading never spends the allowance for filing a request.
+
+## AMENDMENT 3 (2026-09-27) — the in-app Visitor views need a session and a consent
+
+**By:** Story MOTIR-6170 · Subtask MOTIR-6666, applying `docs/decisions/visitor-sign-in-and-records.md`
+(DECISION MOTIR-6664).
+
+- **§5 no longer holds for the in-app Visitor views.** READ of `app.motir.co/p/<identifier>/<view>`
+  needs a signed-in account and a one-time consent per project; motir.co's pages keep §5 unchanged
+  (READ anonymous, WRITE signed in).
+- **AMENDMENT 2's anonymous branch is retired.** _"an anonymous reader"_ leaves the list of who is a
+  Visitor, and _"stored nowhere"_ becomes one visitor record per (person, project).
+- **The resolution grows two answers.** `resolveVisitor` asks, in order: `not_found` (unchanged, and
+  still asked FIRST so a signed-out stranger learns nothing about a private project), `sign_in` (no
+  session), `enter` (the person can enter), `consent` (no visitor record for this project yet), then
+  `visitor`. A Visitor read touches the record's latest visit, at most once per ten minutes.
+- **The public-read limit is keyed per person.** Every Visitor has an account now, so the
+  `public-read` scope is keyed on the signed-in user id rather than the client IP; the budget is
+  unchanged.

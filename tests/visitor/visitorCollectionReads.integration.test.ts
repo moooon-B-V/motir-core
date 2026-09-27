@@ -2,12 +2,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import { boardsService } from '@/lib/services/boardsService';
-import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import type { VisitorReadContext } from '@/lib/visitor/context';
 import type { ProjectTreeRowDto, WorkItemTreeNodeDto } from '@/lib/dto/workItems';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { consentedVisitor } from './_consentedVisitor';
 import { truncateAuthTables } from '../helpers/db';
 
 // The in-app COLLECTION reads, as a Visitor reads them (Story MOTIR-6170 ·
@@ -77,12 +76,10 @@ async function publicFixture() {
     where: { id: privateEpic.id },
     data: { publicChildrenHidden: true, storyPoints: 13, estimateMinutes: 240 },
   });
-  const verdict = await projectAccessService.resolveVisitor(identifier, null);
-  if (verdict.kind !== 'visitor')
-    throw new Error(`expected a visitor verdict, got ${verdict.kind}`);
+  const visitorCtx = await consentedVisitor(identifier);
   return {
     fx,
-    visitor: verdict.ctx as VisitorReadContext,
+    visitor: visitorCtx,
     privateEpic,
     openEpic,
     openStory,

@@ -16,8 +16,12 @@ export interface VisitorReadContext {
   readonly kind: 'visitor';
   /** The public project being read — resolved and proved `public` already. */
   readonly project: Project;
-  /** The session's user when signed in (another org, or a Limited non-entrant); `null` when anonymous. */
-  readonly actorUserId: string | null;
+  /**
+   * The signed-in reader — another organisation's person, or a Limited member who
+   * was not added. Never null since MOTIR-6666: a Visitor has signed in and
+   * consented (`visitor-sign-in-and-records.md`).
+   */
+  readonly actorUserId: string;
   /** Always {@link VISITOR_PERMISSIONS} — the Viewer's set, nothing that writes. */
   readonly permissions: ReadonlySet<PermissionKey>;
   /**
@@ -29,19 +33,38 @@ export interface VisitorReadContext {
 }
 
 /**
- * The three answers {@link projectAccessService.resolveVisitor} gives for a
- * Visitor URL:
+ * What the one-time CONSENT screen needs to say (MOTIR-6666) — the project's name
+ * and key and the name of the workspace whose Managers will see the reader. Nothing
+ * from inside the project: no work item, no count, no hidden set.
+ */
+export interface VisitorConsentSubject {
+  readonly identifier: string;
+  readonly projectName: string;
+  readonly workspaceName: string;
+}
+
+/**
+ * The five answers {@link projectAccessService.resolveVisitor} gives for a
+ * Visitor URL, in the order it asks (MOTIR-6642, MOTIR-6666;
+ * `visitor-sign-in-and-records.md`):
  *
  * - `not_found` — cloud off, no such project, or a project that is not public.
- *   ONE indistinguishable answer, so a stranger can never learn a private
- *   project exists.
+ *   ONE indistinguishable answer, asked FIRST, so a stranger — signed in or not —
+ *   can never learn a private project exists.
+ * - `sign_in` — a public project and no session. Carries only the key, for the
+ *   way back after signing in.
  * - `enter` — the signed-in person can ENTER the project; they belong in their
- *   own in-app view, and the route tree redirects them there.
- * - `visitor` — everyone else, with the context every Visitor read takes.
+ *   own in-app view, and are never asked to consent.
+ * - `consent` — signed in, cannot enter, and has not yet consented on this
+ *   project: the consent screen comes first. Carries what it shows, nothing more.
+ * - `visitor` — signed in, cannot enter, consented: the context every Visitor
+ *   read takes.
  */
 export type VisitorVerdict =
   | { readonly kind: 'not_found' }
+  | { readonly kind: 'sign_in'; readonly identifier: string }
   | { readonly kind: 'enter'; readonly project: Project }
+  | { readonly kind: 'consent'; readonly subject: VisitorConsentSubject }
   | { readonly kind: 'visitor'; readonly ctx: VisitorReadContext };
 
 /** The not-found verdict — one frozen value, so every refusal is deep-equal. */
@@ -51,6 +74,11 @@ export const VISITOR_NOT_FOUND: VisitorVerdict = Object.freeze({ kind: 'not_foun
  * The actor id a Visitor's narrowed service context carries. It names no user
  * row (it is not a cuid), so every "is this the reader's own record" test is
  * false for it and no membership, role or custom role ever resolves for it.
+ *
+ * Kept although every Visitor is signed in since MOTIR-6666: the narrowed context
+ * must resolve the VISITOR's standing on this project, never the signed-in
+ * reader's own standing elsewhere in the workspace — which is exactly what using
+ * their real id would do.
  */
 export const VISITOR_ACTOR_ID = 'visitor:anonymous';
 
