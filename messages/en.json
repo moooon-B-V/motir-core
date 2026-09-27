@@ -6679,6 +6679,53 @@
         "howConflict": "An agent rebases or resolves on the pull request's own branch, pushes, and the checks run again.",
         "rearm": "There is nothing to approve here. A push moves the head, which re-arms the question, and the next green raises the merge gate once — over the new commits."
       },
+      "continue": {
+        "title": "Continue the work",
+        "aria": {
+          "part": "Continue the work"
+        },
+        "died": {
+          "pill": "Run died"
+        },
+        "reason": {
+          "lapsed": "The run stopped reporting — last heard from <when></when>.",
+          "interrupted": "The run was stopped from its terminal <when></when>.",
+          "failed": "The agent exited with an error <when></when>.",
+          "cancelled": "The run was cancelled <when></when>.",
+          "stalled": "The hosted agent stalled — no output for 15 minutes — <when></when>.",
+          "backstop": "The hosted run reached its 12-hour limit <when></when>."
+        },
+        "ranBy": "Run by <b>{name}</b> with <mono>{command}</mono> · started <when></when>",
+        "ranBySomeone": "Run with <mono>{command}</mono> · started <when></when>",
+        "branch": "Its work is on <ref>{branch}</ref>",
+        "branchWithPr": "Its work is on <ref>{branch}</ref> and in the pull request <b>{pr}</b>",
+        "safe": "Nothing was lost and nothing moved: this work item is still <b>{status}</b>.",
+        "lead": "Carry it on from your terminal:",
+        "how": "An agent checks out that branch, reads what is already committed, merges the latest main, and finishes the work item in one pull request.",
+        "startOver": "Start over instead: set <b>{target}</b> to To Do and run it again.",
+        "nothingPushed": "Its branch was never pushed, so there is nothing to continue.",
+        "continuing": {
+          "pill": "Continuing",
+          "by": "Being continued by <b>{name}</b> · started <when></when>",
+          "byYou": "Being continued by <b>you</b> · started <when></when>",
+          "bySomeone": "Being continued · started <when></when>",
+          "tookOver": "It took over from <b>{name}</b>'s run",
+          "on": "On <ref>{branch}</ref>",
+          "why": "Only one continue runs at a time. When it finishes, this work item moves on exactly as after <mono>motir run</mono>."
+        },
+        "implemented": {
+          "line": "The run stopped reporting <when></when>, after it opened its pull request.",
+          "pr": "The pull request is open, so there is nothing to continue: its checks decide from here.",
+          "fix": "If they fail, <mono>motir fix {key}</mono> hands the repair to an agent — the Fix the checks part appears above when they do."
+        },
+        "child": {
+          "line": "The run that owned this work item stopped reporting <when></when>.",
+          "pointer": "It was run as part of <link>{key}</link>, so it is continued from there — the whole run resumes on its branch and skips what already landed:"
+        },
+        "loading": "Checking whether this work item's run is still alive",
+        "error": "Couldn't check whether this work item's run is still alive.",
+        "retry": "Try again"
+      },
       "emptyTitle": "No linked pull request",
       "emptyDescription": "Use + Link pull request here or <mono>link_pull_request</mono> over the MCP to add a PR and show live PR and CI status.",
       "autoLinkCaption": "Linked by <mono>link_pull_request</mono> over the MCP or a <mono>motir auto</mono> session branch.",
@@ -8561,7 +8608,8 @@
       "succeeded": "Succeeded",
       "failed": "Failed",
       "cancelled": "Cancelled",
-      "timed_out": "Timed out"
+      "timed_out": "Timed out",
+      "died": "Run died"
     },
     "command": {
       "next": "motir next",
@@ -8569,7 +8617,8 @@
       "run_scope": "motir run '<'scope>",
       "batch": "motir batch",
       "auto": "motir auto",
-      "fix": "motir fix"
+      "fix": "motir fix",
+      "continue": "motir continue"
     },
     "skipReason": {
       "needsPlanning": "Skipped — needs planning.",
@@ -8676,7 +8725,8 @@
     "indexEmptyMineBody": "When you dispatch work with motir next, motir run or motir batch, your runs appear here — the one happening now, and every one before it.",
     "indexEmptyBodyRead": "When work in this project is dispatched with motir next, motir run or motir batch, every run appears here — the one happening now, and every one before it.",
     "noneRunningMine": "Nothing you started is running.",
-    "nonePastMine": "No run you started has finished yet."
+    "nonePastMine": "No run you started has finished yet.",
+    "runDied": "This run died — last heard from <b><when></when></b>. Its work is kept on its branch; continue it from Development below."
   },
   "repositoryPicker": {
     "add": "Add repository",

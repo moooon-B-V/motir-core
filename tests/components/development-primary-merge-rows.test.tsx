@@ -258,6 +258,7 @@ function reads(over: Partial<LateReads>): LateReads {
     repair: null,
     monitorIssueLinks: [],
     monitorHasConnection: false,
+    continueView: { state: 'none' },
     decisionGate: { ...noGate, document: null },
     choiceGate: { ...noGate, body: null },
     confirmGate: { ...noGate, body: null },

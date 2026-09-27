@@ -235,9 +235,16 @@ export const workflowsService = {
     // computed over an empty status set. The board rendered its chrome and
     // nothing else. `tx` is threaded when the caller already holds a bound
     // transaction; the rest of this file's unbound call sites are MOTIR-2846's.
-    const statuses = await withWorkspaceServiceContext(workspaceId, (t) =>
-      workflowsRepository.findStatuses(projectId, workspaceId, tx ?? t),
-    );
+    //
+    // MOTIR-6653 — a threaded `tx` is used DIRECTLY. This used to open a
+    // transaction regardless and run the query on the caller's, so the caller
+    // held its own pool slot and waited on a second, idle one: the double slot
+    // that starves the pool under concurrent reads.
+    const statuses = tx
+      ? await workflowsRepository.findStatuses(projectId, workspaceId, tx)
+      : await withWorkspaceServiceContext(workspaceId, (t) =>
+          workflowsRepository.findStatuses(projectId, workspaceId, t),
+        );
     return statuses.map(toWorkflowStatusDto);
   },
 

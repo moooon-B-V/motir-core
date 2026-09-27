@@ -921,6 +921,7 @@ describe('the work-loop payloads', () => {
     targetRepoDefaultBranch: null,
     workflowMode: 'per_item_pr' as const,
     sessionBranch: null,
+    branch: null,
     advisories: [],
     // MOTIR-2445 — the parent the prompt already names in prose, as a field.
     parentKey: 'PROD-2',

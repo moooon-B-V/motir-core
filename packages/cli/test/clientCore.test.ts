@@ -432,6 +432,103 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(claim.transitionedBy).toEqual({ id: 'user_them', name: 'Ada' });
   });
 
+  // ── The CONTINUE claim and the heartbeat (MOTIR-6530 / 6532; MOTIR-6537) ────
+  it('claims a CONTINUE on the work item’s own path and restates the dead run field by field', async () => {
+    const body = {
+      key: 'PROD-1',
+      title: 'Refunds',
+      outcome: 'claimed',
+      reason: null,
+      parentKey: null,
+      runId: 'run_continue_1',
+      holder: { id: 'user_me', name: 'Mo' },
+      startedAt: '2026-09-27T10:00:00.000Z',
+      deadRun: {
+        id: 'run_dead',
+        command: 'run_scope',
+        origin: 'local',
+        status: 'timed_out',
+        stopReason: 'abandoned',
+        lastHeardAt: '2026-09-27T09:50:00.000Z',
+        dispatcher: { id: 'user_mara', name: 'Mara S.' },
+      },
+      branch: 'motir/auto-20260927-0900',
+      pullRequest: {
+        repo: 'acme/web',
+        number: 12,
+        url: 'https://github.com/acme/web/pull/12',
+        headRef: 'motir/auto-20260927-0900',
+      },
+      previousAssignee: { id: 'user_mara', name: 'Mara S.' },
+      mode: 'parent',
+      landedKeys: ['PROD-2'],
+      resumedKeys: ['PROD-3'],
+    };
+    server.scriptV1({ 'POST /api/v1/work-items/{key}/continue': { body } });
+
+    const claim = await connected().claimWorkItemContinue('PROD-1');
+
+    expect(server.v1Calls[0]?.path).toBe('/api/v1/work-items/PROD-1/continue');
+    expect(claim).toEqual(body);
+  });
+
+  it('a refused continue carries no dead run, branch, pull request or assignee', async () => {
+    server.scriptV1({
+      'POST /api/v1/work-items/{key}/continue': {
+        body: {
+          key: 'PROD-7',
+          title: 'Widget',
+          outcome: 'not_continuable',
+          reason: 'no_dead_run',
+          parentKey: null,
+          runId: null,
+          holder: null,
+          startedAt: null,
+          deadRun: null,
+          branch: null,
+          pullRequest: null,
+          previousAssignee: null,
+          mode: 'card',
+          landedKeys: [],
+          resumedKeys: [],
+        },
+      },
+    });
+
+    const claim = await connected().claimWorkItemContinue('PROD-7');
+
+    expect(claim).toMatchObject({
+      outcome: 'not_continuable',
+      reason: 'no_dead_run',
+      deadRun: null,
+      pullRequest: null,
+      previousAssignee: null,
+      holder: null,
+    });
+  });
+
+  it('a heartbeat answers `ok`, `closed` on DISPATCH_RUN_TERMINAL, and throws anything else', async () => {
+    server.scriptV1({ 'POST /api/v1/dispatch-runs/{id}/heartbeat': { status: 204 } });
+    await expect(connected().heartbeatDispatchRun('run_1')).resolves.toBe('ok');
+    expect(server.v1Calls[0]?.path).toBe('/api/v1/dispatch-runs/run_1/heartbeat');
+
+    server.scriptV1({
+      'POST /api/v1/dispatch-runs/{id}/heartbeat': {
+        status: 409,
+        body: { code: 'DISPATCH_RUN_TERMINAL', error: 'The run is closed.' },
+      },
+    });
+    await expect(connected().heartbeatDispatchRun('run_1')).resolves.toBe('closed');
+
+    server.scriptV1({
+      'POST /api/v1/dispatch-runs/{id}/heartbeat': {
+        status: 404,
+        body: { code: 'DISPATCH_RUN_NOT_FOUND', error: 'No such run.' },
+      },
+    });
+    await expect(connected().heartbeatDispatchRun('run_1')).rejects.toThrow('No such run.');
+  });
+
   // ── The REPAIR claim (MOTIR-5464 / MOTIR-5465) ────────────────────────────
   it('claims a REPAIR on the work item’s own path and restates every pull request', async () => {
     const pullRequest = {

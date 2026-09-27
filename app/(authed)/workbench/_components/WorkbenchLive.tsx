@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, type ReactNode } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { RefreshCw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
@@ -14,6 +14,7 @@ import {
 // Workbench's own address from it. A literal here reds `landing-owner-guard`,
 // and the guard is right: it is the shape six separate repairs came from.
 import { WORKBENCH_PATH } from '@/lib/workbench/tab';
+import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
 
 // THE HOST THAT HOLDS THE STREAM (Story MOTIR-5238 · Subtask MOTIR-5242).
 //
@@ -51,15 +52,21 @@ import { WORKBENCH_PATH } from '@/lib/workbench/tab';
  * and the card both forbid. (MOTIR-5242's *a tab that did not move is not
  * re-read* is met at the FRAME: no change, no read. The per-tab reading of it is
  * amended on the card, with this reasoning.)
+ *
+ * ⚠️ THE REFRESH IS THE SHELL'S COORDINATED ONE, never `router.refresh()`
+ * directly (bug MOTIR-6640). A nudge usually reports a write the reader just
+ * made on this page, such as an approve in the planning overlay, whose own
+ * refresh is already in flight. Two overlapping refreshes can make Next fall
+ * back to a full document load, so this one waits its turn.
  */
 function useRefreshOnNudge(nudge: number): void {
-  const router = useRouter();
+  const refresh = useCoordinatedRefresh();
   const lastApplied = useRef(0);
   useEffect(() => {
     if (nudge === lastApplied.current) return;
     lastApplied.current = nudge;
-    router.refresh();
-  }, [nudge, router]);
+    refresh();
+  }, [nudge, refresh]);
 }
 
 /**

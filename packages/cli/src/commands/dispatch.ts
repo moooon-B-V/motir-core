@@ -10,7 +10,8 @@ import {
 } from '../agentProfiles.js';
 import { runAgent } from '../agentRun.js';
 import { runDispatchLeg } from '../dispatchLeg.js';
-import { createDispatchRunReporter } from '../dispatchRunReporter.js';
+import { createDispatchRunReporter, type DispatchRunReporter } from '../dispatchRunReporter.js';
+import { bindInterruptSignals, closeRunAndExit, type InterruptSignal } from '../interrupt.js';
 import { runCiWatchPhase, type CiWatchOutcome } from '../ciWatch.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import { execCommand, runIdFromDate, sessionBranchName, type CommandRunner } from '../git.js';
@@ -20,13 +21,20 @@ import {
   refuseLeafOnlyFlag,
   resolveScopeTarget,
   softBlockAncestor,
+  type ClaimedScope,
   type ScopeRunOptions,
 } from './scope.js';
-import { orderClaimedSet } from '../scopedRun.js';
+import { orderClaimedSet, type ScopeTarget } from '../scopedRun.js';
 import { drainScope } from './scopeDrain.js';
 import { runCloseOutHowToTest } from '../closeOutHowToTest.js';
 import { autoExitCode, renderAutoSummary } from '../autoLoop.js';
-import { closeOutContainer, closeOutRepos, parseMax, requireAgent } from './auto.js';
+import {
+  closeOutContainer,
+  closeOutRepos,
+  parseMax,
+  requireAgent,
+  type ResolvedAgent,
+} from './auto.js';
 import {
   autoOnlyFlagError,
   findingsPolicyOf,
@@ -159,6 +167,13 @@ export interface DeliveryDeps {
   /** The CI watch's POLL bound (MOTIR-3685) — distinct from the five-fix cap;
    *  a test uses it to pin the never-reports case in one call rather than 240. */
   maxCiPolls?: number;
+  /**
+   * Install the interrupt handler and return its remover (MOTIR-6530).
+   * Production binds SIGINT and SIGTERM; a test calls the handler directly.
+   */
+  onInterrupt?: (handler: (signal: InterruptSignal) => void) => () => void;
+  /** How the process ends after an interrupt. `process.exit` in production. */
+  exit?: (code: number) => void;
 }
 
 /**
@@ -264,12 +279,21 @@ export function echoPromptIfAsked(
   errVerbatim(dispatch.prompt);
 }
 
-interface DeliverInput {
+export interface DeliverInput {
   session: ProjectSession;
   /** Which command converged here — the one thing `next` and `run` differ in
    *  that the run RECORD has to know, so a person reading a run page can tell a
-   *  picked card from a named one. */
-  command: 'next' | 'run';
+   *  picked card from a named one. `continue` (MOTIR-6533) arrives with its run
+   *  already open — see {@link DeliverInput.reporter}. */
+  command: 'next' | 'run' | 'continue';
+  /**
+   * A reporter that ALREADY holds this delivery's run (MOTIR-6533). `motir
+   * continue`'s run is opened by the server's continue claim, inside the lock that
+   * decided the takeover, so it is ADOPTED rather than opened here — and the
+   * server wrote its `run_opened` event. Absent for `next` / `run`, which open
+   * their own.
+   */
+  reporter?: DispatchRunReporter;
   key: string;
   title: string | null;
   dispatch: DispatchPrompt;
@@ -282,7 +306,7 @@ interface DeliverInput {
  * This is the ONE place both `next` and `run` converge, so their behaviour can
  * never drift.
  */
-async function deliver(input: DeliverInput): Promise<void> {
+export async function deliver(input: DeliverInput): Promise<void> {
   const { session, key, title, dispatch, opts, deps } = input;
   const { client, link, serverUrl, projectKey } = session;
 
@@ -375,7 +399,10 @@ async function deliver(input: DeliverInput): Promise<void> {
   // reporter swallows its own failures by construction; there is deliberately no
   // error handling at this call site, because handling would imply there is
   // something a caller could do.
-  const reporter = createDispatchRunReporter({ client, reportLogBodies: opts.reportLog === true });
+  const adopted = input.reporter !== undefined;
+  const reporter =
+    input.reporter ??
+    createDispatchRunReporter({ client, reportLogBodies: opts.reportLog === true });
   await reporter.open({
     projectKey,
     command: input.command,
@@ -387,150 +414,164 @@ async function deliver(input: DeliverInput): Promise<void> {
     // no test can reach and a reader has to stop and disprove.
     agent: agent.parsed.binary,
   });
-  reporter.event({ kind: 'run_opened', data: { command: input.command, key } });
+  // An adopted run's `run_opened` was written by the server that opened it.
+  if (!adopted) reporter.event({ kind: 'run_opened', data: { command: input.command, key } });
 
-  const verdict = await runDispatchLeg({
-    client,
-    rootDir: link.dir,
-    key,
-    dispatch,
-    agent: agent.parsed,
-    targets,
-    primary: target,
-    sessionBranch: dispatch.sessionBranch,
-    reporter,
-    onMaterialization: (lines: string[]) => {
-      for (const line of lines) info(line);
-    },
-    beforeSpawn: () => {
-      info('');
-      echoPromptIfAsked(opts, key, dispatch);
-    },
-    ...(deps.run ? { run: deps.run } : {}),
+  // ⚠️ A STOP IS A DECISION, AND THE RECORD SAYS SO (MOTIR-6530): Ctrl-C or a
+  // SIGTERM closes the run `interrupted` after flushing what is queued, rather
+  // than leaving it to read `running` until its heartbeat lapses. No work-item
+  // status moves — the card stays exactly where the work left it.
+  const detachInterrupt = (deps.onInterrupt ?? bindInterruptSignals)((signal) => {
+    info('');
+    info(`Interrupted — closing the run of ${key}.`);
+    void closeRunAndExit(reporter, signal, deps.exit);
   });
-
-  if (verdict.kind === 'checkout_unavailable') {
-    await reporter.close('halted');
-    process.exitCode = 1;
-    return;
-  }
-
-  if (verdict.kind === 'agent_failed') {
-    // The item stays In Progress on purpose — work was started. Record it so
-    // the next `motir next` moves past it instead of re-picking the failure.
-    addExclude(serverUrl, projectKey, { key });
-    info('');
-    info(renderAgentFailure(key, verdict.exitCode, dispatch));
-    // Surface the agent's own exit code as ours: a script wrapping `motir next`
-    // must be able to tell a failed run from a successful one.
-    await reporter.close('halted');
-    process.exitCode = verdict.exitCode;
-    return;
-  }
-
-  // ⚠️ EXIT 0 IS NOT AN OUTCOME (MOTIR-3018). A finished card and a REFUSED one
-  // both exit 0, so the run asks the card which it was before deciding anything
-  // else. This read comes FIRST — before the push check — because a refusing
-  // agent reverts its worktree and pushes nothing by design, so the push check
-  // would otherwise report a correctly-refused card as work that went missing.
-  if (verdict.kind === 'replan_submitted') {
-    // Nothing to exclude: `planning` is in the in-progress CATEGORY, so the card
-    // is already out of the pickable set — which is the entire reason that
-    // status exists (MOTIR-2425). Adding it to the session exclude list would
-    // record a local opinion about a card the server already holds back.
-    info('');
-    info(renderReplanSubmitted(key));
-    // ⚠️ `replanned`, NOT `halted`. The agent read its card, found the premise
-    // false, submitted a plan and exited 0 — a CORRECT outcome, and a run summary
-    // that called it a failure would teach an operator to ignore failures.
-    await reporter.close('replanned');
-    return;
-  }
-
-  // ⚠️ EXIT 0 IS NOT A PUSH (MOTIR-3004). `implemented` says the code is on the
-  // remote and the pull request is open — a claim this run can only make by
-  // checking. An agent that exits 0 having pushed nothing leaves a card asserting
-  // built work that exists only in a worktree the run is about to delete, so the
-  // recording is refused and the card stays In Progress, which is what an
-  // interrupted run actually looks like.
-  if (verdict.kind === 'nothing_pushed') {
-    addExclude(serverUrl, projectKey, { key });
-    info('');
-    info(renderNothingPushed(key, dispatch));
-    await reporter.close('completed');
-    return;
-  }
-
-  // Exit 0 AND the work is on the remote: the agent completed the prompt's GIT
-  // WORKFLOW section, whose last step is opening the PR / integrating the
-  // branch. Both modes therefore land the item at IMPLEMENTED — built, pushed,
-  // and waiting on CI, which is the step of the lifecycle this run can vouch for.
-  if (dispatch.workflowMode === 'session_lineage' && dispatch.sessionBranch) {
-    await client.markIntegrated({
+  try {
+    const verdict = await runDispatchLeg({
+      client,
+      rootDir: link.dir,
       key,
+      dispatch,
+      agent: agent.parsed,
+      targets,
+      primary: target,
       sessionBranch: dispatch.sessionBranch,
-      // Same split as the loop's (MOTIR-2419): the harness names the agent this
-      // command launched — not the CLI that launched it — and the model is the
-      // agent's own report, or null.
-      implementationHarness: deriveAgentHarness(agent.parsed.binary),
-      implementationModel: verdict.model,
+      reporter,
+      onMaterialization: (lines: string[]) => {
+        for (const line of lines) info(line);
+      },
+      beforeSpawn: () => {
+        info('');
+        echoPromptIfAsked(opts, key, dispatch);
+      },
+      ...(deps.run ? { run: deps.run } : {}),
     });
-  } else {
-    await client.transitionStatus({ key, status: IMPLEMENTED });
-  }
-  reporter.event({
-    kind: 'card_settled',
-    workItemKey: key,
-    disposition: 'implemented',
-    ...(dispatch.sessionBranch ? { sessionBranch: dispatch.sessionBranch } : {}),
-  });
-  removeExclude(serverUrl, projectKey, key);
 
-  // EVERY repository of the set, not only the primary (MOTIR-3133): a card whose
-  // second half had no checkout to happen in is exactly the run that otherwise
-  // exits 0 with half the work missing.
-  //
-  // ⚠️ A WARNING here, and a FAILURE in `motir batch` — the leg reports the
-  // suspects and lets each command decide, because the two genuinely disagree
-  // and a refactor is not the place to settle it.
-  const suspects = verdict.suspects;
-  info('');
-  info(renderAgentSuccess(key, dispatch));
-  for (const suspect of suspects) {
+    if (verdict.kind === 'checkout_unavailable') {
+      await reporter.close('halted');
+      process.exitCode = 1;
+      return;
+    }
+
+    if (verdict.kind === 'agent_failed') {
+      // The item stays In Progress on purpose — work was started. Record it so
+      // the next `motir next` moves past it instead of re-picking the failure.
+      addExclude(serverUrl, projectKey, { key });
+      info('');
+      info(renderAgentFailure(key, verdict.exitCode, dispatch));
+      // Surface the agent's own exit code as ours: a script wrapping `motir next`
+      // must be able to tell a failed run from a successful one.
+      await reporter.close('halted');
+      process.exitCode = verdict.exitCode;
+      return;
+    }
+
+    // ⚠️ EXIT 0 IS NOT AN OUTCOME (MOTIR-3018). A finished card and a REFUSED one
+    // both exit 0, so the run asks the card which it was before deciding anything
+    // else. This read comes FIRST — before the push check — because a refusing
+    // agent reverts its worktree and pushes nothing by design, so the push check
+    // would otherwise report a correctly-refused card as work that went missing.
+    if (verdict.kind === 'replan_submitted') {
+      // Nothing to exclude: `planning` is in the in-progress CATEGORY, so the card
+      // is already out of the pickable set — which is the entire reason that
+      // status exists (MOTIR-2425). Adding it to the session exclude list would
+      // record a local opinion about a card the server already holds back.
+      info('');
+      info(renderReplanSubmitted(key));
+      // ⚠️ `replanned`, NOT `halted`. The agent read its card, found the premise
+      // false, submitted a plan and exited 0 — a CORRECT outcome, and a run summary
+      // that called it a failure would teach an operator to ignore failures.
+      await reporter.close('replanned');
+      return;
+    }
+
+    // ⚠️ EXIT 0 IS NOT A PUSH (MOTIR-3004). `implemented` says the code is on the
+    // remote and the pull request is open — a claim this run can only make by
+    // checking. An agent that exits 0 having pushed nothing leaves a card asserting
+    // built work that exists only in a worktree the run is about to delete, so the
+    // recording is refused and the card stays In Progress, which is what an
+    // interrupted run actually looks like.
+    if (verdict.kind === 'nothing_pushed') {
+      addExclude(serverUrl, projectKey, { key });
+      info('');
+      info(renderNothingPushed(key, dispatch));
+      await reporter.close('completed');
+      return;
+    }
+
+    // Exit 0 AND the work is on the remote: the agent completed the prompt's GIT
+    // WORKFLOW section, whose last step is opening the PR / integrating the
+    // branch. Both modes therefore land the item at IMPLEMENTED — built, pushed,
+    // and waiting on CI, which is the step of the lifecycle this run can vouch for.
+    if (dispatch.workflowMode === 'session_lineage' && dispatch.sessionBranch) {
+      await client.markIntegrated({
+        key,
+        sessionBranch: dispatch.sessionBranch,
+        // Same split as the loop's (MOTIR-2419): the harness names the agent this
+        // command launched — not the CLI that launched it — and the model is the
+        // agent's own report, or null.
+        implementationHarness: deriveAgentHarness(agent.parsed.binary),
+        implementationModel: verdict.model,
+      });
+    } else {
+      await client.transitionStatus({ key, status: IMPLEMENTED });
+    }
+    reporter.event({
+      kind: 'card_settled',
+      workItemKey: key,
+      disposition: 'implemented',
+      ...(dispatch.sessionBranch ? { sessionBranch: dispatch.sessionBranch } : {}),
+    });
+    removeExclude(serverUrl, projectKey, key);
+
+    // EVERY repository of the set, not only the primary (MOTIR-3133): a card whose
+    // second half had no checkout to happen in is exactly the run that otherwise
+    // exits 0 with half the work missing.
+    //
+    // ⚠️ A WARNING here, and a FAILURE in `motir batch` — the leg reports the
+    // suspects and lets each command decide, because the two genuinely disagree
+    // and a refactor is not the place to settle it.
+    const suspects = verdict.suspects;
     info('');
-    info(suspect.message);
-    info(`Hint: ${suspect.hint}`);
-  }
+    info(renderAgentSuccess(key, dispatch));
+    for (const suspect of suspects) {
+      info('');
+      info(suspect.message);
+      info(`Hint: ${suspect.hint}`);
+    }
 
-  // ── THE CI WATCH (Story MOTIR-3655 · MOTIR-3685) ──────────────────────────
-  //
-  // `motir run` has no next card, so it simply watches its own until CI speaks:
-  // green ends the run, red dispatches a fixing iteration, and the sixth red
-  // gives up non-zero. A red check does NOT move the card — `implemented` is
-  // exactly right for code that is committed and whose build has not spoken.
-  const watch = await runCiWatchPhase({
-    client,
-    key,
-    title,
-    agent: agent.parsed,
-    cwd: target.cwd,
-    report: (line) => info(line),
-    ...(deps.wait ? { wait: deps.wait } : {}),
-    ...(deps.runAgentFn ? { runAgentFn: deps.runAgentFn } : {}),
-    ...(deps.maxCiPolls === undefined ? {} : { maxPolls: deps.maxCiPolls }),
-  });
-  // ⚠️ NON-ZERO on a give-up, and it must be obvious it gave up rather than
-  // succeeded: the card is at `implemented` either way, and a script wrapping
-  // `motir run` can only tell the two apart by the exit code.
-  // ⚠️ TWO TOTAL LOOKUPS, NOT TWO CONDITIONALS. Both are keyed on the watch's
-  // own closed vocabulary, so adding a `CiWatchOutcome` member is a TYPE ERROR
-  // here rather than a silent fall-through to the `else` — the same totality the
-  // ADR asks of every renderer of a closed enum. It also adds no branch to a
-  // function whose per-file coverage gate is real: a ternary here would be an
-  // arm no test reaches, on a tail that already has one.
-  reporter.event({ kind: CI_WATCH_EVENT[watch.kind], workItemKey: key, data: watch });
-  if (watch.kind === 'gave_up' || watch.kind === 'fix_failed') process.exitCode = 1;
-  await reporter.close(CI_WATCH_STOP_REASON[watch.kind]);
+    // ── THE CI WATCH (Story MOTIR-3655 · MOTIR-3685) ──────────────────────────
+    //
+    // `motir run` has no next card, so it simply watches its own until CI speaks:
+    // green ends the run, red dispatches a fixing iteration, and the sixth red
+    // gives up non-zero. A red check does NOT move the card — `implemented` is
+    // exactly right for code that is committed and whose build has not spoken.
+    const watch = await runCiWatchPhase({
+      client,
+      key,
+      title,
+      agent: agent.parsed,
+      cwd: target.cwd,
+      report: (line) => info(line),
+      ...(deps.wait ? { wait: deps.wait } : {}),
+      ...(deps.runAgentFn ? { runAgentFn: deps.runAgentFn } : {}),
+      ...(deps.maxCiPolls === undefined ? {} : { maxPolls: deps.maxCiPolls }),
+    });
+    // ⚠️ NON-ZERO on a give-up, and it must be obvious it gave up rather than
+    // succeeded: the card is at `implemented` either way, and a script wrapping
+    // `motir run` can only tell the two apart by the exit code.
+    // ⚠️ TWO TOTAL LOOKUPS, NOT TWO CONDITIONALS. Both are keyed on the watch's
+    // own closed vocabulary, so adding a `CiWatchOutcome` member is a TYPE ERROR
+    // here rather than a silent fall-through to the `else` — the same totality the
+    // ADR asks of every renderer of a closed enum. It also adds no branch to a
+    // function whose per-file coverage gate is real: a ternary here would be an
+    // arm no test reaches, on a tail that already has one.
+    reporter.event({ kind: CI_WATCH_EVENT[watch.kind], workItemKey: key, data: watch });
+    if (watch.kind === 'gave_up' || watch.kind === 'fix_failed') process.exitCode = 1;
+    await reporter.close(CI_WATCH_STOP_REASON[watch.kind]);
+  } finally {
+    detachInterrupt();
+  }
 }
 
 /**
@@ -804,118 +845,16 @@ export async function runCommand(
       if (!claimed) return;
 
       const runId = runIdFromDate((deps.now ?? (() => new Date()))());
-      const branch = sessionBranchName(runId);
-      const run = deps.run ?? execCommand;
-
-      // ── THE RUN RECORD (Story MOTIR-1789 · MOTIR-1794) ──────────────────
-      //
-      // ⚠️ OPENED WITH THE CLAIM'S FULL MEMBER SET, IN `orderClaimedSet` ORDER,
-      // and this is the operation the whole record is shaped around. The claim
-      // has just locked every member — including the ones that are not startable
-      // yet — and the order has just been computed from edges the run already
-      // holds. That knowledge exists for exactly one moment, in one process:
-      // rebuilt afterwards from per-card events it becomes a list of what the
-      // run got round to, and the SKIPPED cards vanish entirely.
-      //
-      // The order comes from the SAME `orderClaimedSet` the drain uses, so the
-      // positions a person reads on the run page are the order the drain
-      // actually worked. Nothing is re-queried to produce it.
-      const reporter = createDispatchRunReporter({
-        client,
-        reportLogBodies: opts.reportLog === true,
-      });
-      const claimOrder = orderClaimedSet(
-        claimed.ready.map((m) => m.key),
-        claimed.edges,
-      );
-      await reporter.open({
-        projectKey: session.projectKey,
-        command: 'run_scope',
-        runId,
-        cards: claimOrder.map((key) => ({ key, disposition: 'queued' as const })),
-        ...(decision.target.kind === 'work_item' ? { scopeKey: decision.target.key } : {}),
-        scopeLabel: claimed.claim.scope.name,
-        agent: agent.parsed.binary,
-      });
-      reporter.event({
-        kind: 'scope_claimed',
-        data: { outcome: claimed.claim.outcome, members: claimOrder.length },
-      });
-
-      const summary = await drainScope({
+      await runClaimedScope({
         session,
+        target: decision.target,
+        claimed,
         opts,
-        members: claimed.ready,
-        edges: claimed.edges,
-        max: parseMax(opts.max),
+        deps,
         agent,
         runId,
-        branch,
-        run,
-        clock: deps.clock ?? Date.now,
-        runAgentFn: deps.runAgentFn ?? runAgent,
-        reporter,
+        branch: sessionBranchName(runId),
       });
-      // ⚠️ THE CLOSE-OUT RE-READS THE CONTAINER'S CHILDREN FIRST (Bug
-      // MOTIR-3268). The claim was taken at t=0; a bug filed mid-drain
-      // (MOTIR-3017) parents itself under this very container, so the set this
-      // run holds is a statement about the past by the time it is finished.
-      //
-      // ⚠️ THE READ SURVIVES; ITS CONSEQUENCE CHANGED (MOTIR-4967). It used to
-      // decide whether a pull request was opened AT ALL, because one opened over
-      // an unfinished container claims the story is built. The pull request is
-      // now a DRAFT either way, and a draft cannot be merged — so it cannot
-      // complete the container or cascade `done` onto the children that are
-      // missing. What this read decides now is whether the close-out marks it
-      // READY, which is the same question asked at the only moment it can be
-      // answered.
-      const open = await readOpenChildren(client, decision.target);
-      // ⚠️ HOW TO TEST IS WRITTEN BEFORE THE PULL REQUESTS GO READY (MOTIR-5358;
-      // `docs/decisions/approval-gates.md` §9's 2026-09-13 amendment). The run
-      // target is the claimed container; ONE agent, handed the server's close-out
-      // prompt, publishes the run's record onto it, and the record it reads back
-      // is rendered into every body below. It never strands the run — a failure
-      // is logged and the close-out carries on. A sprint scope has no work-item
-      // target, so it has no step.
-      const howToTest =
-        decision.target.kind === 'work_item'
-          ? await runCloseOutHowToTest({
-              client,
-              dispatchRunId: reporter.runId,
-              targetKey: decision.target.key,
-              summary,
-              agent,
-              runAgentFn: deps.runAgentFn ?? runAgent,
-            })
-          : undefined;
-      // ONE pull request per TOUCHED repo, through the shipped close-out. On a
-      // multi-repo scope that is one PER REPO, and the summary names each — "one
-      // pull request, one CI run" is exactly true for a single-repo scope only.
-      closeOutRepos(summary, run, open, howToTest);
-      // ⚠️ THEN THE CONTAINER (MOTIR-4969), and only then. The close-out above
-      // is what rewrites every repository's pull request and marks it ready; the
-      // story is told it is built afterwards, so a run that dies in between
-      // leaves drafts AND a container that is not Implemented — the pair that is
-      // true. It re-reads the same `open` the close-out did, through
-      // `summary.outstanding`, so the two cannot disagree about whether a child
-      // is missing.
-      await closeOutContainer(client, summary);
-      // Each repository's session pull request, with the outcome the close-out
-      // reported — `opened` · `existing` · `failed` · `empty`. Whether it was
-      // left a DRAFT rides on the report too, and it is the thing a person
-      // reading a run page most needs to see: a draft is not something to merge.
-      for (const pr of summary.prs) {
-        reporter.event({
-          kind: 'session_pr',
-          data: { repo: pr.repoName, branch: pr.branch, url: pr.url, outcome: pr.outcome },
-        });
-      }
-      reporter.event({ kind: 'run_closed', data: { stopReason: summary.stopReason } });
-      await reporter.close(summary.stopReason);
-      info('');
-      info(renderAutoSummary(summary));
-      info(renderFindingsPolicy(opts));
-      process.exitCode = autoExitCode(summary);
       return;
     }
 
@@ -1042,4 +981,147 @@ export async function doneCommand(key: string | undefined, opts: DoneOptions): P
     removeExclude(serverUrl, projectKey, trimmed);
     info(`${trimmed}: done.`);
   });
+}
+
+/** What {@link runClaimedScope} needs — the scope arm AFTER its claim. */
+export interface ClaimedScopeRunInput {
+  session: ProjectSession;
+  target: ScopeTarget;
+  claimed: ClaimedScope;
+  opts: RunOptions;
+  deps: DeliveryDeps;
+  agent: ResolvedAgent;
+  runId: string;
+  /** The session branch — minted for a fresh run, the dead run's on a resume. */
+  branch: string;
+  /** A run the SERVER already opened (`motir continue <parent>`, MOTIR-6535). */
+  reporter?: DispatchRunReporter;
+  /** `branch` is a dead run's, being resumed: merge the base into it first. */
+  resumeBranch?: boolean;
+}
+
+/**
+ * THE SCOPE ARM, after its claim (MOTIR-3199; extracted by MOTIR-6535 so a
+ * resumed parent run drains through exactly the code a fresh one does): open the
+ * run with the claimed set, drain it on `branch`, write How to test, close out one
+ * pull request per repository, and report.
+ */
+export async function runClaimedScope(input: ClaimedScopeRunInput): Promise<void> {
+  const { session, target, claimed, opts, deps, agent, runId, branch } = input;
+  const decision = { target };
+  const { client } = session;
+  const run = deps.run ?? execCommand;
+
+  // ── THE RUN RECORD (Story MOTIR-1789 · MOTIR-1794) ──────────────────
+  //
+  // ⚠️ OPENED WITH THE CLAIM'S FULL MEMBER SET, IN `orderClaimedSet` ORDER,
+  // and this is the operation the whole record is shaped around. The claim
+  // has just locked every member — including the ones that are not startable
+  // yet — and the order has just been computed from edges the run already
+  // holds. That knowledge exists for exactly one moment, in one process:
+  // rebuilt afterwards from per-card events it becomes a list of what the
+  // run got round to, and the SKIPPED cards vanish entirely.
+  //
+  // The order comes from the SAME `orderClaimedSet` the drain uses, so the
+  // positions a person reads on the run page are the order the drain
+  // actually worked. Nothing is re-queried to produce it.
+  const reporter =
+    input.reporter ??
+    createDispatchRunReporter({
+      client,
+      reportLogBodies: opts.reportLog === true,
+    });
+  const claimOrder = orderClaimedSet(
+    claimed.ready.map((m) => m.key),
+    claimed.edges,
+  );
+  await reporter.open({
+    projectKey: session.projectKey,
+    command: 'run_scope',
+    runId,
+    cards: claimOrder.map((key) => ({ key, disposition: 'queued' as const })),
+    ...(decision.target.kind === 'work_item' ? { scopeKey: decision.target.key } : {}),
+    scopeLabel: claimed.claim.scope.name,
+    agent: agent.parsed.binary,
+  });
+  reporter.event({
+    kind: 'scope_claimed',
+    data: { outcome: claimed.claim.outcome, members: claimOrder.length },
+  });
+
+  const summary = await drainScope({
+    session,
+    opts,
+    members: claimed.ready,
+    edges: claimed.edges,
+    max: parseMax(opts.max),
+    agent,
+    runId,
+    branch,
+    run,
+    ...(input.resumeBranch ? { resumeBranch: true } : {}),
+    clock: deps.clock ?? Date.now,
+    runAgentFn: deps.runAgentFn ?? runAgent,
+    reporter,
+  });
+  // ⚠️ THE CLOSE-OUT RE-READS THE CONTAINER'S CHILDREN FIRST (Bug
+  // MOTIR-3268). The claim was taken at t=0; a bug filed mid-drain
+  // (MOTIR-3017) parents itself under this very container, so the set this
+  // run holds is a statement about the past by the time it is finished.
+  //
+  // ⚠️ THE READ SURVIVES; ITS CONSEQUENCE CHANGED (MOTIR-4967). It used to
+  // decide whether a pull request was opened AT ALL, because one opened over
+  // an unfinished container claims the story is built. The pull request is
+  // now a DRAFT either way, and a draft cannot be merged — so it cannot
+  // complete the container or cascade `done` onto the children that are
+  // missing. What this read decides now is whether the close-out marks it
+  // READY, which is the same question asked at the only moment it can be
+  // answered.
+  const open = await readOpenChildren(client, decision.target);
+  // ⚠️ HOW TO TEST IS WRITTEN BEFORE THE PULL REQUESTS GO READY (MOTIR-5358;
+  // `docs/decisions/approval-gates.md` §9's 2026-09-13 amendment). The run
+  // target is the claimed container; ONE agent, handed the server's close-out
+  // prompt, publishes the run's record onto it, and the record it reads back
+  // is rendered into every body below. It never strands the run — a failure
+  // is logged and the close-out carries on. A sprint scope has no work-item
+  // target, so it has no step.
+  const howToTest =
+    decision.target.kind === 'work_item'
+      ? await runCloseOutHowToTest({
+          client,
+          dispatchRunId: reporter.runId,
+          targetKey: decision.target.key,
+          summary,
+          agent,
+          runAgentFn: deps.runAgentFn ?? runAgent,
+        })
+      : undefined;
+  // ONE pull request per TOUCHED repo, through the shipped close-out. On a
+  // multi-repo scope that is one PER REPO, and the summary names each — "one
+  // pull request, one CI run" is exactly true for a single-repo scope only.
+  closeOutRepos(summary, run, open, howToTest);
+  // ⚠️ THEN THE CONTAINER (MOTIR-4969), and only then. The close-out above
+  // is what rewrites every repository's pull request and marks it ready; the
+  // story is told it is built afterwards, so a run that dies in between
+  // leaves drafts AND a container that is not Implemented — the pair that is
+  // true. It re-reads the same `open` the close-out did, through
+  // `summary.outstanding`, so the two cannot disagree about whether a child
+  // is missing.
+  await closeOutContainer(client, summary);
+  // Each repository's session pull request, with the outcome the close-out
+  // reported — `opened` · `existing` · `failed` · `empty`. Whether it was
+  // left a DRAFT rides on the report too, and it is the thing a person
+  // reading a run page most needs to see: a draft is not something to merge.
+  for (const pr of summary.prs) {
+    reporter.event({
+      kind: 'session_pr',
+      data: { repo: pr.repoName, branch: pr.branch, url: pr.url, outcome: pr.outcome },
+    });
+  }
+  reporter.event({ kind: 'run_closed', data: { stopReason: summary.stopReason } });
+  await reporter.close(summary.stopReason);
+  info('');
+  info(renderAutoSummary(summary));
+  info(renderFindingsPolicy(opts));
+  process.exitCode = autoExitCode(summary);
 }

@@ -40,7 +40,11 @@ export const POST = withV1Route({ permission: 'work_item:edit' }, async (ctx) =>
   // refuses it — 404, indistinguishable from one that never existed.
   const input =
     body.kind === 'work_item'
-      ? { kind: 'work_item' as const, ...(await resolveWorkItemKey(body.key, ctx.service)) }
+      ? {
+          kind: 'work_item' as const,
+          ...(await resolveWorkItemKey(body.key, ctx.service)),
+          ...(body.exceptLanded ? { exceptLanded: true } : {}),
+        }
       : {
           kind: 'sprint' as const,
           projectId: (await projectsService.getByKey(body.projectKey, ctx.service)).id,
