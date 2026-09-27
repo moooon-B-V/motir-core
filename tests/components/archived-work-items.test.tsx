@@ -318,6 +318,8 @@ describe('toArchivedRows', () => {
       storyPoints: null,
       updatedAt: '2026-06-15T00:00:00.000Z',
       hasDescription: false,
+      obsolescence: null,
+      obsolescenceNoteMd: null,
       archivedAt: '2026-06-15T00:00:00.000Z',
       archivedBy: { id: 'u2', name: 'Dana Kim', image: null },
       ...over,

@@ -74,6 +74,13 @@ export type ExecutorDto = 'coding_agent' | 'human';
  * lists in order and asserts total. Leaf-only, exactly as `type` is.
  */
 export type WorkItemDifficultyDto = 'trivial' | 'low' | 'medium' | 'high';
+/**
+ * Whether a work item is still TRUE OF THE CODE (Story MOTIR-6574 · MOTIR-6579)
+ * — mirrors the `WorkItemObsolescence` Prisma enum, whose members
+ * `lib/issues/obsolescence.ts` lists in order and asserts total. Unlike
+ * `difficulty`, it is KIND- and STATUS-agnostic: any card may carry it.
+ */
+export type WorkItemObsolescenceDto = 'outdated' | 'deprecated';
 
 /**
  * The full work-item shape for the detail view. Carries both content axes
@@ -256,6 +263,14 @@ export interface WorkItemDto {
    * fallback). `null` is the common case and stays common.
    */
   subject: string | null;
+  /**
+   * The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6579) — `outdated` (the card
+   * no longer matches what shipped) or `deprecated` (its work was superseded),
+   * `null` when unmarked. Settable on ANY kind in ANY status, archived included.
+   */
+  obsolescence: WorkItemObsolescenceDto | null;
+  /** The Markdown note saying WHY the card is marked; `null` when none. */
+  obsolescenceNoteMd: string | null;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -287,6 +302,13 @@ export interface WorkItemSummaryDto {
    */
   estimateMinutes: number | null;
   storyPoints: number | null;
+  /**
+   * The OBSOLESCENCE mark + its note (Story MOTIR-6574 · MOTIR-6579) — carried on
+   * the summary so a marked CHILD reads as marked from its parent's child rows
+   * and every summary list. `null` when unmarked / no note.
+   */
+  obsolescence: WorkItemObsolescenceDto | null;
+  obsolescenceNoteMd: string | null;
   archivedAt: string | null;
 }
 
@@ -364,12 +386,15 @@ export interface RelationshipLinkDto {
 }
 
 /**
- * ALL FIVE relationship groups of one work item, each `key ASC` (MOTIR-4063).
+ * ALL SEVEN relationship groups of one work item, each `key ASC` (MOTIR-4063,
+ * widened by MOTIR-6580).
  *
  * `blockedBy` = items this item `is_blocked_by` (its OUT edges of that kind);
  * `blocks` = the items it blocks (the IN edges of the same kind); `relatesTo` /
  * `duplicates` / `clones` = its OUT edges of those kinds (`relates_to` persists
- * a reciprocal row, so its OUT set already covers both directions).
+ * a reciprocal row, so its OUT set already covers both directions);
+ * `supersedes` / `supersededBy` = the OUT / IN edges of the directed
+ * `supersedes` kind (`from` is the NEWER item, no reciprocal).
  *
  * ⚠️ The five are ONE CONCEPT and were, until MOTIR-4063, THREE ROUTES: the item
  * detail assembled all five for the UI/MCP, the AI boundary carried none of them
@@ -385,6 +410,10 @@ export interface RelationshipLinkGroups {
   relatesTo: RelationshipLinkDto[];
   duplicates: RelationshipLinkDto[];
   clones: RelationshipLinkDto[];
+  /** The OLDER items this one replaces — its OUT `supersedes` edges (MOTIR-6580). */
+  supersedes: RelationshipLinkDto[];
+  /** The NEWER items that replace this one — its IN `supersedes` edges. */
+  supersededBy: RelationshipLinkDto[];
 }
 
 /**
@@ -490,6 +519,10 @@ export interface IssueDetailDto {
   relatesTo: RelationshipLinkDto[];
   duplicates: RelationshipLinkDto[];
   clones: RelationshipLinkDto[];
+  /** See {@link RelationshipLinkGroups.supersedes} (MOTIR-6580). */
+  supersedes: RelationshipLinkDto[];
+  /** See {@link RelationshipLinkGroups.supersededBy} (MOTIR-6580). */
+  supersededBy: RelationshipLinkDto[];
   readiness: ReadinessVerdictDto;
   /**
    * A CHOICE'S BODY, parsed (Story MOTIR-4914 · MOTIR-5891) — the options, or the
@@ -583,6 +616,9 @@ export interface WorkItemSubtreeDto {
   title: string;
   status: string;
   position: string;
+  /** The OBSOLESCENCE mark (MOTIR-6582) — carried so the AI `get-subtree` read's
+   *  rows say whether each node is still current. `null` when unmarked. */
+  obsolescence: WorkItemObsolescenceDto | null;
   depth: number;
 }
 
@@ -682,6 +718,11 @@ export interface WorkItemTreeNodeDto {
    *  here too because the FILTERED tree renders from these nodes, not from
    *  `WorkItemTreeRowDto`, and both views share one row shaper. */
   hasDescription: boolean;
+  /** The OBSOLESCENCE mark + note (MOTIR-6579) — carried for the same reason as
+   *  `hasDescription`: the filtered tree renders from these nodes through the
+   *  List's row shaper. `null` when unmarked / no note. */
+  obsolescence: WorkItemObsolescenceDto | null;
+  obsolescenceNoteMd: string | null;
   depth: number;
   hasChildren: boolean;
   matched: boolean;
@@ -985,6 +1026,15 @@ export interface WorkItemListItemDto {
    * `WorkItemKeysetItemDto` inherit it.
    */
   hasDescription: boolean;
+  /**
+   * The OBSOLESCENCE mark + its note (Story MOTIR-6574 · MOTIR-6579) — `null`
+   * when unmarked / no note. Projected by every list/tree/archived/keyset read
+   * (`$queryRaw` is an unchecked cast, so each SELECT names both columns).
+   * `WorkItemTreeRowDto` / `ArchivedWorkItemDto` / `WorkItemKeysetItemDto`
+   * inherit them.
+   */
+  obsolescence: WorkItemObsolescenceDto | null;
+  obsolescenceNoteMd: string | null;
 }
 
 /**
@@ -1208,6 +1258,14 @@ export interface CreateWorkItemInput {
    */
   difficulty?: WorkItemDifficultyDto | null;
   /**
+   * The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6579) — accepted on ANY kind
+   * (no kind guard, unlike `difficulty`). A value outside the enum is refused
+   * with `InvalidObsolescenceError` (422). Omitted → the column stays null.
+   */
+  obsolescence?: WorkItemObsolescenceDto | null;
+  /** The Markdown note beside the mark. Omitted → the column stays null. */
+  obsolescenceNoteMd?: string | null;
+  /**
    * Pin the repo this item's work ships in (Story 7.9 · MOTIR-1804) — the bare
    * repo NAME, or the `owner/name` ref form (normalized to the name). Validated
    * against the PROJECT's repository set (MOTIR-4955) — a repository connected to
@@ -1405,6 +1463,16 @@ export interface UpdateWorkItemInput {
    * (`DifficultyNotAllowedOnKindError`, 422) unless this clears it.
    */
   difficulty?: WorkItemDifficultyDto | null;
+  /**
+   * Patch the OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6579) — set / change /
+   * clear (`null`) on ANY kind in ANY status, a `done` or archived card included
+   * (marking finished work is the field's purpose). A value outside the enum is
+   * refused with `InvalidObsolescenceError` (422); re-sending the current value
+   * records nothing.
+   */
+  obsolescence?: WorkItemObsolescenceDto | null;
+  /** Patch the mark's Markdown note — set / change / clear (`null`). */
+  obsolescenceNoteMd?: string | null;
   /**
    * Patch the repo pin (Story 7.9 · MOTIR-1804): set / change / clear (`null`,
    * or a blank string) the bare repo NAME this item's work ships in. The

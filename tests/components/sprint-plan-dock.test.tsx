@@ -49,6 +49,8 @@ function summary(over: Partial<WorkItemSummaryDto> = {}): WorkItemSummaryDto {
     estimateMinutes: 50,
     storyPoints: 5,
     archivedAt: null,
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     ...over,
   };
 }

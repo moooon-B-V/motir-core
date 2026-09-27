@@ -563,6 +563,10 @@
       "medium": "Medium",
       "high": "High"
     },
+    "obsolescence": {
+      "outdated": "Outdated",
+      "deprecated": "Deprecated"
+    },
     "priority": {
       "highest": "Highest",
       "high": "High",
@@ -575,7 +579,9 @@
       "blocks": "Blocks",
       "relates_to": "Relates to",
       "duplicates": "Duplicates",
-      "clones": "Clones"
+      "clones": "Clones",
+      "supersedes": "Supersedes",
+      "superseded_by": "Superseded by"
     },
     "role": {
       "owner": "owner",
@@ -1622,6 +1628,8 @@
       "type": "Work type",
       "executor": "Executor",
       "difficulty": "Difficulty",
+      "obsolescence": "Obsolescence",
+      "obsolescenceNoteMd": "Obsolescence note",
       "targetRepo": "Target repo",
       "targetRepos": "Repositories",
       "folderId": "Folder",
@@ -1638,7 +1646,8 @@
       "is_blocked_by": "is blocked by",
       "relates_to": "relates to",
       "duplicates": "duplicates",
-      "clones": "clones"
+      "clones": "clones",
+      "supersedes": "supersedes"
     }
   },
   "attachments": {

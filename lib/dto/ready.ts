@@ -20,6 +20,7 @@
 import type {
   ExecutorDto,
   WorkItemDifficultyDto,
+  WorkItemObsolescenceDto,
   WorkItemKindDto,
   WorkItemPriorityDto,
   WorkItemTypeDto,
@@ -91,6 +92,16 @@ export interface ReadyItemDto {
    * that claims it can know it without a second read.
    */
   difficulty: WorkItemDifficultyDto | null;
+  /**
+   * The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6581) — `outdated` |
+   * `deprecated` | `null`. Carried on the row a CLI reads before dispatch so an
+   * agent about to build on a card learns it no longer describes the code
+   * without a second read. It does NOT gate readiness — a marked card stays in
+   * the set exactly where it would be unmarked.
+   */
+  obsolescence: WorkItemObsolescenceDto | null;
+  /** Why the card is marked, in Markdown — `null` when there is no note. */
+  obsolescenceNoteMd: string | null;
   /**
    * The full Markdown instruction body — populated ONLY for a MANUAL row (the
    * source the *Show instruction* modal renders; 8.8.5 / 8.8.10) and `null` for

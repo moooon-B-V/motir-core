@@ -418,6 +418,8 @@ describe('top-up — the ready filter parser and mapper, as units', () => {
         type: null,
         executor: null,
         difficulty: null,
+        obsolescence: null,
+        obsolescenceNoteMd: null,
         descriptionMd: null,
       },
       undefined,

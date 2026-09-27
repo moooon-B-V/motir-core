@@ -140,6 +140,10 @@ export function toWorkItemDto(
     // nothing to collapse — an unrecognised member reaches the rail intact,
     // because the rail is where a person would first notice one.
     subject: row.subject,
+    // The OBSOLESCENCE mark + note (Story MOTIR-6574 · MOTIR-6579) — a nullable
+    // enum and a nullable Markdown column, passed straight through.
+    obsolescence: row.obsolescence,
+    obsolescenceNoteMd: row.obsolescenceNoteMd,
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -164,6 +168,9 @@ export function toWorkItemSummaryDto(row: WorkItem): WorkItemSummaryDto {
     position: row.position,
     estimateMinutes: row.estimateMinutes,
     storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
+    // A marked child reads as marked from its parent (MOTIR-6579).
+    obsolescence: row.obsolescence,
+    obsolescenceNoteMd: row.obsolescenceNoteMd,
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
   };
 }
@@ -209,6 +216,7 @@ export function toWorkItemSubtreeDto(row: WorkItemSubtreeRow): WorkItemSubtreeDt
     title: row.title,
     status: row.status,
     position: row.position,
+    obsolescence: row.obsolescence,
     depth: row.depth,
   };
 }
@@ -245,6 +253,8 @@ export function toWorkItemTreeNodeDto(
     storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     updatedAt: row.updatedAt.toISOString(),
     hasDescription: row.hasDescription,
+    obsolescence: row.obsolescence,
+    obsolescenceNoteMd: row.obsolescenceNoteMd,
     depth: row.depth,
     hasChildren: children.length > 0,
     matched: row.matched,
@@ -322,6 +332,9 @@ export function toWorkItemListItemDto(row: WorkItemListRow): WorkItemListItemDto
     storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     updatedAt: row.updatedAt.toISOString(),
     hasDescription: row.hasDescription,
+    // The OBSOLESCENCE mark + note (MOTIR-6579), projected by every list read.
+    obsolescence: row.obsolescence,
+    obsolescenceNoteMd: row.obsolescenceNoteMd,
   };
 }
 

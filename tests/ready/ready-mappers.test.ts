@@ -39,6 +39,8 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     sprintId: null,
     backlogRank: null,
     archivedAt: null,
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     triagedAt: null,
     snoozedUntil: null,
     submittedByUserId: null,
@@ -101,6 +103,9 @@ describe('toReadyItemDto', () => {
       type: null,
       executor: null,
       difficulty: null,
+      // The obsolescence mark (MOTIR-6581) rides the ready row; unset here.
+      obsolescence: null,
+      obsolescenceNoteMd: null,
       // Not a manual row → no inline body (lean list payload).
       descriptionMd: null,
     });

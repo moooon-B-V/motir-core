@@ -9,6 +9,7 @@ import {
   type WorkItem,
   type WorkItemImplementationSource,
   type WorkItemKind,
+  type WorkItemObsolescence,
   type WorkItemPlanningSource,
   type WorkItemPriority,
   type WorkItemType,
@@ -107,6 +108,8 @@ export interface WorkItemSubtreeRow {
   title: string;
   status: string;
   position: string;
+  /** The OBSOLESCENCE mark (MOTIR-6582), cast to text like `kind`. */
+  obsolescence: WorkItemObsolescence | null;
   depth: number;
 }
 
@@ -145,6 +148,9 @@ export interface WorkItemForestRow {
   updatedAt: Date;
   /** Does the item carry a non-empty description? See {@link WorkItemListRow}. */
   hasDescription: boolean;
+  /** The OBSOLESCENCE mark + note (MOTIR-6579) — see {@link WorkItemListRow}. */
+  obsolescence: WorkItemObsolescence | null;
+  obsolescenceNoteMd: string | null;
   depth: number;
   matched: boolean;
 }
@@ -217,6 +223,10 @@ export const HOME_WORK_ITEM_SELECT = {
   reporterId: true,
   executor: true,
   difficulty: true,
+  // The OBSOLESCENCE mark + note (MOTIR-6579) — beside `difficulty`, so every
+  // read that returns the item's fields returns these.
+  obsolescence: true,
+  obsolescenceNoteMd: true,
   storyPoints: true,
   estimateMinutes: true,
   updatedAt: true,
@@ -529,6 +539,11 @@ export interface WorkItemListRow {
    * surface as `undefined` at runtime rather than a compile error.
    */
   hasDescription: boolean;
+  /** The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6579), cast to text in the
+   *  query; `null` when unmarked. Every read producing this row shape projects
+   *  it and the note — an omission would be `undefined` at runtime. */
+  obsolescence: WorkItemObsolescence | null;
+  obsolescenceNoteMd: string | null;
 }
 
 /**
@@ -2586,12 +2601,12 @@ export const workItemRepository = {
     return client.$queryRaw<WorkItemSubtreeRow[]>`
       WITH RECURSIVE subtree AS (
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
-               w."title", w."status", w."position", 1 AS depth
+               w."title", w."status", w."position", w."obsolescence", 1 AS depth
           FROM "work_item" w
           WHERE w."id" = ${rootId}
         UNION ALL
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
-               w."title", w."status", w."position", s.depth + 1
+               w."title", w."status", w."position", w."obsolescence", s.depth + 1
           FROM "work_item" w
           JOIN subtree s ON w."parentId" = s."id"
       )
@@ -2603,6 +2618,7 @@ export const workItemRepository = {
              "title",
              "status",
              "position",
+             "obsolescence"::text AS "obsolescence",
              depth::int AS "depth"
         FROM subtree
         ORDER BY depth ASC, "position" ASC`;
@@ -2633,7 +2649,7 @@ export const workItemRepository = {
     return client.$queryRaw<WorkItemSubtreeRow[]>`
       WITH RECURSIVE subtree AS (
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
-               w."title", w."status", w."position", 1 AS depth
+               w."title", w."status", w."position", w."obsolescence", 1 AS depth
           FROM "work_item" w
           WHERE w."id" = ${rootId}
             AND w."workspaceId" = ${workspaceId}
@@ -2641,7 +2657,7 @@ export const workItemRepository = {
             AND w."triagedAt" IS NULL
         UNION ALL
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
-               w."title", w."status", w."position", s.depth + 1
+               w."title", w."status", w."position", w."obsolescence", s.depth + 1
           FROM "work_item" w
           JOIN subtree s ON w."parentId" = s."id"
           WHERE s.depth <= ${maxDepth}
@@ -2657,6 +2673,7 @@ export const workItemRepository = {
              "title",
              "status",
              "position",
+             "obsolescence"::text AS "obsolescence",
              depth::int AS "depth"
         FROM subtree
         ORDER BY depth ASC, "position" ASC`;
@@ -3161,7 +3178,8 @@ export const workItemRepository = {
         SELECT w."id", w."parentId", w."kind", w."type", w."key", w."identifier",
                w."title", w."status", w."ciState", w."priority", w."assigneeId", w."reporterId",
                w."dueDate", w."estimateMinutes", w."storyPoints", w."updatedAt",
-               ${hasDescriptionSql('w')} AS "hasDescription", 1 AS depth
+               ${hasDescriptionSql('w')} AS "hasDescription",
+               w."obsolescence", w."obsolescenceNoteMd", 1 AS depth
           FROM "work_item" w
           WHERE w."projectId" = ${projectId}
             AND w."workspaceId" = ${workspaceId}
@@ -3172,7 +3190,8 @@ export const workItemRepository = {
         SELECT c."id", c."parentId", c."kind", c."type", c."key", c."identifier",
                c."title", c."status", c."ciState", c."priority", c."assigneeId", c."reporterId",
                c."dueDate", c."estimateMinutes", c."storyPoints", c."updatedAt",
-               ${hasDescriptionSql('c')} AS "hasDescription", p.depth + 1
+               ${hasDescriptionSql('c')} AS "hasDescription",
+               c."obsolescence", c."obsolescenceNoteMd", p.depth + 1
           FROM "work_item" c
           JOIN forest p ON c."parentId" = p."id"
           WHERE c."projectId" = ${projectId}
@@ -3197,6 +3216,8 @@ export const workItemRepository = {
              f."storyPoints",
              f."updatedAt",
              f."hasDescription",
+             f."obsolescence"::text AS "obsolescence",
+             f."obsolescenceNoteMd",
              f.depth::int         AS "depth",
              (${matched})         AS "matched"
         FROM forest f
@@ -3253,7 +3274,9 @@ export const workItemRepository = {
              w."estimateMinutes",
              w."storyPoints",
              w."updatedAt",
-             ${hasDescriptionSql('w')} AS "hasDescription"
+             ${hasDescriptionSql('w')} AS "hasDescription",
+             w."obsolescence"::text AS "obsolescence",
+             w."obsolescenceNoteMd"
         FROM "work_item" w
         LEFT JOIN "user" au ON au."id" = w."assigneeId"
         LEFT JOIN "user" ru ON ru."id" = w."reporterId"
@@ -3321,7 +3344,9 @@ export const workItemRepository = {
              w."storyPoints",
              w."createdAt",
              w."updatedAt",
-             ${hasDescriptionSql('w')} AS "hasDescription"
+             ${hasDescriptionSql('w')} AS "hasDescription",
+             w."obsolescence"::text AS "obsolescence",
+             w."obsolescenceNoteMd"
         FROM "work_item" w
         WHERE ${projectIssuesScopeSql(projectId, workspaceId, filter)}
           ${afterSql}
@@ -3404,6 +3429,8 @@ export const workItemRepository = {
              w."storyPoints",
              w."updatedAt",
              ${hasDescriptionSql('w')} AS "hasDescription",
+             w."obsolescence"::text AS "obsolescence",
+             w."obsolescenceNoteMd",
              w."archivedAt",
              ar."changedById"     AS "archivedById",
              abu."name"           AS "archivedByName",
@@ -3890,6 +3917,8 @@ export const workItemRepository = {
              w."updatedAt",
              w."sprintId",
              ${hasDescriptionSql('w')} AS "hasDescription",
+             w."obsolescence"::text AS "obsolescence",
+             w."obsolescenceNoteMd",
              EXISTS (
                SELECT 1 FROM "work_item" ch
                 WHERE ch."parentId" = w."id" AND ch."archivedAt" IS NULL
@@ -5387,6 +5416,7 @@ const FILTER_FIELD_COLUMN_SQL: Record<Exclude<BuiltInFilterFieldId, 'text'>, Pri
   priority: Prisma.sql`w."priority"::text`,
   type: Prisma.sql`w."type"::text`,
   difficulty: Prisma.sql`w."difficulty"::text`,
+  obsolescence: Prisma.sql`w."obsolescence"::text`,
   assignee: Prisma.sql`w."assigneeId"`,
   reporter: Prisma.sql`w."reporterId"`,
   sprint: Prisma.sql`w."sprintId"`,

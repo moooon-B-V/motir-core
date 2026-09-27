@@ -106,6 +106,8 @@ function item(key: number, over: Partial<WorkItemTreeRowDto> = {}): WorkItemTree
     storyPoints: null,
     updatedAt: '2026-06-01T00:00:00.000Z',
     hasDescription: false,
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     hasChildren: false,
     ...over,
   };

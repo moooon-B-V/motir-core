@@ -127,6 +127,7 @@ async function seedMatrix(): Promise<Seeded> {
       descriptionMd: 'Stack trace points at the token refresh path.',
       type: 'code',
       difficulty: 'high',
+      obsolescence: 'outdated',
       ciState: 'failing',
     },
   });
@@ -143,6 +144,7 @@ async function seedMatrix(): Promise<Seeded> {
       estimateMinutes: null,
       type: 'manual',
       difficulty: 'low',
+      obsolescence: 'deprecated',
       ciState: 'running',
     },
   });
@@ -396,6 +398,14 @@ const CASES: MatrixCase[] = [
   builtin('difficulty', 'is_none_of', ['high'], ['b', 'c', 'd']),
   builtin('difficulty', 'is_empty', null, ['c']),
   builtin('difficulty', 'is_not_empty', null, ['a', 'b', 'd']),
+  // obsolescence (enum, nullable — any kind and status, Story MOTIR-6574 ·
+  // MOTIR-6583: a=outdated, b=deprecated, c and d unmarked). `is_none_of
+  // ['outdated']` returns the deprecated row AND the unmarked ones — the
+  // registry's nullable-enum semantics, exactly as `difficulty` above.
+  builtin('obsolescence', 'is_any_of', ['outdated'], ['a']),
+  builtin('obsolescence', 'is_none_of', ['outdated'], ['b', 'c', 'd']),
+  builtin('obsolescence', 'is_empty', null, ['c', 'd']),
+  builtin('obsolescence', 'is_not_empty', null, ['a', 'b']),
   // assignee (enum, nullable — empty pair + the unassigned sentinel rules)
   builtin('assignee', 'is_any_of', [], ['a'], (s) => [s.memberId]),
   builtin('assignee', 'is_none_of', [], ['b', 'c', 'd'], (s) => [s.memberId]),
