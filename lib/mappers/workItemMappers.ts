@@ -216,6 +216,7 @@ export function toWorkItemSubtreeDto(row: WorkItemSubtreeRow): WorkItemSubtreeDt
     title: row.title,
     status: row.status,
     position: row.position,
+    obsolescence: row.obsolescence,
     depth: row.depth,
   };
 }

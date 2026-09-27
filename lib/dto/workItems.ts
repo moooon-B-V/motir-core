@@ -616,6 +616,9 @@ export interface WorkItemSubtreeDto {
   title: string;
   status: string;
   position: string;
+  /** The OBSOLESCENCE mark (MOTIR-6582) — carried so the AI `get-subtree` read's
+   *  rows say whether each node is still current. `null` when unmarked. */
+  obsolescence: WorkItemObsolescenceDto | null;
   depth: number;
 }
 

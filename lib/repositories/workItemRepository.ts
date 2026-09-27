@@ -108,6 +108,8 @@ export interface WorkItemSubtreeRow {
   title: string;
   status: string;
   position: string;
+  /** The OBSOLESCENCE mark (MOTIR-6582), cast to text like `kind`. */
+  obsolescence: WorkItemObsolescence | null;
   depth: number;
 }
 
@@ -2599,12 +2601,12 @@ export const workItemRepository = {
     return client.$queryRaw<WorkItemSubtreeRow[]>`
       WITH RECURSIVE subtree AS (
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
-               w."title", w."status", w."position", 1 AS depth
+               w."title", w."status", w."position", w."obsolescence", 1 AS depth
           FROM "work_item" w
           WHERE w."id" = ${rootId}
         UNION ALL
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
-               w."title", w."status", w."position", s.depth + 1
+               w."title", w."status", w."position", w."obsolescence", s.depth + 1
           FROM "work_item" w
           JOIN subtree s ON w."parentId" = s."id"
       )
@@ -2616,6 +2618,7 @@ export const workItemRepository = {
              "title",
              "status",
              "position",
+             "obsolescence"::text AS "obsolescence",
              depth::int AS "depth"
         FROM subtree
         ORDER BY depth ASC, "position" ASC`;
@@ -2646,7 +2649,7 @@ export const workItemRepository = {
     return client.$queryRaw<WorkItemSubtreeRow[]>`
       WITH RECURSIVE subtree AS (
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
-               w."title", w."status", w."position", 1 AS depth
+               w."title", w."status", w."position", w."obsolescence", 1 AS depth
           FROM "work_item" w
           WHERE w."id" = ${rootId}
             AND w."workspaceId" = ${workspaceId}
@@ -2654,7 +2657,7 @@ export const workItemRepository = {
             AND w."triagedAt" IS NULL
         UNION ALL
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
-               w."title", w."status", w."position", s.depth + 1
+               w."title", w."status", w."position", w."obsolescence", s.depth + 1
           FROM "work_item" w
           JOIN subtree s ON w."parentId" = s."id"
           WHERE s.depth <= ${maxDepth}
@@ -2670,6 +2673,7 @@ export const workItemRepository = {
              "title",
              "status",
              "position",
+             "obsolescence"::text AS "obsolescence",
              depth::int AS "depth"
         FROM subtree
         ORDER BY depth ASC, "position" ASC`;

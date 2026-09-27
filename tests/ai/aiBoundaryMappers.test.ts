@@ -32,7 +32,7 @@ function summary(over: Partial<WorkItemSummaryDto>): WorkItemSummaryDto {
 }
 
 describe('toPlanTreeSkeleton', () => {
-  it('projects to {key, id, kind, title, status, parentKey, revision, folderId} and resolves parentKey + revision', () => {
+  it('projects to {key, id, kind, title, status, parentKey, revision, folderId, decision, obsolescence} and resolves parentKey + revision', () => {
     const epic = summary({ id: 'id_e', identifier: 'MOTIR-1', kind: 'epic', parentId: null });
     const story = summary({
       id: 'id_s',
@@ -61,6 +61,7 @@ describe('toPlanTreeSkeleton', () => {
         revision: 'rev_e',
         folderId: null,
         decision: null,
+        obsolescence: null,
       },
       {
         key: 'MOTIR-2',
@@ -72,6 +73,7 @@ describe('toPlanTreeSkeleton', () => {
         revision: null,
         folderId: null,
         decision: null,
+        obsolescence: null,
       },
     ]);
   });
@@ -119,6 +121,7 @@ describe('toSkeletonRows', () => {
           identifier: 'MOTIR-7',
           title: 'A',
           status: 'todo',
+          obsolescence: null,
         },
       ],
       new Map(),
@@ -145,6 +148,7 @@ describe('toSkeletonRows', () => {
           identifier: 'MOTIR-8',
           title: 'D',
           status: 'done',
+          obsolescence: null,
         },
         {
           id: 'id_x',
@@ -153,6 +157,7 @@ describe('toSkeletonRows', () => {
           identifier: 'MOTIR-9',
           title: 'X',
           status: 'todo',
+          obsolescence: null,
         },
       ],
       new Map(),
@@ -163,6 +168,27 @@ describe('toSkeletonRows', () => {
       ['MOTIR-8', block],
       ['MOTIR-9', null],
     ]);
+  });
+});
+
+// MOTIR-6582 — the OBSOLESCENCE mark rides every skeleton row, on the breadth read
+// and the depth reads alike; the NOTE never does (bodies stay off the breadth read).
+describe('the obsolescence mark on skeleton rows', () => {
+  it('carries the mark on a marked row, null on an unmarked one, and never the note', () => {
+    const marked = summary({
+      id: 'id_m',
+      identifier: 'MOTIR-5',
+      obsolescence: 'outdated',
+      obsolescenceNoteMd: 'Rewritten by MOTIR-6.',
+    });
+    const current = summary({ id: 'id_c', identifier: 'MOTIR-6' });
+    const out = toPlanTreeSkeleton([marked, current], new Map(), new Map(), new Map());
+    // Order is the input's — a marked row is neither dropped nor moved.
+    expect(out.map((r) => [r.key, r.obsolescence])).toEqual([
+      ['MOTIR-5', 'outdated'],
+      ['MOTIR-6', null],
+    ]);
+    expect(Object.keys(out[0]!)).not.toContain('obsolescenceNoteMd');
   });
 });
 
@@ -205,7 +231,7 @@ function listItem(over: Partial<WorkItemListItemDto>): WorkItemListItemDto {
 }
 
 describe('toSearchResultRows', () => {
-  it('projects the flat List row to {key, id, kind, type, title, status, priority, revision} — no parentKey', () => {
+  it('projects the flat List row to {key, id, kind, type, title, status, priority, revision, obsolescence} — no parentKey, no note', () => {
     const rows = toSearchResultRows(
       [
         listItem({
@@ -225,6 +251,8 @@ describe('toSearchResultRows', () => {
           title: 'Gamma',
           status: 'todo',
           priority: 'low',
+          obsolescence: 'deprecated',
+          obsolescenceNoteMd: 'Replaced.',
         }),
       ],
       new Map([['id_7', 'rev_7']]),
@@ -239,6 +267,7 @@ describe('toSearchResultRows', () => {
         status: 'in_progress',
         priority: 'high',
         revision: 'rev_7',
+        obsolescence: null,
       },
       {
         key: 'MOTIR-8',
@@ -249,6 +278,7 @@ describe('toSearchResultRows', () => {
         status: 'todo',
         priority: 'low',
         revision: null,
+        obsolescence: 'deprecated',
       },
     ]);
   });

@@ -13,6 +13,7 @@ import {
   ReporterNotInWorkspaceError,
   TypeNotAllowedOnKindError,
   DifficultyNotAllowedOnKindError,
+  InvalidObsolescenceError,
   UnknownStatusError,
   ContainerRepoSetNotWritableError,
   UnknownProjectRepoRefError,
@@ -293,6 +294,12 @@ export function toToolError(err: unknown): CallToolResult {
     // story — or a re-kind onto one that keeps a difficulty. Its own code, so the
     // agent is told which field to clear rather than that TYPE is not allowed.
     err instanceof DifficultyNotAllowedOnKindError ||
+    // The OBSOLESCENCE backstop (Story MOTIR-6574 · MOTIR-6582): a value outside
+    // `outdated` · `deprecated` that reached the service on create_work_item /
+    // update_work_item. The input schema narrows it first; this arm keeps a caller
+    // that bypasses it (a direct runner call, a looser future schema) on a typed
+    // `INVALID_OBSOLESCENCE` naming the field instead of an opaque internal error.
+    err instanceof InvalidObsolescenceError ||
     // Target-repo validation (MOTIR-1804; project-scoped in MOTIR-1783): a
     // `targetRepo` naming a repo outside the item's PROJECT repository set on
     // create_work_item / update_work_item — a workspace-connected repo the

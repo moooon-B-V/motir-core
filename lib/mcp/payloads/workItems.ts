@@ -3,6 +3,7 @@ import {
   commentSchema,
   dependencyEdgesSchema,
   attachmentSchema,
+  obsolescenceSchema,
   presentAttachment,
   presentComment,
   workItemChildSchema,
@@ -74,6 +75,13 @@ export const mcpWorkItemChildSchema = workItemChildSchema.extend({
   position: z.string(),
   /** The archive timestamp; v1 narrows this to the boolean `archived`. */
   archivedAt: z.string().nullable(),
+  /** The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6582) — `outdated` ·
+   *  `deprecated`, or null while the child is still true of the code. v1's child
+   *  ref does not carry it, so it is part of the MCP widening. Informational: a
+   *  marked child is never dropped or re-ordered. */
+  obsolescence: obsolescenceSchema.nullable(),
+  /** The Markdown note saying WHY the child is marked; null when none. */
+  obsolescenceNoteMd: z.string().nullable(),
 });
 export type McpWorkItemChild = z.infer<typeof mcpWorkItemChildSchema>;
 
@@ -227,6 +235,8 @@ export function presentMcpWorkItemChild(
     parentId: child.parentId,
     position: child.position,
     archivedAt: child.archivedAt,
+    obsolescence: child.obsolescence,
+    obsolescenceNoteMd: child.obsolescenceNoteMd,
   };
 }
 
@@ -342,7 +352,7 @@ export function presentMcpWorkItem(dto: WorkItemDto): McpWorkItem {
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt,
     // The obsolescence mark rides the SHARED half since MOTIR-6581 put it on the
-    // v1 row this payload derives from; the MCP card (MOTIR-6582) owns its docs.
+    // v1 row this payload derives from; MOTIR-6582 documents it on every door.
     obsolescence: dto.obsolescence,
     obsolescenceNoteMd: dto.obsolescenceNoteMd,
     // the MCP widening
@@ -714,6 +724,9 @@ export const mcpSkeletonRowSchema = workItemRefSchema
     // ordinary root and no agent orienting over the tree can tell where the team
     // put it. Resolve the id against the payload's `folders` for its name path.
     folderId: z.string().nullable(),
+    // The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6582) — the mark only; the
+    // note is a body, and bodies stay off the breadth read (`get_work_item` has it).
+    obsolescence: obsolescenceSchema.nullable(),
   });
 export type McpSkeletonRow = z.infer<typeof mcpSkeletonRowSchema>;
 
@@ -728,6 +741,7 @@ export function presentMcpSkeletonRow(item: PlanTreeSkeletonItem): McpSkeletonRo
     id: item.id,
     revision: item.revision,
     folderId: item.folderId,
+    obsolescence: item.obsolescence,
   };
 }
 

@@ -13,6 +13,7 @@ import type { IssueDetailDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { CHILD_EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
+import { obsolescenceLines } from '../obsolescence';
 import { derived } from '../payloads/define';
 import { getWorkItemPayload, presentMcpWorkItemChild } from '../payloads/workItems';
 import { TEMP_REF_HELP, normalizeProjectedTarget, planIdField } from './planRef';
@@ -100,6 +101,16 @@ function summarize(
   if (detail.supersededBy.length > 0) {
     lines.push(`Superseded by: ${detail.supersededBy.map((l) => l.item.identifier).join(', ')}`);
   }
+  // The OBSOLESCENCE mark (MOTIR-6582): `obsolescence: outdated — superseded by …`
+  // and the note's first line, on a MARKED card only — an unmarked card gains no
+  // line, and nothing about the rest of the block changes.
+  lines.push(
+    ...obsolescenceLines({
+      obsolescence: it.obsolescence,
+      obsolescenceNoteMd: it.obsolescenceNoteMd,
+      supersededByKeys: detail.supersededBy.map((l) => l.item.identifier),
+    }),
+  );
   if (it.descriptionMd) {
     lines.push('', it.descriptionMd);
   }
@@ -265,6 +276,11 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
         COMMENT_COUNT_DESCRIPTION +
         ' ' +
         ITEM_ONLY_COMMENT_COUNT_NOTE +
+        ' The item and every child row carry the OBSOLESCENCE mark — `obsolescence` ' +
+        '(`outdated` · `deprecated`, null while the card is still true of the code) and ' +
+        '`obsolescenceNoteMd` (why) — and the text block prints `obsolescence: <mark> — ' +
+        'superseded by <keys>` plus the note’s first line on a marked card. Informational ' +
+        'only: a marked child is never hidden or re-ordered.' +
         ' A committed item also carries `errors`: every monitor issue linked to it, with the ' +
         'facts and the latest event’s EVIDENCE Motir has stored — exception, stack frames, tags, ' +
         'request line — and `evidence.state` (`present`, `no_exception` or `never_read`, plus ' +

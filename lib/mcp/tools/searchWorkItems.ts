@@ -24,6 +24,7 @@ import { presentMcpWorkItemRow, searchWorkItemsPayload } from '../payloads/workI
 import { decodeSearchCursor, encodeSearchCursor } from '../searchCursor';
 import { edgeMarker, EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
 import { commentCountMarker, COMMENT_COUNT_DESCRIPTION } from '../commentCounts';
+import { obsolescenceLines } from '../obsolescence';
 import { planIdField } from './planRef';
 
 // `search_work_items` (Story 7.8 · Subtask 7.8.6) — the agent's arbitrary
@@ -183,13 +184,21 @@ function proposalLine(row: ProjectedRowDto): string {
 
 /** One result row as a compact line for the human-readable text block, with its
  *  dependency edges and comment count appended (the SAME markers `list_ready`
- *  renders, in the same order). */
+ *  renders, in the same order). A MARKED row (MOTIR-6582) gains its mark and the
+ *  note's first line, indented beneath it; an unmarked row reads as before. */
 function line(
   item: WorkItemListItemDto,
   edges: WorkItemDependencyEdgesDto | undefined,
   commentCount: number | undefined,
 ): string {
-  return `${item.identifier} [${item.kind}/${item.priority}] ${item.title} — ${item.status}${edgeMarker(edges)}${commentCountMarker(commentCount)}`;
+  return [
+    `${item.identifier} [${item.kind}/${item.priority}] ${item.title} — ${item.status}${edgeMarker(edges)}${commentCountMarker(commentCount)}`,
+    ...obsolescenceLines({
+      obsolescence: item.obsolescence,
+      obsolescenceNoteMd: item.obsolescenceNoteMd,
+      indent: '  ',
+    }),
+  ].join('\n');
 }
 
 /** Map the agent-facing expanded filter to the 6.1.1 stored envelope `{ v, c, f }`. */
@@ -335,6 +344,11 @@ export function registerSearchWorkItems(
         EDGE_BLOCK_DESCRIPTION +
         ' ' +
         COMMENT_COUNT_DESCRIPTION +
+        ' Each row also carries the OBSOLESCENCE mark — `obsolescence` (`outdated` · ' +
+        '`deprecated`, null while the card is still true of the code) and ' +
+        '`obsolescenceNoteMd` (why) — and a marked row’s text line is followed by its mark ' +
+        'and the note’s first line. Informational only: a marked row is never excluded or ' +
+        're-sorted (filter on the `obsolescence` field to select by it).' +
         ' Pass `planId` to search the tree INCLUDING a plan you are authoring: `items` then holds ' +
         'the committed rows the plan does not remove, and a separate `proposals` array holds that ' +
         'plan’s proposed cards — each with `proposal: true` and a null `key`, because a proposal ' +

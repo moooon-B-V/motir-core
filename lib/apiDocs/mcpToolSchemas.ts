@@ -845,6 +845,16 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'Optional difficulty — how hard the work is to REASON about, not how big it is: "trivial", "low", "medium" or "high". Leaf items (task / bug / subtask) only; a non-null value on an epic or story is refused (DIFFICULTY_NOT_ALLOWED_ON_KIND). Omit (or null) to leave it unset.',
       },
+      obsolescence: {
+        anyOf: [{ type: 'string', enum: ['outdated', 'deprecated'] }, { type: 'null' }],
+        description:
+          'Mark the item as no longer TRUE OF THE CODE: "outdated" (the text no longer describes what shipped; the capability lives on in another shape) or "deprecated" (retired or overturned on purpose — do not build on it). Settable on ANY kind in ANY status, a `done` item included; null clears it. Link the replacing item with link_work_items `supersedes`. A value outside the enum is refused (INVALID_OBSOLESCENCE). Informational: no read hides or re-orders a marked item.',
+      },
+      obsolescenceNoteMd: {
+        type: ['string', 'null'],
+        description:
+          'Markdown note saying WHY the item is marked (what changed, what to read instead); null clears it. Independent of `obsolescence`: clearing the mark keeps the note.',
+      },
       targetRepo: {
         type: ['string', 'null'],
         description:
@@ -2719,6 +2729,16 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         anyOf: [{ type: 'string', enum: ['trivial', 'low', 'medium', 'high'] }, { type: 'null' }],
         description:
           'How hard the work is to REASON about, not how big it is: "trivial", "low", "medium" or "high" — leaf items only; null clears it. A non-null value on an epic or story is refused (DIFFICULTY_NOT_ALLOWED_ON_KIND), and so is changing the kind of a leaf that carries one to a container without clearing it in the same call.',
+      },
+      obsolescence: {
+        anyOf: [{ type: 'string', enum: ['outdated', 'deprecated'] }, { type: 'null' }],
+        description:
+          'Mark the item as no longer TRUE OF THE CODE: "outdated" (the text no longer describes what shipped; the capability lives on in another shape) or "deprecated" (retired or overturned on purpose — do not build on it). Settable on ANY kind in ANY status, a `done` item included; null clears it. Link the replacing item with link_work_items `supersedes`. A value outside the enum is refused (INVALID_OBSOLESCENCE). Informational: no read hides or re-orders a marked item.',
+      },
+      obsolescenceNoteMd: {
+        type: ['string', 'null'],
+        description:
+          'Markdown note saying WHY the item is marked (what changed, what to read instead); null clears it. Independent of `obsolescence`: clearing the mark keeps the note.',
       },
       estimateMinutes: {
         anyOf: [{ type: 'integer', minimum: 0 }, { type: 'null' }],
