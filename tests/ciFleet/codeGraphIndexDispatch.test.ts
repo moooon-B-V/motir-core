@@ -4,6 +4,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   classifyIndexExit,
+  MAX_DISPATCH_ATTEMPTS,
   codeGraphIndexDispatchService,
   indexAdmissionWaitMs,
   indexPollWaitMs,
@@ -988,7 +989,10 @@ describe('every path out of supervision tears the container down', () => {
     });
     // THE GUARANTEE, stated as the only assertion that can catch its absence.
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
-    expect(fakeOrchestrator.teardowns).toHaveLength(1);
+    // `never_started` is re-dispatchable (MOTIR-6586), so the dispatch booted a
+    // second container — and tore down every one it booted.
+    expect(fakeOrchestrator.provisioned).toHaveLength(MAX_DISPATCH_ATTEMPTS);
+    expect(fakeOrchestrator.teardowns).toHaveLength(MAX_DISPATCH_ATTEMPTS);
   });
 
   it('carries the container-seconds record OUT as well as writing it', async () => {
@@ -1065,6 +1069,11 @@ describe('every path out of supervision tears the container down', () => {
     });
     expect(outcome.outcome === 'settled' && outcome.failureDetail).toContain('poll ceiling');
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+    // ⚠️ AND NOT RE-DISPATCHED (MOTIR-6586). A container that spent the whole
+    // supervision budget is the costliest outcome there is; a second one on the
+    // same tree mostly repeats it, so the verdict says so and one boot is final.
+    expect(outcome).toMatchObject({ verdict: { redispatchable: false } });
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
   });
 });
 
@@ -1669,6 +1678,9 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
       const outcome = await codeGraphIndexDispatchService.runIndexContainer(dbInput, {
         ...FAST,
         bootDeadlineMs: 0,
+        // ONE container: this case is about how the readout counts it, and a
+        // re-dispatch (MOTIR-6586) would count two.
+        maxDispatchAttempts: 1,
       });
       if (outcome.outcome !== 'settled') throw new Error('expected a settled outcome');
       expect(outcome.verdict).toMatchObject({ exitClass: 'never_started', indexed: false });

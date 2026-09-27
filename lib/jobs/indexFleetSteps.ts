@@ -1,7 +1,7 @@
 import { fetchCodeGraphRunVerdict, type CodeGraphRunVerdict } from '@/lib/ai/motirAiClient';
 import { indexFleetConfig } from '@/lib/orchestrator';
 import type {
-  IndexDispatchOutcome,
+  IndexAdvanceOutcome,
   SupervisionSteps,
 } from '@/lib/services/codeGraphIndexDispatchService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
@@ -146,8 +146,15 @@ export class IndexDispatchFailedError extends Error {
     /** The dispatch service's outcome discriminator, or its named exit class. */
     readonly exitClass: string,
     detail: string,
+    /** How many containers the dispatch booted before giving up (MOTIR-6586).
+     *  Named in the message only when a re-dispatch happened, so a first-attempt
+     *  failure reads exactly as it always has. */
+    readonly attempts = 1,
   ) {
-    super(`Indexing ${repoRef} into project ${projectId} failed (${exitClass}): ${detail}`);
+    super(
+      `Indexing ${repoRef} into project ${projectId} failed (${exitClass})` +
+        `${attempts > 1 ? ` after ${attempts} dispatch attempts` : ''}: ${detail}`,
+    );
     this.name = 'IndexDispatchFailedError';
   }
 }
@@ -412,7 +419,7 @@ async function indexEveryProject(
     // ⚠️ IT ADVANCES ONE POLL AND USUALLY THROWS `JobRunDefer` (MOTIR-3828), so
     // this `for` body normally does not complete — see the fan-out block above
     // this function for what that means for the loop.
-    const outcome: IndexDispatchOutcome =
+    const outcome: IndexAdvanceOutcome =
       await services.codeGraphIndexDispatch.advanceIndexContainer(ctx.runId, dispatchInput, {
         steps,
       });
@@ -678,17 +685,25 @@ async function liftIndexingPause(repoRef: string): Promise<void> {
 function dispatchFailure(
   repoRef: string,
   projectId: string,
-  outcome: IndexDispatchOutcome,
+  outcome: IndexAdvanceOutcome,
 ): IndexDispatchFailedError {
+  const attempts = outcome.attempts ?? 1;
   if (outcome.outcome === 'settled') {
     return new IndexDispatchFailedError(
       repoRef,
       projectId,
       outcome.verdict.exitClass,
       outcome.failureDetail ?? outcome.verdict.detail,
+      attempts,
     );
   }
-  return new IndexDispatchFailedError(repoRef, projectId, outcome.outcome, outcome.detail);
+  return new IndexDispatchFailedError(
+    repoRef,
+    projectId,
+    outcome.outcome,
+    outcome.detail,
+    attempts,
+  );
 }
 
 /**
