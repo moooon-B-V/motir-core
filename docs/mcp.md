@@ -2373,10 +2373,15 @@ The `filter` envelope:
 - `combinator` — `"and"` (match all rows) or `"or"` (match any).
 - `conditions` — an array (up to the row cap) of
   `{ field, operator, value }`:
-  - `field` — a built-in (`kind`, `status`, `priority`, `type`, `assignee`,
-    `reporter`, `sprint`, `text`, `created`, `updated`, `due`, `storyPoints`,
-    `estimate`), a label/component (`lbl`, `cmp`), or a custom field
-    (`cf:<fieldId>`).
+  - `field` — a built-in (`kind`, `status`, `priority`, `type`, `difficulty`,
+    `obsolescence`, `assignee`, `reporter`, `sprint`, `text`, `created`,
+    `updated`, `due`, `storyPoints`, `estimate`), a label/component (`lbl`,
+    `cmp`), or a custom field (`cf:<fieldId>`).
+  - `obsolescence` (MOTIR-6583) takes `is_any_of` · `is_none_of` over
+    `outdated` · `deprecated`, plus `is_empty` · `is_not_empty`. An unmarked
+    card is `null`: `is_empty` selects it, and `is_none_of ["outdated"]`
+    INCLUDES it alongside the `deprecated` rows. A search without the condition
+    never drops or re-sorts a marked card.
   - `operator` — one of `is_any_of`, `is_none_of`, `is_empty`, `is_not_empty`,
     `contains`, `not_contains`, `eq`, `ne`, `lt`, `lte`, `gt`, `gte`,
     `on_or_before`, `on_or_after`, `between`, `in_last_days`, `in_next_days`

@@ -115,8 +115,9 @@ const conditionSchema = z.object({
   field: z
     .string()
     .describe(
-      'Field id: a built-in (kind, status, priority, type, difficulty, assignee, reporter, ' +
-        'sprint, text, created, updated, due, storyPoints, estimate), a label/' +
+      'Field id: a built-in (kind, status, priority, type, difficulty, obsolescence, ' +
+        'assignee, reporter, sprint, text, created, updated, due, storyPoints, estimate), ' +
+        'a label/' +
         'component (lbl, cmp), a folder (folder — matches the item’s own folder, else ' +
         'its root ancestor’s, including folders inside the chosen ones), or a custom ' +
         'field (cf:<fieldId>).',

@@ -5412,6 +5412,7 @@ const FILTER_FIELD_COLUMN_SQL: Record<Exclude<BuiltInFilterFieldId, 'text'>, Pri
   priority: Prisma.sql`w."priority"::text`,
   type: Prisma.sql`w."type"::text`,
   difficulty: Prisma.sql`w."difficulty"::text`,
+  obsolescence: Prisma.sql`w."obsolescence"::text`,
   assignee: Prisma.sql`w."assigneeId"`,
   reporter: Prisma.sql`w."reporterId"`,
   sprint: Prisma.sql`w."sprintId"`,
