@@ -1,57 +1,75 @@
-import { workspacesService } from '@/lib/services/workspacesService';
+import type { ProjectAccessMode } from '@/generated/prisma/client';
+import { canEnter } from '@/lib/permissions/resolve';
+import { bindOrganizationContext } from '@/lib/organizations/context';
+import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { toWorkspaceMemberDTO } from '@/lib/mappers/workspaceMappers';
+import { resolveWorkspaceRole } from '@/lib/workspaces/roles';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 
-// assignableMembersService — the set of people the assignee / reporter pickers
-// may offer for a project (Story 6.4 · Subtask 6.4.6). It mirrors Jira: on a
-// `private` project, assignable users are scoped to the PROJECT's members (you
-// can't assign work to someone who can't see the project); on `open` / `limited`
-// projects, the whole workspace is assignable (every workspace member can browse
-// it). One chokepoint so every picker-feeding surface (the issue list, the issue
-// detail / edit forms, the board peek) scopes identically — the page reads this
-// instead of `workspacesService.listMembers` for a project-scoped view.
+// assignableMembersService — the set of people the assignee / reporter pickers,
+// the mention gates and every other "who can be in this project?" question may
+// offer for a project (Story 6.4 · Subtask 6.4.6; Story MOTIR-6169 · MOTIR-6547).
+// It mirrors Jira: you can't assign work to, or mention, someone who can't open
+// the project. One chokepoint so every picker-feeding surface (the issue list, the
+// issue detail / edit forms, the board peek, the mention validators, a component's
+// default assignee, a user custom field, team code access) scopes identically.
 //
-// Returns the same `WorkspaceMemberDTO` shape the pickers already consume, so the
-// AssigneePicker component is unchanged: the `private` branch keeps the project's
-// members, in the project's order, and reports each one's WORKSPACE row — a
+// ⚠️ THE ANSWER IS THE ENTRY RULE, NOT A COPY OF IT. A member is offered exactly
+// when `canEnter` (`lib/permissions/resolve.ts`) admits them: a Manager (the org
+// Owner and Admins included), anyone ADDED, and a Full-scope member on a
+// `workspace` / `public` project. A contractor with a Limited scope is never
+// offered on a project they cannot open, and a Full member is never offered on a
+// Members-only project they were not added to.
+//
+// Returns the same `WorkspaceMemberDTO` shape the pickers already consume — a
 // person's role is their workspace role in every project (Story MOTIR-6168).
 
 export const assignableMembersService = {
   /**
-   * The members assignable on a project, scoped by its access level:
-   *   * `open` / `limited` → every workspace member (they can all browse it).
-   *   * `private`          → only the project's members.
-   * The caller passes the access level it already resolved on the project DTO
-   * (no extra round-trip); the read runs inside `withWorkspaceContext` so the
-   * `project_membership` RLS policy exposes the rows.
+   * The workspace members who can ENTER the project, in the workspace's own
+   * order. The caller passes the mode it already resolved on the project (no
+   * extra round-trip for it); the membership, "was added" and org-manager reads
+   * run in ONE `withWorkspaceContext` so the RLS policies expose the rows.
    */
   async list(input: {
     projectId: string;
-    // `public` (Story 6.12) scopes like `open`/`limited` here — the `!== 'private'`
-    // branch lists every workspace member (the internal authoring pickers; a
-    // public project's PUBLIC view hides assignees entirely, 6.12.4).
-    accessLevel: 'open' | 'limited' | 'private' | 'public';
+    accessMode: ProjectAccessMode;
     ctx: WorkspaceContext;
   }): Promise<WorkspaceMemberDTO[]> {
-    if (input.accessLevel !== 'private') {
-      return workspacesService.listMembers(input.ctx.workspaceId, input.ctx.userId);
-    }
     return withWorkspaceContext(input.ctx, async (tx) => {
-      const rows = await projectMembershipRepository.findMembersByProject(input.projectId, tx);
-      const workspaceRows = await workspaceMembershipRepository.findMembersByWorkspace(
-        input.ctx.workspaceId,
-        tx,
-      );
-      const byUser = new Map(workspaceRows.map((m) => [m.userId, m]));
-      // A project member always holds a workspace membership (the membership
-      // cascade removes one with the other), so a miss is skipped, never invented.
-      return rows.flatMap((row) => {
-        const m = byUser.get(row.userId);
-        return m ? [toWorkspaceMemberDTO(m)] : [];
-      });
+      const [members, addedIds, workspace] = await Promise.all([
+        workspaceMembershipRepository.findMembersByWorkspace(input.ctx.workspaceId, tx),
+        projectMembershipRepository.findUserIdsByProject(input.projectId, tx),
+        workspaceRepository.findByIdInTx(input.ctx.workspaceId, tx),
+      ]);
+      // The org's Owner and Admins enter every project as Managers
+      // (`composeOwnerReach`); their org rows are other people's rows, admitted
+      // once the workspace's own organization is bound — a trusted resolution.
+      let orgManagers = new Set<string>();
+      if (workspace) {
+        await bindOrganizationContext(tx, workspace.organizationId);
+        orgManagers = new Set(
+          await organizationMembershipRepository.findManagerUserIdsByOrganization(
+            workspace.organizationId,
+            tx,
+          ),
+        );
+      }
+      const added = new Set(addedIds);
+      return members
+        .filter((m) =>
+          canEnter({
+            accessMode: input.accessMode,
+            workspaceRole: orgManagers.has(m.userId) ? 'manager' : resolveWorkspaceRole(m),
+            accessScope: m.accessScope,
+            addedToProject: added.has(m.userId),
+          }),
+        )
+        .map(toWorkspaceMemberDTO);
     });
   },
 };

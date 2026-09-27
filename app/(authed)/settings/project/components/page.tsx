@@ -71,7 +71,7 @@ export default async function ProjectComponentsPage() {
         <ComponentsPaneBody
           projectKey={ctx.project.identifier}
           projectId={ctx.projectId}
-          accessLevel={ctx.project.accessLevel}
+          accessMode={ctx.project.accessMode}
           wsCtx={wsCtx}
         />
       </Suspense>
@@ -91,17 +91,17 @@ export default async function ProjectComponentsPage() {
 async function ComponentsPaneBody({
   projectKey,
   projectId,
-  accessLevel,
+  accessMode,
   wsCtx,
 }: {
   projectKey: string;
   projectId: string;
-  accessLevel: Parameters<typeof assignableMembersService.list>[0]['accessLevel'];
+  accessMode: Parameters<typeof assignableMembersService.list>[0]['accessMode'];
   wsCtx: { userId: string; workspaceId: string };
 }) {
   const [components, assignableMembers] = await Promise.all([
     componentsService.listComponents(projectKey, wsCtx),
-    assignableMembersService.list({ projectId, accessLevel, ctx: wsCtx }),
+    assignableMembersService.list({ projectId, accessMode, ctx: wsCtx }),
   ]);
 
   // MOTIR-2469 retired the private admin check that used to sit here — a role

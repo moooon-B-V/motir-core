@@ -100,6 +100,7 @@ describe('GET /api/v1/projects', () => {
     expect(page.items[0]).toEqual({
       key: caller.projectKey,
       name: 'Motir',
+      accessMode: 'workspace',
       accessLevel: 'open',
       archived: false,
     });
@@ -315,6 +316,7 @@ describe('GET /api/v1/projects/{projectKey}', () => {
     expect(body).toEqual({
       key: caller.projectKey,
       name: 'Motir',
+      accessMode: 'workspace',
       accessLevel: 'open',
       archived: false,
     });

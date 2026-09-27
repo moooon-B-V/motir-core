@@ -14,9 +14,9 @@
  * `motir` **project** (Story 6.4 added project-level access gating): every seed
  * user gets a `ProjectMembership` — **zhuyue@motir.co is the project `admin`**
  * (manages members + access), **everyone else is a `member`** (can edit, can't
- * manage) — and the project's `accessLevel` is set to **`public`** (Story 6.12 —
+ * manage) — and the project's access mode is set to **`public`** (Story 6.12 —
  * the live tenant IS the public showcase: anyone reads /p/PROD with no sign-in;
- * flip to `open`/`private` to showcase member gating instead). Before 6.4 access
+ * flip to `workspace`/`members` to showcase member gating instead). Before 6.4 access
  * was workspace-level only.
  *
  * Org tier (Story 6.10): the `moooon` workspace nests under a `moooon`
@@ -349,9 +349,9 @@ async function main() {
   // original "add the team to the workspace AND the project" ask (the workspace
   // half is the addMember loop above). zhuyue@motir.co is the project `admin`
   // (manages members + access); everyone else is a `member` (can edit, can't
-  // manage). The project's accessLevel is set to `public` below (Story 6.12 —
-  // the live tenant IS the public showcase); flip it to `'open'`/`'private'` to
-  // demo workspace-member gating instead. The clear pass above deletes the
+  // manage). The project's access mode is set to `public` below (Story 6.12 —
+  // the live tenant IS the public showcase); flip it to `'workspace'`/`'members'`
+  // to demo workspace-member gating instead. The clear pass above deletes the
   // project (cascading its memberships), so a plain create is idempotent across
   // reseeds.
   // Bound (MOTIR-2868) on the workspace: `project_membership` gates every verb on
@@ -374,7 +374,7 @@ async function main() {
     // (`publicTagline` + `publicTags` + `publicOverviewMd`) is seeded to Motir's
     // canonical copy so the Overview renders real copy (Story 6.16 · 6.16.7 split
     // the tagline + tags out of the README body into their own hero fields).
-    await projectRepository.setAccessLevel(project.id, 'public', { stampMadePublicAt: true }, tx);
+    await projectRepository.setAccessMode(project.id, 'public', tx, { stampMadePublicAt: true });
     await projectRepository.setPublicOverview(
       project.id,
       {

@@ -376,7 +376,7 @@ export async function seedReportingFixture(): Promise<ReportingSeedManifest> {
         tx,
       );
     }
-    await projectRepository.setAccessLevel(project.id, 'open', { stampMadePublicAt: false }, tx);
+    await projectRepository.setAccessMode(project.id, 'workspace', tx);
   });
   await db.workspaceMembership.updateMany({
     where: { workspaceId: workspace.id },

@@ -167,9 +167,12 @@ describe('guard 2 — the `--el-avatar-*` ramp is not stranded', () => {
 describe('guard 3 — the published v1 Project is byte-identical across this story', () => {
   // Frozen deliberately as a LITERAL, not derived from the schema: a list
   // computed from the thing it checks would move with it and assert nothing.
-  const PUBLISHED = ['key', 'name', 'accessLevel', 'archived'];
+  // `accessMode` was ADDED deliberately by Story MOTIR-6169 · MOTIR-6547 — the
+  // authoritative access field, with `accessLevel` kept as a derived, deprecated
+  // one (an additive change ADR §8 permits without a version bump).
+  const PUBLISHED = ['key', 'name', 'accessMode', 'accessLevel', 'archived'];
 
-  it('publishes exactly these four fields', () => {
+  it('publishes exactly these five fields', () => {
     expect(Object.keys(projectSchema.shape).sort()).toEqual([...PUBLISHED].sort());
   });
 
@@ -185,6 +188,7 @@ describe('guard 3 — the published v1 Project is byte-identical across this sto
     const parsed = projectSchema.parse({
       key: 'MOTIR',
       name: 'Motir',
+      accessMode: 'workspace',
       accessLevel: 'open',
       archived: false,
       image: 'https://cdn.example.test/projects/p1/logo.png',

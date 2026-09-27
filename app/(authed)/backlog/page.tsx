@@ -124,7 +124,7 @@ export default async function BacklogPage({
     // are access-scoped (6.4.6): a private project lists only its members.
     assignableMembersService.list({
       projectId: ctx.projectId,
-      accessLevel: ctx.project.accessLevel,
+      accessMode: ctx.project.accessMode,
       ctx: accessCtx,
     }),
     sprintsService.listByProject(ctx.projectId, accessCtx),

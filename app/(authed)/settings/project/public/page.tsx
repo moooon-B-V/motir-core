@@ -82,7 +82,7 @@ export default async function ProjectPublicPagePage() {
         // The not-yet-public band and the head's *View public page* link hang
         // off the access level (Panel C6): the room is usable before the
         // project is public — an overview is written before it is shown.
-        isPublic={ctx.project.accessLevel === 'public'}
+        isPublic={ctx.project.accessMode === 'public'}
         // The page ON THE PUBLIC HOST, resolved by the one module that owns
         // that question (`publicSiteOrigin()` → `MOTIR_PUBLIC_SITE_URL`); a
         // server value threaded to the island, as the Members room does.

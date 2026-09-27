@@ -6,7 +6,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { composeOwnerReach } from '@/lib/workspaces/membershipGate';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { customRolePermissionsOf, resolveWorkspaceRole } from '@/lib/workspaces/roles';
-import type { Project, ProjectAccessLevel } from '@/generated/prisma/client';
+import type { Project, ProjectAccessMode } from '@/generated/prisma/client';
 import { accessModeOf } from '@/lib/projects/accessMode';
 import {
   canBrowse,
@@ -91,14 +91,6 @@ export function holdsRecordView(
 }
 
 /**
- * The resolved inputs plus the project's legacy `accessLevel`, which rides along
- * for the one caller that still scopes by it (`getCommentCapabilities` → the
- * mention candidates) until the readers card (MOTIR-6547) moves it to the mode.
- * The POLICY never reads it: `resolvePermissions` decides on `accessMode`.
- */
-type ResolvedInputs = ProjectAccessInputs & { accessLevel: ProjectAccessLevel };
-
-/**
  * Resolve the policy inputs for `(actor, project)`. Throws ProjectNotFoundError
  * (→ 404, no existence leak) when the project is missing OR lives in another
  * workspace — a cross-tenant id must be indistinguishable from a never-existed
@@ -108,7 +100,7 @@ async function resolveInputs(
   projectId: string,
   ctx: AccessActorContext,
   tx?: Prisma.TransactionClient,
-): Promise<ResolvedInputs> {
+): Promise<ProjectAccessInputs> {
   // MOTIR-2527: when the caller has no bound transaction, this opens ONE for the
   // whole resolution rather than binding only the membership read. All three rows
   // the gate reads are RLS-gated on `app.workspace_id` — `project` by
@@ -168,7 +160,6 @@ async function resolveInputs(
     // org Owner / Admin composed in as a Manager has no row, and a Manager's
     // scope is never read.
     accessMode: accessModeOf(project),
-    accessLevel: project.accessLevel,
     workspaceRole,
     accessScope: workspaceMembership?.accessScope ?? null,
     customRolePermissions: customRolePermissionsOf(workspaceRole, workspaceMembership),
@@ -295,7 +286,7 @@ export const projectAccessService = {
    * 5.1.2) — one `resolveInputs` round-trip feeding the three comment gates:
    * `canBrowse` (may they see the issue at all — the 404 gate), `canComment`
    * (Jira's "Add comments"), `canModerate` (Jira's "Edit all / Delete all
-   * comments" — project admin or workspace owner/admin). `accessLevel` rides
+   * comments" — project admin or workspace owner/admin). `accessMode` rides
    * along so the caller can scope mention candidates via
    * `assignableMembersService` without re-reading the project. Throws only
    * ProjectNotFoundError (cross-workspace project ids stay hidden).
@@ -308,14 +299,14 @@ export const projectAccessService = {
     canBrowse: boolean;
     canComment: boolean;
     canModerate: boolean;
-    accessLevel: ProjectAccessLevel;
+    accessMode: ProjectAccessMode;
   }> {
     const inputs = await resolveInputs(projectId, ctx, tx);
     return {
       canBrowse: canBrowse(inputs),
       canComment: canComment(inputs),
       canModerate: canModerateComments(inputs),
-      accessLevel: inputs.accessLevel,
+      accessMode: inputs.accessMode,
     };
   },
 

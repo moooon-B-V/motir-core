@@ -88,7 +88,7 @@ export default async function ProjectAutomationPage() {
         <AutomationPaneBody
           projectId={ctx.projectId}
           projectKey={ctx.project.identifier}
-          accessLevel={ctx.project.accessLevel}
+          accessMode={ctx.project.accessMode}
           currentUserName={session.user.name ?? session.user.email}
           userId={ctx.userId}
           wsCtx={wsCtx}
@@ -103,14 +103,14 @@ export default async function ProjectAutomationPage() {
 async function AutomationPaneBody({
   projectId,
   projectKey,
-  accessLevel,
+  accessMode,
   currentUserName,
   userId,
   wsCtx,
 }: {
   projectId: string;
   projectKey: string;
-  accessLevel: Parameters<typeof assignableMembersService.list>[0]['accessLevel'];
+  accessMode: Parameters<typeof assignableMembersService.list>[0]['accessMode'];
   currentUserName: string;
   userId: string;
   wsCtx: { userId: string; workspaceId: string };
@@ -129,7 +129,7 @@ async function AutomationPaneBody({
   const [workflow, members, sprints, customFields, components, folders, referencedLabels] =
     await allSettledOrThrow([
       workflowsService.getWorkflow(projectId, wsCtx.workspaceId),
-      assignableMembersService.list({ projectId, accessLevel, ctx: wsCtx }),
+      assignableMembersService.list({ projectId, accessMode, ctx: wsCtx }),
       sprintsService.listByProject(projectId, wsCtx),
       customFieldsService.listFields({ key: projectKey, actorUserId: userId, ctx: wsCtx }),
       componentsService.listComponents(projectKey, wsCtx),

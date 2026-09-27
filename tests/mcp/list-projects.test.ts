@@ -117,6 +117,7 @@ describe('list_projects — registration + the token workspace read', () => {
       id: fx.project.id,
       name: fx.project.name,
       slug: fx.project.slug,
+      accessMode: fx.project.accessMode,
       accessLevel: fx.project.accessLevel,
       // ADDED by MOTIR-2230: the row now derives from v1's `projectSchema`,
       // which publishes `archived`. `listProjects` filters archived rows out, so

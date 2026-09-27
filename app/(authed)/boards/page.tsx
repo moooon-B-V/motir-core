@@ -148,7 +148,7 @@ export default async function BoardsPage({
     await Promise.all([
       assignableMembersService.list({
         projectId: ctx.projectId,
-        accessLevel: ctx.project.accessLevel,
+        accessMode: ctx.project.accessMode,
         ctx: wsCtx,
       }),
       workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),

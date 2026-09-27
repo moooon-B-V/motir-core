@@ -246,7 +246,7 @@ export default async function IssueDetailPage({
     // access level (6.4.6): private → project members.
     assignableMembersService.list({
       projectId: ctx.projectId,
-      accessLevel: ctx.project.accessLevel,
+      accessMode: ctx.project.accessMode,
       ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
     }),
     // Sprints (Subtask 2.4.14) back the inline Sprint field's picker + the ⋯

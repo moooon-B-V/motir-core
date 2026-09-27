@@ -45,7 +45,7 @@ export async function GET(req: Request): Promise<Response> {
     const data = await workItemsService.getQuickView(
       ctx.projectId,
       key,
-      ctx.project.accessLevel,
+      ctx.project.accessMode,
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       locale,
     );

@@ -1,4 +1,5 @@
 import { isWorkspaceOrgClosing } from '@/lib/organizations/closingGuard';
+import { accessModeOf } from '@/lib/projects/accessMode';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import {
@@ -8,6 +9,7 @@ import {
   type WorkItemLink,
   type WorkItemPriority,
   type ApprovalGateKind,
+  type ProjectAccessMode,
 } from '@/generated/prisma/client';
 import {
   astHasEpic5Conditions,
@@ -1260,10 +1262,12 @@ async function readFolderLevel(
  */
 async function resolveDescriptionMentionable(
   projectId: string,
-  accessLevel: 'open' | 'limited' | 'private' | 'public',
+  accessMode: ProjectAccessMode,
   ctx: ServiceContext,
 ): Promise<Set<string>> {
-  const members = await assignableMembersService.list({ projectId, accessLevel, ctx });
+  // Exactly the people who can ENTER the project (Story MOTIR-6169 · MOTIR-6547):
+  // a mention of anyone else is dropped silently, the Jira rule.
+  const members = await assignableMembersService.list({ projectId, accessMode, ctx });
   return new Set(members.map((m) => m.userId));
 }
 
@@ -1690,7 +1694,7 @@ export const workItemsService = {
     if (descTokenIds.length > 0) {
       const mentionable = await resolveDescriptionMentionable(
         input.projectId,
-        project.accessLevel,
+        accessModeOf(project),
         ctx,
       );
       descMentionIds = descTokenIds.filter((id) => mentionable.has(id));
@@ -2239,7 +2243,7 @@ export const workItemsService = {
         if (project) {
           descMentionable = await resolveDescriptionMentionable(
             project.id,
-            project.accessLevel,
+            accessModeOf(project),
             ctx,
           );
         }
@@ -6123,7 +6127,7 @@ export const workItemsService = {
   async getQuickView(
     projectId: string,
     identifier: string,
-    accessLevel: 'open' | 'limited' | 'private' | 'public',
+    accessMode: ProjectAccessMode,
     ctx: ServiceContext,
     locale: Locale,
   ): Promise<QuickViewData> {
@@ -6161,7 +6165,7 @@ export const workItemsService = {
     // nothing on the happy path and makes the refusal path bounded.
     const [detail, members, sprintRows, componentRows, estimationConfig] = await allSettledOrThrow([
       this.getIssueDetail(projectId, identifier, ctx),
-      assignableMembersService.list({ projectId, accessLevel, ctx }),
+      assignableMembersService.list({ projectId, accessMode, ctx }),
       withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
         sprintRepository.listByProject(projectId, ctx.workspaceId, tx),
       ),

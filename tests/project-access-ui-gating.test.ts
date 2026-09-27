@@ -160,7 +160,7 @@ describe('assignableMembersService.list — access-scoped pickers (6.4.6)', () =
     // OPEN → every workspace member is assignable.
     const openMembers = await assignableMembersService.list({
       projectId: openProject.id,
-      accessLevel: 'open',
+      accessMode: 'workspace',
       ctx: ownerCtx,
     });
     expect(openMembers.map((m) => m.userId).sort()).toEqual(
@@ -171,7 +171,7 @@ describe('assignableMembersService.list — access-scoped pickers (6.4.6)', () =
     // NOT the off-project workspace member.
     const privateMembers = await assignableMembersService.list({
       projectId: privateProject.id,
-      accessLevel: 'private',
+      accessMode: 'members',
       ctx: ownerCtx,
     });
     const ids = privateMembers.map((m) => m.userId).sort();

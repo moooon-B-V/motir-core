@@ -19,7 +19,7 @@ import { useToast } from '@/components/ui/Toast';
 //     SERVER-gated surfaces re-render — the header button + nudge + promo card
 //     disappear (the project is now `public`) and the 6.17.4 "Building in
 //     public" status badge takes the same header slot. The entry points are
-//     conditionally rendered server-side on `accessLevel`, so a single
+//     conditionally rendered server-side on `accessMode`, so a single
 //     `router.refresh()` is the whole page-state-after-mutation story (no
 //     client island owns the visibility — CLAUDE.md "Page state after a
 //     mutation").

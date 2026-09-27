@@ -65,7 +65,7 @@ describe('assignableMembersService.list — a private project', () => {
 
     const rows = await assignableMembersService.list({
       projectId: project.id,
-      accessLevel: 'private',
+      accessMode: 'members',
       ctx,
     });
     const byId = new Map(rows.map((r) => [r.userId, r]));

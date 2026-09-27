@@ -214,13 +214,21 @@ describe('commentsService.addComment', () => {
   it('hides a PRIVATE project from a non-member (404) and scopes mentions to project members', async () => {
     const s = await buildScenario();
     captureCommentEvents();
-    // Flip private: the then-current members (owner, member, viewer, projAdmin,
-    // mentionee) are auto-enrolled. The late joiner stays out.
+    // Flip private (Members only). Nobody is added by the flip since Story
+    // MOTIR-6169, so the mentionee is added explicitly; the late joiner stays out.
     await projectMembersService.setAccessLevel({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,
       ctx: s.ownerCtx,
       level: 'private',
+    });
+    await adminDb.projectMembership.create({
+      data: {
+        workspaceId: s.fx.workspaceId,
+        projectId: s.fx.projectId,
+        userId: s.mentionee.id,
+        role: 'member',
+      },
     });
     const outsider = await usersService.createUser({
       email: 'late@ex.com',

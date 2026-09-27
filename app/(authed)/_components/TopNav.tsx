@@ -130,7 +130,7 @@ export interface TopNavProps {
    * Resolved server-side in the layout. */
   buildInPublicProjectKey: string | null;
   /** Whether the active project is currently building in public
-   * (`accessLevel === 'public'`). When true, the same header slot shows the
+   * (`accessMode === 'public'`). When true, the same header slot shows the
    * clickable "Building in public" status indicator (Subtask 6.17.7 · design
    * §6.17.6 · Panel 12) linking to the build-in-public settings, shown to ALL
    * team members (no `canManage` read — unlike the non-public CTA above). The

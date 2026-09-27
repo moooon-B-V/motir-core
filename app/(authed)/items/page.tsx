@@ -138,7 +138,7 @@ export default async function IssuesPage({
     // Assignable users scoped by access level (6.4.6): private → project members.
     assignableMembersService.list({
       projectId: ctx.projectId,
-      accessLevel: ctx.project.accessLevel,
+      accessMode: ctx.project.accessMode,
       ctx: wsCtx,
     }),
     // The builder's sprint value editor (6.1.4) — a project's sprint list is

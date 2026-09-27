@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { accessModeOf } from '@/lib/projects/accessMode';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -42,7 +43,7 @@ function peek(s: Awaited<ReturnType<typeof makeScenario>>, identifier: string) {
   return workItemsService.getQuickView(
     s.project.id,
     identifier,
-    s.project.accessLevel,
+    accessModeOf(s.project),
     s.ctx,
     'en',
   );
@@ -209,7 +210,7 @@ describe('getQuickView() — the editor inputs the editable rail needs (MOTIR-25
       workItemsService.getQuickView(
         owner.project.id,
         item.identifier,
-        owner.project.accessLevel,
+        accessModeOf(owner.project),
         outsider.ctx,
         'en',
       ),

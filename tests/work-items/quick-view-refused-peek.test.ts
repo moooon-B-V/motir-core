@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { accessModeOf } from '@/lib/projects/accessMode';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -67,7 +68,7 @@ function peek(s: Scenario, identifier: string) {
   return workItemsService.getQuickView(
     s.project.id,
     identifier,
-    s.project.accessLevel,
+    accessModeOf(s.project),
     s.ctx,
     'en',
   );

@@ -648,7 +648,7 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
 
 describe('the QUICK VIEW reads the same member facts (Bug MOTIR-5650)', () => {
   const peek = (identifier: string) =>
-    workItemsService.getQuickView(fx.projectId, identifier, 'open', fx.ctx, 'en');
+    workItemsService.getQuickView(fx.projectId, identifier, 'workspace', fx.ctx, 'en');
 
   it('carries the approved gate’s members — the facts the item page’s frame reads', async () => {
     const { item, approval, web, api } = await pressable();

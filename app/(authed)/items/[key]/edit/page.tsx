@@ -86,7 +86,7 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
     projectAccessService.getCapabilities(ctx.projectId, serviceCtx),
     assignableMembersService.list({
       projectId: ctx.projectId,
-      accessLevel: ctx.project.accessLevel,
+      accessMode: ctx.project.accessMode,
       ctx: serviceCtx,
     }),
     // The moves an approval HOLDS (MOTIR-5528) — the status field says so here

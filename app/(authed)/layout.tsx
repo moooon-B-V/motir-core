@@ -298,11 +298,11 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // capability this build does not have.
   const publicProjectsAvailable = isCloud();
   const buildInPublicProjectKey =
-    publicProjectsAvailable && canManage && activeProject && activeProject.accessLevel !== 'public'
+    publicProjectsAvailable && canManage && activeProject && activeProject.accessMode !== 'public'
       ? activeProject.identifier
       : null;
   const buildingInPublic =
-    publicProjectsAvailable && !!activeProject && activeProject.accessLevel === 'public';
+    publicProjectsAvailable && !!activeProject && activeProject.accessMode === 'public';
 
   const activeWorkspaceId = ctx?.workspaceId ?? null;
 

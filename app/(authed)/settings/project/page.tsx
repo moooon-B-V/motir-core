@@ -62,7 +62,7 @@ export default async function ProjectSettingsPage() {
         <DetailsPaneBody
           projectId={ctx.projectId}
           projectKey={ctx.project.identifier}
-          accessLevel={ctx.project.accessLevel}
+          accessMode={ctx.project.accessMode}
           actorCtx={actorCtx}
         />
       </Suspense>
@@ -74,12 +74,12 @@ export default async function ProjectSettingsPage() {
 async function DetailsPaneBody({
   projectId,
   projectKey,
-  accessLevel,
+  accessMode,
   actorCtx,
 }: {
   projectId: string;
   projectKey: string;
-  accessLevel: string;
+  accessMode: string;
   actorCtx: { userId: string; workspaceId: string };
 }) {
   const [details, caps] = await Promise.all([
@@ -111,7 +111,7 @@ async function DetailsPaneBody({
       {/* …and only on a build that HAS a public surface (MOTIR-4035): off-cloud
           `app/api/public/*` serves nothing, so the promo would be an invitation
           to publish into a void. */}
-      {isCloud() && caps.canManage && accessLevel !== 'public' ? (
+      {isCloud() && caps.canManage && accessMode !== 'public' ? (
         <BuildInPublicPromoCard projectKey={projectKey} />
       ) : null}
     </>
