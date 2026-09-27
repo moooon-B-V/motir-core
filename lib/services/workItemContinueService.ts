@@ -240,15 +240,17 @@ async function evaluate(
       : null;
   const { branch, pullRequest } = await resolveContinueBranch(item.id, run, tx);
   const refusal: Exclude<WorkItemContinueRefusal, 'run_alive' | 'no_dead_run'> | null =
-    refusalByStatus === 'use_fix'
-      ? 'use_fix'
+    // ⚠️ THE STATUS FIRST, then the parent (MOTIR-6537): a child that is not In
+    // Progress — never started, or finished — has nothing to continue, whoever's
+    // run it was a leg of. The parent pointer is for an in-flight leg only, and
+    // the marker's not-shown rule depends on this order.
+    refusalByStatus === 'use_fix' || refusalByStatus === 'not_in_progress'
+      ? refusalByStatus
       : parentKey !== null
         ? 'continue_the_parent'
-        : refusalByStatus === 'not_in_progress'
-          ? 'not_in_progress'
-          : branch === null
-            ? 'no_branch'
-            : null;
+        : branch === null
+          ? 'no_branch'
+          : null;
   return {
     kind: 'died',
     run,

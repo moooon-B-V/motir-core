@@ -281,6 +281,35 @@ describe('claimContinue — every refusal, with its reason', () => {
 
     expect(result).toMatchObject({ reason: 'continue_the_parent', parentKey: story.identifier });
   });
+
+  it('not_in_progress — a To Do leg of a dead parent run has nothing to continue, and the card shows nothing (MOTIR-6537)', async () => {
+    // Found by `how-to-test.spec`: a never-started child of a dead scoped run was
+    // offered `motir continue <PARENT>`, against the design's not-shown rule.
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'the story' });
+    const child = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'a child never started',
+      parentId: story.id,
+    });
+    await setStatus(child.id, 'todo');
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run_scope',
+        scopeKey: story.identifier,
+        cards: [{ key: child.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    await dispatchRunService.close(run.id, { stopReason: 'halted' }, fx.ctx);
+
+    expect(await claim(fx, child.identifier)).toMatchObject({ reason: 'not_in_progress' });
+    expect(await workItemContinueService.getContinueView(child.id, fx.ctx)).toMatchObject({
+      state: 'died',
+      refusal: 'not_in_progress',
+    });
+  });
 });
 
 describe('getContinueView — the four states the marker renders', () => {
