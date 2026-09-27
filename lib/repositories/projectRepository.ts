@@ -258,6 +258,24 @@ export const projectRepository = {
     });
   },
 
+  /**
+   * EVERY project of a workspace — ARCHIVED ones included — as the three columns
+   * the entry rule reads (Story MOTIR-6169 · MOTIR-6549). The notification feed
+   * filters by entry at READ time, and a notification about an archived
+   * project's item must stay visible to someone who could enter that project, so
+   * this read does not drop archived rows the way `findByWorkspace` does. Takes
+   * `tx`: `project_active_workspace` gates on `app.workspace_id`.
+   */
+  async findAccessRowsByWorkspace(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<Project, 'id' | 'accessLevel' | 'accessMode'>>> {
+    return tx.project.findMany({
+      where: { workspaceId },
+      select: { id: true, accessLevel: true, accessMode: true },
+    });
+  },
+
   async findAllIdsByWorkspace(
     workspaceId: string,
     tx?: Prisma.TransactionClient,
