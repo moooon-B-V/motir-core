@@ -39,6 +39,8 @@ export type RateLimitScope =
   | 'public-write'
   | 'public-submit'
   | 'public-follow'
+  // A Visitor's READS of a public project in the app (MOTIR-6642).
+  | 'public-read'
   | 'ai:chat'
   | 'ai:generate'
   | 'ai:internal'

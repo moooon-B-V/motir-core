@@ -37,6 +37,10 @@ import { hasPermission, resolvePermissions } from '@/lib/permissions/resolve';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { toActorPermissionsDTO } from '@/lib/mappers/permissionMappers';
 import type { ActorPermissionsDTO } from '@/lib/dto/permissions';
+import { isCloud } from '@/lib/billing/availability';
+import { VISITOR_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { VISITOR_NOT_FOUND, type VisitorVerdict } from '@/lib/visitor/context';
 
 // projectAccessService — the ENFORCEMENT half of the Story 6.4 access model
 // (Subtask 6.4.3). It resolves the three policy inputs (the project's access
@@ -640,6 +644,64 @@ export const projectAccessService = {
       // The in-place "Edit" affordance gate for the public page (Subtask 6.16.3)
       // — admin-only; an anonymous / cross-org viewer resolves to `false`.
       canManage: canManageProject(inputs),
+    };
+  },
+
+  /**
+   * THE VISITOR'S ONE RESOLUTION (Story MOTIR-6170 · MOTIR-6642;
+   * `public-projects.md`, its Visitor amendment). Given the identifier a Visitor
+   * URL carries and the request's session (or none), answer who this reader is on
+   * that project:
+   *
+   * - `not_found` when the public surface is off (`isCloud()` false — the same
+   *   predicate `publicSurfaceUnavailable` answers), when no public project carries
+   *   the identifier, or when the project it names is not `public`. The three are
+   *   ONE frozen value, so nothing a stranger can observe tells them apart — a
+   *   login wall or a different error would confirm a private project exists.
+   * - `enter` when the session's user can ENTER the project (`canEnter`): they
+   *   belong in their own in-app view.
+   * - `visitor` otherwise — anonymous, another organisation, or a Limited member
+   *   who was not added — with the {@link VisitorReadContext} every Visitor read
+   *   takes: the Visitor key set and the private-epic hidden set, read once.
+   *
+   * Built ON {@link resolvePublicInputs}, the existing cross-org touch-point, so it
+   * is not a third place that grants cross-org read (`public-projects.md` §2).
+   */
+  async resolveVisitor(
+    identifier: string,
+    session: { user: { id: string } } | null,
+  ): Promise<VisitorVerdict> {
+    if (!isCloud()) return VISITOR_NOT_FOUND;
+    // The same resolver `publicProjectsService.resolvePublicProject` uses: the one
+    // PUBLIC project carrying this key, across workspaces.
+    const project = await projectRepository.findPublicByIdentifier(identifier);
+    if (!project || accessModeOf(project) !== 'public') return VISITOR_NOT_FOUND;
+
+    const actorUserId = session?.user.id ?? null;
+    let inputs: ProjectAccessInputs;
+    try {
+      inputs = await resolvePublicInputs(project.id, actorUserId);
+    } catch (err) {
+      // A project that stopped being public between the two reads is the same
+      // not-found as one that never was.
+      if (err instanceof ProjectNotFoundError) return VISITOR_NOT_FOUND;
+      throw err;
+    }
+    if (actorUserId && canEnter(inputs)) return { kind: 'enter', project };
+
+    const hidden = await workItemRepository.findPublicHiddenDescendantIds(
+      project.id,
+      project.workspaceId,
+    );
+    return {
+      kind: 'visitor',
+      ctx: {
+        kind: 'visitor',
+        project,
+        actorUserId,
+        permissions: VISITOR_PERMISSIONS,
+        hiddenIds: new Set(hidden),
+      },
     };
   },
 
