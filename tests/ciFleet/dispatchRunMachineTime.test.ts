@@ -7,6 +7,7 @@ import {
   type HostedAgentContainerRequest,
 } from '@/lib/services/hostedAgentContainerService';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
+import { ciContainerUsageRepository } from '@/lib/repositories/ciContainerUsageRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -274,6 +275,25 @@ describe('the by-run read', () => {
     expect(
       await ciFleetCostMeterService.getMachineTimeForDispatchRun('no-such-dispatch-run'),
     ).toEqual(nothing);
+  });
+
+  // The aggregate has no GROUP BY and COALESCEs its sums, so Postgres always hands
+  // back one row with numbers in it. The read still defends against a driver that
+  // returns no row or SQL NULLs rather than throwing — pinned here against a stub
+  // transaction, since no real query can produce either shape.
+  it('treats a missing aggregate row or NULL sums as zero and unsettled', async () => {
+    const stub = (rows: unknown[]) =>
+      ({ $queryRaw: async () => rows }) as unknown as Prisma.TransactionClient;
+    const nothing = { billableSeconds: 0, costUsd: '0', settled: false };
+    expect(await ciContainerUsageRepository.getMachineTimeForDispatchRun('r', stub([]))).toEqual(
+      nothing,
+    );
+    expect(
+      await ciContainerUsageRepository.getMachineTimeForDispatchRun(
+        'r',
+        stub([{ billableSeconds: null, costUsd: null, rowCount: 2, openCount: null }]),
+      ),
+    ).toEqual({ billableSeconds: 0, costUsd: '0', settled: true });
   });
 });
 

@@ -112,7 +112,12 @@ jobs:
           docker export "$cid" | tar -x -C "$rootfs" --exclude='proc/*' --exclude='sys/*' --exclude='dev/*' 2>/dev/null || true
           docker rm "$cid" >/dev/null
           # `-a`, not `-I`: a key embedded in a binary is still a key.
-          hits="$(grep -rEal "$patterns" "$rootfs" 2>/dev/null || true)"
+          # ONE exemption, by exact path: `gh` (GitHub's own CLI, from its signed
+          # apt repository) carries compiled string-table runs that happen to fit
+          # the token shapes — `gho_brewPATHNone…`, `github_pat_environment…` in
+          # gh 2.101.0 — and no credential. Everything else is still scanned, and
+          # the env and credential-file checks above and below still cover gh.
+          hits="$(grep -rEal "$patterns" "$rootfs" 2>/dev/null | grep -vxF "$rootfs/usr/bin/gh" || true)"
           if [ -n "$hits" ]; then
             echo "$hits" | head -20
             echo "::error::credential-shaped strings found in the image filesystem (files listed above)"
