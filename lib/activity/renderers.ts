@@ -379,6 +379,9 @@ const REGISTRY: Record<string, RegistryEntry> = {
   executor: textField(),
   // Difficulty (Story MOTIR-6016) — a plain enum scalar, rendered the same way.
   difficulty: textField(),
+  // The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6579) — a plain enum scalar,
+  // rendered like difficulty ("changed obsolescence None → outdated").
+  obsolescence: textField(),
   storyPoints: textField(),
   // The repo pin (Story 7.9 · MOTIR-1804) — a plain string scalar naming the repo
   // this item's work ships in. RENDERABLE, not suppressed: "which repo does this
@@ -411,6 +414,9 @@ const REGISTRY: Record<string, RegistryEntry> = {
   // -- body fields: edit recorded, content never inlined --------------------
   descriptionMd: editedField(),
   explanationMd: editedField(),
+  // The obsolescence NOTE (MOTIR-6579) is Markdown like the two bodies above, so
+  // it is recorded as an edit with its content never inlined into the feed.
+  obsolescenceNoteMd: editedField(),
   // -- resolved fields (batched display lookups) ----------------------------
   status: resolvedField('statuses', (r, key) => r.status(key)),
   assigneeId: resolvedField('users', (r, id) => r.user(id)),

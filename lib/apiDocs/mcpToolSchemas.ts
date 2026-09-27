@@ -845,6 +845,16 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'Optional difficulty — how hard the work is to REASON about, not how big it is: "trivial", "low", "medium" or "high". Leaf items (task / bug / subtask) only; a non-null value on an epic or story is refused (DIFFICULTY_NOT_ALLOWED_ON_KIND). Omit (or null) to leave it unset.',
       },
+      obsolescence: {
+        anyOf: [{ type: 'string', enum: ['outdated', 'deprecated'] }, { type: 'null' }],
+        description:
+          'Mark the item as no longer TRUE OF THE CODE: "outdated" (the text no longer describes what shipped; the capability lives on in another shape) or "deprecated" (retired or overturned on purpose — do not build on it). Settable on ANY kind in ANY status, a `done` item included; null clears it. Link the replacing item with link_work_items `supersedes`. A value outside the enum is refused (INVALID_OBSOLESCENCE). Informational: no read hides or re-orders a marked item.',
+      },
+      obsolescenceNoteMd: {
+        type: ['string', 'null'],
+        description:
+          'Markdown note saying WHY the item is marked (what changed, what to read instead); null clears it. Independent of `obsolescence`: clearing the mark keeps the note.',
+      },
       targetRepo: {
         type: ['string', 'null'],
         description:
@@ -1220,9 +1230,17 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       toKey: { $ref: '#/properties/fromKey' },
       relationship: {
         type: 'string',
-        enum: ['blocked_by', 'blocks', 'relates_to', 'duplicates', 'clones'],
+        enum: [
+          'blocked_by',
+          'blocks',
+          'relates_to',
+          'duplicates',
+          'clones',
+          'supersedes',
+          'superseded_by',
+        ],
         description:
-          'The relationship FROM the first item TO the second, read "fromKey <relationship> toKey": "blocked_by" (fromKey is blocked by toKey — the dependency edge that holds fromKey out of the ready set), "blocks" (the inverse — fromKey blocks toKey), "relates_to", "duplicates", or "clones".',
+          'The relationship FROM the first item TO the second, read "fromKey <relationship> toKey": "blocked_by" (fromKey is blocked by toKey — the dependency edge that holds fromKey out of the ready set), "blocks" (the inverse — fromKey blocks toKey), "relates_to", "duplicates", "clones", "supersedes" (fromKey is the NEWER work item that replaces toKey), or "superseded_by" (the inverse — fromKey is the OLDER item, replaced by toKey). The supersedes pair is one stored edge read from either end; it gates nothing.',
       },
     },
     required: ['fromKey', 'toKey', 'relationship'],
@@ -1856,7 +1874,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 field: {
                   type: 'string',
                   description:
-                    'Field id: a built-in (kind, status, priority, type, difficulty, assignee, reporter, sprint, text, created, updated, due, storyPoints, estimate), a label/component (lbl, cmp), a folder (folder — matches the item’s own folder, else its root ancestor’s, including folders inside the chosen ones), or a custom field (cf:<fieldId>).',
+                    'Field id: a built-in (kind, status, priority, type, difficulty, obsolescence, assignee, reporter, sprint, text, created, updated, due, storyPoints, estimate), a label/component (lbl, cmp), a folder (folder — matches the item’s own folder, else its root ancestor’s, including folders inside the chosen ones), or a custom field (cf:<fieldId>).',
                 },
                 operator: {
                   type: 'string',
@@ -2141,9 +2159,17 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       toKey: { $ref: '#/properties/fromKey' },
       relationship: {
         type: 'string',
-        enum: ['blocked_by', 'blocks', 'relates_to', 'duplicates', 'clones'],
+        enum: [
+          'blocked_by',
+          'blocks',
+          'relates_to',
+          'duplicates',
+          'clones',
+          'supersedes',
+          'superseded_by',
+        ],
         description:
-          'The relationship FROM the first item TO the second, read "fromKey <relationship> toKey": "blocked_by" (fromKey is blocked by toKey — the dependency edge that holds fromKey out of the ready set), "blocks" (the inverse — fromKey blocks toKey), "relates_to", "duplicates", or "clones".',
+          'The relationship FROM the first item TO the second, read "fromKey <relationship> toKey": "blocked_by" (fromKey is blocked by toKey — the dependency edge that holds fromKey out of the ready set), "blocks" (the inverse — fromKey blocks toKey), "relates_to", "duplicates", "clones", "supersedes" (fromKey is the NEWER work item that replaces toKey), or "superseded_by" (the inverse — fromKey is the OLDER item, replaced by toKey). The supersedes pair is one stored edge read from either end; it gates nothing.',
       },
     },
     required: ['fromKey', 'toKey', 'relationship'],
@@ -2703,6 +2729,16 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         anyOf: [{ type: 'string', enum: ['trivial', 'low', 'medium', 'high'] }, { type: 'null' }],
         description:
           'How hard the work is to REASON about, not how big it is: "trivial", "low", "medium" or "high" — leaf items only; null clears it. A non-null value on an epic or story is refused (DIFFICULTY_NOT_ALLOWED_ON_KIND), and so is changing the kind of a leaf that carries one to a container without clearing it in the same call.',
+      },
+      obsolescence: {
+        anyOf: [{ type: 'string', enum: ['outdated', 'deprecated'] }, { type: 'null' }],
+        description:
+          'Mark the item as no longer TRUE OF THE CODE: "outdated" (the text no longer describes what shipped; the capability lives on in another shape) or "deprecated" (retired or overturned on purpose — do not build on it). Settable on ANY kind in ANY status, a `done` item included; null clears it. Link the replacing item with link_work_items `supersedes`. A value outside the enum is refused (INVALID_OBSOLESCENCE). Informational: no read hides or re-orders a marked item.',
+      },
+      obsolescenceNoteMd: {
+        type: ['string', 'null'],
+        description:
+          'Markdown note saying WHY the item is marked (what changed, what to read instead); null clears it. Independent of `obsolescence`: clearing the mark keeps the note.',
       },
       estimateMinutes: {
         anyOf: [{ type: 'integer', minimum: 0 }, { type: 'null' }],

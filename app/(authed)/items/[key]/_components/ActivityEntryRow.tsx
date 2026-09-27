@@ -75,6 +75,8 @@ const FIELD_NAME_KEYS: Record<string, string> = {
   estimateMinutes: 'estimateMinutes',
   storyPoints: 'storyPoints',
   difficulty: 'difficulty',
+  obsolescence: 'obsolescence',
+  obsolescenceNoteMd: 'obsolescenceNoteMd',
   type: 'type',
   executor: 'executor',
   targetRepo: 'targetRepo',
@@ -94,6 +96,7 @@ const LINK_KIND_KEYS: Record<string, string> = {
   relates_to: 'relates_to',
   duplicates: 'duplicates',
   clones: 'clones',
+  supersedes: 'supersedes',
 };
 
 export function ActivityEntryRow({

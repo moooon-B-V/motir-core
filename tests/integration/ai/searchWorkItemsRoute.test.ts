@@ -97,6 +97,8 @@ describe('POST /api/internal/ai/search-work-items', () => {
         status: 'todo',
         priority: 'high',
         revision: expect.any(String),
+        // The OBSOLESCENCE mark (MOTIR-6582) — null on a current card.
+        obsolescence: null,
       },
     ]);
   });

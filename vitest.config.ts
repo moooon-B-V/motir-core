@@ -161,6 +161,16 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: [
+        // Story MOTIR-6574 · MOTIR-6584 — the OBSOLESCENCE story's two NEW modules
+        // (the scale's one list, and the MCP write fields + text-block lines) and
+        // the relationship model it widened with the `supersedes` pair, which had
+        // no coverage entry at all. Pinned at the project floor in `thresholds`
+        // below after being MEASURED on this branch against the story's own specs:
+        // 100 / 100 / 100 / 100 on all three. The already-gated files the story
+        // touched are measured by the PR's coverage job, suite-wide.
+        'lib/issues/obsolescence.ts',
+        'lib/mcp/obsolescence.ts',
+        'lib/workItems/linkRelationships.ts',
         // Story MOTIR-6016 · MOTIR-6102 — the three modules the DIFFICULTY story
         // added, pinned at the project floor in `thresholds` below after being
         // measured on this branch against the story's own specs.
@@ -2830,6 +2840,17 @@ export default defineConfig({
         // return` ref guards that cannot be reached without breaking the ref, so
         // the honest ceiling is close to the floor.
         'components/planning/PlanChangeComposer.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ── Story MOTIR-6574 · OBSOLESCENCE (Subtask MOTIR-6584) ─────────────
+        // Pinned at the floor, not at the 100 measured, so the gate stays about
+        // regressions rather than ratcheting on the next unrelated line.
+        'lib/issues/obsolescence.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/mcp/obsolescence.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/workItems/linkRelationships.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

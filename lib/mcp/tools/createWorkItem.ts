@@ -4,6 +4,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   Executor,
   WorkItemDifficulty,
+  WorkItemObsolescence,
   WorkItemPriority,
   WorkItemType,
 } from '@/generated/prisma/client';
@@ -16,10 +17,12 @@ import type {
   WorkItemDifficultyDto,
   WorkItemDto,
   WorkItemKindDto,
+  WorkItemObsolescenceDto,
   WorkItemTypeDto,
 } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { obsolescenceNoteWriteField, obsolescenceWriteField } from '../obsolescence';
 import { derived } from '../payloads/define';
 import { presentMcpWorkItem, workItemPlacementWritePayload } from '../payloads/workItems';
 import type { WorkItemPlacement } from '../payloads/workItems';
@@ -155,6 +158,9 @@ const inputSchema = {
         'non-null value on an epic or story is refused (DIFFICULTY_NOT_ALLOWED_ON_KIND). ' +
         'Omit (or null) to leave it unset.',
     ),
+  // The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6582) — any kind, any status.
+  obsolescence: obsolescenceWriteField,
+  obsolescenceNoteMd: obsolescenceNoteWriteField,
   targetRepo: z
     .string()
     .nullable()
@@ -237,6 +243,8 @@ interface CreateWorkItemArgs {
   type?: WorkItemType | null;
   executor?: Executor | null;
   difficulty?: WorkItemDifficulty | null;
+  obsolescence?: WorkItemObsolescence | null;
+  obsolescenceNoteMd?: string | null;
   targetRepo?: string | null;
   targetRepos?: string[];
   targetRepositories?: string[];
@@ -302,6 +310,14 @@ export async function runCreateWorkItem(
       ...(args.difficulty !== undefined
         ? { difficulty: args.difficulty as WorkItemDifficultyDto | null }
         : {}),
+      // The obsolescence mark + note (MOTIR-6582): forwarded only when supplied;
+      // the service validates the value (InvalidObsolescenceError) on any kind.
+      ...(args.obsolescence !== undefined
+        ? { obsolescence: args.obsolescence as WorkItemObsolescenceDto | null }
+        : {}),
+      ...(args.obsolescenceNoteMd !== undefined
+        ? { obsolescenceNoteMd: args.obsolescenceNoteMd }
+        : {}),
       // Target repo (MOTIR-1804): forward only when supplied. The service owns
       // the normalization (`owner/name` → name) and the connected-set validation
       // — this stays a thin pass-through, like every other leaf field here.
@@ -351,7 +367,10 @@ export function registerCreateWorkItem(
         'create a top-level capability area; kind "bug" under a story/epic to LOG A BUG. ' +
         'Optionally set the leaf-authoring fields up front — story points, estimate ' +
         '(minutes), work type, executor and difficulty — so a subtask can be created ' +
-        'fully-specified in one call. Honors the same kind-parent rules (an epic is root-only — ' +
+        'fully-specified in one call. `obsolescence` (`outdated` · `deprecated`) and ' +
+        '`obsolescenceNoteMd` may be set on any kind; a value outside the enum is refused ' +
+        'with INVALID_OBSOLESCENCE. ' +
+        'Honors the same kind-parent rules (an epic is root-only — ' +
         'a parented epic is rejected), leaf-only type/executor/difficulty rule, and access ' +
         'checks as the UI.',
       inputSchema,
