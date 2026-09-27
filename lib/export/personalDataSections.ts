@@ -586,6 +586,12 @@ export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
     'A planning lease measured in minutes, held by a session and released by a sweep. ' +
     'It carries no fact about the person beyond "a lock existed", and is gone before ' +
     'an export could describe it — transient operational substrate, not a record.',
+  ProjectVisitor:
+    'Exported, but not as a raw table: `buildPersonalDataArchive` writes it as ' +
+    '`project-visits.json` (Story MOTIR-6170 · MOTIR-6668), each record joined to the ' +
+    'name and key of the public project it is about and saying who the consent shared ' +
+    'the person’s name and email with. A dump of the table would name projects only by ' +
+    'an opaque id, which answers Art. 15 in letter and not in substance.',
   Project:
     'Not a user-keyed row. `Project` appears in the User relation graph only as the ' +
     'back-relation of `user.lastActiveProjectId`; that pointer is a COLUMN on `user` ' +
