@@ -121,7 +121,7 @@ async function grantProjectRole(
   role: 'admin' | 'member' | 'viewer',
 ): Promise<void> {
   await db.projectMembership.create({
-    data: { userId, workspaceId: t.workspaceId, projectId: t.projectId, role },
+    data: { userId, workspaceId: t.workspaceId, projectId: t.projectId },
   });
   // Roles live on the workspace since MOTIR-6168.
   await setWorkspaceRoleFor(userId, t.workspaceId, role);

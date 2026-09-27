@@ -54,7 +54,7 @@ async function seedLeg(tag: string): Promise<Leg> {
     data: { name: `WS ${tag}`, slug: `run-found-ws-${tag}-${n}`, organizationId: org.id },
   });
   await adminDb.workspaceMembership.create({
-    data: { workspaceId: workspace.id, userId: user.id, role: 'owner' },
+    data: { workspaceId: workspace.id, userId: user.id, workspaceRole: 'manager' },
   });
   const project = await adminDb.project.create({
     data: {

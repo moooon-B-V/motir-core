@@ -113,7 +113,7 @@ async function secondWorkspaceInSameOrg() {
     },
   });
   await adminDb.workspaceMembership.create({
-    data: { workspaceId: ws.id, userId: fx.ownerId, role: 'owner' },
+    data: { workspaceId: ws.id, userId: fx.ownerId, workspaceRole: 'manager' },
   });
   const project = await createTestProject({
     workspaceId: ws.id,
@@ -136,7 +136,7 @@ async function projectAdminButNotOrgAdmin() {
     },
   });
   await adminDb.workspaceMembership.create({
-    data: { workspaceId: fx.workspaceId, userId: user.id, role: 'admin' },
+    data: { workspaceId: fx.workspaceId, userId: user.id, workspaceRole: 'manager' },
   });
   await adminDb.organizationMembership.create({
     data: { organizationId: orgId, userId: user.id, role: ORGANIZATION_ROLE.member },
@@ -332,7 +332,11 @@ describe('the ORG-ADMIN gate, asserted where it LIVES', () => {
       },
     });
     await adminDb.workspaceMembership.create({
-      data: { workspaceId: fx.workspaceId, userId: stranger.id, role: 'admin' },
+      data: {
+        workspaceId: fx.workspaceId,
+        userId: stranger.id,
+        workspaceRole: 'manager',
+      },
     });
     await expect(
       organizationRepoService.linkExistingRepo(

@@ -91,14 +91,17 @@ describe('the PERMISSION is part of this card, and it governs every method', () 
       data: { name: 'Viewer', email: `viewer-${Date.now()}@example.com` },
     });
     await adminDb.workspaceMembership.create({
-      data: { workspaceId: fx.workspaceId, userId: viewer.id, role: 'member' },
+      data: {
+        workspaceId: fx.workspaceId,
+        userId: viewer.id,
+        workspaceRole: 'member',
+      },
     });
     await adminDb.projectMembership.create({
       data: {
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
         userId: viewer.id,
-        role: 'viewer',
       },
     });
     await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
@@ -143,14 +146,17 @@ describe('the PERMISSION is part of this card, and it governs every method', () 
       data: { name: 'V', email: `v2-${Date.now()}@example.com` },
     });
     await adminDb.workspaceMembership.create({
-      data: { workspaceId: fx.workspaceId, userId: viewer.id, role: 'member' },
+      data: {
+        workspaceId: fx.workspaceId,
+        userId: viewer.id,
+        workspaceRole: 'member',
+      },
     });
     await adminDb.projectMembership.create({
       data: {
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
         userId: viewer.id,
-        role: 'viewer',
       },
     });
     await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');

@@ -23,6 +23,31 @@ export async function runMigrationFile(dir: string, transform: (sql: string) => 
   }
 }
 
+// ── The pre-migration schema ───────────────────────────────────────────────────
+//
+// These migrations ran over rows that had NO workspace role yet, and since
+// MOTIR-6561 the column is NOT NULL, so that state cannot be built directly any
+// more. `makeTenant` recreates it: it drops the constraint on this worker's
+// database and writes the memberships through raw SQL with `workspace_role`
+// NULL, exactly as they stood before MOTIR-6458 ran. EVERY file that calls
+// `makeTenant` restores the constraint in an `afterEach` with
+// `restoreWorkspaceRoleNotNull`, which runs MOTIR-6561's own migration (backfill
+// then SET NOT NULL) — so the next file on this worker gets the real schema back
+// even when a test fails, and that migration is exercised on every restore.
+const NOT_NULL_MIGRATION = '20260927090000_workspace_role_not_null';
+
+/** Drop MOTIR-6561's NOT NULL on this worker's database, so pre-migration rows can be written. */
+export async function relaxWorkspaceRoleNotNull(): Promise<void> {
+  await adminDb.$executeRawUnsafe(
+    'ALTER TABLE "workspace_membership" ALTER COLUMN "workspace_role" DROP NOT NULL',
+  );
+}
+
+/** Put MOTIR-6561's NOT NULL back — call it from an `afterEach` in every file using `makeTenant`. */
+export async function restoreWorkspaceRoleNotNull(): Promise<void> {
+  await runMigrationFile(NOT_NULL_MIGRATION);
+}
+
 // ── The fixture tenant ─────────────────────────────────────────────────────────
 let seq = 0;
 
@@ -92,10 +117,12 @@ export async function makeTenant(): Promise<Tenant> {
     admin: 'admin',
     viewer: 'viewer',
   };
+  await relaxWorkspaceRoleNotNull();
   for (const [label, id] of Object.entries(people)) {
-    await adminDb.workspaceMembership.create({
-      data: { userId: id, workspaceId: ws.id, role: wsRole[label] ?? 'member' },
-    });
+    // The legacy column ONLY — `workspace_role` NULL, the row the migrations map.
+    await adminDb.$executeRaw`
+      INSERT INTO "workspace_membership" ("id", "userId", "workspaceId", "role", "updatedAt")
+      VALUES (gen_random_uuid()::text, ${id}, ${ws.id}, ${wsRole[label] ?? 'member'}::"member_role", now())`;
     await adminDb.organizationMembership.create({
       data: {
         organizationId: org.id,
@@ -130,21 +157,19 @@ export async function makeTenant(): Promise<Tenant> {
   // it must fold into Contractor-P1's workspace role, not become a second row.
   const twin = await def(p2.id, 'Commenter', ['report:view', 'comment:add', 'project:browse']);
 
+  // The legacy PROJECT role is what the mapping reads, and the application no
+  // longer writes it (MOTIR-6562) — so the fixture writes it raw, as it stood.
   const pm = (
     projectId: string,
     userId: string,
     role: 'admin' | 'member' | 'viewer',
     roleDefinitionId?: string,
   ) =>
-    adminDb.projectMembership.create({
-      data: {
-        workspaceId: ws.id,
-        projectId,
-        userId,
-        role,
-        roleDefinitionId: roleDefinitionId ?? null,
-      },
-    });
+    adminDb.$executeRaw`
+      INSERT INTO "project_membership"
+        ("id", "workspace_id", "project_id", "user_id", "role", "role_definition_id", "updated_at")
+      VALUES (gen_random_uuid()::text, ${ws.id}, ${projectId}, ${userId},
+              ${role}::"member_role", ${roleDefinitionId ?? null}, now())`;
   await pm(p1.id, people.narrower!, 'viewer');
   await pm(p2.id, people.narrower!, 'member');
   await pm(p1.id, people.wider!, 'admin');

@@ -70,7 +70,7 @@ afterAll(async () => {
 async function plainMember() {
   const user = await createTestUser();
   await adminDb.workspaceMembership.create({
-    data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
+    data: { userId: user.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
   });
   return user;
 }
@@ -544,7 +544,11 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
       const assignee = await plainMember();
       const admin = await createTestUser();
       await adminDb.workspaceMembership.create({
-        data: { userId: admin.id, workspaceId: fx.workspaceId, role: 'admin' },
+        data: {
+          userId: admin.id,
+          workspaceId: fx.workspaceId,
+          workspaceRole: 'manager',
+        },
       });
       const { gate } = await designSubtaskWithGate({ assigneeId: assignee.id });
 
@@ -566,7 +570,11 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
   it('a plain MEMBER who is neither assignee nor reporter is refused — and it is a 403-shaped refusal, not a 404', async () => {
     const bystander = await createTestUser();
     await adminDb.workspaceMembership.create({
-      data: { userId: bystander.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: bystander.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     const { gate } = await designSubtaskWithGate({ assigneeId: null });
 
@@ -595,7 +603,11 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
     });
     const outsider = await createTestUser();
     await adminDb.workspaceMembership.create({
-      data: { userId: outsider.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: outsider.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     const { gate } = await designSubtaskWithGate({ assigneeId: null });
 
@@ -614,14 +626,17 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
     });
     const viewer = await createTestUser();
     await adminDb.workspaceMembership.create({
-      data: { userId: viewer.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: viewer.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     await adminDb.projectMembership.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
         userId: viewer.id,
-        role: 'viewer',
       },
     });
     await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
@@ -798,7 +813,11 @@ describe('the ESCAPE HATCH is the `approval:decide_any` PERMISSION, never a work
   it('a WORKSPACE admin still decides — they hold the key through the always-pass rail, so nothing regressed', async () => {
     const wsAdmin = await createTestUser();
     await adminDb.workspaceMembership.create({
-      data: { userId: wsAdmin.id, workspaceId: fx.workspaceId, role: 'admin' },
+      data: {
+        userId: wsAdmin.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'manager',
+      },
     });
     const ctx = { userId: wsAdmin.id, workspaceId: fx.workspaceId };
     // Asserted as a PERMISSION the model resolves, which is the whole change: the

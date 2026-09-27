@@ -102,15 +102,12 @@ export async function seedCustomRoles(prefix: string): Promise<CustomRolesSeed> 
   // turn chapter 3's "change a teammate to Contributor" into a test of the seed.
   const memberships = await db.projectMembership.findMany({
     where: { projectId: project.id },
-    select: { userId: true, role: true, roleDefinitionId: true },
+    select: { userId: true, roleDefinitionId: true },
   });
   if (memberships.length !== 1 || memberships[0]!.userId !== teammate.id) {
     throw new Error(
       `custom-roles-seed: expected exactly the teammate's membership, got ${memberships.length}`,
     );
-  }
-  if (memberships[0]!.role !== 'member') {
-    throw new Error(`custom-roles-seed: the teammate must start on a BUILT-IN role`);
   }
   if (memberships.some((m) => m.roleDefinitionId !== null)) {
     throw new Error('custom-roles-seed: nobody may start on a custom role — the spec authors it');

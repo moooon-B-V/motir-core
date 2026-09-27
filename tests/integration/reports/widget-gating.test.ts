@@ -61,7 +61,7 @@ async function makePrivateTeam(): Promise<Team> {
   await workspacesService.addMember({
     userId: member.id,
     workspaceId: fx.workspaceId,
-    role: 'member',
+    workspaceRole: 'member',
   });
   await addToProjectAs({
     key: fx.projectIdentifier,
@@ -79,7 +79,7 @@ async function makePrivateTeam(): Promise<Team> {
   await workspacesService.addMember({
     userId: outsider.id,
     workspaceId: fx.workspaceId,
-    role: 'member',
+    workspaceRole: 'member',
   });
   return {
     fx,

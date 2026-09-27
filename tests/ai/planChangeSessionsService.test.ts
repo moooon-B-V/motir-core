@@ -170,7 +170,11 @@ describe('planChangeSessionsService — open + resume', () => {
       name: 'Teammate',
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: teammate.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: teammate.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     await addToProjectAs({
       key: fx.project.identifier,

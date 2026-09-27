@@ -224,7 +224,11 @@ describe('authorisation — a WORKSPACE resource, not a project one', () => {
   it('lets an owner write and a member only read', async () => {
     const member = await createTestUser();
     await adminDb.workspaceMembership.create({
-      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: member.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
 
@@ -242,7 +246,6 @@ describe('authorisation — a WORKSPACE resource, not a project one', () => {
       data: {
         userId: manager.id,
         workspaceId: fx.workspaceId,
-        role: 'member',
         workspaceRole: 'manager',
       },
     });
@@ -251,22 +254,14 @@ describe('authorisation — a WORKSPACE resource, not a project one', () => {
     ).resolves.toMatchObject({ hostname: `acme.${BASE}` });
   });
 
-  it('lets a legacy ADMIN write — it resolves to the Manager', async () => {
-    // A deploy-window row: `workspace_role` NULL, legacy `admin`. The gate asks
-    // the workspace role, and `resolveWorkspaceRole` maps it to `manager`.
-    const admin = await createTestUser();
-    await adminDb.workspaceMembership.create({
-      data: { userId: admin.id, workspaceId: fx.workspaceId, role: 'admin' },
-    });
-    await expect(
-      publicSubdomainService.claim(fx.workspaceId, 'acme', admin.id),
-    ).resolves.toMatchObject({ hostname: `acme.${BASE}` });
-  });
-
   it('refuses a VIEWER the write', async () => {
     const viewer = await createTestUser();
     await adminDb.workspaceMembership.create({
-      data: { userId: viewer.id, workspaceId: fx.workspaceId, role: 'viewer' },
+      data: {
+        userId: viewer.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'viewer',
+      },
     });
     await expect(
       publicSubdomainService.claim(fx.workspaceId, 'acme', viewer.id),
@@ -530,7 +525,11 @@ describe('release', () => {
 
     const member = await createTestUser();
     await adminDb.workspaceMembership.create({
-      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: member.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     await expect(publicSubdomainService.release(fx.workspaceId, member.id)).rejects.toBeInstanceOf(
       SubdomainForbiddenError,

@@ -127,7 +127,11 @@ describe('ITEM-ANCHORED planning', () => {
       name: 'Viewer',
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: viewer.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: viewer.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     await addToProjectAs({
       key: fx.project.identifier,

@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import type { WorkspaceRole } from '@/generated/prisma/client';
 import { resolvePermissions } from '@/lib/permissions/resolve';
@@ -6,7 +6,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { roleMigrationReportService } from '@/lib/services/roleMigrationReportService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
-import { makeTenant, runMigrationFile } from './_workspaceRoleTenant';
+import { makeTenant, restoreWorkspaceRoleNotNull, runMigrationFile } from './_workspaceRoleTenant';
 
 // THE STORY GATE's migration half (Story MOTIR-6168 · MOTIR-6467): the two data
 // migrations run IN ORDER — the mapping, then the never-wider check — over the
@@ -31,6 +31,11 @@ const CHECK = '20260926100200_workspace_role_never_wider';
 
 beforeEach(async () => {
   await truncateAuthTables();
+});
+
+// The fixture drops MOTIR-6561's NOT NULL to seed pre-migration rows; put it back.
+afterEach(async () => {
+  await restoreWorkspaceRoleNotNull();
 });
 
 afterAll(async () => {

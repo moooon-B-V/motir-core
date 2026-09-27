@@ -16,6 +16,7 @@ import { truncateAuthTables } from '../../helpers/db';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
+import { legacyToWorkspaceRole } from '@/lib/workspaces/roles';
 
 // Integration tests for the Story-4.3 estimationService (Subtask 4.3.3): the
 // per-issue story-point WRITE, the project estimation-config CRUD, and the
@@ -203,7 +204,7 @@ describe('estimationService getEstimationConfig / updateEstimationConfig', () =>
         data: {
           userId: user.id,
           workspaceId: fx.workspaceId,
-          role: roles.workspaceRole ?? 'member',
+          workspaceRole: legacyToWorkspaceRole(roles.workspaceRole ?? 'member'),
         },
       });
       if (roles.projectRole) {
@@ -217,7 +218,6 @@ describe('estimationService getEstimationConfig / updateEstimationConfig', () =>
             userId: user.id,
             projectId: fx.projectId,
             workspaceId: fx.workspaceId,
-            role: roles.projectRole,
           },
         });
       }

@@ -461,7 +461,6 @@ describe('every action re-checks the permission', () => {
           workspaceId: fx.workspaceId,
           projectId: fx.projectId,
           userId: archivist.id,
-          role: CUSTOM_ROLE_TIER,
         },
         tx,
       );

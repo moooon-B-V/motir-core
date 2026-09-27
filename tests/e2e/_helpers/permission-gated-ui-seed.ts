@@ -76,7 +76,7 @@ export async function seedPermissionGatedUi(slug: string): Promise<PermissionGat
     });
     await workspacesService.addMember({ userId: user.id, workspaceId: workspace.id });
     await db.projectMembership.create({
-      data: { userId: user.id, projectId: project.id, workspaceId: workspace.id, role },
+      data: { userId: user.id, projectId: project.id, workspaceId: workspace.id },
     });
     // Roles live on the workspace since MOTIR-6168.
     await setWorkspaceRoleFor(user.id, workspace.id, role);

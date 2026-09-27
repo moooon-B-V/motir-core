@@ -158,7 +158,7 @@ async function seedTwoTenants(): Promise<{ a: SeededTenant; b: SeededTenant }> {
       data: { name: `Harness ${tag}`, slug: `harness-${tag}`, organizationId: organization.id },
     });
     await adminDb.workspaceMembership.create({
-      data: { workspaceId: workspace.id, userId: user.id, role: 'owner' },
+      data: { workspaceId: workspace.id, userId: user.id, workspaceRole: 'manager' },
     });
     await adminDb.project.create({
       data: {

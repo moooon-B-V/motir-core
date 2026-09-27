@@ -160,7 +160,7 @@ test('@smoke the combined Epic-6 journey: build → save → widget → rule →
   await workspacesService.addMember({
     userId: viewer.id,
     workspaceId: tenant.workspaceId,
-    role: 'member',
+    workspaceRole: 'member',
   });
   await addToProjectAs({
     key: tenant.key,
@@ -175,7 +175,7 @@ test('@smoke the combined Epic-6 journey: build → save → widget → rule →
   await workspacesService.addMember({
     userId: watcher.id,
     workspaceId: tenant.workspaceId,
-    role: 'member',
+    workspaceRole: 'member',
   });
   await pinActiveProject(watcher.id, tenant);
 

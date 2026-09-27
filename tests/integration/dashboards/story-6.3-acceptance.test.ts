@@ -75,7 +75,7 @@ async function seedRecipe(): Promise<Recipe> {
   await workspacesService.addMember({
     userId: member.id,
     workspaceId: fx.workspaceId,
-    role: 'member',
+    workspaceRole: 'member',
   });
   const filter = await savedFiltersService.create(
     fx.projectIdentifier,
@@ -244,7 +244,7 @@ describe('Story 6.3 recipe — dashboard + three widgets, shared, read end-to-en
     await workspacesService.addMember({
       userId: outsider.id,
       workspaceId: r.ownerCtx.workspaceId,
-      role: 'member',
+      workspaceRole: 'member',
     });
     const outsiderCtx: ServiceContext = {
       userId: outsider.id,

@@ -121,7 +121,7 @@ async function addWorkspaceMember(fx: WorkItemFixture, email: string) {
   await workspacesService.addMember({
     userId: user.id,
     workspaceId: fx.workspaceId,
-    role: 'member',
+    workspaceRole: 'member',
   });
   return { userId: user.id, ctx: { userId: user.id, workspaceId: fx.workspaceId } };
 }

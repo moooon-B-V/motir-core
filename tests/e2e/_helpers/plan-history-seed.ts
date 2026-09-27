@@ -77,7 +77,7 @@ export async function seedPlanHistory(slug: string): Promise<PlanHistorySeed> {
   });
   await workspacesService.addMember({ userId: viewer.id, workspaceId: workspace.id });
   await adminDb.projectMembership.create({
-    data: { userId: viewer.id, projectId: project.id, workspaceId: workspace.id, role: 'viewer' },
+    data: { userId: viewer.id, projectId: project.id, workspaceId: workspace.id },
   });
   // Roles live on the workspace since MOTIR-6168.
   await adminDb.workspaceMembership.update({

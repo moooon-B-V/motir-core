@@ -708,7 +708,11 @@ describe('getOrgPeriodConsumption — the ONE read MOTIR-1901 consumes', () => {
       data: { name: 'Second WS', slug: 'second-ws-ci-meter', organizationId: a.organizationId },
     });
     await adminDb.workspaceMembership.create({
-      data: { workspaceId: secondWorkspace.id, userId: owner.id, role: 'owner' },
+      data: {
+        workspaceId: secondWorkspace.id,
+        userId: owner.id,
+        workspaceRole: 'manager',
+      },
     });
     const second = { workspace: secondWorkspace };
     const project = await projectsService.createProject({
