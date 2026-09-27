@@ -1,6 +1,7 @@
 import type { ApprovalGate } from '@/generated/prisma/client';
 import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { RepairPullRequestDto } from '@/lib/dto/workItemRepair';
+import { routedToDisplayName } from '@/lib/approvalGates/routing';
 
 // THE PURE HALF of a card's to-fix answer (Story MOTIR-6588 · MOTIR-6600). The reads
 // live in `fixReasonService`; everything here is a function of what they returned, so
@@ -124,7 +125,8 @@ export function pullRequestReasonOf(
 export function changesRequestedOf(
   refusal: {
     gate: 'pull_request_approval' | 'acceptance_result';
-    decidedByLabel: string | null;
+    /** The reviewer as a SURFACE draws them — `reviewerNameOf`, never the audit label. */
+    reviewerName: string | null;
     noteMd: string | null;
   },
   total: number,
@@ -134,13 +136,33 @@ export function changesRequestedOf(
     fixDetail: {
       ...EMPTY_DETAIL,
       repair: refusal.gate === 'acceptance_result' ? 'fix' : 'run',
-      reviewerName: refusal.decidedByLabel,
+      reviewerName: refusal.reviewerName,
       notePreview: notePreviewOf(refusal.noteMd),
       gate: refusal.gate,
       affected: total,
       total,
     },
   };
+}
+
+/**
+ * The reviewer's name as the To fix row draws it.
+ *
+ * ⚠️ NOT `decidedByLabel` AS STORED. That column is the gate's AUDIT string —
+ * `Name <email>`, denormalised at decision time so an auditor can resolve a person
+ * who has since gone (`lib/approvalGates/routing.ts`) — and an email in the middle of
+ * the row's sentence is noise. The live user row answers first, through the same
+ * `routedToDisplayName` a routed name uses; a reviewer whose row no longer resolves
+ * falls back to the audit label with its `<email>` suffix removed.
+ */
+export function reviewerNameOf(
+  user: { name: string; email: string } | null,
+  decidedByLabel: string | null,
+): string | null {
+  const live = routedToDisplayName(user);
+  if (live) return live;
+  if (decidedByLabel === null) return null;
+  return decidedByLabel.replace(/\s*<[^<>]*>\s*$/, '').trim() || decidedByLabel;
 }
 
 /**

@@ -313,9 +313,11 @@ describe('per reason — an event puts the card on To fix, and only there', () =
         notePreview: 'Rename the export button.',
       },
     });
-    expect((seen.row!.fixDetail as { reviewerName: string | null }).reviewerName).toEqual(
-      expect.any(String),
-    );
+    // The reviewer's NAME, never the gate's `Name <email>` audit label (found by the
+    // acceptance E2E, MOTIR-6607).
+    const reviewer = (seen.row!.fixDetail as { reviewerName: string | null }).reviewerName;
+    expect(reviewer).toEqual(expect.any(String));
+    expect(reviewer).not.toMatch(/[<@]/);
   });
 });
 

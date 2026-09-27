@@ -8,6 +8,7 @@ import {
   FIX_NOTE_PREVIEW_MAX,
   FIX_REASON_PRIORITY,
   notePreviewOf,
+  reviewerNameOf,
   sameFixReason,
 } from '@/lib/workItems/fixReason';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -114,7 +115,7 @@ async function requestChanges(
       state: opts.state ?? 'changes_requested',
       decidedById: fx.ownerId,
       decidedAt: opts.decidedAt ?? new Date('2026-09-26T10:00:00Z'),
-      decidedByLabel: 'Yue Zhu',
+      decidedByLabel: 'Yue Zhu <yue@example.com>',
       decisionSource: 'ui',
       decidedUnderAuthority: 'assignee',
       noteMd:
@@ -141,6 +142,17 @@ describe('the pure half', () => {
     const cut = notePreviewOf(long)!;
     expect(cut).toHaveLength(FIX_NOTE_PREVIEW_MAX);
     expect(cut.endsWith('…')).toBe(true);
+  });
+
+  it('the reviewer is drawn by NAME — the live user row first, else the audit label without its email', () => {
+    expect(
+      reviewerNameOf({ name: 'Mei Lin', email: 'mei@example.com' }, 'Old <old@example.com>'),
+    ).toBe('Mei Lin');
+    expect(reviewerNameOf({ name: '  ', email: 'mei@example.com' }, null)).toBe('mei@example.com');
+    expect(reviewerNameOf(null, 'Mei Lin <mei@example.com>')).toBe('Mei Lin');
+    expect(reviewerNameOf(null, 'octocat')).toBe('octocat');
+    expect(reviewerNameOf(null, '<only@example.com>')).toBe('<only@example.com>');
+    expect(reviewerNameOf(null, null)).toBeNull();
   });
 
   it('sameFixReason compares the reason and the whole detail', () => {
@@ -255,7 +267,7 @@ describe('each reason alone', () => {
         check: null,
         queueReason: null,
         base: null,
-        reviewerName: 'Yue Zhu',
+        reviewerName: fx.owner.name,
         notePreview: 'Rename the export button.',
         gate: 'pull_request_approval',
         affected: 1,
@@ -287,7 +299,7 @@ describe('each reason alone', () => {
         state: 'changes_requested',
         decidedById: fx.ownerId,
         decidedAt: new Date('2026-09-26T10:00:00Z'),
-        decidedByLabel: 'Yue Zhu',
+        decidedByLabel: 'Yue Zhu <yue@example.com>',
         decisionSource: 'ui',
         decidedUnderAuthority: 'assignee',
         noteMd: 'The empty board should say how to add the first card.',
@@ -300,7 +312,7 @@ describe('each reason alone', () => {
       fixDetail: {
         repair: 'fix',
         gate: 'acceptance_result',
-        reviewerName: 'Yue Zhu',
+        reviewerName: fx.owner.name,
         notePreview: 'The empty board should say how to add the first card.',
       },
     });

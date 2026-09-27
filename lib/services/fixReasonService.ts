@@ -4,12 +4,14 @@ import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { evaluateRepair } from '@/lib/services/repairPredicate';
 import {
   NOTHING_TO_FIX,
   changesRequestedOf,
   pullRequestReasonOf,
+  reviewerNameOf,
   sameFixReason,
   standingMergeRefusalOf,
   type FixReasonValue,
@@ -36,6 +38,16 @@ import {
 // one that read the most. Idempotent — an unchanged answer writes nothing — and it
 // emits no event. It runs INSIDE the caller's transaction and bound tenant context;
 // `work_item` has no system arm.
+
+/** The reviewer's display name — the live user row first (`reviewerNameOf`). */
+async function reviewerName(
+  decidedById: string | null,
+  decidedByLabel: string | null,
+  tx: Prisma.TransactionClient,
+): Promise<string | null> {
+  const user = decidedById ? await userRepository.findById(decidedById, tx) : null;
+  return reviewerNameOf(user, decidedByLabel);
+}
 
 /**
  * What the card's to-fix answer is NOW, read inside `tx` without writing it. The
@@ -80,10 +92,21 @@ export async function deriveFixReason(
     const byMembers = pullRequestReasonOf(verdict.pullRequests, total);
     if (byMembers) return byMembers;
     if (verdict.repairClass === 'acceptance_rerun' && verdict.acceptanceRefusal) {
+      // The standing refusal the class was admitted on is the story's latest DECIDED
+      // acceptance gate (`readStandingAcceptanceRefusal`) — read for WHO decided it.
+      const gate = await approvalGateRepository.findLatestDecidedByWorkItemAndKind(
+        item.id,
+        'acceptance_result',
+        tx,
+      );
       return changesRequestedOf(
         {
           gate: 'acceptance_result',
-          decidedByLabel: verdict.acceptanceRefusal.decidedByLabel,
+          reviewerName: await reviewerName(
+            gate?.decidedById ?? null,
+            verdict.acceptanceRefusal.decidedByLabel,
+            tx,
+          ),
           noteMd: verdict.acceptanceRefusal.reasonMd,
         },
         total,
@@ -101,7 +124,7 @@ export async function deriveFixReason(
     return changesRequestedOf(
       {
         gate: 'pull_request_approval',
-        decidedByLabel: latest.decidedByLabel,
+        reviewerName: await reviewerName(latest.decidedById, latest.decidedByLabel, tx),
         noteMd: latest.noteMd,
       },
       total,
