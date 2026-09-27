@@ -374,6 +374,8 @@ export function buildProgram(): Command {
   // `motir continue <key>` (MOTIR-6533) — carry on a card whose last run died.
   register(program, 'continue')
     .option('--agent <cmd>', 'Run THIS agent command on the continue (overrides MOTIR_AGENT).')
+    .option('--max <n>', 'A parent: stop after dispatching n more work items.')
+    .option('--keep-going', 'A parent: continue past a failed agent instead of halting.')
     .option(
       '--report-log',
       'ALSO send your agent’s output to Motir, so a failed run shows its tail on the run page. OFF by default — only the lifecycle is sent, never file contents, paths or diffs.',

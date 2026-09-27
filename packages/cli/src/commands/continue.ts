@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { WorkItemContinueClaim } from '../client.js';
-import { findingsPolicyOf, resolveDispatchTarget } from '../dispatch.js';
+import { resolveDispatchTarget } from '../dispatch.js';
 import { createDispatchRunReporter } from '../dispatchRunReporter.js';
 import { CliError } from '../errors.js';
 import { execCommand, type CommandRunner } from '../git.js';
@@ -42,9 +42,17 @@ import { runIdFromDate } from '../git.js';
 // worktree is reused AS FOUND, dirty or clean — the claim proved its run dead, so
 // nobody else is in it — and one on another branch is a refusal naming it.
 
-/** `motir run`'s options: a card continue uses its delivery flags, a parent
- *  continue its scope flags (`--max`, `--keep-going`). */
-export type ContinueOptions = RunOptions;
+/** What `motir continue` reads — its own flags, registered in `program.ts`. */
+export interface ContinueOptions {
+  /** `--agent <cmd>` — the continuing agent (overrides MOTIR_AGENT). */
+  agent?: string;
+  /** `--report-log` — ALSO send the agent's output to Motir. Off by default. */
+  reportLog?: boolean;
+  /** `--max <n>` — a PARENT continue: stop after n cards. */
+  max?: string;
+  /** `--keep-going` — a PARENT continue: carry on past a failed agent. */
+  keepGoing?: boolean;
+}
 
 /** Injectable seams; never overridden in production. */
 export interface ContinueDeps extends DeliveryDeps {
@@ -215,7 +223,6 @@ export async function continueCommand(
     reporter.adopt(claim.runId as string);
 
     const dispatch = await client.dispatchPrompt(claim.key, {
-      findingsPolicy: findingsPolicyOf(opts),
       ...(claim.deadRun ? { continueFrom: claim.deadRun.id } : {}),
     });
 
@@ -291,7 +298,9 @@ async function continueParent(input: {
 
   const target = { kind: 'work_item' as const, key: claim.key };
   const ownerId = await resolveOwnerId(session.client);
-  const claimed = await claimScopeForRun(session, target, opts, ownerId);
+  // `continue` registers only its own flags; the scope helpers read the rest as unset.
+  const runOpts: RunOptions = { ...opts };
+  const claimed = await claimScopeForRun(session, target, runOpts, ownerId);
   if (!claimed) {
     // Nothing left to dispatch (or the scope claim refused and said why).
     await reporter.close('completed');
@@ -307,7 +316,7 @@ async function continueParent(input: {
     session,
     target,
     claimed,
-    opts,
+    opts: runOpts,
     deps,
     agent,
     runId,

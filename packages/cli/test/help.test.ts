@@ -137,6 +137,9 @@ describe('the curated overview', () => {
         fix [options] <key>       Hand a work item whose pull requests are failing, or
                                   whose merge could not land because of its code, to
                                   your agent, on their own branches.
+        continue [options] <key>  Carry on a work item whose last run died, on the
+                                  branch it left — from any machine, without starting
+                                  it over.
         auto [options]            Drain the ready set unattended: one item at a time
                                   onto a session branch.
         batch [options]           Implement a FROZEN snapshot of the ready set: one
@@ -240,6 +243,7 @@ describe('group membership', () => {
       'next',
       'run',
       'fix',
+      'continue',
       'auto',
       'batch',
       'plan',

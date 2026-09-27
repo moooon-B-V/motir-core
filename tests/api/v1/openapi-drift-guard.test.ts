@@ -611,6 +611,17 @@ describe('every operation’s REAL response validates against its declared schem
       { key: repairable },
     );
 
+    // ── The CONTINUE claim (MOTIR-6532) ─────────────────────────────────────
+    // On its OWN never-run item: refused `not_continuable` — a 200 in the SAME
+    // declared shape as a claim; the claimed arm is `claimWorkItemContinue.test.ts`'s.
+    const continuable = await createItem('An item with no dead run');
+    await drive(
+      'claimWorkItemContinue',
+      () => import('@/app/api/v1/work-items/[key]/continue/route'),
+      send(`/api/v1/work-items/${continuable}/continue`, 'POST'),
+      { key: continuable },
+    );
+
     // ── The SCOPE claim (MOTIR-3049) ────────────────────────────────────────
     // On its OWN container, for the same reason the keyed claim above takes its
     // own item: a scope claim moves EVERY member to `in_progress` and assigns
@@ -679,6 +690,14 @@ describe('every operation’s REAL response validates against its declared schem
       'getDispatchRunCloseOutPrompt',
       () => import('@/app/api/v1/dispatch-runs/[id]/close-out-prompt/route'),
       send(`/api/v1/dispatch-runs/${runId}/close-out-prompt`, 'GET'),
+      { id: runId },
+    );
+
+    // The HEARTBEAT (MOTIR-6528) — before the close, while the run is open: 204.
+    await drive(
+      'heartbeatDispatchRun',
+      () => import('@/app/api/v1/dispatch-runs/[id]/heartbeat/route'),
+      send(`/api/v1/dispatch-runs/${runId}/heartbeat`, 'POST'),
       { id: runId },
     );
 

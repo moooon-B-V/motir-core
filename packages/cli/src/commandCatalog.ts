@@ -589,6 +589,11 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
         flags: '--agent <cmd>',
         description: 'Run THIS agent command on the continue (overrides MOTIR_AGENT).',
       },
+      { flags: '--max <n>', description: 'A parent: stop after dispatching n more work items.' },
+      {
+        flags: '--keep-going',
+        description: 'A parent: continue past a failed agent instead of halting.',
+      },
       {
         flags: '--report-log',
         description:
