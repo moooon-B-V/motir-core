@@ -510,15 +510,20 @@ export const boardsService = {
       position: b.col.position.toString(),
       wipLimit: b.col.wipLimit,
       statusKeys: b.statusKeys,
-      cards: b.rows.map((r) =>
-        toBoardCardDto(r, {
+      cards: b.rows.map((r) => {
+        const card = toBoardCardDto(r, {
           ready: readyById.get(r.id) ?? true,
           pendingDecision: pendingById.get(r.id) ?? null,
           planHold: planHoldRead.byItemId.get(r.id) ?? null,
           swimlaneKey: swimlaneKeyByCard.get(r.id),
           statusCategory: categoryByStatusKey.get(r.status) ?? null,
-        }),
-      ),
+        });
+        // A Visitor's PRIVATE epic card wears "Not public" (MOTIR-6648;
+        // `epic-privacy.md` §4) — a member's card is unchanged.
+        return !member && r.kind === 'epic' && r.publicChildrenHidden
+          ? { ...card, childrenHidden: true as const }
+          : card;
+      }),
       totalCount: b.totalCount,
       // Retired in 3.8.2: the board loads the whole bounded set, never a paged
       // window, so there is no "next page". The field stays (always null) until

@@ -206,7 +206,12 @@ describe('the board', () => {
     expect(total).toBe(cards.length);
     expect(ids(cards)).toEqual([...t.visibleIds].sort());
 
+    // MOTIR-6648 — the private epic's card is marked for the Visitor, never for a member.
+    expect(cards.find((c) => c.id === t.privateEpic.id)?.childrenHidden).toBe(true);
     const memberBoard = await boardsService.getBoard(t.fx.projectId, t.fx.ctx);
+    expect(memberBoard.columns.flatMap((c) => c.cards).some((c) => 'childrenHidden' in c)).toBe(
+      false,
+    );
     expect(ids(memberBoard.columns.flatMap((c) => c.cards))).toEqual([...t.allIds].sort());
   });
 });

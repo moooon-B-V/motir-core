@@ -32,6 +32,9 @@ export interface IssueRowData {
   title: string;
   /** Drives the type-hued IssueTypeIcon. */
   kind: WorkItemKindDto;
+  /** A Visitor's PRIVATE epic (MOTIR-6170 · MOTIR-6648): its row carries the
+   *  "Not public" pill. Set only when the read marked it — a member never sees it. */
+  childrenHidden?: boolean;
   /** The leaf's work TYPE (Story 2.7) → the Type-column `WorkItemTypeChip`
    *  (Subtask 8.8.9); `null` on containers (epic/story) → a muted em-dash. */
   type: WorkItemTypeDto | null;
@@ -164,6 +167,7 @@ function shapeRowData(
     identifier: item.identifier,
     title: item.title,
     kind: item.kind,
+    ...(item.childrenHidden ? { childrenHidden: true } : {}),
     type: item.type,
     status: item.status,
     statusLabel: status?.label ?? item.status,
