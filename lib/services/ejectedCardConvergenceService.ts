@@ -235,12 +235,10 @@ export const ejectedCardConvergenceService = {
               'queue_failed',
               tx,
             );
+            // `settleUnlandedOutcome` raises nothing here: a standing CAN'T-LAND outcome asks
+            // no merge question whatever the latest gate is (`gateSet.ts`'s `cantLandHolds`,
+            // pinned by `tests/approvalGates/gateSet.test.ts`).
             const settled = await settleUnlandedOutcome(item, 'cant_land', ctx, tx);
-            if (settled.raised) {
-              // Rolls the withdrawal back with it: asking again over the refused commits
-              // is the state this population exists to end.
-              throw new Error('the hold raised an approve-to-merge gate');
-            }
             return {
               kind: 'converged',
               item,
