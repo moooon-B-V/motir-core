@@ -160,8 +160,15 @@ export const dispatchRunEventRepository = {
       take: 20,
     });
     for (const row of rows) {
-      const branch = (row.data as { branch?: unknown } | null)?.branch;
-      if (typeof branch === 'string' && branch.length > 0) return branch;
+      const data = row.data as { branch?: unknown; branches?: unknown } | null;
+      if (typeof data?.branch === 'string' && data.branch.length > 0) return data.branch;
+      // The per-repository shape MOTIR-6539 writes (`branches: [{ repository,
+      // branch, workBranch }]`, primary first) — read too, so the two writers of
+      // this event agree on where a leg's work is, whichever of them shipped it.
+      if (Array.isArray(data?.branches)) {
+        const first = data.branches[0] as { branch?: unknown } | undefined;
+        if (typeof first?.branch === 'string' && first.branch.length > 0) return first.branch;
+      }
     }
     return null;
   },

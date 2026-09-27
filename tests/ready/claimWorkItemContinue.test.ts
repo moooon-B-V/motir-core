@@ -338,3 +338,30 @@ describe('getContinueView — the four states the marker renders', () => {
     });
   });
 });
+
+describe('the branch is read from EITHER checkout_ready shape', () => {
+  it('reads `data.branches[0].branch` (the per-repository shape) as well as `data.branch`', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, runId } = await deadCard(fx, { branch: null });
+    const leg = await adminDb.dispatchRunCard.findFirstOrThrow({ where: { dispatchRunId: runId } });
+    await adminDb.dispatchRunEvent.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        dispatchRunId: runId,
+        dispatchRunCardId: leg.id,
+        seq: 99,
+        kind: 'checkout_ready',
+        data: {
+          branches: [
+            {
+              repository: 'motir-core',
+              branch: 'subtask/per-repo',
+              workBranch: 'subtask/per-repo',
+            },
+          ],
+        },
+      },
+    });
+    expect((await claim(fx, card.identifier)).branch).toBe('subtask/per-repo');
+  });
+});
