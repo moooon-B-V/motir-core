@@ -563,6 +563,10 @@
       "medium": "Medium",
       "high": "High"
     },
+    "obsolescence": {
+      "outdated": "Outdated",
+      "deprecated": "Deprecated"
+    },
     "priority": {
       "highest": "Highest",
       "high": "High",
@@ -1622,6 +1626,8 @@
       "type": "Work type",
       "executor": "Executor",
       "difficulty": "Difficulty",
+      "obsolescence": "Obsolescence",
+      "obsolescenceNoteMd": "Obsolescence note",
       "targetRepo": "Target repo",
       "targetRepos": "Repositories",
       "folderId": "Folder",

@@ -75,6 +75,8 @@ const FIELD_NAME_KEYS: Record<string, string> = {
   estimateMinutes: 'estimateMinutes',
   storyPoints: 'storyPoints',
   difficulty: 'difficulty',
+  obsolescence: 'obsolescence',
+  obsolescenceNoteMd: 'obsolescenceNoteMd',
   type: 'type',
   executor: 'executor',
   targetRepo: 'targetRepo',

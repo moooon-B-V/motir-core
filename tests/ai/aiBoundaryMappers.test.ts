@@ -25,6 +25,8 @@ function summary(over: Partial<WorkItemSummaryDto>): WorkItemSummaryDto {
     estimateMinutes: null,
     storyPoints: null,
     archivedAt: null,
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     ...over,
   };
 }
@@ -196,6 +198,8 @@ function listItem(over: Partial<WorkItemListItemDto>): WorkItemListItemDto {
     storyPoints: null,
     updatedAt: '2026-07-01T00:00:00.000Z',
     hasDescription: false,
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     ...over,
   };
 }

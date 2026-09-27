@@ -90,8 +90,19 @@ describe('the two key sets', () => {
     'dueDate', 'estimateMinutes', 'storyPoints', 'type', 'executor', 'difficulty',
     'targetRepo', 'targetRepos', 'sprintId', 'folderId', 'position', 'backlogRank',
     'archivedAt', 'links', 'attachments', 'labels', 'components', 'todos', 'comment',
-    'deleted', 'reason', 'customFields.anything',
+    'deleted', 'reason', 'obsolescence', 'obsolescenceNoteMd', 'customFields.anything',
   ]; // prettier-ignore
+
+  // MOTIR-6579 — marking a card outdated/deprecated is a fact about its STANDING,
+  // written on done and archived cards by design; it never re-opens an approval.
+  it('an obsolescence mark and its note are NOT a change to the approved shape', () => {
+    expect(
+      classifyRevision({
+        obsolescence: { from: null, to: 'deprecated' },
+        obsolescenceNoteMd: { from: null, to: 'Superseded.' },
+      }),
+    ).toBe('ignored');
+  });
 
   it.each(WRITTEN_KEYS)('%s is classified in exactly one set', (key) => {
     const inShape = APPROVED_SHAPE_KEYS.has(key);

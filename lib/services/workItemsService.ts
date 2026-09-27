@@ -26,6 +26,7 @@ import {
   type IssueType,
 } from '@/lib/issues/parentRules';
 import { isTypeableKind, resolveExecutor } from '@/lib/issues/executorDefaults';
+import { isWorkItemObsolescence } from '@/lib/issues/obsolescence';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { promoteIfCiAlreadyGreen } from './ciPromotion';
 import {
@@ -129,6 +130,7 @@ import {
   StaleWorkItemError,
   TypeNotAllowedOnKindError,
   DifficultyNotAllowedOnKindError,
+  InvalidObsolescenceError,
   UnknownStatusError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
@@ -226,6 +228,7 @@ import type {
   WorkItemLineageDto,
   WorkItemTypeDto,
   WorkItemDifficultyDto,
+  WorkItemObsolescenceDto,
   PagedIssueListDto,
   WorkItemKeysetItemDto,
   PagedArchivedWorkItemsDto,
@@ -539,6 +542,21 @@ function assertDifficultyKindConsistent(
   }
 }
 
+/**
+ * Validate an OBSOLESCENCE value reaching the service (Story MOTIR-6574 ·
+ * MOTIR-6579) — the enum-membership check, and NOTHING ELSE. Deliberately no
+ * kind predicate (the one difference from {@link assertDifficultyKindConsistent})
+ * and no status / archived check: the mark is kind- and status-agnostic, and
+ * marking FINISHED work is its purpose. `null` (clear) is always legal. A value
+ * outside the closed enum throws {@link InvalidObsolescenceError} before any
+ * write, so nothing is persisted.
+ */
+function assertObsolescence(value: unknown): WorkItemObsolescenceDto | null {
+  if (value === null) return null;
+  if (!isWorkItemObsolescence(value)) throw new InvalidObsolescenceError(value);
+  return value;
+}
+
 /** Stable, deterministic ordering for summary lists resolved via findByIds. */
 function byKeyAsc(a: WorkItem, b: WorkItem): number {
   return a.key - b.key;
@@ -739,6 +757,10 @@ function buildCreatedDiff(row: WorkItem): Record<string, DiffCell> {
   // Difficulty (Story MOTIR-6016): skipped when unset, so a create without one
   // leaves the diff exactly as it was.
   set('difficulty', row.difficulty);
+  // The OBSOLESCENCE mark + note (Story MOTIR-6574): skipped when unset, so a
+  // create without them leaves the diff exactly as it was.
+  set('obsolescence', row.obsolescence);
+  set('obsolescenceNoteMd', row.obsolescenceNoteMd);
   // The repo pin (Story 7.9 · MOTIR-1804): the `set` helper skips null, so an
   // unpinned create's diff is unchanged; a pinned create records the repo the
   // planner chose, which is exactly the "one subtask = one repo" decision a
@@ -1625,6 +1647,11 @@ export const workItemsService = {
     // before the key-allocation transaction for the same reason.
     const itemDifficulty = input.difficulty ?? null;
     assertDifficultyKindConsistent(input.kind, itemDifficulty);
+    // Obsolescence (Story MOTIR-6574 · MOTIR-6579): enum membership ONLY — any
+    // kind may carry it, so no kind predicate. Checked before the key-allocation
+    // transaction so a refused value never burns a work-item key.
+    const itemObsolescence = assertObsolescence(input.obsolescence ?? null);
+    const itemObsolescenceNoteMd = input.obsolescenceNoteMd ?? null;
 
     // Story points (Story 4.3 · exposed on create in 7.8.21): validated with the
     // SAME shared rule the UI estimation path uses (finite, non-negative,
@@ -1878,6 +1905,10 @@ export const workItemsService = {
         type: itemType,
         executor: itemExecutor,
         difficulty: itemDifficulty,
+        // The OBSOLESCENCE mark + note (MOTIR-6579) — validated above; null when
+        // omitted (an unmarked card).
+        obsolescence: itemObsolescence,
+        obsolescenceNoteMd: itemObsolescenceNoteMd,
         // The repo pin (Story 7.9 · MOTIR-1804) — validated above; null when the
         // caller didn't pin one (the dispatch payload resolves the default).
         targetRepo,
@@ -2142,6 +2173,8 @@ export const workItemsService = {
       'type',
       'executor',
       'difficulty',
+      'obsolescence',
+      'obsolescenceNoteMd',
       'targetRepo',
       'targetRepos',
       'targetRepositories',
@@ -2169,6 +2202,12 @@ export const workItemsService = {
     // Throws `InvalidEstimateError` (422).
     const nextStoryPoints =
       patch.storyPoints !== undefined ? validateStoryPoints(patch.storyPoints) : undefined;
+
+    // Obsolescence (Story MOTIR-6574 · MOTIR-6579): enum membership validated
+    // BEFORE the transaction, so an unknown value fails fast and writes nothing.
+    // `undefined` → leave untouched; `null` clears.
+    const nextObsolescence =
+      patch.obsolescence !== undefined ? assertObsolescence(patch.obsolescence) : undefined;
 
     // Target repo (Story 7.9 · MOTIR-1804; project-scoped in MOTIR-1783):
     // normalize + validate the pin against THIS ITEM's project repo set BEFORE
@@ -2510,6 +2549,27 @@ export const workItemsService = {
       if (nextDifficulty !== current.difficulty) {
         update.difficulty = nextDifficulty;
         diff.difficulty = { from: current.difficulty, to: nextDifficulty };
+      }
+
+      // ── Obsolescence (Story MOTIR-6574 · MOTIR-6579) ──────────────────
+      // NO kind predicate and NO done/archived refusal, deliberately: marking a
+      // `done` epic, a `cancelled` decision or an archived card is exactly what
+      // the field is for, so it is written on any kind in any status. It touches
+      // nothing else — not status, readiness, rollups, archive or the ready set.
+      // Re-sending the current value is a no-op and records nothing.
+      if (nextObsolescence !== undefined && nextObsolescence !== current.obsolescence) {
+        update.obsolescence = nextObsolescence;
+        diff.obsolescence = { from: current.obsolescence, to: nextObsolescence };
+      }
+      if (
+        patch.obsolescenceNoteMd !== undefined &&
+        patch.obsolescenceNoteMd !== current.obsolescenceNoteMd
+      ) {
+        update.obsolescenceNoteMd = patch.obsolescenceNoteMd;
+        diff.obsolescenceNoteMd = {
+          from: current.obsolescenceNoteMd,
+          to: patch.obsolescenceNoteMd,
+        };
       }
 
       // The repository REFERENCES (MOTIR-3039), written BEFORE the empty-diff

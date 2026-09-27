@@ -39,6 +39,8 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     sprintId: null,
     backlogRank: null,
     archivedAt: null,
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     triagedAt: null,
     snoozedUntil: null,
     submittedByUserId: null,
