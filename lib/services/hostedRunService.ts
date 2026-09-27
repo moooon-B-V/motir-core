@@ -485,6 +485,7 @@ export const hostedRunService = {
       const booted = await hostedAgentContainerService.boot(request, options.supervision);
       if (booted.phase === 'terminal') {
         const detail =
+          /* v8 ignore next -- boot() ends admission, pull and provision failures only; a SETTLED container is poll()'s, never boot()'s */
           booted.outcome.outcome === 'settled'
             ? `the container ended at boot (${booted.outcome.reason})`
             : `${booted.outcome.outcome}: ${booted.outcome.detail}`;
