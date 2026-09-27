@@ -2512,6 +2512,18 @@
         "title": "Discard unsaved changes?",
         "keep": "Keep editing",
         "discard": "Discard"
+      },
+      "visitorLink": {
+        "title": "Visitor link",
+        "subtitle": "People who open this link can read <strong>{projectName}</strong> in the app — its work items, board, roadmap, plans, approvals and runs — after they sign in and agree to share their name and email with this project’s Managers. They can’t change anything, and they see your team by name only.",
+        "copy": "Copy visitor link",
+        "open": "Open as a visitor",
+        "copied": "Visitor link copied",
+        "hint": "Opens on the board. You’ll see who visited under Members & access. Members who follow it land in their own view instead.",
+        "notPublic": {
+          "lead": "No visitor link while this project isn’t public.",
+          "body": "Visitors can read a project only when its access is <strong>Public</strong>, set in <link>Members & access</link>."
+        }
       }
     },
     "publicAddress": {
