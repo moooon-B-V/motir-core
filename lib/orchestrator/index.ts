@@ -194,8 +194,10 @@ export function hostedAgentFleetConfig(): IndexFleetConfig {
   try {
     region = flyFleetConfig().region;
   } catch (err) {
-    const detail = err instanceof Error ? err.message.replace(/^set /, '') : '';
-    missing.push(detail || 'the fleet configuration');
+    // Merge the fleet's own list of missing variables with this one's, and say
+    // `set …` once: read the refusal's `detail`, never its rendered message.
+    // `flyFleetConfig` throws nothing but this refusal.
+    missing.push((err as OrchestratorNotConfiguredError).detail.replace(/^set /, ''));
   }
   const image = process.env[HOSTED_AGENT_IMAGE_ENV_VAR]?.trim() ?? '';
   if (!image) missing.push(HOSTED_AGENT_IMAGE_ENV_VAR);

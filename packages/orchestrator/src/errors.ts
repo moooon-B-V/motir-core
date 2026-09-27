@@ -110,8 +110,12 @@ export class OrchestratorTimeoutError extends Error {
  *  flow rather than crashing on boot — `appAuth.ts`'s contract. */
 export class OrchestratorNotConfiguredError extends Error {
   readonly code = 'ORCHESTRATOR_NOT_CONFIGURED' as const;
+  /** What is missing, as passed in (`set A, B`) — for a caller that merges several
+   *  accessors' refusals into one, so it never re-reads the rendered message. */
+  readonly detail: string;
   constructor(detail: string) {
     super(`The container orchestrator is not configured: ${detail}.`);
     this.name = 'OrchestratorNotConfiguredError';
+    this.detail = detail;
   }
 }

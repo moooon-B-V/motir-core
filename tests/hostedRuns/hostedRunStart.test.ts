@@ -123,7 +123,7 @@ function stub(s: Stub = {}): void {
 const mintCalls = () =>
   calls.filter((c) => c.url === `${GATEWAY}/api/motir/run-keys` && c.method === 'POST');
 const creditCalls = () => calls.filter((c) => c.url === `${AI}/v1/credits/agent-run-check`);
-const aiCalls = () => calls.filter((c) => c.url.startsWith(AI));
+const aiCalls = () => calls.filter((c) => new URL(c.url).origin === new URL(AI).origin);
 
 let fx: WorkItemFixture;
 
