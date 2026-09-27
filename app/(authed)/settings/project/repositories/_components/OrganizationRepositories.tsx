@@ -13,6 +13,7 @@ import type {
   HostedRunRepoAccessMapDto,
   ProjectRepoDto,
 } from '@/lib/dto/projectRepos';
+import { repositoryRowAnchorId } from '@/lib/projectRepos/repositoryAnchor';
 
 // FROM YOUR ORGANISATION — the project's organisation repositories (Story
 // MOTIR-4669 · MOTIR-4681), `design/repository-set/design-notes.md` §17.2 / §17.6.
@@ -178,6 +179,17 @@ export function OrganizationRepositories({
                 id={`repo-${entry.id}`}
                 className="flex flex-col gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y)"
               >
+                {/* The row's `owner/name` anchor — where a refused Run hosted's
+                    "Open in Repositories" lands (MOTIR-691, §18.3). The li keeps
+                    its own id; an element has one. */}
+                {entry.row.realizedRepo ? (
+                  <span
+                    id={repositoryRowAnchorId(
+                      `${entry.row.realizedRepo.owner}/${entry.row.realizedRepo.name}`,
+                    )}
+                    aria-hidden
+                  />
+                ) : null}
                 <div className="flex items-center gap-3">
                   <FolderGit2
                     className="h-[18px] w-[18px] shrink-0 text-(--el-icon-muted)"

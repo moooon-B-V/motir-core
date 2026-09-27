@@ -93,7 +93,12 @@ export interface RunGitWriteRefusal {
  */
 export class HostedRunRepositoryNotWritableError extends Error {
   readonly code = 'hosted_repository_not_writable' as const;
-  constructor(readonly refusals: readonly RunGitWriteRefusal[]) {
+  constructor(
+    readonly refusals: readonly RunGitWriteRefusal[],
+    /** How many repositories the run covers in all, when the caller knows —
+     *  the refusal reads "n of this run's total" (MOTIR-6518 §18.3). */
+    readonly totalRepositories: number | null = null,
+  ) {
     super(refusals.map((r) => r.reason).join('; '));
     this.name = 'HostedRunRepositoryNotWritableError';
   }

@@ -9,10 +9,13 @@ import { RunTonePill } from '@/components/runs/RunTonePill';
 import { RunCanvasPane } from '@/app/(authed)/runs/_components/RunCanvasPane';
 import { RunFindings } from '@/app/(authed)/runs/_components/RunFindings';
 import { RunLogPane } from '@/app/(authed)/runs/_components/RunLogPane';
+import { HostedRunCancel } from '@/app/(authed)/runs/_components/HostedRunCancel';
+import { HostedRunCost } from '@/app/(authed)/runs/_components/HostedRunCost';
+import { hostedPhaseRead, hostedReasonLine } from '@/app/(authed)/runs/_components/HostedRunParts';
 import { useRunEvents } from '@/app/(authed)/runs/_components/useRunEvents';
-import type { DispatchRunDto } from '@/lib/dto/dispatchRuns';
+import type { DispatchRunDetailDto, DispatchRunEventDto } from '@/lib/dto/dispatchRuns';
 import { formatRunDuration, formatRunInstant } from '@/lib/runs/runClock';
-import { RUN_STATUS_TONE } from '@/lib/runs/timeline';
+import { RUN_STATUS_TONE, isLiveRun } from '@/lib/runs/timeline';
 
 // THE RUN MODAL (MOTIR-3895 · `design/runs/design-notes.md` § The run MODAL) —
 // full screen OVER `/runs`, never a route.
@@ -41,7 +44,7 @@ export interface RunModalProps {
 
 type Load =
   | { state: 'loading' }
-  | { state: 'ready'; run: DispatchRunDto }
+  | { state: 'ready'; run: DispatchRunDetailDto }
   | { state: 'missing' }
   | { state: 'failed' };
 
@@ -74,7 +77,7 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
         setLoad({ state: 'failed' });
         return;
       }
-      const dto = (await res.json()) as DispatchRunDto;
+      const dto = (await res.json()) as DispatchRunDetailDto;
       setLoad({ state: 'ready', run: dto });
       setReloadKey((k) => k + 1);
     } catch {
@@ -122,6 +125,19 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
     })();
   }, [finished, fetchRun]);
 
+  // A LIVE HOSTED run's cost follows it (MOTIR-691): one re-read of the run every
+  // 20 events on the one stream — no second connection, no timer.
+  const hostedLive = run?.origin === 'hosted' && isLiveRun(run.status);
+  const costBucket = hostedLive ? Math.floor(events.length / 20) : -1;
+  const costBucketRef = useRef(costBucket);
+  useEffect(() => {
+    if (costBucket <= costBucketRef.current) return;
+    costBucketRef.current = costBucket;
+    void (async () => {
+      await fetchRun();
+    })();
+  }, [costBucket, fetchRun]);
+
   // A run that is not there is not a state to sit in: close, and let the list say so.
   useEffect(() => {
     if (load.state === 'missing') onClose();
@@ -163,13 +179,22 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
         </div>
       ) : run ? (
         <>
-          <RunHeader run={run} />
+          <RunHeader run={run} onCancelled={() => void fetchRun()} />
+          {run.origin === 'hosted' ? (
+            <HostedRunCost
+              runId={run.id}
+              live={isLiveRun(run.status)}
+              cost={run.cost ?? null}
+              variant="strip"
+              refreshKey={Math.floor(events.length / 20) + (isLiveRun(run.status) ? 0 : 1000)}
+            />
+          ) : null}
           {reconnecting ? (
             <p className="border-b border-(--el-border-soft) bg-(--el-tint-peach) px-(--spacing-card-padding) py-1.5 text-xs text-(--el-text-strong)">
               {t('reconnecting')}
             </p>
           ) : null}
-          {run.stopReason === 'abandoned' ? (
+          {run.stopReason === 'abandoned' && run.origin !== 'hosted' ? (
             <p
               className="flex items-center gap-2 border-b border-(--el-border-soft) bg-(--el-tint-peach) px-(--spacing-card-padding) py-1.5 text-xs text-(--el-text-strong)"
               data-testid="run-modal-offline"
@@ -218,8 +243,9 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
               data-testid="run-modal-log-region"
               data-selected-work-item={selectedWorkItemId ?? ''}
             >
-              <h2 className="border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2 text-xs font-semibold text-(--el-text-secondary)">
+              <h2 className="flex items-center gap-2 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-2 text-xs font-semibold text-(--el-text-secondary)">
                 {t('paneLog')}
+                {run.origin === 'hosted' ? <HostedPhaseChip run={run} events={events} /> : null}
               </h2>
               {/* PINNED ABOVE THE LOG, and absent entirely when the run
                   produced nothing — which is most runs. See `RunFindings`. */}
@@ -233,15 +259,50 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
   );
 }
 
-function RunHeader({ run }: { run: DispatchRunDto }) {
+/**
+ * The log pane head's PHASE CHIP for a hosted run — where it is of the decision's
+ * six (`Running · 3 of 6`). The pane is a 26rem column; the full list is the Run
+ * section's timeline.
+ */
+function HostedPhaseChip({
+  run,
+  events,
+}: {
+  run: DispatchRunDetailDto;
+  events: DispatchRunEventDto[];
+}) {
+  const t = useTranslations('runs.hosted');
+  const read = hostedPhaseRead(events, run.status, run);
+  const phase = read.current ?? 'done';
+  return (
+    <span
+      className="rounded-(--radius-badge) bg-(--el-chip-bg) px-(--spacing-chip-x) py-(--spacing-chip-y) font-normal text-(--el-text-strong)"
+      data-testid="hosted-phase-chip"
+    >
+      {t('phaseChip', { phase: t(`phase.${phase}`), position: read.position })}
+    </span>
+  );
+}
+
+function RunHeader({ run, onCancelled }: { run: DispatchRunDetailDto; onCancelled: () => void }) {
   const t = useTranslations('runs');
+  const tHosted = useTranslations('runs.hosted');
   const commandKey =
     run.command === 'run' && run.scopeWorkItemId !== null ? 'run_scope' : run.command;
+  const hosted = run.origin === 'hosted';
+  // A hosted run's stop line is the REASON its end recorded, quoted — not the
+  // stop-reason enum, whose `abandoned` would say reporting went offline.
+  const reason = hosted ? hostedReasonLine(run, tHosted) : null;
   return (
     <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-(--el-border-soft) px-(--spacing-card-padding) py-3">
       <h1 className="font-mono text-sm font-semibold text-(--el-text)">
-        {t(`command.${commandKey}`)}
+        {hosted ? tHosted('modalTitle') : t(`command.${commandKey}`)}
       </h1>
+      {hosted ? (
+        <span className="rounded-(--radius-badge) bg-(--el-chip-bg) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs text-(--el-text-strong)">
+          {tHosted('meta.hosted')}
+        </span>
+      ) : null}
       {run.scopeWorkItemId !== null && run.scopeLabel !== null ? (
         <Link
           href={`/items/${encodeURIComponent(run.scopeLabel)}`}
@@ -268,7 +329,19 @@ function RunHeader({ run }: { run: DispatchRunDto }) {
       </span>
       <span className="ml-auto flex items-center gap-2">
         <RunTonePill tone={RUN_STATUS_TONE[run.status]}>{t(`runStatus.${run.status}`)}</RunTonePill>
-        {run.stopReason !== null ? (
+        {hosted && isLiveRun(run.status) ? (
+          <HostedRunCancel runId={run.id} onCancelled={onCancelled} />
+        ) : null}
+        {hosted ? (
+          reason ? (
+            <span
+              className="font-mono text-xs text-(--el-text-secondary)"
+              data-testid="hosted-stop-line"
+            >
+              {reason}
+            </span>
+          ) : null
+        ) : run.stopReason !== null ? (
           <span className="text-xs text-(--el-text-secondary)">
             {t(`stopReason.${run.stopReason}`)}
           </span>

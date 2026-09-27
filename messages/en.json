@@ -8579,7 +8579,124 @@
     "indexEmptyMineBody": "When you dispatch work with motir next, motir run or motir batch, your runs appear here — the one happening now, and every one before it.",
     "indexEmptyBodyRead": "When work in this project is dispatched with motir next, motir run or motir batch, every run appears here — the one happening now, and every one before it.",
     "noneRunningMine": "Nothing you started is running.",
-    "nonePastMine": "No run you started has finished yet."
+    "nonePastMine": "No run you started has finished yet.",
+    "hosted": {
+      "door": {
+        "run": "Run hosted",
+        "runAgain": "Run hosted again",
+        "starting": "Starting…"
+      },
+      "picker": {
+        "label": "Model",
+        "default": "Default",
+        "defaultSecondary": "Default · {provider}",
+        "footer": "The models that can run a hosted work item. The run is billed to your organization in credits.",
+        "loadingTrigger": "Loading models…",
+        "loadingBody": "Loading the models that can run hosted…",
+        "unavailableTrigger": "Models unavailable",
+        "unavailableBody": "Couldn’t load the models that can run hosted, so Run hosted is off for now.",
+        "retry": "Try again",
+        "emptyTrigger": "No model available",
+        "emptyBody": "No model can run a hosted work item right now, so Run hosted is off. Local runs are unaffected."
+      },
+      "notReady": "Run hosted is available once this work item is ready — it has {count, plural, one {# open blocker} other {# open blockers}}.",
+      "refused": {
+        "notReady": {
+          "title": "Not started — this work item isn’t ready to run.",
+          "body": "Nothing was booted and nothing was charged."
+        },
+        "outOfCredits": {
+          "title": "Not started — your organization is out of credits.",
+          "body": "Nothing was booted and nothing was charged. Run hosted works again once the organization has credits."
+        },
+        "modelNotOffered": {
+          "title": "{model} is no longer offered for hosted runs.",
+          "body": "Nothing was started. The list has been refreshed — choose a model and run again."
+        },
+        "notWritable": {
+          "lead": "Not started — Motir’s app can’t write to {count} of this run’s {total} repositories.",
+          "leadNoTotal": "Not started — Motir’s app can’t write to {count, plural, one {# of this run’s repositories} other {# of this run’s repositories}}.",
+          "detail": "Nothing was booted and nothing was charged. Each repository below says what fixes it; an owner of the GitHub account may have to do it.",
+          "open": "Open in Repositories"
+        },
+        "unavailable": {
+          "title": "Not started — hosted runs aren’t available right now.",
+          "body": "Nothing was booted and nothing was charged. Try again shortly."
+        },
+        "bootFailed": {
+          "title": "The hosted run couldn’t start its machine.",
+          "body": "It was opened and ended as failed, and nothing is left running."
+        },
+        "failed": {
+          "title": "Not started — Motir couldn’t start the run.",
+          "body": "Nothing was booted. Try again shortly."
+        }
+      },
+      "phase": {
+        "starting": "Starting",
+        "cloned": "Cloned",
+        "running": "Running",
+        "finished": "Agent finished",
+        "pullRequest": "Pull request open",
+        "done": "Done"
+      },
+      "phaseChip": "{phase} · {position} of 6",
+      "phaseDetail": {
+        "running": "opencode · {model}",
+        "exit": "exit {code}"
+      },
+      "meta": {
+        "lane": "Lane",
+        "hosted": "Hosted",
+        "agent": "Agent",
+        "model": "Model",
+        "elapsed": "Elapsed",
+        "took": "Took"
+      },
+      "modalTitle": "Hosted run",
+      "logFooter": "A hosted run always reports its output. · Deleted after 30 days.",
+      "prHeadline": "Pull request opened —",
+      "end": {
+        "succeeded": "The run delivered its work.",
+        "failed": "The agent exited without a pull request.",
+        "crashed": "The run’s machine stopped before the run closed.",
+        "cancelled": "The run was cancelled.",
+        "stalled": "The agent stopped producing output.",
+        "timedOut": "The run reached its time limit.",
+        "lostSupervision": "Motir lost track of the run’s machine.",
+        "stays": "This work item stays where it was — work the agent pushed is on the run’s branch."
+      },
+      "exitReason": "agent exited with code {code}",
+      "cancel": {
+        "button": "Cancel run",
+        "title": "Cancel this run?",
+        "body": "The agent stops, its machine is torn down and its key is revoked. Work it already pushed stays on the run’s branch, and this work item stays where it is.",
+        "keep": "Keep running",
+        "confirm": "Cancel run",
+        "failed": "Couldn’t cancel the run. Try again."
+      },
+      "cost": {
+        "head": "Cost",
+        "liveHint": "So far — updating while the run is live",
+        "stripLive": "Cost so far",
+        "stripUpdating": "updating",
+        "tokens": "Tokens",
+        "tokensValue": "{input, number} in · {output, number} out",
+        "cache": "Cache: {read, number} read · {write, number} write",
+        "credits": "Credits",
+        "creditsValue": "{count, plural, one {# credit} other {# credits}}",
+        "split": "{model, number} model calls · {machine, number} machine time",
+        "splitPending": "{model, number} model calls · machine time is charged when the run ends",
+        "machine": "Machine time",
+        "machineCharged": "Charged in credits",
+        "unavailable": "Motir couldn’t read this run’s cost right now.",
+        "unit": {
+          "h": "{n} h",
+          "min": "{n} min",
+          "s": "{n} s"
+        }
+      }
+    }
   },
   "repositoryPicker": {
     "add": "Add repository",

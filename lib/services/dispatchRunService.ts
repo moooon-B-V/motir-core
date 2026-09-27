@@ -29,6 +29,8 @@ import type {
   DispatchRunCloseOutPromptDto,
   DispatchRunCostDto,
   DispatchRunDetailDto,
+  DispatchRunHostedEndDto,
+  DispatchRunMachineTimeDto,
   DispatchRunDto,
   DispatchRunEventDto,
   DispatchRunOpenedDto,
@@ -52,6 +54,7 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { holdsRecordView, projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
+import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PermissionKey } from '@/lib/permissions/catalog';
@@ -300,6 +303,34 @@ async function readHostedRunCost(runId: string): Promise<DispatchRunCostDto | nu
   } catch {
     return null;
   }
+}
+
+/** The end path's closing-line prefix: `[motir] hosted run ended (<label>): `. */
+const HOSTED_END_PREFIX = /^\[motir\] hosted run ended \([^)]*\): /;
+
+/**
+ * How a HOSTED run ended (MOTIR-691): the end path's closing `log` line
+ * (`hostedRunService.endHostedRun`, `data.end`) and its legs' agent exit codes.
+ * Read, never stored. A leg's exit code is on the leg itself — the ingest writes
+ * an `agent_exited` event's code onto its `dispatch_run_card`, not into the
+ * event's data.
+ */
+async function readHostedEnd(
+  runId: string,
+  legExitCodes: readonly (number | null)[],
+  tx: Prisma.TransactionClient,
+): Promise<DispatchRunHostedEndDto> {
+  const line = await dispatchRunEventRepository.findHostedEndLine(runId, tx);
+  const endData = line?.data as { end?: unknown } | null | undefined;
+  const detail = line?.body ? line.body.replace(HOSTED_END_PREFIX, '').trim() : '';
+  // The failing leg's code when one failed; otherwise any recorded code.
+  const codes = legExitCodes.filter((c): c is number => c !== null);
+  const exitCode = codes.find((c) => c !== 0) ?? codes[0] ?? null;
+  return {
+    outcome: typeof endData?.end === 'string' ? endData.end : null,
+    detail: detail === '' ? null : detail,
+    exitCode,
+  };
 }
 
 /**
@@ -918,8 +949,19 @@ export const dispatchRunService = {
         }
 
         const base = toDispatchRunDto(run, seq);
+        // A HOSTED run's reason line (MOTIR-691) — read in the same transaction,
+        // off the two events that carry it. A local run has neither to read.
+        const hostedEnd =
+          base.origin === 'hosted'
+            ? await readHostedEnd(
+                runId,
+                base.cards.map((c) => c.exitCode),
+                tx,
+              )
+            : undefined;
         return {
           ...base,
+          ...(hostedEnd ? { hostedEnd } : {}),
           cards: base.cards.map((card) => ({
             ...card,
             // A leg whose card was deleted has no deliveries to join and never
@@ -934,6 +976,25 @@ export const dispatchRunService = {
     // binding open (MOTIR-689). A local run makes no call and carries no key.
     if (detail.origin !== 'hosted') return detail;
     return { ...detail, cost: await readHostedRunCost(detail.id) };
+  },
+
+  /**
+   * A run's MACHINE TIME (MOTIR-691), for the hosted cost block: billable seconds
+   * and whether every container row has settled. Gated exactly as the run is — a
+   * run the reader may not see is not found — then read from the fleet meter by
+   * the run's id (MOTIR-6448). A LOCAL run meters nothing and answers zero.
+   *
+   * ⚠️ NEVER THE METER'S COST FIGURE — that is Motir's own fleet cost, not a
+   * price; what the run was charged is the credits on its cost.
+   */
+  async getMachineTime(runId: string, ctx: ServiceContext): Promise<DispatchRunMachineTimeDto> {
+    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+      const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
+      if (!run) throw new DispatchRunNotFoundError(runId);
+      await assertMayReadRun(run, ctx, tx);
+    });
+    const time = await ciFleetCostMeterService.getMachineTimeForDispatchRun(runId);
+    return { billableSeconds: time.billableSeconds, settled: time.settled };
   },
 
   /**

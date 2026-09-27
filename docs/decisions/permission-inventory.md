@@ -810,32 +810,33 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `report`
 
-| Operation                                                   | Verbs            | Gate today                                                                     | Permission            | Decision         | Why |
-| ----------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------ | --------------------- | ---------------- | --- |
-| `/api/dispatch-runs/[id]`                                   | GET              | `requireCompliantWorkspaceContext` + RLS (the run's own workspace)             | —                     | workspace-scoped | R58 |
-| `/api/dispatch-runs/[id]/stream`                            | GET              | `requireCompliantWorkspaceContext` + RLS, before the stream opens              | —                     | workspace-scoped | R58 |
-| `/api/dispatch-runs/[id]/cancel`                            | POST             | `hostedRunService.cancel` → the dispatcher, else `assertCanManage`             | `project:administer`  | new              | R77 |
-| `/api/hosted-runs/models`                                   | GET              | `requireCompliantWorkspaceContext` (a signed-in member of the workspace)       | —                     | workspace-scoped | R73 |
-| `/api/dashboards`                                           | GET/POST         | workspace only                                                                 | —                     | workspace-scoped | R34 |
-| `/api/dashboards/[dashboardId]`                             | DELETE/GET/PATCH | workspace only                                                                 | —                     | workspace-scoped | R34 |
-| `/api/dashboards/[dashboardId]/widgets`                     | POST             | workspace only                                                                 | —                     | workspace-scoped | R34 |
-| `/api/dashboards/[dashboardId]/widgets/[widgetId]`          | DELETE/PATCH     | workspace only                                                                 | —                     | workspace-scoped | R34 |
-| `/api/dashboards/[dashboardId]/widgets/[widgetId]/move`     | POST             | workspace only                                                                 | —                     | workspace-scoped | R34 |
-| `/api/projects/[key]/roadmap`                               | GET              | `workItemsService.getProjectRoadmap` → `assertPermission`                      | `report:view`         | existing         | R19 |
-| `/api/projects/[key]/saved-filters`                         | GET/POST         | `savedFiltersService.{list,create}` → `assertPermission`                       | `saved_filter:manage` | existing         | R16 |
-| `/api/projects/[key]/saved-filters/[filterId]`              | DELETE/GET/PATCH | `savedFiltersService.{update,delete,changeOwner}` → `assertPermission`         | `saved_filter:manage` | existing         | R16 |
-| `/api/projects/[key]/saved-filters/[filterId]/dependents`   | GET              | `savedFiltersService.getDependents` → `getSavedFilterCapabilities`             | `project:browse`      | existing         | R16 |
-| `/api/projects/[key]/saved-filters/[filterId]/star`         | DELETE/PUT       | `savedFiltersService.{star,unstar}` → `assertPermission`                       | `saved_filter:manage` | existing         | R16 |
-| `/api/projects/[key]/saved-filters/[filterId]/subscription` | DELETE/GET/PUT   | `savedFilterSubscriptionsService.{subscribe,unsubscribe}` → `assertPermission` | `saved_filter:manage` | existing         | R16 |
-| `/api/projects/[key]/dispatch-runs`                         | GET              | `dispatchRunService.listRunsForProject` → `assertCanBrowse`                    | `project:browse`      | existing         | R58 |
-| `/api/projects/[key]/dispatch-runs/active`                  | GET              | `dispatchRunService` → `assertCanBrowse`                                       | `project:browse`      | existing         | R58 |
-| `/api/projects/[key]/velocity`                              | GET              | `reportsService.getVelocity` → `assertPermission`                              | `report:view`         | existing         | R19 |
-| `/api/reports/average-age`                                  | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                 | `report:view`         | existing         | R46 |
-| `/api/reports/created-vs-resolved`                          | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                 | `report:view`         | existing         | R46 |
-| `/api/reports/distribution`                                 | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                 | `report:view`         | existing         | R46 |
-| `/api/reports/filter-results`                               | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                 | `report:view`         | existing         | R46 |
-| `/api/reports/resolution-time`                              | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                 | `report:view`         | existing         | R46 |
-| `/api/reports/workload`                                     | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                 | `report:view`         | existing         | R46 |
+| Operation                                                   | Verbs            | Gate today                                                                      | Permission            | Decision         | Why |
+| ----------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------- | --------------------- | ---------------- | --- |
+| `/api/dispatch-runs/[id]`                                   | GET              | `requireCompliantWorkspaceContext` + RLS (the run's own workspace)              | —                     | workspace-scoped | R58 |
+| `/api/dispatch-runs/[id]/stream`                            | GET              | `requireCompliantWorkspaceContext` + RLS, before the stream opens               | —                     | workspace-scoped | R58 |
+| `/api/dispatch-runs/[id]/machine-time`                      | GET              | `requireCompliantWorkspaceContext` + RLS, then the run GET's `assertMayReadRun` | —                     | workspace-scoped | R58 |
+| `/api/dispatch-runs/[id]/cancel`                            | POST             | `hostedRunService.cancel` → the dispatcher, else `assertCanManage`              | `project:administer`  | new              | R77 |
+| `/api/hosted-runs/models`                                   | GET              | `requireCompliantWorkspaceContext` (a signed-in member of the workspace)        | —                     | workspace-scoped | R73 |
+| `/api/dashboards`                                           | GET/POST         | workspace only                                                                  | —                     | workspace-scoped | R34 |
+| `/api/dashboards/[dashboardId]`                             | DELETE/GET/PATCH | workspace only                                                                  | —                     | workspace-scoped | R34 |
+| `/api/dashboards/[dashboardId]/widgets`                     | POST             | workspace only                                                                  | —                     | workspace-scoped | R34 |
+| `/api/dashboards/[dashboardId]/widgets/[widgetId]`          | DELETE/PATCH     | workspace only                                                                  | —                     | workspace-scoped | R34 |
+| `/api/dashboards/[dashboardId]/widgets/[widgetId]/move`     | POST             | workspace only                                                                  | —                     | workspace-scoped | R34 |
+| `/api/projects/[key]/roadmap`                               | GET              | `workItemsService.getProjectRoadmap` → `assertPermission`                       | `report:view`         | existing         | R19 |
+| `/api/projects/[key]/saved-filters`                         | GET/POST         | `savedFiltersService.{list,create}` → `assertPermission`                        | `saved_filter:manage` | existing         | R16 |
+| `/api/projects/[key]/saved-filters/[filterId]`              | DELETE/GET/PATCH | `savedFiltersService.{update,delete,changeOwner}` → `assertPermission`          | `saved_filter:manage` | existing         | R16 |
+| `/api/projects/[key]/saved-filters/[filterId]/dependents`   | GET              | `savedFiltersService.getDependents` → `getSavedFilterCapabilities`              | `project:browse`      | existing         | R16 |
+| `/api/projects/[key]/saved-filters/[filterId]/star`         | DELETE/PUT       | `savedFiltersService.{star,unstar}` → `assertPermission`                        | `saved_filter:manage` | existing         | R16 |
+| `/api/projects/[key]/saved-filters/[filterId]/subscription` | DELETE/GET/PUT   | `savedFilterSubscriptionsService.{subscribe,unsubscribe}` → `assertPermission`  | `saved_filter:manage` | existing         | R16 |
+| `/api/projects/[key]/dispatch-runs`                         | GET              | `dispatchRunService.listRunsForProject` → `assertCanBrowse`                     | `project:browse`      | existing         | R58 |
+| `/api/projects/[key]/dispatch-runs/active`                  | GET              | `dispatchRunService` → `assertCanBrowse`                                        | `project:browse`      | existing         | R58 |
+| `/api/projects/[key]/velocity`                              | GET              | `reportsService.getVelocity` → `assertPermission`                               | `report:view`         | existing         | R19 |
+| `/api/reports/average-age`                                  | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                  | `report:view`         | existing         | R46 |
+| `/api/reports/created-vs-resolved`                          | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                  | `report:view`         | existing         | R46 |
+| `/api/reports/distribution`                                 | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                  | `report:view`         | existing         | R46 |
+| `/api/reports/filter-results`                               | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                  | `report:view`         | existing         | R46 |
+| `/api/reports/resolution-time`                              | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                  | `report:view`         | existing         | R46 |
+| `/api/reports/workload`                                     | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                  | `report:view`         | existing         | R46 |
 
 ### `repository`
 

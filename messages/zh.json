@@ -8575,7 +8575,124 @@
     "indexEmptyMineBody": "当你用 motir next、motir run 或 motir batch 派发工作时，你的每一次运行都会出现在这里——正在进行的，以及此前的每一次。",
     "indexEmptyBodyRead": "当本项目的工作通过 motir next、motir run 或 motir batch 派发时，每一次运行都会出现在这里——正在进行的，以及此前的每一次。",
     "noneRunningMine": "当前没有你发起的正在运行的任务。",
-    "nonePastMine": "你发起的运行还没有已完成的。"
+    "nonePastMine": "你发起的运行还没有已完成的。",
+    "hosted": {
+      "door": {
+        "run": "托管运行",
+        "runAgain": "再次托管运行",
+        "starting": "正在启动…"
+      },
+      "picker": {
+        "label": "模型",
+        "default": "默认",
+        "defaultSecondary": "默认 · {provider}",
+        "footer": "可以运行托管工作项的模型。运行以积分计费给你的组织。",
+        "loadingTrigger": "正在加载模型…",
+        "loadingBody": "正在加载可以托管运行的模型…",
+        "unavailableTrigger": "模型不可用",
+        "unavailableBody": "无法加载可以托管运行的模型，因此暂时无法托管运行。",
+        "retry": "重试",
+        "emptyTrigger": "没有可用的模型",
+        "emptyBody": "目前没有模型可以运行托管工作项，因此无法托管运行。本地运行不受影响。"
+      },
+      "notReady": "此工作项就绪后即可托管运行——它还有 {count} 个未完成的阻塞项。",
+      "refused": {
+        "notReady": {
+          "title": "未启动——此工作项还不能运行。",
+          "body": "没有启动任何机器，也没有产生任何费用。"
+        },
+        "outOfCredits": {
+          "title": "未启动——你的组织积分已用完。",
+          "body": "没有启动任何机器，也没有产生任何费用。组织有积分后即可再次托管运行。"
+        },
+        "modelNotOffered": {
+          "title": "{model} 已不再提供给托管运行。",
+          "body": "没有启动任何运行。列表已刷新——请选择模型后再运行。"
+        },
+        "notWritable": {
+          "lead": "未启动——Motir 的应用无法写入本次运行 {total} 个代码仓库中的 {count} 个。",
+          "leadNoTotal": "未启动——Motir 的应用无法写入本次运行的 {count} 个代码仓库。",
+          "detail": "没有启动任何机器，也没有产生任何费用。下面每个代码仓库都说明了如何修复；可能需要该 GitHub 账号的所有者来操作。",
+          "open": "在代码仓库中打开"
+        },
+        "unavailable": {
+          "title": "未启动——托管运行目前不可用。",
+          "body": "没有启动任何机器，也没有产生任何费用。请稍后再试。"
+        },
+        "bootFailed": {
+          "title": "托管运行未能启动它的机器。",
+          "body": "运行已打开并以失败结束，没有任何东西仍在运行。"
+        },
+        "failed": {
+          "title": "未启动——Motir 无法启动这次运行。",
+          "body": "没有启动任何机器。请稍后再试。"
+        }
+      },
+      "phase": {
+        "starting": "正在启动",
+        "cloned": "已克隆",
+        "running": "运行中",
+        "finished": "代理已结束",
+        "pullRequest": "拉取请求已打开",
+        "done": "完成"
+      },
+      "phaseChip": "{phase} · 第 {position} 步，共 6 步",
+      "phaseDetail": {
+        "running": "opencode · {model}",
+        "exit": "退出码 {code}"
+      },
+      "meta": {
+        "lane": "通道",
+        "hosted": "托管",
+        "agent": "代理",
+        "model": "模型",
+        "elapsed": "已用时",
+        "took": "耗时"
+      },
+      "modalTitle": "托管运行",
+      "logFooter": "托管运行总是会上报其输出。· 30 天后删除。",
+      "prHeadline": "已打开拉取请求——",
+      "end": {
+        "succeeded": "运行已交付其工作。",
+        "failed": "代理退出了，但没有拉取请求。",
+        "crashed": "运行的机器在运行关闭之前停止了。",
+        "cancelled": "运行已取消。",
+        "stalled": "代理停止了输出。",
+        "timedOut": "运行达到了时间上限。",
+        "lostSupervision": "Motir 失去了对运行机器的跟踪。",
+        "stays": "此工作项保持原状——代理推送的工作在本次运行的分支上。"
+      },
+      "exitReason": "代理以退出码 {code} 退出",
+      "cancel": {
+        "button": "取消运行",
+        "title": "取消这次运行？",
+        "body": "代理会停止，它的机器会被拆除，它的密钥会被吊销。它已经推送的工作会保留在本次运行的分支上，此工作项保持原状。",
+        "keep": "继续运行",
+        "confirm": "取消运行",
+        "failed": "无法取消运行。请重试。"
+      },
+      "cost": {
+        "head": "费用",
+        "liveHint": "到目前为止——运行期间持续更新",
+        "stripLive": "目前费用",
+        "stripUpdating": "更新中",
+        "tokens": "令牌",
+        "tokensValue": "输入 {input, number} · 输出 {output, number}",
+        "cache": "缓存：读取 {read, number} · 写入 {write, number}",
+        "credits": "积分",
+        "creditsValue": "{count, number} 积分",
+        "split": "模型调用 {model, number} · 机器时间 {machine, number}",
+        "splitPending": "模型调用 {model, number} · 机器时间在运行结束时计费",
+        "machine": "机器时间",
+        "machineCharged": "以积分计费",
+        "unavailable": "Motir 目前无法读取这次运行的费用。",
+        "unit": {
+          "h": "{n} 小时",
+          "min": "{n} 分钟",
+          "s": "{n} 秒"
+        }
+      }
+    }
   },
   "repositoryPicker": {
     "add": "添加仓库",

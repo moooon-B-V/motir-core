@@ -373,6 +373,7 @@ export const hostedRunService = {
     if (refusals.length > 0) {
       throw new HostedRunRepositoryNotWritableError(
         refusals.map(({ ok: _ok, app: _app, ...refusal }) => refusal as RunGitWriteRefusal),
+        repositories.length,
       );
     }
     // The fleet, last of the reads: an unconfigured deployment opens nothing.

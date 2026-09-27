@@ -1,12 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Bot, CloudOff, TriangleAlert } from 'lucide-react';
 import { RunTonePill } from '@/components/runs/RunTonePill';
 import { Button } from '@/components/ui/Button';
+import { HostedRunCost } from '@/app/(authed)/runs/_components/HostedRunCost';
+import {
+  HostedEndBlock,
+  HostedPhaseList,
+  useHostedRunDetail,
+} from '@/app/(authed)/runs/_components/HostedRunParts';
 import { drainSseFrames } from '@/lib/ai/sseFrames';
+import { formatRunDuration } from '@/lib/runs/runClock';
+import { HostedDoorNotices } from './HostedDoorNotices';
+import { useHostedRun } from './HostedRunProvider';
 import type {
   DispatchRunCardDto,
   DispatchRunDto,
@@ -86,6 +95,7 @@ export function RunSection({
   const [events, setEvents] = useState<DispatchRunEventDto[]>([]);
 
   const current = runs[0] ?? null;
+  const door = useHostedRun();
   const leg = useMemo(
     () => current?.cards.find((c) => c.key === itemKey) ?? null,
     [current, itemKey],
@@ -164,6 +174,58 @@ export function RunSection({
     };
   }, [liveRunId]);
 
+  // THE DOOR'S RUN (MOTIR-691): the section's current run — this card's own leg
+  // run, or, for a container, the scope run over its children when that is the
+  // newer one. The header door reads it to decide Run hosted vs Cancel run.
+  const doorRun =
+    scopeRun && (!current || scopeRun.startedAt > current.startedAt) ? scopeRun : current;
+  const reportCurrentRun = door?.reportCurrentRun;
+  useEffect(() => {
+    reportCurrentRun?.(
+      doorRun ? { id: doorRun.id, origin: doorRun.origin, status: doorRun.status } : null,
+    );
+  }, [reportCurrentRun, doorRun?.id, doorRun?.origin, doorRun?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A START OR A CANCEL from the door (MOTIR-691) — this island's history is
+  // `useState(initialRuns)`, which a `router.refresh()` cannot reach, so it
+  // refetches its first page on the door's tick (CLAUDE.md § Page state). The
+  // mount run is skipped: the server already handed the first page down.
+  const runsChangedAt = door?.runsChangedAt ?? 0;
+  useEffect(() => {
+    if (runsChangedAt === 0) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/work-items/${encodeURIComponent(itemKey)}/dispatch-runs`);
+        if (!res.ok || cancelled) return;
+        const body = (await res.json()) as { runs: DispatchRunDto[]; nextCursor: string | null };
+        const next = body.runs[0] ?? null;
+        setRuns((prev) => {
+          // A NEW current run resumes its own stream from its own cursor, with
+          // none of the previous run's events on screen.
+          if (next && prev[0]?.id !== next.id) {
+            seqRef.current = next.seq;
+            setEvents([]);
+          }
+          return body.runs;
+        });
+        setCursor(body.nextCursor);
+      } catch {
+        // The history stays as it was; the next tick or a reload catches up.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [runsChangedAt, itemKey]);
+
+  // A HOSTED current run reads its detail — cost, end, what it shipped — and
+  // re-reads it as the run moves: every 20 events while live, and once at its end.
+  const hostedRunId = current?.origin === 'hosted' ? current.id : null;
+  const hostedRefresh =
+    (current && isLiveRun(current.status) ? 0 : 1) + Math.floor(events.length / 20) * 2;
+  const hostedDetail = useHostedRunDetail(hostedRunId, hostedRefresh);
+
   const loadMore = useCallback(async () => {
     if (!cursor || loadingMore) return;
     setLoadingMore(true);
@@ -185,18 +247,28 @@ export function RunSection({
   // MOTIR-5402 panel 1). It has no leg of its own, so the leg history is empty —
   // and the empty state used to say the opposite of what happened. The scope
   // block takes its place; there is no step timeline, because steps are a LEG's.
+  const notices = door ? <HostedDoorNotices /> : null;
+
   if (runs.length === 0 && scopeRun) {
-    return <ScopeBlock run={scopeRun} itemKey={itemKey} time={scopeRunTime} t={t} />;
+    return (
+      <div className="flex flex-col gap-4">
+        {notices}
+        <ScopeBlock run={scopeRun} itemKey={itemKey} time={scopeRunTime} t={t} />
+      </div>
+    );
   }
 
   if (runs.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 py-6 text-center">
-        <Bot className="size-5 text-(--el-text-faint)" aria-hidden="true" />
-        <p className="font-sans text-sm text-(--el-text)">{t('empty.title')}</p>
-        <p className="max-w-[28rem] font-sans text-sm text-(--el-text-secondary)">
-          {t('empty.body')}
-        </p>
+      <div className="flex flex-col gap-4">
+        {notices}
+        <div className="flex flex-col items-center gap-2 py-6 text-center">
+          <Bot className="size-5 text-(--el-text-faint)" aria-hidden="true" />
+          <p className="font-sans text-sm text-(--el-text)">{t('empty.title')}</p>
+          <p className="max-w-[28rem] font-sans text-sm text-(--el-text-secondary)">
+            {t('empty.body')}
+          </p>
+        </div>
       </div>
     );
   }
@@ -215,12 +287,14 @@ export function RunSection({
     if (leg.endedAt) reached.add('settled');
   }
 
+  const hosted = current?.origin === 'hosted';
   const runTone = current ? RUN_STATUS_TONE[current.status] : 'queued';
   const legTone = leg ? DISPOSITION_TONE[leg.disposition] : 'queued';
   const otherCards = current ? current.cards.length : 0;
 
   return (
     <div className="flex flex-col gap-4">
+      {notices}
       <div className="flex items-center gap-2">
         <RunTonePill tone={legTone}>{t(`disposition.${leg?.disposition ?? 'queued'}`)}</RunTonePill>
         {current ? (
@@ -261,29 +335,38 @@ export function RunSection({
         </p>
       ) : null}
 
-      {current?.status === 'timed_out' ? (
+      {current?.status === 'timed_out' && !hosted ? (
         <p className="flex items-center gap-2 font-sans text-sm text-(--el-text-secondary)">
           <CloudOff className="size-4" aria-hidden="true" />
           {t('reportingOffline')}
         </p>
       ) : null}
 
-      <ol className="flex flex-col gap-1.5" aria-live="polite">
-        {CARD_STEPS.map((step) => {
-          const done = reached.has(step);
-          return (
-            <li key={step} className="flex items-center gap-2 font-sans text-sm">
-              <span
-                className={`size-2 shrink-0 rounded-full ${done ? 'bg-(--el-status-done)' : 'border border-(--el-border-strong)'}`}
-                aria-hidden="true"
-              />
-              <span className={done ? 'text-(--el-text)' : 'text-(--el-text-secondary)'}>
-                {t(`step.${step}`)}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
+      {hosted && current ? (
+        <HostedRunBody
+          run={current}
+          events={events}
+          detail={hostedDetail}
+          refreshKey={hostedRefresh}
+        />
+      ) : (
+        <ol className="flex flex-col gap-1.5" aria-live="polite">
+          {CARD_STEPS.map((step) => {
+            const done = reached.has(step);
+            return (
+              <li key={step} className="flex items-center gap-2 font-sans text-sm">
+                <span
+                  className={`size-2 shrink-0 rounded-full ${done ? 'bg-(--el-status-done)' : 'border border-(--el-border-strong)'}`}
+                  aria-hidden="true"
+                />
+                <span className={done ? 'text-(--el-text)' : 'text-(--el-text-secondary)'}>
+                  {t(`step.${step}`)}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
 
       <div className="flex flex-col gap-1">
         <h3 className="font-sans text-sm font-semibold text-(--el-text)">{t('history.title')}</h3>
@@ -321,6 +404,88 @@ export function RunSection({
       ) : null}
     </div>
   );
+}
+
+/**
+ * A HOSTED run in the section (Story MOTIR-683 · MOTIR-691; design MOTIR-684
+ * panels 5–8): the meta row, the decision's six phases, the end, and the cost.
+ * A LOCAL run never reaches this — its seven shipped steps are unchanged.
+ */
+function HostedRunBody({
+  run,
+  events,
+  detail,
+  refreshKey,
+}: {
+  run: DispatchRunDto;
+  events: DispatchRunEventDto[];
+  detail: ReturnType<typeof useHostedRunDetail>;
+  refreshKey: number;
+}) {
+  const t = useTranslations('runs.hosted');
+  const live = isLiveRun(run.status);
+  return (
+    <div className="flex flex-col gap-4" data-testid="hosted-run">
+      <dl className="flex flex-wrap gap-x-4 gap-y-1 font-sans text-xs">
+        <MetaPair label={t('meta.lane')}>{t('meta.hosted')}</MetaPair>
+        <MetaPair label={t('meta.agent')}>
+          <span className="font-mono">{run.agent ?? 'opencode'}</span>
+        </MetaPair>
+        {run.model ? (
+          <MetaPair label={t('meta.model')}>
+            <span className="font-mono">{run.model}</span>
+          </MetaPair>
+        ) : null}
+        {live ? (
+          <MetaPair label={t('meta.elapsed')}>
+            <Elapsed since={run.startedAt} />
+          </MetaPair>
+        ) : run.endedAt ? (
+          <MetaPair label={t('meta.took')}>
+            {formatRunDuration(run.startedAt, run.endedAt)}
+          </MetaPair>
+        ) : null}
+      </dl>
+      <HostedPhaseList events={events} status={run.status} detail={detail} model={run.model} />
+      {!live && detail ? <HostedEndBlock detail={detail} /> : null}
+      <HostedRunCost
+        runId={run.id}
+        live={live}
+        cost={detail ? (detail.cost ?? null) : undefined}
+        variant="block"
+        refreshKey={refreshKey}
+      />
+    </div>
+  );
+}
+
+function MetaPair({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <dt className="text-(--el-text-secondary)">{label}</dt>
+      <dd className="text-(--el-text)">{children}</dd>
+    </div>
+  );
+}
+
+/**
+ * A live run's ELAPSED time, ticking — CLIENT-ONLY. It renders a dash on the
+ * server and on the first client paint, then starts the clock in an effect, so a
+ * time read during render can never make the two paints disagree.
+ */
+function Elapsed({ since }: { since: string }) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    const first = setTimeout(tick, 0);
+    const id = setInterval(tick, 1_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, []);
+  if (now === null) return <span>—</span>;
+  return <span>{formatRunDuration(since, new Date(now).toISOString())}</span>;
 }
 
 /**

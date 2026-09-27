@@ -76,7 +76,10 @@ export async function POST(
     if (err instanceof CiCreditsExhaustedError) return problem(err.code, err.message, 402);
     if (err instanceof HostedRunCreditsUnavailableError) return problem(err.code, err.message, 503);
     if (err instanceof HostedRunRepositoryNotWritableError) {
-      return problem(err.code, err.message, 409, { repositories: err.refusals });
+      return problem(err.code, err.message, 409, {
+        repositories: err.refusals,
+        totalRepositories: err.totalRepositories,
+      });
     }
     if (err instanceof HostedRunCardNotReadyError) return problem(err.code, err.message, 409);
     if (err instanceof HostedRunBootFailedError) {
