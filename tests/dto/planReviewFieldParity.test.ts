@@ -546,8 +546,9 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
    * sees for it. That is the whole ratchet: the answer may legitimately be
    * "nothing", but it has to be written down rather than defaulted into.
    *
-   * `noRow` holds only the obsolescence pair (MOTIR-6629) and the four
-   * supersedes edge lists (MOTIR-6630), owed a row by MOTIR-6632; every other key a `modify` can carry is visible to the approver.
+   * `noRow` is EMPTY: every key a `modify` can carry is visible to the approver.
+   * The obsolescence pair (MOTIR-6629) and the four supersedes edge lists
+   * (MOTIR-6630) were recorded here as owed until MOTIR-6632 drew their rows.
    */
   type ChangeRowDisposition = { row: PlanItemChangeField } | { noRow: string };
   const DISPOSITION: Record<PlanItemPatchKey, ChangeRowDisposition> = {
@@ -576,17 +577,19 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
     // `+2 / −1 blockers` rather than naming each edge (MOTIR-3366's carriers).
     blockedByAdd: { row: 'links' },
     blockedByRemove: { row: 'links' },
-    // The OBSOLESCENCE mark and its note — carried by MOTIR-6629, OWED a change
-    // row by MOTIR-6632 (the review render). Recorded as owed rather than
-    // defaulted, so that card replaces these with the row it draws.
-    obsolescence: { noRow: 'owed — MOTIR-6632 renders the proposed mark on the review' },
-    obsolescenceNoteMd: { noRow: 'owed — MOTIR-6632 renders the proposed note on the review' },
-    // The four `supersedes` edge lists — carried by MOTIR-6630, owed a change row
-    // by MOTIR-6632 on the same terms as the mark.
-    supersedesAdd: { noRow: 'owed — MOTIR-6632 renders the proposed supersedes edges' },
-    supersedesRemove: { noRow: 'owed — MOTIR-6632 renders the proposed supersedes edges' },
-    supersededByAdd: { noRow: 'owed — MOTIR-6632 renders the proposed superseded-by edges' },
-    supersededByRemove: { noRow: 'owed — MOTIR-6632 renders the proposed superseded-by edges' },
+    // The OBSOLESCENCE mark and its note — carried by MOTIR-6629, drawn by
+    // MOTIR-6632 (design Part XXIV §24.3 / §24.6): `Mark  Current → Outdated`
+    // and the note's first line.
+    obsolescence: { row: 'obsolescence' },
+    obsolescenceNoteMd: { row: 'obsolescenceNote' },
+    // The four `supersedes` edge lists — carried by MOTIR-6630, drawn by
+    // MOTIR-6632 as TWO rows, one per direction, each carrying resolved chips
+    // (§24.7). Unlike the blocker carriers they are NOT folded into `links`: no
+    // canvas edge draws them, so the chips are the whole of what the approver sees.
+    supersedesAdd: { row: 'supersedes' },
+    supersedesRemove: { row: 'supersedes' },
+    supersededByAdd: { row: 'supersededBy' },
+    supersededByRemove: { row: 'supersededBy' },
   };
 
   /**

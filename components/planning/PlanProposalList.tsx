@@ -10,6 +10,9 @@ import { StatusPill } from '@/components/issues/StatusPill';
 import { DifficultyIndicator } from '@/components/issues/DifficultyPicker';
 import { ProposalPeek } from '@/components/planning/ProposalPeek';
 import { changeCellText } from '@/components/planning/changeCellText';
+import { SupersedesChips } from '@/components/planning/SupersedesChip';
+import { proposedMarkOf } from '@/components/planning/PlanItemNode';
+import { firstLine } from '@/lib/workItems/obsolescenceNote';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
@@ -180,15 +183,28 @@ function fieldLabel(t: ReturnType<typeof useTranslations>, field: string): strin
   return t.has(key) ? t(key) : field;
 }
 
+/**
+ * The label/value grid every list row's `<dl>` uses (Part XXIV §24.9): ONE grid
+ * per proposal whose label column is exactly the shipped 6rem unless that
+ * proposal carries a longer label — *SUPERSEDED BY* was cut to *SUPERSEDE…* by the
+ * per-row `grid-cols-[6rem_1fr]`, ambiguous with *SUPERSEDES*. Each row is a
+ * `col-span-2` subgrid of it.
+ */
+const ROW_GRID =
+  'mt-1.5 grid grid-cols-[minmax(6rem,max-content)_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-xs';
+const ROW_SUBGRID = 'col-span-2 grid grid-cols-subgrid items-baseline';
+const ROW_LABEL = 'truncate font-medium tracking-wide text-(--el-text-secondary) uppercase';
+
 function ChangeLines({ changes }: { changes: PlanItemChangeDto[] }) {
   const t = useTranslations('planReview');
   const tl = useTranslations('labels');
   if (changes.length === 0) return null;
+  const current = t('obsolescenceCurrent');
   return (
-    <dl className="mt-1.5 grid gap-0.5 text-xs">
+    <dl className={ROW_GRID}>
       {changes.map((change) => (
-        <div key={change.field} className="grid grid-cols-[6rem_1fr] items-baseline gap-2">
-          <dt className="truncate font-medium tracking-wide text-(--el-text-secondary) uppercase">
+        <div key={change.field} className={ROW_SUBGRID}>
+          <dt className={ROW_LABEL}>
             {/* A move into or out of a FOLDER is `Placement`, not `Parent` — a
                 folder is not a parent (Part XVII §17.4). */}
             {isFolderPlacementChange(change) ? t('field_placement') : fieldLabel(t, change.field)}
@@ -213,6 +229,22 @@ function ChangeLines({ changes }: { changes: PlanItemChangeDto[] }) {
                   className="font-semibold text-(--el-text-strong)"
                 />
               </span>
+            ) : (change.field === 'supersedes' || change.field === 'supersededBy') &&
+              change.refs ? (
+              // The supersedes EDGES as key chips, `+` / `−`, three then `+N more`
+              // (Part XXIV §24.7). No second control: the row opens the peek.
+              <SupersedesChips
+                added={change.refs.added}
+                removed={change.refs.removed}
+                signed
+                layout="wrap"
+              />
+            ) : change.field === 'obsolescenceNote' && change.to ? (
+              // The NOTE's first line, one line, the whole note in `title` —
+              // prose, in `--el-text` (§24.6). Verbatim: the planner wrote it.
+              <span className="block truncate text-(--el-text)" title={change.to}>
+                {firstLine(change.to)}
+              </span>
             ) : BODY_FIELDS.has(change.field) ? (
               <span className="font-semibold text-(--el-text-strong)">
                 {t('listBodyRewritten')}
@@ -221,7 +253,7 @@ function ChangeLines({ changes }: { changes: PlanItemChangeDto[] }) {
               <>
                 {change.from ? (
                   <span className="text-(--el-text-secondary) line-through">
-                    {changeCellText(change.field, change.from, tl)}
+                    {changeCellText(change.field, change.from, tl, current)}
                   </span>
                 ) : null}
                 {change.from ? (
@@ -230,8 +262,12 @@ function ChangeLines({ changes }: { changes: PlanItemChangeDto[] }) {
                   </span>
                 ) : null}
                 <span className="font-semibold text-(--el-text-strong)">
-                  {changeCellText(change.field, changeToText(change, t('proposedCrumb')), tl) ??
-                    '—'}
+                  {changeCellText(
+                    change.field,
+                    changeToText(change, t('proposedCrumb')),
+                    tl,
+                    current,
+                  ) ?? '—'}
                 </span>
               </>
             )}
@@ -248,12 +284,26 @@ function ChangeLines({ changes }: { changes: PlanItemChangeDto[] }) {
 function ReasonRow({ reason }: { reason: string }) {
   const t = useTranslations('planReview');
   return (
-    <dl data-testid="remove-reason" className="mt-1.5 grid gap-0.5 text-xs">
-      <div className="grid grid-cols-[6rem_1fr] items-baseline gap-2">
-        <dt className="truncate font-medium tracking-wide text-(--el-text-secondary) uppercase">
-          {t('removeReason')}
-        </dt>
+    <dl data-testid="remove-reason" className={ROW_GRID}>
+      <div className={ROW_SUBGRID}>
+        <dt className={ROW_LABEL}>{t('removeReason')}</dt>
         <dd className="min-w-0 text-(--el-text)">{reason}</dd>
+      </div>
+    </dl>
+  );
+}
+
+/** An `add`'s SUPERSEDES row (Part XXIV §24.8) — under the facts line, in the
+ *  same label/value grid, unsigned chips. No refs ⇒ no row. */
+function SupersedesRow({ refs }: { refs: NonNullable<PlanReviewItemDto['supersedesRefs']> }) {
+  const t = useTranslations('planReview');
+  return (
+    <dl data-testid="supersedes-row" className={ROW_GRID}>
+      <div className={ROW_SUBGRID}>
+        <dt className={ROW_LABEL}>{t('field_supersedes')}</dt>
+        <dd className="min-w-0">
+          <SupersedesChips added={refs} signed={false} layout="wrap" />
+        </dd>
       </div>
     </dl>
   );
@@ -398,6 +448,18 @@ function ProposalRow({
           ) : null}
         </div>
         <ChangeLines changes={item.changes} />
+        {/* What the mark does to the card, said ONCE, in words (Part XXIV
+            §24.4): drawn when the plan SETS or CHANGES a mark on a finished card
+            — not on a clear, not on an edges-only `modify`, and never on a
+            decided plan, whose record tense forecasts nothing. */}
+        {outcome === null && proposedMarkOf(item) && item.statusCategory === 'done' ? (
+          <p data-testid="mark-holds-status" className="mt-1 text-xs text-(--el-text-secondary)">
+            {t('markHoldsStatus', { status: item.statusLabel ?? item.status ?? '' })}
+          </p>
+        ) : null}
+        {item.op === 'add' && item.supersedesRefs && item.supersedesRefs.length > 0 ? (
+          <SupersedesRow refs={item.supersedesRefs} />
+        ) : null}
         {item.op === 'remove' && item.removeReason ? (
           <ReasonRow reason={item.removeReason} />
         ) : null}
@@ -521,6 +583,16 @@ export function PlanProposalList({
     // After the close has flushed, so the restore is not racing the unmount.
     requestAnimationFrame(() => triggerRef.current?.focus());
   }, []);
+  // A proposed supersedes chip on the peek's rail opens THAT proposal's peek
+  // (MOTIR-6632, Part XXIV §24.7) — swapped in place; the row that opened the
+  // first peek still takes focus back on close.
+  const openProposalById = useCallback(
+    (planItemId: string) => {
+      const next = items.find((i) => i.planItemId === planItemId);
+      if (next) setPeeked({ proposal: next, key: null });
+    },
+    [items],
+  );
 
   if (items.length === 0 && leaving.length === 0) {
     return (
@@ -584,7 +656,12 @@ export function PlanProposalList({
           work-item peek for an `add` that approval has already materialized
           (MOTIR-3161, bug MOTIR-4471). Each renders nothing when its half is null, so
           only one is ever open. */}
-      <ProposalPeek item={peeked.proposal} outcome={outcome} onClose={closePeek} />
+      <ProposalPeek
+        item={peeked.proposal}
+        outcome={outcome}
+        onClose={closePeek}
+        onOpenProposal={openProposalById}
+      />
       <WorkItemQuickView peekKey={peeked.key} onClose={closePeek} />
     </div>
   );
