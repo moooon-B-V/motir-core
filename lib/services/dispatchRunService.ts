@@ -666,6 +666,38 @@ export const dispatchRunService = {
   },
 
   /**
+   * HEARTBEAT — the run says it is still alive (Story MOTIR-6526 · MOTIR-6528,
+   * `run-death-keeps-work.md` §2). Sets `lastHeartbeatAt` to now; the rule that
+   * reads it is `isRunAlive` (`lib/runs/runLiveness.ts`).
+   *
+   * ⚠️ UNDER THE SAME ROW LOCK AS `close`, and refused the same way. The lapse
+   * reap closes a silent run through `close`, and a heartbeat that arrives after
+   * it must NOT land on the closed row — the CLI has to LEARN its run was closed
+   * (`DispatchRunTerminalError`, 409), not keep beating into a record that says
+   * the opposite.
+   *
+   * ⚠️ ONLY THE RUN'S OWN OPERATOR MAY BEAT FOR IT. A run someone else opened
+   * answers `DispatchRunNotFoundError` — the same 404 an unknown id and another
+   * tenant's run give — so a heartbeat cannot keep a dead run looking alive from
+   * a machine that is not running it, and the id confirms nothing.
+   *
+   * Writes no card status and no event: a heartbeat every 60 s would be most of
+   * a run's event budget, and the stream is for what the run DID.
+   */
+  async heartbeat(runId: string, ctx: ServiceContext): Promise<void> {
+    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+      const locked = await dispatchRunRepository.findTerminalStateForUpdate(runId, tx);
+      if (!locked || locked.createdById !== ctx.userId) {
+        throw new DispatchRunNotFoundError(runId);
+      }
+      if (locked.status !== 'running') {
+        throw new DispatchRunTerminalError(runId, locked.status);
+      }
+      await dispatchRunRepository.touchHeartbeat(runId, new Date(), tx);
+    });
+  },
+
+  /**
    * CLOSE the run: its terminal status, its stop reason, and every leg that is
    * still unsettled.
    *

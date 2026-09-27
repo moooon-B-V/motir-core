@@ -1994,6 +1994,11 @@ export const dispatchRunSchema = z.object({
   model: z.string().nullable(),
   startedAt: z.string().datetime(),
   endedAt: z.string().datetime().nullable(),
+  /**
+   * When the run last said it was alive (MOTIR-6528). Null for a run whose CLI
+   * never heartbeats and for every hosted run, whose liveness is its supervision.
+   */
+  lastHeartbeatAt: z.string().datetime().nullable(),
   createdById: z.string().nullable(),
   /** The run's cards, in the run's own stored order. */
   cards: z.array(dispatchRunCardSchema),

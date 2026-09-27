@@ -70,6 +70,8 @@ export interface LockedDispatchRunTerminalState {
   status: DispatchRun['status'];
   stopReason: DispatchRun['stopReason'];
   endedAt: Date | null;
+  /** Who opened it — the heartbeat's owner check (MOTIR-6528). */
+  createdById: string | null;
 }
 
 /** An open run and who started it — the holder a refused repair claim names. */
@@ -326,7 +328,8 @@ export const dispatchRunRepository = {
       SELECT "id",
              "status",
              "stop_reason" AS "stopReason",
-             "ended_at"    AS "endedAt"
+             "ended_at"    AS "endedAt",
+             "created_by_id" AS "createdById"
         FROM "dispatch_run"
        WHERE "id" = ${id}
        FOR UPDATE
@@ -341,6 +344,36 @@ export const dispatchRunRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRun> {
     return tx.dispatchRun.update({ where: { id }, data });
+  },
+
+  /**
+   * Record that the run is alive (MOTIR-6528). `tx` required — a write, and one
+   * the locked terminal read must precede, so a heartbeat can never land on a
+   * run the lapse reap has just closed.
+   */
+  async touchHeartbeat(id: string, at: Date, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.dispatchRun.update({ where: { id }, data: { lastHeartbeatAt: at } });
+  },
+
+  /**
+   * The LAPSE REAP's cross-tenant discovery read (MOTIR-6528): LOCAL runs still
+   * `running` whose last heartbeat is older than the cut-off, oldest first.
+   *
+   * A null heartbeat never matches — a run opened by a CLI that never heartbeats
+   * stays on the 12-hour age reap, and a HOSTED run's liveness is its
+   * supervision. Same `withSystemContext` contract as
+   * {@link listStaleRunningAcrossWorkspaces}: read-only, every write re-binds.
+   */
+  async listLapsedLocalRunningAcrossWorkspaces(
+    heartbeatBefore: Date,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<DispatchRun[]> {
+    return tx.dispatchRun.findMany({
+      where: { status: 'running', origin: 'local', lastHeartbeatAt: { lt: heartbeatBefore } },
+      orderBy: { lastHeartbeatAt: 'asc' },
+      take,
+    });
   },
 
   /**
@@ -383,7 +416,13 @@ export const dispatchRunRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRun[]> {
     return tx.dispatchRun.findMany({
-      where: { status: 'running', startedAt: { lt: startedBefore } },
+      // ⚠️ `lastHeartbeatAt: null` (MOTIR-6528): a HEARTBEATING run is alive for
+      // as long as it keeps reporting, however long it runs
+      // (`run-death-keeps-work.md` §1), so the age reap is for the runs that
+      // cannot prove they are alive — a legacy CLI's, and a hosted run's, whose
+      // 12 hours is the spend backstop. A heartbeating run that goes silent is
+      // the lapse reap's.
+      where: { status: 'running', startedAt: { lt: startedBefore }, lastHeartbeatAt: null },
       orderBy: { startedAt: 'asc' },
       take,
     });

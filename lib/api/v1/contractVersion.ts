@@ -611,5 +611,20 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.40.0` at `b4588d153`, so this claims `1.41.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD.
+ *
+ * - `1.42.0` — MOTIR-6528 adds `heartbeatDispatchRun`:
+ *   `POST /api/v1/dispatch-runs/{id}/heartbeat`, no body, `204` — a LOCAL run says
+ *   it is still alive (`docs/decisions/run-death-keeps-work.md` §2). And one field on
+ *   the `DispatchRun` component: `lastHeartbeatAt` (nullable), when the run last did.
+ *   `DISPATCH_RUN_TERMINAL` (409) answers a heartbeat on a closed run;
+ *   `DISPATCH_RUN_NOT_FOUND` (404) an unknown, cross-tenant or another operator's run.
+ *
+ *   Additive: a NEW operation and a NEW nullable field (§8's allowed list); no
+ *   existing field changes meaning. Gated on `work_item:edit`, a key
+ *   `CLI_TOKEN_GRANT` already carries, so the grant is NOT widened.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.41.0` at `874665544`, so this claims `1.42.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the OPERATION.
  */
-export const V1_CONTRACT_VERSION = '1.41.0';
+export const V1_CONTRACT_VERSION = '1.42.0';

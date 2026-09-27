@@ -1,4 +1,4 @@
-import { DispatchRunTerminalError } from '@/lib/dispatchRuns/errors';
+import { DispatchRunEventLimitError, DispatchRunTerminalError } from '@/lib/dispatchRuns/errors';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import {
@@ -6,6 +6,7 @@ import {
   DISPATCH_RUN_BODY_RETENTION_DAYS,
   dispatchRunService,
 } from '@/lib/services/dispatchRunService';
+import { RUN_HEARTBEAT_LAPSE_MS } from '@/lib/runs/runLiveness';
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 
 // THE DISPATCH-RUN HOUSEKEEPING (Story MOTIR-1789 · MOTIR-1792) — the two
@@ -65,7 +66,84 @@ export interface DispatchRunSweepSummary {
   runsFailed: number;
 }
 
+/** What one pass of the LAPSE reap did (MOTIR-6528). */
+export interface RunLivenessSweepSummary {
+  /** Local runs closed `abandoned` because their heartbeat lapsed. */
+  runsReaped: number;
+  /** Runs the CLI closed first, between the discovery read and the close. */
+  runsRacedByClose: number;
+  /** Runs whose close failed for any other reason. Logged, never thrown. */
+  runsFailed: number;
+}
+
 export const dispatchRunSweepService = {
+  /**
+   * THE LAPSE REAP (Story MOTIR-6526 · MOTIR-6528, `run-death-keeps-work.md` §2)
+   * — closes every LOCAL run whose last heartbeat is older than the lapse window
+   * as `abandoned`, with a closing `log` event naming when it was last heard
+   * from.
+   *
+   * ⚠️ HOUSEKEEPING, NOT THE VERDICT. `isRunAlive` already reads such a run as
+   * dead the moment the window passes — the marker and the continue claim do not
+   * wait for this. What this does is make the RECORD agree, so the run page stops
+   * saying `running` and the run's legs settle.
+   *
+   * ⚠️ THROUGH `dispatchRunService.close`, like the age reap: the same row lock
+   * and the same already-terminal refusal, so the CLI's own close and a late
+   * heartbeat both meet a typed error instead of overwriting an answer. And like
+   * every close, it writes NO card status — the card keeps the status the work
+   * left it at.
+   *
+   * The closing event is appended BEFORE the close (an append on a closed run is
+   * refused). If the run closes between the two, the append's refusal is the race
+   * and is counted as one.
+   */
+  async reapLapsed(now: Date = new Date()): Promise<RunLivenessSweepSummary> {
+    const summary: RunLivenessSweepSummary = { runsReaped: 0, runsRacedByClose: 0, runsFailed: 0 };
+    const cutoff = new Date(now.getTime() - RUN_HEARTBEAT_LAPSE_MS);
+    const lapsed = await withSystemContext((tx) =>
+      dispatchRunRepository.listLapsedLocalRunningAcrossWorkspaces(
+        cutoff,
+        DISPATCH_RUN_SWEEP_BATCH_SIZE,
+        tx,
+      ),
+    );
+    for (const run of lapsed) {
+      const ctx = { userId: run.createdById ?? '', workspaceId: run.workspaceId };
+      try {
+        try {
+          await dispatchRunService.appendEvents(
+            run.id,
+            [
+              {
+                kind: 'log',
+                data: {
+                  message: `no heartbeat since ${run.lastHeartbeatAt!.toISOString()}`,
+                  lastHeartbeatAt: run.lastHeartbeatAt!.toISOString(),
+                },
+              },
+            ],
+            ctx,
+          );
+        } catch (err) {
+          // A run at its event ceiling still has to close: the reason event is
+          // the explanation, the close is the obligation.
+          if (!(err instanceof DispatchRunEventLimitError)) throw err;
+        }
+        await dispatchRunService.close(run.id, { stopReason: 'abandoned' }, ctx);
+        summary.runsReaped += 1;
+      } catch (err) {
+        if (err instanceof DispatchRunTerminalError) {
+          summary.runsRacedByClose += 1;
+          continue;
+        }
+        summary.runsFailed += 1;
+        console.error('[run-liveness-sweep] failed to reap run', run.id, err);
+      }
+    }
+    return summary;
+  },
+
   async sweep(now: Date = new Date()): Promise<DispatchRunSweepSummary> {
     const summary: DispatchRunSweepSummary = {
       workspacesSwept: 0,

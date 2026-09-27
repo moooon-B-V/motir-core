@@ -52,6 +52,7 @@ function run(over: Partial<DispatchRunDto> = {}): DispatchRunDto {
     startedAt: new Date(Date.now() - 3_600_000).toISOString(),
     endedAt: new Date().toISOString(),
     createdById: null,
+    lastHeartbeatAt: null,
     cards: [leg(), leg({ id: 'leg_2', key: 'MOTIR-1793', workItemId: 'wi_2' })],
     seq: 0,
     ...over,

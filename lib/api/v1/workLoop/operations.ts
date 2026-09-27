@@ -855,6 +855,38 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     errorStatuses: [404, 409, 422],
   }),
   defineOperation({
+    method: 'POST',
+    path: '/api/v1/dispatch-runs/{id}/heartbeat',
+    operationId: 'heartbeatDispatchRun',
+    summary: 'Report that a local dispatch run is still alive',
+    description:
+      'A LOCAL run says it is still working. The CLI sends one every 60 seconds while a run is ' +
+      'open; a local run silent for 5 minutes is DEAD — its card shows the run died and ' +
+      '`motir continue` may take the work over — and the server closes it `abandoned`. ' +
+      'The server stamps the time itself; the request carries no body. ' +
+      'Only the operator who opened the run may beat for it. A run that is already closed — ' +
+      'usually by that lapse — is a conflict, and the answer is to stop beating, not to retry. ' +
+      'It writes NO work-item status and no event.',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'id',
+        in: 'path',
+        required: true,
+        description: 'The dispatch run’s id, as `openDispatchRun` returned it.',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 204,
+      body: { kind: 'empty' },
+      description: 'The heartbeat was recorded.',
+    },
+    // 404 for an unknown, cross-workspace or another operator's run; 409 when the
+    // run is already closed.
+    errorStatuses: [404, 409],
+  }),
+  defineOperation({
     method: 'GET',
     path: '/api/v1/dispatch-runs/{id}/close-out-prompt',
     operationId: 'getDispatchRunCloseOutPrompt',
