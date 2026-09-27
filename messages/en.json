@@ -6684,14 +6684,60 @@
           "pointer": "Run the fix from <link>{key}</link> — this work item was built as part of that run, so its repair runs there."
         },
         "which": {
-          "checks": "Nothing changed on your side? <b>Approve</b> sends the same commits once more. If the failing check points at real code, <code>motir fix</code> hands it to an agent.",
           "conflict": "A conflict needs new commits. <code>motir fix</code> hands it to an agent; approving again cannot land these commits, so nothing is offered until the branch moves.",
-          "other": "<b>Approve</b> sends the same commits once more. If it leaves the queue the same way, <code>motir fix</code> hands it to an agent."
+          "failed": "A queue failure needs new commits, even a flaky one. <code>motir fix</code> hands it to an agent, which merges the base branch first and pushes. Approving again is not offered: it would queue the same commits the queue just refused."
         },
         "conflictOn": "<prs></prs> conflicts with {base} and cannot be merged.",
         "conflictOnNoBase": "<prs></prs> conflicts with its base branch and cannot be merged.",
         "howConflict": "An agent rebases or resolves on the pull request's own branch, pushes, and the checks run again.",
         "rearm": "There is nothing to approve here. A push moves the head, which re-arms the question, and the next green raises the merge gate once — over the new commits."
+      },
+      "continue": {
+        "title": "Continue the work",
+        "aria": {
+          "part": "Continue the work"
+        },
+        "died": {
+          "pill": "Run died"
+        },
+        "reason": {
+          "lapsed": "The run stopped reporting — last heard from <when></when>.",
+          "interrupted": "The run was stopped from its terminal <when></when>.",
+          "failed": "The agent exited with an error <when></when>.",
+          "cancelled": "The run was cancelled <when></when>.",
+          "stalled": "The hosted agent stalled — no output for 15 minutes — <when></when>.",
+          "backstop": "The hosted run reached its 12-hour limit <when></when>."
+        },
+        "ranBy": "Run by <b>{name}</b> with <mono>{command}</mono> · started <when></when>",
+        "ranBySomeone": "Run with <mono>{command}</mono> · started <when></when>",
+        "branch": "Its work is on <ref>{branch}</ref>",
+        "branchWithPr": "Its work is on <ref>{branch}</ref> and in the pull request <b>{pr}</b>",
+        "safe": "Nothing was lost and nothing moved: this work item is still <b>{status}</b>.",
+        "lead": "Carry it on from your terminal:",
+        "how": "An agent checks out that branch, reads what is already committed, merges the latest main, and finishes the work item in one pull request.",
+        "startOver": "Start over instead: set <b>{target}</b> to To Do and run it again.",
+        "nothingPushed": "Its branch was never pushed, so there is nothing to continue.",
+        "continuing": {
+          "pill": "Continuing",
+          "by": "Being continued by <b>{name}</b> · started <when></when>",
+          "byYou": "Being continued by <b>you</b> · started <when></when>",
+          "bySomeone": "Being continued · started <when></when>",
+          "tookOver": "It took over from <b>{name}</b>'s run",
+          "on": "On <ref>{branch}</ref>",
+          "why": "Only one continue runs at a time. When it finishes, this work item moves on exactly as after <mono>motir run</mono>."
+        },
+        "implemented": {
+          "line": "The run stopped reporting <when></when>, after it opened its pull request.",
+          "pr": "The pull request is open, so there is nothing to continue: its checks decide from here.",
+          "fix": "If they fail, <mono>motir fix {key}</mono> hands the repair to an agent — the Fix the checks part appears above when they do."
+        },
+        "child": {
+          "line": "The run that owned this work item stopped reporting <when></when>.",
+          "pointer": "It was run as part of <link>{key}</link>, so it is continued from there — the whole run resumes on its branch and skips what already landed:"
+        },
+        "loading": "Checking whether this work item's run is still alive",
+        "error": "Couldn't check whether this work item's run is still alive.",
+        "retry": "Try again"
       },
       "emptyTitle": "No linked pull request",
       "emptyDescription": "Use + Link pull request here or <mono>link_pull_request</mono> over the MCP to add a PR and show live PR and CI status.",
@@ -8575,7 +8621,8 @@
       "succeeded": "Succeeded",
       "failed": "Failed",
       "cancelled": "Cancelled",
-      "timed_out": "Timed out"
+      "timed_out": "Timed out",
+      "died": "Run died"
     },
     "command": {
       "next": "motir next",
@@ -8583,7 +8630,8 @@
       "run_scope": "motir run '<'scope>",
       "batch": "motir batch",
       "auto": "motir auto",
-      "fix": "motir fix"
+      "fix": "motir fix",
+      "continue": "motir continue"
     },
     "skipReason": {
       "needsPlanning": "Skipped — needs planning.",
@@ -8690,7 +8738,8 @@
     "indexEmptyMineBody": "When you dispatch work with motir next, motir run or motir batch, your runs appear here — the one happening now, and every one before it.",
     "indexEmptyBodyRead": "When work in this project is dispatched with motir next, motir run or motir batch, every run appears here — the one happening now, and every one before it.",
     "noneRunningMine": "Nothing you started is running.",
-    "nonePastMine": "No run you started has finished yet."
+    "nonePastMine": "No run you started has finished yet.",
+    "runDied": "This run died — last heard from <b><when></when></b>. Its work is kept on its branch; continue it from Development below."
   },
   "repositoryPicker": {
     "add": "Add repository",
@@ -8834,6 +8883,7 @@
         "ci_failed": "The checks on these commits failed, so this question was withdrawn.",
         "plan_stale": "Work this plan changes was finished, so the plan went out of date and this question was withdrawn.",
         "plan_discarded": "Every proposal in the plan was withdrawn, so the plan ended and this question with it.",
+        "queue_failed": "The merge queue failed these commits, so this question was withdrawn.",
         "unknown": "This question was withdrawn. The reason was not recorded."
       },
       "causeByKind": {
@@ -8938,6 +8988,10 @@
         "title": "These commits did not land, so the approval that sent them has been used.",
         "next": "Approve the work item again to try once more. If a check failed for a real reason, run motir fix instead."
       },
+      "mergeQueueFailedNeedsFix": {
+        "title": "This pull request failed in the merge queue.",
+        "next": "Queuing the same commits again would fail the same way, so nothing was queued. motir fix hands it to an agent, and Motir asks again once a new push is green."
+      },
       "mergeAppPermissionMissing": {
         "title": "Motir's GitHub App is not allowed to merge here.",
         "next": "An organisation owner grants {permission} to Motir's GitHub App on GitHub, then you approve again.",
@@ -9030,7 +9084,8 @@
         "withdrawnPulledBack": "{count, plural, one {# pull request} other {# pull requests}} · taken out of review",
         "withdrawnUnknown": "{count, plural, one {# pull request} other {# pull requests}} · withdrawn",
         "withdrawnConflict": "{count, plural, one {# pull request} other {# pull requests}} · {pr} conflicts with {base}",
-        "withdrawnConflictNoBase": "{count, plural, one {# pull request} other {# pull requests}} · {pr} conflicts with its base branch"
+        "withdrawnConflictNoBase": "{count, plural, one {# pull request} other {# pull requests}} · {pr} conflicts with its base branch",
+        "withdrawnQueueFailed": "{count, plural, one {# pull request} other {# pull requests}} · {pr} failed in the merge queue"
       },
       "verb": {
         "approveAndMerge": "Approve and merge"
@@ -9086,7 +9141,9 @@
         "citePulledBack": "Nobody decided it. Motir asks again when {key} is back in review.",
         "portConflict": "{pr} conflicts with {base}, so this question was withdrawn. Nothing was approved.",
         "portConflictNoBase": "{pr} conflicts with its base branch, so this question was withdrawn. Nothing was approved.",
-        "citeConflict": "Nobody decided it. A push that resolves the conflict and goes green asks again."
+        "citeConflict": "Nobody decided it. A push that resolves the conflict and goes green asks again.",
+        "portQueueFailed": "{pr} left the merge queue for a failure, so this question was withdrawn. Nothing was approved.",
+        "citeQueueFailed": "Nobody decided it. A push whose checks go green asks again."
       },
       "list": {
         "pair": "{a} and {b}",
@@ -9111,6 +9168,12 @@
         "failingCheck": "Failing check: <link>{check}</link>",
         "unchanged": "Nothing changed on your side? <b>Queue again</b> approves these same commits once more and puts them back in the merge queue.",
         "cannotLand": "These commits cannot land as they stand. <b>motir fix</b> hands the repair to an agent; a push brings the question back once its checks pass.",
+        "failed": {
+          "checks": "<b>{pr}</b> left the merge queue: <b>{check}</b> failed.",
+          "timedOut": "<b>{pr}</b> left the merge queue: <b>{check}</b> timed out.",
+          "mergeCommit": "<b>{pr}</b> left the merge queue: the queue could not build a merge commit for it.",
+          "held": "These commits cannot land as they stand, so Motir is not asking again. <b>{key}</b> is held at Implemented, at this head."
+        },
         "newCommits": "It has new commits since your approval. Motir asks again when every check is green.",
         "auto": "Motir merges this project’s pull requests when they are green. <b>Queue again</b> sends it back at the same commits.",
         "partTitle": "Merge queue",

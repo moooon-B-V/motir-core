@@ -666,6 +666,38 @@ export const dispatchRunService = {
   },
 
   /**
+   * HEARTBEAT — the run says it is still alive (Story MOTIR-6526 · MOTIR-6528,
+   * `run-death-keeps-work.md` §2). Sets `lastHeartbeatAt` to now; the rule that
+   * reads it is `isRunAlive` (`lib/runs/runLiveness.ts`).
+   *
+   * ⚠️ UNDER THE SAME ROW LOCK AS `close`, and refused the same way. The lapse
+   * reap closes a silent run through `close`, and a heartbeat that arrives after
+   * it must NOT land on the closed row — the CLI has to LEARN its run was closed
+   * (`DispatchRunTerminalError`, 409), not keep beating into a record that says
+   * the opposite.
+   *
+   * ⚠️ ONLY THE RUN'S OWN OPERATOR MAY BEAT FOR IT. A run someone else opened
+   * answers `DispatchRunNotFoundError` — the same 404 an unknown id and another
+   * tenant's run give — so a heartbeat cannot keep a dead run looking alive from
+   * a machine that is not running it, and the id confirms nothing.
+   *
+   * Writes no card status and no event: a heartbeat every 60 s would be most of
+   * a run's event budget, and the stream is for what the run DID.
+   */
+  async heartbeat(runId: string, ctx: ServiceContext): Promise<void> {
+    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+      const locked = await dispatchRunRepository.findTerminalStateForUpdate(runId, tx);
+      if (!locked || locked.createdById !== ctx.userId) {
+        throw new DispatchRunNotFoundError(runId);
+      }
+      if (locked.status !== 'running') {
+        throw new DispatchRunTerminalError(runId, locked.status);
+      }
+      await dispatchRunRepository.touchHeartbeat(runId, new Date(), tx);
+    });
+  },
+
+  /**
    * CLOSE the run: its terminal status, its stop reason, and every leg that is
    * still unsettled.
    *
@@ -686,46 +718,80 @@ export const dispatchRunService = {
     input: CloseDispatchRunInput,
     ctx: ServiceContext,
   ): Promise<DispatchRunDto> {
-    return withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      async (tx) => {
-        const locked = await dispatchRunRepository.findTerminalStateForUpdate(runId, tx);
-        if (!locked) throw new DispatchRunNotFoundError(runId);
-        if (locked.status !== 'running') {
-          throw new DispatchRunTerminalError(runId, locked.status);
-        }
-
-        const endedAt = new Date();
-        await dispatchRunRepository.update(
-          runId,
-          {
-            status: input.status ?? statusForStopReason(input.stopReason),
-            stopReason: input.stopReason,
-            endedAt,
-          },
-          tx,
-        );
-
-        // Settle whatever the run left in flight. One update per leg rather than
-        // an `updateMany`, because the target disposition DEPENDS on where each
-        // leg was — a `queued` card was never reached, a `running` one was.
-        const legs = await dispatchRunCardRepository.listByRun(runId, tx);
-        for (const leg of legs) {
-          if (!NON_TERMINAL.includes(leg.disposition)) continue;
-          await dispatchRunCardRepository.update(
-            leg.id,
-            { disposition: settledDisposition(leg.disposition), endedAt },
-            tx,
-          );
-        }
-
-        const withCards = await dispatchRunRepository.findByIdWithCards(runId, tx);
-        /* v8 ignore next -- the row was just written inside this transaction */
-        if (!withCards) throw new DispatchRunNotFoundError(runId);
-        const seq = (await dispatchRunEventRepository.maxSeq(runId, tx)) ?? 0;
-        return toDispatchRunDto(withCards, seq);
-      },
+    return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
+      dispatchRunService.closeWithin(runId, input, ctx, tx),
     );
+  },
+
+  /**
+   * The CLOSE's write half, inside a transaction the CALLER holds — extracted
+   * (MOTIR-6532) so the continue claim can close a LAPSED run under the card's own
+   * row lock, in the same transaction that then opens the `continue` run. Same
+   * lock, same already-terminal refusal, same settle as `close`; a second copy
+   * would be a second definition of what closing a run writes.
+   *
+   * `closingLog`, when given, is appended as a run-scoped `log` event just before
+   * the close, under the same row lock — the reason a server-side close records.
+   * `tx` must be bound to the run's workspace.
+   */
+  async closeWithin(
+    runId: string,
+    input: CloseDispatchRunInput,
+    ctx: ServiceContext,
+    tx: Prisma.TransactionClient,
+    closingLog?: Prisma.InputJsonObject,
+  ): Promise<DispatchRunDto> {
+    const locked = await dispatchRunRepository.findTerminalStateForUpdate(runId, tx);
+    if (!locked) throw new DispatchRunNotFoundError(runId);
+    if (locked.status !== 'running') {
+      throw new DispatchRunTerminalError(runId, locked.status);
+    }
+
+    if (closingLog !== undefined) {
+      const seq = ((await dispatchRunEventRepository.maxSeq(runId, tx)) ?? 0) + 1;
+      await dispatchRunEventRepository.createMany(
+        [
+          {
+            workspaceId: ctx.workspaceId,
+            dispatchRunId: runId,
+            seq,
+            kind: 'log',
+            data: closingLog,
+          },
+        ],
+        tx,
+      );
+    }
+
+    const endedAt = new Date();
+    await dispatchRunRepository.update(
+      runId,
+      {
+        status: input.status ?? statusForStopReason(input.stopReason),
+        stopReason: input.stopReason,
+        endedAt,
+      },
+      tx,
+    );
+
+    // Settle whatever the run left in flight. One update per leg rather than
+    // an `updateMany`, because the target disposition DEPENDS on where each
+    // leg was — a `queued` card was never reached, a `running` one was.
+    const legs = await dispatchRunCardRepository.listByRun(runId, tx);
+    for (const leg of legs) {
+      if (!NON_TERMINAL.includes(leg.disposition)) continue;
+      await dispatchRunCardRepository.update(
+        leg.id,
+        { disposition: settledDisposition(leg.disposition), endedAt },
+        tx,
+      );
+    }
+
+    const withCards = await dispatchRunRepository.findByIdWithCards(runId, tx);
+    /* v8 ignore next -- the row was just written inside this transaction */
+    if (!withCards) throw new DispatchRunNotFoundError(runId);
+    const seq = (await dispatchRunEventRepository.maxSeq(runId, tx)) ?? 0;
+    return toDispatchRunDto(withCards, seq);
   },
 
   /**

@@ -45,6 +45,7 @@ import {
   type SnapshotSkip,
 } from '../batchPlan.js';
 import type { DispatchItem, MotirClient } from '../client.js';
+import { bindInterruptSignals, closeRunAndExit, type InterruptSignal } from '../interrupt.js';
 
 // `motir batch` — THE FROZEN SNAPSHOT (Story 7.9 · Subtask 7.9.10 · MOTIR-888).
 // Take the ready set ONCE, print it, then implement exactly those items one at a
@@ -409,14 +410,20 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
   let stopReason: BatchStopReason = 'completed';
 
   let interrupted = false;
-  const onSigint = (): void => {
-    if (interrupted) process.exit(130);
+  // A SIGTERM, or a SECOND Ctrl-C, ends the process NOW — after closing the run
+  // `interrupted` with what is queued flushed, so the record says it was stopped
+  // rather than reading `running` until its heartbeat lapses (MOTIR-6530).
+  const onSignal = (signal: InterruptSignal): void => {
+    if (interrupted || signal === 'SIGTERM') {
+      void closeRunAndExit(reporter, signal);
+      return;
+    }
     interrupted = true;
     info('');
     info('Interrupt received — finishing the item in flight, then stopping.');
     info('Press Ctrl-C again to exit immediately.');
   };
-  process.on('SIGINT', onSigint);
+  const detachInterrupt = bindInterruptSignals(onSignal);
 
   try {
     for (const [index, entry] of snapshot.taken.entries()) {
@@ -476,7 +483,7 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
       }
     }
   } finally {
-    process.off('SIGINT', onSigint);
+    detachInterrupt();
   }
 
   const notReached = snapshot.taken

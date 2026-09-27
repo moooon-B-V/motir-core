@@ -17,6 +17,7 @@ import type {
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
   CommitComparison,
+  ChangedFilesResult,
   ChangeRequestMergeability,
   ChangeRequestMergeabilityInput,
   MergeChangeRequestInput,
@@ -75,6 +76,31 @@ export const REPO_FILE_READ_TIMEOUT_MS = 5_000;
  * so a host that hangs cannot hold a job open indefinitely.
  */
 export const COMMIT_COMPARE_TIMEOUT_MS = 10_000;
+
+/**
+ * Deadline for a changed-files listing, in ms (MOTIR-6619) — its own constant
+ * beside {@link COMMIT_COMPARE_TIMEOUT_MS} because it is the same host endpoint
+ * asked a different question, on a different path: a compare for the drift count
+ * runs from a JOB, this one runs inside a planning session's turn, where a named
+ * `host_error` beats a long silence. The same length as the compare, because the
+ * host does the same walk either way.
+ *
+ * It must stay under the listing route's `maxDuration`
+ * (`app/api/internal/ai/repo-changes/route.ts`) so a dead host surfaces as the
+ * `host_error` result inside the invocation budget — `tests/git/
+ * listChangedFiles.test.ts` asserts that ordering.
+ */
+export const CHANGED_FILES_TIMEOUT_MS = 10_000;
+
+/**
+ * The most paths one {@link GitProvider.listChangedFiles} answer carries — GitHub's
+ * compare endpoint's own cap on `files[]` (it returns at most 300 and says nothing
+ * about the rest). GitLab has no such cap on the same question, and is held to this
+ * one anyway, so a session learns the same bound about a branch wherever it lives.
+ * A listing AT the cap reports `truncated: true`: a response sitting exactly on a
+ * host cap is indistinguishable from one that was cut.
+ */
+export const CHANGED_FILES_MAX = 300;
 
 /**
  * Deadline for EACH host call a merge makes, in ms (MOTIR-5514). A merge is a write
@@ -271,6 +297,48 @@ export interface GitProvider {
     base: string,
     head: string,
   ): Promise<CommitComparison>;
+
+  /**
+   * WHICH PATHS `head` CHANGED against `base` (Story MOTIR-6617 · MOTIR-6619) —
+   * the listing a planning session reads a neighbour's in-flight branch through,
+   * before reading the files themselves with {@link readFileAtRef}.
+   *
+   * ⚠️ REQUIRED, for {@link compareCommits}' reason. Both hosts back it with the
+   * very endpoint that method already calls — GitHub's
+   * `GET /repos/{owner}/{name}/compare/{base}...{head}` (`files[]`), GitLab's
+   * `GET /api/v4/projects/:id/repository/compare` (`diffs[]`) — and the call
+   * happens HERE, in the process holding the token, so nothing
+   * credential-shaped crosses a boundary. Both can, therefore both must;
+   * declaring it optional would re-create the disguise MOTIR-2124 removed.
+   *
+   * ⚠️ NAMES ONLY. The hosts return patch hunks alongside the paths; an
+   * implementation drops them. Content is read through {@link readFileAtRef}.
+   *
+   * ⚠️ IT RETURNS ITS FAILURES as named members of {@link ChangedFilesResult} —
+   * a missing ref, a connection that is not there, a revoked credential, a diff
+   * the host would not compute, a host that did not answer — and never throws
+   * for any of them. An empty `files` is a real answer ("changed nothing"), so
+   * no failure may ever be rendered as one.
+   *
+   * ⚠️ NO CALLER MAY INVOKE THIS ON A RENDER PATH — {@link compareCommits}' rule.
+   * Its one caller is `GET /api/internal/ai/repo-changes`, on demand.
+   *
+   * Implementations MUST bound the request with {@link CHANGED_FILES_TIMEOUT_MS},
+   * MUST cap the list at {@link CHANGED_FILES_MAX}, and MUST NOT put the token —
+   * or any URL carrying one — into the result.
+   *
+   * The argument shape is {@link compareCommits}' and {@link readFileAtRef}'s:
+   * positional `(installationId, owner, name, …)`, and `base` is REQUIRED for
+   * `readFileAtRef`'s stated reason — the caller holds the mirrored default
+   * branch and the provider does not.
+   */
+  listChangedFiles(
+    installationId: string,
+    owner: string,
+    name: string,
+    base: string,
+    head: string,
+  ): Promise<ChangedFilesResult>;
 
   /**
    * MERGE one change request on the host (Story MOTIR-4882 · MOTIR-5514;

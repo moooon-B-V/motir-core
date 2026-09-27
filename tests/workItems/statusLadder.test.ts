@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ladderKeysFrom,
   CONTAINER_CLAIM_BAR_RANK,
   CONTAINER_CLAIM_STATUS_KEYS,
   LADDER,
@@ -222,5 +223,18 @@ describe('the container-completeness bar', () => {
     // that says "children are open" without saying which repeats that.
     const rows = [{ identifier: 'MOTIR-3218', status: 'todo' }];
     expect(childrenBelowClaimBar(rows, DEFAULT_STATUSES, KEYS)[0]!.identifier).toBe('MOTIR-3218');
+  });
+});
+
+describe('ladderKeysFrom (MOTIR-6537)', () => {
+  it('resolves each named rung by literal key, and null where the project has none', () => {
+    expect(ladderKeysFrom([{ key: 'todo' }, { key: 'implemented' }, { key: 'in_review' }])).toEqual(
+      { reviewKey: 'in_review', implementedKey: 'implemented', approvedKey: null },
+    );
+    expect(ladderKeysFrom([])).toEqual({
+      reviewKey: null,
+      implementedKey: null,
+      approvedKey: null,
+    });
   });
 });

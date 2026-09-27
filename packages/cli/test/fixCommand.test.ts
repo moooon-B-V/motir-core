@@ -10,6 +10,7 @@ import type {
   WorkItemRepairClaim,
   WorkItemRepairRefusal,
 } from '../src/client.js';
+import { NOTHING_TO_CHANGE_DETAIL } from '../src/ciWatch.js';
 
 // `motir fix <key>` (Story MOTIR-5460 · MOTIR-5465). The session, the agent, git
 // and the wait are all injected; what is under test is the PIPELINE — claim, then
@@ -806,7 +807,7 @@ describe('the pure renderers', () => {
       watch: {
         kind: 'fix_failed',
         attempts: 1,
-        detail: 'nothing to change — use Queue again on the card',
+        detail: NOTHING_TO_CHANGE_DETAIL,
       },
       pullRequests: [
         pr({ ci: 'passing', failingChecks: [], queueExit: exit }),
@@ -827,6 +828,6 @@ describe('the pure renderers', () => {
     expect(out).toContain(
       'failing: in the merge queue — it conflicts with work queued ahead of it',
     );
-    expect(out).toContain('use Queue again on the card');
+    expect(out).toContain('push a commit to re-run CI');
   });
 });

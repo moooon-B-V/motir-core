@@ -158,6 +158,11 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
     data: {
       repositories: over.map((t) => t.targetRepo),
       failures: materialized.failures.length,
+      // WHERE THIS LEG'S WORK WILL BE (MOTIR-6530) — the session branch on a
+      // lineage run, else the per-card branch the prompt names. The one place a
+      // local run records its branch: if the process dies, `motir continue`
+      // reads it here. `null` only from a server too old to name the branch.
+      branch: input.sessionBranch ?? dispatch.branch ?? null,
     },
   });
   if (materialized.failures.length > 0) return settle({ kind: 'checkout_unavailable' });

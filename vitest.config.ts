@@ -2450,6 +2450,24 @@ export default defineConfig({
         'lib/services/workItemRepairService.ts',
         'app/api/v1/work-items/[key]/repair/route.ts',
         'components/github/RepairFixPart.tsx',
+        // ── Story MOTIR-6526 · A RUN THAT DIES KEEPS ITS WORK ─────────────────
+        // Subtask MOTIR-6537, the story's vitest gate. The files the story CREATED
+        // on the server — the one liveness rule, the continue claim's service and
+        // route, the heartbeat route, the lapse sweep's job and the marker's
+        // Development part. MEASURED on the parent branch first, over `tests/runs`,
+        // `tests/runLivenessSweep`, `tests/api/v1/dispatch-run-heartbeat`,
+        // `tests/ready/claimWorkItemContinue`, `tests/ready/continueViewReasons`,
+        // `tests/api/v1/work-item-continue-route`, `tests/integration/runDied*`,
+        // `tests/components/continue-part` and `tests/dispatch/dispatchPromptContinue`:
+        // the service 100 / 91.2 br, the part 100 / 94.1 br, the rest 100. The
+        // shared files it changed keep their existing pins (`dispatchRunService.ts`)
+        // or were never in the report, and are not widened here.
+        'lib/runs/runLiveness.ts',
+        'lib/services/workItemContinueService.ts',
+        'app/api/v1/work-items/[key]/continue/route.ts',
+        'app/api/v1/dispatch-runs/[id]/heartbeat/route.ts',
+        'lib/jobs/definitions/runLivenessSweep.ts',
+        'components/github/ContinuePart.tsx',
         // ── Story MOTIR-5461 · A PULL REQUEST THE MERGE QUEUE EJECTS ───────────
         // Subtask MOTIR-5636, the story's vitest gate. The files the story CREATED —
         // the ejection and failing-check services, the reason table and its error, the
@@ -3132,6 +3150,43 @@ export default defineConfig({
           statements: 90,
         },
         'components/github/RepairFixPart.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // MOTIR-6537 — the run-death story's new files, measured above; pinned at the floor.
+        'lib/runs/runLiveness.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/workItemContinueService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/work-items/[key]/continue/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/v1/dispatch-runs/[id]/heartbeat/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/runLivenessSweep.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/github/ContinuePart.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

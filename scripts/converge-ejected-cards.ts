@@ -8,18 +8,22 @@
  * Those buttons are gone, so a card left over from the old rules would sit with nothing
  * to press and nothing to say.
  *
- * THE FOUR POPULATIONS:
+ * THE FIVE POPULATIONS:
  *
  *   A. `implemented` with a standing RETRYABLE or SETTING exit at a member's head
  *      → `in_review` with ONE fresh approve-to-merge gate.
- *   B. `implemented` with a standing CONFLICT → already where the new rules put it:
- *      COUNTED and left alone.
+ *   B. `implemented` with a standing CONFLICT — or, since the FIFTH AMENDMENT, a standing
+ *      queue FAILURE → already where the new rules put it: COUNTED and left alone.
  *   C. `approved` with a standing NEUTRAL removal → the removal spent the approval,
  *      so the card is asked again.
  *   D. `approved` holding an open member with no outcome at all, under an approval
  *      decided more than ten minutes ago → a host refusal nobody recorded (the record
  *      is newer than the press). One is written with the backfill-only code
  *      `unrecorded`, classed RETRYABLE, and the card is asked again.
+ *   E. `in_review` holding an AWAITING gate the OLD rule re-asked from a standing queue
+ *      FAILURE (Story MOTIR-6587 · MOTIR-6595; §4 FIFTH AMENDMENT, point 4) → the gate
+ *      is withdrawn with the cause `queue_failed` and the card is HELD at `implemented`,
+ *      where `motir fix` claims it. A DECIDED gate is skipped `gate_decided`.
  *
  * Everything else is SKIPPED AND COUNTED by reason.
  *
@@ -27,7 +31,8 @@
  * `ejectedCardConvergenceService`, which calls `settleUnlandedOutcome` — the entry point
  * a live queue exit and a live host refusal both run.
  *
- * IDEMPOTENT: a converged card is at `in_review`, so a second apply converges 0.
+ * IDEMPOTENT: a converged A/C/D card is at `in_review` and a converged E card is held at
+ * `implemented`, so a second apply converges 0.
  *
  * Usage:
  *   pnpm db:converge:unlanded-cards --dry-run    # rehearse: classify + print, write nothing
@@ -57,8 +62,13 @@ function parseArgs(argv: string[]): { dryRun: boolean } {
 
 function printReport(report: ConvergeReport): void {
   const verb = report.dryRun ? 'would converge' : 'converged';
+  const withdrawn = new Set(report.withdrawnQueueFailed.map((card) => card.workItemId));
   for (const card of report.converged) {
-    console.log(`${TAG}   ${verb} ${card.identifier} (${card.workItemId}) → in_review + ONE gate`);
+    console.log(
+      withdrawn.has(card.workItemId)
+        ? `${TAG}   ${verb} ${card.identifier} (${card.workItemId}) → gate withdrawn queue_failed, held at implemented`
+        : `${TAG}   ${verb} ${card.identifier} (${card.workItemId}) → in_review + ONE gate`,
+    );
   }
   const byReason = new Map<string, string[]>();
   for (const skip of report.skipped) {
@@ -72,10 +82,11 @@ function printReport(report: ConvergeReport): void {
   }
   const skippedBy = (reason: string) => byReason.get(reason)?.length ?? 0;
   console.log(
-    `${TAG} done — scanned ${report.scanned}, ${verb} ${report.converged.length}, ` +
-      `skipped ${report.skipped.length} (conflict held ${skippedBy('cant_land_held')}, ` +
+    `${TAG} done — scanned ${report.scanned}, ${verb} ${report.converged.length} ` +
+      `(of which queue failure withdrawn ${report.withdrawnQueueFailed.length}), ` +
+      `skipped ${report.skipped.length} (can't land held ${skippedBy('cant_land_held')}, ` +
       `head moved ${skippedBy('head_moved')}, auto mode ${skippedBy('auto_mode')}, ` +
-      `already in_review ${skippedBy('already_in_review')}, ` +
+      `already in_review ${skippedBy('already_in_review')}, gate decided ${skippedBy('gate_decided')}, ` +
       `no approved gate ${skippedBy('no_approved_gate')}, nothing stranded ${skippedBy('nothing_stranded')}, ` +
       `too recent ${skippedBy('too_recent')}, other status ${skippedBy('other_status')}, ` +
       `archived ${skippedBy('archived')}), failed ${report.failed.length}.` +

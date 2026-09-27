@@ -706,11 +706,14 @@ describe('a STANDING merge-queue failure (MOTIR-5720)', () => {
     expect(outcome).toEqual({ kind: 'green', attempts: 1 });
   });
 
-  it('an attempt that pushes NOTHING ends after ONE attempt, pointing at Queue again', async () => {
+  // MOTIR-6594 (`approval-gates.md` §4 FIFTH AMENDMENT): Queue again is refused after a
+  // queue FAILURE, so the early stop points at a new head instead.
+  it('an attempt that pushes NOTHING ends after ONE attempt, pointing at a new push', async () => {
     const { outcome, fixes, lines } = await drive([[ejected()]]);
     expect(fixes).toBe(1);
     expect(outcome).toEqual({ kind: 'fix_failed', attempts: 1, detail: NOTHING_TO_CHANGE_DETAIL });
-    expect(lines.at(-1)).toContain('Queue again');
+    expect(lines.at(-1)).toContain('push a commit to re-run CI');
+    expect(lines.at(-1)).not.toContain('use Queue again');
   });
 
   it('a push whose first check lands a poll late still goes on — one unchanged poll is grace', async () => {
@@ -755,8 +758,11 @@ describe('a STANDING merge-queue failure (MOTIR-5720)', () => {
     expect(prompt).toContain('Merge queue / e2e');
     expect(prompt).toContain(queueReasonInWords('MERGE_CONFLICT'));
     expect(prompt).toContain('Merge `origin/parent/PROD-2` into the branch, resolve the conflicts');
-    expect(prompt).toContain('make NO commit and say so');
-    expect(prompt).toContain('*Queue again*');
+    // A flaky failure still needs a NEW head (MOTIR-6594): Queue again is not offered.
+    expect(prompt).toContain('STILL PUSH');
+    expect(prompt).toContain('or an empty commit if that merge brought nothing');
+    expect(prompt).not.toContain('make NO commit');
+    expect(prompt).toContain('*Queue again* is not');
   });
 
   it('a pull request with no queue exit gets the prompt it always got', () => {

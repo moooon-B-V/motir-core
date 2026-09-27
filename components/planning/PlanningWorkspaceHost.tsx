@@ -9,7 +9,7 @@ import {
   type CSSProperties,
   type RefObject,
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
 import { useTranslations } from 'next-intl';
 import { Map, X } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -93,6 +93,10 @@ import {
 // explicit refetch trigger (`treeVersion`, folded into the canvas's diff key);
 // the server-rendered surfaces behind this overlay (counts, headers, the backlog
 // underneath) take the `router.refresh()`. Both, because both apply.
+// The refresh is the shell's COORDINATED one (bug MOTIR-6640): on the Workbench
+// the live stream nudges a refresh for the same approve, and two overlapping
+// refreshes can make Next fall back to a full document load. That load drops
+// the decided plan this overlay keeps after an approve.
 //
 // OPENS BEFORE ITS DATA (Bug MOTIR-2069): the frame — back bar, project name,
 // the two-pane split, the whole conversation rail — waits on NOTHING. The host
@@ -233,7 +237,7 @@ export function PlanningWorkspaceHost({
 }: PlanningWorkspaceHostProps) {
   const t = useTranslations('planningWorkspace');
   const tPlanReview = useTranslations('planReview');
-  const router = useRouter();
+  const refresh = useCoordinatedRefresh();
 
   // The turn's TARGET SET (MOTIR-1491). It lives HERE, not in the rail, because
   // both panes read it: the composer collects it and the canvas rings it. The
@@ -330,12 +334,12 @@ export function PlanningWorkspaceHost({
   const closeAfterApproveRef = useRef(false);
   const onApproved = useCallback(() => {
     setTreeVersion((v) => v + 1);
-    router.refresh();
+    refresh();
     if (!closeAfterApproveRef.current) return;
     closeAfterApproveRef.current = false;
     setGuardOpen(false);
     closeBypassingGuard();
-  }, [router, closeBypassingGuard]);
+  }, [refresh, closeBypassingGuard]);
   const { state, send, retry, correctTurn, approve, discard, stop } = usePlanChangeConversation({
     onApproved,
     anchorId,

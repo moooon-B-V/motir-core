@@ -128,9 +128,53 @@ export interface WorkItemHistoryPage {
  */
 export type AiWorkItemDto = WorkItemDto & RelationshipLinkGroups;
 
+/**
+ * Where a card's UNMERGED code lives in one repository (MOTIR-6618) — the open
+ * pull request's branch, read off the delivery rows with no provider call.
+ *
+ * - `repo` is `owner/name`, exactly the `repoRef` `GET /api/internal/ai/repo-file`
+ *   (motir-ai's `read_file`) accepts, so the planner passes it straight through
+ *   together with `branch` as the `ref`.
+ * - `branch` is the pull request's `headRef` — the NAME a reader reads at.
+ *   `headSha` only dates the observation (the head the latest check rows ran on,
+ *   else the head the mergeability was last observed at; null when neither was
+ *   ever recorded).
+ * - `source: 'own'` — the card's own open delivery in that repository.
+ *   `source: 'inherited'` — the card has none there, so the entry is the NEAREST
+ *   ancestor's open delivery in that repository (the story's
+ *   `parent/MOTIR-<id>-<slug>` branch a child's commit rides); `fromKey` names
+ *   that ancestor.
+ * - `draft` is true only for a pull request recorded as a draft (null — never
+ *   recorded — reads as false, as every other reader of the row treats it).
+ */
+export type InFlightCodeDto = {
+  repo: string;
+  branch: string;
+  headSha: string | null;
+  prNumber: number;
+  prUrl: string;
+  draft: boolean;
+  baseRef: string | null;
+} & ({ source: 'own' } | { source: 'inherited'; fromKey: string });
+
+/**
+ * The in-flight half of the get-item read (MOTIR-6618). Both are ARRAYS on every
+ * item, never null: empty is the ordinary answer.
+ *
+ * `mergedRepos` names the repositories where the card's OWN delivery has merged
+ * and no in-flight entry (own or inherited) remains — so a reader can tell "on
+ * the default branch now" (`inFlightCode: []`, `mergedRepos: ['o/r']`) from
+ * "nothing was ever written" (both empty).
+ */
+export interface AiInFlightCodeFields {
+  inFlightCode: InFlightCodeDto[];
+  mergedRepos: string[];
+}
+
 export interface GetItemResponse {
   // `decision` — a `human` decision's confirmation (MOTIR-5958), null otherwise.
-  item: AiWorkItemDto & { decision: AiDecisionBlock | null };
+  // `inFlightCode` / `mergedRepos` — the card's unmerged code (MOTIR-6618).
+  item: AiWorkItemDto & { decision: AiDecisionBlock | null } & AiInFlightCodeFields;
   comments?: CommentsPageDTO;
   history?: WorkItemHistoryPage;
 }
