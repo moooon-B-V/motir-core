@@ -199,6 +199,9 @@ describe('a seeded session’s row carries its seed', () => {
     expect(row!.seed).toEqual({
       cardKey: accepted.card.identifier,
       gateKind: 'acceptance_result',
+      // A refusal seed, never a pick (MOTIR-6069's two origins) — so no option was chosen.
+      origin: 'refusal',
+      chosenLabel: null,
     });
   });
 
