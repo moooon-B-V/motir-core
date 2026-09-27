@@ -14,7 +14,7 @@ import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 // recent), its SEARCH (`?q=`) + category filter (`?category=`), and its "load
 // more" pagination. NOT session-gated: a logged-out visitor / crawler reads it
 // (the square is anonymous — model revision 2026-06-14), so there is
-// deliberately no `getSession()` call. The `accessLevel = 'public'` filter + the
+// deliberately no `getSession()` call. The `accessMode = 'public'` filter + the
 // card projection + the ranking + the search/tag predicates all live in the
 // service / repository, so this handler is pure transport. HTTP layer only:
 // parse the `rank` / `window` / `cursor` / `q` / `category` params → one service

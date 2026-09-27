@@ -154,8 +154,8 @@ async function resolveInputs(
     tx,
   );
   return {
-    // The project's MODE — derived from `accessLevel` while the column is NULL
-    // (Story MOTIR-6169) — and the actor's SCOPE, read off the membership row; an
+    // The project's stored MODE (Story MOTIR-6169; NOT NULL since MOTIR-6686)
+    // and the actor's SCOPE, read off the membership row; an
     // org Owner / Admin composed in as a Manager has no row, and a Manager's
     // scope is never read.
     accessMode: project.accessMode,
@@ -391,7 +391,7 @@ export const projectAccessService = {
    * it: a project-bound token was LISTED every project it would then 404 on.
    * A bound actor keeps at most its one project, before any role is read.
    */
-  async filterBrowsable<T extends Pick<Project, 'id' | 'accessLevel' | 'accessMode'>>(
+  async filterBrowsable<T extends Pick<Project, 'id' | 'accessMode'>>(
     projects: T[],
     ctx: AccessActorContext,
     tx?: Prisma.TransactionClient,

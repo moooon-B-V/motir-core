@@ -41,7 +41,7 @@ export const projectTagRepository = {
   /**
    * Every tag with its PUBLIC-project assignment count — the tag-FACET read that
    * backs the square's category browse (6.13.3 + the categories panel). The
-   * filtered `_count` runs the `access_level = 'public'` (and `archivedAt: null`)
+   * filtered `_count` runs the `access_mode = 'public'` (and `archivedAt: null`)
    * predicate INSIDE the relation aggregate, so a non-public or archived
    * project's assignment never inflates a tag's count. Pure read (no `tx`).
    */
@@ -52,7 +52,7 @@ export const projectTagRepository = {
         label: true,
         _count: {
           select: {
-            assignments: { where: { project: { accessLevel: 'public', archivedAt: null } } },
+            assignments: { where: { project: { accessMode: 'public', archivedAt: null } } },
           },
         },
       },

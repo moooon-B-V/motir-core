@@ -18,7 +18,7 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 // them is gone (`member-facing-permissions.md`, the 2026-09-26 amendment).
 //
 // Each set is the role's MAXIMAL grant, i.e. what it holds on the most-open
-// access level. The project's `accessLevel` then SUBTRACTS from it — see
+// access mode. The project's `accessMode` then SUBTRACTS from it — see
 // `lib/permissions/resolve.ts`, which owns that half. Keeping the two separate is
 // what makes a role readable on its own ("what does Member mean?") without
 // having to hold four access levels in your head at the same time.

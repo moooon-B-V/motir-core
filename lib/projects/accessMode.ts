@@ -29,8 +29,8 @@ export const WORKSPACE_ACCESS_SCOPES = [
 ] as const satisfies readonly WorkspaceAccessScope[];
 
 /**
- * The legacy level written BESIDE a mode, so the two columns never disagree —
- * above all for the RLS policies that still key on `"accessLevel" = 'public'`.
+ * The legacy level written BESIDE a mode, so the two columns never disagree
+ * while the previous image — which still reads `accessLevel` — serves.
  * `members` writes `private` (not `limited`): `limited` meant "everyone views,
  * only members edit", which no mode reproduces, so the narrow level is the one
  * that admits exactly the people a Members-only project admits.
