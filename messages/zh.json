@@ -2450,7 +2450,19 @@
       },
       "emptyMembersOnlyTitle": "只有管理者可以打开此项目",
       "emptyMembersOnlyBody": "此项目仅限成员，且尚未添加任何人。添加人员即可让他们进入。",
-      "readOnlyModeNote": "只有工作区管理者可以更改谁能打开此项目。"
+      "readOnlyModeNote": "只有工作区管理者可以更改谁能打开此项目。",
+      "visitors": {
+        "heading": "访客",
+        "countLabel": "{count} 位访客",
+        "subtitle": "观看此公开项目的 {workspace} 以外的人。每个人在首次访问前都同意与此项目的管理者分享其姓名和电子邮件。只有管理者能看到此列表。",
+        "firstVisit": "首次访问",
+        "latestVisit": "最近访问",
+        "agreed": "同意于",
+        "showMore": "显示更多",
+        "loadFailed": "无法加载更多访客，请重试。",
+        "emptyTitle": "还没有人访问",
+        "emptyBody": "当 {workspace} 以外的人打开此项目的访客链接并同意分享其信息后，他们会显示在这里。"
+      }
     },
     "publicPage": {
       "title": "公开页面",

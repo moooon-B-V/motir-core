@@ -2450,7 +2450,19 @@
       },
       "emptyMembersOnlyTitle": "Only Managers can open this project",
       "emptyMembersOnlyBody": "It is members only and nobody has been added yet. Add people to let them in.",
-      "readOnlyModeNote": "Only a workspace Manager can change who can open this project."
+      "readOnlyModeNote": "Only a workspace Manager can change who can open this project.",
+      "visitors": {
+        "heading": "Visitors",
+        "countLabel": "{count, plural, one {# visitor} other {# visitors}}",
+        "subtitle": "People outside {workspace} who watched this public project. Each agreed to share their name and email with this project’s Managers before their first visit. Only Managers see this list.",
+        "firstVisit": "First visit",
+        "latestVisit": "Latest visit",
+        "agreed": "Agreed",
+        "showMore": "Show more",
+        "loadFailed": "We couldn’t load more visitors. Try again.",
+        "emptyTitle": "No one has visited yet",
+        "emptyBody": "When someone outside {workspace} opens this project’s Visitor link and agrees to share their details, they appear here."
+      }
     },
     "publicPage": {
       "title": "Public page",
