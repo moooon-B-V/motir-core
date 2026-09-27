@@ -519,3 +519,281 @@ describe('gitlab.listChangedFiles', () => {
     expect(serialized).not.toContain('http');
   });
 });
+
+// ── Story gate MOTIR-6621 — the arms the feature suite above left uncovered ──
+// The story's coverage floor, measured per function over each provider's
+// `listChangedFiles` and its helpers: malformed host entries, a host that hangs
+// or throws something odd, and SHAs a host did not give in the expected shape.
+// Every one is still a NAMED result, never a throw.
+
+describe('github.listChangedFiles — the residual arms (MOTIR-6621)', () => {
+  const { privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+
+  beforeEach(() => {
+    _resetInstallationTokenCache();
+    vi.stubEnv('GITHUB_APP_ID', '999');
+    vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('skips files[] entries with no path; a SHA not in hex, or no commits list, degrades to null / the merge base', async () => {
+    stubFetch(() =>
+      json({
+        base_commit: { sha: 'not-a-sha' },
+        merge_base_commit: { sha: MERGE_BASE_SHA },
+        // `commits` is absent altogether — head falls back to the merge base.
+        files: [
+          null,
+          'lib/a-string.ts',
+          { filename: '' },
+          { status: 'added' },
+          ...githubThreeFiles(),
+        ],
+      }),
+    );
+    expect(await github.listChangedFiles('inst-1', 'moooon', 'acme', 'main', 'feat/x')).toEqual({
+      outcome: 'ok',
+      base: 'main',
+      head: 'feat/x',
+      files: [
+        { path: 'lib/new.ts', status: 'added' },
+        { path: 'lib/changed.ts', status: 'modified' },
+        { path: 'lib/after.ts', status: 'renamed', previousPath: 'lib/before.ts' },
+      ],
+      truncated: false,
+      baseSha: null,
+      headSha: MERGE_BASE_SHA,
+    });
+  });
+
+  it('a token endpoint that answers 5xx is host_error with the mint’s own message, not revoked', async () => {
+    const fetchMock = stubFetch(
+      () => json(githubCompareBody()),
+      () => json({ message: 'Server Error' }, 500),
+    );
+    const result = await github.listChangedFiles('inst-1', 'moooon', 'acme', 'main', 'feat/x');
+    expect(result).toEqual({
+      outcome: 'host_error',
+      base: 'main',
+      head: 'feat/x',
+      detail: 'GitHub installation-token mint failed: token endpoint returned 500',
+    });
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/compare/'))).toBe(false);
+  });
+
+  it('a compare that does not answer inside the deadline is host_error', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) =>
+        String(url).includes('/access_tokens')
+          ? Promise.resolve(tokenResponse())
+          : new Promise<Response>((_resolve, reject) => {
+              init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+            }),
+      ),
+    );
+    const pending = github.listChangedFiles('inst-1', 'moooon', 'acme', 'main', 'feat/x');
+    await vi.advanceTimersByTimeAsync(CHANGED_FILES_TIMEOUT_MS);
+    expect(await pending).toEqual({
+      outcome: 'host_error',
+      base: 'main',
+      head: 'feat/x',
+      detail: `no response within ${CHANGED_FILES_TIMEOUT_MS}ms`,
+    });
+  });
+
+  it('a compare fetch that rejects with a non-Error is host_error "unknown"', async () => {
+    stubFetch(() => Promise.reject('socket closed'));
+    expect(await github.listChangedFiles('inst-1', 'moooon', 'acme', 'main', 'feat/x')).toEqual({
+      outcome: 'host_error',
+      base: 'main',
+      head: 'feat/x',
+      detail: 'unknown',
+    });
+  });
+});
+
+describe('gitlab.listChangedFiles — the residual arms (MOTIR-6621)', () => {
+  beforeEach(() => {
+    vi.spyOn(gitlabConnectionService, 'getAccessToken').mockResolvedValue({
+      token: 'glpat_changes_secret',
+      expiresAt: new Date(Date.now() + 3_600_000),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('skips diffs[] entries with no usable path, and names a deletion by whichever path it has', async () => {
+    stubFetch(() =>
+      json({
+        ...gitlabCompareBody([
+          null,
+          { new_path: 42, old_path: null, deleted_file: false },
+          { new_path: '', old_path: '', deleted_file: true },
+          { new_path: 'src/only-new.ts', old_path: '', deleted_file: true },
+          { new_path: 'src/same.ts', old_path: 'src/same.ts', renamed_file: true },
+          ...gitlabThreeDiffs(),
+        ]),
+      }),
+    );
+    const result = await gitlab.listChangedFiles('conn-1', 'acme', 'web', 'main', 'feat/x');
+    expect(result).toMatchObject({
+      outcome: 'ok',
+      files: [
+        { path: 'src/only-new.ts', status: 'removed' },
+        // A "rename" onto its own path is a modification, not a rename.
+        { path: 'src/same.ts', status: 'modified' },
+        { path: 'src/new.ts', status: 'added' },
+        { path: 'src/after.ts', status: 'renamed', previousPath: 'src/before.ts' },
+        { path: 'src/gone.ts', status: 'removed' },
+        { path: 'src/changed.ts', status: 'modified' },
+      ],
+    });
+  });
+
+  it('with no parseable web_url, head comes from commit.id — and a non-hex id is null', async () => {
+    stubFetch(() => json({ ...gitlabCompareBody(), web_url: 'https://gitlab.com/acme/web' }));
+    expect(await gitlab.listChangedFiles('conn-1', 'acme', 'web', 'main', 'feat/x')).toMatchObject({
+      outcome: 'ok',
+      baseSha: null,
+      headSha: HEAD_SHA,
+    });
+
+    stubFetch(() =>
+      json({ ...gitlabCompareBody(), web_url: undefined, commit: { id: 'not-a-sha' } }),
+    );
+    expect(await gitlab.listChangedFiles('conn-1', 'acme', 'web', 'main', 'feat/x')).toMatchObject({
+      outcome: 'ok',
+      baseSha: null,
+      headSha: null,
+    });
+  });
+
+  it('a 5xx, a 200 with no diffs list, and a fetch that rejects are all host_error', async () => {
+    stubFetch(() => new Response('bad gateway', { status: 502 }));
+    expect(await gitlab.listChangedFiles('conn-1', 'acme', 'web', 'main', 'feat/x')).toEqual({
+      outcome: 'host_error',
+      base: 'main',
+      head: 'feat/x',
+      detail: 'GitLab compare returned 502',
+    });
+
+    stubFetch(() => json({ commit: { id: HEAD_SHA } }));
+    expect(await gitlab.listChangedFiles('conn-1', 'acme', 'web', 'main', 'feat/x')).toMatchObject({
+      outcome: 'host_error',
+      detail: 'GitLab compare returned no diffs list',
+    });
+
+    stubFetch(() => {
+      throw new TypeError('fetch failed');
+    });
+    expect(await gitlab.listChangedFiles('conn-1', 'acme', 'web', 'main', 'feat/x')).toMatchObject({
+      outcome: 'host_error',
+      detail: 'fetch failed',
+    });
+
+    stubFetch(() => Promise.reject('socket closed'));
+    expect(await gitlab.listChangedFiles('conn-1', 'acme', 'web', 'main', 'feat/x')).toMatchObject({
+      outcome: 'host_error',
+      detail: 'unknown',
+    });
+  });
+
+  it('a token read that fails for any OTHER reason is host_error, never a throw', async () => {
+    const spy = vi.spyOn(gitlabConnectionService, 'getAccessToken');
+    const fetchMock = stubFetch(() => json(gitlabCompareBody()));
+
+    spy.mockRejectedValueOnce(new Error('decrypt failed'));
+    expect(await gitlab.listChangedFiles('conn-1', 'acme', 'web', 'main', 'feat/x')).toEqual({
+      outcome: 'host_error',
+      base: 'main',
+      head: 'feat/x',
+      detail: 'decrypt failed',
+    });
+
+    spy.mockRejectedValueOnce('not an Error');
+    expect(await gitlab.listChangedFiles('conn-1', 'acme', 'web', 'main', 'feat/x')).toMatchObject({
+      outcome: 'host_error',
+      detail: 'the connection token could not be read',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+// A host answer whose BODY cannot be read — a 200 that is not JSON, and an error
+// status whose body stream fails — is still a named result on both hosts.
+describe('listChangedFiles — an unreadable host body (MOTIR-6621)', () => {
+  const { privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+
+  /** An error-status answer whose `text()` rejects, as a torn stream does. */
+  function tornBody(status: number): Response {
+    return {
+      status,
+      ok: false,
+      headers: new Headers(),
+      text: () => Promise.reject(new Error('stream torn')),
+      json: () => Promise.reject(new Error('stream torn')),
+    } as unknown as Response;
+  }
+
+  beforeEach(() => {
+    _resetInstallationTokenCache();
+    vi.stubEnv('GITHUB_APP_ID', '999');
+    vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
+    vi.spyOn(gitlabConnectionService, 'getAccessToken').mockResolvedValue({
+      token: 'glpat_changes_secret',
+      expiresAt: new Date(Date.now() + 3_600_000),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('github: a non-JSON 200 and a torn error body are host_error', async () => {
+    stubFetch(() => new Response('<html>oops</html>', { status: 200 }));
+    expect(
+      await github.listChangedFiles('inst-1', 'moooon', 'acme', 'main', 'feat/x'),
+    ).toMatchObject({ outcome: 'host_error', detail: 'GitHub compare returned no files list' });
+
+    stubFetch(() => tornBody(502));
+    expect(
+      await github.listChangedFiles('inst-1', 'moooon', 'acme', 'main', 'feat/x'),
+    ).toMatchObject({ outcome: 'host_error', detail: 'GitHub compare returned 502' });
+  });
+
+  it('gitlab: a non-JSON 200 is host_error; a torn 404 body is no_such_ref', async () => {
+    stubFetch(() => new Response('<html>oops</html>', { status: 200 }));
+    expect(await gitlab.listChangedFiles('conn-1', 'acme', 'web', 'main', 'feat/x')).toMatchObject({
+      outcome: 'host_error',
+      detail: 'GitLab compare returned no diffs list',
+    });
+
+    stubFetch(() => tornBody(404));
+    expect(await gitlab.listChangedFiles('conn-1', 'acme', 'web', 'main', 'feat/x')).toEqual({
+      outcome: 'no_such_ref',
+      base: 'main',
+      head: 'feat/x',
+    });
+  });
+});
