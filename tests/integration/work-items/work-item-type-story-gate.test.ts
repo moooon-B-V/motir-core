@@ -224,6 +224,8 @@ describe('the integration seam — a type survives the whole path, on real Postg
         storyPoints: created.storyPoints ?? null,
         createdAt: created.createdAt,
         updatedAt: created.updatedAt,
+        obsolescence: null,
+        obsolescenceNoteMd: null,
         dependencies: { blockedBy: [], blocks: [] },
       });
       expect(parsed.success, `v1 schema rejected type '${type}'`).toBe(true);
@@ -247,6 +249,8 @@ describe('the integration seam — a type survives the whole path, on real Postg
       storyPoints: null,
       createdAt: new Date(),
       updatedAt: new Date(),
+      obsolescence: null,
+      obsolescenceNoteMd: null,
       dependencies: { blockedBy: [], blocks: [] },
     };
     for (const alias of ['doc', 'spike', 'kode'] as unknown as WorkItemTypeDto[]) {
