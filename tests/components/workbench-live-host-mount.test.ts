@@ -81,3 +81,35 @@ describe('the live host is an ANCESTOR of everything that reads it', () => {
     expect(before).not.toContain('<Suspense');
   });
 });
+
+// THE SHELL'S REFRESHES ARE COORDINATED (bug MOTIR-6640). The live nudge and the
+// planning overlay's approve both refresh for the same write; two overlapping
+// refreshes made Next fall back to a full document load and wiped the decided
+// plan. The coordinator only works if both callers go through it, and it is
+// mounted in the shell for the same reason the live host is: the overlay is not
+// a descendant of any page. So this is a text check too.
+describe('the shell refreshes through ONE coordinator', () => {
+  const liveHost = code('app/(authed)/workbench/_components/WorkbenchLive.tsx');
+  const planningHost = code('components/planning/PlanningWorkspaceHost.tsx');
+
+  it('mounts CoordinatedRefreshProvider around the live host and the planning overlay', () => {
+    const open = layout.indexOf('<CoordinatedRefreshProvider>');
+    const close = layout.indexOf('</CoordinatedRefreshProvider>');
+    expect(
+      open,
+      '`app/(authed)/layout.tsx` must mount <CoordinatedRefreshProvider>',
+    ).toBeGreaterThan(-1);
+    expect(layout.indexOf('<WorkbenchLive>')).toBeGreaterThan(open);
+    expect(layout.indexOf('</WorkbenchLive>')).toBeLessThan(close);
+    const overlay = layout.indexOf('<PlanningWorkspaceOverlay');
+    expect(overlay).toBeGreaterThan(open);
+    expect(overlay).toBeLessThan(close);
+  });
+
+  it('never refreshes the router directly from the nudge or the approve', () => {
+    expect(liveHost).toContain('useCoordinatedRefresh');
+    expect(liveHost).not.toMatch(/router\.refresh\(/);
+    expect(planningHost).toContain('useCoordinatedRefresh');
+    expect(planningHost).not.toMatch(/router\.refresh\(/);
+  });
+});
