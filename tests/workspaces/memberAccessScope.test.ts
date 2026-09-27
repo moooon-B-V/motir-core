@@ -209,4 +209,43 @@ describe('PATCH /api/workspaces/:workspaceId/members/:userId/access-scope', () =
     ctxRef.current = { userId: f.other.id, workspaceId: f.workspaceId };
     expect((await call(f.workspaceId, f.member.id, { accessScope: 'full' })).status).toBe(403);
   });
+
+  it('401 with no session, and 400 for a body that is not JSON or names no scope — before any write', async () => {
+    const f = await build();
+    const unauth = await call(f.workspaceId, f.member.id, { accessScope: 'limited' });
+    expect(unauth.status).toBe(401);
+    expect(await unauth.json()).toMatchObject({ code: 'UNAUTHENTICATED' });
+
+    ctxRef.current = { userId: f.manager.id, workspaceId: f.workspaceId };
+    const notJson = await PATCH(
+      new Request(
+        `http://localhost/api/workspaces/${f.workspaceId}/members/${f.member.id}/access-scope`,
+        {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: '{not json',
+        },
+      ),
+      { params: Promise.resolve({ workspaceId: f.workspaceId, userId: f.member.id }) },
+    );
+    expect(notJson.status).toBe(400);
+    expect(await notJson.json()).toMatchObject({ code: 'BAD_REQUEST' });
+    expect((await call(f.workspaceId, f.member.id, { scope: 'limited' })).status).toBe(400);
+    expect((await call(f.workspaceId, f.member.id, null)).status).toBe(400);
+
+    const rows = await workspacesService.listMembers(f.workspaceId, f.manager.id);
+    expect(rows.find((r) => r.userId === f.member.id)?.accessScope).toBe('full');
+  });
+
+  it('rethrows an error it has no status for, rather than answering it', async () => {
+    const f = await build();
+    ctxRef.current = { userId: f.manager.id, workspaceId: f.workspaceId };
+    const spy = vi
+      .spyOn(workspacesService, 'setMemberAccessScope')
+      .mockRejectedValueOnce(new Error('the database went away'));
+    await expect(call(f.workspaceId, f.member.id, { accessScope: 'limited' })).rejects.toThrow(
+      'the database went away',
+    );
+    spy.mockRestore();
+  });
 });
