@@ -21,6 +21,7 @@ import {
   buildOperationRegistry,
   findV1Operation,
   mergeResourceComponents,
+  mergeSharedSchemas,
   V1_OPERATION_REGISTRY,
   V1_OPERATIONS,
   V1_RESOURCE_COMPONENTS,
@@ -101,6 +102,29 @@ describe('the v1 operation registry', () => {
   it('REFUSES two modules that claim one component NAME', () => {
     const resource = { operations: [], components: { WorkItemSummary: workItemSummarySchema } };
     expect(() => mergeResourceComponents([resource, resource])).toThrow(/duplicate v1 component/);
+  });
+
+  // MOTIR-6581 — the named SHARED schemas land in the same `components.schemas`
+  // map, so a clash with a resource name is the same silent-overwrite hazard,
+  // and the emitter resolves a `$ref` by INSTANCE, so one instance under two
+  // names would make the document pick one arbitrarily.
+  it('REFUSES a shared schema whose NAME clashes with a resource component or another one', () => {
+    const vocab = z.enum(['a', 'b']);
+    const clashesWithResource = {
+      operations: [],
+      components: { WorkItemSummary: workItemSummarySchema },
+      sharedSchemas: { WorkItemSummary: vocab },
+    };
+    expect(() => mergeSharedSchemas([clashesWithResource])).toThrow(/duplicate v1 component/);
+    const one = { operations: [], components: {}, sharedSchemas: { Vocab: vocab } };
+    const other = { operations: [], components: {}, sharedSchemas: { Vocab: z.enum(['c']) } };
+    expect(() => mergeSharedSchemas([one, other])).toThrow(/duplicate v1 component/);
+  });
+
+  it('REFUSES one shared schema INSTANCE registered under two names', () => {
+    const vocab = z.enum(['a', 'b']);
+    const twice = { operations: [], components: {}, sharedSchemas: { A: vocab, B: vocab } };
+    expect(() => mergeSharedSchemas([twice])).toThrow(/registered twice/);
   });
 
   it('gives a 204 operation an EMPTY body and every other one a real shape', () => {

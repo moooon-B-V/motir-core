@@ -72,6 +72,8 @@ export function toRowSummary(dto: WorkItemDto): WorkItemSummaryDto {
     position: dto.position,
     estimateMinutes: dto.estimateMinutes,
     storyPoints: dto.storyPoints,
+    obsolescence: dto.obsolescence,
+    obsolescenceNoteMd: dto.obsolescenceNoteMd,
     archivedAt: dto.archivedAt,
   };
 }

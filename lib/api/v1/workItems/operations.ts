@@ -15,6 +15,7 @@ import {
   createWorkItemBodySchema,
   linkPullRequestBodySchema,
   linkedPullRequestSchema,
+  obsolescenceSchema,
   relationshipSchema,
   transitionListSchema,
   updateWorkItemBodySchema,
@@ -159,7 +160,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     operationId: 'createWorkItem',
     summary: 'Create a work item',
     description:
-      'Create a work item in a project. The parent, if given, is named by its key and must be a kind-legal parent in the same project. Alternatively send `folderId` to file the new item into one of the project’s folders; naming both a parent and a folder is refused with `PLACEMENT_CONFLICT`.',
+      'Create a work item in a project. The parent, if given, is named by its key and must be a kind-legal parent in the same project. Alternatively send `folderId` to file the new item into one of the project’s folders; naming both a parent and a folder is refused with `PLACEMENT_CONFLICT`. `obsolescence` (`outdated` / `deprecated`) and `obsolescenceNoteMd` may be set on any kind and in any status; a value outside the enum is refused with `INVALID_OBSOLESCENCE`.',
     permission: 'work_item:edit',
     parameters: [projectKeyParameter],
     requestBody: {
@@ -195,7 +196,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     operationId: 'updateWorkItem',
     summary: 'Update a work item',
     description:
-      'Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field explicitly set to `null` CLEARS it. Send `If-Match` to make the update conditional on the item not having moved. `folderId` files the item into a folder (or `null` takes it out), in the same write as every other field; setting `parentKey` on a filed item takes it out of its folder, and sending both is refused with `PLACEMENT_CONFLICT`.',
+      'Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field explicitly set to `null` CLEARS it. Send `If-Match` to make the update conditional on the item not having moved. `folderId` files the item into a folder (or `null` takes it out), in the same write as every other field; setting `parentKey` on a filed item takes it out of its folder, and sending both is refused with `PLACEMENT_CONFLICT`. `obsolescence` and `obsolescenceNoteMd` mark the item as no longer true of the code on ANY kind and in ANY status — a `done` item included — and `null` clears either; a value outside the enum is refused with `INVALID_OBSOLESCENCE`.',
     permission: 'work_item:edit',
     parameters: [keyParameter, ifMatchParameter],
     requestBody: {
@@ -251,13 +252,13 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     operationId: 'listWorkItemLinks',
     summary: 'Read a work item’s relationship edges',
     description:
-      'All five edge groups. An empty group is `[]`, never an absent key — to a typed client those are different things.',
+      'All seven edge groups. An empty group is `[]`, never an absent key — to a typed client those are different things. `supersedes` lists the older work items this one replaces; `supersededBy` the newer ones that replace it.',
     permission: 'project:browse',
     parameters: [keyParameter],
     response: {
       status: 200,
       body: { kind: 'object', schema: workItemLinkGroupsSchema },
-      description: 'The five edge groups.',
+      description: 'The seven edge groups.',
     },
     errorStatuses: [404],
   }),
@@ -267,7 +268,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     operationId: 'createWorkItemLink',
     summary: 'Create a relationship edge',
     description:
-      'Link this work item to another by key. Creating an edge that already exists is a 409 — the body is valid, the state is not what the request assumed.',
+      'Link this work item to another by key. Creating an edge that already exists is a 409 — the body is valid, the state is not what the request assumed. `supersedes` records that this (newer) work item replaces `toKey`; `superseded_by` writes the same edge from the older end. Neither gates readiness — only `blocked_by` / `blocks` do.',
     permission: 'work_item:edit',
     parameters: [keyParameter],
     requestBody: {
@@ -588,4 +589,19 @@ export const WORK_ITEM_COMPONENTS: Readonly<Record<string, z.ZodType>> = {
   // would then demand that MCP's transport shape equal v1's — which is exactly
   // the freedom that doctrine reserves. Its VERDICTS are shared, and they are
   // the component above.
+};
+
+/**
+ * The named SHARED schemas this resource contributes (MOTIR-6581) — a field
+ * vocabulary rather than a resource, so it is emitted as ONE component that every
+ * carrier `$ref`s wherever the schema instance appears, and it is deliberately
+ * NOT in {@link WORK_ITEM_COMPONENTS}: that map is the SHARED-RESOURCE set the
+ * MCP payload guard derives from (`lib/mcp/payloads/sharedResources.ts`), and an
+ * enum is not a resource any tool returns.
+ *
+ * `WorkItemObsolescence` rides the detail, the collection row, the ready row and
+ * both write bodies — named once so a client generator produces one type for it.
+ */
+export const WORK_ITEM_SHARED_SCHEMAS: Readonly<Record<string, z.ZodType>> = {
+  WorkItemObsolescence: obsolescenceSchema,
 };

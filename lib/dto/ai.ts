@@ -6,6 +6,7 @@ import type {
   RelationshipLinkGroups,
   WorkItemDto,
   WorkItemKindDto,
+  WorkItemObsolescenceDto,
   WorkItemPriorityDto,
   WorkItemRevisionDto,
   WorkItemTypeDto,
@@ -58,6 +59,11 @@ export interface PlanTreeSkeletonItem {
   // A `human` decision's confirmation (MOTIR-5958) — null on every other item.
   // Populated by ONE batched read per response, never N+1.
   decision: AiDecisionBlock | null;
+  // The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6582) — `outdated` ·
+  // `deprecated`, null when the card is still true of the code. The MARK only:
+  // the note is a body, and bodies stay off the breadth read (`get-item` carries
+  // it). Informational — no read in this family drops or re-sorts a marked row.
+  obsolescence: WorkItemObsolescenceDto | null;
 }
 
 // One folder of the project, as the tree read carries it (MOTIR-5410). `path` is
@@ -103,8 +109,11 @@ export interface WorkItemHistoryPage {
 // DEPTH context 7.1.6 deferred: the full comment thread and the change log, each
 // bounded/paginated. `comments` / `history` are present ONLY when asked for.
 /**
- * The AI boundary's item shape: the work-item DTO PLUS all five relationship
- * groups (MOTIR-4063).
+ * The AI boundary's item shape: the work-item DTO PLUS every relationship group
+ * (MOTIR-4063; `supersedes` / `supersededBy` since MOTIR-6580). The DTO half
+ * carries the OBSOLESCENCE mark and its note (`obsolescence`,
+ * `obsolescenceNoteMd` — MOTIR-6579 / MOTIR-6582), so the planner reads whether
+ * a card is still current, why, and what replaced it from this one item.
  *
  * ⚠️ The links ride the ITEM rather than sitting beside it, because that is
  * where the planner reads them (`motir-ai` `readLinks` indexes `blockedBy` /
@@ -220,6 +229,9 @@ export interface SearchResultRow {
   status: string;
   priority: WorkItemPriorityDto;
   revision: string | null;
+  // The OBSOLESCENCE mark (MOTIR-6582) — the same cheap field the skeleton row
+  // carries, so a hit can be triaged as stale before a `get-item` depth read.
+  obsolescence: WorkItemObsolescenceDto | null;
 }
 
 // POST /api/internal/ai/search-work-items (Subtask 7.5.2) — the on-demand SEARCH

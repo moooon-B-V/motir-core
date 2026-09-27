@@ -4,6 +4,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   Executor,
   WorkItemDifficulty,
+  WorkItemObsolescence,
   WorkItemPriority,
   WorkItemType,
 } from '@/generated/prisma/client';
@@ -15,10 +16,12 @@ import type {
   UpdateWorkItemInput,
   WorkItemDifficultyDto,
   WorkItemDto,
+  WorkItemObsolescenceDto,
   WorkItemTypeDto,
 } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolError, toolOk } from '../toolResult';
+import { obsolescenceNoteWriteField, obsolescenceWriteField } from '../obsolescence';
 import { derived } from '../payloads/define';
 import { presentMcpWorkItem, workItemWritePayload } from '../payloads/workItems';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
@@ -83,6 +86,9 @@ const inputSchema = {
         'refused (DIFFICULTY_NOT_ALLOWED_ON_KIND), and so is changing the kind of a leaf ' +
         'that carries one to a container without clearing it in the same call.',
     ),
+  // The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6582) — any kind, any status.
+  obsolescence: obsolescenceWriteField,
+  obsolescenceNoteMd: obsolescenceNoteWriteField,
   estimateMinutes: z
     .number()
     .int()
@@ -157,6 +163,8 @@ interface UpdateWorkItemArgs {
   type?: WorkItemType | null;
   executor?: Executor | null;
   difficulty?: WorkItemDifficulty | null;
+  obsolescence?: WorkItemObsolescence | null;
+  obsolescenceNoteMd?: string | null;
   estimateMinutes?: number | null;
   storyPoints?: number | null;
   targetRepo?: string | null;
@@ -178,6 +186,12 @@ function toPatch(args: UpdateWorkItemArgs): UpdateWorkItemInput {
   if (args.difficulty !== undefined) {
     patch.difficulty = args.difficulty as WorkItemDifficultyDto | null;
   }
+  // The mark and its note (MOTIR-6582): `null` clears; the service validates the
+  // value (InvalidObsolescenceError → INVALID_OBSOLESCENCE) on ANY kind and status.
+  if (args.obsolescence !== undefined) {
+    patch.obsolescence = args.obsolescence as WorkItemObsolescenceDto | null;
+  }
+  if (args.obsolescenceNoteMd !== undefined) patch.obsolescenceNoteMd = args.obsolescenceNoteMd;
   if (args.estimateMinutes !== undefined) patch.estimateMinutes = args.estimateMinutes;
   if (args.storyPoints !== undefined) patch.storyPoints = args.storyPoints;
   if (args.targetRepo !== undefined) patch.targetRepo = args.targetRepo;
@@ -229,7 +243,8 @@ export async function runUpdateWorkItem(
         NO_FIELDS_TO_PATCH_CODE,
         'update_work_item was called with no field to change — only "key" was supplied. ' +
           'Name at least one of: title, descriptionMd, explanationMd, priority, type, ' +
-          'executor, difficulty, estimateMinutes, storyPoints, targetRepo, targetRepos, ' +
+          'executor, difficulty, obsolescence, obsolescenceNoteMd, estimateMinutes, ' +
+          'storyPoints, targetRepo, targetRepos, ' +
           'targetRepositories, assigneeId, dueDate. (Use transition_status for the ' +
           'workflow status.)',
       );
@@ -257,10 +272,13 @@ export function registerUpdateWorkItem(
       title: 'Update work item',
       description:
         'Edit a work item (by identifier, e.g. "ACME-7"): patch any subset of title, ' +
-        'description, explanation, priority, type, executor, difficulty, estimate, story ' +
-        'points, target repo, assignee, or due date. Use transition_status for the workflow ' +
-        'status. Honors the same leaf-only type/difficulty rules, project-repository ' +
-        'validation, assignee-membership check, and access checks as the UI.',
+        'description, explanation, priority, type, executor, difficulty, obsolescence mark ' +
+        'and its note, estimate, story points, target repo, assignee, or due date. Use ' +
+        'transition_status for the workflow status. The obsolescence mark (`outdated` · ' +
+        '`deprecated`) and `obsolescenceNoteMd` may be set on ANY kind in ANY status — a ' +
+        '`done` item included — and `null` clears either; a value outside the enum is ' +
+        'refused with INVALID_OBSOLESCENCE. Honors the same leaf-only type/difficulty rules, ' +
+        'project-repository validation, assignee-membership check, and access checks as the UI.',
       inputSchema,
     },
     async (args, extra) => runUpdateWorkItem(args, resolveContext(extra)),

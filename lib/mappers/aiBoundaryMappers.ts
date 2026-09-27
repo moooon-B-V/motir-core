@@ -1,4 +1,9 @@
-import type { WorkItemKindDto, WorkItemListItemDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
+import type {
+  WorkItemKindDto,
+  WorkItemListItemDto,
+  WorkItemObsolescenceDto,
+  WorkItemSummaryDto,
+} from '@/lib/dto/workItems';
 import type { FolderPickerNodeDto } from '@/lib/dto/folders';
 import type {
   AiDecisionBlock,
@@ -28,6 +33,10 @@ export interface SkeletonSourceRow {
   identifier: string;
   title: string;
   status: string;
+  // The OBSOLESCENCE mark (MOTIR-6582) — REQUIRED on every source, so a read
+  // whose projection forgot the column fails to compile rather than reporting
+  // every marked card as current (the subtree CTE is a raw SELECT).
+  obsolescence: WorkItemObsolescenceDto | null;
 }
 
 // Map a set of work-item rows to the plan-tree skeleton (contract §6).
@@ -60,6 +69,7 @@ export function toSkeletonRows(
     revision: revisionByItemId.get(r.id) ?? null,
     folderId: folderIdByItemId.get(r.id) ?? null,
     decision: decisionByItemId.get(r.id) ?? null,
+    obsolescence: r.obsolescence,
   }));
 }
 
@@ -123,6 +133,7 @@ export function toSearchResultRows(
     status: i.status,
     priority: i.priority,
     revision: revisionByItemId.get(i.id) ?? null,
+    obsolescence: i.obsolescence,
   }));
 }
 

@@ -13,7 +13,17 @@
 // via their session, so re-emitting it would be redundant noise and would
 // invite client code to treat it as authoritative when it isn't).
 
-export type WorkItemLinkKindDto = 'is_blocked_by' | 'relates_to' | 'duplicates' | 'clones';
+/**
+ * The FIVE storage kinds. `supersedes` (MOTIR-6580) reads "fromId supersedes
+ * toId": `from` is the NEWER item, `to` the OLDER one it replaces — directed,
+ * no reciprocal, gating nothing.
+ */
+export type WorkItemLinkKindDto =
+  | 'is_blocked_by'
+  | 'relates_to'
+  | 'duplicates'
+  | 'clones'
+  | 'supersedes';
 
 /**
  * The wire shape of a work-item-to-work-item link. Carries direction
@@ -46,11 +56,19 @@ export interface LinkWorkItemsInput {
 }
 
 /**
- * The FIVE UI-facing relationship kinds shown in the link-management surface
- * (2.4.8 design / 2.4.9). Distinct from the four STORAGE kinds
+ * The SEVEN UI-facing relationship kinds (2.4.8 design / 2.4.9, widened by
+ * MOTIR-6580). Distinct from the five STORAGE kinds
  * ({@link WorkItemLinkKindDto}): `blocked_by` and `blocks` are the two
- * DIRECTIONS of the single `is_blocked_by` storage edge — the action layer maps
- * a (current item, target, relationship) triple to the directed
- * {@link LinkWorkItemsInput} (see `lib/workItems/linkRelationships.ts`).
+ * DIRECTIONS of the single `is_blocked_by` storage edge, and `supersedes` and
+ * `superseded_by` the two directions of the single `supersedes` edge — the
+ * action layer maps a (current item, target, relationship) triple to the
+ * directed {@link LinkWorkItemsInput} (see `lib/workItems/linkRelationships.ts`).
  */
-export type RelationshipKind = 'blocked_by' | 'blocks' | 'relates_to' | 'duplicates' | 'clones';
+export type RelationshipKind =
+  | 'blocked_by'
+  | 'blocks'
+  | 'relates_to'
+  | 'duplicates'
+  | 'clones'
+  | 'supersedes'
+  | 'superseded_by';

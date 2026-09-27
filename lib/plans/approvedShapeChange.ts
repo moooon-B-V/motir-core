@@ -90,6 +90,11 @@ export const APPROVED_SHAPE_IGNORED_KEYS: ReadonlySet<string> = new Set([
   // the provenance of a re-scope reset (MOTIR-5359, retired by MOTIR-5640) — it
   // rode a `status` cell on historic rows; the activity registry still reads it
   'statusReset',
+  // the OBSOLESCENCE mark + note (MOTIR-6579) — a fact about the card's STANDING
+  // (is it still true of the code?), written on done / archived cards by design;
+  // marking an approved card is not a change to the work the plan approved
+  'obsolescence',
+  'obsolescenceNoteMd',
   // identity columns only a `created` row carries
   'projectId',
   'key',

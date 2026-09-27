@@ -30,6 +30,7 @@ export type WorkItemErrorTag =
   | 'STALE_WORK_ITEM'
   | 'TYPE_NOT_ALLOWED_ON_KIND'
   | 'DIFFICULTY_NOT_ALLOWED_ON_KIND'
+  | 'INVALID_OBSOLESCENCE'
   | 'NOT_EPIC'
   | 'UNKNOWN_TARGET_REPO'
   | 'UNKNOWN_PROJECT_REPO_REF'
@@ -265,6 +266,26 @@ export class DifficultyNotAllowedOnKindError extends WorkItemError {
   constructor(kind: string) {
     super(`A ${kind} cannot carry a difficulty (it is leaf-only).`);
     this.name = 'DifficultyNotAllowedOnKindError';
+  }
+}
+
+/**
+ * An `obsolescence` value OUTSIDE the closed `WorkItemObsolescence` enum reached
+ * the service — Story MOTIR-6574 · MOTIR-6579. The shape of
+ * {@link DifficultyNotAllowedOnKindError} WITHOUT a kind: the mark is kind- and
+ * status-agnostic, so the only way to write it wrong is an unknown member. The
+ * wire schemas narrow the value first; this is the service's own backstop so a
+ * caller that bypasses them (an internal path, a loosely-typed body) still writes
+ * nothing. A client error → 422 (the blanket `WorkItemError` mapping).
+ */
+export class InvalidObsolescenceError extends WorkItemError {
+  readonly tag = 'INVALID_OBSOLESCENCE' as const;
+  readonly code = 'INVALID_OBSOLESCENCE' as const;
+  constructor(value: unknown) {
+    super(
+      `${JSON.stringify(value) ?? String(value)} is not an obsolescence (expected "outdated", "deprecated" or null).`,
+    );
+    this.name = 'InvalidObsolescenceError';
   }
 }
 
