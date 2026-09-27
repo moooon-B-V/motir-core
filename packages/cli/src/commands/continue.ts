@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { WorkItemContinueClaim } from '../client.js';
+import type { DispatchItem, MotirClient, WorkItemContinueClaim } from '../client.js';
 import { resolveDispatchTarget } from '../dispatch.js';
 import { createDispatchRunReporter } from '../dispatchRunReporter.js';
 import { CliError } from '../errors.js';
@@ -139,7 +139,17 @@ export function prepareContinueCheckout(input: {
   const target = resolveDispatchTarget(input.rootDir, input.config, input.targetRepo, {
     exists: input.exists,
   });
-  if (target.reason !== 'repo_checkout' || target.repoPath === null) {
+  // A card pinned to NO repository runs in the link root itself — the one-repo
+  // link, `.motir.json` inside the checkout — exactly as `motir run` does
+  // (`unpinned_root`). Found by the story gate against the real server
+  // (MOTIR-6537): refusing it made every such card uncontinuable.
+  const repoPath =
+    target.reason === 'repo_checkout'
+      ? target.repoPath
+      : target.reason === 'unpinned_root'
+        ? input.rootDir
+        : null;
+  if (repoPath === null) {
     return {
       ok: false,
       message:
@@ -148,7 +158,6 @@ export function prepareContinueCheckout(input: {
         `.motir.json, then run \`motir continue ${input.key}\` again.`,
     };
   }
-  const repoPath = target.repoPath;
   const repoName = input.targetRepo ?? repoPath.split(/[\\/]/).pop() ?? 'repo';
   // The SAME path the prompt's continue workflow names (`worktreeDir`).
   const path = join(dirname(repoPath), `${repoName}-${input.key.toLowerCase()}`);
@@ -300,7 +309,10 @@ async function continueParent(input: {
   const ownerId = await resolveOwnerId(session.client);
   // `continue` registers only its own flags; the scope helpers read the rest as unset.
   const runOpts: RunOptions = { ...opts };
-  const claimed = await claimScopeForRun(session, target, runOpts, ownerId);
+  // The dead run's IN-FLIGHT legs are run again: the claim made them ours, and the
+  // ready set — To Do leaves only — would never list them.
+  const resume = await resumedItems(session.client, claim.resumedKeys);
+  const claimed = await claimScopeForRun(session, target, runOpts, ownerId, undefined, resume);
   if (!claimed) {
     // Nothing left to dispatch (or the scope claim refused and said why).
     await reporter.close('completed');
@@ -324,4 +336,28 @@ async function continueParent(input: {
     reporter,
     resumeBranch: true,
   });
+}
+
+/**
+ * The dead parent run's in-flight legs, as the drain's rows — each read once. The
+ * claim re-assigned them to the caller, so they are In Progress and ours: exactly
+ * the resumption the drain's pick rule allows (`isPickable`).
+ */
+async function resumedItems(client: MotirClient, keys: readonly string[]): Promise<DispatchItem[]> {
+  const items: DispatchItem[] = [];
+  for (const key of keys) {
+    const { item } = await client.getWorkItem(key);
+    items.push({
+      key: item.identifier,
+      kind: item.kind,
+      title: item.title,
+      priority: item.priority,
+      status: { key: item.status, category: 'in_progress' },
+      type: item.type,
+      executor: item.executor,
+      assigneeId: item.assigneeId,
+      inheritedSessionBranch: null,
+    });
+  }
+  return items;
 }

@@ -631,6 +631,11 @@
  *   branch; an invalid one is `CONTINUE_FROM_INVALID` (422). Every git workflow
  *   also gains a checkpoint instruction (push after each commit) — prompt TEXT,
  *   not contract.
+ *   MOTIR-6535 / MOTIR-6537: `WorkItemContinueClaim` also carries `resumedKeys`
+ *   (the dead parent run's in-flight legs, now the caller's), and `claimScope`'s
+ *   `work_item` body takes an optional `exceptLanded` (leave children already at
+ *   Implemented or later out of the claim instead of refusing on them) — both for
+ *   `motir continue <PARENT>`; a body without the flag claims exactly as before.
  *
  *   Additive: a NEW operation and NEW nullable fields (§8's allowed list); no
  *   existing field changes meaning. Gated on `work_item:edit`, a key

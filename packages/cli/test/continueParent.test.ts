@@ -141,6 +141,7 @@ function parentClaim(over: Partial<WorkItemContinueClaim> = {}): WorkItemContinu
     previousAssignee: { id: 'user_mara', name: 'Mara S.' },
     mode: 'parent',
     landedKeys: ['PROD-2'],
+    resumedKeys: [],
     ...over,
   };
 }
@@ -172,12 +173,12 @@ function recordingGit(): CommandRunner {
   };
 }
 
-function setup() {
+function setup(over: { ready?: DispatchItem[]; claim?: Partial<WorkItemContinueClaim> } = {}) {
   const calls: H['calls'] = [];
   const root = mkdtempSync(join(tmpdir(), 'motir-continue-parent-'));
   mkdirSync(join(root, 'motir-core'));
   // Only the NOT-landed child is ready: PROD-2 is Implemented, PROD-3 is in flight.
-  const ready: DispatchItem[] = [readyRow('PROD-3')];
+  const ready: DispatchItem[] = over.ready ?? [readyRow('PROD-3')];
   const client = {
     whoami: async () => ({
       user: { id: OWNER, name: 'Me', email: 'me@motir.test' },
@@ -185,10 +186,20 @@ function setup() {
     }),
     claimWorkItemContinue: async (key: string) => {
       calls.push({ tool: 'claim_continue', args: key });
-      return parentClaim();
+      return parentClaim(over.claim);
     },
     getWorkItem: async (key: string) => {
       calls.push({ tool: 'get_work_item', args: key });
+      // A leaf read — the resumed in-flight leg's row (MOTIR-6537).
+      if (key !== 'PROD-1') {
+        return detail({
+          identifier: key,
+          kind: 'subtask',
+          title: `Item ${key}`,
+          status: 'in_progress',
+          assigneeId: OWNER,
+        });
+      }
       return detail({ status: 'in_progress' }, ['PROD-2@implemented', 'PROD-3@in_progress']);
     },
     listReadyForDispatch: async (args: unknown) => {
@@ -338,6 +349,60 @@ describe('motir continue <PARENT>', () => {
     expect(h.commands.some((c) => c.startsWith('gh pr create'))).toBe(false);
     // The run is the server's, adopted — never a second one opened.
     expect(h.calls.map((c) => c.tool)).not.toContain('open_run');
+  });
+});
+
+describe('motir continue <PARENT> — the IN-FLIGHT legs (MOTIR-6537)', () => {
+  it('runs a leg the claim resumed even though the ready set — To Do only — does not list it', async () => {
+    // Found by the story gate against the REAL server: the dead run's in-flight
+    // child is In Progress, so the ready set never lists it, and a resume that read
+    // only the ready set dispatched nothing ("nothing is ready to start").
+    setup({ ready: [], claim: { resumedKeys: ['PROD-3'] } });
+    await continueCommand(
+      'PROD-1',
+      { agent: 'fake-agent' },
+      { run: recordingGit(), clock: () => 0, now: () => new Date(0) },
+    );
+
+    const prompts = h.calls.filter((c) => c.tool === 'dispatch_prompt');
+    expect(prompts.map((p) => p.args)).toEqual([{ key: 'PROD-3', sessionBranch: BRANCH }]);
+    expect(h.stderr).not.toContain('nothing is ready to start');
+    // The scope claim of a RESUME leaves the landed children out (MOTIR-6537).
+    expect(h.calls.find((c) => c.tool === 'claim_scope')?.args).toEqual({
+      kind: 'work_item',
+      key: 'PROD-1',
+      exceptLanded: true,
+    });
+  });
+
+  it('a session branch not minted by `motir auto` gets a fresh run id from the clock', async () => {
+    setup({ claim: { branch: 'story/refunds-session' } });
+    await continueCommand(
+      'PROD-1',
+      { agent: 'fake-agent' },
+      { run: recordingGit(), clock: () => 0 },
+    );
+    const prompts = h.calls.filter((c) => c.tool === 'dispatch_prompt');
+    expect(prompts.map((p) => p.args)).toEqual([
+      { key: 'PROD-3', sessionBranch: 'story/refunds-session' },
+    ]);
+  });
+
+  it('with nothing ready and nothing resumed, it closes the adopted run `completed` and runs no agent', async () => {
+    setup({ ready: [], claim: { landedKeys: [], resumedKeys: [] } });
+    await continueCommand(
+      'PROD-1',
+      { agent: 'fake-agent' },
+      { run: recordingGit(), clock: () => 0, now: () => new Date(0) },
+    );
+    expect(runAgentMock).not.toHaveBeenCalled();
+    expect(h.stderr).not.toContain('Already landed');
+    expect(h.calls).toContainEqual(
+      expect.objectContaining({
+        tool: 'close_run',
+        args: expect.objectContaining({ stopReason: 'completed' }),
+      }),
+    );
   });
 });
 

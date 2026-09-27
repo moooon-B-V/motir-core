@@ -428,6 +428,9 @@ describe('claimContinue — a PARENT whose scope run died (MOTIR-6535)', () => {
       mode: 'parent',
       branch: 'motir/auto-20260927-0900',
       landedKeys: [landed.identifier],
+      // The in-flight leg is named, so the resumed drain runs it again — the ready
+      // set lists only To Do leaves. The never-started one is left to the ready set.
+      resumedKeys: [inFlight.identifier],
       deadRun: { id: run.id, stopReason: 'abandoned' },
     });
     // The container AND its in-flight leg are the claimant's now; the landed one

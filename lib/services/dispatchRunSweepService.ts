@@ -6,7 +6,7 @@ import {
   DISPATCH_RUN_BODY_RETENTION_DAYS,
   dispatchRunService,
 } from '@/lib/services/dispatchRunService';
-import { RUN_HEARTBEAT_LAPSE_MS } from '@/lib/runs/runLiveness';
+import { heartbeatLapsedBefore } from '@/lib/runs/runLiveness';
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 
 // THE DISPATCH-RUN HOUSEKEEPING (Story MOTIR-1789 · MOTIR-1792) — the two
@@ -100,7 +100,7 @@ export const dispatchRunSweepService = {
    */
   async reapLapsed(now: Date = new Date()): Promise<RunLivenessSweepSummary> {
     const summary: RunLivenessSweepSummary = { runsReaped: 0, runsRacedByClose: 0, runsFailed: 0 };
-    const cutoff = new Date(now.getTime() - RUN_HEARTBEAT_LAPSE_MS);
+    const cutoff = heartbeatLapsedBefore(now);
     const lapsed = await withSystemContext((tx) =>
       dispatchRunRepository.listLapsedLocalRunningAcrossWorkspaces(
         cutoff,

@@ -414,8 +414,8 @@ Anyone who may edit the project carries it on with **`motir continue <key>`**, w
 checks that branch out — reusing the worktree when it is on this machine — and finishes
 the card in one pull request. On a **parent** whose `motir run <parent>` died,
 `motir continue <parent>` resumes the whole scope on the dead run's session branch —
-merging `origin/main` into it first, reusing its draft pull request, and never
-re-running a child that already landed. Starting over instead is a deliberate act: set the card
+merging `origin/main` into it first, reusing its draft pull request, running again the
+children the dead run was still working, and never re-running a child that already landed. Starting over instead is a deliberate act: set the card
 to **To Do** and `motir run` it. Pressing Ctrl-C closes the run as _interrupted_, and
 the card stays where it was.
 

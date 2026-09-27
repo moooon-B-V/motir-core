@@ -107,6 +107,10 @@ export interface WorkItemContinueClaimDto {
   /** The dead scope run's legs that already LANDED (Implemented or later) — never
    *  re-dispatched. Empty for a card. */
   landedKeys: string[];
+  /** The dead scope run's legs still IN FLIGHT — In Progress, and re-assigned to
+   *  the caller by this claim. The ready set lists only To Do leaves, so these are
+   *  named here for the resumed drain to run again. Empty for a card. */
+  resumedKeys: string[];
 }
 
 /** How a run ended without success, as the *run died* marker's reason line says it. */

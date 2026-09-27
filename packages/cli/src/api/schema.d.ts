@@ -1940,6 +1940,7 @@ export interface components {
             /** @enum {string} */
             mode: "card" | "parent";
             landedKeys: string[];
+            resumedKeys: string[];
         };
         ScopeClaim: {
             scope: {
@@ -8616,6 +8617,7 @@ export interface operations {
                     /** @constant */
                     kind: "work_item";
                     key: string;
+                    exceptLanded?: boolean;
                 } | {
                     /** @constant */
                     kind: "sprint";

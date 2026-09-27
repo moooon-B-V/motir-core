@@ -705,6 +705,8 @@ export interface WorkItemContinueClaim {
   mode: 'card' | 'parent';
   /** The dead scope run's legs that already landed — never re-dispatched. */
   landedKeys: string[];
+  /** The dead scope run's legs still in flight, now the caller's — run again. */
+  resumedKeys: string[];
 }
 
 export interface WorkItemRepairClaim {
@@ -1971,13 +1973,20 @@ export class MotirClient {
    * it.**
    */
   async claimScope(
-    args: { kind: 'work_item'; key: string } | { kind: 'sprint'; projectKey: string },
+    args:
+      | { kind: 'work_item'; key: string; exceptLanded?: boolean }
+      | { kind: 'sprint'; projectKey: string },
   ): Promise<ScopeClaim> {
     return toScopeClaim(
       await this.v1.request('claimScope', {
         body:
           args.kind === 'work_item'
-            ? { kind: 'work_item', key: args.key }
+            ? {
+                kind: 'work_item',
+                key: args.key,
+                // Only when set — a fresh run's body is unchanged (MOTIR-6535).
+                ...(args.exceptLanded ? { exceptLanded: true } : {}),
+              }
             : { kind: 'sprint', projectKey: args.projectKey },
       }),
     );

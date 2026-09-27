@@ -27,7 +27,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { IN_PROGRESS_STATUS_KEY } from '@/lib/workItems/claimOutcome';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
+import { ladderKeysFrom, RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // THE CONTINUE CLAIM (Story MOTIR-6526 · MOTIR-6532,
@@ -72,14 +72,7 @@ function toDeadRun(run: LatestRunForWorkItem): DeadRunDto {
   };
 }
 
-function ladderKeysOf(statuses: readonly WorkflowStatusDto[]) {
-  const keyOf = (key: string) => statuses.find((s) => s.key === key)?.key ?? null;
-  return {
-    reviewKey: keyOf('in_review'),
-    implementedKey: keyOf('implemented'),
-    approvedKey: keyOf('approved'),
-  };
-}
+const ladderKeysOf = ladderKeysFrom;
 
 /**
  * The STATUS refusals — the pull request's rungs are `motir fix`'s business, and
@@ -287,6 +280,7 @@ function refused(
     previousAssignee: null,
     mode: 'card',
     landedKeys: [],
+    resumedKeys: [],
     ...extra,
   };
 }
@@ -351,6 +345,7 @@ export const workItemContinueService = {
             previousAssignee: null,
             mode: verdict.run.scopeWorkItemId === item.id ? 'parent' : 'card',
             landedKeys: [],
+            resumedKeys: [],
           };
         }
         if (verdict.kind === 'alive') {
@@ -398,10 +393,14 @@ export const workItemContinueService = {
         const legItems = await workItemRepository.findByIdentifiers(projectId, legKeys, tx);
         const landedKeys: string[] = [];
         const inFlight: string[] = [];
+        const resumedKeys: string[] = [];
         for (const leg of legItems) {
           const rank = rankOfStatus(leg.status, statuses, ladderKeysOf(statuses));
           if (rank >= RUNG_RANK.implemented) landedKeys.push(leg.identifier);
-          else if (leg.status === IN_PROGRESS_STATUS_KEY) inFlight.push(leg.id);
+          else if (leg.status === IN_PROGRESS_STATUS_KEY) {
+            inFlight.push(leg.id);
+            resumedKeys.push(leg.identifier);
+          }
         }
         if (inFlight.length > 0) await workItemRepository.lockByIds(inFlight, tx);
         for (const id of inFlight) {
@@ -462,6 +461,7 @@ export const workItemContinueService = {
           previousAssignee,
           mode: parent ? 'parent' : 'card',
           landedKeys: landedKeys.sort(),
+          resumedKeys: resumedKeys.sort(),
         };
       },
     );

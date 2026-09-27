@@ -1,7 +1,9 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { DispatchRunNotFoundError, DispatchRunTerminalError } from '@/lib/dispatchRuns/errors';
 import { runLivenessSweep, RUN_LIVENESS_SWEEP_CRON } from '@/lib/jobs/definitions/runLivenessSweep';
+import { engineJob } from '@/lib/jobs/engine/registry';
+import { jobServices } from '@/lib/jobs/services';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -177,5 +179,20 @@ describe('system.run-liveness-sweep', () => {
     expect(runLivenessSweep.cron).toBe('0,30 * * * *');
     expect(runLivenessSweep.catchUp).toBe('latest');
     expect(runLivenessSweep.retryPolicy).toBe('idempotent');
+  });
+
+  it('the handler delegates to the lapse reap and returns what it counted (MOTIR-6537)', async () => {
+    // Through the ENGINE registry's own handler — the function the worker invokes.
+    const spy = vi
+      .spyOn(dispatchRunSweepService, 'reapLapsed')
+      .mockResolvedValue({ runsReaped: 2, runsRacedByClose: 1, runsFailed: 0 });
+    const step = { run: async <T>(_id: string, fn: () => T | Promise<T>): Promise<T> => fn() };
+
+    const handler = engineJob('system.run-liveness-sweep')!.handler;
+    const result = await handler({ step } as never, jobServices as never);
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ runsReaped: 2, runsRacedByClose: 1, runsFailed: 0 });
+    spy.mockRestore();
   });
 });

@@ -718,6 +718,12 @@ export const scopeClaimBodySchema = z.discriminatedUnion('kind', [
       kind: z.literal('work_item'),
       /** The container's key — a story, task or bug. Case-insensitive. */
       key: z.string().min(1).max(64),
+      /**
+       * Leave children already LANDED (Implemented or later) out of the claim
+       * instead of refusing on them. Sent by `motir continue <PARENT>`, whose
+       * dead run landed them (MOTIR-6535); a fresh run omits it.
+       */
+      exceptLanded: z.boolean().optional(),
     })
     .strict(),
   z
@@ -2304,6 +2310,9 @@ export const workItemContinueClaimSchema = z.object({
   mode: z.enum(['card', 'parent']),
   /** The dead scope run's legs already landed — never re-dispatched. */
   landedKeys: z.array(workItemKeySchema),
+  /** The dead scope run's legs still in flight — In Progress and now the caller's.
+   *  The ready set lists only To Do leaves, so the resumed drain runs these too. */
+  resumedKeys: z.array(workItemKeySchema),
 });
 export type V1WorkItemContinueClaim = z.infer<typeof workItemContinueClaimSchema>;
 
@@ -2347,5 +2356,6 @@ export function presentWorkItemContinueClaim(
     previousAssignee: ref(dto.previousAssignee),
     mode: dto.mode,
     landedKeys: [...dto.landedKeys],
+    resumedKeys: [...dto.resumedKeys],
   };
 }

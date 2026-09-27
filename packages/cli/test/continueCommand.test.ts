@@ -21,7 +21,7 @@ vi.mock('../src/session.js', () => ({
   withProjectSession: async (fn: (s: unknown) => Promise<unknown>) => fn(sessionRef.current),
 }));
 
-const { continueCommand, prepareContinueCheckout, renderContinueRefusal } =
+const { continueCommand, prepareContinueCheckout, renderContinueRefusal, renderTakeover } =
   await import('../src/commands/continue.js');
 
 const SERVER = 'https://app.motir.co';
@@ -52,6 +52,7 @@ function claim(over: Partial<WorkItemContinueClaim> = {}): WorkItemContinueClaim
     previousAssignee: { id: 'user_mara', name: 'Mara S.' },
     mode: 'card',
     landedKeys: [],
+    resumedKeys: [],
     ...over,
   };
 }
@@ -224,6 +225,51 @@ describe('motir continue — the pipeline', () => {
     }
     expect(runAgentMock).not.toHaveBeenCalled();
   });
+
+  // MOTIR-6537 — the pipeline's other exits.
+  it('an empty key is refused before anything is asked', async () => {
+    setup(claim());
+    await expect(continueCommand('   ', { agent: 'fake-agent' })).rejects.toThrow(
+      'A work item key is required',
+    );
+    expect(tools()).toEqual([]);
+  });
+
+  it('a checkout that fails settles the leg failed, closes the run halted, and runs no agent', async () => {
+    setup(claim());
+    const failingFetch: CommandRunner = (_bin, args, cwd) => {
+      h.git.push({ args, cwd });
+      return args[0] === 'fetch' ? { exitCode: 128, stdout: '', stderr: 'no such ref' } : ok();
+    };
+    await continueCommand('PROD-7', { agent: 'fake-agent' }, { run: failingFetch });
+
+    expect(process.exitCode).toBe(1);
+    expect(runAgentMock).not.toHaveBeenCalled();
+    expect(h.stderr).toContain('could not fetch its branch');
+    const appended = h.calls
+      .filter((c) => c.tool === 'append')
+      .flatMap((c) => (c.args as { events: { kind: string; disposition?: string }[] }).events);
+    expect(appended).toContainEqual(
+      expect.objectContaining({ kind: 'card_settled', disposition: 'failed' }),
+    );
+    expect(h.calls).toContainEqual(
+      expect.objectContaining({
+        tool: 'close_run',
+        args: expect.objectContaining({ stopReason: 'halted' }),
+      }),
+    );
+  });
+
+  it('a continue of its OWN run (`mine`, no dead run) asks for a plain prompt', async () => {
+    setup(claim({ outcome: 'mine', deadRun: null, previousAssignee: null }));
+    await continueCommand(
+      'PROD-7',
+      { agent: 'fake-agent' },
+      { run: fakeGit(), maxCiPolls: 1, wait: async () => {} },
+    );
+    expect(h.calls[1]).toEqual({ tool: 'dispatch_prompt', args: { key: 'PROD-7', opts: {} } });
+    expect(runAgentMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('motir continue — an interrupt closes the continue run `interrupted`', () => {
@@ -278,6 +324,59 @@ describe('renderContinueRefusal — each reason names what to do instead', () =>
       renderContinueRefusal(claim({ outcome: 'taken', holder: { id: 'u', name: 'Jo P.' } })),
     ).toContain('already being continued by Jo P.');
   });
+
+  // MOTIR-6537 — the words when the server left something out.
+  it('taken with no holder and no start still reads as a sentence', () => {
+    const line = renderContinueRefusal(claim({ outcome: 'taken', holder: null, startedAt: null }));
+    expect(line).toContain('already being continued by somebody else —');
+    expect(line).not.toContain('since');
+  });
+
+  it('run_alive names the holder when there is one; continue_the_parent without a parent key', () => {
+    expect(
+      renderContinueRefusal(
+        claim({
+          outcome: 'not_continuable',
+          reason: 'run_alive',
+          holder: { id: 'u', name: 'Mara S.' },
+        }),
+      ),
+    ).toContain("(Mara S.'s)");
+    expect(
+      renderContinueRefusal(
+        claim({ outcome: 'not_continuable', reason: 'run_alive', holder: null }),
+      ),
+    ).not.toContain("'s)");
+    expect(
+      renderContinueRefusal(
+        claim({ outcome: 'not_continuable', reason: 'continue_the_parent', parentKey: null }),
+      ),
+    ).toContain('motir continue <the parent>');
+  });
+
+  it('a refusal with no reason is the generic sentence', () => {
+    expect(renderContinueRefusal(claim({ outcome: 'not_continuable', reason: null }))).toContain(
+      'the server refused the continue',
+    );
+  });
+});
+
+describe('renderTakeover — whose work, and where (MOTIR-6537)', () => {
+  it('names the previous assignee, the dead run’s dispatcher and the branch', () => {
+    expect(renderTakeover(claim())).toBe(
+      "Took PROD-7 over from Mara S. — its last run (Mara S.'s) was last heard from " +
+        `2026-09-27T09:50:00.000Z.\nContinuing on ${BRANCH}.`,
+    );
+  });
+
+  it('reads plainly when the server knew none of them', () => {
+    expect(renderTakeover(claim({ previousAssignee: null, deadRun: null, branch: null }))).toBe(
+      'Took PROD-7 over.\nContinuing on its branch.',
+    );
+    const noDispatcher = claim();
+    noDispatcher.deadRun = { ...noDispatcher.deadRun!, dispatcher: null };
+    expect(renderTakeover(noDispatcher)).toContain("its last run (somebody's)");
+  });
 });
 
 describe('prepareContinueCheckout — reuse as found, add otherwise, never reset', () => {
@@ -317,5 +416,77 @@ describe('prepareContinueCheckout — reuse as found, add otherwise, never reset
     expect(result.ok).toBe(false);
     expect((result as { message: string }).message).toContain('other/branch');
     expect(h.git.some((g) => ['reset', 'clean', 'stash'].includes(g.args[0]!))).toBe(false);
+  });
+
+  // MOTIR-6537 — every way the checkout can fail says so, and changes nothing.
+  const scripted =
+    (answers: { fetch?: number; add?: number; local?: number; head?: string; headCode?: number }) =>
+    (_bin: string, args: string[], cwd: string): CommandResult => {
+      h.git.push({ args, cwd });
+      if (args[0] === 'fetch') return { exitCode: answers.fetch ?? 0, stdout: '', stderr: 'boom' };
+      if (args[0] === 'rev-parse' && args[1] === '--verify')
+        return { exitCode: answers.local ?? 1, stdout: '', stderr: '' };
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref')
+        return { exitCode: answers.headCode ?? 0, stdout: answers.head ?? '', stderr: '' };
+      if (args[0] === 'worktree') return { exitCode: answers.add ?? 0, stdout: '', stderr: 'nope' };
+      return ok();
+    };
+  const repoThere = (p: string) => p === join(h.root, 'motir-core');
+
+  it('a branch that cannot be fetched is refused, naming it', () => {
+    setup(claim());
+    const result = prepareContinueCheckout(base(h.root, repoThere, scripted({ fetch: 1 })));
+    expect(result.ok).toBe(false);
+    expect((result as { message: string }).message).toContain(
+      `could not fetch its branch \`${BRANCH}\` — boom`,
+    );
+  });
+
+  it('a worktree that cannot be added is refused, naming the path', () => {
+    setup(claim());
+    const result = prepareContinueCheckout(base(h.root, repoThere, scripted({ add: 1 })));
+    expect((result as { message: string }).message).toContain('could not check out');
+  });
+
+  it('a branch that already exists LOCALLY is checked out, not re-created', () => {
+    setup(claim());
+    const result = prepareContinueCheckout(base(h.root, repoThere, scripted({ local: 0 })));
+    expect(result.ok).toBe(true);
+    const add = h.git.find((g) => g.args[0] === 'worktree');
+    expect(add?.args).toEqual(['worktree', 'add', join(h.root, 'motir-core-prod-7'), BRANCH]);
+  });
+
+  it('a worktree whose HEAD cannot be read is refused as “something else”', () => {
+    setup(claim());
+    const wt = join(h.root, 'motir-core-prod-7');
+    const result = prepareContinueCheckout(
+      base(h.root, (p) => repoThere(p) || p === wt, scripted({ headCode: 1 })),
+    );
+    expect((result as { message: string }).message).toContain('is on `something else`');
+  });
+
+  it('a pinned repository with no checkout is refused, naming where it was looked for', () => {
+    setup(claim());
+    const result = prepareContinueCheckout(base(h.root, () => false, scripted({})));
+    expect(result.ok).toBe(false);
+    expect((result as { message: string }).message).toContain(
+      `no local checkout of motir-core at ${join(h.root, 'motir-core')}`,
+    );
+    expect(h.git).toEqual([]);
+  });
+
+  it('a card pinned to NO repository continues in the link root, beside it — as `motir run` works there', () => {
+    // Found by the story gate against the real server (MOTIR-6537): the one-repo
+    // link has `.motir.json` inside the checkout and cards with no `targetRepo`,
+    // and every one of them was refused as having no local checkout.
+    setup(claim());
+    const repo = join(h.root, 'motir-core');
+    const result = prepareContinueCheckout({
+      ...base(repo, () => false, fakeGit()),
+      targetRepo: null,
+    });
+    expect(result).toEqual({ ok: true, path: join(h.root, 'motir-core-prod-7') });
+    const add = h.git.find((g) => g.args[0] === 'worktree' && g.args[1] === 'add');
+    expect(add?.cwd).toBe(repo);
   });
 });

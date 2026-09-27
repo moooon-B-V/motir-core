@@ -109,6 +109,14 @@ describe('D1 — died, continuable', () => {
   });
 });
 
+describe('D1 — whose run, when the account is gone', () => {
+  it('a dead run with no dispatcher reads “Run with …”, and a scoped run names `motir run`', () => {
+    mount(died({ deadRun: { ...deadRun, command: 'run_scope', dispatcher: null } }));
+    expect(text()).toContain(`Run with motir run · started ${ago(deadRun.startedAt)}`);
+    expect(text()).not.toContain('Run by');
+  });
+});
+
 describe('D4 — nothing pushed', () => {
   it('offers no command, only start-over', () => {
     mount(died({ refusal: 'no_branch', branch: null }));
@@ -153,6 +161,20 @@ describe('D5 — continuing', () => {
     expect(text()).toContain("It took over from Ana's run");
     expect(text()).toContain('On motir/ACME-12-export');
     expect(text()).not.toContain('Run died');
+  });
+
+  it('names nobody when the holder’s account is gone, and no branch when none is known', () => {
+    mount({
+      state: 'continuing',
+      holder: null,
+      byViewer: false,
+      startedAt: '2026-09-27T14:25:00.000Z',
+      branch: null,
+      tookOverFrom: { runId: 'run_1', dispatcher: null },
+    });
+    expect(text()).toContain(`Being continued · started ${ago('2026-09-27T14:25:00.000Z')}`);
+    expect(text()).not.toContain('took over');
+    expect(text()).not.toContain('On ');
   });
 
   it('says “you” to the viewer who is continuing it', () => {

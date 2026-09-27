@@ -67,3 +67,12 @@ export function isRunAlive(run: RunLivenessInput, now: Date = new Date()): boole
 export function lastHeardFrom(run: Pick<RunLivenessInput, 'startedAt' | 'lastHeartbeatAt'>): Date {
   return new Date(ms(run.lastHeartbeatAt ?? run.startedAt));
 }
+
+/**
+ * The instant before which a local run's last heartbeat makes it LAPSED, as of
+ * `now` — the same rule as {@link isRunAlive}, stated as a cutoff so the sweep can
+ * put it in a query. The ONE other place the lapse window is read.
+ */
+export function heartbeatLapsedBefore(now: Date = new Date()): Date {
+  return new Date(now.getTime() - RUN_HEARTBEAT_LAPSE_MS);
+}

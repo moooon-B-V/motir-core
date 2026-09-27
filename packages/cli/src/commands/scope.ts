@@ -137,6 +137,12 @@ export async function claimScopeForRun(
   /** The TARGET's own verdict, from the `getWorkItem` `resolveScopeTarget`
    *  already made — never re-read. Absent for a sprint scope. */
   targetReadiness?: ReadinessVerdict,
+  /**
+   * Items to run BESIDES the ready set — `motir continue <PARENT>`'s in-flight
+   * legs (MOTIR-6535). The ready set lists only To Do leaves, so a resumed run's
+   * In Progress children would otherwise never be dispatched again.
+   */
+  resume?: readonly DispatchItem[],
 ): Promise<ClaimedScope | null> {
   const { client, projectKey, serverUrl } = session;
 
@@ -163,12 +169,13 @@ export async function claimScopeForRun(
   // goes. The walk follows the cursor to exhaustion inside `listReadyForDispatch`
   // — a run that silently took only the first page would claim a set it had not
   // enumerated.
-  const ready = await client.listReadyForDispatch({
+  const listed = await client.listReadyForDispatch({
     projectKey,
     ownerId,
     ...(target.kind === 'work_item' ? { ancestor: [target.key] } : { sprintId: 'active' }),
     ...(opts.allowSoftBlock ? { allowSoftBlock: true } : {}),
   });
+  const ready = [...listed, ...(resume ?? []).filter((r) => !listed.some((l) => l.key === r.key))];
 
   if (ready.length === 0) {
     // ⚠️ NOT an error, and distinguishable in the output from a refusal. A story
@@ -180,7 +187,8 @@ export async function claimScopeForRun(
   // 2 ── the CLAIM. ONE call, covering the whole scope.
   const claim = await client.claimScope(
     target.kind === 'work_item'
-      ? { kind: 'work_item', key: target.key }
+      ? // A RESUME leaves the dead run's landed children out of the claim (MOTIR-6535).
+        { kind: 'work_item', key: target.key, ...(resume ? { exceptLanded: true } : {}) }
       : { kind: 'sprint', projectKey },
   );
 
