@@ -3,6 +3,7 @@ import type { ProjectAccessMode } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { VISITOR_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { levelForMode } from '@/lib/projects/accessMode';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFixtures';
@@ -155,9 +156,8 @@ describe('visitor — everyone else', () => {
     const verdict = await projectAccessService.resolveVisitor(t.identifier, null);
     expect(verdict.kind).toBe('visitor');
     if (verdict.kind !== 'visitor') return;
-    const expected = await workItemRepository.findPublicHiddenDescendantIds(
-      t.fx.projectId,
-      t.fx.workspaceId,
+    const expected = await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+      workItemRepository.findPublicHiddenDescendantIds(t.fx.projectId, t.fx.workspaceId, tx),
     );
     expect([...verdict.ctx.hiddenIds].sort()).toEqual([...expected].sort());
     expect([...verdict.ctx.hiddenIds].sort()).toEqual([a.id, b.id].sort());

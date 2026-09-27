@@ -4,7 +4,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { composeOwnerReach } from '@/lib/workspaces/membershipGate';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { customRolePermissionsOf } from '@/lib/workspaces/roles';
 import type { Project, ProjectAccessMode } from '@/generated/prisma/client';
 import { accessModeOf } from '@/lib/projects/accessMode';
@@ -689,9 +689,11 @@ export const projectAccessService = {
     }
     if (actorUserId && canEnter(inputs)) return { kind: 'enter', project };
 
-    const hidden = await workItemRepository.findPublicHiddenDescendantIds(
-      project.id,
-      project.workspaceId,
+    // BOUND to the project's own workspace — a value the database handed us above,
+    // never the reader's — so the read sees exactly this project's rows under the
+    // non-bypass role (the RLS call-site guard's rule for a new caller).
+    const hidden = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.findPublicHiddenDescendantIds(project.id, project.workspaceId, tx),
     );
     return {
       kind: 'visitor',
