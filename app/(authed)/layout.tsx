@@ -227,6 +227,14 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   const activeProject = ctx
     ? await projectsService.getActiveProject(session.user.id, ctx.workspaceId)
     : null;
+  // With NO active project — a reader who can enter none of the workspace's
+  // projects (Story MOTIR-6169 · MOTIR-6548) — the empty switcher offers
+  // "Create project" only to someone who could enter what they made. Read only
+  // in that state, so the everyday request pays nothing for it.
+  const canCreateProject =
+    ctx && !activeProject
+      ? await projectsService.canOfferCreateProject(session.user.id, ctx.workspaceId)
+      : true;
 
   // The actor's PERMISSION SET on the active project — ONE round-trip
   // (`getPermissionsDTO`, Story MOTIR-2255) feeding three consumers:
@@ -298,11 +306,11 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // capability this build does not have.
   const publicProjectsAvailable = isCloud();
   const buildInPublicProjectKey =
-    publicProjectsAvailable && canManage && activeProject && activeProject.accessLevel !== 'public'
+    publicProjectsAvailable && canManage && activeProject && activeProject.accessMode !== 'public'
       ? activeProject.identifier
       : null;
   const buildingInPublic =
-    publicProjectsAvailable && !!activeProject && activeProject.accessLevel === 'public';
+    publicProjectsAvailable && !!activeProject && activeProject.accessMode === 'public';
 
   const activeWorkspaceId = ctx?.workspaceId ?? null;
 
@@ -445,6 +453,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                         workspaces={workspaces}
                         activeWorkspaceId={activeWorkspaceId}
                         activeProject={activeProject}
+                        canCreateProject={canCreateProject}
                         projects={projects}
                         aiConfigured={aiPlanningConfigured}
                         user={{ name: session.user.name, email: session.user.email }}
@@ -507,7 +516,16 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       column) is a stylesheet that cannot read a React prop.
                       6rem = the orb's 76px reach + a visible gap. See
                       `design/shell/design-notes.md`. */}
+                    {/* KEYED ON THE ACTIVE PROJECT (Story MOTIR-6169 · MOTIR-6548): when
+                      a reader's project stops being enterable — their scope
+                      changed, the project went Members only, they were removed —
+                      the next request resolves another project or none, and a
+                      client island seeded from the old one's props must not keep
+                      rendering it. A new key remounts every island below; an
+                      unchanged one costs nothing (the lesson: a tenant-context
+                      switch invalidates client islands the way a mutation does). */}
                     <div
+                      key={activeProject?.id ?? 'no-project'}
                       style={
                         {
                           '--shell-bottom-clearance': showPlanWithAi ? '6rem' : '1.5rem',

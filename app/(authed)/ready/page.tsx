@@ -12,6 +12,7 @@ import { ReadyList } from './_components/ReadyList';
 import { ReadyHelpPopover } from './_components/ReadyHelpPopover';
 import { ExpansionNudgeBanner } from './_components/ExpansionNudgeBanner';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The Ready set — the AI dispatch surface (Story 7.0 · Subtask 7.0.6). A Server
 // Component that resolves the active project (the established getActiveProject
@@ -33,10 +34,10 @@ export default async function ReadyPage() {
   const t = await getTranslations('ready');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   const svcCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
 

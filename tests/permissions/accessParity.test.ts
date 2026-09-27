@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
+import type { ProjectAccessMode, WorkspaceRole } from '@/generated/prisma/client';
 import { describe, expect, it } from 'vitest';
 import {
   canBrowse,
@@ -16,7 +16,7 @@ import {
   canUpvotePublicRequest,
   type ProjectAccessInputs,
 } from '@/lib/projects/access';
-import { hasPermission, resolvePermissions } from '@/lib/permissions/resolve';
+import { canEnter, hasPermission, resolvePermissions } from '@/lib/permissions/resolve';
 import {
   PUBLIC_PROJECT_PERMISSIONS,
   ROLE_GATED_PERMISSIONS,
@@ -24,13 +24,16 @@ import {
 } from '@/lib/permissions/builtinRoles';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 
-// THE TRUTH TABLE for the project access policy — REWRITTEN by Story MOTIR-6168 ·
-// MOTIR-6459, when roles moved to the WORKSPACE (`docs/decisions/role-model.md`
-// §2–§3). The old table was 64 rows of access level × workspace role × PROJECT
-// role; a project carries no role any more, so its input space is now:
+// THE TRUTH TABLE for the project access policy — REWRITTEN by Story MOTIR-6169 ·
+// MOTIR-6543, when access moved onto the project as three MODES and each
+// membership gained a SCOPE (`docs/decisions/role-model.md` Q1). Entry is one
+// rule (`canEnter`), and an entrant holds exactly their workspace role's set — the
+// per-level subtraction MOTIR-6168 left (`limited` losing edit, `private` losing
+// everything) retired with the levels. The input space is now:
 //
-//   4 access levels × { no membership, Manager, Member, Viewer, a custom role }
-//                   × { added to the project, not added }   =   40 rows
+//   3 access modes × { no membership, Manager, a Full Member, a Full Viewer,
+//                      a Full custom role, a Limited Member }
+//                  × { added to the project, not added }   =   36 rows
 //
 // ⚠️ EACH ROW'S EXPECTED SET IS WRITTEN OUT, from the LITERAL key lists below —
 // never computed from the code under test. A table computed from `resolve.ts`
@@ -140,108 +143,93 @@ const NONE: readonly PermissionKey[] = [];
 
 const union = (...sets: (readonly PermissionKey[])[]): PermissionKey[] =>
   [...new Set(sets.flat())].sort();
-const without = (set: readonly PermissionKey[], key: PermissionKey): PermissionKey[] =>
-  set.filter((k) => k !== key).sort();
 
 // ── The rows ─────────────────────────────────────────────────────────────────
 
-type Actor = 'none' | 'manager' | 'member' | 'viewer' | 'custom';
+type Actor = 'none' | 'manager' | 'member' | 'viewer' | 'custom' | 'limitedMember';
 
 interface Row {
-  accessLevel: ProjectAccessLevel;
+  accessMode: ProjectAccessMode;
   actor: Actor;
   addedToProject: boolean;
   expected: PermissionKey[];
 }
 
 const TABLE: Row[] = [
-  // ── open — every workspace member holds their role's keys, added or not ──
-  { accessLevel: 'open', actor: 'none', addedToProject: false, expected: union(NONE) },
-  { accessLevel: 'open', actor: 'none', addedToProject: true, expected: union(NONE) },
-  { accessLevel: 'open', actor: 'manager', addedToProject: false, expected: union(MANAGER) },
-  { accessLevel: 'open', actor: 'manager', addedToProject: true, expected: union(MANAGER) },
-  { accessLevel: 'open', actor: 'member', addedToProject: false, expected: union(MEMBER) },
-  { accessLevel: 'open', actor: 'member', addedToProject: true, expected: union(MEMBER) },
-  { accessLevel: 'open', actor: 'viewer', addedToProject: false, expected: union(VIEWER) },
-  { accessLevel: 'open', actor: 'viewer', addedToProject: true, expected: union(VIEWER) },
-  { accessLevel: 'open', actor: 'custom', addedToProject: false, expected: union(CUSTOM) },
-  { accessLevel: 'open', actor: 'custom', addedToProject: true, expected: union(CUSTOM) },
-
-  // ── limited — everything but EDIT for someone not added ──
-  { accessLevel: 'limited', actor: 'none', addedToProject: false, expected: union(NONE) },
-  { accessLevel: 'limited', actor: 'none', addedToProject: true, expected: union(NONE) },
-  { accessLevel: 'limited', actor: 'manager', addedToProject: false, expected: union(MANAGER) },
-  { accessLevel: 'limited', actor: 'manager', addedToProject: true, expected: union(MANAGER) },
+  // ── workspace — every Full member enters; a Limited one only if added ──
+  { accessMode: 'workspace', actor: 'none', addedToProject: false, expected: union(NONE) },
+  { accessMode: 'workspace', actor: 'none', addedToProject: true, expected: union(NONE) },
+  { accessMode: 'workspace', actor: 'manager', addedToProject: false, expected: union(MANAGER) },
+  { accessMode: 'workspace', actor: 'manager', addedToProject: true, expected: union(MANAGER) },
+  { accessMode: 'workspace', actor: 'member', addedToProject: false, expected: union(MEMBER) },
+  { accessMode: 'workspace', actor: 'member', addedToProject: true, expected: union(MEMBER) },
+  { accessMode: 'workspace', actor: 'viewer', addedToProject: false, expected: union(VIEWER) },
+  { accessMode: 'workspace', actor: 'viewer', addedToProject: true, expected: union(VIEWER) },
+  { accessMode: 'workspace', actor: 'custom', addedToProject: false, expected: union(CUSTOM) },
+  { accessMode: 'workspace', actor: 'custom', addedToProject: true, expected: union(CUSTOM) },
+  { accessMode: 'workspace', actor: 'limitedMember', addedToProject: false, expected: union(NONE) },
   {
-    accessLevel: 'limited',
-    actor: 'member',
-    addedToProject: false,
-    expected: without(MEMBER, 'work_item:edit'),
+    accessMode: 'workspace',
+    actor: 'limitedMember',
+    addedToProject: true,
+    expected: union(MEMBER),
   },
-  { accessLevel: 'limited', actor: 'member', addedToProject: true, expected: union(MEMBER) },
-  { accessLevel: 'limited', actor: 'viewer', addedToProject: false, expected: union(VIEWER) },
-  { accessLevel: 'limited', actor: 'viewer', addedToProject: true, expected: union(VIEWER) },
-  { accessLevel: 'limited', actor: 'custom', addedToProject: false, expected: union(CUSTOM) },
-  { accessLevel: 'limited', actor: 'custom', addedToProject: true, expected: union(CUSTOM) },
 
-  // ── private — nothing for someone not added (a Manager excepted) ──
-  { accessLevel: 'private', actor: 'none', addedToProject: false, expected: union(NONE) },
-  { accessLevel: 'private', actor: 'none', addedToProject: true, expected: union(NONE) },
-  { accessLevel: 'private', actor: 'manager', addedToProject: false, expected: union(MANAGER) },
-  { accessLevel: 'private', actor: 'manager', addedToProject: true, expected: union(MANAGER) },
-  { accessLevel: 'private', actor: 'member', addedToProject: false, expected: union(NONE) },
-  { accessLevel: 'private', actor: 'member', addedToProject: true, expected: union(MEMBER) },
-  { accessLevel: 'private', actor: 'viewer', addedToProject: false, expected: union(NONE) },
-  { accessLevel: 'private', actor: 'viewer', addedToProject: true, expected: union(VIEWER) },
-  { accessLevel: 'private', actor: 'custom', addedToProject: false, expected: union(NONE) },
-  { accessLevel: 'private', actor: 'custom', addedToProject: true, expected: union(CUSTOM) },
+  // ── members — only the people added enter (a Manager excepted) ──
+  { accessMode: 'members', actor: 'none', addedToProject: false, expected: union(NONE) },
+  { accessMode: 'members', actor: 'none', addedToProject: true, expected: union(NONE) },
+  { accessMode: 'members', actor: 'manager', addedToProject: false, expected: union(MANAGER) },
+  { accessMode: 'members', actor: 'manager', addedToProject: true, expected: union(MANAGER) },
+  { accessMode: 'members', actor: 'member', addedToProject: false, expected: union(NONE) },
+  { accessMode: 'members', actor: 'member', addedToProject: true, expected: union(MEMBER) },
+  { accessMode: 'members', actor: 'viewer', addedToProject: false, expected: union(NONE) },
+  { accessMode: 'members', actor: 'viewer', addedToProject: true, expected: union(VIEWER) },
+  { accessMode: 'members', actor: 'custom', addedToProject: false, expected: union(NONE) },
+  { accessMode: 'members', actor: 'custom', addedToProject: true, expected: union(CUSTOM) },
+  { accessMode: 'members', actor: 'limitedMember', addedToProject: false, expected: union(NONE) },
+  { accessMode: 'members', actor: 'limitedMember', addedToProject: true, expected: union(MEMBER) },
 
-  // ── public — like open for members, plus the public grant for everyone ──
-  { accessLevel: 'public', actor: 'none', addedToProject: false, expected: union(PUBLIC) },
-  { accessLevel: 'public', actor: 'none', addedToProject: true, expected: union(PUBLIC) },
+  // ── public — as workspace, plus the public read set for everyone ──
+  { accessMode: 'public', actor: 'none', addedToProject: false, expected: union(PUBLIC) },
+  { accessMode: 'public', actor: 'none', addedToProject: true, expected: union(PUBLIC) },
   {
-    accessLevel: 'public',
+    accessMode: 'public',
     actor: 'manager',
     addedToProject: false,
     expected: union(MANAGER, PUBLIC),
   },
   {
-    accessLevel: 'public',
+    accessMode: 'public',
     actor: 'manager',
     addedToProject: true,
     expected: union(MANAGER, PUBLIC),
   },
+  { accessMode: 'public', actor: 'member', addedToProject: false, expected: union(MEMBER, PUBLIC) },
+  { accessMode: 'public', actor: 'member', addedToProject: true, expected: union(MEMBER, PUBLIC) },
+  { accessMode: 'public', actor: 'viewer', addedToProject: false, expected: union(VIEWER, PUBLIC) },
+  { accessMode: 'public', actor: 'viewer', addedToProject: true, expected: union(VIEWER, PUBLIC) },
+  { accessMode: 'public', actor: 'custom', addedToProject: false, expected: union(CUSTOM, PUBLIC) },
+  { accessMode: 'public', actor: 'custom', addedToProject: true, expected: union(CUSTOM, PUBLIC) },
+  { accessMode: 'public', actor: 'limitedMember', addedToProject: false, expected: union(PUBLIC) },
   {
-    accessLevel: 'public',
-    actor: 'member',
-    addedToProject: false,
+    accessMode: 'public',
+    actor: 'limitedMember',
+    addedToProject: true,
     expected: union(MEMBER, PUBLIC),
   },
-  { accessLevel: 'public', actor: 'member', addedToProject: true, expected: union(MEMBER, PUBLIC) },
-  {
-    accessLevel: 'public',
-    actor: 'viewer',
-    addedToProject: false,
-    expected: union(VIEWER, PUBLIC),
-  },
-  { accessLevel: 'public', actor: 'viewer', addedToProject: true, expected: union(VIEWER, PUBLIC) },
-  {
-    accessLevel: 'public',
-    actor: 'custom',
-    addedToProject: false,
-    expected: union(CUSTOM, PUBLIC),
-  },
-  { accessLevel: 'public', actor: 'custom', addedToProject: true, expected: union(CUSTOM, PUBLIC) },
 ];
 
-function inputsFor(
-  row: Pick<Row, 'accessLevel' | 'actor' | 'addedToProject'>,
-): ProjectAccessInputs {
+function inputsFor(row: Pick<Row, 'accessMode' | 'actor' | 'addedToProject'>): ProjectAccessInputs {
   const workspaceRole: WorkspaceRole | null =
-    row.actor === 'none' ? null : row.actor === 'custom' ? 'member' : row.actor;
+    row.actor === 'none'
+      ? null
+      : row.actor === 'custom' || row.actor === 'limitedMember'
+        ? 'member'
+        : row.actor;
   return {
-    accessLevel: row.accessLevel,
+    accessMode: row.accessMode,
     workspaceRole,
+    accessScope: row.actor === 'none' ? null : row.actor === 'limitedMember' ? 'limited' : 'full',
     addedToProject: row.addedToProject,
     customRolePermissions: row.actor === 'custom' ? [...CUSTOM] : null,
   };
@@ -283,15 +271,15 @@ describe('the literal sets are the built-in roles, transcribed', () => {
   });
 });
 
-describe('the truth table — 4 levels × 5 actors × added or not', () => {
+describe('the truth table — 3 modes × 6 actors × added or not', () => {
   it('covers every combination exactly once', () => {
-    expect(TABLE).toHaveLength(40);
-    const seen = new Set(TABLE.map((r) => `${r.accessLevel}/${r.actor}/${r.addedToProject}`));
-    expect(seen.size).toBe(40);
+    expect(TABLE).toHaveLength(36);
+    const seen = new Set(TABLE.map((r) => `${r.accessMode}/${r.actor}/${r.addedToProject}`));
+    expect(seen.size).toBe(36);
   });
 
   it.each(TABLE)(
-    '$accessLevel · $actor · added=$addedToProject — resolves to exactly its written-out set',
+    '$accessMode · $actor · added=$addedToProject — resolves to exactly its written-out set',
     (row) => {
       const inputs = inputsFor(row);
       expect([...resolvePermissions(inputs)].sort()).toEqual(row.expected);
@@ -299,21 +287,39 @@ describe('the truth table — 4 levels × 5 actors × added or not', () => {
       for (const [name, predicate, key] of PREDICATES) {
         expect(predicate(inputs), `${name}`).toBe(row.expected.includes(key));
       }
+      // …and the actor ENTERS exactly when they hold something beyond the public
+      // read set — the listing rule and the resolver agree on every row.
+      const beyondPublic = row.expected.some((k) => !PUBLIC.includes(k));
+      expect(canEnter(inputs), 'canEnter').toBe(beyondPublic);
     },
   );
 });
 
 describe('the properties the story asserts', () => {
-  it('open: a Member not added holds exactly the Member set; a Viewer exactly the Viewer set, no edit', () => {
+  it('an entrant holds exactly WORKSPACE_ROLE_PERMISSIONS[role] in every mode (plus the public set on public)', () => {
+    for (const accessMode of ['workspace', 'members', 'public'] as ProjectAccessMode[]) {
+      for (const actor of ['manager', 'member', 'viewer'] as const) {
+        const held = [
+          ...resolvePermissions(inputsFor({ accessMode, actor, addedToProject: true })),
+        ];
+        const role = [...WORKSPACE_ROLE_PERMISSIONS[actor]];
+        expect(held.sort(), `${accessMode}/${actor}`).toEqual(
+          accessMode === 'public' ? union(role, PUBLIC) : union(role),
+        );
+      }
+    }
+  });
+
+  it('workspace: a Full Member not added holds exactly the Member set; a Viewer exactly the Viewer set, no edit', () => {
     expect(
       [
         ...resolvePermissions(
-          inputsFor({ accessLevel: 'open', actor: 'member', addedToProject: false }),
+          inputsFor({ accessMode: 'workspace', actor: 'member', addedToProject: false }),
         ),
       ].sort(),
     ).toEqual([...WORKSPACE_ROLE_PERMISSIONS.member].sort());
     const viewer = resolvePermissions(
-      inputsFor({ accessLevel: 'open', actor: 'viewer', addedToProject: true }),
+      inputsFor({ accessMode: 'workspace', actor: 'viewer', addedToProject: true }),
     );
     expect([...viewer].sort()).toEqual([...WORKSPACE_ROLE_PERMISSIONS.viewer].sort());
     expect(viewer.has('work_item:edit')).toBe(false);
@@ -321,28 +327,28 @@ describe('the properties the story asserts', () => {
 
   it('a custom role holds exactly its stored keys — and closing Runs is leaving its key out', () => {
     const held = resolvePermissions(
-      inputsFor({ accessLevel: 'open', actor: 'custom', addedToProject: true }),
+      inputsFor({ accessMode: 'workspace', actor: 'custom', addedToProject: true }),
     );
     expect([...held].sort()).toEqual(union(CUSTOM));
     expect(held.has('run:view_any')).toBe(false);
     expect(held.has('comment:add')).toBe(true);
   });
 
-  it('a Manager holds every role-gated key on every level, added or not', () => {
-    for (const accessLevel of ['open', 'limited', 'private', 'public'] as ProjectAccessLevel[]) {
+  it('a Manager holds every role-gated key in every mode, added or not', () => {
+    for (const accessMode of ['workspace', 'members', 'public'] as ProjectAccessMode[]) {
       for (const addedToProject of [false, true]) {
         const held = resolvePermissions(
-          inputsFor({ accessLevel, actor: 'manager', addedToProject }),
+          inputsFor({ accessMode, actor: 'manager', addedToProject }),
         );
         for (const key of ROLE_GATED_PERMISSIONS) expect(held.has(key)).toBe(true);
       }
     }
   });
 
-  it('the Manager rail does NOT widen the level-gated public-request grants', () => {
-    for (const accessLevel of ['open', 'limited', 'private'] as ProjectAccessLevel[]) {
+  it('the Manager rail does NOT widen the mode-gated public-request grants', () => {
+    for (const accessMode of ['workspace', 'members'] as ProjectAccessMode[]) {
       const held = resolvePermissions(
-        inputsFor({ accessLevel, actor: 'manager', addedToProject: true }),
+        inputsFor({ accessMode, actor: 'manager', addedToProject: true }),
       );
       expect(held.has('public_request:submit')).toBe(false);
     }
@@ -367,7 +373,7 @@ describe('the properties the story asserts', () => {
       const inputs = inputsFor(row);
       const administers = hasPermission(inputs, 'project:administer');
       for (const key of ADMINISTRATIVE_KEYS) {
-        expect(hasPermission(inputs, key), `${row.accessLevel}/${row.actor} · ${key}`).toBe(
+        expect(hasPermission(inputs, key), `${row.accessMode}/${row.actor} · ${key}`).toBe(
           administers,
         );
       }
@@ -376,8 +382,9 @@ describe('the properties the story asserts', () => {
 
   it('an empty custom role grants nothing — it does not fall back to its tier', () => {
     const held = resolvePermissions({
-      accessLevel: 'open',
+      accessMode: 'workspace',
       workspaceRole: 'member',
+      accessScope: 'full',
       addedToProject: true,
       customRolePermissions: [],
     });

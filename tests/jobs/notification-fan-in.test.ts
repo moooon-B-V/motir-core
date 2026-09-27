@@ -186,14 +186,22 @@ describe('notificationFanInService.fanIn — comment mentions', () => {
     const s = await buildScenario();
     const comment = await addMentioningComment(s, s.member);
 
-    // Going private auto-enrolls the then-current members; a user added AFTER
-    // the flip is a workspace member with no project access — "lost view access
-    // between write and fan-in".
+    // Going private adds nobody (Story MOTIR-6169): the member who keeps their
+    // view is ADDED explicitly; a user added to the workspace AFTER the flip has
+    // no project access — "lost view access between write and fan-in".
     await projectMembersService.setAccessLevel({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,
       ctx: s.fx.ctx,
       level: 'private',
+    });
+    await adminDb.projectMembership.create({
+      data: {
+        workspaceId: s.fx.workspaceId,
+        projectId: s.fx.projectId,
+        userId: s.member.id,
+        role: 'member',
+      },
     });
     const lateMember = await usersService.createUser({
       email: 'late@example.com',

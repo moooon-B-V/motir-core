@@ -82,8 +82,9 @@ describe('both migrations, in order, over the legacy fixture tenant', () => {
           workspaceId: t.wsId,
         });
         const want = resolvePermissions({
-          accessLevel: 'open',
+          accessMode: 'workspace',
           workspaceRole: outcome.role,
+          accessScope: 'full',
           customRolePermissions: m.roleDefinition?.permissions ?? null,
           addedToProject: added,
         });

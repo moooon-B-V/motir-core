@@ -15,7 +15,7 @@ import {
   canUpvotePublicRequest,
 } from '@/lib/projects/access';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
-import type { ProjectAccessLevel } from '@/generated/prisma/client';
+import type { ProjectAccessLevel, ProjectAccessMode } from '@/generated/prisma/client';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
@@ -191,12 +191,15 @@ const EXPECTED: Record<
     admin: { browse: true, edit: true },
     nonMember: { browse: false, edit: false },
   },
-  // `plainMember` is a workspace Member NEVER ADDED to the project: on `limited`
-  // they browse and do not edit; on `private` they do not browse.
+  // `plainMember` is a workspace Member NEVER ADDED to the project. The projects
+  // here are built with a legacy LEVEL and a NULL mode, so they resolve through
+  // `accessModeOf` (Story MOTIR-6169): `limited` is Members only now, so the
+  // plain member no longer enters it — the one row the access model moved
+  // (`role-model.md` Q1, and the migration reports every such person).
   limited: {
     owner: { browse: true, edit: true },
     wsAdmin: { browse: true, edit: true },
-    plainMember: { browse: true, edit: false },
+    plainMember: { browse: false, edit: false },
     viewer: { browse: true, edit: false },
     member: { browse: true, edit: true },
     admin: { browse: true, edit: true },
@@ -307,11 +310,19 @@ describe('projectAccessService — resolution + leak safety', () => {
   });
 });
 
+/** The org-bounded MODES the pure tests sweep — `public` is covered on its own below. */
+const MODES: ProjectAccessMode[] = ['workspace', 'members'];
+
 describe('canBrowse / canEdit — pure policy', () => {
-  it('a workspace Manager always passes regardless of level or whether they were added', () => {
-    for (const accessLevel of LEVELS) {
+  it('a workspace Manager always passes regardless of mode or whether they were added', () => {
+    for (const accessMode of MODES) {
       for (const addedToProject of [false, true]) {
-        const inputs = { accessLevel, workspaceRole: 'manager' as const, addedToProject };
+        const inputs = {
+          accessMode,
+          workspaceRole: 'manager' as const,
+          accessScope: 'full' as const,
+          addedToProject,
+        };
         expect(canBrowse(inputs)).toBe(true);
         expect(canEdit(inputs)).toBe(true);
       }
@@ -319,49 +330,58 @@ describe('canBrowse / canEdit — pure policy', () => {
   });
 
   it('a workspace Viewer added to the project can browse but never edit', () => {
-    for (const accessLevel of LEVELS) {
-      const inputs = { accessLevel, workspaceRole: 'viewer' as const, addedToProject: true };
+    for (const accessMode of MODES) {
+      const inputs = {
+        accessMode,
+        workspaceRole: 'viewer' as const,
+        accessScope: 'full' as const,
+        addedToProject: true,
+      };
       expect(canBrowse(inputs)).toBe(true);
       expect(canEdit(inputs)).toBe(false);
     }
   });
 
-  it('a non-workspace-member is denied at every ORG-BOUNDED level', () => {
+  it('a non-workspace-member is denied in every ORG-BOUNDED mode', () => {
     // Excludes `public` — its read semantics (the cross-org exception) admit a
     // non-member, asserted separately below.
-    for (const accessLevel of LEVELS) {
-      const inputs = { accessLevel, workspaceRole: null, addedToProject: false };
+    for (const accessMode of MODES) {
+      const inputs = { accessMode, workspaceRole: null, accessScope: null, addedToProject: false };
       expect(canBrowse(inputs)).toBe(false);
       expect(canEdit(inputs)).toBe(false);
     }
   });
 });
 
-// Story 6.12 — the `public` access level: the cross-org READ exception + the
+// Story 6.12 — the `public` access mode: the cross-org READ exception + the
 // three public-viewer WRITE grants, and `canEdit` staying closed to non-members.
-describe('public access level (Story 6.12)', () => {
-  const anon = { accessLevel: 'public' as const, workspaceRole: null, addedToProject: false };
+describe('public access mode (Story 6.12)', () => {
+  const anon = {
+    accessMode: 'public' as const,
+    workspaceRole: null,
+    accessScope: null,
+    addedToProject: false,
+  };
+  const pub = (
+    workspaceRole: 'manager' | 'member' | 'viewer',
+    addedToProject: boolean,
+    accessMode: ProjectAccessMode = 'public',
+  ) => ({ accessMode, workspaceRole, accessScope: 'full' as const, addedToProject });
 
   it('canBrowse admits ANYONE on a public project — incl. a null-role / anonymous actor', () => {
     // The leading public branch returns true regardless of role, so a logged-out /
     // cross-org viewer (no workspace role) reads a public project.
     expect(canBrowse(anon)).toBe(true);
-    expect(
-      canBrowse({ accessLevel: 'public', workspaceRole: 'viewer', addedToProject: false }),
-    ).toBe(true);
+    expect(canBrowse(pub('viewer', false))).toBe(true);
   });
 
   it('canEdit stays CLOSED to a public non-member, OPEN to an internal member', () => {
     // A public VIEWER (non-member) never edits — the null-deny rail, unchanged.
     expect(canEdit(anon)).toBe(false);
-    // A public project's internal workspace Member edits like `open` (most-open rung).
-    expect(canEdit({ accessLevel: 'public', workspaceRole: 'member', addedToProject: false })).toBe(
-      true,
-    );
+    // A public project's internal Full workspace Member edits like `workspace`.
+    expect(canEdit(pub('member', false))).toBe(true);
     // A workspace Viewer is still read-only on a public project.
-    expect(canEdit({ accessLevel: 'public', workspaceRole: 'viewer', addedToProject: true })).toBe(
-      false,
-    );
+    expect(canEdit(pub('viewer', true))).toBe(false);
   });
 
   it('the three write grants are true IFF the project is public, independent of role', () => {
@@ -369,12 +389,10 @@ describe('public access level (Story 6.12)', () => {
       // true on public for any role (a non-member included — authentication is
       // enforced upstream, not by these pure predicates).
       expect(grant(anon)).toBe(true);
-      expect(grant({ accessLevel: 'public', workspaceRole: 'member', addedToProject: true })).toBe(
-        true,
-      );
-      // false on every non-public level — no other write path keys off "public".
-      for (const accessLevel of LEVELS) {
-        expect(grant({ accessLevel, workspaceRole: 'manager', addedToProject: true })).toBe(false);
+      expect(grant(pub('member', true))).toBe(true);
+      // false in every non-public mode — no other write path keys off "public".
+      for (const accessMode of MODES) {
+        expect(grant(pub('manager', true, accessMode))).toBe(false);
       }
     }
   });

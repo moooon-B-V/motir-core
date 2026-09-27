@@ -1,4 +1,5 @@
 import type { DashboardAccess, DashboardLayout, Prisma } from '@/generated/prisma/client';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { dashboardRepository } from '@/lib/repositories/dashboardRepository';
 import { dashboardWidgetRepository } from '@/lib/repositories/dashboardWidgetRepository';
@@ -141,7 +142,16 @@ async function resolveSourceColumns(
   }
   if (descriptor.kind === 'project') {
     const project = await projectRepository.findById(descriptor.projectId, tx);
-    if (!project || project.workspaceId !== ctx.workspaceId || project.archivedAt !== null) {
+    // ENTRY at configure time (Story MOTIR-6169 · MOTIR-6549): a widget may only
+    // be pointed at a project its author can ENTER — the same `filterBrowsable`
+    // the switcher uses, so a Limited person cannot aim one at a Public project
+    // they merely read as a visitor. A project they cannot enter answers exactly
+    // as a missing one does, so the refusal leaks nothing about its existence.
+    const enterable =
+      project && project.workspaceId === ctx.workspaceId && project.archivedAt === null
+        ? (await projectAccessService.filterBrowsable([project], ctx, tx)).length > 0
+        : false;
+    if (!project || !enterable) {
       throw new DashboardWidgetSourceNotFoundError(
         `Project ${descriptor.projectId} was not found in this workspace.`,
       );

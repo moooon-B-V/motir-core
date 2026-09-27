@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
@@ -59,7 +60,7 @@ describe('workItemsService.listCandidateParents', () => {
     const fx = await makeFixture();
     const { E, S, T, B } = await seedTree(fx);
     const ids = async (childType: IssueType) =>
-      (await workItemsService.listCandidateParents(fx.projectId, childType, fx.workspaceId))
+      (await workItemsService.listCandidateParents(fx.projectId, childType, fx.ctx))
         .map((c) => c.id)
         .sort();
 
@@ -74,23 +75,24 @@ describe('workItemsService.listCandidateParents', () => {
     const fx = await makeFixture();
     const { S, T, B } = await seedTree(fx);
     await workItemsService.archiveWorkItem(B.id, fx.ctx);
-    const got = (
-      await workItemsService.listCandidateParents(fx.projectId, 'subtask', fx.workspaceId)
-    )
+    const got = (await workItemsService.listCandidateParents(fx.projectId, 'subtask', fx.ctx))
       .map((c) => c.id)
       .sort();
     expect(got).toEqual([S.id, T.id].sort()); // the archived bug is gone
   });
 
-  it('is workspace-scoped: a foreign workspaceId returns [] (finding #26)', async () => {
+  it('is workspace-scoped: a foreign workspace is refused as not-found (finding #26)', async () => {
+    // Since MOTIR-6319 the read asserts browse on the project first, so a project
+    // outside the caller's workspace is refused outright — the same not-found a
+    // missing project gets — rather than answered with an empty list.
     const fx = await makeFixture();
     await seedTree(fx);
-    const got = await workItemsService.listCandidateParents(
-      fx.projectId,
-      'subtask',
-      'some-other-workspace-id',
-    );
-    expect(got).toEqual([]);
+    await expect(
+      workItemsService.listCandidateParents(fx.projectId, 'subtask', {
+        userId: fx.ownerId,
+        workspaceId: 'some-other-workspace-id',
+      }),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 
   it('defense-in-depth: createWorkItem still rejects a forged illegal parent (epic cannot hold a subtask)', async () => {

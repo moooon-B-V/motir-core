@@ -8,6 +8,7 @@ import type {
   RoleMigrationEntryDTO,
   WorkspaceDTO,
   WorkspaceMemberDTO,
+  WorkspaceMemberWithAccessDTO,
   WorkspaceSummaryDTO,
 } from '@/lib/dto/workspaces';
 
@@ -55,6 +56,18 @@ export function toWorkspaceMemberDTO(row: MembershipWithUser): WorkspaceMemberDT
   };
 }
 
+/** A Members-page row: the member plus scope and added-project count (MOTIR-6545). */
+export function toWorkspaceMemberWithAccessDTO(
+  row: MembershipWithUser,
+  addedProjectCount: number,
+): WorkspaceMemberWithAccessDTO {
+  return {
+    ...toWorkspaceMemberDTO(row),
+    accessScope: row.accessScope,
+    addedProjectCount,
+  };
+}
+
 export function toWorkspaceSummaryDTO(workspace: Workspace): WorkspaceSummaryDTO {
   return {
     id: workspace.id,
@@ -89,6 +102,7 @@ function toRoleMigrationBefore(raw: unknown): RoleMigrationBeforeDTO {
         lost: list(r['lost']).filter((k): k is string => typeof k === 'string'),
       };
     }),
+    projectKey: str(o['projectKey']),
   };
 }
 

@@ -108,6 +108,7 @@ const PROJECT = {
   key: 'MOTIR',
   name: 'Motir',
   accessLevel: 'open',
+  accessMode: 'workspace',
   archived: false,
 };
 

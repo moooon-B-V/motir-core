@@ -128,22 +128,18 @@ describe('the context path, from the layout’s props to both hosts (MOTIR-2558)
       );
     });
 
-    it('offers NOTHING in the project tier when the layout resolved no project', async () => {
-      // ⚠️ INVERTED (MOTIR-4873), not deleted. This used to assert the
-      // create-first door — an accent `+` square opening `CreateProjectModal`,
-      // in the project tier. Every member is now inside a project
-      // (MOTIR-4870), so the door serves nobody, and a tier that draws
-      // something for a state the product cannot produce is a tier teaching
-      // that it can happen.
-      //
-      // The state is unreachable rather than impossible to construct, so the
-      // assertion is about what the tier does with it: nothing. Creating an
-      // ADDITIONAL project is untouched and lives on the switcher.
+    it('with no project, the tier reads "No project" and offers no create-first door', async () => {
+      // History: MOTIR-4873 inverted this to "offers NOTHING", because every
+      // member was inside a project (MOTIR-4870). A Limited member added to no
+      // project made the state reachable again (Story MOTIR-6169 · MOTIR-6548):
+      // the tier now renders the switcher with no project — an italic crumb and
+      // an empty list — and still NOT the retired create-first door.
       const bar = await TopNav(layoutProps({ activeProject: null, projects: [] }));
       const { container } = renderWithIntl(wrap(bar));
       const header = container.querySelector('header')!;
 
-      expect(within(header).queryByRole('button', { name: 'Switch project' })).toBeNull();
+      const trigger = within(header).getByRole('button', { name: 'Switch project' });
+      expect(trigger.textContent).toContain('No project');
       expect(
         within(header).queryByRole('button', { name: 'Create your first project' }),
       ).toBeNull();
@@ -206,10 +202,19 @@ describe('the context path, from the layout’s props to both hosts (MOTIR-2558)
 
     it('adds no new read — the props were already resolved for the rail', () => {
       // The move must not have cost a round-trip: `projectsService` is called
-      // exactly where it was, for the same two values.
+      // exactly where it was, for the same two values — plus the no-project
+      // shell's create-door read (MOTIR-6548), which the layout makes ONLY when
+      // there is no active project, so the everyday request pays nothing for it.
       const calls = LAYOUT.match(/projectsService\.\w+/g) ?? [];
       expect(new Set(calls)).toEqual(
-        new Set(['projectsService.listProjects', 'projectsService.getActiveProject']),
+        new Set([
+          'projectsService.listProjects',
+          'projectsService.getActiveProject',
+          'projectsService.canOfferCreateProject',
+        ]),
+      );
+      expect(LAYOUT).toMatch(
+        /ctx && !activeProject\s*\?\s*await projectsService\.canOfferCreateProject/,
       );
     });
 

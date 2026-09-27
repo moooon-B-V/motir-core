@@ -101,7 +101,7 @@ describe('the /approvals page', () => {
 
   it('redirects when no active project resolves', async () => {
     getActiveProject.mockResolvedValue(null);
-    await expect(renderPage()).rejects.toThrow('redirect:/sign-in');
+    await expect(renderPage()).rejects.toThrow('redirect:/no-project');
     expect(listRecords).not.toHaveBeenCalled();
   });
 

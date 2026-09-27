@@ -1,4 +1,8 @@
-import type { ProjectAccessLevel, WorkspaceRole } from '@/generated/prisma/client';
+import type {
+  ProjectAccessMode,
+  WorkspaceAccessScope,
+  WorkspaceRole,
+} from '@/generated/prisma/client';
 import { describe, expect, it } from 'vitest';
 import { WORKSPACE_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { CLOSING_READ_SET, resolvePermissions } from '@/lib/permissions/resolve';
@@ -6,11 +10,12 @@ import { CLOSING_READ_SET, resolvePermissions } from '@/lib/permissions/resolve'
 // A CLOSING organization is read-only (Story MOTIR-6306 · MOTIR-6396;
 // `docs/decisions/organization-deletion.md` §3) — the pure half: the resolver's
 // intersection, over every input the parity table enumerates plus custom roles.
-// (Inputs are the WORKSPACE role and whether the actor was added — Story
-// MOTIR-6168 moved roles off the project.)
+// (Inputs are the access MODE, the WORKSPACE role, the membership SCOPE and
+// whether the actor was added — Stories MOTIR-6168 and MOTIR-6169.)
 
-const LEVELS: ProjectAccessLevel[] = ['open', 'limited', 'private', 'public'];
+const MODES: ProjectAccessMode[] = ['workspace', 'members', 'public'];
 const ROLES: Array<WorkspaceRole | null> = [null, 'manager', 'member', 'viewer'];
+const SCOPES: WorkspaceAccessScope[] = ['full', 'limited'];
 const CUSTOM: Array<readonly string[] | null> = [
   null,
   [],
@@ -18,11 +23,18 @@ const CUSTOM: Array<readonly string[] | null> = [
 ];
 
 function* allInputs() {
-  for (const accessLevel of LEVELS)
+  for (const accessMode of MODES)
     for (const workspaceRole of ROLES)
-      for (const addedToProject of [false, true])
-        for (const customRolePermissions of CUSTOM)
-          yield { accessLevel, workspaceRole, addedToProject, customRolePermissions };
+      for (const scope of SCOPES)
+        for (const addedToProject of [false, true])
+          for (const customRolePermissions of CUSTOM)
+            yield {
+              accessMode,
+              workspaceRole,
+              accessScope: workspaceRole == null ? null : scope,
+              addedToProject,
+              customRolePermissions,
+            };
 }
 
 describe('the closing read set', () => {
@@ -62,8 +74,9 @@ describe('resolvePermissions with organizationClosing', () => {
 
   it('closes the Owner too, and a public visitor’s request writes', () => {
     const owner = resolvePermissions({
-      accessLevel: 'open',
+      accessMode: 'workspace',
       workspaceRole: 'manager',
+      accessScope: 'full',
       addedToProject: false,
       organizationClosing: true,
     });
@@ -79,8 +92,9 @@ describe('resolvePermissions with organizationClosing', () => {
       expect(key).not.toMatch(/:(edit|add|create|delete|archive|manage|administer|submit)/);
     }
     const visitor = resolvePermissions({
-      accessLevel: 'public',
+      accessMode: 'public',
       workspaceRole: null,
+      accessScope: null,
       addedToProject: false,
       organizationClosing: true,
     });

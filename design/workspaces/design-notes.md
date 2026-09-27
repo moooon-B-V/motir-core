@@ -586,3 +586,84 @@ Colour is `--el-*` only; shape through `--radius-card/-input/-control/-badge/-bt
 Secondary ink is `--el-text-secondary` everywhere (never `--el-text-muted`). The role picker is the
 shipped WAI-ARIA combobox + `listbox` with `aria-label` _Role for {name}_; disabled pickers carry
 `aria-disabled`. Rooms chips carry their state as a word for assistive tech, not only as a glyph.
+
+## Access scope at the workspace (MOTIR-6540 · Story MOTIR-6169)
+
+A delta of § _Workspace roles_ above and its `workspace-roles.mock.html`, drawn in
+**`design/workspaces/workspace-roles--access-scope.mock.html`** (panels W1–W11). The shared vocabulary,
+the project half and the full GIVES / TAKES are in `design/projects/design-notes.md` § _Access modes at
+the project (MOTIR-6540)_; this section specifies the workspace page. Rendered first at
+`/settings/organization` (the Members fold-in and the shipped Invite modal), `origin/main` @ `c6cf7e5b4`.
+
+**Access path:** workspace settings → Workspace → **Members** (revealed), or the same card folded into
+`/settings/organization` below the reveal — unchanged, with the same three columns in both.
+
+### Panels — built by MOTIR-6551
+
+- **W1 — the Access column.** A third column header _Access_ (`w-[13rem]`) beside _Workspace role_. Each
+  row: the shipped `Combobox` trigger, narrowed to `w-[7.25rem]`, reading _Full_ or _Limited_. A Limited
+  row adds a link-styled **N projects** count (`addedProjectCount`, MOTIR-6545); at 0 it is a warning
+  `Pill` (`--el-warning-surface`, `TriangleAlert`, _No projects_) plus a row-help line saying what that
+  means. A **Manager row** — a stored Manager, or an org Owner / Admin — shows a dashed, locked _Full ·
+  Manager_ chip (`Lock`) in place of a control.
+- **W2 — the picker open.** Two options with their meanings; picking calls `setMemberAccessScopeAction`.
+- **W3 — "N projects" open.** A read-only `Popover` naming each project the person was added to (name +
+  key), each linking to that project's Access &amp; members page, and a footer saying adding lives there.
+  The list is read when the popover opens (the count alone travels on the row).
+- **W4 — the lock's reason**, as a `Tooltip` on the chip (and its `aria-label`).
+- **W5 — pending, then a refusal.** Pending = the role column's pending treatment (`LoaderCircle`,
+  disabled). `ScopeNotApplicableError` (409) or forbidden (403) reverts the cell and shows an error `Toast`.
+- **W6 — read-only (a non-Manager).** Every Access cell in its read-only treatment; the count still
+  opens W3; the `info-note` widens to name access.
+- **W7 — Invite, Full (default).** The shipped Invite `Modal` gains an **Access** field — the compact
+  radio-card markup of the project's mode control, two options — and one static line: invites keep
+  creating a Member (the role is not chosen here).
+- **W8 — Invite, Limited.** **Projects to join** appears: the shipped `MultiSelectPicker` (chips + filter)
+  over the Manager's projects. An empty pick is allowed and shows a warning note. Send-time refusals
+  (MOTIR-6546) render as the picker's field error.
+- **W9 — who may invite.** A Full non-Manager's modal has NO Access field (Full invites only). A Limited
+  member gets no **Invite** button at all.
+- **W10 — the migration notice's `project_access_lost` rows.** The notice's title widens to _Changed by
+  the move to workspace roles and project access_; rows group under two mono sub-heads, _Roles_ and
+  _Project access_, the second with one explaining sentence. Each access row: before _Could open KEY_ →
+  after a neutral `Pill` with `Lock` _No access to KEY_ (`beforeJson.projectKey`), the reason line
+  verbatim, a ghost **Open project access** (→ that project's `/settings/project/members`) and **Dismiss**.
+- **W11 — dark.**
+
+### Copy catalogue — `settings.members.*` / `settings.migration.*` (new or changed; en + zh)
+
+| key (proposed)                                           | en                                                                                                                              | zh                                                                                           |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `members.accessColumn`                                   | Access                                                                                                                          | 访问                                                                                         |
+| `members.scope.full` / `.limited`                        | Full / Limited                                                                                                                  | 完全 / 受限                                                                                  |
+| `members.scopeDesc.full`                                 | Opens every project open to the workspace, plus the ones they’re added to.                                                      | 可打开所有开放给工作区的项目，另加其被添加到的项目。                                         |
+| `members.scopeDesc.limited`                              | Opens only the projects they’re added to.                                                                                       | 只能打开其被添加到的项目。                                                                   |
+| `members.scopeSelectLabel`                               | Access for {name}                                                                                                               | {name} 的访问范围                                                                            |
+| `members.scopeLockedManager`                             | Full · Manager                                                                                                                  | 完全 · 管理者                                                                                |
+| `members.scopeLockedReason`                              | Managers open every project, so access doesn’t apply to them.                                                                   | 管理者可以打开每个项目，因此访问范围对其不适用。                                             |
+| `members.projectCount`                                   | {count, plural, one {# project} other {# projects}}                                                                             | {count} 个项目                                                                               |
+| `members.noProjects` / `…Help`                           | No projects / Limited and added to no project — {name} can’t open anything in {workspace} yet.                                  | 无项目 / 受限且未被添加到任何项目——{name} 目前无法打开 {workspace} 中的任何内容。            |
+| `members.projectsPopoverTitle` / `…Foot`                 | {name} can open / Add or remove {name} on each project’s Access &amp; members page.                                             | {name} 可打开 / 请在各项目的“访问与成员”页面添加或移除 {name}。                              |
+| `members.scopeChangedFull` / `…Limited`                  | {name} now opens every project open to {workspace} / {name} now opens only the projects they’re added to                        | {name} 现在可打开所有开放给 {workspace} 的项目 / {name} 现在只能打开其被添加到的项目         |
+| `members.scopeChangeErrorTitle`                          | Couldn’t change {name}’s access                                                                                                 | 无法更改 {name} 的访问范围                                                                   |
+| `members.scopeNotApplicableBody`                         | {name} was just made a Manager, and Managers open every project. Their access stays Full.                                       | {name} 刚被设为管理者，而管理者可以打开每个项目。其访问范围保持为完全。                      |
+| `members.rolesManagerOnly` (changed)                     | Only a workspace Manager can change roles and access.                                                                           | 只有工作区管理者可以更改角色和访问范围。                                                     |
+| `members.inviteAccessLabel`                              | Access                                                                                                                          | 访问范围                                                                                     |
+| `members.inviteAccessFullDesc` / `…LimitedDesc`          | Every project open to the workspace. / Only the projects you pick below.                                                        | 所有开放给工作区的项目。 / 仅限你在下方选择的项目。                                          |
+| `members.inviteProjectsLabel` / `…Placeholder` / `…Hint` | Projects to join / Pick projects… / They join these projects when they accept.                                                  | 要加入的项目 / 选择项目… / 他们接受邀请时将加入这些项目。                                    |
+| `members.inviteNoProjectsWarning`                        | They won’t be able to open anything until a Manager adds them to a project.                                                     | 在管理者将其添加到某个项目之前，他们将无法打开任何内容。                                     |
+| `members.inviteJoinsAsMember`                            | They join as a Member. You can change their role after they accept.                                                             | 他们将以成员身份加入。接受后你可以更改其角色。                                               |
+| `migration.title` (changed)                              | Changed by the move to workspace roles and project access                                                                       | 因迁移到工作区角色和项目访问而变更                                                           |
+| `migration.body` (changed)                               | These people were not moved by the plain mapping. Check each one.                                                               | 以下成员并非按常规映射迁移。请逐一核对。                                                     |
+| `migration.rolesHeading` / `.accessHeading`              | Roles / Project access                                                                                                          | 角色 / 项目访问                                                                              |
+| `migration.accessBody`                                   | Projects that were Limited are now Members only. Add anyone who should keep access on that project’s Access &amp; members page. | 原为“受限”的项目现在为“仅限成员”。如需保留某人的访问权限，请在该项目的“访问与成员”页面添加。 |
+| `migration.accessBefore` / `.accessAfter`                | Could open {projectKey} / No access to {projectKey}                                                                             | 可打开 {projectKey} / 无法访问 {projectKey}                                                  |
+| `migrationReason.project_access_lost`                    | No longer enters {projectKey} — it was Limited and they were not added.                                                         | 不再能进入 {projectKey}——该项目原为“受限”，且其未被添加。                                    |
+| `migration.openProjectAccess`                            | Open project access                                                                                                             | 打开项目访问                                                                                 |
+
+### Tokens &amp; a11y
+
+As § _Workspace roles_; new tokens used are `--el-warning-surface` (the 0-projects pill, ink
+`--el-text-strong`), `--el-chip-*` and `--el-icon-muted` (theme.css's own). The Access picker is the
+shipped WAI-ARIA combobox with `aria-label` _Access for {name}_; the locked chip is focusable and names
+its state in its `aria-label`. The warning is carried by glyph and words, never hue alone.

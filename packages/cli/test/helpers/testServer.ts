@@ -246,7 +246,7 @@ export function v1Page<T>(items: T[], nextCursor: string | null = null) {
 
 /** One v1 project resource. */
 export function v1Project(key: string, name = key) {
-  return { key, name, accessLevel: 'open', archived: false };
+  return { key, name, accessLevel: 'open', accessMode: 'workspace', archived: false };
 }
 
 /** A total dependency block — two arrays, empty rather than missing. */

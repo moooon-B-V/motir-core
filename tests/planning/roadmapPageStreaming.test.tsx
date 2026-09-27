@@ -213,7 +213,7 @@ describe('the ACCESS gates still run ahead of the paint', () => {
     // read — is unchanged, and is why this spec exists.
     getActiveProject.mockResolvedValue(null);
 
-    await expect(RoadmapPage()).rejects.toThrow('REDIRECT:/sign-in');
+    await expect(RoadmapPage()).rejects.toThrow('REDIRECT:/no-project');
     expect(getProjectRoadmap).not.toHaveBeenCalled();
     expect(getPreplanState).not.toHaveBeenCalled();
   });

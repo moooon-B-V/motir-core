@@ -264,8 +264,8 @@ describe('workItemsService.quickSearch — permission scope (Story 6.4)', () => 
       name: 'Private',
       identifier: 'PRIV',
     });
-    // Make PRIV private BEFORE adding the outsider, so they are NOT auto-seeded
-    // as a project member (only the then-current members — the owner — are).
+    // Make PRIV private; going private adds nobody (Story MOTIR-6169), so the
+    // outsider below is not a project member (the owner enters as a Manager).
     await projectMembersService.setAccessLevel({
       key: priv.identifier,
       actorUserId: owner.id,

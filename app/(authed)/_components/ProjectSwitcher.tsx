@@ -33,6 +33,15 @@ export interface ProjectSwitcherProps {
    * and show only the manual "Create project" row.
    */
   aiConfigured?: boolean;
+  /**
+   * Whether the "start a project" doors render (MOTIR-6548 · no-project shell
+   * S2 / S3). False only for a reader with no active project who could not enter
+   * a project they created — a Limited member; the tier passes true whenever
+   * there IS an active project, so the everyday switcher is unchanged.
+   */
+  canCreateProject?: boolean;
+  /** The active workspace's name, for the empty list's sentence (MOTIR-6548). */
+  workspaceName?: string;
 }
 
 export function ProjectSwitcher({
@@ -40,6 +49,8 @@ export function ProjectSwitcher({
   activeProjectId,
   activeProject,
   aiConfigured = false,
+  canCreateProject = true,
+  workspaceName = '',
 }: ProjectSwitcherProps) {
   const t = useTranslations('shell');
   const router = useRouter();
@@ -112,7 +123,14 @@ export function ProjectSwitcher({
                   and workspace tiers beside it). Nav ITEM labels stay sans.
                   `max-w-[22ch]` rather than `flex-1`: a tier sizes to its name
                   and truncates, where the rail slot stretched to fill. */}
-              <span className="min-w-0 max-w-[22ch] truncate text-left font-serif">
+              <span
+                className={cn(
+                  'min-w-0 max-w-[22ch] truncate text-left font-serif',
+                  // No project (MOTIR-6548 · S1): an italic crumb in the
+                  // secondary ink the trigger already takes when inactive.
+                  !active && 'italic',
+                )}
+              >
                 {active?.name ?? t('projectSwitcher.none')}
               </span>
               {isArchived ? (
@@ -134,45 +152,58 @@ export function ProjectSwitcher({
               {t('projectSwitcher.heading')}
             </span>
           </div>
-          <ul role="list" className="px-1">
-            {projects.map((p) => {
-              const isActive = p.id === activeProjectId;
-              return (
-                <li key={p.id}>
-                  <button
-                    type="button"
-                    onClick={() => handleSwitch(p.id)}
-                    disabled={isPending}
-                    className={cn(
-                      'flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left',
-                      'hover:bg-(--el-surface) focus-visible:bg-(--el-surface) focus-visible:outline-none',
-                      'disabled:pointer-events-none disabled:opacity-50',
-                      isActive && 'bg-(--el-surface)',
-                    )}
-                  >
-                    {/* A LIST row holds the slot open so every NAME keeps one
-                        left edge — nothing is drawn in it (MOTIR-2675). */}
-                    <ProjectMark image={p.image} size={24} reserveSlot />
-                    <span
+          {projects.length === 0 ? (
+            // No project to switch to (MOTIR-6548 · S2): one sentence where the
+            // rows would be, inside the same labelled list, so a screen reader
+            // hears the list and why it is empty rather than nothing.
+            <ul role="list" aria-label={t('projectSwitcher.heading')} className="px-1">
+              <li className="px-2 py-2 font-sans text-sm text-(--el-text-secondary)">
+                {t('noProject.switcherEmpty', { workspace: workspaceName })}
+              </li>
+            </ul>
+          ) : (
+            <ul role="list" className="px-1">
+              {projects.map((p) => {
+                const isActive = p.id === activeProjectId;
+                return (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleSwitch(p.id)}
+                      disabled={isPending}
                       className={cn(
-                        'flex-1 truncate font-sans text-sm text-(--el-text)',
-                        isActive && 'font-semibold',
+                        'flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left',
+                        'hover:bg-(--el-surface) focus-visible:bg-(--el-surface) focus-visible:outline-none',
+                        'disabled:pointer-events-none disabled:opacity-50',
+                        isActive && 'bg-(--el-surface)',
                       )}
                     >
-                      {p.name}
-                    </span>
-                    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
-                      {isActive ? (
-                        <Check className="h-4 w-4" style={{ color: 'var(--el-accent)' }} />
-                      ) : null}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="my-1 h-px bg-(--el-border)" />
-          {/* Two peer "start a project" doors (MOTIR-1485 / 1486): the accent
+                      {/* A LIST row holds the slot open so every NAME keeps one
+                        left edge — nothing is drawn in it (MOTIR-2675). */}
+                      <ProjectMark image={p.image} size={24} reserveSlot />
+                      <span
+                        className={cn(
+                          'flex-1 truncate font-sans text-sm text-(--el-text)',
+                          isActive && 'font-semibold',
+                        )}
+                      >
+                        {p.name}
+                      </span>
+                      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                        {isActive ? (
+                          <Check className="h-4 w-4" style={{ color: 'var(--el-accent)' }} />
+                        ) : null}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {canCreateProject ? (
+            <>
+              <div className="my-1 h-px bg-(--el-border)" />
+              {/* Two peer "start a project" doors (MOTIR-1485 / 1486): the accent
               AI door LEADS (Motir is chat-first, Principle #1). It mints a fresh
               DRAFT project and hands off to the shipped /onboarding fork
               (MOTIR-1462) scoped to that new project — it does NOT plan into the
@@ -180,27 +211,29 @@ export function ProjectSwitcher({
               shipped modal, unchanged. The AI door only shows when the AI
               backend is configured (same gate as the "Plan with AI" launcher);
               otherwise just the manual door renders. */}
-          <div className="flex flex-col px-1 pb-1">
-            {aiConfigured ? (
-              <form action={startNewAiProjectAction}>
+              <div className="flex flex-col px-1 pb-1">
+                {aiConfigured ? (
+                  <form action={startNewAiProjectAction}>
+                    <button
+                      type="submit"
+                      className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm font-medium text-(--el-accent-on-surface) focus-visible:outline-none"
+                    >
+                      <Sparkles className="text-(--el-accent-on-surface) h-4 w-4" aria-hidden />
+                      {t('project.planWithAi')}
+                    </button>
+                  </form>
+                ) : null}
                 <button
-                  type="submit"
-                  className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm font-medium text-(--el-accent-on-surface) focus-visible:outline-none"
+                  type="button"
+                  onClick={openCreate}
+                  className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
                 >
-                  <Sparkles className="text-(--el-accent-on-surface) h-4 w-4" aria-hidden />
-                  {t('project.planWithAi')}
+                  <Plus className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                  {t('project.create')}
                 </button>
-              </form>
-            ) : null}
-            <button
-              type="button"
-              onClick={openCreate}
-              className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-            >
-              <Plus className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-              {t('project.create')}
-            </button>
-          </div>
+              </div>
+            </>
+          ) : null}
         </Popover.Content>
       </Popover>
 

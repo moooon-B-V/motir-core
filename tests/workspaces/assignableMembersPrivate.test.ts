@@ -55,12 +55,17 @@ describe('assignableMembersService.list — a private project', () => {
       ctx,
       level: 'private',
     });
-    // Joins the workspace AFTER the project went private, so is not on it.
+    // Going private adds nobody (Story MOTIR-6169): the viewer is ADDED to the
+    // project explicitly.
+    await adminDb.projectMembership.create({
+      data: { workspaceId: workspace.id, projectId: project.id, userId: viewer.id, role: 'member' },
+    });
+    // A workspace member never added to the project.
     await workspacesService.addMember({ userId: outsider.id, workspaceId: workspace.id });
 
     const rows = await assignableMembersService.list({
       projectId: project.id,
-      accessLevel: 'private',
+      accessMode: 'members',
       ctx,
     });
     const byId = new Map(rows.map((r) => [r.userId, r]));

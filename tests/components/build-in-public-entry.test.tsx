@@ -9,7 +9,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 // design/public-projects Panel 10): the PRIMARY project-shell header button and
 // the durable Settings → General promo card. Both open the reusable 6.17.2
 // explainer/confirm dialog and, on confirm, run the shared `useGoPublic` write —
-// PATCH /api/projects/[key]/access with accessLevel:'public', then toast +
+// PATCH /api/projects/[key]/access with accessMode:'public' (MOTIR-6544), then toast +
 // router.refresh (server-gated visibility, so the refresh is the whole
 // page-state-after-mutation story).
 // (The Panel-10b shell nudge is deferred — a global content-flow banner above
@@ -64,7 +64,7 @@ describe('BuildInPublicButton (PRIMARY header entry)', () => {
     const [url, init] = fetchSpy.mock.calls[0]!;
     expect(url).toBe('/api/projects/MOTIR/access');
     expect(init.method).toBe('PATCH');
-    expect(JSON.parse(init.body)).toEqual({ accessLevel: 'public' });
+    expect(JSON.parse(init.body)).toEqual({ accessMode: 'public' });
     await waitFor(() => expect(refreshSpy).toHaveBeenCalledTimes(1));
   });
 

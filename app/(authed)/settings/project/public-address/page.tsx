@@ -16,6 +16,7 @@ import { publicProjectPath, publicSiteOrigin } from '@/lib/publicProjects/urls';
 
 import { PublicSubdomainCard } from './_components/PublicSubdomainCard';
 import { CustomDomainsSection } from './_components/CustomDomainsSection';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // THE PUBLIC ADDRESS ROOM (Story MOTIR-3878 · MOTIR-4221) — where a workspace
 // claims its subdomain and, once MOTIR-4229 lands, a project connects a domain
@@ -68,10 +69,10 @@ export default async function ProjectPublicAddressPage() {
   const t = await getTranslations('settings');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   const refused = await guardSettingsPage('public-address', ctx);
   if (refused) return refused;

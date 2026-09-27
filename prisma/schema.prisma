@@ -1358,6 +1358,22 @@ model Project {
   /// lock every current member out. The browse/edit policy that reads this is
   /// computed at the service layer in Subtask 6.4.3.
   accessLevel                      ProjectAccessLevel    @default(open)
+  /// The project's ACCESS MODE (Story MOTIR-6169 · MOTIR-6541) — who may ENTER
+  /// it: `workspace` (every Full-scope workspace member, plus the people added),
+  /// `members` (only the people added) or `public` (as `workspace`, plus anyone
+  /// with the link) — `docs/decisions/role-model.md` Q1. Added BESIDE the legacy
+  /// `accessLevel`: NULL means "not migrated yet — derive it from
+  /// `accessLevel`" (`accessModeOf`, `lib/projects/accessMode.ts`), which is what
+  /// keeps a project the still-serving old build creates correct during the
+  /// deploy window. It has NO default on purpose: a default would hand
+  /// `workspace` to a project the old build creates `private`.
+  ///
+  /// ⚠️ This column and `accessLevel` MOVE TOGETHER, and
+  /// `projectRepository.setAccessMode` is their only writer, so the RLS
+  /// policies that still key on `accessLevel = 'public'` never disagree with
+  /// the application. The follow-up contract story drops `accessLevel` and
+  /// makes this column NOT NULL.
+  accessMode                       ProjectAccessMode?    @map("access_mode")
   /// Public Overview / README (Story 6.12 · Subtask 6.12.3) — the authored
   /// Markdown body shown on the DEFAULT public Overview tab (6.12.4), edited by
   /// the project admin via the shipped `MarkdownEditor` in settings (6.12.8).
@@ -1770,10 +1786,10 @@ model Project {
 /// the `owner` row is the workspace founder, who always has access to every
 /// project regardless of project membership.
 model WorkspaceMembership {
-  id               String        @id @default(cuid())
+  id               String               @id @default(cuid())
   userId           String
   workspaceId      String
-  role             MemberRole    @default(member)
+  role             MemberRole           @default(member)
   /// The member's currently-active project within this workspace. Clears
   /// to NULL (onDelete: SetNull) — not cascades — when that project is
   /// archived/deleted, so losing a project never removes the membership.
@@ -1791,15 +1807,24 @@ model WorkspaceMembership {
   /// `workspaceMembershipRepository.setWorkspaceRole` is their only writer. A
   /// membership on a workspace custom role carries `workspaceRole =
   /// CUSTOM_WORKSPACE_ROLE_TIER` (`member`, `lib/workspaces/roles.ts`).
-  workspaceRole    WorkspaceRole @map("workspace_role")
+  workspaceRole    WorkspaceRole        @map("workspace_role")
   /// The workspace CUSTOM role this membership holds, or NULL for a built-in.
   /// `onDelete: Restrict` for the reason `ProjectMembership.roleDefinitionId`
   /// gives: Cascade would drop the member, SetNull would silently re-grant, so
   /// the DATABASE refuses and the only route to deleting a held role is the
   /// service's reassign-then-delete path.
-  roleDefinitionId String?       @map("role_definition_id")
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  roleDefinitionId String?              @map("role_definition_id")
+  /// The member's ACCESS SCOPE (Story MOTIR-6169 · MOTIR-6541) — `full` enters
+  /// every project open to the workspace plus any Members-only project they
+  /// were added to; `limited` enters ONLY the projects they were added to
+  /// (`docs/decisions/role-model.md` Q1). Never read for a Manager, who enters
+  /// every project. It DOES default, unlike `workspaceRole`: nobody before this
+  /// story was restricted, so `full` is the correct value for every row the
+  /// still-serving old build inserts, and a default loses nothing.
+  /// `workspaceMembershipRepository.setAccessScope` is its writer.
+  accessScope      WorkspaceAccessScope @default(full) @map("access_scope")
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
 
   user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace      Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -2100,6 +2125,10 @@ enum RoleMigrationReason {
   custom_role_merged
   mapped_narrower
   org_admin_granted
+  /// Written by the access migration (Story MOTIR-6169 · MOTIR-6542): a person a
+  /// `limited` project admitted who no longer enters it, because it became
+  /// Members only and they were not added.
+  project_access_lost
 
   @@map("role_migration_reason")
 }
@@ -2123,6 +2152,32 @@ enum ProjectAccessLevel {
   public
 
   @@map("project_access_level")
+}
+
+/// A project's ACCESS MODE (`project.accessMode`, Story MOTIR-6169 · MOTIR-6541)
+/// — who may ENTER it (`docs/decisions/role-model.md` Q1, *Project access
+/// modes*): `workspace` = every Full-scope workspace member plus the people
+/// added; `members` = only the people added; `public` = as `workspace`, plus
+/// anyone with the link (the Visitor, MOTIR-6170). Managers enter every mode.
+/// What a person may DO once inside is their workspace role, never the mode.
+enum ProjectAccessMode {
+  workspace
+  members
+  public
+
+  @@map("project_access_mode")
+}
+
+/// A workspace membership's ACCESS SCOPE (`workspaceMembership.accessScope`,
+/// Story MOTIR-6169 · MOTIR-6541, `role-model.md` Q1 *Membership scopes*):
+/// `full` enters every project open to the workspace, plus any Members-only
+/// project the person was added to; `limited` enters ONLY the projects they were
+/// added to — the contractor case.
+enum WorkspaceAccessScope {
+  full
+  limited
+
+  @@map("workspace_access_scope")
 }
 
 /// How a project's pull requests are merged (`docs/decisions/approval-gates.md`
@@ -4831,6 +4886,10 @@ enum ApprovalGateSupersedeCause {
   /// The plan's LAST proposal was withdrawn, so the plan was discarded (ADR
   /// `approval-gates.md` §11.7).
   plan_discarded
+  /// The merge queue removed a member for a FAILURE at the commits the gate asked
+  /// about — CAN'T-LAND since `approval-gates.md` §4's FIFTH AMENDMENT (MOTIR-6595).
+  /// Only the convergence writes it, because a live failure raises no gate to withdraw.
+  queue_failed
 
   @@map("approval_gate_supersede_cause")
 }

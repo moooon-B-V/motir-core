@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { accessModeOf } from '@/lib/projects/accessMode';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { db } from '@/lib/db';
@@ -101,7 +102,7 @@ function peek(s: Scenario, identifier: string, actor = s.ctx) {
   return workItemsService.getQuickView(
     s.project.id,
     identifier,
-    s.project.accessLevel,
+    accessModeOf(s.project),
     actor,
     'en',
   );

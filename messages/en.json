@@ -647,6 +647,9 @@
       "rolesManagerOnly": "Only a workspace Manager can change roles.",
       "orgManagedRole": "An organization Owner or Admin is a Manager in every workspace. Change it on the organization’s Members page.",
       "roleChangeFailed": "Couldn’t change the role.",
+      "scopeManagerOnly": "Only a workspace Manager can change who can enter projects.",
+      "scopeNotApplicable": "A Manager enters every project, so their access is always Full.",
+      "scopeChangeFailed": "Couldn’t change the access scope.",
       "keyLabelRequired": "Key and label are required.",
       "noProjectForIssue": "Pick or create a project before adding a work item.",
       "titleRequired": "Give the work item a title.",
@@ -658,7 +661,8 @@
       "orgSecurityForbidden": "Only owners and admins of an organization can change its security settings.",
       "workspaceSecurityForbidden": "Only owners and admins of a workspace can change its security settings.",
       "refused": "That didn’t go through: {reason}",
-      "organizationClosing": "This organization is scheduled for deletion and is read-only. Only its Owner can cancel the deletion."
+      "organizationClosing": "This organization is scheduled for deletion and is read-only. Only its Owner can cancel the deletion.",
+      "memberProjectsFailed": "Couldn’t load their projects."
     },
     "links": {
       "notFound": "That work item no longer exists.",
@@ -1210,6 +1214,12 @@
           "description": "Answer questions about the plan, docs and work items"
         }
       }
+    },
+    "noProject": {
+      "title": "You’re not in a project yet",
+      "body": "A Manager of {workspace} can add you to a project. You’ll see it here as soon as they do.",
+      "switcherEmpty": "You haven’t been added to a project in {workspace} yet.",
+      "create": "Create a project"
     }
   },
   "issueViews": {
@@ -1933,7 +1943,7 @@
       },
       "onlyManager": "You’re the only Manager. Make someone else a Manager before changing your own role.",
       "orgAdminRole": "Organization Admin — a Manager in every workspace of {org}. Change it on the organization’s Members page.",
-      "rolesManagerOnly": "Only a workspace Manager can change roles.",
+      "rolesManagerOnly": "Only a workspace Manager can change roles and access.",
       "roleChanged": "{name} is now a {role} in every project of {workspace}",
       "lastManagerTitle": "Couldn’t change the role",
       "lastManagerBody": "A workspace needs at least one Manager. {name} is still a Manager.",
@@ -1944,10 +1954,10 @@
       "selfDemoteKeep": "Keep Manager",
       "selfDemoteConfirm": "Make me a {role}",
       "migration": {
-        "title": "Changed by the move to workspace roles",
+        "title": "Changed by the move to workspace roles and project access",
         "managersOnly": "Managers only",
         "count": "{count, plural, one {# person} other {# people}}",
-        "body": "Roles now live on the workspace — one role per person, the same in every project. These people were not moved by the plain mapping. Check each one; change a role above if it is wrong.",
+        "body": "These people were not moved by the plain mapping. Check each one.",
         "dismiss": "Dismiss",
         "dismissLabel": "Dismiss {name}",
         "dismissed": "Dismissed",
@@ -1975,9 +1985,48 @@
           "custom_role_recreated": "Their custom project role was re-created at the workspace.",
           "custom_role_merged": "Two custom roles merged into one holding only the keys both shared.",
           "org_admin_granted": "Became an organization Admin, as every workspace owner does.",
-          "mapped_narrower": "Their keys in a project are narrower than before."
-        }
-      }
+          "mapped_narrower": "Their keys in a project are narrower than before.",
+          "project_access_lost": "No longer enters {projectKey} — it was Limited and they were not added."
+        },
+        "rolesHeading": "Roles",
+        "accessHeading": "Project access",
+        "accessBody": "Projects that were Limited are now Members only. Add anyone who should keep access on that project’s Access & members page.",
+        "accessBefore": "Could open {projectKey}",
+        "accessAfter": "No access to {projectKey}",
+        "openProjectAccess": "Open project access"
+      },
+      "accessColumn": "Access",
+      "scope": {
+        "full": "Full",
+        "limited": "Limited"
+      },
+      "scopeDesc": {
+        "full": "Opens every project open to the workspace, plus the ones they’re added to.",
+        "limited": "Opens only the projects they’re added to."
+      },
+      "scopeSelectLabel": "Access for {name}",
+      "scopeLockedManager": "Full · Manager",
+      "scopeLockedReason": "Managers open every project, so access doesn’t apply to them.",
+      "projectCount": "{count, plural, one {# project} other {# projects}}",
+      "noProjects": "No projects",
+      "noProjectsHelp": "Limited and added to no project — {name} can’t open anything in {workspace} yet.",
+      "projectsPopoverTitle": "{name} can open",
+      "projectsPopoverFoot": "Add or remove {name} on each project’s Access & members page.",
+      "scopeChangedFull": "{name} now opens every project open to {workspace}",
+      "scopeChangedLimited": "{name} now opens only the projects they’re added to",
+      "scopeChangeErrorTitle": "Couldn’t change {name}’s access",
+      "scopeNotApplicableBody": "{name} was just made a Manager, and Managers open every project. Their access stays Full.",
+      "inviteAccessLabel": "Access",
+      "inviteAccessFullDesc": "Every project open to the workspace.",
+      "inviteAccessLimitedDesc": "Only the projects you pick below.",
+      "inviteProjectsLabel": "Projects to join",
+      "inviteProjectsPlaceholder": "Pick projects…",
+      "inviteProjectsHint": "They join these projects when they accept.",
+      "inviteProjectsRemove": "Remove {project}",
+      "inviteNoProjectsWarning": "They won’t be able to open anything until a Manager adds them to a project.",
+      "inviteJoinsAsMember": "They join as a Member. You can change their role after they accept.",
+      "errorInviteProjects": "One of those projects can’t be joined. Pick them again.",
+      "errorInviteNotAllowed": "You can’t send this invite. Only a workspace Manager can invite with Limited access."
     },
     "danger": {
       "cantLeaveTitle": "Can't leave",
@@ -2344,24 +2393,9 @@
     "access": {
       "title": "Access & members",
       "cardDescription": "Who can find, view, and edit this project, and the people on it.",
-      "subtitle": "Control who can see and edit <strong>{projectName}</strong>. Workspace Managers always have access.",
+      "subtitle": "Control who can open {projectName}. Workspace Managers always can.",
       "accessHeading": "Project access",
-      "accessSubheading": "Who in the {workspaceName} workspace can reach this project.",
-      "levelGroupLabel": "Project access level",
-      "level": {
-        "open": "Open",
-        "limited": "Limited",
-        "private": "Private",
-        "public": "Building in public"
-      },
-      "levelDesc": {
-        "open": "Any member of the {workspaceName} workspace can view and edit this project.",
-        "limited": "Any workspace member can view and comment, but only project members can edit.",
-        "private": "Only people added to the project below can find or open it. Hidden from everyone else.",
-        "public": "Publish this project to the web as a build-in-public page — anyone can follow the board, roadmap, and work items without an account, indexable by search engines. Visitors sign in only to submit, upvote, or comment. It's the same public access level, presented as a status you can start and stop anytime."
-      },
-      "goPrivateNote": "The {count, plural, one {# person} other {# people}} who can currently access <strong>{projectName}</strong> will be added as project members so no one loses access. You can adjust roles or remove them in the Members list.",
-      "levelChangedToast": "Project access set to {level}",
+      "accessSubheading": "Who in the {workspaceName} workspace can open this project.",
       "changeAccessErrorTitle": "Could not change access",
       "membersHeading": "Members",
       "memberCountLabel": "{count, plural, one {# member} other {# members}}",
@@ -2384,8 +2418,38 @@
       "addMemberErrorTitle": "Could not add member",
       "removeMemberErrorTitle": "Could not remove member",
       "errorGeneric": "Something went wrong. Please try again.",
-      "membersFromWorkspaceRole": "People added to this project. What each can do comes from their workspace role — manage roles in workspace settings.",
-      "workspaceRolesLink": "Workspace roles →"
+      "membersFromWorkspaceRole": "People added to this project. They can always open it, whatever the access mode. What each can do comes from their workspace role.",
+      "workspaceRolesLink": "Workspace roles →",
+      "mode": {
+        "workspace": "Open to the workspace",
+        "members": "Members only",
+        "public": "Public"
+      },
+      "modeDesc": {
+        "workspace": "Everyone in {workspaceName} with Full access can open it, plus the people added below.",
+        "members": "Only the people added below can find or open it. Hidden from everyone else.",
+        "public": "Open to the workspace, plus anyone with the link — the build-in-public page. Visitors read without an account and sign in only to submit, upvote or comment."
+      },
+      "modeGroupLabel": "Project access mode",
+      "publicUnavailable": "Publishing runs on Motir Cloud — this self-hosted install has no public site to publish to.",
+      "membersOnlyConfirmTitle": "Make {projectName} members only?",
+      "membersOnlyConfirmBody": "{count, plural, one {<b># person</b> will lose access} other {<b># people</b> will lose access}}. They have Full access to {workspaceName} but were not added to this project:",
+      "membersOnlyConfirmHint": "Add anyone who should keep access first, or add them afterwards. Managers always keep access.",
+      "membersOnlyConfirmNobody": "Nobody loses access — everyone who can open {projectName} today was added to it or is a Manager.",
+      "membersOnlyConfirmAction": "Make members only",
+      "modeChangedToast": "{projectName} is now {mode}",
+      "changeAccessErrorBody": "{projectName} is still {mode}. Please try again.",
+      "addPeople": "Add people…",
+      "addPeopleSearch": "Search people…",
+      "addPeopleFoot": "Workspace members who are not added yet. Managers enter every project anyway.",
+      "alwaysEnters": "always enters",
+      "scope": {
+        "full": "Full",
+        "limited": "Limited"
+      },
+      "emptyMembersOnlyTitle": "Only Managers can open this project",
+      "emptyMembersOnlyBody": "It is members only and nobody has been added yet. Add people to let them in.",
+      "readOnlyModeNote": "Only a workspace Manager can change who can open this project."
     },
     "publicPage": {
       "title": "Public page",
@@ -6607,9 +6671,8 @@
           "pointer": "Run the fix from <link>{key}</link> — this work item was built as part of that run, so its repair runs there."
         },
         "which": {
-          "checks": "Nothing changed on your side? <b>Approve</b> sends the same commits once more. If the failing check points at real code, <code>motir fix</code> hands it to an agent.",
           "conflict": "A conflict needs new commits. <code>motir fix</code> hands it to an agent; approving again cannot land these commits, so nothing is offered until the branch moves.",
-          "other": "<b>Approve</b> sends the same commits once more. If it leaves the queue the same way, <code>motir fix</code> hands it to an agent."
+          "failed": "A queue failure needs new commits, even a flaky one. <code>motir fix</code> hands it to an agent, which merges the base branch first and pushes. Approving again is not offered: it would queue the same commits the queue just refused."
         },
         "conflictOn": "<prs></prs> conflicts with {base} and cannot be merged.",
         "conflictOnNoBase": "<prs></prs> conflicts with its base branch and cannot be merged.",
@@ -8757,6 +8820,7 @@
         "ci_failed": "The checks on these commits failed, so this question was withdrawn.",
         "plan_stale": "Work this plan changes was finished, so the plan went out of date and this question was withdrawn.",
         "plan_discarded": "Every proposal in the plan was withdrawn, so the plan ended and this question with it.",
+        "queue_failed": "The merge queue failed these commits, so this question was withdrawn.",
         "unknown": "This question was withdrawn. The reason was not recorded."
       },
       "causeByKind": {
@@ -8861,6 +8925,10 @@
         "title": "These commits did not land, so the approval that sent them has been used.",
         "next": "Approve the work item again to try once more. If a check failed for a real reason, run motir fix instead."
       },
+      "mergeQueueFailedNeedsFix": {
+        "title": "This pull request failed in the merge queue.",
+        "next": "Queuing the same commits again would fail the same way, so nothing was queued. motir fix hands it to an agent, and Motir asks again once a new push is green."
+      },
       "mergeAppPermissionMissing": {
         "title": "Motir's GitHub App is not allowed to merge here.",
         "next": "An organisation owner grants {permission} to Motir's GitHub App on GitHub, then you approve again.",
@@ -8953,7 +9021,8 @@
         "withdrawnPulledBack": "{count, plural, one {# pull request} other {# pull requests}} · taken out of review",
         "withdrawnUnknown": "{count, plural, one {# pull request} other {# pull requests}} · withdrawn",
         "withdrawnConflict": "{count, plural, one {# pull request} other {# pull requests}} · {pr} conflicts with {base}",
-        "withdrawnConflictNoBase": "{count, plural, one {# pull request} other {# pull requests}} · {pr} conflicts with its base branch"
+        "withdrawnConflictNoBase": "{count, plural, one {# pull request} other {# pull requests}} · {pr} conflicts with its base branch",
+        "withdrawnQueueFailed": "{count, plural, one {# pull request} other {# pull requests}} · {pr} failed in the merge queue"
       },
       "verb": {
         "approveAndMerge": "Approve and merge"
@@ -9009,7 +9078,9 @@
         "citePulledBack": "Nobody decided it. Motir asks again when {key} is back in review.",
         "portConflict": "{pr} conflicts with {base}, so this question was withdrawn. Nothing was approved.",
         "portConflictNoBase": "{pr} conflicts with its base branch, so this question was withdrawn. Nothing was approved.",
-        "citeConflict": "Nobody decided it. A push that resolves the conflict and goes green asks again."
+        "citeConflict": "Nobody decided it. A push that resolves the conflict and goes green asks again.",
+        "portQueueFailed": "{pr} left the merge queue for a failure, so this question was withdrawn. Nothing was approved.",
+        "citeQueueFailed": "Nobody decided it. A push whose checks go green asks again."
       },
       "list": {
         "pair": "{a} and {b}",
@@ -9034,6 +9105,12 @@
         "failingCheck": "Failing check: <link>{check}</link>",
         "unchanged": "Nothing changed on your side? <b>Queue again</b> approves these same commits once more and puts them back in the merge queue.",
         "cannotLand": "These commits cannot land as they stand. <b>motir fix</b> hands the repair to an agent; a push brings the question back once its checks pass.",
+        "failed": {
+          "checks": "<b>{pr}</b> left the merge queue: <b>{check}</b> failed.",
+          "timedOut": "<b>{pr}</b> left the merge queue: <b>{check}</b> timed out.",
+          "mergeCommit": "<b>{pr}</b> left the merge queue: the queue could not build a merge commit for it.",
+          "held": "These commits cannot land as they stand, so Motir is not asking again. <b>{key}</b> is held at Implemented, at this head."
+        },
         "newCommits": "It has new commits since your approval. Motir asks again when every check is green.",
         "auto": "Motir merges this project’s pull requests when they are green. <b>Queue again</b> sends it back at the same commits.",
         "partTitle": "Merge queue",

@@ -6,6 +6,8 @@ import en from '@/messages/en.json';
 import { DevelopmentSection, DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
 import type { ApprovalGateDTO, PullRequestApprovalMemberDTO } from '@/lib/dto/approvalGate';
 import { AWAITING_MERGE_GATE, CORE_PR, GATEWAY_PR } from '../helpers/howToTestFixtures';
+import { persistedRowOutcome } from '@/components/github/MergeOutcomeSlot';
+import { QUEUE_EXIT_REASONS } from '@/lib/mergeQueue/queueExit';
 
 // THE PEEK READS THE SAME ROW OUTCOME THE ITEM PAGE DOES (Bug MOTIR-5650).
 //
@@ -171,6 +173,47 @@ describe('the quick view reads the persisted merge outcome (MOTIR-5650)', () => 
       expect(pillsOf(GATEWAY_PR.title)).toEqual(detail);
       expect(within(rowOf(GATEWAY_PR.title)).getByText(label)).toBeTruthy();
       expect(screen.queryByRole('button', { name: pra.outcome.queueAgain })).toBeNull();
+    },
+  );
+});
+
+// THE ROW READS THE CLASS, NEVER THE REASON STRING (MOTIR-6596; `design-notes.md` § 31).
+// Asserted over every key of the reason table, so a reason added later cannot slip into a
+// verb its class forbids.
+describe('persistedRowOutcome — by class, over every queue reason', () => {
+  const fact = (rawReason: string, disposition: 'failure' | 'neutral') => ({
+    queued: false,
+    retryable: false,
+    exitAtApprovedHead: true,
+    refusal: null,
+    exit: {
+      rawReason,
+      disposition,
+      headSha: 'sha',
+      exitedAt: '2026-09-27T10:00:00.000Z',
+      requeuedAt: null,
+      failingCheckName: null,
+      failingCheckUrl: null,
+    },
+  });
+  const EXPECTED: Record<string, string> = {
+    CI_FAILURE: 'failedHeld',
+    CI_TIMEOUT: 'failedHeld',
+    INVALID_MERGE_COMMIT: 'failedHeld',
+    GIT_TREE_INVALID: 'failedHeld',
+    MERGE_CONFLICT: 'cannotLand',
+    BRANCH_PROTECTIONS: 'leftQueue',
+    MANUAL: 'removedFromQueue',
+    QUEUE_CLEARED: 'removedFromQueue',
+    ROLL_BACK: 'removedFromQueue',
+    UNKNOWN_REMOVAL_REASON: 'removedFromQueue',
+  };
+  it.each(Object.entries(QUEUE_EXIT_REASONS).filter(([, disposition]) => disposition !== 'landed'))(
+    '%s',
+    (reason, disposition) => {
+      expect(persistedRowOutcome(fact(reason, disposition as 'failure' | 'neutral'))).toBe(
+        EXPECTED[reason],
+      );
     },
   );
 });

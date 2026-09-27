@@ -123,6 +123,12 @@ export type GateRefusal =
   // AMENDMENT, point 4): the pull request left the queue for a failure, so the old
   // approval is not reused — a fresh approval of the re-asked gate re-queues it.
   | { tag: 'MERGE_REQUEUE_NEEDS_APPROVAL' }
+  // Queue again on a queue FAILURE exit (MOTIR-6594; `approval-gates.md` §4 FIFTH
+  // AMENDMENT): the checks failed or timed out, or the merge commit or tree could not
+  // be built, so the same commits cannot land however often anyone says yes — the
+  // repair is `motir fix` and a new green head. `reason` is GitHub's own string, for
+  // the copy to name the failure; it is never `MERGE_CONFLICT`, which keeps its tag.
+  | { tag: 'MERGE_QUEUE_FAILED_NEEDS_FIX'; reason: string }
   | {
       tag: 'MERGE_APP_PERMISSION_MISSING';
       /**
@@ -228,6 +234,8 @@ export function toGateRefusal(
     case 'MERGE_ALREADY_REQUEUED':
     case 'MERGE_REQUEUE_NEEDS_APPROVAL':
       return { tag: code };
+    case 'MERGE_QUEUE_FAILED_NEEDS_FIX':
+      return { tag: code, reason: extra?.reason ?? '' };
     case 'MERGE_BRANCH_PROTECTED':
       return extra?.reason ? { tag: code, reason: extra.reason } : { tag: code };
     case 'MERGE_APP_PERMISSION_MISSING':

@@ -28,6 +28,7 @@ import { IssueTreeSection } from './_components/IssueTreeSection';
 import { IssueTreeSkeleton } from './_components/IssueTreeSkeleton';
 import { IssueQuickViewController } from './_components/IssueQuickViewController';
 import { OrganizationReadOnlyNote } from '../_components/OrganizationReadOnlyNote';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The project issue index (Story 2.5 · Subtask 2.5.3; view switcher in 2.5.8) —
 // the surface the sidebar "Issues" link opens. Server Component: resolves the
@@ -67,10 +68,10 @@ export default async function IssuesPage({
   const t = await getTranslations('issueViews');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   // Story 6.4.6 — gate the issue list on canBrowse; a non-browsable active
   // project renders the no-access state, not the list. The same resolve also
@@ -138,7 +139,7 @@ export default async function IssuesPage({
     // Assignable users scoped by access level (6.4.6): private → project members.
     assignableMembersService.list({
       projectId: ctx.projectId,
-      accessLevel: ctx.project.accessLevel,
+      accessMode: ctx.project.accessMode,
       ctx: wsCtx,
     }),
     // The builder's sprint value editor (6.1.4) — a project's sprint list is

@@ -17,6 +17,7 @@ vi.mock('@/lib/auth', async (importOriginal) => {
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { projectsService } from '@/lib/services/projectsService';
 import { organizationsService } from '@/lib/services/organizationsService';
 import {
   INVITE_IDENTIFIER_PREFIX,
@@ -143,6 +144,9 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
       workspaceRole: 'member',
       role: 'member',
       inviterUserId: user.id,
+      // A Full invite naming no project — the default (Story MOTIR-6169 · MOTIR-6546).
+      accessScope: 'full',
+      projectIds: [],
     });
     expect(rows[0]!.expiresAt.getTime()).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
     const token = rows[0]!.identifier.slice(INVITE_IDENTIFIER_PREFIX.length);
@@ -260,7 +264,7 @@ describe('POST /api/invites/[token]/accept', () => {
     };
     const res = await postAccept(token);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ workspaceId: workspace.id });
+    expect(await res.json()).toEqual({ workspaceId: workspace.id, skippedProjects: [] });
 
     const membership = await workspacesService.findMembership(invitee.id, workspace.id);
     expect(membership).not.toBeNull();
@@ -497,5 +501,200 @@ describe('GET /api/invites/[token] — validate', () => {
       inviterName: 'Ben Liu',
       email: 'newbie@example.com',
     });
+  });
+});
+
+// ── Story MOTIR-6169 · MOTIR-6546 — an invite carries the access scope ──────────
+
+describe('an invite carries the access scope', () => {
+  async function setup() {
+    const { user: manager, workspace } = await makeInviter('mgr-scope@example.com', 'Manager');
+    const alpha = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: manager.id,
+      name: 'Alpha',
+    });
+    const beta = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: manager.id,
+      name: 'Beta',
+    });
+    const contractor = await usersService.createUser({
+      email: 'contractor-scope@example.com',
+      password: 'hunter2hunter2',
+      name: 'Contractor',
+    });
+    return { manager, workspace, alpha, beta, contractor };
+  }
+
+  async function tokenFor(email: string): Promise<string> {
+    const row = await adminDb.verification.findFirstOrThrow({
+      where: { identifier: { startsWith: INVITE_IDENTIFIER_PREFIX }, value: { contains: email } },
+    });
+    return row.identifier.slice(INVITE_IDENTIFIER_PREFIX.length);
+  }
+
+  it("a Manager's Limited invite with one project → accept → a Limited membership and exactly that project", async () => {
+    const f = await setup();
+    mockSession.current = { user: { id: f.manager.id, email: f.manager.email, name: 'Manager' } };
+    const sent = await postInvite(f.workspace.id, {
+      email: f.contractor.email,
+      accessScope: 'limited',
+      projectIds: [f.alpha.id],
+    });
+    expect(sent.status).toBe(200);
+    const token = await tokenFor(f.contractor.email);
+
+    mockSession.current = {
+      user: { id: f.contractor.id, email: f.contractor.email, name: 'Contractor' },
+    };
+    const res = await postAccept(token);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ workspaceId: f.workspace.id, skippedProjects: [] });
+
+    const membership = await adminDb.workspaceMembership.findUniqueOrThrow({
+      where: { userId_workspaceId: { userId: f.contractor.id, workspaceId: f.workspace.id } },
+    });
+    expect(membership.accessScope).toBe('limited');
+    const added = await adminDb.projectMembership.findMany({ where: { userId: f.contractor.id } });
+    expect(added.map((r) => r.projectId)).toEqual([f.alpha.id]);
+    const listed = await projectsService.listProjects(f.workspace.id, f.contractor.id);
+    expect(listed.map((p) => p.identifier)).toEqual([f.alpha.identifier]);
+  });
+
+  it('an invite stored before the change — no accessScope, no projectIds — accepts as Full with no project rows', async () => {
+    const f = await setup();
+    const token = 'legacy-scope-token';
+    await adminDb.verification.create({
+      data: {
+        identifier: INVITE_IDENTIFIER_PREFIX + token,
+        value: JSON.stringify({
+          workspaceId: f.workspace.id,
+          email: f.contractor.email,
+          role: 'member',
+          inviterUserId: f.manager.id,
+        }),
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+    mockSession.current = {
+      user: { id: f.contractor.id, email: f.contractor.email, name: 'Contractor' },
+    };
+    expect((await postAccept(token)).status).toBe(200);
+    const membership = await adminDb.workspaceMembership.findUniqueOrThrow({
+      where: { userId_workspaceId: { userId: f.contractor.id, workspaceId: f.workspace.id } },
+    });
+    expect(membership.accessScope).toBe('full');
+    expect(await adminDb.projectMembership.count({ where: { userId: f.contractor.id } })).toBe(0);
+  });
+
+  it('a Limited member cannot invite, and a Full Member cannot send a Limited or project invite — none writes a row', async () => {
+    const f = await setup();
+    const limited = await usersService.createUser({
+      email: 'limited-inviter@example.com',
+      password: 'hunter2hunter2',
+      name: 'Limited',
+    });
+    await workspacesService.addMember({ userId: limited.id, workspaceId: f.workspace.id });
+    await adminDb.workspaceMembership.update({
+      where: { userId_workspaceId: { userId: limited.id, workspaceId: f.workspace.id } },
+      data: { accessScope: 'limited' },
+    });
+    const full = await usersService.createUser({
+      email: 'full-inviter@example.com',
+      password: 'hunter2hunter2',
+      name: 'Full',
+    });
+    await workspacesService.addMember({ userId: full.id, workspaceId: f.workspace.id });
+
+    const before = await adminDb.verification.count();
+    mockSession.current = { user: { id: limited.id, email: limited.email, name: 'Limited' } };
+    const byLimited = await postInvite(f.workspace.id, { email: 'x1@example.com' });
+    expect(byLimited.status).toBe(403);
+    expect(((await byLimited.json()) as { code: string }).code).toBe(
+      'INVITE_NOT_ALLOWED_FOR_SCOPE',
+    );
+
+    mockSession.current = { user: { id: full.id, email: full.email, name: 'Full' } };
+    const limitedInvite = await postInvite(f.workspace.id, {
+      email: 'x2@example.com',
+      accessScope: 'limited',
+    });
+    expect(limitedInvite.status).toBe(403);
+    expect(((await limitedInvite.json()) as { code: string }).code).toBe('INVITE_SCOPE_FORBIDDEN');
+    const projectInvite = await postInvite(f.workspace.id, {
+      email: 'x3@example.com',
+      accessScope: 'limited',
+      projectIds: [f.alpha.id],
+    });
+    expect(projectInvite.status).toBe(403);
+    expect(await adminDb.verification.count()).toBe(before);
+    // …while a Full Member's Full invite still works, as before.
+    expect((await postInvite(f.workspace.id, { email: 'x4@example.com' })).status).toBe(200);
+  });
+
+  it('a malformed projectIds is a 400 before anything is read (MOTIR-6546)', async () => {
+    const f = await setup();
+    mockSession.current = { user: { id: f.manager.id, email: f.manager.email, name: 'Manager' } };
+    for (const projectIds of ['p1', [1, 2], [f.alpha.id, null]]) {
+      const res = await postInvite(f.workspace.id, {
+        email: 'bad-ids@example.com',
+        accessScope: 'limited',
+        projectIds,
+      });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { code: string }).code).toBe('BAD_REQUEST');
+    }
+  });
+
+  it('projects on a Full invite are a 400, and so is a project of another workspace or an archived one', async () => {
+    const f = await setup();
+    const { workspace: elsewhere, user: otherOwner } = await makeInviter(
+      'other-scope@example.com',
+      'Other',
+    );
+    const foreign = await projectsService.createProject({
+      workspaceId: elsewhere.id,
+      actorUserId: otherOwner.id,
+      name: 'Foreign',
+    });
+    await adminDb.project.update({ where: { id: f.beta.id }, data: { archivedAt: new Date() } });
+    const before = await adminDb.verification.count();
+    mockSession.current = { user: { id: f.manager.id, email: f.manager.email, name: 'Manager' } };
+    const fullWithProjects = await postInvite(f.workspace.id, {
+      email: 'y1@example.com',
+      accessScope: 'full',
+      projectIds: [f.alpha.id],
+    });
+    expect(fullWithProjects.status).toBe(400);
+    for (const bad of [foreign.id, f.beta.id]) {
+      const res = await postInvite(f.workspace.id, {
+        email: 'y2@example.com',
+        accessScope: 'limited',
+        projectIds: [bad],
+      });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { code: string }).code).toBe('INVITE_PROJECT_INVALID');
+    }
+    expect(await adminDb.verification.count()).toBe(before);
+  });
+
+  it('a project archived between send and accept is skipped and named', async () => {
+    const f = await setup();
+    mockSession.current = { user: { id: f.manager.id, email: f.manager.email, name: 'Manager' } };
+    await postInvite(f.workspace.id, {
+      email: f.contractor.email,
+      accessScope: 'limited',
+      projectIds: [f.alpha.id, f.beta.id],
+    });
+    const token = await tokenFor(f.contractor.email);
+    await adminDb.project.update({ where: { id: f.beta.id }, data: { archivedAt: new Date() } });
+    mockSession.current = {
+      user: { id: f.contractor.id, email: f.contractor.email, name: 'Contractor' },
+    };
+    const res = await postAccept(token);
+    expect(await res.json()).toEqual({ workspaceId: f.workspace.id, skippedProjects: ['Beta'] });
+    const added = await adminDb.projectMembership.findMany({ where: { userId: f.contractor.id } });
+    expect(added.map((r) => r.projectId)).toEqual([f.alpha.id]);
   });
 });

@@ -12,6 +12,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { RoomViewSwitch } from '@/components/rooms/RoomViewSwitch';
 import { ApprovalRecordsList } from './_components/ApprovalRecordsList';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // THE APPROVAL RECORDS ROOM (Story MOTIR-5299 · MOTIR-5302) — every approval record
 // the reader may see in the active project, pending first then decided, built to
@@ -42,9 +43,10 @@ export default async function ApprovalRecordsPage({
   if (!session) redirect('/sign-in');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at the
-  // WORKSPACE tier); the guard stays because the type does.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   const params = await searchParams;
   const t = await getTranslations('approvalRecords');

@@ -67,14 +67,15 @@ test('@smoke self-host: the public-projects capability is absent, not hidden', a
   // ── 1. THE PUBLISH DOOR IS NOT OFFERED ────────────────────────────────────
   await page.goto('/settings/project/members');
   // The control renders — this is not a page that disappeared — and it offers
-  // exactly the three levels a self-hosted team shares work with.
-  await expect(page.getByRole('radio', { name: /Private/ })).toBeVisible();
-  await expect(page.getByRole('radio', { name: /Open/ })).toBeVisible();
-  await expect(page.getByRole('radio', { name: /Limited/ })).toBeVisible();
-  // …and not the fourth. `getByRole` rather than a text search: the words
-  // "building in public" also appear in the shell's own copy elsewhere, and a
-  // text assertion would pass or fail on that instead.
-  await expect(page.getByRole('radio', { name: /Building in public|Public/ })).toHaveCount(0);
+  // the two modes a self-hosted team shares work with.
+  await expect(page.getByRole('radio', { name: /^Open to the workspace/ })).toBeEnabled();
+  await expect(page.getByRole('radio', { name: /^Members only/ })).toBeEnabled();
+  // …and draws Public DISABLED, with its reason (Story MOTIR-6169 · MOTIR-6550 ·
+  // design A10 — it used to be removed outright). `getByRole` rather than a text
+  // search: the word "public" also appears in the shell's own copy elsewhere.
+  const publicMode = page.getByRole('radio', { name: /^Public/ });
+  await expect(publicMode).toBeDisabled();
+  await expect(publicMode).toContainText('Publishing runs on Motir Cloud');
 
   // The shell's build-in-public slot is empty in both of its placements.
   await expect(page.getByRole('button', { name: 'Build in public', exact: true })).toHaveCount(0);

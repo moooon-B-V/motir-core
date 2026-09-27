@@ -13,13 +13,13 @@ import { useToast } from '@/components/ui/Toast';
 // access mutation has a single implementation:
 //   • `setOpen` opens / closes the explainer/confirm dialog;
 //   • `confirm` runs the actual write — `PATCH /api/projects/[key]/access`
-//     with `accessLevel: 'public'`, the shipped 6.4 `setAccessLevel` path
-//     (Story 6.17.2: reframe the label, never fork the model);
+//     with `accessMode: 'public'` — the access-mode setter (Story MOTIR-6169 ·
+//     MOTIR-6544; Story 6.17.2: reframe the label, never fork the model);
 //   • on success it toasts, closes the dialog, and `router.refresh()`es so the
 //     SERVER-gated surfaces re-render — the header button + nudge + promo card
 //     disappear (the project is now `public`) and the 6.17.4 "Building in
 //     public" status badge takes the same header slot. The entry points are
-//     conditionally rendered server-side on `accessLevel`, so a single
+//     conditionally rendered server-side on `accessMode`, so a single
 //     `router.refresh()` is the whole page-state-after-mutation story (no
 //     client island owns the visibility — CLAUDE.md "Page state after a
 //     mutation").
@@ -37,12 +37,17 @@ export function useGoPublic(projectKey: string) {
       const res = await fetch(`/api/projects/${projectKey}/access`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ accessLevel: 'public' }),
+        body: JSON.stringify({ accessMode: 'public' }),
       });
       if (!res.ok) throw new Error('ACCESS_WRITE_FAILED');
       toast({
         variant: 'success',
-        title: t('access.levelChangedToast', { level: t('access.level.public') }),
+        // The mode's own words (MOTIR-6550 retired the level keys). The hook is
+        // handed the project KEY, not its name, and the key reads as the name.
+        title: t('access.modeChangedToast', {
+          projectName: projectKey,
+          mode: t('access.mode.public'),
+        }),
       });
       setOpen(false);
       // Re-run the server tree: the entry points (header / nudge / promo) are

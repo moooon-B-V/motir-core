@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { accessModeOf } from '@/lib/projects/accessMode';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { cleanup, screen, waitFor } from '@testing-library/react';
@@ -282,7 +283,7 @@ describe('two gates per card, with a pull request (AMENDMENT 6 Q1)', () => {
     return workItemsService.getQuickView(
       fx.projectId,
       card.identifier,
-      fx.project.accessLevel,
+      accessModeOf(fx.project),
       fx.ctx,
       'en',
     );

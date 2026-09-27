@@ -1659,7 +1659,7 @@ export interface components {
             decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission") | null;
             decisionSource: ("ui" | "api" | "mcp" | "github") | null;
             subjectVersion: string | null;
-            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded") | null;
+            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed") | null;
             outcomeRef: string | null;
             refusalVerdict: ("revise" | "re_plan") | null;
             offersRefusalVerdict: boolean;
@@ -1686,7 +1686,15 @@ export interface components {
         Project: {
             key: string;
             name: string;
-            /** @enum {string} */
+            /**
+             * @description Who may enter the project — the authoritative access field.
+             * @enum {string}
+             */
+            accessMode: "workspace" | "members" | "public";
+            /**
+             * @description DEPRECATED — derived from `accessMode` (workspace → open, members → private, public → public), so `limited` is never emitted. Read `accessMode`.
+             * @enum {string}
+             */
             accessLevel: "open" | "limited" | "private" | "public";
             archived: boolean;
         };
@@ -5333,7 +5341,7 @@ export interface operations {
                             decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission") | null;
                             decisionSource: ("ui" | "api" | "mcp" | "github") | null;
                             subjectVersion: string | null;
-                            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded") | null;
+                            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed") | null;
                             outcomeRef: string | null;
                             refusalVerdict: ("revise" | "re_plan") | null;
                             offersRefusalVerdict: boolean;

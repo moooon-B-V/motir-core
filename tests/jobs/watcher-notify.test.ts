@@ -165,15 +165,23 @@ describe('watcherNotificationsService.fanOut — comment events', () => {
     const capture = captureEmailEvents();
     const comment = await commentsService.addComment(s.issueId, { bodyMd: 'Hi.' }, s.fx.ctx);
 
-    // Going private auto-enrolls the then-current workspace members; a user
-    // added AFTER the flip is a workspace member with no project membership.
-    // Their watcher row is inserted directly — exactly "was watching, lost
-    // view access between write and send".
+    // Going private adds nobody (Story MOTIR-6169): the watcher who keeps their
+    // view is ADDED explicitly; a user added to the workspace AFTER the flip has
+    // no project membership. Their watcher row is inserted directly — exactly
+    // "was watching, lost view access between write and send".
     await projectMembersService.setAccessLevel({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,
       ctx: s.fx.ctx,
       level: 'private',
+    });
+    await adminDb.projectMembership.create({
+      data: {
+        workspaceId: s.fx.workspaceId,
+        projectId: s.fx.projectId,
+        userId: s.watcher.id,
+        role: 'member',
+      },
     });
     const { user: late } = await addWsMember(s.fx, 'late@example.com', 'Late Member');
     await adminDb.$transaction((tx) => watcherRepository.add(s.issueId, late.id, tx));
@@ -188,7 +196,7 @@ describe('watcherNotificationsService.fanOut — comment events', () => {
       mentionedUserIds: [],
     });
 
-    // The auto-enrolled watcher still sees the private project; the late one
+    // The added watcher still sees the private project; the late one
     // does not — only the former is mailed.
     expect(result.notifiedUserIds).toEqual([s.watcher.id]);
     expect(capture.events).toHaveLength(1);

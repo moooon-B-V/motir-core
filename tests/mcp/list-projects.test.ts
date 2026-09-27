@@ -117,6 +117,7 @@ describe('list_projects — registration + the token workspace read', () => {
       id: fx.project.id,
       name: fx.project.name,
       slug: fx.project.slug,
+      accessMode: fx.project.accessMode,
       accessLevel: fx.project.accessLevel,
       // ADDED by MOTIR-2230: the row now derives from v1's `projectSchema`,
       // which publishes `archived`. `listProjects` filters archived rows out, so
@@ -226,8 +227,8 @@ describe('list_projects — the access checks are the UI switcher’s', () => {
       level: 'private',
     });
 
-    // A plain workspace member added AFTER the project went private, so they were
-    // never auto-seeded onto it.
+    // A plain workspace member never added to the private project (going private
+    // adds nobody — Story MOTIR-6169).
     const plain = await makeUser('plain-mcp-lp@ex.com', 'Plain');
     await workspacesService.addMember({ userId: plain.id, workspaceId: workspace.id });
     const plainCtx: ServiceContext = { userId: plain.id, workspaceId: workspace.id };

@@ -7,6 +7,7 @@ import { customFieldsService } from '@/lib/services/customFieldsService';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { FieldsSettingsEditor } from './_components/FieldsSettingsEditor';
 import { guardSettingsPage } from '../_guard';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // Project custom-fields settings — server component (Subtask 5.3.6). Reads
 // the active project and its field definitions (through the 5.3.2 service:
@@ -28,10 +29,10 @@ export default async function ProjectFieldsPage() {
   const t = await getTranslations('settings');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
   // protection: this page is still one typed URL away once its rail row is

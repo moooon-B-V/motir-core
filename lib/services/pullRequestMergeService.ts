@@ -1130,13 +1130,20 @@ async function queueAgainUnderApproval(
   // ⚠️ AND A CAN'T-LAND EXIT IS NEVER RE-QUEUED, whatever anyone approves (§4 FOURTH
   // AMENDMENT, point 2). A conflict does not resolve by being asked again: the commits
   // have to change, so the card sits at Implemented with `motir fix` (MOTIR-5803) and
-  // the next push re-arms the question.
+  // the next push re-arms the question. Since the FIFTH AMENDMENT (MOTIR-6594) a queue
+  // FAILURE is can't-land too, and it is refused as what it is: a CI failure reported
+  // as a conflict would send a person looking for a conflict that does not exist. The
+  // approval that reaches here post-dates the exit — a gate re-asked under the old rule,
+  // before the convergence (MOTIR-6595) withdrew it.
   if (classOfQueueExit(args.exit.rawReason) === 'cant_land') {
     return {
       subjectVersion: member.subjectVersion,
       pullRequestId: target.pullRequestId,
       outcome: 'refused',
-      refusal: toGateRefusal('MERGE_CONFLICT'),
+      refusal:
+        args.exit.rawReason === 'MERGE_CONFLICT'
+          ? toGateRefusal('MERGE_CONFLICT')
+          : toGateRefusal('MERGE_QUEUE_FAILED_NEEDS_FIX', { reason: args.exit.rawReason }),
     };
   }
 

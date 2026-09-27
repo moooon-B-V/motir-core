@@ -799,6 +799,8 @@ describe('claimRepair — a standing merge-queue failure (MOTIR-5719)', () => {
     ['GIT_TREE_INVALID', 'failure' as const],
     ['MERGE_CONFLICT', 'failure' as const],
   ])('IN REVIEW with %s is CLAIMED — the code may be at fault', async (rawReason, disposition) => {
+    // Since the FIFTH AMENDMENT (MOTIR-6594) a live queue failure never reaches In Review;
+    // this is a card the OLD rule re-asked, admitted until the convergence moves it.
     const fx = await makeWorkItemFixture();
     const { card, pr } = await greenCard(fx);
     await setStatus(card.id, 'in_review');
@@ -832,12 +834,28 @@ describe('claimRepair — a standing merge-queue failure (MOTIR-5719)', () => {
     },
   );
 
-  it('IMPLEMENTED with a CONFLICT is claimed — the only way forward is the code', async () => {
+  // CAN'T-LAND is held at Implemented — a conflict, and since the FIFTH AMENDMENT
+  // (MOTIR-6594) every queue FAILURE — and `motir fix` claims it there.
+  it.each([
+    'MERGE_CONFLICT',
+    'CI_FAILURE',
+    'CI_TIMEOUT',
+    'INVALID_MERGE_COMMIT',
+    'GIT_TREE_INVALID',
+  ])('IMPLEMENTED with %s is claimed — the only way forward is the code', async (rawReason) => {
     const fx = await makeWorkItemFixture();
     const { card, pr } = await greenCard(fx);
-    await exitOn(pr.id, { rawReason: 'MERGE_CONFLICT', disposition: 'failure' });
+    await exitOn(pr.id, { rawReason, disposition: 'failure' });
 
-    expect((await claim(fx, card.identifier)).outcome).toBe('claimed');
+    const result = await claim(fx, card.identifier);
+
+    expect(result.outcome).toBe('claimed');
+    expect(result.pullRequests).toEqual([
+      expect.objectContaining({
+        number: pr.number,
+        queueExit: expect.objectContaining({ rawReason }),
+      }),
+    ]);
   });
 
   it('IN REVIEW with a red check of its own but no queue exit is still refused — only an ejection admits it', async () => {
