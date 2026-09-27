@@ -81,11 +81,16 @@ const headRefFor = (card: SeededCard, scenario: Scenario) =>
 /** A second head for the same pull request — what a push produces. */
 const pushedHead = (scenario: Scenario) => 'f00d' + headShaFor(PRS[scenario].number).slice(4);
 
-/** Strip the catalogue's rich tags and fill its placeholders — the text a reader sees. */
-const plain = (text: string, vars: Record<string, string> = {}) =>
-  text
-    .replace(/<\/?[a-z]+>/g, '')
-    .replace(/\{(\w+)\}/g, (_, key: string) => vars[key] ?? `{${key}}`);
+/** Strip the catalogue's rich tags (to a fixed point, so no removal can leave a new
+ *  tag behind) and fill its placeholders — the text a reader sees. */
+const plain = (text: string, vars: Record<string, string> = {}) => {
+  let stripped = text;
+  for (let previous = ''; previous !== stripped; ) {
+    previous = stripped;
+    stripped = stripped.replace(/<\/?[a-z]+>/g, '');
+  }
+  return stripped.replace(/\{(\w+)\}/g, (_, key: string) => vars[key] ?? `{${key}}`);
+};
 
 function captured(name: string): Record<string, unknown> {
   const file = join(process.cwd(), 'tests/fixtures/github/merge-queue', `${name}.json`);

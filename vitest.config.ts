@@ -2646,7 +2646,7 @@ export default defineConfig({
         'lib/workItems/fixReason.ts',
         'lib/mappers/fixReasonMappers.ts',
         'lib/services/workItemFixReasonBackfillService.ts',
-        'app/(authed)/workbench/_components/WorkbenchFixLine.tsx',
+        'app/**/workbench/_components/WorkbenchFixLine.tsx',
         // ── Story MOTIR-6156 · THE MULTI-LINE COMPOSER (Subtask MOTIR-6239) ──
         // MEASURED on this branch before being pinned, per this list's own rule:
         // 97.11 statements / 90.43 branches / 100 functions / 100 lines, over the
@@ -5995,7 +5995,7 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
-        'app/(authed)/workbench/_components/WorkbenchFixLine.tsx': {
+        'app/**/workbench/_components/WorkbenchFixLine.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,
