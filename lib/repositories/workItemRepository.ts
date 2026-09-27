@@ -1357,7 +1357,9 @@ export const workItemRepository = {
    * `parent_id` is already a column on the row this query returns. `folderId`
    * rides along for the same reason once folders are levels (Bug MOTIR-5710): a
    * FILED root has a null parent too, and it is a member of its folder's level,
-   * not of the root's.
+   * not of the root's. `kind` rides along for the off-level edge's DISPOSITION
+   * (MOTIR-6359): the level rule pairs an epic only with an epic, so the canvas
+   * cannot tell a cross-level edge from a covered one without it.
    */
   async findRoadmapBlockerStubs(
     ids: string[],
@@ -1367,6 +1369,7 @@ export const workItemRepository = {
       id: string;
       identifier: string;
       title: string;
+      kind: string;
       parentId: string | null;
       folderId: string | null;
       parentTitle: string | null;
@@ -1382,6 +1385,7 @@ export const workItemRepository = {
         id: true,
         identifier: true,
         title: true,
+        kind: true,
         status: true,
         sprintId: true,
         parentId: true,
@@ -1393,6 +1397,7 @@ export const workItemRepository = {
       id: r.id,
       identifier: r.identifier,
       title: r.title,
+      kind: r.kind,
       parentId: r.parentId,
       folderId: r.folderId,
       parentTitle: r.parent?.title ?? null,

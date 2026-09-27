@@ -8,7 +8,7 @@ import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
 import { Segmented } from '@/components/ui/Segmented';
 import type { PlanViewDto } from '@/lib/planning/planView';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
-import type { PlanReviewItemDto } from '@/lib/dto/planReview';
+import type { PlanEdgeCoverageDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { addedProposalIds, newlyAddedCount } from '@/lib/planning/livePane';
 
@@ -47,6 +47,9 @@ import { addedProposalIds, newlyAddedCount } from '@/lib/planning/livePane';
 export interface PlanProposalViewsProps {
   /** The proposals to draw — the review's own item set. */
   items: PlanReviewItemDto[];
+  /** The committed edges this plan re-judges (MOTIR-6362) — the review's own
+   *  `edgeCoverage`, handed through to the canvas. */
+  edgeCoverage?: readonly PlanEdgeCoverageDto[];
   /**
    * The plan's decision, drawn on every node and row the plan contributes
    * (MOTIR-3161). Three-valued: `accepted` / `declined` / null. Read from the
@@ -126,6 +129,7 @@ export interface PlanProposalViewsProps {
 
 export function PlanProposalViews({
   items,
+  edgeCoverage,
   outcome,
   projectKey,
   version,
@@ -150,6 +154,7 @@ export function PlanProposalViews({
   const canvas = (
     <PlanReviewCanvas
       items={items}
+      edgeCoverage={edgeCoverage}
       projectKey={projectKey}
       version={version}
       outcome={outcome}

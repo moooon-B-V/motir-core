@@ -459,6 +459,7 @@ export function PlanDetail({
           // default, the establish band's own predicate, `refetch` and `version`.
           <PlanProposalViews
             items={review.items}
+            edgeCoverage={review.edgeCoverage}
             outcome={outcome}
             projectKey={projectKey}
             version={version}

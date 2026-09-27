@@ -1,3 +1,4 @@
+import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
@@ -66,6 +67,10 @@ export interface RoadmapLevelItem {
 export interface RoadmapEdge {
   blockedId: string;
   blockerId: string;
+  /** What an OFF-LEVEL edge draws (MOTIR-6359) — `RoadmapEdgeDto.coverage`. Absent
+   *  on a within-level edge, in sprint scope and from an older server, which all
+   *  keep the pre-MOTIR-6359 treatment. */
+  coverage?: EdgeDisposition;
 }
 
 /** A naming stub for a blocker that lives on ANOTHER level (the off-level anchor). */

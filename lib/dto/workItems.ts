@@ -8,6 +8,7 @@
 // `string` (a fractional-index key is already a string and Decimals don't
 // JSON-serialize losslessly as numbers). The mapper owns those conversions.
 
+import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { ChoiceBodyDTO } from '@/lib/dto/approvalGate';
 import type { FilterAst } from '@/lib/filters/ast';
 import type { WorkflowDto, StatusCategoryDto } from './workflows';
@@ -807,6 +808,16 @@ export interface RoadmapNodeDto {
 export interface RoadmapEdgeDto {
   blockedId: string;
   blockerId: string;
+  /**
+   * What the canvas draws for an OFF-LEVEL edge (MOTIR-6359; design
+   * `design/roadmap/design-notes.md` § "Covered cross-parent edges"): `uncovered`
+   * and `cross_level` are INVALID and flagged "blocked elsewhere"; `covered` is
+   * valid and drawn one level up, so nothing is drawn here; `exempt` is valid with
+   * no level above to draw it, so it keeps a neutral anchor. Set only on an
+   * off-level edge in PROJECT scope — absent on a within-level edge, in sprint
+   * scope, and from an older server, where the canvas keeps its old treatment.
+   */
+  coverage?: EdgeDisposition;
 }
 
 /**

@@ -6411,7 +6411,7 @@
         "pending": "pending",
         "pendingMeaning": "not done yet",
         "blockedElsewhere": "blocked elsewhere",
-        "blockedElsewhereMeaning": "the blocker sits elsewhere in the plan",
+        "blockedElsewhereMeaning": "its parent isn’t blocked by the blocker’s parent — add that link",
         "blockerNotInSprint": "blocker not in sprint",
         "blockerNotInSprintMeaning": "not done & outside the sprint",
         "collapse": "Hide the dependency legend",

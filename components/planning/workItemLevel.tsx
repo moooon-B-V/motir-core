@@ -28,9 +28,11 @@ import type { DirectionDocKind } from '@/lib/onboarding/directionDoc';
 // design). Shared by every work-item consumer (the roadmap view + onboarding):
 //  - each item → a `WorkItemNode` (drillable from `hasChildren`);
 //  - a within-level blocked_by edge → a firm/pending arrow (blocker done → firm);
-//  - a blocker on ANOTHER level → the CROSS-STORY signal: a `cross` (red) edge to
-//    a GHOST ANCHOR node that names the off-level blocker, and the blocked node is
-//    flagged (red ring + "cross-story" pill).
+//  - a blocker on ANOTHER level → by the edge's DISPOSITION (MOTIR-6359): an
+//    INVALID edge (uncovered, or cross-level) is the "blocked elsewhere" signal — a
+//    `cross` edge to a GHOST ANCHOR naming the blocker, and the blocked node is
+//    flagged (ring + pill); a COVERED edge draws nothing (its parents' arrow says
+//    it one level up); an EXEMPT edge is an ordinary arrow from a NEUTRAL anchor.
 //
 // Subtask 7.20.6 / MOTIR-1013 adds (via `opts`, used by the persistent roadmap —
 // NOT onboarding):
@@ -265,6 +267,7 @@ export function ghostAnchorNode(
     id,
     parentId: null,
     drillable: false,
+    anchor: true,
     searchText: label?.searchText ?? id,
     crumbLabel: label?.crumbLabel,
     // The off-level blocker is a REAL work item with a valid identifier
@@ -373,7 +376,11 @@ export function buildWorkItemLevel(
   const crossBlocked = new Set<string>();
   const deps: ProjectCanvasDep[] = [];
   const anchorNodes: ProjectCanvasNode[] = [];
-  const anchorAdded = new Set<string>();
+  // Insertion-ordered, so the anchors keep the order their first edge met them.
+  const anchorByBlocker = new Map<
+    string,
+    { stub: (typeof wi.offLevelBlockers)[number] | undefined; neutral: boolean }
+  >();
 
   for (const e of wi.edges) {
     // THIS LEVEL'S EDGES ARE THE ONES WHOSE BLOCKED END IS DRAWN HERE (bug
@@ -476,27 +483,58 @@ export function buildWorkItemLevel(
     if (scope === 'sprint' && (!stub || stub.isDone || stub.inActiveSprint)) {
       continue;
     }
-    // a red edge to a ghost anchor naming the off-level blocker.
-    crossBlocked.add(e.blockedId);
-    deps.push({ from: e.blockerId, to: e.blockedId, variant: 'cross' });
-    if (!anchorAdded.has(e.blockerId)) {
-      anchorAdded.add(e.blockerId);
-      anchorNodes.push(
-        ghostAnchorNode(
-          e.blockerId,
-          stub
-            ? { searchText: `${stub.identifier} ${stub.title}`, crumbLabel: stub.identifier }
-            : null,
-          <GhostAnchor
-            identifier={stub?.identifier ?? '—'}
-            title={stub?.title}
-            parentTitle={stub?.parentTitle ?? null}
-            folderPath={stub?.folderPath ?? null}
-            outOfSprint={scope === 'sprint'}
-          />,
-        ),
-      );
+    // PROJECT scope: the edge's DISPOSITION decides (MOTIR-6359; design
+    // `design/roadmap/design-notes.md` § "Covered cross-parent edges"), and the
+    // service computed it with the validators' own predicates — so "blocked
+    // elsewhere" appears exactly where `validate_work_item` calls the edge invalid.
+    //  - COVERED: the parents carry the edge, and their arrow one level up draws
+    //    it. Nothing here — no arrow, no ring, no anchor (sheet 2).
+    //  - EXEMPT: valid, but an end has no parent to carry it, so no level above
+    //    draws it. The ordinary firm/pending arrow from a NEUTRAL anchor, and no
+    //    flag (sheet 7).
+    //  - UNCOVERED / CROSS-LEVEL, or no disposition at all (a sprint read, an older
+    //    server): the shipped bad-plan treatment below.
+    // After the sprint arm, which asks a different question and is unchanged.
+    if (scope !== 'sprint' && e.coverage === 'covered') continue;
+    const neutral = scope !== 'sprint' && e.coverage === 'exempt';
+    if (neutral) {
+      deps.push({
+        from: e.blockerId,
+        to: e.blockedId,
+        variant: stub?.isDone ? 'firm' : 'pending',
+      });
+    } else {
+      // a red edge to a ghost anchor naming the off-level blocker.
+      crossBlocked.add(e.blockedId);
+      deps.push({ from: e.blockerId, to: e.blockedId, variant: 'cross' });
     }
+    // ONE anchor per blocker, and it is DANGER if any edge from it is flagged: a
+    // blocker that holds one valid and one invalid edge on this level is still the
+    // named end of a wrong edge.
+    const anchor = anchorByBlocker.get(e.blockerId);
+    if (anchor) {
+      anchor.neutral = anchor.neutral && neutral;
+    } else {
+      anchorByBlocker.set(e.blockerId, { stub, neutral });
+    }
+  }
+  for (const [blockerId, { stub, neutral }] of anchorByBlocker) {
+    anchorNodes.push(
+      ghostAnchorNode(
+        blockerId,
+        stub
+          ? { searchText: `${stub.identifier} ${stub.title}`, crumbLabel: stub.identifier }
+          : null,
+        <GhostAnchor
+          identifier={stub?.identifier ?? '—'}
+          title={stub?.title}
+          parentTitle={stub?.parentTitle ?? null}
+          folderPath={stub?.folderPath ?? null}
+          outOfSprint={scope === 'sprint'}
+          tone={neutral ? 'neutral' : 'danger'}
+        />,
+      ),
+    );
   }
 
   // The current-position ("you are here") node = the FIRST in-progress item on

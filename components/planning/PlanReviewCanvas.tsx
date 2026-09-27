@@ -6,7 +6,11 @@ import {
   ProjectRoadmapCanvas,
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
-import { mergePlanLevel, proposalsAtLevel } from '@/components/planning/planLevel';
+import {
+  mergePlanLevel,
+  proposalsAtLevel,
+  withProjectedCoverage,
+} from '@/components/planning/planLevel';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import {
   buildWorkItemLevel,
@@ -26,7 +30,7 @@ import { proposalLevelKey } from '@/lib/planning/planShape';
 import { folderChangeCounts } from '@/lib/planning/planChangeDiff';
 import { ProposalPeek } from '@/components/planning/ProposalPeek';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
-import type { PlanReviewItemDto } from '@/lib/dto/planReview';
+import type { PlanEdgeCoverageDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 // ⚠️ `arrivalLevel` LIVES IN `lib/` NOW (MOTIR-6161) — the planning surface asks
 // the same question and cannot import a component to ask it. Re-exported here so
 // every existing importer and every `plan-review-canvas*` test keeps working
@@ -91,6 +95,14 @@ function withChangeKeys(level: RoadmapLevel, items: PlanReviewItemDto[]): Roadma
 
 export interface PlanReviewCanvasProps {
   items: PlanReviewItemDto[];
+  /**
+   * The COMMITTED edges this plan re-judges (MOTIR-6362): an edge whose parents'
+   * edge a `modify` adds or removes was judged by the roadmap read against a parent
+   * edge the plan is changing, so its `coverage` is replaced with the projected
+   * one before the level is built. Absent ⇒ every committed edge draws as the
+   * roadmap read judged it.
+   */
+  edgeCoverage?: readonly PlanEdgeCoverageDto[];
   /** The project the plan belongs to — the per-level roadmap read is keyed by it. */
   projectKey: string;
   /** Bumped by the parent on each poll update so the canvas refetches its level. */
@@ -140,6 +152,7 @@ export interface PlanReviewCanvasProps {
 
 export function PlanReviewCanvas({
   items,
+  edgeCoverage,
   projectKey,
   version,
   outcome = null,
@@ -355,6 +368,11 @@ export function PlanReviewCanvas({
     setShowAllTick((n) => n + 1);
   }, []);
 
+  // The projected dispositions for committed edges, keyed `blocked blocker`.
+  const coverageOverride = useMemo(
+    () => new Map((edgeCoverage ?? []).map((e) => [`${e.blockedId} ${e.blockerId}`, e.coverage])),
+    [edgeCoverage],
+  );
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
       // An off-level blocker's ANCHOR is viewable (bug MOTIR-5387), and the peek
@@ -394,11 +412,16 @@ export function PlanReviewCanvas({
           // No `arrivingBlockers` here (bug MOTIR-4952): this level's id is
           // synthetic, so no proposal is parented on it — `proposalsAtLevel` is
           // empty for it by construction, and the map would be inert.
-          grouped = buildWorkItemLevel({
-            items: rows,
-            edges: root.edges.filter((e) => rowIds.has(e.blockedId)),
-            offLevelBlockers: root.offLevelBlockers,
-          });
+          grouped = buildWorkItemLevel(
+            withProjectedCoverage(
+              {
+                items: rows,
+                edges: root.edges.filter((e) => rowIds.has(e.blockedId)),
+                offLevelBlockers: root.offLevelBlockers,
+              },
+              coverageOverride,
+            ),
+          );
         }
         // Nothing the plan touches is in here (the conjunct above), so no
         // proposal can merge onto this level and none is parented on the
@@ -481,7 +504,7 @@ export function PlanReviewCanvas({
             .filter((i) => proposalLevelKey(i) !== parentId && levelRowIds.has(i.nodeId))
             .map((i) => i.nodeId),
         );
-        committed = buildWorkItemLevel(wi, {
+        committed = buildWorkItemLevel(withProjectedCoverage(wi, coverageOverride), {
           // Grouping is a statement about the PROJECT's roots, so it is the root
           // level's alone — a drilled level's rows are somebody's children.
           groupNonEpicRoots: atRoot,
@@ -498,7 +521,7 @@ export function PlanReviewCanvas({
       setLevelIsAllProposed(committed.nodes.length === 0 && merged.nodes.length > 0);
       return live ? withChangeKeys(merged, items) : merged;
     },
-    [items, projectKey, outcome, touchedNodeIds, folderChanges, t, live],
+    [items, projectKey, outcome, touchedNodeIds, folderChanges, t, live, coverageOverride],
   );
 
   // The plan's cards for the ARRIVALS count (§23.7) — only while it is written.

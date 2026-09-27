@@ -8,6 +8,8 @@ import { ghostAnchorNode } from '@/components/planning/workItemLevel';
 import type { ProjectCanvasDep, ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
 import { proposalLevelKey, proposedParentNodeIds } from '@/lib/planning/planShape';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
+import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
+import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 
 // One LEVEL of the plan-detail canvas (MOTIR-3083, redrawing 7.4.5 / MOTIR-847).
 //
@@ -183,6 +185,10 @@ export function mergePlanLevel(
   for (const dep of committed.deps) {
     if (dep.variant === 'cross') anchorIds.add(dep.from);
   }
+  // …and every node the builder minted AS an anchor, which catches the NEUTRAL
+  // anchor of an exempt edge (MOTIR-6359) — its arrow is firm / pending, so the
+  // `cross` test above cannot see it.
+  for (const node of committed.nodes) if (node.anchor) anchorIds.add(node.id);
   // The builder's anchors, before `drawOffLevel` adds the ones minted here —
   // the set the stranded-anchor sweep at the bottom is allowed to remove from.
   const committedAnchorIds = new Set(anchorIds);
@@ -256,10 +262,18 @@ export function mergePlanLevel(
       deps.push({ from: blockerId, to: item.nodeId, variant });
       return;
     }
-    crossBlocked.add(item.nodeId);
+    // THE EDGE'S DISPOSITION OVER THE PROJECTED TREE (MOTIR-6362) — the roadmap
+    // rule (MOTIR-6359) asked of the level approve leaves behind. COVERED: the
+    // plan's parents carry the edge, so their arrow one level up draws it and this
+    // level draws nothing. EXEMPT: valid, with no parent to carry it, so an
+    // ordinary arrow from a NEUTRAL anchor and no chip. Anything else — invalid, or
+    // no disposition from an older server or a decided plan — keeps the flag.
+    if (stub.coverage === 'covered') return;
+    const neutral = stub.coverage === 'exempt';
+    if (!neutral) crossBlocked.add(item.nodeId);
     if (!seen.has(key)) {
       seen.add(key);
-      deps.push({ from: blockerId, to: item.nodeId, variant: 'cross' });
+      deps.push({ from: blockerId, to: item.nodeId, variant: neutral ? variant : 'cross' });
     }
     // ONE anchor per blocker on the level, whoever else it blocks — including a
     // committed sibling whose anchor the builder already minted.
@@ -273,7 +287,11 @@ export function mergePlanLevel(
           crumbLabel: stub.identifier ?? stub.title,
         },
         stub.identifier !== null ? (
-          <GhostAnchor identifier={stub.identifier} title={stub.title} />
+          <GhostAnchor
+            identifier={stub.identifier}
+            title={stub.title}
+            tone={neutral ? 'neutral' : 'danger'}
+          />
         ) : (
           <ProposedBlockerAnchor title={stub.title} />
         ),
@@ -396,4 +414,23 @@ export function mergePlanLevel(
   }
 
   return { nodes: [...nodes, ...anchors], deps };
+}
+
+/**
+ * The committed level with each re-judged edge's `coverage` replaced by the
+ * PROJECTED one (MOTIR-6362) — so the level is built as it will read after
+ * approve. An edge the plan does not re-judge keeps the roadmap read's verdict.
+ */
+export function withProjectedCoverage(
+  wi: RoadmapLevelData,
+  override: ReadonlyMap<string, EdgeDisposition>,
+): RoadmapLevelData {
+  if (override.size === 0) return wi;
+  return {
+    ...wi,
+    edges: wi.edges.map((e) => {
+      const coverage = override.get(`${e.blockedId} ${e.blockerId}`);
+      return coverage === undefined ? e : { ...e, coverage };
+    }),
+  };
 }
