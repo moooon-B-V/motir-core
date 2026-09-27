@@ -321,6 +321,14 @@ export class PublicAccessUnavailableError extends Error {
   }
 }
 
+export class InvalidAccessModeError extends Error {
+  readonly code = 'INVALID_ACCESS_MODE' as const;
+  constructor(mode: string) {
+    super(`"${mode}" is not a valid project access mode (use workspace, members, or public).`);
+    this.name = 'InvalidAccessModeError';
+  }
+}
+
 export class InvalidAccessLevelError extends Error {
   readonly code = 'INVALID_ACCESS_LEVEL' as const;
   constructor(level: string) {

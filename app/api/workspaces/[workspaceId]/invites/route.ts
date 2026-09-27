@@ -2,16 +2,23 @@ import { NextResponse } from 'next/server';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
 import {
+  InvalidAccessScopeError,
   InvalidEmailError,
+  InviteNotAllowedForScopeError,
+  InviteProjectInvalidError,
+  InviteProjectsRequireLimitedError,
   InviteRateLimitedError,
+  InviteScopeForbiddenError,
   InviteTargetAlreadyMemberError,
   NotAMemberError,
 } from '@/lib/workspaces/errors';
 
 // POST /api/workspaces/[workspaceId]/invites
-// Thin HTTP transport: parses the request, calls the service, maps
-// typed domain errors to status codes. All business logic and DB
-// access lives in workspaceInvitesService.
+// Body: `{ email, accessScope?, projectIds? }` — `accessScope` is `full` (the
+// default) or `limited`, and `projectIds` names the projects a Limited invite
+// joins on accept (Story MOTIR-6169 · MOTIR-6546). Thin HTTP transport: parses
+// the request, calls the service, maps typed domain errors to status codes. All
+// business logic and DB access lives in workspaceInvitesService.
 
 interface RouteParams {
   params: Promise<{ workspaceId: string }>;
@@ -41,17 +48,38 @@ export async function POST(req: Request, { params }: RouteParams): Promise<Respo
     );
   }
 
+  const record = body as { accessScope?: unknown; projectIds?: unknown };
+  if (
+    record.projectIds !== undefined &&
+    (!Array.isArray(record.projectIds) || record.projectIds.some((id) => typeof id !== 'string'))
+  ) {
+    return NextResponse.json(
+      { error: '"projectIds" must be an array of project ids.', code: 'BAD_REQUEST' },
+      { status: 400 },
+    );
+  }
+
   try {
     const result = await workspaceInvitesService.sendInvite({
       inviterUserId: session.user.id,
       inviterName: session.user.name,
       workspaceId,
       targetEmail: rawEmail,
+      accessScope: record.accessScope,
+      projectIds: record.projectIds as string[] | undefined,
     });
     return NextResponse.json(result);
   } catch (err) {
-    if (err instanceof InvalidEmailError) {
+    if (
+      err instanceof InvalidEmailError ||
+      err instanceof InvalidAccessScopeError ||
+      err instanceof InviteProjectsRequireLimitedError ||
+      err instanceof InviteProjectInvalidError
+    ) {
       return NextResponse.json({ error: err.message, code: err.code }, { status: 400 });
+    }
+    if (err instanceof InviteNotAllowedForScopeError || err instanceof InviteScopeForbiddenError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 403 });
     }
     if (err instanceof NotAMemberError) {
       // Cross-tenant access must NOT leak that this workspace exists. A 403

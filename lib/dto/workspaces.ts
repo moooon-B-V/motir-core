@@ -1,4 +1,8 @@
-import type { RoleMigrationReason, WorkspaceRole } from '@/generated/prisma/client';
+import type {
+  RoleMigrationReason,
+  WorkspaceAccessScope,
+  WorkspaceRole,
+} from '@/generated/prisma/client';
 
 // DTOs for the workspace endpoints + settings surfaces. These define
 // EXACTLY what crosses the HTTP / Server-Action boundary — no Prisma
@@ -42,6 +46,24 @@ export interface WorkspaceMemberDTO {
   workspaceRole: WorkspaceRole;
   /** The workspace custom role they hold, or null on a built-in. */
   customRole: { id: string; name: string } | null;
+}
+
+/**
+ * A row of the workspace Members page (Story MOTIR-6169 · MOTIR-6545): the member
+ * plus their ACCESS SCOPE and how many of the workspace's projects they were
+ * added to — the page's "N projects" cell for a Limited member.
+ */
+export interface WorkspaceMemberWithAccessDTO extends WorkspaceMemberDTO {
+  /** Full enters every project open to the workspace; Limited only the ones they were added to. */
+  accessScope: WorkspaceAccessScope;
+  /** How many projects of this workspace the member was added to. */
+  addedProjectCount: number;
+}
+
+/** The answer to an access-scope change (MOTIR-6545): the scope as it now stands. */
+export interface WorkspaceMemberAccessScopeDTO {
+  userId: string;
+  accessScope: WorkspaceAccessScope;
 }
 
 /** The answer to a role change (MOTIR-6463): the member's role as it now stands. */
@@ -92,6 +114,14 @@ export interface MemberRoleContextDTO {
   /** Whether the viewer is a Manager of this workspace (their role, or the org's reach). */
   canManageRoles: boolean;
   /**
+   * Whether the viewer may send an invite at all (Story MOTIR-6169 · MOTIR-6551,
+   * design W9): a Manager, or a Full member (Full invites only). False for a
+   * Limited member, who gets no Invite button.
+   */
+  canInvite: boolean;
+  /** The projects a Limited invite may name — the Manager's; empty for anyone else. */
+  inviteProjects: MemberAddedProjectDTO[];
+  /**
    * The members who are the org's Owner or an Admin — a Manager of every
    * workspace by their org role, drawn locked at Manager (MOTIR-6456 panel 6a).
    */
@@ -102,6 +132,13 @@ export interface MemberRoleContextDTO {
   customRoles: { id: string; name: string }[];
 }
 
+/** A project a member was added to, as the Members page names it (MOTIR-6551). */
+export interface MemberAddedProjectDTO {
+  id: string;
+  name: string;
+  identifier: string;
+}
+
 /** What a person held before the move to workspace roles, as the report recorded it. */
 export interface RoleMigrationBeforeDTO {
   /** The legacy workspace role (`owner` / `admin` / `member` / `viewer`), when recorded. */
@@ -110,6 +147,12 @@ export interface RoleMigrationBeforeDTO {
   projects: { projectKey: string; role: string | null; customRoleName: string | null }[];
   /** Where their keys narrowed (the never-wider check's rows). */
   narrowedIn: { projectKey: string; lost: string[] }[];
+  /**
+   * The ONE project an access row is about (`project_access_lost`, Story
+   * MOTIR-6169 · MOTIR-6542 writes `{ projectKey, accessLevel }`), or null on
+   * every role row.
+   */
+  projectKey: string | null;
 }
 
 /** One open row of the migration report. */

@@ -34,7 +34,7 @@ describe('the paged-body fallback', () => {
 
   it('assembles across pages in the order they were walked', () => {
     const page = (key: string, nextCursor: string | null) => ({
-      items: [{ key, name: key, accessLevel: 'open', archived: false }],
+      items: [{ key, name: key, accessLevel: 'open', accessMode: 'workspace', archived: false }],
       nextCursor,
     });
     expect(toProjectList([page('AAA', 'c1'), page('BBB', null)] as never).projects).toEqual([

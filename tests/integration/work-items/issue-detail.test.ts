@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { accessModeOf } from '@/lib/projects/accessMode';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -342,7 +343,7 @@ describe('workItemsService.getQuickView (8.8.2 — the peek payload)', () => {
     const peek = await workItemsService.getQuickView(
       fx.projectId,
       story.identifier,
-      fx.project.accessLevel,
+      accessModeOf(fx.project),
       fx.ctx,
       'en',
     );
@@ -374,7 +375,7 @@ describe('workItemsService.getQuickView (8.8.2 — the peek payload)', () => {
       workItemsService.getQuickView(
         fx.projectId,
         'PROD-9999',
-        fx.project.accessLevel,
+        accessModeOf(fx.project),
         fx.ctx,
         'en',
       ),
@@ -407,7 +408,7 @@ describe('workItemsService.getQuickView (8.8.2 — the peek payload)', () => {
     const peek = await workItemsService.getQuickView(
       fx.projectId,
       subtask.identifier,
-      fx.project.accessLevel,
+      accessModeOf(fx.project),
       fx.ctx,
       'en',
     );
@@ -438,14 +439,14 @@ describe('workItemsService.getQuickView (8.8.2 — the peek payload)', () => {
     const epicPeek = await workItemsService.getQuickView(
       fx.projectId,
       epic.identifier,
-      fx.project.accessLevel,
+      accessModeOf(fx.project),
       fx.ctx,
       'en',
     );
     const storyPeek = await workItemsService.getQuickView(
       fx.projectId,
       backlogStory.identifier,
-      fx.project.accessLevel,
+      accessModeOf(fx.project),
       fx.ctx,
       'en',
     );

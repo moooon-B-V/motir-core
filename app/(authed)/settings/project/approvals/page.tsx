@@ -9,6 +9,7 @@ import { projectPrMergeModeService } from '@/lib/services/projectPrMergeModeServ
 import { AcceptanceVideoGateCard } from './_components/AcceptanceVideoGateCard';
 import { PrMergeModeCard } from './_components/PrMergeModeCard';
 import { guardSettingsPage } from '../_guard';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // `Project settings ▸ Approvals` — server component (Story MOTIR-4925 · Subtask
 // MOTIR-5170), built to `design/projects/approvals.mock.html` panel 0 (the door)
@@ -34,10 +35,10 @@ export default async function ProjectApprovalsPage() {
   const t = await getTranslations('settings');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at the
-  // WORKSPACE tier). The guard stays because the type does, and it redirects
-  // rather than rendering — the sibling rooms' own reasoning.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
   // protection: this page is one typed URL away once its rail row is gone. The

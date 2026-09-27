@@ -259,6 +259,8 @@ export const config = {
     '/filters/:path*',
     '/invite/:path*',
     '/items/:path*',
+    // The no-project landing (MOTIR-6548).
+    '/no-project/:path*',
     '/onboarding/:path*',
     '/planning/:path*',
     '/plans/:path*',

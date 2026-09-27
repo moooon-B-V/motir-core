@@ -56,7 +56,13 @@ export interface McpProjectRow {
   id: string;
   name: string;
   slug: string;
-  /** Browse-access level (Story 6.4 / 6.12) — disambiguates same-named projects. */
+  /**
+   * Who may ENTER the project (Story MOTIR-6169) — `workspace`, `members` or
+   * `public`. The authoritative access field; it also disambiguates same-named
+   * projects.
+   */
+  accessMode: ProjectDTO['accessMode'];
+  /** @deprecated Derived from `accessMode`; read `accessMode`. */
   accessLevel: ProjectDTO['accessLevel'];
 }
 
@@ -67,13 +73,14 @@ export function toProjectRow(dto: ProjectDTO): McpProjectRow {
     id: dto.id,
     name: dto.name,
     slug: dto.slug,
+    accessMode: dto.accessMode,
     accessLevel: dto.accessLevel,
   };
 }
 
 /** Compact one-line summary of a project for the dual-content text block. */
 export function summarizeProject(row: McpProjectRow): string {
-  return `${row.key} — ${row.name} · ${row.accessLevel}`;
+  return `${row.key} — ${row.name} · ${row.accessMode}`;
 }
 
 /**
@@ -125,7 +132,9 @@ export function registerListProjects(server: McpServer, resolveContext: McpConte
       title: 'List projects',
       description:
         "List the projects the presented token can reach — each project's key (the " +
-        '`projectKey` every other tool takes), id, name, slug, and browse-access level. ' +
+        '`projectKey` every other tool takes), id, name, slug, and access mode ' +
+        '(`accessMode`: workspace · members · public — the authoritative field; `accessLevel` ' +
+        'is a deprecated value derived from it). ' +
         'Takes no arguments: the workspace is the one the token is bound to, so this never ' +
         'reaches another tenant. Use it to RESOLVE a project instead of asking the user to ' +
         'type its key. Honors the same access checks as the UI — a project the caller may ' +

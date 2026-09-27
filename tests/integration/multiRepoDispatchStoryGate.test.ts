@@ -152,7 +152,7 @@ describe('1 — the PAYLOAD and the DETAIL read answer from one classifier', () 
     const peek = await workItemsService.getQuickView(
       caller.fixture.projectId,
       item.identifier,
-      'open',
+      'workspace',
       caller.ctx,
       'en',
     );

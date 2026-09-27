@@ -43,7 +43,7 @@ function task(fx: WorkItemFixture, title: string) {
 }
 
 function peek(fx: WorkItemFixture, identifier: string) {
-  return workItemsService.getQuickView(fx.projectId, identifier, 'open', fx.ctx, 'en');
+  return workItemsService.getQuickView(fx.projectId, identifier, 'workspace', fx.ctx, 'en');
 }
 
 describe('getQuickView — the item’s folder', () => {

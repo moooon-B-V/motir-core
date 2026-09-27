@@ -1,4 +1,5 @@
 import { isWorkspaceOrgClosing } from '@/lib/organizations/closingGuard';
+import { accessModeOf } from '@/lib/projects/accessMode';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import {
@@ -8,6 +9,7 @@ import {
   type WorkItemLink,
   type WorkItemPriority,
   type ApprovalGateKind,
+  type ProjectAccessMode,
 } from '@/generated/prisma/client';
 import {
   astHasEpic5Conditions,
@@ -142,7 +144,7 @@ import {
 } from '@/lib/workItems/crossParentCoverage';
 import { edgeDisposition } from '@/lib/workItems/edgeDisposition';
 import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/components/errors';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
 import { validateStoryPoints } from '@/lib/estimation/validate';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -1301,12 +1303,29 @@ async function readFolderLevel(
  * line: the queryable substrate stays comment-scoped until a use case earns
  * more).
  */
+/**
+ * Assert the actor may BROWSE the project, answering a refusal as
+ * `ProjectNotFoundError` (MOTIR-6319) — the no-existence-leak posture
+ * `projectsService.resolveByKey` already takes: a project the actor cannot see is
+ * indistinguishable from one that does not exist.
+ */
+async function assertBrowseAsNotFound(projectId: string, ctx: ServiceContext): Promise<void> {
+  try {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+  } catch (err) {
+    if (err instanceof ProjectAccessDeniedError) throw new ProjectNotFoundError(projectId);
+    throw err;
+  }
+}
+
 async function resolveDescriptionMentionable(
   projectId: string,
-  accessLevel: 'open' | 'limited' | 'private' | 'public',
+  accessMode: ProjectAccessMode,
   ctx: ServiceContext,
 ): Promise<Set<string>> {
-  const members = await assignableMembersService.list({ projectId, accessLevel, ctx });
+  // Exactly the people who can ENTER the project (Story MOTIR-6169 · MOTIR-6547):
+  // a mention of anyone else is dropped silently, the Jira rule.
+  const members = await assignableMembersService.list({ projectId, accessMode, ctx });
   return new Set(members.map((m) => m.userId));
 }
 
@@ -1738,7 +1757,7 @@ export const workItemsService = {
     if (descTokenIds.length > 0) {
       const mentionable = await resolveDescriptionMentionable(
         input.projectId,
-        project.accessLevel,
+        accessModeOf(project),
         ctx,
       );
       descMentionIds = descTokenIds.filter((id) => mentionable.has(id));
@@ -2299,7 +2318,7 @@ export const workItemsService = {
         if (project) {
           descMentionable = await resolveDescriptionMentionable(
             project.id,
-            project.accessLevel,
+            accessModeOf(project),
             ctx,
           );
         }
@@ -6236,7 +6255,7 @@ export const workItemsService = {
   async getQuickView(
     projectId: string,
     identifier: string,
-    accessLevel: 'open' | 'limited' | 'private' | 'public',
+    accessMode: ProjectAccessMode,
     ctx: ServiceContext,
     locale: Locale,
   ): Promise<QuickViewData> {
@@ -6274,7 +6293,7 @@ export const workItemsService = {
     // nothing on the happy path and makes the refusal path bounded.
     const [detail, members, sprintRows, componentRows, estimationConfig] = await allSettledOrThrow([
       this.getIssueDetail(projectId, identifier, ctx),
-      assignableMembersService.list({ projectId, accessLevel, ctx }),
+      assignableMembersService.list({ projectId, accessMode, ctx }),
       withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
         sprintRepository.listByProject(projectId, ctx.workspaceId, tx),
       ),
@@ -6580,11 +6599,15 @@ export const workItemsService = {
   async listCandidateParents(
     projectId: string,
     childType: IssueType,
-    workspaceId: string,
+    ctx: ServiceContext,
   ): Promise<WorkItemSummaryDto[]> {
+    // The caller's project is not trusted (MOTIR-6319): the actor must be able to
+    // browse it, or the picker would list another project's titles. A refusal is
+    // not-found, never forbidden — the no-existence-leak posture.
+    await assertBrowseAsNotFound(projectId, ctx);
     const kinds = allowedParentKinds(childType);
-    const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
-      workItemRepository.findByProjectAndKinds(projectId, kinds, workspaceId, tx),
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByProjectAndKinds(projectId, kinds, ctx.workspaceId, tx),
     );
     return rows.map(toWorkItemSummaryDto);
   },
@@ -6812,6 +6835,10 @@ export const workItemsService = {
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
+    // The tenant gate above is the WORKSPACE's; the project's own gate is browse
+    // (MOTIR-6319, measured: an outsider to a Members-only project was handed its
+    // ready leaves). Refused as not-found, like the tenant gate.
+    await assertBrowseAsNotFound(projectId, ctx);
     const limit = clampReadyLimit(filter.limit);
     const cursor = filter.cursor ? decodeReadyCursor(filter.cursor) : undefined;
     // `allowSoftBlock` (MOTIR-6366) is read HERE and only here: it is passed to

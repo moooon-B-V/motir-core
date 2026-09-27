@@ -292,10 +292,8 @@ describe('POST /api/ai/coding-convention/refresh', () => {
     expect((await forbidden.json()).permission).toBe('ai:configure');
     expect(refreshCodeAuditMock).not.toHaveBeenCalled();
 
-    // …and a NON-BROWSER gets the 404 instead. ⚠️ The outsider is created AFTER
-    // the project goes private: `setAccessLevel('private')` auto-seeds the
-    // then-current workspace members as project members, so an actor enrolled
-    // beforehand would still browse and this would assert the 403 again.
+    // …and a NON-BROWSER gets the 404 instead: a workspace member never added to
+    // the now-private project (going private adds nobody — Story MOTIR-6169).
     await projectMembersService.setAccessLevel({
       key: project.identifier,
       actorUserId: owner.id,

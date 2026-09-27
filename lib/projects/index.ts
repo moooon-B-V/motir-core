@@ -41,8 +41,12 @@ export interface ProjectContext {
  *   - there is no session (no signed-in user);
  *   - the user has no resolvable workspace (rare; the workspace resolver
  *     already self-heals via ensureDefaultWorkspace);
- *   - the workspace has no projects yet (a fresh workspace before the
- *     user has created the first one).
+ *   - the workspace has projects but the user can ENTER none of them — a
+ *     Limited member added to no project, or a Full member whose every project
+ *     is Members only (Story MOTIR-6169 · MOTIR-6548). A project-scoped page
+ *     answers that with `redirect(NO_PROJECT_PATH)`, never `/sign-in`, which
+ *     bounces a signed-in reader straight back. (A workspace with NO projects
+ *     is healed by `ensureDefaultProject` before this returns.)
  *
  * Pair with withWorkspaceContext to actually run a project-scoped query:
  *

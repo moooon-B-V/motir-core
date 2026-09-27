@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
 import type { OrganizationDTO } from '@/lib/dto/organizations';
@@ -219,19 +219,35 @@ describe('the shell’s context path (MOTIR-2556)', () => {
       expect(trigger.textContent).toContain('Archived');
     });
 
-    it('renders NOTHING — no switcher and no door — when there is no project', () => {
-      // ⚠️ INVERTED (MOTIR-4873). It asserted the create-first door: an accent
-      // `+` square opening `CreateProjectModal`, in the project tier. Every
-      // member is inside a project (MOTIR-4870), so the door serves nobody, and
-      // a tier that draws something for a state the product cannot produce is a
-      // tier teaching that it can happen.
-      //
-      // The state is unreachable rather than unconstructable, so the assertion
-      // is about what the tier DOES with it: nothing. Creating an ADDITIONAL
-      // project is untouched and lives on the switcher.
-      render({ activeProject: null, projects: [] });
-      expect(screen.queryByRole('button', { name: 'Switch project' })).toBeNull();
+    it('with NO project it reads "No project" and opens an EMPTY switcher (MOTIR-6548)', () => {
+      // History: MOTIR-4873 made this tier render NOTHING with no project,
+      // because every member was inside one (MOTIR-4870). A Limited member added
+      // to no project is the one reader for whom that is false again, and the
+      // design draws the tier for them (`design/shell/no-project--limited.mock
+      // .html` S1 / S2): the crumb, an empty list naming the workspace, and no
+      // retired create-first door.
+      render({ activeProject: null, projects: [], canCreateProject: false });
+      const trigger = screen.getByRole('button', { name: 'Switch project' });
+      expect(within(trigger).getByText('No project').className).toContain('italic');
+      fireEvent.click(trigger);
+      expect(
+        screen.getByText('You haven’t been added to a project in Engineering yet.'),
+      ).toBeTruthy();
+      // A Limited member may not create — they could not enter what they made.
+      expect(screen.queryByRole('button', { name: 'Create project' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'Create your first project' })).toBeNull();
+    });
+
+    it('offers "Create project" in the empty switcher to someone who may create (MOTIR-6548 · S3)', () => {
+      render({ activeProject: null, projects: [], canCreateProject: true });
+      fireEvent.click(screen.getByRole('button', { name: 'Switch project' }));
+      expect(screen.getByRole('button', { name: 'Create project' })).toBeTruthy();
+    });
+
+    it('keeps the everyday doors whenever there IS a project, whatever canCreateProject says', () => {
+      render({ canCreateProject: false });
+      fireEvent.click(screen.getByRole('button', { name: 'Switch project' }));
+      expect(screen.getByRole('button', { name: 'Create project' })).toBeTruthy();
     });
   });
 

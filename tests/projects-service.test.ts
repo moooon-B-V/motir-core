@@ -84,8 +84,11 @@ describe('createProject — happy path', () => {
     // MOTIR-2680 dropped the columns; its absence is now part of what this
     // assertion pins.) `previousKeys` is NOT present here — it
     // loads only on the details-surface read path (6.8), not on a plain create.
+    // `accessMode` (Story MOTIR-6169 · MOTIR-6547) is the authoritative access
+    // field; `accessLevel` rides beside it, derived and deprecated.
     expect(Object.keys(project).sort()).toEqual([
       'accessLevel',
+      'accessMode',
       'aiGenerateExplanations',
       'archivedAt',
       'id',

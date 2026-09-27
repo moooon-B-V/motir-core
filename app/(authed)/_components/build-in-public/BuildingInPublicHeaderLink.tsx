@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils/cn';
  * It fills the SAME header slot the {@link BuildInPublicButton} "Build in
  * public" CTA occupies when the project is NOT public — the slot shows exactly
  * ONE of them, never both, never empty (the bug 6.17.6 fixes: the slot used to
- * go empty once `accessLevel === 'public'`). The layout resolves which one to
+ * go empty once `accessMode === 'public'`). The layout resolves which one to
  * render server-side, so this component just renders the indicator.
  *
  * It reuses the {@link BuildingInPublicBadge} visual recipe VERBATIM — the
@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils/cn';
  * `.btn-build:hover`), and the app focus-ring on focus-visible.
  *
  * VISIBILITY (design §6.17.6c): shown to ALL team members while the project is
- * public — a pure server-side `accessLevel === 'public'` check, no `canManage`
+ * public — a pure server-side `accessMode === 'public'` check, no `canManage`
  * read (unlike the non-public CTA, which is admin-gated). The destination is
  * itself role-aware (`ProjectMembersSettings` shows non-admins the badge +
  * "View public page" read-only and gates only "Stop" behind `assertCanManage`),

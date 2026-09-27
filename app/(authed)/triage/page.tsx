@@ -9,6 +9,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { triageService } from '@/lib/services/triageService';
 import { TriageInbox } from './_components/TriageInbox';
 import { ReportButton } from '../_components/ReportButton';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The admin Triage inbox (Story 6.11 · Subtask 6.11.6) — the incoming-work
 // front door. ACTIVE-project-scoped, mirroring `issues/page.tsx`: a server
@@ -28,10 +29,10 @@ export default async function TriagePage() {
   const t = await getTranslations('triage');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   // The inbox is for users who can ACT on it. A non-throwing read of the actor's
   // keys gates the surface on `work_item:triage` — the key `getTriageQueue` below

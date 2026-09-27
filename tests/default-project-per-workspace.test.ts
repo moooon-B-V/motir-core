@@ -155,7 +155,7 @@ describe('door 3 — ARCHIVING THE LAST PROJECT', () => {
     });
 
     await projectsService.archiveProject({
-      projectId: only.id,
+      projectId: only!.id,
       workspaceId: workspace.id,
       actorUserId: user.id,
     });
@@ -166,7 +166,7 @@ describe('door 3 — ARCHIVING THE LAST PROJECT', () => {
     // place the invariant changes behaviour a reader could notice: you can no
     // more sit in a project-less workspace than in a workspace-less account.
     expect(active).not.toBeNull();
-    expect(active!.id).not.toBe(only.id);
+    expect(active!.id).not.toBe(only!.id);
     expect(active!.archivedAt).toBeNull();
   });
 });
@@ -192,7 +192,7 @@ describe('ensureDefaultProject — idempotence', () => {
       actorUserId: user.id,
     });
 
-    expect(b.id).toBe(a.id);
+    expect(b!.id).toBe(a!.id);
     expect(await allProjects()).toHaveLength(1);
   });
 
@@ -215,7 +215,7 @@ describe('ensureDefaultProject — idempotence', () => {
       projectsService.ensureDefaultProject({ workspaceId: workspace.id, actorUserId: user.id }),
     ]);
 
-    expect(a.id).toBe(b.id);
+    expect(a!.id).toBe(b!.id);
     expect(await allProjects()).toHaveLength(1);
   });
 
@@ -252,7 +252,7 @@ describe('ensureDefaultProject — idempotence', () => {
       actorUserId: user.id,
     });
 
-    expect(ensured.id).toBe(seeded.id);
+    expect(ensured!.id).toBe(seeded.id);
     expect(await allProjects()).toHaveLength(1);
   });
 

@@ -9,108 +9,97 @@ import {
   Check,
   Copy,
   ExternalLink,
-  Eye,
   Info,
   Link2,
+  LoaderCircle,
   Lock,
   Megaphone,
   Users,
   X,
 } from 'lucide-react';
-import type { ProjectAccessLevel } from '@/generated/prisma/client';
+import type { ProjectAccessMode } from '@/generated/prisma/client';
 import { Card } from '@/components/ui/Card';
 import { Button, buttonVariants } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { useToast } from '@/components/ui/Toast';
 import { BuildingInPublicBadge } from '@/components/projects/BuildingInPublicBadge';
-import type { ProjectMemberDTO } from '@/lib/dto/projectMembers';
-import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import type { AccessLossPersonDTO, ProjectMemberDTO } from '@/lib/dto/projectMembers';
+import type { WorkspaceMemberWithAccessDTO } from '@/lib/dto/workspaces';
 import { BuildInPublicDialog } from './BuildInPublicDialog';
 import { StopBuildInPublicDialog } from './StopBuildInPublicDialog';
+import { MembersOnlyConfirmDialog } from './MembersOnlyConfirmDialog';
+import { RolePill, ScopePill } from './MemberChips';
 
-// ProjectMembersSettings (Story 6.4 · Subtask 6.4.5) — the project-settings
-// Members + Access UI, built against design/projects/access-members.mock.html
-// (the 6.4.1 design asset) and calling the 6.4.4 REST API optimistically.
+// ProjectMembersSettings — the project's Access & members page (Story 6.4 ·
+// Subtask 6.4.5; re-pointed at ACCESS MODES by Story MOTIR-6169 · MOTIR-6550 and
+// `design/projects/access-members--access-modes.mock.html`).
 //
 // The two cards:
-//   • Project access — the open / limited / private radio cards (PATCH
-//     /api/projects/[key]/access). Going private seeds every workspace member
-//     as a project member, so we mirror that locally (the server does the same
-//     via createManySkipDuplicates).
-//   • Members — the project member list with a per-row role select + Remove,
-//     and an add-member Combobox scoped to workspace-members-not-yet-on-project
-//     (POST / PATCH / DELETE /api/projects/[key]/members[/userId]).
+//   • Project access — the three MODES (Open to the workspace · Members only ·
+//     Public) as the shipped radio-card markup (there is no `RadioGroup`
+//     primitive; the card IS the radio — design A1). `PATCH
+//     /api/projects/[key]/access { accessMode }`. Members only first reads the
+//     preview and confirms who loses access (A2 / A3); Public goes through the
+//     build-in-public dialog and is disabled, with its reason, off-cloud (A10).
+//   • Members — the people added to the project, each with read-only role and
+//     scope chips (A1), an "Add people" Combobox of workspace members not yet
+//     added (A5), and Remove. `POST` / `DELETE /api/projects/[key]/members`.
 //
-// Project-admin gated: `canManage` (a workspace owner/admin, or a project
-// admin) governs whether the edit affordances render; non-admins see the same
-// data read-only (role chips, no selects, no add/remove) — the gate stays
-// legible rather than the controls vanishing.
+// The two cards are gated SEPARATELY (A6 / A7): `canManageAccess`
+// (`project:manage_access`) owns the mode control, `canManageMembers`
+// (`member:manage`) the people controls. Without one, that card is read-only —
+// the mode shown as text, or the list without Add / Remove — rather than gone.
 
-// The SETTABLE access levels (the radio control), in openness order
-// `public > open > limited > private` (Story 6.12.8 adds `public` — the
-// make-public toggle — to the 6.4 control; the share link + the "Edit on the
-// public page →" entry below it render only while the project is public, per
-// design/public-projects Panel 6). The icon / tint / label maps are total over
-// `ProjectAccessLevel`.
-const ACCESS_LEVELS = ['public', 'open', 'limited', 'private'] as const;
-type AccessLevel = (typeof ACCESS_LEVELS)[number];
+// The modes in the order the design draws them. Total over `ProjectAccessMode`.
+const ACCESS_MODES = [
+  'workspace',
+  'members',
+  'public',
+] as const satisfies readonly ProjectAccessMode[];
 
-// Per-level icon (design Panel 6: megaphone / users / eye / lock). `public`
-// reads as "Building in public" (Story 6.17.2 reframe), so its glyph is the
-// build-in-public megaphone, not a globe.
-const ACCESS_ICON: Record<ProjectAccessLevel, typeof Megaphone> = {
+// Per-mode icon and tile tint (design A1): mint Users · lavender Lock · the
+// build-in-public megaphone on its own tokens.
+const MODE_ICON: Record<ProjectAccessMode, typeof Megaphone> = {
+  workspace: Users,
+  members: Lock,
   public: Megaphone,
-  open: Users,
-  limited: Eye,
-  private: Lock,
 };
-// Icon-tile tint per level — hue in the tint with strong text (AA, finding #35):
-// public = build lavender, open = mint, limited = peach, private = lavender.
-const ACCESS_TINT: Record<ProjectAccessLevel, string> = {
-  public: 'bg-(--el-build-bg)',
-  open: 'bg-(--el-tint-mint)',
-  limited: 'bg-(--el-tint-peach)',
-  private: 'bg-(--el-tint-lavender)',
+const MODE_TINT: Record<ProjectAccessMode, string> = {
+  workspace: 'bg-(--el-tint-mint) text-(--el-text-strong)',
+  members: 'bg-(--el-tint-lavender) text-(--el-text-strong)',
+  public: 'bg-(--el-build-bg) text-(--el-build-glyph)',
 };
 
 export interface ProjectMembersSettingsProps {
   projectKey: string;
   projectName: string;
   workspaceName: string;
-  // The project's CURRENT level (display + settable) — `ProjectAccessLevel`,
-  // now including `public` (6.12.8, the make-public control).
-  accessLevel: ProjectAccessLevel;
+  /** The project's CURRENT access mode. */
+  accessMode: ProjectAccessMode;
   members: ProjectMemberDTO[];
-  workspaceMembers: WorkspaceMemberDTO[];
+  /** Every workspace member, with role and scope — the add picker's source and
+   *  where each row's chips are read from (MOTIR-6545). */
+  workspaceMembers: WorkspaceMemberWithAccessDTO[];
   currentUserId: string;
-  canManage: boolean;
+  /** `project:manage_access` — whether the mode control is live (A6 / A7). */
+  canManageAccess: boolean;
+  /** `member:manage` — whether Add / Remove render (A6 / A7). */
+  canManageMembers: boolean;
   /**
    * Whether this BUILD can publish a project at all — `isCloud()`, read on the
    * server page (MOTIR-4035). Threaded as a prop rather than read here because
-   * `MOTIR_CLOUD` is a server variable and this is a client island; the same
-   * reason `cloudBilling` reaches `TopNav` as a prop.
+   * `MOTIR_CLOUD` is a server variable and this is a client island.
    *
-   * False on a self-hosted build, where `app/api/public/*` serves nothing — so
-   * offering the level would offer to publish a project into a surface that
-   * does not exist. The service refuses it too (`PublicAccessUnavailableError`);
-   * this half is what stops a person meeting that refusal.
+   * False on a self-hosted build, where `app/api/public/*` serves nothing: Public
+   * is then DRAWN, disabled, with the reason (design A10) rather than removed.
+   * The service refuses it too (`PublicAccessUnavailableError`).
    */
   publicAccessAvailable: boolean;
   /**
    * The project's absolute address ON THE PUBLIC SITE — `https://motir.co/p/<key>`
-   * once `MOTIR_PUBLIC_SITE_URL` is configured (MOTIR-4242).
-   *
-   * Resolved on the server page by `publicProjectUrl()`, the ONE module that
-   * owns *where does a reader find a public project?* (`lib/publicProjects/urls.ts`,
-   * MOTIR-3881; `tests/hosting/appUrlSeam.test.ts` pins it as that variable's
-   * only reader). Threaded as a prop for the same reason `publicAccessAvailable`
-   * is: `MOTIR_PUBLIC_SITE_URL` is a server variable and this is a client
-   * island.
-   *
-   * It replaces `window.location.origin`, which is the APPLICATION's origin —
-   * `app.motir.co`, where `app/(public)/p/` no longer exists (MOTIR-3951), so
-   * every address this room gave out 404'd.
+   * once `MOTIR_PUBLIC_SITE_URL` is configured (MOTIR-4242), resolved on the
+   * server by `publicProjectUrl()`, the one module that owns that question.
    */
   publicPageUrl: string;
 }
@@ -119,11 +108,12 @@ export function ProjectMembersSettings({
   projectKey,
   projectName,
   workspaceName,
-  accessLevel: initialAccessLevel,
+  accessMode: initialAccessMode,
   members: initialMembers,
   workspaceMembers,
   currentUserId,
-  canManage,
+  canManageAccess,
+  canManageMembers,
   publicAccessAvailable,
   publicPageUrl,
 }: ProjectMembersSettingsProps) {
@@ -131,34 +121,28 @@ export function ProjectMembersSettings({
   const { toast } = useToast();
   const router = useRouter();
 
-  const [accessLevel, setAccessLevel] = useState<ProjectAccessLevel>(initialAccessLevel);
-
-  // The levels this build OFFERS (MOTIR-4035). `public` publishes to strangers
-  // and that surface is cloud-only, so off-cloud it is not on the control.
-  //
-  // ⚠️ It stays on the control when it is the CURRENT level, disabled. A radio
-  // group whose selected option is absent shows nothing selected, which reads as
-  // a broken control rather than as an unavailable capability — and a project
-  // can arrive at `public` on a self-hosted build (data restored from cloud, or
-  // set before this gate landed). Showing the true state and refusing to leave
-  // it OUT of the offered set is the honest pair.
-  const offeredLevels = useMemo(
-    () =>
-      ACCESS_LEVELS.filter(
-        (level) => level !== 'public' || publicAccessAvailable || accessLevel === 'public',
-      ),
-    [publicAccessAvailable, accessLevel],
-  );
+  const [accessMode, setAccessMode] = useState<ProjectAccessMode>(initialAccessMode);
+  // The mode being saved — its card shows a spinner in place of the radio dot
+  // and the group is disabled until the write settles (design A8).
+  const [savingMode, setSavingMode] = useState<ProjectAccessMode | null>(null);
   const [members, setMembers] = useState<ProjectMemberDTO[]>(initialMembers);
-  const [accessPending, setAccessPending] = useState(false);
   const [pendingUserIds, setPendingUserIds] = useState<ReadonlySet<string>>(new Set());
-  // The "Start building in public?" explainer/confirm (Story 6.17.2, design
-  // Panel 11). Selecting the `public` level opens it instead of mutating
-  // immediately — going public is a confirmed action, never a bare toggle.
+  // The "Start building in public?" explainer/confirm (Story 6.17.2). Choosing
+  // Public opens it instead of writing — going public is a confirmed action.
   const [buildConfirmOpen, setBuildConfirmOpen] = useState(false);
-  // The reverse "Stop building in public?" confirm (Story 6.17.4, design Panel
-  // 12), opened from the status/manage row's Stop action.
+  // The reverse "Stop building in public?" confirm (Story 6.17.4).
   const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
+  // The Members-only confirm (design A2 / A3): who loses access, from the
+  // preview read. `null` while closed.
+  const [membersOnlyLosing, setMembersOnlyLosing] = useState<AccessLossPersonDTO[] | null>(null);
+  const [previewPending, setPreviewPending] = useState(false);
+
+  const accessBusy = savingMode !== null || previewPending;
+  const modeLabel = (mode: ProjectAccessMode) => t(`access.mode.${mode}`);
+  const byUserId = useMemo(
+    () => new Map(workspaceMembers.map((w) => [w.userId, w])),
+    [workspaceMembers],
+  );
 
   function setPending(userId: string, on: boolean) {
     setPendingUserIds((prev) => {
@@ -169,112 +153,132 @@ export function ProjectMembersSettings({
     });
   }
 
-  // The 6.4.4 routes return `{ code }` on error; surface the only one with a
-  // member-specific message (the last-admin guard, 409) and fall back to a
-  // generic message for everything else. Read the code as the thrown Error's
+  // The member routes return `{ code }` on error; read it as the thrown Error's
   // message so each catch can branch on it.
   async function readError(res: Response): Promise<string> {
     const data = (await res.json().catch(() => ({}))) as { code?: string };
     return data.code ?? 'UNKNOWN';
   }
 
-  // ── Access level ──────────────────────────────────────────────────────────
-  // Selecting a level. Going `public` is gated behind the build-in-public
-  // explainer/confirm (Story 6.17.2) — the mutation fires only on confirm, so
-  // the radio doesn't flip until then. Every other level applies immediately.
-  function changeAccess(level: AccessLevel) {
-    if (!canManage || level === accessLevel || accessPending) return;
-    // Off-cloud there is nothing to publish to (MOTIR-4035). The option is not
-    // rendered as selectable, so this is the belt to that brace.
-    if (level === 'public' && !publicAccessAvailable) return;
-    if (level === 'public') {
+  // ── Access mode ───────────────────────────────────────────────────────────
+  // Choosing a mode. Public is gated behind the build-in-public dialog, and
+  // Members only behind the preview-and-confirm — in both the radio does not
+  // flip until the person confirms. Open to the workspace applies at once: it
+  // only ever admits more people.
+  function changeMode(mode: ProjectAccessMode) {
+    if (!canManageAccess || mode === accessMode || accessBusy) return;
+    // Off-cloud there is nothing to publish to (MOTIR-4035). The card is
+    // disabled, so this is the belt to that brace.
+    if (mode === 'public' && !publicAccessAvailable) return;
+    if (mode === 'public') {
       setBuildConfirmOpen(true);
       return;
     }
-    void applyAccess(level);
+    if (mode === 'members') {
+      void openMembersOnlyConfirm();
+      return;
+    }
+    void applyMode(mode);
   }
 
-  // The confirm handler for the build-in-public dialog — runs the actual write
-  // (the shipped 6.4 `setAccessLevel` path) and closes the dialog on resolve.
+  async function openMembersOnlyConfirm() {
+    setPreviewPending(true);
+    try {
+      const res = await fetch(`/api/projects/${projectKey}/access/preview?mode=members`);
+      if (!res.ok) throw new Error(await readError(res));
+      const data = (await res.json()) as { losing: AccessLossPersonDTO[] };
+      setMembersOnlyLosing(data.losing);
+    } catch {
+      toast({
+        variant: 'error',
+        title: t('access.changeAccessErrorTitle'),
+        description: t('access.changeAccessErrorBody', {
+          projectName,
+          mode: modeLabel(accessMode),
+        }),
+      });
+    } finally {
+      setPreviewPending(false);
+    }
+  }
+
+  async function confirmMembersOnly() {
+    await applyMode('members');
+    setMembersOnlyLosing(null);
+  }
+
   async function confirmBuildInPublic() {
-    await applyAccess('public');
+    await applyMode('public');
     setBuildConfirmOpen(false);
   }
 
-  // The confirm handler for the STOP-building-in-public dialog (Story 6.17.4) —
-  // reverts the project to the `open` access level (the standard non-public
-  // state; we don't persist a prior level, and the card specifies the `open`
-  // fallback) via the same optimistic `setAccessLevel` path, then closes the
-  // dialog. Going non-public clears the badge + the public-only sections below.
+  // Stopping building in public returns the project to Open to the workspace —
+  // the non-public mode the card specifies (Story 6.17.4); no prior mode is kept.
   async function confirmStop() {
-    await applyAccess('open');
+    await applyMode('workspace');
     setStopConfirmOpen(false);
   }
 
-  // The optimistic access write. Keeps `setAccessLevel('public')` as the single
-  // mutation (Story 6.17.2: reframe the label, never fork the model).
-  async function applyAccess(level: AccessLevel) {
-    if (level === accessLevel) return;
-    const prevLevel = accessLevel;
-    const prevMembers = members;
-    setAccessLevel(level);
-    // Going private adds every workspace member to the project — match the
-    // server locally.
-    if (level === 'private') {
-      setMembers((current) => {
-        const have = new Set(current.map((m) => m.userId));
-        const seeded = workspaceMembers
-          .filter((w) => !have.has(w.userId))
-          .map<ProjectMemberDTO>((w) => ({
-            userId: w.userId,
-            name: w.name,
-            email: w.email,
-          }));
-        return [...current, ...seeded];
-      });
-    }
-    setAccessPending(true);
+  // The access write. The chosen card saves in place (A8); on failure the
+  // selection reverts and the toast names the mode the project is STILL in.
+  async function applyMode(mode: ProjectAccessMode) {
+    if (mode === accessMode) return;
+    const prevMode = accessMode;
+    setSavingMode(mode);
     try {
       const res = await fetch(`/api/projects/${projectKey}/access`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ accessLevel: level }),
+        body: JSON.stringify({ accessMode: mode }),
       });
       if (!res.ok) throw new Error(await readError(res));
+      setAccessMode(mode);
       toast({
         variant: 'success',
-        title: t('access.levelChangedToast', { level: t(`access.level.${level}`) }),
+        title: t('access.modeChangedToast', { projectName, mode: modeLabel(mode) }),
       });
-      // The access write also feeds a SECOND surface: the project-shell header's
-      // build-in-public slot (TopNav), which is server-rendered from the layout's
-      // `accessLevel` read (Subtask 6.17.7). This page's own access cell stays
-      // optimistic (a client island seeded via useState — router.refresh can't
-      // clobber it), but the server-rendered header slot needs an explicit
-      // re-read to swap the "Build in public" CTA ↔ the "Building in public"
-      // linked indicator on start/stop. `router.refresh()` reaches that server
-      // surface (page-state-after-mutation: keep the optimistic cell AND refresh
-      // the server surface). Without it, stopping leaves a stale indicator up.
+      // The mode also feeds SERVER-rendered surfaces — the shell header's
+      // build-in-public slot and the switcher's project list. This card stays a
+      // client island seeded once, so `router.refresh()` re-reads those without
+      // touching it (page-state-after-mutation: keep the island, refresh the
+      // server surface).
       router.refresh();
     } catch {
-      setAccessLevel(prevLevel);
-      setMembers(prevMembers);
+      setAccessMode(prevMode);
       toast({
         variant: 'error',
         title: t('access.changeAccessErrorTitle'),
-        description: t('access.errorGeneric'),
+        description: t('access.changeAccessErrorBody', {
+          projectName,
+          mode: modeLabel(prevMode),
+        }),
       });
     } finally {
-      setAccessPending(false);
+      setSavingMode(null);
     }
   }
 
   // ── Members ───────────────────────────────────────────────────────────────
+  // Workspace members not yet added (A5). The secondary line is
+  // `email · role · scope`; a Manager is offered but marked "always enters".
   const availableToAdd = useMemo<ComboboxOption<string>[]>(() => {
     const onProject = new Set(members.map((m) => m.userId));
     return workspaceMembers
       .filter((w) => !onProject.has(w.userId))
-      .map((w) => ({ value: w.userId, label: w.name, secondary: w.email, keywords: w.email }));
-  }, [members, workspaceMembers]);
+      .map((w) => {
+        const role = w.customRole?.name ?? t(`members.role.${w.workspaceRole}`);
+        const tail =
+          w.workspaceRole === 'manager'
+            ? t('access.alwaysEnters')
+            : t(`access.scope.${w.accessScope}`);
+        return {
+          value: w.userId,
+          label: w.name,
+          secondary: `${w.email} · ${role} · ${tail}`,
+          keywords: w.email,
+        };
+      });
+  }, [members, workspaceMembers, t]);
 
   async function addMember(userId: string) {
     const target = workspaceMembers.find((w) => w.userId === userId);
@@ -340,122 +344,93 @@ export function ProjectMembersSettings({
               <h2 className="font-sans text-base font-semibold text-(--el-text)">
                 {t('access.accessHeading')}
               </h2>
-              <p className="text-(--el-text-muted) font-sans text-xs">
+              <p className="text-(--el-text-secondary) font-sans text-xs">
                 {t('access.accessSubheading', { workspaceName })}
               </p>
             </div>
-            <AccessSummaryPill level={accessLevel} label={t(`access.level.${accessLevel}`)} />
+            <ModeSummaryPill mode={accessMode} label={modeLabel(accessMode)} />
           </div>
         }
       >
-        <div
-          role="radiogroup"
-          aria-label={t('access.levelGroupLabel')}
-          className="flex flex-col gap-2"
-        >
-          {offeredLevels.map((level) => {
-            const Icon = ACCESS_ICON[level];
-            const selected = accessLevel === level;
-            return (
-              <button
-                key={level}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                disabled={
-                  !canManage || accessPending || (level === 'public' && !publicAccessAvailable)
-                }
-                onClick={() => changeAccess(level)}
-                className={`focus-visible:ring-(--focus-ring-color) flex items-center gap-3 rounded-(--radius-card) border p-(--spacing-card-padding) text-left focus-visible:outline-none focus-visible:ring-2 disabled:cursor-default ${
-                  selected ? 'border-(--el-accent)' : 'border-(--el-border)'
-                } ${canManage ? 'enabled:hover:border-(--el-border-strong)' : ''}`}
-              >
-                <span
-                  className={`inline-flex size-9 shrink-0 items-center justify-center rounded-(--radius-control) ${ACCESS_TINT[level]} ${
-                    level === 'public' ? 'text-(--el-build-glyph)' : 'text-(--el-text-strong)'
-                  }`}
-                  aria-hidden
-                >
-                  <Icon className="size-5" />
-                </span>
-                <span className="flex-1">
-                  <span className="flex items-center gap-2 font-sans text-sm font-medium text-(--el-text)">
-                    {t(`access.level.${level}`)}
-                    {/* "Live" status chip on the selected build-in-public option
-                        (Story 6.17.2, design Panel 6). The full shell-header
-                        status badge + stop/manage path is Story 6.17.4. */}
-                    {level === 'public' && selected ? (
-                      <Pill className="border-transparent bg-(--el-build-bg) text-(--el-build-text)">
-                        <Megaphone className="size-3" aria-hidden />
-                        {t('buildInPublic.liveBadge')}
-                      </Pill>
-                    ) : null}
-                  </span>
-                  <span className="text-(--el-text-muted) block font-sans text-xs">
-                    {t(`access.levelDesc.${level}`, { workspaceName })}
-                  </span>
-                </span>
-                <span
-                  className={`inline-flex size-4 shrink-0 items-center justify-center rounded-full border ${
-                    selected ? 'border-(--el-accent)' : 'border-(--el-border-strong)'
-                  }`}
-                  aria-hidden
-                >
-                  {selected ? <span className="size-2 rounded-full bg-(--el-accent)" /> : null}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {accessLevel === 'private' && canManage ? (
-          <div className="mt-3 flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-sky) p-(--spacing-card-padding)">
-            <Info className="mt-0.5 size-4 shrink-0 text-(--el-text-strong)" aria-hidden />
-            <p className="font-sans text-xs text-(--el-text-strong)">
-              {t.rich('access.goPrivateNote', {
-                count: workspaceMembers.length,
-                projectName,
-                strong: (chunks) => <strong>{chunks}</strong>,
-              })}
-            </p>
+        {canManageAccess ? (
+          <div
+            role="radiogroup"
+            aria-label={t('access.modeGroupLabel')}
+            className="flex flex-col gap-2"
+          >
+            {ACCESS_MODES.map((mode) => {
+              const selected = accessMode === mode;
+              const unavailable = mode === 'public' && !publicAccessAvailable;
+              return (
+                <ModeCard
+                  key={mode}
+                  mode={mode}
+                  label={modeLabel(mode)}
+                  description={t(`access.modeDesc.${mode}`, { workspaceName })}
+                  selected={selected}
+                  saving={savingMode === mode}
+                  disabled={accessBusy || unavailable}
+                  unavailableReason={unavailable ? t('access.publicUnavailable') : null}
+                  liveLabel={t('buildInPublic.liveBadge')}
+                  onSelect={() => changeMode(mode)}
+                />
+              );
+            })}
           </div>
-        ) : null}
+        ) : (
+          // Read-only (design A6 / A7): the mode as TEXT — the selected card
+          // alone, no radio — and one note saying who can change it.
+          <div className="flex flex-col gap-3">
+            <ModeCard
+              mode={accessMode}
+              label={modeLabel(accessMode)}
+              description={t(`access.modeDesc.${accessMode}`, { workspaceName })}
+              selected
+              readOnly
+              liveLabel={t('buildInPublic.liveBadge')}
+            />
+            <InfoNote>{t('access.readOnlyModeNote')}</InfoNote>
+          </div>
+        )}
       </Card>
 
-      {/* The "Start building in public?" explainer/confirm (Story 6.17.2, design
-          Panel 11) — a reusable piece the discoverable entry points (6.17.3)
-          also open. Selecting the `public` level opens it; the access write
-          fires only on confirm. */}
       <BuildInPublicDialog
         open={buildConfirmOpen}
         onOpenChange={setBuildConfirmOpen}
         onConfirm={confirmBuildInPublic}
-        pending={accessPending}
+        pending={savingMode === 'public'}
       />
 
-      {/* ── Building-in-public status + manage / stop + public link + Overview
-          (only while the project is public) ─────────────────────────────── */}
-      {accessLevel === 'public' ? (
+      <MembersOnlyConfirmDialog
+        open={membersOnlyLosing !== null}
+        onOpenChange={(open) => {
+          if (!open) setMembersOnlyLosing(null);
+        }}
+        projectName={projectName}
+        workspaceName={workspaceName}
+        losing={membersOnlyLosing ?? []}
+        onConfirm={confirmMembersOnly}
+        pending={savingMode === 'members'}
+      />
+
+      {/* ── Building-in-public status + manage / stop + public link (only
+          while the project is public; design A10 keeps them unchanged) ───── */}
+      {accessMode === 'public' ? (
         <>
-          {/* The status badge + manage / stop row (Story 6.17.4, design Panel
-              12) — admins get Stop; non-admins see the badge + link read-only. */}
           <BuildInPublicManageRow
             publicPageUrl={publicPageUrl}
-            canManage={canManage}
+            canManage={canManageAccess}
             onStop={() => setStopConfirmOpen(true)}
           />
-          <PublicShareSection publicPageUrl={publicPageUrl} canManage={canManage} />
+          <PublicShareSection publicPageUrl={publicPageUrl} canManage={canManageAccess} />
         </>
       ) : null}
 
-      {/* The reverse "Stop building in public?" confirm (Story 6.17.4, design
-          Panel 12). Stopping reverts to a non-public level; the access write
-          fires only on confirm. */}
       <StopBuildInPublicDialog
         open={stopConfirmOpen}
         onOpenChange={setStopConfirmOpen}
         onConfirm={confirmStop}
-        pending={accessPending}
+        pending={savingMode === 'workspace'}
       />
 
       {/* ── Members ────────────────────────────────────────────────────── */}
@@ -474,16 +449,16 @@ export function ProjectMembersSettings({
                 {members.length}
               </Pill>
             </div>
-            {canManage ? (
+            {canManageMembers ? (
               <div className="w-[15rem]">
                 <Combobox
                   options={availableToAdd}
                   value={null}
                   onChange={addMember}
                   label={t('access.addMemberLabel')}
-                  placeholder={t('access.addMember')}
+                  placeholder={t('access.addPeople')}
                   searchable
-                  searchPlaceholder={t('access.addMemberSearch')}
+                  searchPlaceholder={t('access.addPeopleSearch')}
                   emptyText={t('access.addMemberEmpty')}
                 />
               </div>
@@ -493,9 +468,6 @@ export function ProjectMembersSettings({
           </div>
         }
       >
-        {/* Panel 3 of `design/projects/access-members--no-roles.mock.html`
-            (Story MOTIR-6168 · MOTIR-6466): the rows carry no role any more, so
-            one line says where what each person can do comes from. */}
         <p className="text-(--el-text-secondary) mb-3 font-sans text-xs">
           {t('access.membersFromWorkspaceRole')}{' '}
           <Link
@@ -505,66 +477,191 @@ export function ProjectMembersSettings({
             {t('access.workspaceRolesLink')}
           </Link>
         </p>
-        {!canManage ? (
-          <div className="mb-3 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface) p-(--spacing-control-y) px-(--spacing-control-x)">
-            <Info className="size-4 shrink-0 text-(--el-text-muted)" aria-hidden />
-            <p className="text-(--el-text-secondary) font-sans text-xs">
-              {t('access.readOnlyNote')}
-            </p>
+        {!canManageMembers ? (
+          <div className="mb-3">
+            <InfoNote>{t('access.readOnlyNote')}</InfoNote>
           </div>
         ) : null}
 
-        <ul role="list" className="flex flex-col">
-          {members.map((member) => {
-            const isSelf = member.userId === currentUserId;
-            const busy = pendingUserIds.has(member.userId);
-            const initial = (member.name || member.email).charAt(0).toUpperCase();
-            return (
-              <li
-                key={member.userId}
-                className="border-(--el-border-soft) flex items-center gap-3 border-b py-3 last:border-b-0"
-              >
-                <span
-                  className="bg-(--el-text) text-(--el-text-inverted) inline-flex size-8 shrink-0 items-center justify-center rounded-full font-sans text-xs font-semibold"
-                  aria-hidden
+        {members.length === 0 && accessMode === 'members' ? (
+          // Members only with nobody added (design A4).
+          <div className="flex flex-col items-center gap-2 py-6 text-center">
+            <span
+              className="bg-(--el-tint-lavender) text-(--el-text-strong) inline-flex size-9 items-center justify-center rounded-(--radius-control)"
+              aria-hidden
+            >
+              <Lock className="size-5" />
+            </span>
+            <p className="font-sans text-sm font-medium text-(--el-text)">
+              {t('access.emptyMembersOnlyTitle')}
+            </p>
+            <p className="text-(--el-text-secondary) max-w-[26rem] font-sans text-xs">
+              {t('access.emptyMembersOnlyBody')}
+            </p>
+          </div>
+        ) : (
+          <ul role="list" className="flex flex-col">
+            {members.map((member) => {
+              const isSelf = member.userId === currentUserId;
+              const busy = pendingUserIds.has(member.userId);
+              const initial = (member.name || member.email).charAt(0).toUpperCase();
+              const who = byUserId.get(member.userId);
+              return (
+                <li
+                  key={member.userId}
+                  className="border-(--el-border-soft) flex items-center gap-3 border-b py-3 last:border-b-0"
                 >
-                  {initial}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-sans text-sm font-medium text-(--el-text)">
-                    {member.name}
-                    {isSelf ? (
-                      <span className="text-(--el-text-muted) font-normal">
-                        {t('access.youSuffix')}
-                      </span>
-                    ) : null}
-                  </p>
-                  <p className="text-(--el-text-muted) truncate font-sans text-xs">
-                    {member.email}
-                  </p>
-                </div>
-
-                {canManage && !isSelf ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    loading={busy}
-                    onClick={() => removeMember(member)}
+                  <span
+                    className="bg-(--el-text) text-(--el-text-inverted) inline-flex size-8 shrink-0 items-center justify-center rounded-full font-sans text-xs font-semibold"
+                    aria-hidden
                   >
-                    {t('access.remove')}
-                  </Button>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+                    {initial}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-sans text-sm font-medium text-(--el-text)">
+                      {member.name}
+                      {isSelf ? (
+                        <span className="text-(--el-text-secondary) font-normal">
+                          {t('access.youSuffix')}
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="text-(--el-text-secondary) truncate font-sans text-xs">
+                      {member.email}
+                    </p>
+                  </div>
+                  {who ? (
+                    <>
+                      <RolePill role={who.workspaceRole} customRoleName={who.customRole?.name} />
+                      {who.workspaceRole === 'manager' ? null : (
+                        <ScopePill scope={who.accessScope} />
+                      )}
+                    </>
+                  ) : null}
+
+                  {canManageMembers && !isSelf ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      loading={busy}
+                      onClick={() => removeMember(member)}
+                    >
+                      {t('access.remove')}
+                    </Button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </Card>
     </div>
   );
 }
 
-function AccessSummaryPill({ level, label }: { level: ProjectAccessLevel; label: string }) {
-  const Icon = ACCESS_ICON[level];
+// One mode as a radio card (design A1) — or, read-only, as the same card with
+// no radio and no button role (A6). The card IS the radio.
+function ModeCard({
+  mode,
+  label,
+  description,
+  selected,
+  saving = false,
+  disabled = false,
+  readOnly = false,
+  unavailableReason = null,
+  liveLabel,
+  onSelect,
+}: {
+  mode: ProjectAccessMode;
+  label: string;
+  description: string;
+  selected: boolean;
+  saving?: boolean;
+  disabled?: boolean;
+  readOnly?: boolean;
+  unavailableReason?: string | null;
+  liveLabel: string;
+  onSelect?: () => void;
+}) {
+  const Icon = MODE_ICON[mode];
+  const body = (
+    <>
+      <span
+        className={`inline-flex size-9 shrink-0 items-center justify-center rounded-(--radius-control) ${MODE_TINT[mode]}`}
+        aria-hidden
+      >
+        <Icon className="size-5" />
+      </span>
+      <span className="flex-1">
+        <span className="flex items-center gap-2 font-sans text-sm font-medium text-(--el-text)">
+          {label}
+          {mode === 'public' && selected ? (
+            <Pill className="border-transparent bg-(--el-build-bg) text-(--el-build-text)">
+              <Megaphone className="size-3" aria-hidden />
+              {liveLabel}
+            </Pill>
+          ) : null}
+        </span>
+        <span className="text-(--el-text-secondary) block font-sans text-xs">{description}</span>
+        {unavailableReason ? (
+          <span className="text-(--el-text-secondary) mt-1 flex items-start gap-1 font-sans text-xs">
+            <Info className="mt-0.5 size-3 shrink-0" aria-hidden />
+            {unavailableReason}
+          </span>
+        ) : null}
+      </span>
+    </>
+  );
+
+  if (readOnly) {
+    return (
+      <div className="border-(--el-border) flex items-center gap-3 rounded-(--radius-card) border p-(--spacing-card-padding)">
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      aria-disabled={unavailableReason ? true : undefined}
+      disabled={disabled}
+      onClick={onSelect}
+      className={`focus-visible:ring-(--focus-ring-color) enabled:hover:border-(--el-border-strong) flex items-center gap-3 rounded-(--radius-card) border p-(--spacing-card-padding) text-left focus-visible:outline-none focus-visible:ring-2 disabled:cursor-default ${
+        selected ? 'border-(--el-accent)' : 'border-(--el-border)'
+      } ${unavailableReason ? 'opacity-60' : ''}`}
+    >
+      {body}
+      {saving ? (
+        <LoaderCircle className="size-4 shrink-0 animate-spin text-(--el-accent)" aria-hidden />
+      ) : (
+        <span
+          className={`inline-flex size-4 shrink-0 items-center justify-center rounded-full border ${
+            selected ? 'border-(--el-accent)' : 'border-(--el-border-strong)'
+          }`}
+          aria-hidden
+        >
+          {selected ? <span className="size-2 rounded-full bg-(--el-accent)" /> : null}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function InfoNote({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface) p-(--spacing-control-y) px-(--spacing-control-x)">
+      <Info className="text-(--el-text-secondary) size-4 shrink-0" aria-hidden />
+      <p className="text-(--el-text-secondary) font-sans text-xs">{children}</p>
+    </div>
+  );
+}
+
+function ModeSummaryPill({ mode, label }: { mode: ProjectAccessMode; label: string }) {
+  const Icon = MODE_ICON[mode];
   return (
     <Pill tone="neutral" className="shrink-0">
       <Icon className="size-3" aria-hidden />

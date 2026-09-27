@@ -17,6 +17,7 @@ const loadAction = vi.fn();
 vi.mock('@/app/(authed)/settings/workspace/actions', () => ({
   dismissRoleMigrationEntryAction: (...a: unknown[]) => dismissAction(...a),
   loadRoleMigrationPageAction: (...a: unknown[]) => loadAction(...a),
+  openProjectAccessAction: vi.fn(async () => undefined),
 }));
 
 import {
@@ -35,6 +36,7 @@ function entry(i: number, overrides: Partial<RoleMigrationEntryDTO> = {}): RoleM
       workspaceRole: 'member',
       projects: [{ projectKey: 'PROD', role: 'viewer', customRoleName: null }],
       narrowedIn: [],
+      projectKey: null,
     },
     afterRole: 'viewer',
     afterCustomRoleName: null,
@@ -73,8 +75,12 @@ describe('the reason is TOTAL over the enum', () => {
         (m.settings.members.migration.reason as Record<string, string>)[reason];
       expect(reasons(en)).toBeTruthy();
       expect(reasons(zh as typeof en)).toBeTruthy();
-      renderNotice(page([entry(1, { reason })]));
-      expect(screen.getByText(reasons(en)!)).toBeTruthy();
+      // An access row names its project (`before.projectKey`, MOTIR-6551); the
+      // role rows' sentences take no values.
+      renderNotice(
+        page([entry(1, { reason, before: { ...entry(1).before, projectKey: 'PROD' } })]),
+      );
+      expect(screen.getByText(reasons(en)!.replace('{projectKey}', 'PROD'))).toBeTruthy();
     },
   );
 });
@@ -91,6 +97,7 @@ describe('what a row says', () => {
               { projectKey: 'OPS', role: 'member', customRoleName: 'Contractor' },
             ],
             narrowedIn: [],
+            projectKey: null,
           },
           afterRole: 'member',
           afterCustomRoleName: 'Contractor ∩ Reviewer',
@@ -100,7 +107,9 @@ describe('what a row says', () => {
     );
     expect(screen.getByText('Workspace admin · Viewer in PROD · Contractor in OPS')).toBeTruthy();
     expect(screen.getByText('Contractor ∩ Reviewer')).toBeTruthy();
-    expect(screen.getByText('Changed by the move to workspace roles')).toBeTruthy();
+    expect(
+      screen.getByText('Changed by the move to workspace roles and project access'),
+    ).toBeTruthy();
     expect(screen.getByText('Managers only')).toBeTruthy();
     expect(screen.getByText('1 person')).toBeTruthy();
   });
@@ -117,6 +126,7 @@ describe('what a row says', () => {
             { projectKey: 'PROD', lost: ['work_item:edit'] },
             { projectKey: 'OPS', lost: [] },
           ],
+          projectKey: null,
         },
         t,
       ),
@@ -139,6 +149,7 @@ describe('describeBefore — the parts it leaves out', () => {
             { projectKey: 'OPS', role: null, customRoleName: 'Contractor' },
           ],
           narrowedIn: [],
+          projectKey: null,
         },
         t,
       ),
@@ -221,5 +232,54 @@ describe('dismiss and paging', () => {
   it('renders nothing when nothing is open', () => {
     const { container } = renderNotice(page([]));
     expect(container.textContent).toBe('');
+  });
+});
+
+describe('the access rows (Story MOTIR-6169 · MOTIR-6551 · design W10)', () => {
+  const access = (i: number, key: string) =>
+    entry(i, {
+      reason: 'project_access_lost',
+      afterRole: 'member',
+      before: { workspaceRole: null, projects: [], narrowedIn: [], projectKey: key },
+    });
+
+  it('group under their own sub-head, apart from the role rows, with the explaining sentence', () => {
+    renderNotice(page([entry(1), access(2, 'OPS')]));
+    const roles = screen.getByRole('region', { name: 'Roles' });
+    const accessGroup = screen.getByRole('region', { name: 'Project access' });
+    expect(roles.textContent).toContain('Person 1');
+    expect(accessGroup.textContent).toContain('Person 2');
+    expect(accessGroup.textContent).not.toContain('Person 1');
+    expect(
+      screen.getByText(
+        'Projects that were Limited are now Members only. Add anyone who should keep access on that project’s Access & members page.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('an access row reads before → after for its project, the reason, and offers the project door', () => {
+    renderNotice(page([access(2, 'OPS')]));
+    expect(screen.getByText('Could open OPS')).toBeTruthy();
+    expect(screen.getByText('No access to OPS')).toBeTruthy();
+    expect(
+      screen.getByText('No longer enters OPS — it was Limited and they were not added.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open project access' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Dismiss Person 2' })).toBeTruthy();
+  });
+
+  it('with only role rows, draws no sub-heads — the shipped notice, unchanged', () => {
+    renderNotice(page([entry(1)]));
+    expect(screen.queryByText('Project access')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Roles' })).toBeNull();
+  });
+
+  it('an access row dismisses like any other', async () => {
+    dismissAction.mockResolvedValue({ ok: true });
+    renderNotice(page([access(2, 'OPS'), access(3, 'ENG')]));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss Person 2' }));
+    await waitFor(() => expect(screen.queryByText('Could open OPS')).toBeNull());
+    expect(dismissAction).toHaveBeenCalledWith('e2');
+    expect(screen.getByText('Could open ENG')).toBeTruthy();
   });
 });

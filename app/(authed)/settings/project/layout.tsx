@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { NoAccessState } from '@/components/projects/NoAccessState';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The project-settings AREA layout (Story 6.5 · Subtask 6.5.2). The grouped
 // settings NAV itself lives in the app rail — SidebarNav swaps to it when the
@@ -25,10 +26,10 @@ export default async function ProjectSettingsAreaLayout({ children }: { children
   if (!session) redirect('/sign-in');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   const { canBrowse } = await projectAccessService.getCapabilities(ctx.projectId, {
     userId: ctx.userId,

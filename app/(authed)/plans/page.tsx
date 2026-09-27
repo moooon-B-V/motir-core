@@ -22,6 +22,7 @@ import { PLAN_SESSION_LANDING_PARAM, planStateFromParam } from '@/lib/planning/p
 import { buildSessionRowViews } from './sessionRowView';
 import { SessionsList } from './_components/SessionsList';
 import { PlanStatusTabs } from './_components/PlanStatusTabs';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The Plans surface — every planning CONVERSATION in the project (MOTIR-6025,
 // `agent-authored-plans.md` AMENDMENT 17 §8; built to
@@ -69,9 +70,10 @@ export default async function PlansPage({
     getTranslations('projectAccess'),
     getActiveProject(),
   ]);
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
 

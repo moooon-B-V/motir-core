@@ -88,10 +88,11 @@ function crowdedProps(overrides: Partial<TopNavProps> = {}): TopNavProps {
     orgs: [],
     workspaces: [],
     activeWorkspaceId: null,
-    // The project half of the context path (MOTIR-2556). Null here: neither
-    // file is about the tier nav — both stub it — so the bar's widest state is
-    // still the one the RIGHT cluster produces.
-    activeProject: null,
+    // The project half of the context path (MOTIR-2556). Neither file is about
+    // the tier nav — both stub it — but the project must be SET: the budget is
+    // measured on the everyday bar, and its Create slot is not rendered without
+    // an active project (MOTIR-6548 · the no-project shell).
+    activeProject: { id: 'p1', name: 'Motir', identifier: 'MOTIR' } as never,
     projects: [],
     aiConfigured: false,
     user: { name: 'Zhu Yue', email: 'yue@example.com' },

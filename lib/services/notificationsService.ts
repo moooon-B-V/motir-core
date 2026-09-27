@@ -1,6 +1,8 @@
 import type { NotificationCategory, Prisma, User } from '@/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces';
 import { notificationRepository } from '@/lib/repositories/notificationRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { toNotificationDto } from '@/lib/mappers/notificationMappers';
 import { NotificationNotFoundError } from '@/lib/notifications/errors';
@@ -74,13 +76,39 @@ async function resolveActors(
  * these (the `NotificationCategory` enum is exactly `direct | watching`), so the
  * drawer reports the sum to the bell while each tab badge reads its own entry.
  */
+/**
+ * The ids of the workspace's projects the reader can ENTER (Story MOTIR-6169 ·
+ * MOTIR-6549) — computed ONCE per call and handed to every read in it, so the
+ * feed, its totals and the badge agree. It is `filterBrowsable`, the same
+ * predicate the project switcher uses, so the inbox can never show a project the
+ * switcher hides. Archived projects are candidates too: archiving is not a loss
+ * of entry, and a notification about one stays for whoever could open it.
+ */
+async function enterableProjectIds(
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<string[]> {
+  const projects = await projectRepository.findAccessRowsByWorkspace(ctx.workspaceId, tx);
+  const enterable = await projectAccessService.filterBrowsable(projects, ctx, tx);
+  return enterable.map((p) => p.id);
+}
+
 async function unreadByCategory(
   recipientUserId: string,
   tx: Prisma.TransactionClient,
+  enterable: readonly string[],
 ): Promise<UnreadByCategoryDTO> {
   const [direct, watching] = await Promise.all([
-    notificationRepository.countUnreadByRecipient(recipientUserId, { category: 'direct' }, tx),
-    notificationRepository.countUnreadByRecipient(recipientUserId, { category: 'watching' }, tx),
+    notificationRepository.countUnreadByRecipient(
+      recipientUserId,
+      { category: 'direct', enterableProjectIds: enterable },
+      tx,
+    ),
+    notificationRepository.countUnreadByRecipient(
+      recipientUserId,
+      { category: 'watching', enterableProjectIds: enterable },
+      tx,
+    ),
   ]);
   return { direct, watching };
 }
@@ -103,10 +131,19 @@ export const notificationsService = {
     ctx: ServiceContext,
   ): Promise<NotificationsPageDTO> {
     return withWorkspaceContext(ctx, async (tx) => {
+      // Entry is honoured at READ time (MOTIR-6549): a project the reader can no
+      // longer enter drops out of the feed and the counts at once, and comes back
+      // if they are let in again — nothing is deleted.
+      const enterable = await enterableProjectIds(ctx, tx);
       // take+1 probes for a next page without a second read.
       const window = await notificationRepository.listByRecipient(
         ctx.userId,
-        { take: NOTIFICATION_PAGE_SIZE + 1, cursor: options.cursor, category: options.category },
+        {
+          take: NOTIFICATION_PAGE_SIZE + 1,
+          cursor: options.cursor,
+          category: options.category,
+          enterableProjectIds: enterable,
+        },
         tx,
       );
       const rows = window.slice(0, NOTIFICATION_PAGE_SIZE);
@@ -117,8 +154,12 @@ export const notificationsService = {
           rows.map((r) => r.actorId),
           tx,
         ),
-        notificationRepository.countByRecipient(ctx.userId, { category: options.category }, tx),
-        unreadByCategory(ctx.userId, tx),
+        notificationRepository.countByRecipient(
+          ctx.userId,
+          { category: options.category, enterableProjectIds: enterable },
+          tx,
+        ),
+        unreadByCategory(ctx.userId, tx, enterable),
       ]);
 
       return {
@@ -138,7 +179,11 @@ export const notificationsService = {
    */
   async getUnreadCount(ctx: ServiceContext): Promise<UnreadCountDTO> {
     return withWorkspaceContext(ctx, async (tx) => {
-      const unreadCount = await notificationRepository.countUnreadByRecipient(ctx.userId, {}, tx);
+      const unreadCount = await notificationRepository.countUnreadByRecipient(
+        ctx.userId,
+        { enterableProjectIds: await enterableProjectIds(ctx, tx) },
+        tx,
+      );
       return { unreadCount };
     });
   },
@@ -166,9 +211,10 @@ export const notificationsService = {
           ? await notificationRepository.markRead(notificationId, new Date(), tx)
           : existing;
 
+      const enterable = await enterableProjectIds(ctx, tx);
       const [actorsById, byCategory] = await Promise.all([
         resolveActors([row.actorId], tx),
-        unreadByCategory(ctx.userId, tx),
+        unreadByCategory(ctx.userId, tx, enterable),
       ]);
 
       return {
@@ -188,7 +234,7 @@ export const notificationsService = {
   async markAllRead(ctx: ServiceContext): Promise<MarkAllReadResultDTO> {
     return withWorkspaceContext(ctx, async (tx) => {
       await notificationRepository.markAllReadByRecipient(ctx.userId, new Date(), tx);
-      const byCategory = await unreadByCategory(ctx.userId, tx);
+      const byCategory = await unreadByCategory(ctx.userId, tx, await enterableProjectIds(ctx, tx));
       return { unreadCount: totalUnread(byCategory), unreadByCategory: byCategory };
     });
   },

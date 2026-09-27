@@ -133,7 +133,17 @@ describe('createWorkItem — description mentions', () => {
       ctx: s.fx.ctx,
       level: 'private',
     });
-    // Added AFTER the private flip → workspace member, no project membership.
+    // Going private adds nobody (Story MOTIR-6169): the member who keeps their
+    // view is ADDED explicitly; the outsider is a workspace member with no
+    // project membership.
+    await adminDb.projectMembership.create({
+      data: {
+        workspaceId: s.fx.workspaceId,
+        projectId: s.fx.projectId,
+        userId: s.member.id,
+        role: 'member',
+      },
+    });
     const outsider = await usersService.createUser({
       email: 'outsider@example.com',
       password: 'hunter2hunter2',
@@ -152,7 +162,7 @@ describe('createWorkItem — description mentions', () => {
       s.fx.ctx,
     );
 
-    // The auto-enrolled member survives; the outsider is dropped silently.
+    // The added member survives; the outsider is dropped silently.
     expect(events).toHaveLength(1);
     expect(events[0]!.mentionedUserIds).toEqual([s.member.id]);
   });

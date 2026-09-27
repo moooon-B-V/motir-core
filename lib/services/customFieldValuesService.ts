@@ -1,4 +1,5 @@
 import { Prisma } from '@/generated/prisma/client';
+import { accessModeOf } from '@/lib/projects/accessMode';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptionRepository';
 import {
@@ -185,7 +186,7 @@ export const customFieldValuesService = {
       if (!project) throw new WorkItemNotFoundError(workItemId);
       const members = await assignableMembersService.list({
         projectId: project.id,
-        accessLevel: project.accessLevel,
+        accessMode: accessModeOf(project),
         ctx,
       });
       assignableIds = new Set(members.map((m) => m.userId));

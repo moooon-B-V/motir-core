@@ -359,8 +359,8 @@ describe('the browse floor', () => {
       ctx: fx.ctx,
       level: 'private',
     });
-    // Going private seeds the then-current workspace members as project members;
-    // take this reader's away, so they genuinely may not browse it.
+    // Make sure this reader holds no project membership (going private adds
+    // nobody since Story MOTIR-6169), so they genuinely may not browse it.
     await adminDb.projectMembership.deleteMany({
       where: { userId: memberId, projectId: fx.projectId },
     });

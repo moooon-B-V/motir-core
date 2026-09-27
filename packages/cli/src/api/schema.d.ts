@@ -1686,7 +1686,15 @@ export interface components {
         Project: {
             key: string;
             name: string;
-            /** @enum {string} */
+            /**
+             * @description Who may enter the project — the authoritative access field.
+             * @enum {string}
+             */
+            accessMode: "workspace" | "members" | "public";
+            /**
+             * @description DEPRECATED — derived from `accessMode` (workspace → open, members → private, public → public), so `limited` is never emitted. Read `accessMode`.
+             * @enum {string}
+             */
             accessLevel: "open" | "limited" | "private" | "public";
             archived: boolean;
         };

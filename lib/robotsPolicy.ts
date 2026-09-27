@@ -95,6 +95,8 @@ export const SIGNED_IN_SEGMENTS = [
   'filters',
   'invite',
   'items',
+  // The no-project landing (MOTIR-6548).
+  'no-project',
   'onboarding',
   'planning',
   'plans',
