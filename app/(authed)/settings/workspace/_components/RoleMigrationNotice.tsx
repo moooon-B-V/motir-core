@@ -139,7 +139,10 @@ export function RoleMigrationNotice({ initial }: { initial: RoleMigrationPageDTO
               {t('members.migration.rolesHeading')}
             </h3>
           ) : null}
-          <ul role="list" className="flex flex-col">
+          {/* The notice's own list keeps the notice's name (as it had before the
+              access group joined it, MOTIR-6551): a named list for a screen reader,
+              and the address MOTIR-6168's receipt finds the rows by. */}
+          <ul role="list" className="flex flex-col" aria-label={t('members.migration.title')}>
             {roleEntries.map((entry) => (
               <EntryRow
                 key={entry.id}
@@ -162,7 +165,11 @@ export function RoleMigrationNotice({ initial }: { initial: RoleMigrationPageDTO
           <p className="text-(--el-text-secondary) mt-1 font-sans text-xs">
             {t('members.migration.accessBody')}
           </p>
-          <ul role="list" className="flex flex-col">
+          <ul
+            role="list"
+            className="flex flex-col"
+            aria-label={t('members.migration.accessHeading')}
+          >
             {accessEntries.map((entry) => (
               <EntryRow
                 key={entry.id}
