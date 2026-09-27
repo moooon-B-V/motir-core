@@ -17,6 +17,7 @@ import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionR
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { sprintsService } from '@/lib/services/sprintsService';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { NoActiveSprintError } from '@/lib/sprints/errors';
 import {
@@ -29,6 +30,7 @@ import {
 } from '@/lib/workItems/claimOutcome';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { childrenBelowClaimBar, ladderKeysFrom } from '@/lib/workItems/statusLadder';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // THE SCOPE CLAIM (MOTIR-3049) — lock a whole story or sprint, all or nothing.
@@ -60,7 +62,14 @@ import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspa
 
 /** What to claim: one container by key, or a project's ACTIVE sprint. */
 export type ScopeClaimInput =
-  | { kind: 'work_item'; projectId: string; identifier: string }
+  | {
+      kind: 'work_item';
+      projectId: string;
+      identifier: string;
+      /** Leave children already LANDED (Implemented or later) out of the claim
+       *  instead of refusing on them — `motir continue <PARENT>` (MOTIR-6535). */
+      exceptLanded?: boolean;
+    }
   | { kind: 'sprint'; projectId: string };
 
 /**
@@ -159,7 +168,7 @@ export const scopeClaimService = {
   async claimScope(input: ScopeClaimInput, ctx: ServiceContext): Promise<ScopeClaimDto> {
     const resolved =
       input.kind === 'work_item'
-        ? await resolveWorkItemScope(input.projectId, input.identifier, ctx)
+        ? await resolveWorkItemScope(input.projectId, input.identifier, ctx, input.exceptLanded)
         : await resolveSprintScope(input.projectId, ctx);
 
     if (!resolved.ok) return presentEarlyRefusal(resolved.scope, resolved.refusal);
@@ -239,6 +248,7 @@ async function resolveWorkItemScope(
   projectId: string,
   identifier: string,
   ctx: ServiceContext,
+  exceptLanded = false,
 ): Promise<ResolvedScope> {
   const root = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
   const scope: ScopeClaimScopeDto = {
@@ -299,11 +309,21 @@ async function resolveWorkItemScope(
     };
   }
 
+  // RESUMING A DEAD PARENT RUN (MOTIR-6535): the children it already landed are
+  // not work to start — they are what the run left behind. Leaving them out of the
+  // member set is what lets the rest of the scope be claimed; without the flag a
+  // landed child refuses the whole claim, exactly as before.
+  const statuses = exceptLanded
+    ? await workflowsService.listStatusesByProject(root.projectId, ctx.workspaceId)
+    : null;
+  const members = statuses
+    ? childrenBelowClaimBar(children, statuses, ladderKeysFrom(statuses))
+    : children;
   return {
     ok: true,
     scope,
     projectId: root.projectId,
-    memberIds: [root.id, ...children.map((c) => c.id)],
+    memberIds: [root.id, ...members.map((c) => c.id)],
   };
 }
 

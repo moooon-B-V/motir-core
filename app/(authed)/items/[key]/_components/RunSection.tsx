@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
-import { Bot, CloudOff, TriangleAlert } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
+import { Bot, TriangleAlert } from 'lucide-react';
 import { RunTonePill } from '@/components/runs/RunTonePill';
 import { Button } from '@/components/ui/Button';
 import { drainSseFrames } from '@/lib/ai/sseFrames';
@@ -14,6 +14,9 @@ import type {
   DispatchRunListItemDto,
 } from '@/lib/dto/dispatchRuns';
 import { legSummary } from '@/lib/runs/legSummary';
+import { isRunAlive, lastHeardFrom } from '@/lib/runs/runLiveness';
+import { formatRunInstant } from '@/lib/runs/runClock';
+import { relativeLabel } from '@/components/github/RepairFixPart';
 import { runsHref } from '@/lib/runs/runsAddress';
 import {
   CARD_STEPS,
@@ -79,6 +82,7 @@ export function RunSection({
   scopeRunTime = null,
 }: RunSectionProps) {
   const t = useTranslations('runs');
+  const locale = useLocale();
   const [runs, setRuns] = useState(initialRuns);
   const [cursor, setCursor] = useState(initialCursor);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -94,7 +98,15 @@ export function RunSection({
   // ⚠️ THE ONE PREDICATE THAT DECIDES WHETHER A CONNECTION IS OPENED AT ALL.
   // `isLiveRun` is `lib/runs/timeline.ts`'s, the same map the server answers
   // `?status=live` from — not a second reading of "is it running".
-  const liveRunId = current && isLiveRun(current.status) ? current.id : null;
+  // ⚠️ DEAD IS READ, NOT WRITTEN (MOTIR-6534, design `design/runs` § Run died R1).
+  // A local run whose heartbeat lapsed still reads `running` until the sweep closes
+  // it; `isRunAlive` (`lib/runs/runLiveness.ts`) — the ONE liveness rule — says it
+  // died NOW. The clock is read once per mount, as every relative label here is.
+  const [mountedAt] = useState(() => Date.now());
+  const died =
+    current !== null && current.status !== 'succeeded' && !isRunAlive(current, new Date(mountedAt));
+  // A dead run gets no stream: nothing is writing to it any more.
+  const liveRunId = current && isLiveRun(current.status) && !died ? current.id : null;
 
   // The cursor the stream resumes from. Held in a ref rather than in state so a
   // reconnect reads the latest value without the effect depending on it — an
@@ -224,7 +236,11 @@ export function RunSection({
       <div className="flex items-center gap-2">
         <RunTonePill tone={legTone}>{t(`disposition.${leg?.disposition ?? 'queued'}`)}</RunTonePill>
         {current ? (
-          <RunTonePill tone={runTone}>{t(`runStatus.${current.status}`)}</RunTonePill>
+          died && current.status === 'running' ? (
+            <RunTonePill tone="timedout">{t('runStatus.died')}</RunTonePill>
+          ) : (
+            <RunTonePill tone={runTone}>{t(`runStatus.${current.status}`)}</RunTonePill>
+          )
         ) : null}
       </div>
 
@@ -261,10 +277,35 @@ export function RunSection({
         </p>
       ) : null}
 
-      {current?.status === 'timed_out' ? (
-        <p className="flex items-center gap-2 font-sans text-sm text-(--el-text-secondary)">
-          <CloudOff className="size-4" aria-hidden="true" />
-          {t('reportingOffline')}
+      {current && died ? (
+        // The died line takes the reporting-offline note's place, and points DOWN
+        // to the continue part rather than repeating the command.
+        <p
+          className="flex items-start gap-2 font-sans text-sm text-(--el-text-secondary)"
+          role="status"
+          data-testid="run-died-line"
+        >
+          <TriangleAlert
+            className="mt-0.5 size-4 shrink-0 text-(--el-warning)"
+            aria-hidden="true"
+          />
+          <span>
+            {t.rich('runDied', {
+              b: (chunks) => <b className="font-semibold text-(--el-text)">{chunks}</b>,
+              when: () => {
+                const iso = (
+                  current.endedAt && current.status !== 'running'
+                    ? new Date(current.lastHeartbeatAt ?? current.endedAt)
+                    : lastHeardFrom(current)
+                ).toISOString();
+                return (
+                  <time dateTime={iso} title={formatRunInstant(iso)}>
+                    {relativeLabel(iso, locale, mountedAt)}
+                  </time>
+                );
+              },
+            })}
+          </span>
         </p>
       ) : null}
 
@@ -293,9 +334,15 @@ export function RunSection({
               key={run.id}
               className="flex min-w-0 items-center gap-2 border-t border-(--el-border-soft) py-(--spacing-control-y) first:border-t-0"
             >
-              <RunTonePill tone={RUN_STATUS_TONE[run.status]}>
-                {t(`runStatus.${run.status}`)}
-              </RunTonePill>
+              {/* A row still reading `running` whose run is not alive says so, as the
+                  header pill does — the list never contradicts it. */}
+              {run.status === 'running' && !isRunAlive(run, new Date(mountedAt)) ? (
+                <RunTonePill tone="timedout">{t('runStatus.died')}</RunTonePill>
+              ) : (
+                <RunTonePill tone={RUN_STATUS_TONE[run.status]}>
+                  {t(`runStatus.${run.status}`)}
+                </RunTonePill>
+              )}
               <Link className="min-w-0 truncate text-(--el-link) underline" href={runHref(run.id)}>
                 {t(`command.${run.command}`)}
               </Link>

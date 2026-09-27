@@ -443,6 +443,7 @@ export function DevelopmentSectionBody({
   cardTerminal = false,
   designResult = null,
   repair = null,
+  continuePart = null,
   autoQueueExits = null,
   decision = null,
 }: {
@@ -582,6 +583,14 @@ export function DevelopmentSectionBody({
    */
   repair?: WorkItemRepairViewDto | null;
   /**
+   * The CONTINUE PART (Story MOTIR-6526 · MOTIR-6534, design `design/runs` § Run
+   * died) — a run that died, the copyable `motir continue`, or who is continuing.
+   * A sibling of the fix part, drawn in the same place: below the rows' caption
+   * (or the EmptyState, when the card has no pull request) and above How to test.
+   * The host builds it; the peek omits it.
+   */
+  continuePart?: ReactNode;
+  /**
    * The standing merge-queue exits of a card with NO approval gate — an `auto` project
    * (Story MOTIR-5461 · MOTIR-5635, design § 22 E5). Drawn as a flush *Merge queue* part
    * below the rows, and read by the rows' outcome slot. Ignored when a gate frame is
@@ -656,6 +665,7 @@ export function DevelopmentSectionBody({
         )}
       </p>
       {repair ? <RepairFixPart repair={repair} itemIdentifier={itemIdentifier} /> : null}
+      {continuePart}
     </>
   );
   // An `auto` card's standing exits (§ 22 E5): the rows and How to test sit inside the
@@ -726,6 +736,7 @@ export function DevelopmentSectionBody({
         title={t('development.emptyTitle')}
         description={t.rich('development.emptyDescription', { key: itemIdentifier, mono })}
       />
+      {continuePart}
       {howToTestPart}
     </>
   ) : (

@@ -10362,6 +10362,13 @@ model DispatchRun {
   startedAt DateTime  @default(now()) @map("started_at")
   endedAt   DateTime? @map("ended_at")
 
+  /// When the run last said it was alive (MOTIR-6528, `run-death-keeps-work.md`
+  /// §2). A LOCAL run heartbeats every 60 s while it is open; null for a run
+  /// opened by a CLI that never heartbeats and for every HOSTED run, whose
+  /// liveness is its supervision. Read through `isRunAlive`
+  /// (`lib/runs/runLiveness.ts`) and nowhere else.
+  lastHeartbeatAt DateTime? @map("last_heartbeat_at")
+
   /// The operator who started it. `SET NULL`: deleting a person must not destroy
   /// the record of what their runs did.
   createdById String? @map("created_by_id")
@@ -10393,6 +10400,10 @@ model DispatchRun {
   /// `running`. Status-first, because `running` is a tiny minority of the table
   /// — the same shape `job_run`'s reap index has.
   @@index([status, startedAt])
+  /// The lapse reap's discovery read (MOTIR-6528): running LOCAL runs whose last
+  /// heartbeat is older than the lapse window. Status-first for the same reason
+  /// as the index above.
+  @@index([status, lastHeartbeatAt])
   @@map("dispatch_run")
 }
 
@@ -10516,6 +10527,10 @@ enum DispatchCommand {
   /// requests. Opened by the server's repair claim, not by the CLI's own open: the
   /// open `fix` run IS the one-repair-at-a-time lock, and it writes no status.
   fix
+  /// `motir continue <key>` (MOTIR-6532) — a TAKEOVER of a work item whose last run
+  /// DIED. Opened by the server's continue claim, like `fix`: the open `continue`
+  /// run IS the one-continue-at-a-time lock, and it writes no status.
+  continue
 
   @@map("dispatch_command")
 }

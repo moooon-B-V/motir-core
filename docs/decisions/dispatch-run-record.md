@@ -436,3 +436,32 @@ Q3's boundaries hold: the event is a POINTER plus the one label a not-yet-loaded
 row needs. The finding's copy stays the live row's, for the same reason the card's
 status stays the CLI's — a record that froze a title would keep showing it after
 triage rewrote it, while its immutability claimed it was current.
+
+---
+
+## AMENDMENT 2 — run liveness (MOTIR-6525, 2026-09-27)
+
+[`run-death-keeps-work.md`](run-death-keeps-work.md) **§2** is the decision; this records
+what it adds here. **Nothing above is contradicted** — the record gains a way to tell a
+run that is working from one that has died, and every boundary in Q3 stands.
+
+- **A LOCAL run heartbeats every 60 seconds** while it is open, onto its own
+  `DispatchRun` (`lastHeartbeatAt`).
+- **The lapse window is 5 minutes** — five missed heartbeats. A local run silent that
+  long is DEAD: one late report is never read as a death, and a run that is really gone
+  is known within minutes rather than the 12 hours the age reap took.
+- **A lapsed local run is closed `abandoned`** (run status `timed_out`, as the age reap
+  already writes), **and closing it writes no card status.** Q3 §2 — _"The work item's
+  STATUS belongs to the CLI"_ — holds unchanged: the card keeps the status the work left
+  it at, and the _run died_ marker is what makes that state legible.
+- **A HOSTED run sends no heartbeat. Its liveness is its SUPERVISION** — the server-side
+  chain that polls the container, the 15-minute stall, and a lost chain, all of which
+  end it through the hosted end path (`hosted-agent-run.md` §5, as amended).
+- **A run opened by a CLI too old to heartbeat** keeps the existing 12-hour age reap and
+  is never marked dead before then.
+
+Liveness is a timestamp and a rule, read when it is needed. Nothing is written when a run
+"becomes" dead, and no status, event kind or workflow state is added.
+
+See [`run-death-keeps-work.md`](run-death-keeps-work.md) for the decision and what it
+rejected.

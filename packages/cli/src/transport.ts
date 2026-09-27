@@ -20,6 +20,7 @@ import {
   AuthError,
   CliError,
   ContainerHasOpenChildrenError,
+  DispatchRunClosedError,
   PlanNotDecidableError,
   IncompatibleServerError,
   NotFoundError,
@@ -468,6 +469,12 @@ export class V1Transport {
       // — and the code is data, which is exactly what §8 asks a client to read.
       if (envelope.code === 'CONTAINER_HAS_OPEN_CHILDREN') {
         return new ContainerHasOpenChildrenError(envelope.error);
+      }
+      // ⚠️ THE FOURTH, and the same rule: a run closed under a reporter that is
+      // still beating (MOTIR-6530). The reporter stops on this code and on no
+      // other, so it is typed rather than read out of the sentence.
+      if (envelope.code === 'DISPATCH_RUN_TERMINAL') {
+        return new DispatchRunClosedError(envelope.error);
       }
       const allowed = readAllowedTransitions(parsed);
       return new CliError(allowed ? `${envelope.error} Allowed: ${allowed}.` : envelope.error);

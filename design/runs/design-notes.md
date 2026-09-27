@@ -980,3 +980,161 @@ the meta row.
 
 Also out of scope: **the design-approval gate** (MOTIR-693 / 9.2) and **cross-project run rollups**
 (Epic 10 / MOTIR-732), both of which have their own homes.
+
+---
+
+## Run died — the work item says its run died, and hands over `motir continue` (MOTIR-6529, 2026-09-27)
+
+**AMENDS** this area's `run-section.mock.html` (_Every state_, panel 6 — the `timed_out` CloudOff
+_reporting offline_ note) and `design/github/design-notes.md` **§ 21** (the Development block's fix
+part, whose grammar this reuses) — in the delta
+**[`run-section--run-died.mock.html`](./run-section--run-died.mock.html)**, Panels **D1–D8** and
+**R1**, each at desktop, dark and ~400px where its layout differs. Card MOTIR-6529. **No existing mock
+is edited** and no image export ships (`docs/decisions/design-result.md` AMENDMENT 4). The code that
+renders every panel is **MOTIR-6534**; the view it reads is **MOTIR-6532**'s `getContinueView`; the
+rule it applies is **MOTIR-6528**'s `isRunAlive` (`lib/runs/runLiveness.ts`). The direction is
+`docs/decisions/run-death-keeps-work.md`.
+
+**Why it is owed.** A run that dies — the laptop sleeps for good, the terminal is closed — leaves its
+work item In Progress with nothing on the page saying so; at best a `timed_out` run shows _"This run
+stopped reporting"_, which suggests waiting. A person opening the item needs three answers at once:
+**is the work lost, who was doing it, and what do I do now.**
+
+**Access path.** The item page, and nothing else. The **run section** says the run died (Panel R1);
+the **Development card** carries the new **continue part** (Panels D1–D8) — a sibling of § 21's fix
+part, in the same place: below the rows' caption (or, with no pull request, below the EmptyState)
+and above How to test. No new entry point and no new navigation.
+
+### Rendered against shipped reality, not redrawn
+
+The Development card, its rows, caption, EmptyState, the part grammar, the command block and How to
+test are § 21's sheet — itself `DevelopmentSectionBody` rendered at `origin/main` `3205ae235` — and
+the delta's stylesheet and sprite sheet are `github--fix-callout.mock.html`'s, verbatim
+(`audit-mock-sprites --strict`: 44 symbols, 0 drifted, 0 undeclared; no new sprite). The run
+section's pills, step list and history row are `RunSection.tsx` at `origin/main` `874665544`, read
+line by line; its died line takes the CloudOff note's markup and place.
+
+### The panels
+
+| panel | state                                                                                                                                                        | shown when (the continue view, MOTIR-6532)                                                                           |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| D1    | **Died** — the reason line, who ran it and with which command, the branch, _the work item is still In Progress_, `motir continue <KEY>`, the start-over hint | `died`: the last run is not alive by `isRunAlive`, it did not succeed, it left a pushed branch, and nobody holds it  |
+| D2    | **Died, with a draft pull request** — the branch line names the session branch AND the draft, as the row's meta line names it                                | `died`, and a draft pull request is linked (a parent run's)                                                          |
+| D3    | **The reason line**, one per ending — lapsed · interrupted · failed · cancelled · stalled (hosted) · the 12-hour backstop (hosted)                           | the dead run's `stopReason` / `status`; a hosted `timed_out` is split by its closing `log` line                      |
+| D4    | **Died, nothing pushed** — no command; the start-over hint is the only move                                                                                  | `died` with no pushed branch (the claim would refuse `nothing_pushed`)                                               |
+| D5    | **Continuing** — who, since when, whose run they took over, the branch and a link to the run; **no command**                                                 | an open `continue` run holds the item (`taken`; `mine` for the viewer → _Being continued by **you**_, Panel D5b)     |
+| D6    | **Implemented with a died run** — the pull request is open, CI decides, `motir fix` if it goes red; **no continue**                                          | the item is `implemented` (the claim refuses `implemented`)                                                          |
+| D7    | **A child of a parent run** — points at the parent and carries the PARENT's command, `motir continue <PARENT>`                                               | the dead run was a scoped parent run (`continue_on_run_target`, naming the run-target key)                           |
+| D8    | **Loading** (two skeleton bars, labelled) · **Error** (what failed + _Try again_)                                                                            | the view's read is pending / failed                                                                                  |
+| R1    | **The run section** — the died line replaces _reporting offline_; the RUN pill reads **Run died** even while the row still says `running`                    | the section's current run is not alive by `isRunAlive` and did not succeed — **before any sweep has closed its row** |
+
+**Not shown — a note, not a panel.** The part renders nothing, and the page is exactly what ships,
+when the last run is **alive** (a local run that heartbeat under 5 minutes ago, an open hosted run, a
+legacy run inside its 12 hours), when it **succeeded**, or when the item has **never been run**: the
+view's `alive` and `none`. The part and the claim read ONE view; the part never offers a command the
+claim would refuse.
+
+### Decisions
+
+| decision                    | chosen                                                                                                | why                                                                                                                                                                 |
+| --------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| where the command lives     | the **Development card**, as a flush part beside § 21's fix part — not in the run section             | a red build handed to an agent and a dead run handed to an agent are the same kind of act, and the branch and draft it continues are what Development already shows |
+| what the run section does   | **one line**, in the CloudOff note's place, pointing DOWN to the part; the RUN pill says **Run died** | the run section is about the run; repeating the command there would put two copies of one control on one page                                                       |
+| the tone                    | the run area's **timed-out** tone for every ending: peach ground, `--el-warning` glyph                | _unknown is not failed_ (the tone vocabulary above). Every death is the same fact to the reader — the work stopped and is kept; the reason line says how            |
+| saying the work is safe     | an explicit sentence: _Nothing was lost and nothing moved: this work item is still **In Progress**._  | the one thing this marker must not imply is that the item moved; saying the status in words is cheaper than a reader inferring it from a pill                       |
+| continuing shows no command | none, not a disabled one                                                                              | § 21's in-progress rule: a second person must not start a second continue, and the claim would refuse it (`taken`)                                                  |
+| nothing pushed              | the start-over hint alone                                                                             | there is no branch to continue on; a command the claim refuses is a trap                                                                                            |
+| Implemented                 | a sentence naming the open pull request and `motir fix`; no command of its own                        | CI decides from there (`run-death-keeps-work.md`, _What this does NOT decide_); § 21's fix part renders ABOVE this one when checks go red                           |
+| the child of a parent run   | the parent's command, `motir continue <PARENT>`, under § 21's F4 pointer grammar                      | a parent run resumes as a whole on its session branch and draft; the child's own command would be refused                                                           |
+| the time                    | relative (`relativeLabel`, § 21's function) on a `<time datetime>`, `formatRunInstant` in `title`     | the same clock and format as the fix part                                                                                                                           |
+| the start-over hint         | one quiet line: _Start over instead: set this work item to **To Do** and run it again._               | starting over is a deliberate person's act (`run-death-keeps-work.md` §3); the page names it and does not do it                                                     |
+
+### Fields read
+
+| rendered element           | field(s) read                                                                                                                | panel  |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------ |
+| whether the part renders   | the continue view's `state` (`alive · died · continuing · none`), derived server-side through `isRunAlive`                   | all    |
+| the reason line            | the dead run's `status`, `stopReason`, `origin`, and for a hosted `timed_out` its closing `log` event                        | D1–D3  |
+| last heard from            | `lastHeardFrom(run)` — its last heartbeat, else its start (`lib/runs/runLiveness.ts`); the run's `endedAt` once it is closed | D1–D7  |
+| who ran it and the command | the dead run's `createdBy` display name and `command`                                                                        | D1, D5 |
+| the branch                 | the dead run's leg `sessionBranch`, else its `checkout_ready` event's `data.branch` (MOTIR-6530); whether it was pushed      | D1–D4  |
+| the draft pull request     | the item's linked open pull request, as the row's meta line names it (`repo · #n`)                                           | D2     |
+| the holder and start       | the open `continue` run's `createdBy` and `startedAt`; _you_ when it is the viewer                                           | D5     |
+| the run-target key         | the dead run's scope work item's key                                                                                         | D7     |
+
+### Tone and tokens
+
+`--el-*` colour and element-semantic shape tokens only; each `rd-` rule in the delta quotes the class
+string MOTIR-6534 builds it from, and every other rule is § 21's. The part: `border-(--el-border-soft)`
+rule, `h4` in `--el-text`. The reason line: `--el-text`, its `triangle-alert` glyph `--el-icon-muted`.
+The holder / branch / pointer lines: `--el-text-secondary`, names in `--el-text`, the branch in the
+mono face. The notes and the start-over hint: `--el-text-secondary`. Pills ride the shipped `Pill`
+axes, no new variant: _Run died_ `tone="peach"` (the timed-out tone) + `triangle-alert`; _Continuing_
+`status="in-progress"` (sky) + `circle-ellipsis`. The run section's died line glyph is
+`--el-warning`, the timed-out dot's token.
+
+### Copy — `en` + `zh`
+
+One namespace, **`github.development.continue`**, beside `github.development.fix`; the run section's
+line is **`runs.runDied`**. The code block's _Copy_ strings are `github.development.howToTest.code.*`,
+shipped and not re-keyed.
+
+| key                   | en                                                                                                                                        | zh                                                                                            |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `title` / `aria.part` | Continue the work                                                                                                                         | 继续这项工作                                                                                  |
+| `died.pill`           | Run died                                                                                                                                  | 运行已中断                                                                                    |
+| `reason.lapsed`       | The run stopped reporting — last heard from {time}.                                                                                       | 运行已停止上报——最后一次联系在{time}。                                                        |
+| `reason.interrupted`  | The run was stopped from its terminal {time}.                                                                                             | 运行已在其终端中被停止（{time}）。                                                            |
+| `reason.failed`       | The agent exited with an error {time}.                                                                                                    | 智能体出错退出（{time}）。                                                                    |
+| `reason.cancelled`    | The run was cancelled {time}.                                                                                                             | 运行已被取消（{time}）。                                                                      |
+| `reason.stalled`      | The hosted agent stalled — no output for 15 minutes — {time}.                                                                             | 托管智能体停滞——15 分钟无输出（{time}）。                                                     |
+| `reason.backstop`     | The hosted run reached its 12-hour limit {time}.                                                                                          | 托管运行已达 12 小时上限（{time}）。                                                          |
+| `ranBy`               | Run by {name} with {command} · started {time}                                                                                             | 由 {name} 通过 {command} 运行 · {time}开始                                                    |
+| `branch`              | Its work is on {branch}                                                                                                                   | 其工作位于 {branch}                                                                           |
+| `branchWithDraft`     | Its work is on {branch} and in the draft pull request {pr}                                                                                | 其工作位于 {branch} 以及草稿拉取请求 {pr} 中                                                  |
+| `safe`                | Nothing was lost and nothing moved: this work item is still {status}.                                                                     | 没有丢失任何内容，也没有任何变动：此工作项仍为{status}。                                      |
+| `lead`                | Carry it on from your terminal:                                                                                                           | 在终端中继续：                                                                                |
+| `how`                 | An agent checks out that branch, reads what is already committed, merges the latest main, and finishes the work item in one pull request. | 智能体会检出该分支，阅读已提交的内容，合并最新的 main，并在一个拉取请求中完成此工作项。       |
+| `startOver`           | Start over instead: set {target} to To Do and run it again.                                                                               | 或者重新开始：将 {target} 设为待办并重新运行。                                                |
+| `nothingPushed`       | Its branch was never pushed, so there is nothing to continue.                                                                             | 其分支从未推送，因此没有可继续的内容。                                                        |
+| `continuing.pill`     | Continuing                                                                                                                                | 继续中                                                                                        |
+| `continuing.by`       | Being continued by {name} · started {time}                                                                                                | {name} 正在继续 · {time}开始                                                                  |
+| `continuing.byYou`    | Being continued by you · started {time}                                                                                                   | 你正在继续 · {time}开始                                                                       |
+| `continuing.tookOver` | It took over from {name}, whose run stopped reporting {time}                                                                              | 接手自 {name}，其运行在{time}停止上报                                                         |
+| `continuing.on`       | On {branch} · See the run                                                                                                                 | 位于 {branch} · 查看运行                                                                      |
+| `continuing.why`      | Only one continue runs at a time. When it finishes, this work item moves on exactly as after motir run.                                   | 同一时间只运行一个继续。完成后，此工作项会像 motir run 之后一样继续推进。                     |
+| `implemented.line`    | The run stopped reporting {time}, after it opened its pull request.                                                                       | 运行在打开拉取请求之后停止上报（{time}）。                                                    |
+| `implemented.pr`      | The pull request {pr} is open, so there is nothing to continue: its checks decide from here.                                              | 拉取请求 {pr} 已打开，因此没有可继续的内容：接下来由其检查决定。                              |
+| `implemented.fix`     | If they fail, motir fix {key} hands the repair to an agent — the Fix the checks part appears above when they do.                          | 如果检查失败，motir fix {key} 会将修复交给智能体——届时上方会出现“修复检查”。                  |
+| `child.line`          | The run that owned this work item stopped reporting {time}.                                                                               | 负责此工作项的运行在{time}停止上报。                                                          |
+| `child.pointer`       | It was run as part of {key}, so it is continued from there — the whole run resumes on its branch and skips what already landed:           | 它是作为 {key} 的一部分运行的，因此从那里继续——整个运行会在其分支上恢复，并跳过已完成的部分： |
+| `loading`             | Checking whether this work item's run is still alive                                                                                      | 正在检查此工作项的运行是否仍在进行                                                            |
+| `error`               | Couldn't check whether this work item's run is still alive.                                                                               | 无法检查此工作项的运行是否仍在进行。                                                          |
+| `retry`               | Try again                                                                                                                                 | 重试                                                                                          |
+| `runs.runDied`        | This run died — last heard from {time}. Its work is kept on its branch; continue it from Development below.                               | 此运行已中断——最后一次联系在{time}。其工作保留在分支上；请在下方“开发”中继续。                |
+
+`{time}` is `relativeLabel` (_12 min ago_ / _12分钟前_); `{branch}` is set in the mono face; `{pr}` is
+the row's `repo · #n`; `{status}` is the workflow status's own label.
+
+### Scope
+
+**Drawn:** the continue part in every state above at desktop, dark and ~400px where its layout
+differs; the run section's died line; the not-shown rule. **Not drawn, and whose it is:** the
+component and the run-section change — MOTIR-6534; the view and the claim, with every refusal's
+name — MOTIR-6532; the liveness rule — MOTIR-6528; `motir continue`'s terminal output — MOTIR-6533
+(and MOTIR-6535 for a parent), which needs no design; a browser _Continue hosted_ button — the
+browser-continue story MOTIR-6527, with its own design; the acceptance video — MOTIR-6536.
+
+### GIVES / TAKES
+
+| key        | GIVES / TAKES                                                                                                                                                                                                                                                                                                    |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-6534 | **GIVES** every panel (D1–D8, R1), the not-shown rule, the copy and the tokens above — it builds the part and the run-section line. **TAKES** nothing it does not already own                                                                                                                                    |
+| MOTIR-6532 | **GIVES** each outcome a drawing (`died` D1–D4 · `continuing` / `taken` / `mine` D5 · `implemented` D6 · `continue_on_run_target` D7 · `nothing_pushed` D4). **TAKES** the view's fields above: the dead run's reason, holder, branch and whether it was pushed, the draft, and the open `continue` run's holder |
+| MOTIR-6530 | **TAKES** that each leg's branch is recorded (`checkout_ready` `data.branch`, and the leg's `sessionBranch`) so D1's branch line has something to read                                                                                                                                                           |
+| MOTIR-6528 | **GIVES** nothing drawn. **TAKES** that `isRunAlive` and `lastHeardFrom` are the ONLY reading of liveness — R1's pill and the part's state both come from it                                                                                                                                                     |
+| MOTIR-6536 | **GIVES** the script: R1 + D1 after a kill → D5 after `motir continue` → D6 / refusals in words. **TAKES** nothing                                                                                                                                                                                               |
+| MOTIR-6529 | this card                                                                                                                                                                                                                                                                                                        |
+
+Fixture items use `ACME-n` keys: **ACME-14** a leaf, **ACME-12** the story whose parent run it
+belonged to.

@@ -60,6 +60,7 @@ import {
 import { inLane, renderElsewhereAnchored, renderLaneDecline, type Lane } from '../replanLane.js';
 import {
   ensureSessionBranchOnOrigin,
+  mergeBaseIntoRemoteBranch,
   execCommand,
   workReachedRemote,
   GitError,
@@ -76,6 +77,7 @@ import {
 import { deriveAgentHarness } from '../agentProfiles.js';
 import { runCiWatchPhase } from '../ciWatch.js';
 import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
+import { bindInterruptSignals, closeRunAndExit, type InterruptSignal } from '../interrupt.js';
 
 // `motir auto` — THE SEQUENTIAL WHILE LOOP (Story 7.9 · Subtask 7.9.4 ·
 // MOTIR-882). Drain the ready set unattended: one item per iteration, strictly
@@ -205,6 +207,12 @@ export class RepoSessions {
   constructor(
     private readonly branch: string,
     private readonly run: CommandRunner,
+    /**
+     * A RESUMED scope (MOTIR-6535, `motir continue <parent>`): a session branch
+     * already on origin is the dead run's, and `origin/main` is merged into it
+     * before the first child builds on it. A fresh run never sets this.
+     */
+    private readonly opts: { mergeBaseOnReuse?: boolean } = {},
   ) {}
 
   /**
@@ -275,6 +283,16 @@ export class RepoSessions {
           ? `Session branch ${this.branch} created on origin in ${target.cwd}.`
           : `Session branch ${this.branch} already on origin in ${target.cwd} — reusing it.`,
       );
+      if (outcome === 'already_on_origin' && this.opts.mergeBaseOnReuse) {
+        const merged = mergeBaseIntoRemoteBranch(target.cwd, this.branch, this.run);
+        info(
+          merged === 'merged'
+            ? `Merged origin/main into ${this.branch} in ${target.cwd}.`
+            : merged === 'up_to_date'
+              ? `${this.branch} already contains origin/main in ${target.cwd}.`
+              : `origin/main does not merge cleanly into ${this.branch} in ${target.cwd} — left as it was; each child merges it itself.`,
+        );
+      }
       return { repoName: target.targetRepo, cwd: target.cwd, branch: this.branch, keys: [] };
     } catch (err) {
       if (!opts.tolerateFailure) throw err;
@@ -510,14 +528,20 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
   const repos = new RepoSessions(branch, run);
 
   let interrupted = false;
-  const onSigint = (): void => {
-    if (interrupted) process.exit(130);
+  // A SIGTERM, or a SECOND Ctrl-C, ends the process NOW — after closing the run
+  // `interrupted` with what is queued flushed, so the record says it was stopped
+  // rather than reading `running` until its heartbeat lapses (MOTIR-6530).
+  const onSignal = (signal: InterruptSignal): void => {
+    if (interrupted || signal === 'SIGTERM') {
+      void closeRunAndExit(reporter, signal);
+      return;
+    }
     interrupted = true;
     info('');
     info('Interrupt received — finishing up and opening the session pull request(s).');
     info('Press Ctrl-C again to exit immediately.');
   };
-  process.on('SIGINT', onSigint);
+  const detachInterrupt = bindInterruptSignals(onSignal);
 
   let stopReason: StopReason = 'drained';
   try {
@@ -856,7 +880,7 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       }
     }
   } finally {
-    process.off('SIGINT', onSigint);
+    detachInterrupt();
   }
 
   // Whatever the loop queued reaches the server before the command closes the

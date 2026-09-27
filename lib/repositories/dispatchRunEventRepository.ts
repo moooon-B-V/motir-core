@@ -139,6 +139,40 @@ export const dispatchRunEventRepository = {
     });
   },
 
+  /**
+   * The branch the run's newest `checkout_ready` recorded (MOTIR-6530 writes it as
+   * `data.branch`), for one leg — or for ANY leg of the run when `cardId` is null
+   * (a scoped run's session branch is every leg's). Null when none named one.
+   */
+  async findLatestCheckoutBranch(
+    dispatchRunId: string,
+    cardId: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const rows = await tx.dispatchRunEvent.findMany({
+      where: {
+        dispatchRunId,
+        kind: 'checkout_ready',
+        ...(cardId === null ? {} : { dispatchRunCardId: cardId }),
+      },
+      orderBy: { seq: 'desc' },
+      select: { data: true },
+      take: 20,
+    });
+    for (const row of rows) {
+      const data = row.data as { branch?: unknown; branches?: unknown } | null;
+      if (typeof data?.branch === 'string' && data.branch.length > 0) return data.branch;
+      // The per-repository shape MOTIR-6539 writes (`branches: [{ repository,
+      // branch, workBranch }]`, primary first) — read too, so the two writers of
+      // this event agree on where a leg's work is, whichever of them shipped it.
+      if (Array.isArray(data?.branches)) {
+        const first = data.branches[0] as { branch?: unknown } | undefined;
+        if (typeof first?.branch === 'string' && first.branch.length > 0) return first.branch;
+      }
+    }
+    return null;
+  },
+
   async countByRun(dispatchRunId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.dispatchRunEvent.count({ where: { dispatchRunId } });
   },

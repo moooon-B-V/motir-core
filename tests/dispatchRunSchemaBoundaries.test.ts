@@ -174,6 +174,9 @@ describe('the closed enums are the ADR vocabulary, exactly', () => {
       'batch',
       'auto',
       'fix',
+      // `continue` — MOTIR-6532: a takeover of a card whose run died, opened by the
+      // server's continue claim for `motir continue <key>`.
+      'continue',
     ]);
   });
 

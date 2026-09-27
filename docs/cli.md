@@ -407,6 +407,18 @@ origin, so a card at Implemented is one whose branch you can go and look at. If
 an agent exits 0 having pushed nothing, the card stays **In Progress** and the run
 says so — which is what an interrupted run really is.
 
+**A run that dies keeps its work** (`docs/decisions/run-death-keeps-work.md`). Every
+local run tells Motir it is alive once a minute; five minutes of silence and the card's
+page says its run **died**, with the branch its work is on. The card keeps its status.
+Anyone who may edit the project carries it on with **`motir continue <key>`**, which
+checks that branch out — reusing the worktree when it is on this machine — and finishes
+the card in one pull request. On a **parent** whose `motir run <parent>` died,
+`motir continue <parent>` resumes the whole scope on the dead run's session branch —
+merging `origin/main` into it first, reusing its draft pull request, running again the
+children the dead run was still working, and never re-running a child that already landed. Starting over instead is a deliberate act: set the card
+to **To Do** and `motir run` it. Pressing Ctrl-C closes the run as _interrupted_, and
+the card stays where it was.
+
 **The third hop happens after your terminal has exited.** The promotion runs
 server-side, when Motir receives the check results for the pushed commit — often
 a minute or two after `motir next` has returned and your shell prompt is back.
@@ -864,6 +876,8 @@ reporting what the plan says. In `--json`, a cycle member's `wave` is `null`.
 | `motir run <scope>`    | `--print`¹ · `--print-prompt` · `--agent <cmd>` · `--force`¹ · `--allow-soft-block`² · `--max <n>` · `--keep-going` · `--include-planning` · `--disable-log-bug` · `--disable-replan`        |
 | `motir auto`           | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--include-planning` · `--print-prompt` · `--disable-log-bug` · `--disable-replan` · `--auto-approve-replan` |
 | `motir batch`          | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--print-prompt` · `--disable-log-bug` · `--disable-replan`                                                  |
+| `motir fix <key>`      | `--agent <cmd>` · `--report-log`                                                                                                                                                             |
+| `motir continue <key>` | `--agent <cmd>` · `--report-log`                                                                                                                                                             |
 | `motir plan [args...]` | `--detach`                                                                                                                                                                                   |
 | `motir done [key]`     | `--session <branch>` · `--via <status>`                                                                                                                                                      |
 
