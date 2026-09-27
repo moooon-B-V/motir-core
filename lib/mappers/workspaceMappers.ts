@@ -9,6 +9,7 @@ import type {
   RoleMigrationEntryDTO,
   WorkspaceDTO,
   WorkspaceMemberDTO,
+  WorkspaceMemberWithAccessDTO,
   WorkspaceSummaryDTO,
 } from '@/lib/dto/workspaces';
 
@@ -55,6 +56,18 @@ export function toWorkspaceMemberDTO(row: MembershipWithUser): WorkspaceMemberDT
     customRole: row.roleDefinition
       ? { id: row.roleDefinition.id, name: row.roleDefinition.name }
       : null,
+  };
+}
+
+/** A Members-page row: the member plus scope and added-project count (MOTIR-6545). */
+export function toWorkspaceMemberWithAccessDTO(
+  row: MembershipWithUser,
+  addedProjectCount: number,
+): WorkspaceMemberWithAccessDTO {
+  return {
+    ...toWorkspaceMemberDTO(row),
+    accessScope: row.accessScope,
+    addedProjectCount,
   };
 }
 

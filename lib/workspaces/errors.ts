@@ -204,6 +204,44 @@ export class InvalidWorkspaceRoleError extends Error {
  * every workspace of the org and their role here is not the workspace's to change
  * (MOTIR-6456 panel 6a; `role-model.md` AMENDMENT 1). → 409.
  */
+/**
+ * A member who is not a workspace Manager asked to change someone's access scope
+ * (Story MOTIR-6169 · MOTIR-6545). → 403.
+ */
+export class AccessScopeForbiddenError extends Error {
+  readonly code = 'ACCESS_SCOPE_FORBIDDEN' as const;
+  constructor(userId: string, workspaceId: string) {
+    super(
+      `User ${userId} is not a Manager of workspace ${workspaceId}, so cannot change who may enter its projects.`,
+    );
+    this.name = 'AccessScopeForbiddenError';
+  }
+}
+
+/** An access scope that is not `full` or `limited`. → 400. */
+export class InvalidAccessScopeError extends Error {
+  readonly code = 'INVALID_ACCESS_SCOPE' as const;
+  constructor(scope: string) {
+    super(`"${scope}" is not a valid access scope (use full or limited).`);
+    this.name = 'InvalidAccessScopeError';
+  }
+}
+
+/**
+ * `limited` on a member whose effective role is Manager — including the org
+ * Owner or an org Admin (Story MOTIR-6169 · MOTIR-6545). A Manager enters every
+ * project, so a stored Limited would be a lie on their row. → 409.
+ */
+export class ScopeNotApplicableError extends Error {
+  readonly code = 'SCOPE_NOT_APPLICABLE' as const;
+  constructor(userId: string, workspaceId: string) {
+    super(
+      `User ${userId} is a Manager of workspace ${workspaceId} and enters every project, so an access scope does not apply.`,
+    );
+    this.name = 'ScopeNotApplicableError';
+  }
+}
+
 export class OrgManagedWorkspaceRoleError extends Error {
   readonly code = 'ORG_MANAGED_WORKSPACE_ROLE' as const;
   constructor(userId: string, workspaceId: string) {

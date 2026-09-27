@@ -1,0 +1,212 @@
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { db } from '@/lib/db';
+import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
+
+// A Manager sets a member's ACCESS SCOPE (Story MOTIR-6169 · MOTIR-6545) — the
+// service and its REAL route against real Postgres: the Manager-only gate, the
+// refusal on a Manager / org-Admin target, the idempotent no-op, the scope taking
+// effect in every project at once, and the Members list's two new fields. Only
+// `getWorkspaceContext` is mocked (the test has no cookies).
+
+const ctxRef = { current: null as WorkspaceContext | null };
+vi.mock('@/lib/workspaces', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/workspaces')>();
+  return { ...actual, getWorkspaceContext: async () => ctxRef.current };
+});
+
+const { PATCH } =
+  await import('@/app/api/workspaces/[workspaceId]/members/[userId]/access-scope/route');
+const { usersService } = await import('@/lib/services/usersService');
+const { workspacesService } = await import('@/lib/services/workspacesService');
+const { projectsService } = await import('@/lib/services/projectsService');
+const { projectMembersService } = await import('@/lib/services/projectMembersService');
+const { truncateAuthTables } = await import('../helpers/db');
+const { AccessScopeForbiddenError, ScopeNotApplicableError, InvalidAccessScopeError } =
+  await import('@/lib/workspaces/errors');
+
+beforeEach(async () => {
+  ctxRef.current = null;
+  await truncateAuthTables();
+});
+
+afterAll(async () => {
+  await db.$disconnect();
+  await adminDb.$disconnect();
+});
+
+let seq = 0;
+const user = (label: string) =>
+  usersService.createUser({
+    email: `mas-${label}-${seq++}@ex.com`,
+    password: 'hunter2hunter2',
+    name: label,
+  });
+
+async function build() {
+  const manager = await user('manager');
+  const { workspace } = await workspacesService.createWorkspace({
+    name: `MAS ${seq++}`,
+    ownerUserId: manager.id,
+  });
+  const member = await user('member');
+  await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
+  const other = await user('other');
+  await workspacesService.addMember({ userId: other.id, workspaceId: workspace.id });
+  // An org Admin who is NOT a member of the workspace — a Manager by their org role.
+  const orgAdmin = await user('orgadmin');
+  await adminDb.organizationMembership.create({
+    data: { organizationId: workspace.organizationId, userId: orgAdmin.id, role: 'admin' },
+  });
+  const A = await projectsService.createProject({
+    workspaceId: workspace.id,
+    actorUserId: manager.id,
+    name: 'Alpha',
+  });
+  const B = await projectsService.createProject({
+    workspaceId: workspace.id,
+    actorUserId: manager.id,
+    name: 'Beta',
+  });
+  await projectMembersService.addMember({
+    key: A.identifier,
+    actorUserId: manager.id,
+    ctx: { userId: manager.id, workspaceId: workspace.id },
+    targetUserId: member.id,
+  });
+  return { workspaceId: workspace.id, manager, member, other, orgAdmin, A, B };
+}
+
+const scopeOf = async (userId: string, workspaceId: string) =>
+  (
+    await adminDb.workspaceMembership.findUniqueOrThrow({
+      where: { userId_workspaceId: { userId, workspaceId } },
+    })
+  ).accessScope;
+
+describe('workspacesService.setMemberAccessScope', () => {
+  it('a Manager sets Limited, and the target lists only the projects they were added to on the next call', async () => {
+    const f = await build();
+    expect((await projectsService.listProjects(f.workspaceId, f.member.id)).length).toBe(2);
+    const res = await workspacesService.setMemberAccessScope({
+      actorUserId: f.manager.id,
+      workspaceId: f.workspaceId,
+      targetUserId: f.member.id,
+      scope: 'limited',
+    });
+    expect(res).toEqual({ userId: f.member.id, accessScope: 'limited' });
+    expect(await scopeOf(f.member.id, f.workspaceId)).toBe('limited');
+    const listed = await projectsService.listProjects(f.workspaceId, f.member.id);
+    expect(listed.map((p) => p.identifier)).toEqual([f.A.identifier]);
+  });
+
+  it('a workspace Member is refused with the typed forbidden error and nothing changes', async () => {
+    const f = await build();
+    await expect(
+      workspacesService.setMemberAccessScope({
+        actorUserId: f.member.id,
+        workspaceId: f.workspaceId,
+        targetUserId: f.other.id,
+        scope: 'limited',
+      }),
+    ).rejects.toBeInstanceOf(AccessScopeForbiddenError);
+    expect(await scopeOf(f.other.id, f.workspaceId)).toBe('full');
+  });
+
+  it('Limited on a Manager target, and on an org Admin who is not a member, is refused and changes nothing', async () => {
+    const f = await build();
+    for (const target of [f.manager.id, f.orgAdmin.id]) {
+      await expect(
+        workspacesService.setMemberAccessScope({
+          actorUserId: f.manager.id,
+          workspaceId: f.workspaceId,
+          targetUserId: target,
+          scope: 'limited',
+        }),
+      ).rejects.toBeInstanceOf(ScopeNotApplicableError);
+    }
+    expect(await scopeOf(f.manager.id, f.workspaceId)).toBe('full');
+    // …and Full on a Manager is the truth already — an idempotent no-op.
+    await expect(
+      workspacesService.setMemberAccessScope({
+        actorUserId: f.manager.id,
+        workspaceId: f.workspaceId,
+        targetUserId: f.orgAdmin.id,
+        scope: 'full',
+      }),
+    ).resolves.toEqual({ userId: f.orgAdmin.id, accessScope: 'full' });
+  });
+
+  it('full → full writes nothing', async () => {
+    const f = await build();
+    const before = await adminDb.workspaceMembership.findUniqueOrThrow({
+      where: { userId_workspaceId: { userId: f.member.id, workspaceId: f.workspaceId } },
+    });
+    await workspacesService.setMemberAccessScope({
+      actorUserId: f.manager.id,
+      workspaceId: f.workspaceId,
+      targetUserId: f.member.id,
+      scope: 'full',
+    });
+    const after = await adminDb.workspaceMembership.findUniqueOrThrow({
+      where: { userId_workspaceId: { userId: f.member.id, workspaceId: f.workspaceId } },
+    });
+    expect(after.updatedAt.getTime()).toBe(before.updatedAt.getTime());
+  });
+
+  it('rejects an unknown scope before any read', async () => {
+    const f = await build();
+    await expect(
+      workspacesService.setMemberAccessScope({
+        actorUserId: f.manager.id,
+        workspaceId: f.workspaceId,
+        targetUserId: f.member.id,
+        scope: 'partial',
+      }),
+    ).rejects.toBeInstanceOf(InvalidAccessScopeError);
+  });
+});
+
+describe('workspacesService.listMembers — accessScope and addedProjectCount', () => {
+  it('carries both fields for every row', async () => {
+    const f = await build();
+    await workspacesService.setMemberAccessScope({
+      actorUserId: f.manager.id,
+      workspaceId: f.workspaceId,
+      targetUserId: f.member.id,
+      scope: 'limited',
+    });
+    const rows = await workspacesService.listMembers(f.workspaceId, f.manager.id);
+    const byId = new Map(rows.map((r) => [r.userId, r]));
+    expect(byId.get(f.member.id)).toMatchObject({ accessScope: 'limited', addedProjectCount: 1 });
+    expect(byId.get(f.other.id)).toMatchObject({ accessScope: 'full', addedProjectCount: 0 });
+    for (const row of rows) {
+      expect(['full', 'limited']).toContain(row.accessScope);
+      expect(typeof row.addedProjectCount).toBe('number');
+    }
+  });
+});
+
+describe('PATCH /api/workspaces/:workspaceId/members/:userId/access-scope', () => {
+  const call = (workspaceId: string, userId: string, body: unknown) =>
+    PATCH(
+      new Request(`http://localhost/api/workspaces/${workspaceId}/members/${userId}/access-scope`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+      { params: Promise.resolve({ workspaceId, userId }) },
+    );
+
+  it('200 with the member scope, 403 for a non-Manager, 400 for an unknown scope, 409 on a Manager target', async () => {
+    const f = await build();
+    ctxRef.current = { userId: f.manager.id, workspaceId: f.workspaceId };
+    const ok = await call(f.workspaceId, f.member.id, { accessScope: 'limited' });
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toEqual({ userId: f.member.id, accessScope: 'limited' });
+    expect((await call(f.workspaceId, f.member.id, { accessScope: 'x' })).status).toBe(400);
+    expect((await call(f.workspaceId, f.manager.id, { accessScope: 'limited' })).status).toBe(409);
+    ctxRef.current = { userId: f.other.id, workspaceId: f.workspaceId };
+    expect((await call(f.workspaceId, f.member.id, { accessScope: 'full' })).status).toBe(403);
+  });
+});

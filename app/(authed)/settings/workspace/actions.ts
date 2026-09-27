@@ -11,16 +11,20 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { roleMigrationReportService } from '@/lib/services/roleMigrationReportService';
 import type { RoleMigrationPageDTO } from '@/lib/dto/workspaces';
 import {
+  AccessScopeForbiddenError,
+  InvalidAccessScopeError,
   InvalidWorkspaceRoleError,
   LastManagerError,
   LastMemberError,
   NotAMemberError,
   OrgManagedWorkspaceRoleError,
+  ScopeNotApplicableError,
   WorkspaceMemberNotFoundError,
   WorkspaceRoleForbiddenError,
 } from '@/lib/workspaces/errors';
 import { RoleDefinitionNotFoundError } from '@/lib/permissions/errors';
 import type { WorkspaceRole } from '@/lib/workspaces/roles';
+import type { WorkspaceAccessScope } from '@/generated/prisma/client';
 
 // Server Actions for the workspace settings page. HTTP/transport layer:
 // each reads the session + active workspace, calls exactly one service
@@ -161,6 +165,40 @@ export async function setMemberRoleAction(
       err instanceof InvalidWorkspaceRoleError
     ) {
       return { ok: false, error: t('actions.roleChangeFailed'), code: err.code };
+    }
+    throw err;
+  }
+  revalidateWorkspaceSettingsSurfaces();
+  return { ok: true };
+}
+
+/**
+ * Set a member's ACCESS SCOPE — Full or Limited (Story MOTIR-6169 · MOTIR-6545).
+ * Manager-only, the role action's twin: a refusal comes back as `{ ok: false,
+ * error }`, and a success revalidates the same settings surfaces.
+ */
+export async function setMemberAccessScopeAction(
+  targetUserId: string,
+  scope: WorkspaceAccessScope,
+): Promise<ActionResult> {
+  const { userId, workspaceId } = await requireContext();
+  const t = await getErrorsTranslator();
+  try {
+    await workspacesService.setMemberAccessScope({
+      actorUserId: userId,
+      workspaceId,
+      targetUserId,
+      scope,
+    });
+  } catch (err) {
+    if (err instanceof AccessScopeForbiddenError || err instanceof NotAMemberError) {
+      return { ok: false, error: t('actions.scopeManagerOnly'), code: err.code };
+    }
+    if (err instanceof ScopeNotApplicableError) {
+      return { ok: false, error: t('actions.scopeNotApplicable'), code: err.code };
+    }
+    if (err instanceof WorkspaceMemberNotFoundError || err instanceof InvalidAccessScopeError) {
+      return { ok: false, error: t('actions.scopeChangeFailed'), code: err.code };
     }
     throw err;
   }

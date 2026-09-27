@@ -42,12 +42,15 @@ import { entitlementsService } from '@/lib/services/entitlementsService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
 import {
+  AccessScopeForbiddenError,
   AlreadyMemberError,
+  InvalidAccessScopeError,
   InvalidWorkspaceRoleError,
   LastManagerError,
   LastMemberError,
   NotAMemberError,
   OrgManagedWorkspaceRoleError,
+  ScopeNotApplicableError,
   SlugCollisionError,
   WorkspaceMemberNotFoundError,
   WorkspaceNotFoundError,
@@ -58,16 +61,19 @@ import { RoleDefinitionNotFoundError } from '@/lib/permissions/errors';
 import { workspaceRoleDefinitionRepository } from '@/lib/repositories/workspaceRoleDefinitionRepository';
 import {
   toCurrentWorkspaceDTO,
-  toWorkspaceMemberDTO,
+  toWorkspaceMemberWithAccessDTO,
   toWorkspaceSummaryDTO,
 } from '@/lib/mappers/workspaceMappers';
+import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
+import { asAccessScope } from '@/lib/projects/accessMode';
 import type {
   CurrentWorkspaceDTO,
   OrgWorkspacePageDTO,
   OrgWorkspaceRowDTO,
   MemberRoleContextDTO,
-  WorkspaceMemberDTO,
+  WorkspaceMemberAccessScopeDTO,
   WorkspaceMemberRoleDTO,
+  WorkspaceMemberWithAccessDTO,
   WorkspaceSummaryDTO,
 } from '@/lib/dto/workspaces';
 
@@ -1337,6 +1343,76 @@ export const workspacesService = {
   },
 
   /**
+   * Set a member's ACCESS SCOPE — Full or Limited (Story MOTIR-6169 · MOTIR-6545;
+   * `role-model.md` Q1). Manager-only, by the SAME gate `setMemberRole` uses
+   * (`readReachRole`, so the org Owner or an org Admin qualifies), so the two
+   * controls on one Members-page row share one authorisation story.
+   *
+   * Takes effect in every project of the workspace on the target's next request:
+   * the entry rule reads the scope per request and nothing caches it.
+   *
+   * `limited` on a target whose effective role is Manager — the org Owner and
+   * Admins included, member or not — is refused with `ScopeNotApplicableError`:
+   * a Manager enters every project, so a stored Limited would be a lie on their
+   * row. `full` on such a target is an idempotent no-op.
+   *
+   * ⚠️ NO LOCK, deliberately. The one read (is the target a Manager?) races only
+   * with a concurrent promotion to Manager, and a Limited scope stored on a
+   * Manager is harmless because the entry rule never reads it — a lock here
+   * would protect nothing.
+   */
+  async setMemberAccessScope(input: {
+    actorUserId: string;
+    workspaceId: string;
+    targetUserId: string;
+    scope: unknown;
+  }): Promise<WorkspaceMemberAccessScopeDTO> {
+    const scope = asAccessScope(input.scope);
+    if (!scope) throw new InvalidAccessScopeError(String(input.scope));
+
+    return withWorkspaceContext(
+      { userId: input.actorUserId, workspaceId: input.workspaceId },
+      async (tx) => {
+        const actorRole = await readReachRole(input.actorUserId, input.workspaceId, tx);
+        if (!actorRole) throw new NotAMemberError(input.actorUserId, input.workspaceId);
+        if (actorRole !== 'manager') {
+          throw new AccessScopeForbiddenError(input.actorUserId, input.workspaceId);
+        }
+
+        const workspace = await workspaceRepository.findByIdInTx(input.workspaceId, tx);
+        if (!workspace) throw new NotAMemberError(input.actorUserId, input.workspaceId);
+        const target = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
+          input.targetUserId,
+          input.workspaceId,
+          tx,
+        );
+        const targetIsManager =
+          (target != null && resolveWorkspaceRole(target) === 'manager') ||
+          (await isOrgManagerTarget(input.targetUserId, workspace, tx));
+        if (targetIsManager) {
+          // A Manager's scope is never read: Limited would be a lie, Full is the
+          // truth already — answered without a write.
+          if (scope === 'limited') {
+            throw new ScopeNotApplicableError(input.targetUserId, input.workspaceId);
+          }
+          return { userId: input.targetUserId, accessScope: target?.accessScope ?? 'full' };
+        }
+        if (!target) throw new WorkspaceMemberNotFoundError(input.targetUserId, input.workspaceId);
+        if (target.accessScope === scope) {
+          return { userId: input.targetUserId, accessScope: scope };
+        }
+        const updated = await workspaceMembershipRepository.setAccessScope(
+          input.targetUserId,
+          input.workspaceId,
+          scope,
+          tx,
+        );
+        return { userId: updated.userId, accessScope: updated.accessScope };
+      },
+    );
+  },
+
+  /**
    * What the Members page draws its role column with (Story MOTIR-6168 ·
    * MOTIR-6465): whether the viewer may change roles (a Manager — their own
    * role, or the org Owner / an org Admin), which members the ORG makes a
@@ -1372,11 +1448,21 @@ export const workspacesService = {
    * card. Reads inside withWorkspaceContext so the workspace_membership
    * RLS policy exposes the rows (it keys off the per-transaction GUCs).
    */
-  async listMembers(workspaceId: string, actorUserId: string): Promise<WorkspaceMemberDTO[]> {
-    const rows = await withWorkspaceContext({ userId: actorUserId, workspaceId }, (tx) =>
-      workspaceMembershipRepository.findMembersByWorkspace(workspaceId, tx),
+  async listMembers(
+    workspaceId: string,
+    actorUserId: string,
+  ): Promise<WorkspaceMemberWithAccessDTO[]> {
+    // The rows AND each person's added-project count in one context — the count
+    // is ONE grouped query for the whole workspace (Story MOTIR-6169 · MOTIR-6545),
+    // never a read per row.
+    const { rows, added } = await withWorkspaceContext(
+      { userId: actorUserId, workspaceId },
+      async (tx) => ({
+        rows: await workspaceMembershipRepository.findMembersByWorkspace(workspaceId, tx),
+        added: await projectMembershipRepository.countProjectsByUserInWorkspace(workspaceId, tx),
+      }),
     );
-    return rows.map(toWorkspaceMemberDTO);
+    return rows.map((row) => toWorkspaceMemberWithAccessDTO(row, added.get(row.userId) ?? 0));
   },
 
   /**

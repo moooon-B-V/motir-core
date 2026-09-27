@@ -1,4 +1,8 @@
-import type { RoleMigrationReason, WorkspaceRole } from '@/generated/prisma/client';
+import type {
+  RoleMigrationReason,
+  WorkspaceAccessScope,
+  WorkspaceRole,
+} from '@/generated/prisma/client';
 
 // DTOs for the workspace endpoints + settings surfaces. These define
 // EXACTLY what crosses the HTTP / Server-Action boundary — no Prisma
@@ -38,6 +42,24 @@ export interface WorkspaceMemberDTO {
   workspaceRole: WorkspaceRole;
   /** The workspace custom role they hold, or null on a built-in. */
   customRole: { id: string; name: string } | null;
+}
+
+/**
+ * A row of the workspace Members page (Story MOTIR-6169 · MOTIR-6545): the member
+ * plus their ACCESS SCOPE and how many of the workspace's projects they were
+ * added to — the page's "N projects" cell for a Limited member.
+ */
+export interface WorkspaceMemberWithAccessDTO extends WorkspaceMemberDTO {
+  /** Full enters every project open to the workspace; Limited only the ones they were added to. */
+  accessScope: WorkspaceAccessScope;
+  /** How many projects of this workspace the member was added to. */
+  addedProjectCount: number;
+}
+
+/** The answer to an access-scope change (MOTIR-6545): the scope as it now stands. */
+export interface WorkspaceMemberAccessScopeDTO {
+  userId: string;
+  accessScope: WorkspaceAccessScope;
 }
 
 /** The answer to a role change (MOTIR-6463): the member's role as it now stands. */

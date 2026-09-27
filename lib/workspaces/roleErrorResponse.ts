@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import {
+  AccessScopeForbiddenError,
+  InvalidAccessScopeError,
   InvalidWorkspaceRoleError,
   LastManagerError,
   NotAMemberError,
   OrgManagedWorkspaceRoleError,
+  ScopeNotApplicableError,
   WorkspaceMemberNotFoundError,
   WorkspaceRoleForbiddenError,
   WorkspaceRoleInUseError,
@@ -19,7 +22,7 @@ import {
 
 // Typed workspace-role errors → HTTP (Story MOTIR-6168 · MOTIR-6460 / MOTIR-6463),
 // shared by the two `/api/workspaces/[workspaceId]/roles` routes and the member
-// role route. A workspace the actor
+// role route, and the member access-scope route (MOTIR-6545). A workspace the actor
 // cannot see and a role that is not this workspace's are both 404, so neither
 // confirms that a foreign id exists; a member who is not a Manager is 403.
 export function workspaceRoleErrorResponse(err: unknown): NextResponse | null {
@@ -30,7 +33,7 @@ export function workspaceRoleErrorResponse(err: unknown): NextResponse | null {
   ) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 404 });
   }
-  if (err instanceof WorkspaceRoleForbiddenError) {
+  if (err instanceof WorkspaceRoleForbiddenError || err instanceof AccessScopeForbiddenError) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 403 });
   }
   if (err instanceof BuiltInRoleImmutableError) {
@@ -45,7 +48,11 @@ export function workspaceRoleErrorResponse(err: unknown): NextResponse | null {
       { status: 409 },
     );
   }
-  if (err instanceof LastManagerError || err instanceof OrgManagedWorkspaceRoleError) {
+  if (
+    err instanceof LastManagerError ||
+    err instanceof OrgManagedWorkspaceRoleError ||
+    err instanceof ScopeNotApplicableError
+  ) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 409 });
   }
   if (err instanceof InvalidWorkspaceRoleError) {
@@ -55,6 +62,7 @@ export function workspaceRoleErrorResponse(err: unknown): NextResponse | null {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 409 });
   }
   if (
+    err instanceof InvalidAccessScopeError ||
     err instanceof InvalidRoleNameError ||
     err instanceof UngrantablePermissionError ||
     err instanceof InvalidRoleReassignTargetError

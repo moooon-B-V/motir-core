@@ -107,6 +107,23 @@ export const projectMembershipRepository = {
   },
 
   /**
+   * How many projects of `workspaceId` each person was ADDED to, keyed by user id
+   * (Story MOTIR-6169 · MOTIR-6545) — the Members page's "N projects" cell, in ONE
+   * grouped query for the whole workspace. A person added to none is absent.
+   */
+  async countProjectsByUserInWorkspace(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, number>> {
+    const rows = await tx.projectMembership.groupBy({
+      by: ['userId'],
+      where: { workspaceId },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((r) => [r.userId, r._count._all]));
+  },
+
+  /**
    * The ids of the people ADDED to the project (Story MOTIR-6169 · MOTIR-6541) —
    * what the entry rule and the access migration test a person against. Takes
    * `tx` for the `project_membership` RLS policy.
