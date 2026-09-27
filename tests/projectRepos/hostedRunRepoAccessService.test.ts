@@ -207,4 +207,20 @@ describe('hostedRunRepoAccessService.forRoomRows (MOTIR-1895)', () => {
       [perms.id]: { state: 'needs_permissions', account: 'acme-labs', reviewHref: INSTALL_HREF },
     });
   });
+
+  // Coverage top-up (MOTIR-692): an error `hostedRunWriteAccess` cannot
+  // actually produce (every real failure of its own is a typed
+  // `RunGitCredentialUnavailableError`) still must not be SWALLOWED — the "draws
+  // nothing" rule above is for the two NAMED failure shapes, never for "the
+  // read threw something we don't recognise".
+  it('does not swallow an error that is neither a recognised refusal nor not-configured', async () => {
+    const runGitCredential = await import('@/lib/github/runGitCredential');
+    vi.spyOn(runGitCredential, 'hostedRunWriteAccess').mockRejectedValueOnce(
+      new Error('a bug, not a refusal'),
+    );
+    const perms = row({ owner: 'acme-labs', name: 'infra' });
+    await expect(
+      hostedRunRepoAccessService.forRoomRows([perms], { installHref: INSTALL_HREF }),
+    ).rejects.toThrow('a bug, not a refusal');
+  });
 });

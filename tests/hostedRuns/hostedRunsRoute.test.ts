@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { hostedRunService } from '@/lib/services/hostedRunService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -150,6 +151,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   await adminDb.fleetInFlightSlot.deleteMany({});
 });
 
@@ -232,5 +234,80 @@ describe('POST /api/work-items/[id]/hosted-runs (AC8)', () => {
   it('400 without a model', async () => {
     const res = await post('PROD-1', {});
     expect(res.status).toBe(400);
+  });
+
+  // Coverage top-up (MOTIR-692): the gate's own refusal, a body `req.json()`
+  // itself cannot parse, and every error → status branch no scenario above
+  // reaches — each named by the typed error `hostedRunService.start` would
+  // throw for it, since reproducing every real precondition here would
+  // re-test `hostedRunService.start` itself rather than this route's mapping.
+  it("an incompliant session is the gate's own response, never reaching the service", async () => {
+    const gateResponse = new Response(null, { status: 302 });
+    requireCompliantWorkspaceContext.mockResolvedValueOnce({ ok: false, response: gateResponse });
+    const res = await POST(
+      new Request('https://app.test/api/work-items/PROD-1/hosted-runs', {
+        method: 'POST',
+        body: JSON.stringify({ model: MODEL }),
+      }),
+      { params: Promise.resolve({ id: 'PROD-1' }) },
+    );
+    expect(res).toBe(gateResponse);
+  });
+
+  it('a body `req.json()` cannot parse reads as no model — 400', async () => {
+    const res = await POST(
+      new Request('https://app.test/api/work-items/PROD-1/hosted-runs', {
+        method: 'POST',
+        body: 'not json',
+      }),
+      { params: Promise.resolve({ id: 'PROD-1' }) },
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('402 when the CI-credit gate is exhausted', async () => {
+    const { CiCreditsExhaustedError } = await import('@/lib/ciMetering/errors');
+    vi.spyOn(hostedRunService, 'start').mockRejectedValueOnce(
+      new CiCreditsExhaustedError({
+        organizationId: 'org1',
+        state: 'exhausted',
+      } as never),
+    );
+    const res = await post('PROD-1', { model: MODEL });
+    expect(res.status).toBe(402);
+  });
+
+  it('503 hosted_run_boot_failed, naming the run that was opened and ended', async () => {
+    const { HostedRunBootFailedError } = await import('@/lib/hostedRuns/errors');
+    vi.spyOn(hostedRunService, 'start').mockRejectedValueOnce(
+      new HostedRunBootFailedError('run1', 'the fleet refused it'),
+    );
+    const res = await post('PROD-1', { model: MODEL });
+    expect(res.status).toBe(503);
+    expect(((await res.json()) as { dispatchRunId: string }).dispatchRunId).toBe('run1');
+  });
+
+  it('503 hosted_run_unavailable for a git credential, run-key or orchestrator failure', async () => {
+    const { RunGitCredentialUnavailableError } = await import('@/lib/hostedRuns/errors');
+    vi.spyOn(hostedRunService, 'start').mockRejectedValueOnce(
+      new RunGitCredentialUnavailableError('github_unavailable', 'GitHub is down'),
+    );
+    const res = await post('PROD-1', { model: MODEL });
+    expect(res.status).toBe(503);
+    expect(((await res.json()) as { code: string }).code).toBe('hosted_run_unavailable');
+  });
+
+  it('403 when the caller can browse the project but not edit it', async () => {
+    const { ProjectAccessDeniedError } = await import('@/lib/projects/errors');
+    vi.spyOn(hostedRunService, 'start').mockRejectedValueOnce(
+      new ProjectAccessDeniedError('proj1', 'edit'),
+    );
+    const res = await post('PROD-1', { model: MODEL });
+    expect(res.status).toBe(403);
+  });
+
+  it('an error the service names nothing for is rethrown, not swallowed', async () => {
+    vi.spyOn(hostedRunService, 'start').mockRejectedValueOnce(new Error('unexpected'));
+    await expect(post('PROD-1', { model: MODEL })).rejects.toThrow('unexpected');
   });
 });

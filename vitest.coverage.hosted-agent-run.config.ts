@@ -1,0 +1,146 @@
+import { defineConfig } from 'vitest/config';
+import baseConfig from './vitest.config';
+
+// STORY MOTIR-683's `motir-core` COVERAGE FLOOR (MOTIR-692).
+//
+// ⚠️ WHAT A FLOOR IS FOR HERE, AND WHAT IT IS NOT. It does not decide whether the
+// hosted-agent run is correct — `tests/hostedRuns/hostedRunStoryGate.test.ts`
+// holds the properties a percentage cannot see (the round trip, the no-leak
+// guard, the isolation and start-refusal cases), and each card of the story
+// shipped its own units. What a floor catches is what units cannot: a LATER
+// change that deletes a branch's only test and leaves the branch — on a surface
+// that mints and revokes live credentials against real git and a real gateway,
+// where a dead branch means a secret outlives the run that held it.
+//
+// ⚠️ PER-FILE, NEVER GLOBAL, and read off the MERGED result. These are the
+// motir-core server files the story changed: the run's two credentials, its
+// git identity, the model/limits/id constants, the CLI's route allow-list, and
+// the start/cancel/git-credential HTTP edges. Each floor is set at, or just
+// under, what this lane's own command measures — never a round number.
+//
+// ⚠️ IT RUNS THE SUITES THAT REACH THE SURFACE, NOT THE WHOLE TREE — the story
+// gate plus the per-card suites already in the tree for these files.
+//
+// ⚠️ DYNAMIC ROUTE SEGMENTS ARE MATCHED WITH `**`, NEVER THE LITERAL `[id]` /
+// `[key]` (MOTIR-2449's character-class hazard: `[id]` is a glob class, not a
+// path segment, to the matcher the coverage provider uses).
+//
+// ⚠️ IT DOES NOT OVERRIDE `resolve` — see the onboarding-routing lane's own
+// comment for why: spread the base config and change only what this lane is
+// about.
+export default defineConfig({
+  ...baseConfig,
+  test: {
+    ...baseConfig.test,
+    include: [
+      'tests/hostedRuns/**/*.test.ts',
+      'tests/api/v1/dispatch-run-git-credential-route.test.ts',
+      'tests/api/v1/run-credential-legs.test.ts',
+      'tests/api/v1/run-credential-routes.test.ts',
+      'tests/ciFleet/hostedRunCharge.test.ts',
+      'tests/github/runGitCredential.test.ts',
+      'tests/projectRepos/hostedRunRepoAccessService.test.ts',
+      'tests/runCredentialService.test.ts',
+    ],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary'],
+      all: false,
+      include: [
+        'lib/hostedRuns/**',
+        'lib/services/hostedRun*.ts',
+        'lib/github/runGitCredential.ts',
+        'lib/services/runTokenScopeService.ts',
+        'lib/services/runCredentialService.ts',
+        'app/api/v1/dispatch-runs/**/git-credential/route.ts',
+        'app/api/work-items/**/hosted-runs/route.ts',
+        'app/api/dispatch-runs/**/cancel/route.ts',
+      ],
+      thresholds: {
+        perFile: true,
+        'lib/hostedRuns/errors.ts': { statements: 90, functions: 90, branches: 90, lines: 90 },
+        'lib/hostedRuns/ids.ts': { statements: 90, functions: 90, branches: 90, lines: 90 },
+        'lib/hostedRuns/limits.ts': { statements: 90, functions: 90, branches: 90, lines: 90 },
+        'lib/hostedRuns/machineRate.ts': { statements: 90, functions: 90, branches: 90, lines: 90 },
+        'lib/hostedRuns/runTokenRoutes.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'lib/services/hostedRunChargeService.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'lib/services/hostedRunGitCredentialService.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'lib/services/hostedRunKeyService.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'lib/services/hostedRunModelService.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'lib/services/hostedRunRepoAccessService.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'lib/services/hostedRunService.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'lib/github/runGitCredential.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'lib/services/runTokenScopeService.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'lib/services/runCredentialService.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'app/api/v1/dispatch-runs/**/git-credential/route.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'app/api/work-items/**/hosted-runs/route.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'app/api/dispatch-runs/**/cancel/route.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+      },
+    },
+  },
+});

@@ -211,6 +211,29 @@ describe('mintRunKey', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  // Coverage top-up (MOTIR-692): `notMinted`'s final fallback arm — an error
+  // that is NONE of the three typed gateway errors. `lib/gateway/runKeyClient.ts`
+  // always wraps a real transport or HTTP failure into one of those three (see
+  // the tests above), so this arm is reachable only by an error shape the real
+  // client cannot actually produce — exactly why it needs its own direct test.
+  it('an unrecognized mint failure still becomes a typed HostedRunKeyNotMintedError', async () => {
+    const client = await import('@/lib/gateway/runKeyClient');
+    vi.spyOn(client, 'mintGatewayRunKey').mockRejectedValueOnce('a string, not an Error');
+    const err = await hostedRunKeyService.mintRunKey(RUN, 'claude-opus-5-5', NOW).catch((e) => e);
+    expect(err).toBeInstanceOf(HostedRunKeyNotMintedError);
+    expect((err as HostedRunKeyNotMintedError).reason).toBe('unavailable');
+    expect(err.message).toBe('a string, not an Error');
+  });
+
+  it('a mint failure that IS an Error but none of the three typed ones takes the same fallback', async () => {
+    const client = await import('@/lib/gateway/runKeyClient');
+    vi.spyOn(client, 'mintGatewayRunKey').mockRejectedValueOnce(new RangeError('unexpected shape'));
+    const err = await hostedRunKeyService.mintRunKey(RUN, 'claude-opus-5-5', NOW).catch((e) => e);
+    expect(err).toBeInstanceOf(HostedRunKeyNotMintedError);
+    expect((err as HostedRunKeyNotMintedError).reason).toBe('unavailable');
+    expect(err.message).toBe('unexpected shape');
+  });
+
   it('keeps the requested expiry when the gateway answers without one', async () => {
     vi.stubGlobal(
       'fetch',
@@ -282,6 +305,23 @@ describe('revokeRunKey', () => {
     );
     const result = await hostedRunKeyService.revokeRunKey('run_abc');
     expect(result).toMatchObject({ ok: false, runRef: 'run_abc', reason });
+  });
+
+  // Coverage top-up (MOTIR-692): the same fallback arm, on the revoke side.
+  it('an unrecognized revoke failure is still a typed, non-throwing result', async () => {
+    const client = await import('@/lib/gateway/runKeyClient');
+    vi.spyOn(client, 'revokeGatewayRunKeys').mockRejectedValueOnce(new RangeError('out of range'));
+    const result = await hostedRunKeyService.revokeRunKey('run_abc');
+    expect(result).toMatchObject({ ok: false, runRef: 'run_abc', reason: 'unavailable' });
+    expect((result as { message: string }).message).toBe('out of range');
+  });
+
+  it('an unrecognized revoke failure that is not even an Error still answers String(err)', async () => {
+    const client = await import('@/lib/gateway/runKeyClient');
+    vi.spyOn(client, 'revokeGatewayRunKeys').mockRejectedValueOnce(404);
+    const result = await hostedRunKeyService.revokeRunKey('run_abc');
+    expect(result).toMatchObject({ ok: false, runRef: 'run_abc', reason: 'unavailable' });
+    expect((result as { message: string }).message).toBe('404');
   });
 
   it('returns not_configured, without sending, when the mint secret is unset', async () => {

@@ -56,11 +56,13 @@ const PEM = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString();
 let revokedKeys: string[] = [];
 let revokedGitTokens: string[] = [];
 let failGatewayRevoke = false;
+let failGitRevoke = false;
 
 function stubHttp(): void {
   revokedKeys = [];
   revokedGitTokens = [];
   failGatewayRevoke = false;
+  failGitRevoke = false;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -99,6 +101,7 @@ function stubHttp(): void {
         return json(200, { runRef: ref, revoked: already ? 0 : 1 });
       }
       if (url === 'https://api.github.com/installation/token' && method === 'DELETE') {
+        if (failGitRevoke) return json(500, { error: 'github down' });
         revokedGitTokens.push((headers.get('authorization') ?? '').replace(/^(token|Bearer) /, ''));
         return new Response(null, { status: 204 });
       }
@@ -280,6 +283,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   await adminDb.fleetInFlightSlot.deleteMany({});
 });
 
@@ -390,6 +394,32 @@ describe('cancel — revoked and closed now, torn down by its supervisor at the 
     expect(again.status).toBe(409);
   });
 
+  // Coverage top-up (MOTIR-692): the route's own gate and its one unmapped
+  // rethrow — neither is a `hostedRunService.cancel` outcome, so no scenario
+  // above reaches them.
+  it("an incompliant session is the gate's own response, never reaching the service", async () => {
+    const { data } = await startRun();
+    const gateResponse = new Response(null, { status: 302 });
+    requireCompliantWorkspaceContext.mockResolvedValueOnce({ ok: false, response: gateResponse });
+
+    const res = await cancelRoute(new Request('http://t/cancel', { method: 'POST' }), {
+      params: Promise.resolve({ id: data.dispatchRunId }),
+    });
+    expect(res).toBe(gateResponse);
+    expect((await runOf(data.dispatchRunId)).status).toBe('running');
+  });
+
+  it('an error the service never names is rethrown, not swallowed', async () => {
+    const { data } = await startRun();
+    vi.spyOn(hostedRunService, 'cancel').mockRejectedValueOnce(new Error('unexpected'));
+
+    await expect(
+      cancelRoute(new Request('http://t/cancel', { method: 'POST' }), {
+        params: Promise.resolve({ id: data.dispatchRunId }),
+      }),
+    ).rejects.toThrow('unexpected');
+  });
+
   it('AC6 — a project admin may cancel; another member may not; another workspace sees nothing', async () => {
     const { data } = await startRun();
 
@@ -469,6 +499,72 @@ describe('the end path is idempotent and never throws', () => {
     expect(ended).toMatchObject({ closed: true, runKey: 'failed' });
     expect((await runOf(data.dispatchRunId)).status).toBe('failed');
     expect((await lastLog(data.dispatchRunId))?.body).toContain('the run key could not be revoked');
+  });
+
+  // Coverage top-up (MOTIR-692): a git-token revoke that FAILS is named on the
+  // run's closing log too — its own failure count, distinct from the gateway
+  // key's.
+  it('a git-token revoke that fails is named on the closing log by its own count', async () => {
+    const { data } = await startRun();
+    failGitRevoke = true;
+    const ended = await hostedRunService.endHostedRun(data.dispatchRunId, 'failed', 'test');
+    expect(ended.gitCredentials).toEqual({ revoked: 0, failed: 1 });
+    expect((await runOf(data.dispatchRunId)).status).toBe('failed');
+    expect((await lastLog(data.dispatchRunId))?.body).toContain(
+      '1 git token(s) could not be revoked',
+    );
+  });
+
+  // Coverage top-up (MOTIR-692): a run-credential revoke that THROWS (rather
+  // than answering a typed failure, as the gateway's own revoke does) is
+  // caught and logged, never left to abort the rest of the teardown.
+  it('a run-credential revoke that throws is swallowed, and the rest of the end path still runs', async () => {
+    const { data } = await startRun();
+    const runCredentialService = (await import('@/lib/services/runCredentialService'))
+      .runCredentialService;
+    vi.spyOn(runCredentialService, 'revokeRunCredential').mockRejectedValueOnce(
+      new Error('the token table is down'),
+    );
+
+    const ended = await hostedRunService.endHostedRun(data.dispatchRunId, 'failed', 'test');
+    expect(ended).toMatchObject({ closed: true, runCredential: 0 });
+    expect(revokedKeys).toContain(data.dispatchRunId);
+    expect(revokedGitTokens).toEqual(['ghs_run_token']);
+  });
+
+  // Coverage top-up (MOTIR-692): a close that fails for a reason OTHER than the
+  // CLI having already closed it (`DispatchRunTerminalError`) is logged, not
+  // rethrown — the revocations already ran and must stand either way.
+  it('a close that fails for an unrelated reason is logged, and every revoke still stands', async () => {
+    const { data } = await startRun();
+    vi.spyOn(dispatchRunService, 'close').mockRejectedValueOnce(new Error('the run table is down'));
+
+    const ended = await hostedRunService.endHostedRun(data.dispatchRunId, 'failed', 'test');
+    expect(ended.closed).toBe(false);
+    expect(revokedKeys).toContain(data.dispatchRunId);
+    expect(await adminDb.apiToken.count({ where: { dispatchRunId: data.dispatchRunId } })).toBe(0);
+  });
+});
+
+describe('a container whose own teardown fails is still a `failed` run, never a false success', () => {
+  // Coverage top-up (MOTIR-692): `endOutcomeFor`'s "the container did not even
+  // settle" branch — a `teardown_failed`/`provision_failed`/`image_unpullable`
+  // outcome from the seam itself, never `job_completed` / `job_timed_out` /
+  // `gate_revoked`, which every other end scenario in this file produces.
+  it('a settle whose teardown itself fails still ends the run `failed`, not silently open', async () => {
+    const { data, handleId, cardId } = await startRun();
+    const card = await cardOf(cardId);
+    fakeOrchestrator.failNextTeardown('the fleet API is down');
+    fakeOrchestrator.completeJob(handleId, { exitCode: 0 });
+
+    expect(await superviseToEnd(data)).toEqual({ outcome: 'teardown_failed' });
+    expect(await runOf(data.dispatchRunId)).toMatchObject({
+      status: 'failed',
+      stopReason: 'halted',
+    });
+    expect((await lastLog(data.dispatchRunId))?.body).toContain('the container ended as');
+    expect((await cardOf(cardId)).status).toBe(card.status);
+    await expectNothingAlive(data.dispatchRunId);
   });
 });
 

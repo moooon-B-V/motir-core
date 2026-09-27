@@ -331,6 +331,37 @@ describe('POST /api/v1/dispatch-runs/{id}/git-credential (MOTIR-6538)', () => {
     expect(mints).toHaveLength(0);
   });
 
+  // Coverage top-up (MOTIR-692): `issue`'s two ternaries over the run's
+  // dispatcher — a run with no `createdById` at all (never `dispatchedBy`),
+  // and one whose dispatcher's own name trims to nothing (same result, the
+  // OTHER arm).
+  it('a run with no createdById at all answers dispatchedBy: null, and still mints', async () => {
+    const repo = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'shop' });
+    const runId = await openRun([repo]);
+    await adminDb.dispatchRun.update({ where: { id: runId }, data: { createdById: null } });
+
+    const result = await hostedRunGitCredentialService.issue(runId, {
+      userId: caller.fixture.owner.id,
+      workspaceId: caller.fixture.workspaceId,
+      tokenDispatchRunId: runId,
+    });
+    expect(result.dispatchedBy).toBeNull();
+    expect(result.credentials).toHaveLength(1);
+  });
+
+  it('a dispatcher whose own name trims to nothing also answers dispatchedBy: null', async () => {
+    const repo = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'shop' });
+    const runId = await openRun([repo]);
+    await adminDb.user.update({ where: { id: caller.fixture.owner.id }, data: { name: '   ' } });
+
+    const result = await hostedRunGitCredentialService.issue(runId, {
+      userId: caller.fixture.owner.id,
+      workspaceId: caller.fixture.workspaceId,
+      tokenDispatchRunId: runId,
+    });
+    expect(result.dispatchedBy).toBeNull();
+  });
+
   it('AC3 — the run credential reaches this route for its own run and still nothing it could not reach before', async () => {
     const repo = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'shop' });
     const runId = await openRun([repo]);

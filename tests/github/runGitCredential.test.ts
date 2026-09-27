@@ -239,6 +239,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
 afterAll(async () => {
@@ -581,5 +582,252 @@ describe('revokeRunGitCredentials (AC4)', () => {
   it('answers an unknown run with no results rather than throwing', async () => {
     stubGithub();
     await expect(revokeRunGitCredentials('no-such-run')).resolves.toEqual([]);
+  });
+});
+
+// Coverage top-up (MOTIR-692): the operational-failure edges no refusal or
+// happy-path scenario above reaches — an unexpected `appJwt` throw, GitHub
+// answering something the two reads (`installationOn`, the bot-author reads)
+// don't recognise, a project with no repository at all, a mint whose response
+// is malformed, and the two DB reads `revokeRunGitCredentials` guards.
+describe('coverage top-up — the operational edges', () => {
+  it('appJwt rethrows an error that is neither of the two configured shapes', async () => {
+    stubGithub();
+    const appAuth = await import('@/lib/github/appAuth');
+    vi.spyOn(appAuth, 'createAppJwt').mockImplementationOnce(() => {
+      throw new Error('a signing bug, not a configuration one');
+    });
+    await expect(
+      hostedRunWriteAccess([{ repository: 'acme/web', app: 'motir-integration' }]),
+    ).rejects.toThrow('a signing bug, not a configuration one');
+  });
+
+  it('an installation answered with no id is github_unavailable, not a silent pass', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (/\/repos\/[^/]+\/[^/]+\/installation$/.test(url)) {
+          return new Response(JSON.stringify({ account: { login: 'acme' } }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        throw new Error(`unexpected fetch in test: ${url}`);
+      }),
+    );
+    await expect(
+      hostedRunWriteAccess([{ repository: 'acme/web', app: 'motir-integration' }]),
+    ).rejects.toMatchObject({ reason: 'github_unavailable' });
+  });
+
+  it("the bot author read fails when GitHub's own App answers with no slug, or the bot user with no id", async () => {
+    const web = await seedRepo({ state: 'connected', owner: 'acme', name: 'web' });
+    const runId = await openRun([[web.id]]);
+
+    stubGithub();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const method = init?.method ?? 'GET';
+        if (/\/repos\/[^/]+\/[^/]+\/installation$/.test(url)) {
+          return new Response(
+            JSON.stringify({
+              id: 42,
+              account: { login: 'acme' },
+              permissions: ACCEPTED,
+              suspended_at: null,
+              html_url: null,
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        if (/\/app\/installations\/\d+\/access_tokens$/.test(url) && method === 'POST') {
+          return new Response(
+            JSON.stringify({ token: 'ghs_x', expires_at: new Date().toISOString() }),
+            {
+              status: 201,
+              headers: { 'content-type': 'application/json' },
+            },
+          );
+        }
+        // No `slug` — the bot-author read cannot name the login at all.
+        if (url.endsWith('/app')) {
+          return new Response('{}', {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        throw new Error(`unexpected fetch in test: ${method} ${url}`);
+      }),
+    );
+    await expect(mintRunGitCredentials(runId)).rejects.toMatchObject({
+      reason: 'github_unavailable',
+    });
+
+    // Retried after a bad read — a failed bot-author read is never cached — now
+    // the App answers a slug but the bot user has no id.
+    _resetInstallationTokenCache();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const method = init?.method ?? 'GET';
+        if (/\/repos\/[^/]+\/[^/]+\/installation$/.test(url)) {
+          return new Response(
+            JSON.stringify({
+              id: 42,
+              account: { login: 'acme' },
+              permissions: ACCEPTED,
+              suspended_at: null,
+              html_url: null,
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        if (/\/app\/installations\/\d+\/access_tokens$/.test(url) && method === 'POST') {
+          return new Response(
+            JSON.stringify({ token: 'ghs_y', expires_at: new Date().toISOString() }),
+            {
+              status: 201,
+              headers: { 'content-type': 'application/json' },
+            },
+          );
+        }
+        if (url.endsWith('/app')) {
+          return new Response(JSON.stringify({ slug: 'motir-integration' }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        if (/\/users\/.+$/.test(url)) {
+          return new Response('{}', {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        throw new Error(`unexpected fetch in test: ${method} ${url}`);
+      }),
+    );
+    await expect(mintRunGitCredentials(runId)).rejects.toMatchObject({
+      reason: 'github_unavailable',
+    });
+  });
+
+  it('a project with no repository at all refuses the run set as `no_repository`', async () => {
+    const card = await workItemsService.createWorkItem(
+      { projectId: fixture.projectId, kind: 'task', title: 'no repos here' },
+      fixture.ctx,
+    );
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fixture.projectIdentifier,
+        command: 'run',
+        origin: 'hosted',
+        model: 'claude-opus-5-5',
+        cards: [{ key: card.identifier, disposition: 'queued' as const }],
+      },
+      fixture.ctx,
+    );
+    await expect(runRepositories(run.id)).rejects.toMatchObject({ reason: 'no_repository' });
+  });
+
+  it("a mint that fails, or answers a malformed body, refuses the run's git credentials", async () => {
+    const web = await seedRepo({ state: 'connected', owner: 'acme', name: 'web' });
+    const runId = await openRun([[web.id]]);
+
+    stubGithub();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const method = init?.method ?? 'GET';
+        if (/\/repos\/[^/]+\/[^/]+\/installation$/.test(url)) {
+          return new Response(
+            JSON.stringify({
+              id: 42,
+              account: { login: 'acme' },
+              permissions: ACCEPTED,
+              suspended_at: null,
+              html_url: null,
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        if (/\/app\/installations\/\d+\/access_tokens$/.test(url) && method === 'POST') {
+          return new Response('{}', { status: 502 });
+        }
+        throw new Error(`unexpected fetch in test: ${method} ${url}`);
+      }),
+    );
+    await expect(mintRunGitCredentials(runId)).rejects.toMatchObject({
+      reason: 'github_unavailable',
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const method = init?.method ?? 'GET';
+        if (/\/repos\/[^/]+\/[^/]+\/installation$/.test(url)) {
+          return new Response(
+            JSON.stringify({
+              id: 42,
+              account: { login: 'acme' },
+              permissions: ACCEPTED,
+              suspended_at: null,
+              html_url: null,
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        if (/\/app\/installations\/\d+\/access_tokens$/.test(url) && method === 'POST') {
+          // No `token`/`expires_at` — a body the mint cannot use.
+          return new Response('{}', {
+            status: 201,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        throw new Error(`unexpected fetch in test: ${method} ${url}`);
+      }),
+    );
+    await expect(mintRunGitCredentials(runId)).rejects.toMatchObject({
+      reason: 'github_unavailable',
+    });
+  });
+
+  it('a run whose recorded tokens cannot be read revokes nothing but never throws', async () => {
+    stubGithub();
+    const web = await seedRepo({ state: 'connected', owner: 'acme', name: 'web' });
+    const runId = await openRun([[web.id]]);
+    await mintRunGitCredentials(runId);
+
+    const { dispatchRunGitCredentialRepository } =
+      await import('@/lib/repositories/dispatchRunGitCredentialRepository');
+    vi.spyOn(dispatchRunGitCredentialRepository, 'listByRun').mockRejectedValueOnce(
+      new Error('the read is down'),
+    );
+    const result = await revokeRunGitCredentials(runId);
+    expect(result).toMatchObject([{ status: 'failed', credentialId: '' }]);
+    expect(result[0]?.detail).toContain('the read is down');
+    // The row is untouched — a later, healthy call can still revoke it.
+    expect(await recorded(runId)).toHaveLength(1);
+  });
+
+  it('a run whose own row cannot even be read revokes nothing but never throws', async () => {
+    stubGithub();
+    const web = await seedRepo({ state: 'connected', owner: 'acme', name: 'web' });
+    const runId = await openRun([[web.id]]);
+    await mintRunGitCredentials(runId);
+
+    const { dispatchRunRepository } = await import('@/lib/repositories/dispatchRunRepository');
+    vi.spyOn(dispatchRunRepository, 'findById').mockRejectedValueOnce(new Error('db is down'));
+    await expect(revokeRunGitCredentials(runId)).resolves.toEqual([]);
   });
 });

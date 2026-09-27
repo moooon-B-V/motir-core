@@ -29,6 +29,17 @@ describe('machineCreditsFor', () => {
     expect(machineCreditsFor(90 * 60, AT)).toBe(90);
   });
 
+  // Coverage top-up (MOTIR-692): `motirFleetMultiplier`'s OWN fallback — a run
+  // that predates the `motir_fleet` rate entirely (`resolveRunnerRate` answers
+  // `null`), never exercised above because every other test's clock is after
+  // the row's `effectiveFrom`. It falls back to the Linux-equivalent 1.0, never
+  // to zero, which would give machine time away for free.
+  it('falls back to the Linux-equivalent multiplier for a run that predates the motir_fleet rate', () => {
+    const beforeThePricedRow = new Date('2020-01-01T00:00:00.000Z');
+    expect(resolveRunnerRate('motir_fleet', beforeThePricedRow)).toBeNull();
+    expect(motirFleetMultiplier(beforeThePricedRow)).toBe(1);
+  });
+
   it("is ⌈s ÷ 60⌉ at today's rates because CI's rate and the fleet multiplier are both 1", () => {
     expect(CREDITS_PER_LINEAR_EQUIVALENT_MINUTE).toBe(1);
     expect(resolveRunnerRate('motir_fleet', AT)?.multiplier).toBe(1);

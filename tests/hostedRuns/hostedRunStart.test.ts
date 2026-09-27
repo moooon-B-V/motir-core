@@ -15,6 +15,7 @@ import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { HOSTED_AGENT_MAX_TIMEOUT_MS } from '@/lib/services/hostedAgentContainerService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { runCredentialService } from '@/lib/services/runCredentialService';
+import { scopeClaimService } from '@/lib/services/scopeClaimService';
 import {
   createTestLink,
   makeWorkItemFixture,
@@ -416,6 +417,52 @@ describe('a leaf card — the run it starts', () => {
     });
     expect(log?.body).toContain('mint down');
   });
+
+  // Coverage top-up (MOTIR-692): a container nobody supervises spends until the
+  // reaper finds it — so a failure to ENQUEUE the supervision job tears the
+  // container down through the seam's own settle, right there, and still fails
+  // the run (rather than leaving a booted container behind).
+  it('a failure to enqueue the supervision settles the container it just booted, and fails the run', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const card = await newCard({ kind: 'task', title: 'a card' });
+    const sendEventModule = await import('@/lib/jobs/sendEvent');
+    const original = sendEventModule.sendEvent;
+    // Only the SUPERVISION enqueue fails — claiming a leg emits its own
+    // `work-item/transitioned` event first, and that one must still land.
+    vi.spyOn(sendEventModule, 'sendEvent').mockImplementation((async (
+      name: string,
+      ...rest: unknown[]
+    ) => {
+      if (name === 'hosted-run/supervise') throw new Error('queue is down');
+      return (original as (...args: unknown[]) => Promise<void>)(name, ...rest);
+    }) as typeof sendEventModule.sendEvent);
+
+    await expect(start(card.identifier)).rejects.toThrow('queue is down');
+
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+    const runs = await runRows();
+    expect(runs[0]).toMatchObject({ status: 'failed', stopReason: 'halted' });
+  });
+
+  // Coverage top-up (MOTIR-692): the leaf's own claim is refused AFTER the run
+  // has already opened — a race the readiness check cannot see (another
+  // claimer moved between it and the claim). The run still ends `failed`,
+  // exactly as any other post-open failure does.
+  it('a leaf whose claim is refused after the run opened ends it failed', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const card = await newCard({ kind: 'task', title: 'a card' });
+    vi.spyOn(workItemsService, 'claimWorkItem').mockResolvedValueOnce({
+      outcome: 'blocked',
+      claimed: false,
+    } as unknown as Awaited<ReturnType<typeof workItemsService.claimWorkItem>>);
+
+    await expect(start(card.identifier)).rejects.toBeInstanceOf(HostedRunCardNotReadyError);
+
+    const runs = await runRows();
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ status: 'failed', stopReason: 'halted' });
+  });
 });
 
 describe('a parent card — one run over its children', () => {
@@ -485,5 +532,46 @@ describe('a parent card — one run over its children', () => {
     for (const id of [one.id, two.id, story.id]) {
       expect((await adminDb.workItem.findUniqueOrThrow({ where: { id } })).status).toBe('todo');
     }
+  });
+
+  // Coverage top-up (MOTIR-692): a scope that is not one layer deep is refused
+  // as `wrong_shape` — before the model, the credits or the repository check —
+  // exactly as the model-and-repository refusals above are, and just as
+  // vacuously of anything opened, minted or booted.
+  it('a scope more than one layer deep is refused, before the model check is even asked', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const story = await newCard({ kind: 'story', title: 'a story' });
+    const child = await newCard({ kind: 'task', title: 'a child', parentId: story.id });
+    // `task` may parent `bug` (the matrix goes deeper than a flat two levels) —
+    // so this is a legal tree, and the REFUSAL is the scope shape, not the parent.
+    await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'bug', title: 'a grandchild', parentId: child.id },
+      fx.ctx,
+    );
+
+    await expect(start(story.identifier)).rejects.toBeInstanceOf(HostedRunCardNotReadyError);
+    expect(aiCalls()).toEqual([]);
+    await expectNothingStarted();
+  });
+
+  // Coverage top-up (MOTIR-692): the scope claim itself is refused AFTER the
+  // run has already opened — a race the readiness preview cannot see (another
+  // claimer moved between the preview and the claim). The run still ends
+  // `failed`, exactly as any other post-open failure does.
+  it('a parent scope claim refused after the run opened ends it failed', async () => {
+    const site = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const story = await newCard({ kind: 'story', title: 'a story' });
+    const child = await newCard({ kind: 'task', title: 'a child', parentId: story.id });
+    await pinRepos(child.id, [site]);
+    vi.spyOn(scopeClaimService, 'claimScope').mockResolvedValueOnce({
+      claimed: false,
+      outcome: 'taken',
+    } as unknown as Awaited<ReturnType<typeof scopeClaimService.claimScope>>);
+
+    await expect(start(story.identifier)).rejects.toBeInstanceOf(HostedRunCardNotReadyError);
+
+    const runs = await runRows();
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ status: 'failed', stopReason: 'halted' });
   });
 });

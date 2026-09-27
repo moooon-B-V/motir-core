@@ -315,4 +315,67 @@ describe('no wall-clock limit but the backstop — only a silent agent is ended 
     expect(log?.body).toContain(HOSTED_RUN_STALL_DETAIL);
     expect(revoked).toEqual([data.dispatchRunId]);
   });
+
+  // Coverage top-up (MOTIR-692): `stallDetail`'s `latest?.getTime() ?? 0`
+  // fallback — a run with NO event at all (not even `run_opened`), so the
+  // stall read falls back to its BOOT time alone, never to epoch zero.
+  it('a run with no event of its own still stalls off its boot time alone', async () => {
+    const { data } = await startRun();
+    await adminDb.dispatchRunEvent.deleteMany({ where: { dispatchRunId: data.dispatchRunId } });
+    const bootedAt = new Date(data.session.bootedAt).getTime();
+    const later = new Date(bootedAt + HOSTED_RUN_STALL_WINDOW_MS + MINUTE);
+    const memo = new Map<string, unknown>();
+    const store = inMemorySupervisionStore();
+
+    let result = await pass(data, memo, store, () => later);
+    for (let i = 0; i < 5 && result === 'defer'; i += 1) {
+      result = await pass(data, memo, store, () => later);
+    }
+    expect(result).toEqual({ outcome: 'settled', reason: 'job_timed_out' });
+    expect(await runOf(data.dispatchRunId)).toMatchObject({
+      status: 'timed_out',
+      stopReason: 'abandoned',
+    });
+  });
+});
+
+describe('a settle reason none of the end path’s own names cover', () => {
+  // Coverage top-up (MOTIR-692): `endOutcomeFor`'s final fallback arm — a
+  // settled outcome whose `reason` is none of `job_completed`, `job_timed_out`
+  // or `gate_revoked` (the fleet reaper's own `reaped`, here). The end path
+  // still closes the run `failed`, quoting the container's own detail, rather
+  // than silently falling through.
+  it('a container the fleet reaper found abandoned still ends the run failed', async () => {
+    const { data } = await startRun();
+    const { hostedAgentContainerService } =
+      await import('@/lib/services/hostedAgentContainerService');
+    vi.spyOn(hostedAgentContainerService, 'advance').mockResolvedValueOnce({
+      outcome: 'settled',
+      reason: 'reaped',
+      containerId: 'fake-container',
+      exitCode: null,
+      billableSeconds: 1,
+      costUsd: '0',
+      usage: {},
+      failureDetail: 'the fleet reaper found it orphaned',
+    } as unknown as Awaited<ReturnType<typeof hostedAgentContainerService.advance>>);
+
+    const outcome = await hostedRunService.supervise('job-run-1', data, {
+      ...FAST,
+      now: () => new Date(),
+      steps: durableSteps(new Map()),
+      supervisionStore: inMemorySupervisionStore(),
+    });
+    expect(outcome).toMatchObject({ outcome: 'settled', reason: 'reaped' });
+
+    expect(await runOf(data.dispatchRunId)).toMatchObject({
+      status: 'failed',
+      stopReason: 'halted',
+    });
+    const log = await adminDb.dispatchRunEvent.findFirst({
+      where: { dispatchRunId: data.dispatchRunId, kind: 'log' },
+      orderBy: { seq: 'desc' },
+    });
+    expect(log?.body).toContain('the fleet reaper found it orphaned');
+  });
 });

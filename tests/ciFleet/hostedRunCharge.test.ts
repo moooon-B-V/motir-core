@@ -255,6 +255,24 @@ describe('only a container that served a run is charged', () => {
     expect(calls).toHaveLength(0);
   });
 
+  // Coverage top-up (MOTIR-692): decision §3's "a run with 0 billable seconds
+  // costs nothing" — the meter answering settled with zero seconds, distinct
+  // from `not_settled` above (a meter that has not answered at all).
+  it('zero settled billable seconds charges nothing, and motir-ai is never asked', async () => {
+    const calls = stubMotirAi(() => json(debitBody(1)));
+    const runId = await openRun();
+    vi.spyOn(ciFleetCostMeterService, 'getMachineTimeForDispatchRun').mockResolvedValueOnce({
+      settled: true,
+      billableSeconds: 0,
+      costUsd: '0',
+    });
+    expect(await hostedRunChargeService.chargeMachineTime(runId)).toEqual({
+      outcome: 'not_charged',
+      reason: 'zero_seconds',
+    });
+    expect(calls).toHaveLength(0);
+  });
+
   it('a self-hosted (non-billing) build charges nothing', async () => {
     const calls = stubMotirAi(() => json(debitBody(1)));
     const runId = await openRun();
@@ -317,6 +335,60 @@ describe('a motir-ai failure never holds the teardown, and the charge is retried
     expect(await hostedRunChargeService.chargeMachineTime(runId)).toMatchObject({
       outcome: 'retryable',
     });
+  });
+
+  // Coverage top-up (MOTIR-692): a throw that is not an `Error` instance at
+  // the transport. `lib/ai/motirAiClient.ts`'s `aiFetch` wraps EVERY transport
+  // failure — `Error` or not — in `MotirAiUnavailableError(describe(err))`
+  // before it ever reaches `chargeMachineTime`'s own catch, so `err instanceof
+  // Error` is true here too and `detail` is that wrapped message, prefixed
+  // exactly as `MotirAiUnavailableError`'s constructor formats it.
+  it("a non-Error throw at the transport is still a retryable result, wrapped by motir-ai's own client", async () => {
+    const runId = await openRun();
+    await hostedAgentContainerService.run(requestFor(null), { ...FAST, sleep: completingSleep() });
+    await adminDb.ciContainerUsage.updateMany({ data: { dispatchRunId: runId } });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        throw 'connection reset';
+      }),
+    );
+    expect(await hostedRunChargeService.chargeMachineTime(runId)).toEqual({
+      outcome: 'retryable',
+      detail: 'motir-ai is unavailable: connection reset',
+    });
+  });
+
+  // Coverage top-up (MOTIR-692): `chargeMachineTime`'s OWN `err instanceof
+  // Error ? err.message : String(err)` — its NON-Error arm, unreachable through
+  // the real client (`aiFetch` above always wraps first), so it needs a direct
+  // mock of `debitAgentMachine` to reach at all.
+  it("a debit call that throws something that isn't an Error still answers a string detail", async () => {
+    const runId = await openRun();
+    await hostedAgentContainerService.run(requestFor(null), { ...FAST, sleep: completingSleep() });
+    await adminDb.ciContainerUsage.updateMany({ data: { dispatchRunId: runId } });
+    const client = await import('@/lib/ai/motirAiClient');
+    vi.spyOn(client, 'debitAgentMachine').mockRejectedValueOnce({ weird: 'not an Error' });
+    expect(await hostedRunChargeService.chargeMachineTime(runId)).toEqual({
+      outcome: 'retryable',
+      detail: '[object Object]',
+    });
+  });
+
+  // Coverage top-up (MOTIR-692): the client itself unconfigured on this
+  // deployment (no `MOTIR_AI_SERVICE_TOKEN`) — distinct from every reachability
+  // failure above, and never retried since no request was even attempted.
+  it('an unconfigured motir-ai client answers not_charged unconfigured, and makes no call', async () => {
+    const runId = await openRun();
+    await hostedAgentContainerService.run(requestFor(null), { ...FAST, sleep: completingSleep() });
+    await adminDb.ciContainerUsage.updateMany({ data: { dispatchRunId: runId } });
+    const calls = stubMotirAi(() => json(debitBody(1)));
+    vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', '');
+    expect(await hostedRunChargeService.chargeMachineTime(runId)).toEqual({
+      outcome: 'not_charged',
+      reason: 'unconfigured',
+    });
+    expect(calls).toHaveLength(0);
   });
 
   it('a refusal is not retried: one call, the outcome still settled', async () => {
