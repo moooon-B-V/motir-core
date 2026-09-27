@@ -66,6 +66,19 @@ export const CURRENT_PATH_HEADER = 'x-current-path';
 export const PUBLIC_REDIRECT_SEGMENTS = new Set(['', 'explore', 'docs', 'legal', 'p']);
 
 /**
+ * The paths under `/p/*` that stay IN THIS APPLICATION although their segment has
+ * moved (Story MOTIR-6170): the Visitor's one-time CONSENT screen,
+ * `/p/<identifier>/consent` (MOTIR-6669). It asks a signed-in reader to agree
+ * before any live view loads, so it must be answered on `app.motir.co`, where the
+ * session lives. The bare `/p/<identifier>` and every other `/p/*` path keep their
+ * 308 to motir.co; the Visitor's live VIEW paths join this list with their route
+ * tree (MOTIR-6648).
+ */
+export function isAppVisitorPath(pathname: string): boolean {
+  return /^\/p\/[^/]+\/consent\/?$/.test(pathname);
+}
+
+/**
  * Redirect a moved public surface to the public origin, or `null` when this
  * request is not one. Gated on the public origin being CONFIGURED: while
  * `MOTIR_PUBLIC_SITE_URL` is unset, `publicSiteOrigin()` falls back to THIS
@@ -74,6 +87,7 @@ export const PUBLIC_REDIRECT_SEGMENTS = new Set(['', 'explore', 'docs', 'legal',
  */
 function publicSiteRedirect(request: NextRequest): NextResponse | null {
   if (publicSiteOrigin() === resolveBaseUrlTrimmed()) return null;
+  if (isAppVisitorPath(request.nextUrl.pathname)) return null;
   const segment = request.nextUrl.pathname.split('/')[1] ?? '';
   if (!PUBLIC_REDIRECT_SEGMENTS.has(segment)) return null;
   const destination = new URL(

@@ -9845,5 +9845,19 @@
   "roomView": {
     "mine": "Mine",
     "project": "Project"
+  },
+  "visitor": {
+    "consent": {
+      "pill": "Public project · {workspace}",
+      "headline": "Before you watch {project}",
+      "body": "<b>{project}</b> is built in public by <b>{workspace}</b>. If you continue, your <b>name and email</b> will be visible to <b>this project’s workspace Managers</b>, along with when you visit. We only ask once for this project.",
+      "seeLabel": "What they will see",
+      "seeRow": "{email} · your first and latest visit",
+      "continue": "Continue",
+      "continuing": "Continuing…",
+      "goBack": "Go back",
+      "goBackLine": "Going back shares nothing. You’ll be asked again the next time you open {project}.",
+      "failed": "We couldn’t save that. Try again."
+    }
   }
 }

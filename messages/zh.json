@@ -9841,5 +9841,19 @@
   "roomView": {
     "mine": "我的",
     "project": "整个项目"
+  },
+  "visitor": {
+    "consent": {
+      "pill": "公开项目 · {workspace}",
+      "headline": "在观看 {project} 之前",
+      "body": "<b>{project}</b> 由 <b>{workspace}</b> 公开构建。如果继续，<b>此项目所在工作区的管理者</b>将能看到你的<b>姓名和电子邮件</b>，以及你访问的时间。对于此项目，我们只询问一次。",
+      "seeLabel": "他们会看到",
+      "seeRow": "{email} · 你的首次和最近访问时间",
+      "continue": "继续",
+      "continuing": "正在继续…",
+      "goBack": "返回",
+      "goBackLine": "返回不会分享任何信息。下次打开 {project} 时会再次询问。",
+      "failed": "无法保存，请重试。"
+    }
   }
 }
