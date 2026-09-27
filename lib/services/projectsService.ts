@@ -412,8 +412,10 @@ async function resolveActiveProjectInContext(
         return first ? toProjectDTO(first) : null;
       }
 
+      let pinnedHere: Awaited<ReturnType<typeof projectRepository.findById>> = null;
       if (membership.activeProjectId) {
         const pinned = await projectRepository.findById(membership.activeProjectId, tx);
+        if (pinned && pinned.workspaceId === workspaceId) pinnedHere = pinned;
         // Accept the pinned project whether archived or not (#29.2): an
         // archived active project is surfaced (with archivedAt set) so the
         // shell shows the "Archived" pill. Only a genuinely unresolvable
@@ -441,14 +443,20 @@ async function resolveActiveProjectInContext(
       if (projects.length === 0) return NO_PROJECT_IN_WORKSPACE;
       // Recover only to a project the member can ENTER (MOTIR-6319). A workspace
       // that has projects, none of them enterable, is NOT the healable state —
-      // healing would create a project for someone who may not have one — so it
-      // resolves to no project; the no-project shell for that case is MOTIR-6548.
+      // healing would create a project for someone who may not have one. Nor can
+      // it be `null` yet: every authed page answers a null project with
+      // `/sign-in`, which bounces a signed-in reader straight back (MOTIR-4870's
+      // invariant — a redirect loop, measured in CI). So until the no-project
+      // shell lands (MOTIR-6548), it resolves to the project they were on —
+      // UNPERSISTED — and each page's own browse gate renders the no-access state
+      // over it. Nothing leaks: the pin cannot be forged any more
+      // (`setActiveProject`), and no page reads the project past its gate.
       const [first] = await projectAccessService.filterBrowsable(
         projects,
         { userId, workspaceId },
         tx,
       );
-      if (!first) return null;
+      if (!first) return toProjectDTO(pinnedHere ?? projects[0]!);
 
       if (membership.activeProjectId) {
         // The pointer was SET but didn't resolve — a real inconsistency

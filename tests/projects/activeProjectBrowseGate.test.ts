@@ -86,15 +86,43 @@ describe('setActiveProject', () => {
 });
 
 describe('getActiveProject', () => {
-  it('does not hand back a stored active project the actor can no longer enter', async () => {
-    const s = await setup();
-    // The pointer as a forged call (or a revoked access) would have left it.
-    await adminDb.workspaceMembership.update({
-      where: { userId_workspaceId: { userId: s.outsider.id, workspaceId: s.fx.workspaceId } },
-      data: { activeProjectId: s.fx.projectId },
+  const pinFor = (userId: string, workspaceId: string, projectId: string) =>
+    adminDb.workspaceMembership.update({
+      where: { userId_workspaceId: { userId, workspaceId } },
+      data: { activeProjectId: projectId },
     });
+
+  it('does not hand back a stored active project the actor can no longer enter, and recovers to one they can', async () => {
+    const s = await setup();
+    const open = await projectsService.createProject({
+      actorUserId: s.fx.ownerId,
+      workspaceId: s.fx.workspaceId,
+      name: 'Open to all',
+    });
+    await adminDb.project.update({
+      where: { id: open.id },
+      data: { accessLevel: 'open', accessMode: 'workspace' },
+    });
+    // The pointer as a forged call (or a revoked access) would have left it.
+    await pinFor(s.outsider.id, s.fx.workspaceId, s.fx.projectId);
+
     const resolved = await projectsService.getActiveProject(s.outsider.id, s.fx.workspaceId);
-    expect(resolved?.id).not.toBe(s.fx.projectId);
+    expect(resolved?.id).toBe(open.id);
+    expect(await activeOf(s.outsider.id, s.fx.workspaceId)).toBe(open.id);
+  });
+
+  it('with NOTHING enterable, resolves to the project they were on without persisting it — the page gates render no-access over it (MOTIR-6548 draws the shell)', async () => {
+    // `null` here would loop: every authed page answers a null project with
+    // `/sign-in`, which bounces a signed-in reader back (MOTIR-4870's invariant).
+    const s = await setup();
+    await pinFor(s.outsider.id, s.fx.workspaceId, s.fx.projectId);
+
+    const resolved = await projectsService.getActiveProject(s.outsider.id, s.fx.workspaceId);
+    expect(resolved?.id).toBe(s.fx.projectId);
+    // …and it grants nothing: the project's reads still refuse them.
+    await expect(
+      workItemsService.listCandidateParents(s.fx.projectId, 'subtask', s.outsiderCtx),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 });
 

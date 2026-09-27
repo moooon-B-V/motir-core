@@ -574,7 +574,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   list_projects: {
     summary: 'Every project this token can reach, each with the projectKey every other tool takes.',
-    descriptionFingerprint: 'f2ba367c391a',
+    descriptionFingerprint: 'ada98598846a',
   },
   get_project_state: {
     summary:

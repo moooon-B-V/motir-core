@@ -145,7 +145,7 @@ describe('ProjectMembersSettings (6.4.5)', () => {
     );
   });
 
-  it('selecting Private PATCHes access and seeds workspace members locally', async () => {
+  it('selecting Private PATCHes access and adds nobody to the project (MOTIR-6544)', async () => {
     renderAdmin({ accessLevel: 'open', members: [members[0]!] });
     // Only the admin is on the project to start.
     expect(screen.queryByText('Julian')).toBeNull();
@@ -160,9 +160,9 @@ describe('ProjectMembersSettings (6.4.5)', () => {
     );
     const body = JSON.parse((fetchMock.mock.calls.at(-1)![1] as RequestInit).body as string);
     expect(body).toEqual({ accessLevel: 'private' });
-    // The go-private note + the seeded members render.
-    expect(screen.getByText('Julian')).toBeTruthy();
-    expect(screen.getByText('Bo Philips')).toBeTruthy();
+    // Members only means the people deliberately added: going private seeds
+    // nobody, so the list stays as it was.
+    expect(screen.queryByText('Julian')).toBeNull();
   });
 
   it('selecting "Building in public" opens the confirm dialog and PATCHes public only on confirm', async () => {
@@ -183,7 +183,7 @@ describe('ProjectMembersSettings (6.4.5)', () => {
       ),
     );
     const body = JSON.parse((fetchMock.mock.calls.at(-1)![1] as RequestInit).body as string);
-    expect(body).toEqual({ accessLevel: 'public' });
+    expect(body).toEqual({ accessMode: 'public' });
   });
 
   it('restores the row and surfaces the generic error when a remove is rejected', async () => {
@@ -210,7 +210,7 @@ describe('ProjectMembersSettings (6.4.5)', () => {
     expect(screen.getByRole('button', { name: 'Stop building in public' })).toBeTruthy();
     expect(fetchMock).not.toHaveBeenCalled();
 
-    // Confirming reverts to the `open` level via the shipped access PATCH.
+    // Confirming reverts to Workspace (the `open` level) via the access PATCH.
     fireEvent.click(screen.getByRole('button', { name: 'Stop building in public' }));
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -219,7 +219,7 @@ describe('ProjectMembersSettings (6.4.5)', () => {
       ),
     );
     const body = JSON.parse((fetchMock.mock.calls.at(-1)![1] as RequestInit).body as string);
-    expect(body).toEqual({ accessLevel: 'open' });
+    expect(body).toEqual({ accessMode: 'workspace' });
     // The revert must ALSO refresh the server-rendered shell header slot so the
     // "Building in public" indicator swaps back to the CTA without a hard reload
     // (Subtask 6.17.7 — the stopping case that was previously stale).

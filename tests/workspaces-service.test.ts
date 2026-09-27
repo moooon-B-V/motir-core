@@ -281,6 +281,8 @@ describe('listMembers', () => {
         email: 'owner@example.com',
         workspaceRole: 'manager',
         customRole: null,
+        accessScope: 'full',
+        addedProjectCount: 0,
       },
       {
         userId: invitee.id,
@@ -288,6 +290,8 @@ describe('listMembers', () => {
         email: 'invitee@example.com',
         workspaceRole: 'member',
         customRole: null,
+        accessScope: 'full',
+        addedProjectCount: 0,
       },
     ]);
   });
