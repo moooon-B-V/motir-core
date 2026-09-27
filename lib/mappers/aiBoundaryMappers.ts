@@ -13,6 +13,9 @@ import type {
 import type { PlanDto } from '@/lib/dto/plans';
 import type { WorkItemEmbeddingRankRow } from '@/lib/repositories/workItemEmbeddingRepository';
 import type { OrgFootprintDTO } from '@/lib/dto/organizations';
+import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
+import type { InFlightDeliveryFact } from '@/lib/services/inFlightCode';
+import { toLinkedPullRequestDto } from '@/lib/mappers/githubMappers';
 
 // The structural minimum every skeleton projection needs — the fields shared by
 // WorkItemSummaryDto (the flat breadth read), WorkItemSubtreeDto (the depth-
@@ -180,4 +183,31 @@ export function toPendingPlanRows(plans: PlanDto[]): PendingPlanRow[] {
     itemCount: p.itemCount,
     createdAt: p.createdAt,
   }));
+}
+
+// A delivery row → the fact the in-flight derivation reads (MOTIR-6618). The
+// pull-request half goes through `toLinkedPullRequestDto` UNCHANGED, so `repo`
+// (`owner/name`), the link-out URL and the head commit are literally the values
+// the Development surface and the delivery set publish — not a parallel mapping.
+// `branch` is the row's `headRef`, which that DTO does not carry: the branch NAME
+// is what a planner reads at. The head commit falls back to the one the
+// mergeability was last observed at when no check row was ever recorded.
+export function toInFlightDeliveryFact(row: WorkItemDeliveryWithChecks): InFlightDeliveryFact {
+  const pr = toLinkedPullRequestDto({
+    ...row.pullRequest,
+    repo: row.repo,
+    checkRuns: row.pullRequest.checkRuns,
+  });
+  return {
+    workItemId: row.workItemId,
+    repo: pr.repo,
+    branch: row.pullRequest.headRef,
+    headSha: pr.headSha ?? row.pullRequest.mergeableStateHeadSha ?? null,
+    prNumber: pr.number,
+    prUrl: pr.url,
+    draft: row.pullRequest.draft === true,
+    baseRef: row.pullRequest.baseRef,
+    open: pr.state === 'open',
+    merged: row.pullRequest.merged,
+  };
 }

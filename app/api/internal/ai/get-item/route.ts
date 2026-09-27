@@ -15,6 +15,25 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 // authenticateJobRequest); the item is resolved AS the token's user within the
 // token's project, so a cross-tenant / cross-project key is a 404, never a leak.
 //
+// `item.inFlightCode` (MOTIR-6618) — where the card's UNMERGED code lives, one
+// entry per repository: `{ repo, branch, headSha, prNumber, prUrl, draft,
+// baseRef, source }`, derived from the `work_item_delivery` rows with NO provider
+// call.
+//   - `repo` is `owner/name` — exactly the `repoRef` `GET /api/internal/ai/repo-file`
+//     (motir-ai's `read_file`) accepts, so the planner passes `repo` as `repoRef`
+//     and `branch` as `ref` straight through.
+//   - `branch` is the open pull request's `headRef`; `headSha` only dates the
+//     observation (null when no head was ever recorded).
+//   - `source: 'own'` — the card's own OPEN (not merged) pull request in that
+//     repository. `source: 'inherited'` — the card has none there, so the entry
+//     is the NEAREST ancestor's open pull request in that repository (the story's
+//     `parent/MOTIR-<id>-<slug>` branch a child's commit rides), and `fromKey`
+//     names that ancestor. The walk stays inside the token's project.
+//   - EMPTY IS THE ORDINARY ANSWER: an array on every item, never null. `[]` with
+//     `item.mergedRepos: ['owner/name', …]` means the card's own code has MERGED
+//     there (no longer in flight); `[]` with `mergedRepos: []` means nothing was
+//     ever delivered on the card or any ancestor.
+//
 // Typed errors → status:
 //   JobAuthError                       → 401
 //   WorkItemNotFoundError              → 404 (absent / cross-tenant — no leak)

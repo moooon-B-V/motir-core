@@ -5,6 +5,8 @@ import { commentsService } from '@/lib/services/commentsService';
 import { aiBoundaryService } from '@/lib/services/aiBoundaryService';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import {
   makeWorkItemFixture as makeFixture,
@@ -13,6 +15,7 @@ import {
 } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { randomToken } from '../../helpers/random';
 
 // Subtask 7.5.1 — the plan-tree GRAPH-TRAVERSAL read family (get_item /
 // get_subtree / walk_blocking) at the service level, against a REAL Postgres.
@@ -471,8 +474,22 @@ describe('aiBoundaryService — the graph-traversal boundary', () => {
     // which is what lets the two repositories deploy in either order.
     // `decision` (MOTIR-5958) is the next additive key: null on an item that is not a
     // `human` decision, which is every item here.
-    const { blockedBy, blocks, relatesTo, duplicates, clones, decision, ...before } = res.item;
+    // `inFlightCode` / `mergedRepos` (MOTIR-6618) are the next: EMPTY arrays on an
+    // item with no delivery anywhere in its chain.
+    const {
+      blockedBy,
+      blocks,
+      relatesTo,
+      duplicates,
+      clones,
+      decision,
+      inFlightCode,
+      mergedRepos,
+      ...before
+    } = res.item;
     expect(decision).toBeNull();
+    expect(inFlightCode).toEqual([]);
+    expect(mergedRepos).toEqual([]);
     expect(before).toEqual(
       await workItemsService.getWorkItemByIdentifier(fx.projectId, item.identifier, fx.ctx),
     );
@@ -601,5 +618,253 @@ describe('aiBoundaryService — the graph-traversal boundary', () => {
     expect(res.nodes.map((n) => n.key)).toEqual([b.identifier]);
     expect(res.edges).toEqual([{ blockedKey: a.identifier, blockerKey: b.identifier }]);
     expect(res.truncated).toBe(false);
+  });
+});
+
+// ── MOTIR-6618 — the card's IN-FLIGHT CODE on the planner's item read ─────────
+// Where a card's unmerged code lives, per repository: its own OPEN pull request's
+// branch, else the nearest ancestor's — off the delivery rows, no provider call.
+describe('aiBoundaryService.getItem — inFlightCode', () => {
+  type Fx = Awaited<ReturnType<typeof makeFixture>>;
+
+  async function addRepo(fx: Fx, name: string): Promise<{ id: string }> {
+    const inst = await adminDb.githubInstallation.upsert({
+      where: { installationId: `inst-${fx.workspaceId}` },
+      create: {
+        installationId: `inst-${fx.workspaceId}`,
+        workspaceId: fx.workspaceId,
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+        provider: 'github',
+      },
+      update: {},
+    });
+    return adminDb.githubRepo.create({
+      data: {
+        installationId: inst.id,
+        workspaceId: fx.workspaceId,
+        organizationId: fx.workspace.organizationId,
+        repoId: `repo-${randomToken(8)}`,
+        owner: 'moooon',
+        name,
+        defaultBranch: 'main',
+        archived: false,
+        provider: 'github',
+      },
+      select: { id: true },
+    });
+  }
+
+  let nextPrNumber = 700;
+
+  async function addPr(
+    repoId: string,
+    opts: { headRef: string; merged?: boolean; draft?: boolean; baseRef?: string },
+  ): Promise<{ id: string; number: number }> {
+    const number = nextPrNumber++;
+    const row = await adminDb.githubPullRequest.create({
+      data: {
+        repoId,
+        number,
+        state: opts.merged ? 'closed' : 'open',
+        merged: opts.merged ?? false,
+        headRef: opts.headRef,
+        baseRef: opts.baseRef ?? 'main',
+        draft: opts.draft ?? null,
+        provider: 'github',
+      },
+      select: { id: true },
+    });
+    return { id: row.id, number };
+  }
+
+  async function deliver(fx: Fx, workItemId: string, prId: string, repoId: string) {
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemDeliveryRepository.add(
+        { workspaceId: fx.workspaceId, workItemId, githubPullRequestId: prId, repoId },
+        tx,
+      ),
+    );
+  }
+
+  async function chain(fx: Fx) {
+    const epic = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'Epic' },
+      fx.ctx,
+    );
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Story', parentId: epic.id },
+      fx.ctx,
+    );
+    const sub = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'subtask', title: 'Sub', parentId: story.id },
+      fx.ctx,
+    );
+    return { epic, story, sub };
+  }
+
+  it('names an OPEN own delivery — branch is the headRef, source own', async () => {
+    const fx = await makeFixture();
+    const card = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Card' },
+      fx.ctx,
+    );
+    const repo = await addRepo(fx, 'motir-core');
+    const pr = await addPr(repo.id, { headRef: 'subtask/MOTIR-9-own', draft: true });
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: pr.id,
+        commitSha: 'deadbeef',
+        checkName: 'build',
+        checkSuiteId: '',
+        conclusion: 'success',
+      },
+    });
+    await deliver(fx, card.id, pr.id, repo.id);
+
+    const res = await aiBoundaryService.getItem(fx.projectId, card.identifier, fx.ctx);
+    expect(res.item.inFlightCode).toEqual([
+      {
+        repo: 'moooon/motir-core',
+        branch: 'subtask/MOTIR-9-own',
+        headSha: 'deadbeef',
+        prNumber: pr.number,
+        prUrl: `https://github.com/moooon/motir-core/pull/${pr.number}`,
+        draft: true,
+        baseRef: 'main',
+        source: 'own',
+      },
+    ]);
+    expect(res.item.mergedRepos).toEqual([]);
+  });
+
+  it('a child with no delivery INHERITS its parent story’s open branch, fromKey = the story', async () => {
+    const fx = await makeFixture();
+    const { story, sub } = await chain(fx);
+    const repo = await addRepo(fx, 'motir-core');
+    const pr = await addPr(repo.id, { headRef: `parent/${story.identifier}-story` });
+    await deliver(fx, story.id, pr.id, repo.id);
+
+    const res = await aiBoundaryService.getItem(fx.projectId, sub.identifier, fx.ctx);
+    expect(res.item.inFlightCode).toEqual([
+      expect.objectContaining({
+        repo: 'moooon/motir-core',
+        branch: `parent/${story.identifier}-story`,
+        prNumber: pr.number,
+        source: 'inherited',
+        fromKey: story.identifier,
+      }),
+    ]);
+    expect(res.item.mergedRepos).toEqual([]);
+  });
+
+  it('own in motir-ai + parent in motir-core → TWO entries, own and inherited', async () => {
+    const fx = await makeFixture();
+    const { story, sub } = await chain(fx);
+    const core = await addRepo(fx, 'motir-core');
+    const ai = await addRepo(fx, 'motir-ai');
+    const storyPr = await addPr(core.id, { headRef: `parent/${story.identifier}-story` });
+    const ownPr = await addPr(ai.id, { headRef: `subtask/${sub.identifier}-ai` });
+    await deliver(fx, story.id, storyPr.id, core.id);
+    await deliver(fx, sub.id, ownPr.id, ai.id);
+
+    const res = await aiBoundaryService.getItem(fx.projectId, sub.identifier, fx.ctx);
+    expect(
+      res.item.inFlightCode.map((e) => ({
+        repo: e.repo,
+        source: e.source,
+        branch: e.branch,
+        fromKey: e.source === 'inherited' ? e.fromKey : undefined,
+      })),
+    ).toEqual([
+      {
+        repo: 'moooon/motir-ai',
+        source: 'own',
+        branch: `subtask/${sub.identifier}-ai`,
+        fromKey: undefined,
+      },
+      {
+        repo: 'moooon/motir-core',
+        source: 'inherited',
+        branch: `parent/${story.identifier}-story`,
+        fromKey: story.identifier,
+      },
+    ]);
+  });
+
+  it('merged is not in-flight: [] plus mergedRepos; nothing anywhere: two empty arrays', async () => {
+    const fx = await makeFixture();
+    const merged = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Merged' },
+      fx.ctx,
+    );
+    const untouched = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Untouched' },
+      fx.ctx,
+    );
+    const repo = await addRepo(fx, 'motir-core');
+    const pr = await addPr(repo.id, { headRef: 'subtask/MOTIR-1-done', merged: true });
+    await deliver(fx, merged.id, pr.id, repo.id);
+
+    const m = await aiBoundaryService.getItem(fx.projectId, merged.identifier, fx.ctx);
+    expect(m.item.inFlightCode).toEqual([]);
+    expect(m.item.mergedRepos).toEqual(['moooon/motir-core']);
+
+    const u = await aiBoundaryService.getItem(fx.projectId, untouched.identifier, fx.ctx);
+    expect(u.item.inFlightCode).toEqual([]);
+    expect(u.item.mergedRepos).toEqual([]);
+  });
+
+  it('the ancestor walk is ONE batched delivery read however deep the chain', async () => {
+    const fx = await makeFixture();
+    const { epic, story, sub } = await chain(fx);
+    const repo = await addRepo(fx, 'motir-core');
+    const pr = await addPr(repo.id, { headRef: `parent/${epic.identifier}-epic` });
+    await deliver(fx, epic.id, pr.id, repo.id);
+
+    const batched = vi.spyOn(workItemDeliveryRepository, 'listByWorkItemsWithChecks');
+    const perCard = vi.spyOn(workItemDeliveryRepository, 'listByWorkItemWithChecks');
+    const perCardLean = vi.spyOn(workItemDeliveryRepository, 'listByWorkItem');
+    try {
+      const res = await aiBoundaryService.getItem(fx.projectId, sub.identifier, fx.ctx);
+      // Two levels up, still one read — carrying the card AND both ancestors.
+      expect(res.item.inFlightCode).toEqual([
+        expect.objectContaining({ source: 'inherited', fromKey: epic.identifier }),
+      ]);
+      expect(batched).toHaveBeenCalledTimes(1);
+      expect([...batched.mock.calls[0]![0]].sort()).toEqual([epic.id, story.id, sub.id].sort());
+      expect(perCard).not.toHaveBeenCalled();
+      expect(perCardLean).not.toHaveBeenCalled();
+    } finally {
+      batched.mockRestore();
+      perCard.mockRestore();
+      perCardLean.mockRestore();
+    }
+  });
+
+  it('the WORKSPACE BINDING is what makes the rows visible — unbound, the same read is empty', async () => {
+    const fx = await makeFixture();
+    const card = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Card' },
+      fx.ctx,
+    );
+    const repo = await addRepo(fx, 'motir-core');
+    const pr = await addPr(repo.id, { headRef: 'subtask/MOTIR-5-bound' });
+    await deliver(fx, card.id, pr.id, repo.id);
+
+    // The repository read the service issues, WITHOUT the workspace GUC: the policy
+    // hides the row and nothing raises — the failure that looks like an answer.
+    const unbound = await db.$transaction((tx) =>
+      workItemDeliveryRepository.listByWorkItemsWithChecks([card.id], tx),
+    );
+    expect(unbound).toEqual([]);
+
+    // The service binds `ctx.workspaceId`, so the same row IS read.
+    const res = await aiBoundaryService.getItem(fx.projectId, card.identifier, fx.ctx);
+    expect(res.item.inFlightCode).toHaveLength(1);
+    expect(res.item.inFlightCode[0]).toMatchObject({
+      source: 'own',
+      branch: 'subtask/MOTIR-5-bound',
+    });
   });
 });
