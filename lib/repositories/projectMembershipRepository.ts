@@ -129,9 +129,9 @@ export const projectMembershipRepository = {
 
   /**
    * Bulk-insert memberships, skipping any (userId, projectId) that already
-   * exists. Backs the go-private seeding: when a project flips to `private` we
-   * add every current workspace member, and rows that already exist are left
-   * alone. Returns the count created.
+   * exists. Returns the count created. It backed the go-private seeding until
+   * Story MOTIR-6169 retired it (a mode change adds nobody); a Limited invite's
+   * accept uses it to add the person to the projects the invite named (MOTIR-6546).
    */
   async createManySkipDuplicates(
     data: Array<{ workspaceId: string; projectId: string; userId: string; role: MemberRole }>,

@@ -4,7 +4,6 @@ import {
   type PointScale,
   type PrMergeMode,
   type Project,
-  type ProjectAccessLevel,
   type ProjectAccessMode,
   type ProjectRepoOwnership,
   type WorkflowPolicyMode,
@@ -754,37 +753,14 @@ export const projectRepository = {
   },
 
   /**
-   * Set the project's browse-access level (Story 6.4 · Subtask 6.4.4). When
-   * `stampMadePublicAt` is set (the service passes it on a transition INTO
-   * `public`, Subtask 6.13.4), also stamp `madePublicAt = now()` — the "newest"
-   * axis the project square's Recent rank orders by. The service stamps only on
-   * the not-public → public edge, so a re-save of an already-public project
-   * keeps its original go-public moment; a re-publish after going private gets a
-   * fresh stamp.
-   */
-  async setAccessLevel(
-    id: string,
-    accessLevel: ProjectAccessLevel,
-    options: { stampMadePublicAt: boolean },
-    tx: Prisma.TransactionClient,
-  ): Promise<Project> {
-    return tx.project.update({
-      where: { id },
-      data: {
-        accessLevel,
-        ...(options.stampMadePublicAt ? { madePublicAt: new Date() } : {}),
-      },
-    });
-  },
-
-  /**
    * Set the project's ACCESS MODE (Story MOTIR-6169 · MOTIR-6541) — `access_mode`
    * AND the legacy `accessLevel` (`levelForMode`), in ONE update. THE ONLY
    * WRITER of `access_mode`: the two columns move together until the follow-up
    * contract story drops `accessLevel`, so the RLS policies that still key on
    * `"accessLevel" = 'public'` never disagree with the mode the application
-   * reads. `stampMadePublicAt` is `setAccessLevel`'s option, for the same
-   * reason: the service passes it only on the not-public → public edge.
+   * reads. `stampMadePublicAt` stamps `madePublicAt` (the project square's
+   * "newest" axis, Subtask 6.13.4); the service passes it only on the
+   * not-public → public edge, so a re-save keeps the original go-public moment.
    */
   async setAccessMode(
     id: string,

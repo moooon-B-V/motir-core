@@ -35,9 +35,9 @@ import { StopBuildInPublicDialog } from './StopBuildInPublicDialog';
 //
 // The two cards:
 //   • Project access — the open / limited / private radio cards (PATCH
-//     /api/projects/[key]/access). Going private seeds every workspace member
-//     as a project member, so we mirror that locally (the server does the same
-//     via createManySkipDuplicates).
+//     /api/projects/[key]/access). A change adds nobody to the project (Story
+//     MOTIR-6169 · MOTIR-6544); the three-mode control replaces these cards in
+//     MOTIR-6550.
 //   • Members — the project member list with a per-row role select + Remove,
 //     and an add-member Combobox scoped to workspace-members-not-yet-on-project
 //     (POST / PATCH / DELETE /api/projects/[key]/members[/userId]).
@@ -216,29 +216,25 @@ export function ProjectMembersSettings({
   async function applyAccess(level: AccessLevel) {
     if (level === accessLevel) return;
     const prevLevel = accessLevel;
-    const prevMembers = members;
     setAccessLevel(level);
-    // Going private adds every workspace member to the project — match the
-    // server locally.
-    if (level === 'private') {
-      setMembers((current) => {
-        const have = new Set(current.map((m) => m.userId));
-        const seeded = workspaceMembers
-          .filter((w) => !have.has(w.userId))
-          .map<ProjectMemberDTO>((w) => ({
-            userId: w.userId,
-            name: w.name,
-            email: w.email,
-          }));
-        return [...current, ...seeded];
-      });
-    }
+    // A mode change adds NOBODY to the project (Story MOTIR-6169 · MOTIR-6544):
+    // Members only means the people deliberately added, so the list stays as it
+    // is. (Going private used to seed every workspace member, matched here.)
     setAccessPending(true);
     try {
       const res = await fetch(`/api/projects/${projectKey}/access`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ accessLevel: level }),
+        // Build-in-public and its stop speak ACCESS MODES (MOTIR-6544); the other
+        // levels still go through the service's level adapter until the page's
+        // mode control lands (MOTIR-6550).
+        body: JSON.stringify(
+          level === 'public'
+            ? { accessMode: 'public' }
+            : level === 'open'
+              ? { accessMode: 'workspace' }
+              : { accessLevel: level },
+        ),
       });
       if (!res.ok) throw new Error(await readError(res));
       toast({
@@ -257,7 +253,6 @@ export function ProjectMembersSettings({
       router.refresh();
     } catch {
       setAccessLevel(prevLevel);
-      setMembers(prevMembers);
       toast({
         variant: 'error',
         title: t('access.changeAccessErrorTitle'),

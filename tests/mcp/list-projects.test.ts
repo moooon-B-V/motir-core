@@ -226,8 +226,8 @@ describe('list_projects — the access checks are the UI switcher’s', () => {
       level: 'private',
     });
 
-    // A plain workspace member added AFTER the project went private, so they were
-    // never auto-seeded onto it.
+    // A plain workspace member never added to the private project (going private
+    // adds nobody — Story MOTIR-6169).
     const plain = await makeUser('plain-mcp-lp@ex.com', 'Plain');
     await workspacesService.addMember({ userId: plain.id, workspaceId: workspace.id });
     const plainCtx: ServiceContext = { userId: plain.id, workspaceId: workspace.id };

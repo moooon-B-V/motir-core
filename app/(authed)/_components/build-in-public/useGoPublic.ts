@@ -13,8 +13,8 @@ import { useToast } from '@/components/ui/Toast';
 // access mutation has a single implementation:
 //   • `setOpen` opens / closes the explainer/confirm dialog;
 //   • `confirm` runs the actual write — `PATCH /api/projects/[key]/access`
-//     with `accessLevel: 'public'`, the shipped 6.4 `setAccessLevel` path
-//     (Story 6.17.2: reframe the label, never fork the model);
+//     with `accessMode: 'public'` — the access-mode setter (Story MOTIR-6169 ·
+//     MOTIR-6544; Story 6.17.2: reframe the label, never fork the model);
 //   • on success it toasts, closes the dialog, and `router.refresh()`es so the
 //     SERVER-gated surfaces re-render — the header button + nudge + promo card
 //     disappear (the project is now `public`) and the 6.17.4 "Building in
@@ -37,7 +37,7 @@ export function useGoPublic(projectKey: string) {
       const res = await fetch(`/api/projects/${projectKey}/access`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ accessLevel: 'public' }),
+        body: JSON.stringify({ accessMode: 'public' }),
       });
       if (!res.ok) throw new Error('ACCESS_WRITE_FAILED');
       toast({

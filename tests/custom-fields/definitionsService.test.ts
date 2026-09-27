@@ -296,7 +296,7 @@ describe('listFields', () => {
     const fx = await makeWorkItemFixture();
     await createField(fx, 'Customer');
     await projectMembersService.setAccessLevel({ ...actorInput(fx), level: 'private' });
-    // Added AFTER the go-private member seeding, so no project membership.
+    // Never added to the private project, so no project membership.
     const outsider = await usersService.createUser({
       email: 'outsider-list@example.com',
       password: 'hunter2hunter2',

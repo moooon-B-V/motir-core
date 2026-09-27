@@ -65,8 +65,8 @@ describe('listProjects — browsable-only filter (6.4.6)', () => {
       level: 'private',
     });
 
-    // A plain workspace member added AFTER the project went private — so they
-    // were NOT auto-seeded as a member of it.
+    // A plain workspace member who was never added to the private project
+    // (going private adds nobody — Story MOTIR-6169).
     const plain = await makeUser('plain-lp@ex.com', 'Plain');
     await workspacesService.addMember({ userId: plain.id, workspaceId: workspace.id });
 
@@ -136,8 +136,8 @@ describe('assignableMembersService.list — access-scoped pickers (6.4.6)', () =
       name: 'Private',
     });
 
-    // `onProject` joins the workspace BEFORE the private project is sealed, so
-    // go-private auto-seeds them as a member of it.
+    // `onProject` (and the owner) are ADDED to the private project explicitly —
+    // going private adds nobody since Story MOTIR-6169.
     const onProject = await makeUser('onproj-am@ex.com', 'OnProject');
     await workspacesService.addMember({ userId: onProject.id, workspaceId: workspace.id });
     await projectMembersService.setAccessLevel({
@@ -146,9 +146,14 @@ describe('assignableMembersService.list — access-scoped pickers (6.4.6)', () =
       ctx: ownerCtx,
       level: 'private',
     });
+    for (const userId of [owner.id, onProject.id]) {
+      await adminDb.projectMembership.create({
+        data: { workspaceId: workspace.id, projectId: privateProject.id, userId, role: 'member' },
+      });
+    }
 
-    // `offProject` joins the workspace AFTER the seal, so they are a workspace
-    // member but NOT a member of the private project.
+    // `offProject` is a workspace member who was never added to the private
+    // project.
     const offProject = await makeUser('offproj-am@ex.com', 'OffProject');
     await workspacesService.addMember({ userId: offProject.id, workspaceId: workspace.id });
 
@@ -162,8 +167,8 @@ describe('assignableMembersService.list — access-scoped pickers (6.4.6)', () =
       [owner.id, onProject.id, offProject.id].sort(),
     );
 
-    // PRIVATE → only the project's members (owner + onProject, auto-seeded on
-    // go-private), NOT the off-project workspace member.
+    // PRIVATE → only the project's members (owner + onProject, added above),
+    // NOT the off-project workspace member.
     const privateMembers = await assignableMembersService.list({
       projectId: privateProject.id,
       accessLevel: 'private',

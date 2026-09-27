@@ -8,6 +8,7 @@ import { projectMembershipRepository } from '@/lib/repositories/projectMembershi
 import {
   AlreadyProjectMemberError,
   InvalidAccessLevelError,
+  InvalidAccessModeError,
   NotAProjectMemberError,
   PermissionDeniedError,
   ProjectNotFoundError,
@@ -252,8 +253,8 @@ describe('authorization — who may manage', () => {
       ).toBeGreaterThan(0);
       expect(
         (await projectMembersService.getAccess({ key, actorUserId: owner.id, ctx: ownerCtx }))
-          .accessLevel,
-      ).toBe(level);
+          .accessMode,
+      ).toBe(level === 'open' ? 'workspace' : 'members');
     }
   });
 
@@ -348,8 +349,8 @@ describe('removeMember', () => {
   });
 });
 
-describe('setAccessLevel', () => {
-  it('sets open / limited without seeding members', async () => {
+describe('setAccessLevel — the legacy adapter onto setAccessMode', () => {
+  it('maps `limited` to Members only without seeding members', async () => {
     const { key, owner, ownerCtx, project } = await makeFixture('access-open');
     const res = await projectMembersService.setAccessLevel({
       key,
@@ -357,7 +358,9 @@ describe('setAccessLevel', () => {
       ctx: ownerCtx,
       level: 'limited',
     });
-    expect(res).toEqual({ key, accessLevel: 'limited' });
+    // `limited` and `private` both land at Members only (`role-model.md` Q1),
+    // and the legacy column is written beside the mode as `private`.
+    expect(res).toEqual({ key, accessMode: 'members', accessLevel: 'private' });
     const count = await adminDb.projectMembership.count({ where: { projectId: project.id } });
     expect(count).toBe(0);
   });
@@ -408,7 +411,7 @@ describe('setAccessLevel', () => {
         ctx: ownerCtx,
         level,
       });
-      expect(res.accessLevel).toBe(level);
+      expect(res.accessMode).toBe(level === 'open' ? 'workspace' : 'members');
     }
   });
 
@@ -435,10 +438,10 @@ describe('setAccessLevel', () => {
     ).rejects.toBeInstanceOf(InvalidAccessLevelError);
   });
 
-  it('going private adds every current workspace member to the project, skipping anyone already on it', async () => {
+  it('going private adds NOBODY — Members only means the people deliberately added', async () => {
     const { workspace, key, owner, ownerCtx, project } = await makeFixture('access-private');
     const m1 = await addWorkspaceMember(workspace.id, 'm1-private@example.com');
-    const m2 = await addWorkspaceMember(workspace.id, 'm2-private@example.com');
+    await addWorkspaceMember(workspace.id, 'm2-private@example.com');
     await projectMembersService.addMember({
       key,
       actorUserId: owner.id,
@@ -452,14 +455,182 @@ describe('setAccessLevel', () => {
       ctx: ownerCtx,
       level: 'private',
     });
-    expect(res.accessLevel).toBe('private');
+    expect(res).toEqual({ key, accessMode: 'members', accessLevel: 'private' });
 
-    const persistedProject = await adminDb.project.findUnique({ where: { id: project.id } });
-    expect(persistedProject?.accessLevel).toBe('private');
-
-    // Workspace has owner + m1 + m2 = 3 members → 3 project memberships, one each.
+    // Only the one person added by hand is on it — m2 and the owner are not seeded.
     const rows = await adminDb.projectMembership.findMany({ where: { projectId: project.id } });
-    expect(rows.map((r) => r.userId).sort()).toEqual([owner.id, m1.id, m2.id].sort());
+    expect(rows.map((r) => r.userId)).toEqual([m1.id]);
+  });
+});
+
+describe('setAccessMode (Story MOTIR-6169 · MOTIR-6544)', () => {
+  it('switching to `members` writes both columns and leaves the project_membership rows exactly as they were', async () => {
+    const { workspace, key, owner, ownerCtx, project } = await makeFixture('mode-members');
+    const m1 = await addWorkspaceMember(workspace.id, 'm1-mode@example.com');
+    await addWorkspaceMember(workspace.id, 'm2-mode@example.com');
+    await projectMembersService.addMember({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      targetUserId: m1.id,
+    });
+    const before = await adminDb.projectMembership.findMany({
+      where: { projectId: project.id },
+      orderBy: { id: 'asc' },
+    });
+
+    const res = await projectMembersService.setAccessMode({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      mode: 'members',
+    });
+    expect(res).toEqual({ key, accessMode: 'members', accessLevel: 'private' });
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: project.id } });
+    expect(row.accessMode).toBe('members');
+    expect(row.accessLevel).toBe('private');
+    expect(
+      await adminDb.projectMembership.findMany({
+        where: { projectId: project.id },
+        orderBy: { id: 'asc' },
+      }),
+    ).toEqual(before);
+  });
+
+  it('switching back to `workspace` writes workspace / open', async () => {
+    const { key, owner, ownerCtx, project } = await makeFixture('mode-workspace');
+    await projectMembersService.setAccessMode({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      mode: 'members',
+    });
+    const res = await projectMembersService.setAccessMode({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      mode: 'workspace',
+    });
+    expect(res).toEqual({ key, accessMode: 'workspace', accessLevel: 'open' });
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: project.id } });
+    expect([row.accessMode, row.accessLevel]).toEqual(['workspace', 'open']);
+  });
+
+  it('rejects an invalid mode before touching anything', async () => {
+    const { key, owner, ownerCtx, project } = await makeFixture('mode-bad');
+    await expect(
+      projectMembersService.setAccessMode({
+        key,
+        actorUserId: owner.id,
+        ctx: ownerCtx,
+        mode: 'x',
+      }),
+    ).rejects.toBeInstanceOf(InvalidAccessModeError);
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: project.id } });
+    expect(row.accessMode).toBeNull();
+    const mapped = projectMemberErrorResponse(new InvalidAccessModeError('x'));
+    expect(mapped?.status).toBe(400);
+  });
+
+  it('refuses `public` on a self-hosted build', async () => {
+    const { key, owner, ownerCtx } = await makeFixture('mode-public-selfhost');
+    await expect(
+      projectMembersService.setAccessMode({
+        key,
+        actorUserId: owner.id,
+        ctx: ownerCtx,
+        mode: 'public',
+      }),
+    ).rejects.toBeInstanceOf(PublicAccessUnavailableError);
+  });
+
+  it('a workspace Member without project:manage_access gets the typed 403 and changes nothing', async () => {
+    const { workspace, key, project } = await makeFixture('mode-member-refused');
+    const plain = await addWorkspaceMember(workspace.id, 'plain-mode@example.com');
+    const err = await projectMembersService
+      .setAccessMode({
+        key,
+        actorUserId: plain.id,
+        ctx: ctxFor(plain.id, workspace.id),
+        mode: 'members',
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PermissionDeniedError);
+    expect((err as PermissionDeniedError).permission).toBe('project:manage_access');
+    expect(projectMemberErrorResponse(err)?.status).toBe(403);
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: project.id } });
+    expect(row.accessMode).toBeNull();
+  });
+});
+
+describe('previewAccessModeChange (Story MOTIR-6169 · MOTIR-6544)', () => {
+  it('lists exactly the Full, non-Manager workspace members who were not added — with their role', async () => {
+    const { workspace, key, owner, ownerCtx } = await makeFixture('preview');
+    const added = await addWorkspaceMember(workspace.id, 'added-preview@example.com', 'Added');
+    const loser = await addWorkspaceMember(workspace.id, 'loser-preview@example.com', 'Loser');
+    const viewer = await addWorkspaceMember(workspace.id, 'viewer-preview@example.com', 'Viewer');
+    await setWorkspaceRoleFor(viewer.id, workspace.id, 'viewer');
+    const limited = await addWorkspaceMember(workspace.id, 'limited-preview@example.com', 'Lim');
+    await adminDb.workspaceMembership.update({
+      where: { userId_workspaceId: { userId: limited.id, workspaceId: workspace.id } },
+      data: { accessScope: 'limited' },
+    });
+    const manager = await addWorkspaceMember(workspace.id, 'mgr-preview@example.com', 'Mgr');
+    await setWorkspaceRoleFor(manager.id, workspace.id, 'manager');
+    await projectMembersService.addMember({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      targetUserId: added.id,
+    });
+
+    const losing = await projectMembersService.previewAccessModeChange({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      mode: 'members',
+    });
+    // Not the owner / the Manager (the rail), not the added member, not the
+    // Limited one (who already cannot enter a project they were not added to).
+    expect(losing.map((p) => p.userId).sort()).toEqual([loser.id, viewer.id].sort());
+    const byId = new Map(losing.map((p) => [p.userId, p]));
+    expect(byId.get(loser.id)).toMatchObject({
+      name: 'Loser',
+      email: 'loser-preview@example.com',
+      workspaceRole: 'member',
+      customRoleName: null,
+    });
+    expect(byId.get(viewer.id)?.workspaceRole).toBe('viewer');
+  });
+
+  it('returns nobody for any target other than `members`', async () => {
+    const { workspace, key, owner, ownerCtx } = await makeFixture('preview-other');
+    await addWorkspaceMember(workspace.id, 'someone-preview@example.com');
+    for (const mode of ['workspace', 'public']) {
+      expect(
+        await projectMembersService.previewAccessModeChange({
+          key,
+          actorUserId: owner.id,
+          ctx: ownerCtx,
+          mode,
+        }),
+      ).toEqual([]);
+    }
+  });
+
+  it('is behind project:manage_access', async () => {
+    const { workspace, key } = await makeFixture('preview-refused');
+    const plain = await addWorkspaceMember(workspace.id, 'plain-preview@example.com');
+    const err = await projectMembersService
+      .previewAccessModeChange({
+        key,
+        actorUserId: plain.id,
+        ctx: ctxFor(plain.id, workspace.id),
+        mode: 'members',
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PermissionDeniedError);
+    expect((err as PermissionDeniedError).permission).toBe('project:manage_access');
   });
 });
 
@@ -471,7 +642,7 @@ describe('getAccess', () => {
       actorUserId: owner.id,
       ctx: ownerCtx,
     });
-    expect(access).toEqual({ key, accessLevel: 'open' });
+    expect(access).toEqual({ key, accessMode: 'workspace', accessLevel: 'open' });
   });
 
   it('reflects a level set via setAccessLevel', async () => {
@@ -513,6 +684,26 @@ describe('setAccessLevel on a CLOUD build (MOTIR-4035)', () => {
     const row = await adminDb.project.findUnique({ where: { id: project.id } });
     expect(row?.accessLevel).toBe('public');
     expect(row?.madePublicAt).toBeInstanceOf(Date);
+  });
+
+  it('setAccessMode(`public`) lands at public / public and stamps madePublicAt; stopping lands at workspace / open', async () => {
+    const { key, owner, ownerCtx, project } = await makeFixture('mode-public-cloud');
+    const on = await projectMembersService.setAccessMode({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      mode: 'public',
+    });
+    expect(on).toEqual({ key, accessMode: 'public', accessLevel: 'public' });
+    const stamped = await adminDb.project.findUniqueOrThrow({ where: { id: project.id } });
+    expect(stamped.madePublicAt).toBeInstanceOf(Date);
+    const off = await projectMembersService.setAccessMode({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      mode: 'workspace',
+    });
+    expect(off).toEqual({ key, accessMode: 'workspace', accessLevel: 'open' });
   });
 });
 
