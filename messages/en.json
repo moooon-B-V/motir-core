@@ -7855,6 +7855,7 @@
       "label": "Workbench views",
       "toDo": "To do",
       "inProgress": "In progress",
+      "toFix": "To fix",
       "recentlyFinished": "Recently finished",
       "watching": "Watching",
       "toApprove": "To approve"
@@ -7886,6 +7887,10 @@
         "title": "Nothing in flight",
         "body": "Nothing you own is being worked on right now — by you or by an agent.",
         "action": "See what to start"
+      },
+      "toFix": {
+        "title": "Nothing to fix",
+        "body": "When a merge queue, a conflict, a failing check or a reviewer stops one of your work items, it shows up here with the command that repairs it."
       },
       "recentlyFinished": {
         "title": "Nothing finished this week",

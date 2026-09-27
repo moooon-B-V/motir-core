@@ -138,7 +138,7 @@ export interface HomeTabCountsDto {
    * ⚠️ TRANSITIONAL, and owned by MOTIR-4782. The shipped `/home` page still
    * renders two tabs, and this card is backend-only — so the old number
    * survives beside the new ones until the page it feeds is replaced. It is
-   * exactly `toDo + inProgress`, computed from the same round trip rather than
+   * exactly `toDo + inProgress + toFix`, computed from the same round trip rather than
    * from a fifth query, so the two can never disagree.
    *
    * @deprecated Remove with `/home` when MOTIR-4782 lands `/workbench`.
@@ -146,8 +146,12 @@ export interface HomeTabCountsDto {
   myWork: number;
   /** Nothing has been started. */
   toDo: number;
-  /** In flight — including the cards an agent has finished and a person has not looked at. */
+  /** In flight — including the cards an agent has finished and a person has not looked at.
+   *  Excludes {@link HomeTabCountsDto.toFix}, which is carved out of it. */
   inProgress: number;
+  /** Stuck until something is repaired — the in-progress cards whose `fixReason` is set
+   *  (MOTIR-6604). Counted with the list's own slice, so it equals `listToFix().total`. */
+  toFix: number;
   /** Finished inside the rolling window (`HOME_FINISHED_WINDOW_DAYS`). */
   recentlyFinished: number;
   /**

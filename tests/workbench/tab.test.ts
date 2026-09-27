@@ -7,7 +7,14 @@ import { WORKBENCH_TABS, parseWorkbenchTab, workbenchTabHref } from '@/lib/workb
 
 describe('WORKBENCH_TABS — the strip order (MOTIR-5217)', () => {
   it('is the design order: what waits on you, what moves, what to start, then the rest', () => {
-    expect(WORKBENCH_TABS).toEqual(['approvals', 'in-progress', 'todo', 'finished', 'watching']);
+    expect(WORKBENCH_TABS).toEqual([
+      'approvals',
+      'to-fix',
+      'in-progress',
+      'todo',
+      'finished',
+      'watching',
+    ]);
   });
 
   it('says nothing about the landing — the order and the address are separate decisions', () => {
@@ -16,6 +23,7 @@ describe('WORKBENCH_TABS — the strip order (MOTIR-5217)', () => {
     expect(WORKBENCH_TABS[0]).toBe('approvals');
     expect(WORKBENCH_TABS.map((tab) => workbenchTabHref(tab))).toEqual([
       '/workbench?tab=approvals',
+      '/workbench?tab=to-fix',
       '/workbench?tab=in-progress',
       '/workbench?tab=todo',
       '/workbench?tab=finished',
@@ -28,6 +36,7 @@ describe('parseWorkbenchTab', () => {
   it('reads EVERY tab by its own slug — To do and To approve included (MOTIR-5218)', () => {
     expect(parseWorkbenchTab('approvals')).toBe('approvals');
     expect(parseWorkbenchTab('in-progress')).toBe('in-progress');
+    expect(parseWorkbenchTab('to-fix')).toBe('to-fix');
     expect(parseWorkbenchTab('todo')).toBe('todo');
     expect(parseWorkbenchTab('finished')).toBe('finished');
     expect(parseWorkbenchTab('watching')).toBe('watching');
@@ -58,6 +67,7 @@ describe('workbenchTabHref', () => {
     // as it — To do included, which used to be the special case.
     expect(workbenchTabHref('todo')).toBe('/workbench?tab=todo');
     expect(workbenchTabHref('in-progress')).toBe('/workbench?tab=in-progress');
+    expect(workbenchTabHref('to-fix')).toBe('/workbench?tab=to-fix');
     expect(workbenchTabHref('finished')).toBe('/workbench?tab=finished');
     expect(workbenchTabHref('watching')).toBe('/workbench?tab=watching');
   });

@@ -374,9 +374,19 @@ export interface HomeProjectScope {
  * exactly where the shipped `/home` list put such a row (MOTIR-2758's
  * done-EXCLUSION), so nothing a reader can see today disappears.
  */
-export type HomeCategorySlice =
+export type HomeCategorySlice = (
   | { in: readonly StatusCategoryDto[] }
-  | { notIn: readonly StatusCategoryDto[] };
+  | { notIn: readonly StatusCategoryDto[] }
+) & {
+  /**
+   * The TO FIX axis (Story MOTIR-6588 · MOTIR-6604) — `set` keeps only the cards
+   * whose `fixReason` is not null, `unset` only those whose is; absent means the
+   * slice does not care. It is how To fix is carved OUT of In progress rather than
+   * read beside it: the two slices name the same category and opposite values of
+   * this, so a card is on exactly one of them by construction.
+   */
+  fixReason?: 'set' | 'unset';
+};
 
 /**
  * The `WHERE` half of a Workbench read's project scope — "in one of these
@@ -409,12 +419,18 @@ export function homeProjectScopeWhere(
       const named = ('in' in slice ? slice.in : slice.notIn).flatMap((c) => [
         ...statusKeysByCategory[c],
       ]);
+      const fix =
+        slice.fixReason === 'set'
+          ? { fixReason: { not: null } }
+          : slice.fixReason === 'unset'
+            ? { fixReason: null }
+            : {};
       return 'in' in slice
-        ? { projectId, status: { in: named } }
+        ? { projectId, status: { in: named }, ...fix }
         : // An empty exclusion is an unfiltered clause, NOT a never-matching
           // one: `notIn: []` and "no constraint" are the same predicate, and
           // Prisma renders the former as a tautology anyway.
-          { projectId, ...(named.length > 0 ? { status: { notIn: named } } : {}) };
+          { projectId, ...(named.length > 0 ? { status: { notIn: named } } : {}), ...fix };
     }),
   };
 }
@@ -477,8 +493,22 @@ export function homeMembershipWhere(
  */
 export const HOME_SLICE_TODO: HomeCategorySlice = { notIn: ['in_progress', 'done'] };
 
-/** IN PROGRESS — what is moving, including an agent's output awaiting a person. */
-export const HOME_SLICE_IN_PROGRESS: HomeCategorySlice = { in: ['in_progress'] };
+/**
+ * IN PROGRESS — what is moving, including an agent's output awaiting a person.
+ *
+ * ⚠️ MINUS TO FIX (MOTIR-6604): a card stuck until something is repaired is in the
+ * same category and is listed on To fix instead, never on both.
+ */
+export const HOME_SLICE_IN_PROGRESS: HomeCategorySlice = {
+  in: ['in_progress'],
+  fixReason: 'unset',
+};
+
+/**
+ * TO FIX — the in-progress cards stuck until something is repaired (Story MOTIR-6588
+ * · MOTIR-6604): `fixReason IS NOT NULL`, the other half of {@link HOME_SLICE_IN_PROGRESS}.
+ */
+export const HOME_SLICE_TO_FIX: HomeCategorySlice = { in: ['in_progress'], fixReason: 'set' };
 
 /** RECENTLY FINISHED — the terminal slice; the caller adds the window. */
 export const HOME_SLICE_DONE: HomeCategorySlice = { in: ['done'] };
