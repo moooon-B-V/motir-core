@@ -42,7 +42,7 @@ export async function GET(
   const locale = isLocale(requested) ? requested : defaultLocale;
 
   try {
-    const seed = await planningSeedService.getRefusalSeed(id, active, locale);
+    const seed = await planningSeedService.getPlanningSeed(id, active, locale);
     const body: PlanningSeedReadDTO = { seed };
     return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {

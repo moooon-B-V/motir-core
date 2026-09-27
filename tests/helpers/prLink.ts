@@ -126,9 +126,9 @@ export async function linkPrByIdentifier(args: {
   const owner = await adminDb.workspaceMembership.findFirstOrThrow({
     where: {
       workspaceId: item.workspaceId,
-      OR: [{ workspaceRole: 'manager' }, { workspaceRole: null, role: { in: ['owner', 'admin'] } }],
+      workspaceRole: 'manager',
     },
-    orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     select: { userId: true },
   });
   return linkPr(

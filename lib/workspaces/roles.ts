@@ -1,17 +1,20 @@
-import type { MemberRole, WorkspaceRole } from '@/generated/prisma/client';
+import type { WorkspaceRole } from '@/generated/prisma/client';
 
 // Workspace membership roles (Story MOTIR-6168 · MOTIR-6457).
 //
 // Roles live on the workspace (`docs/decisions/role-model.md` §2): each person
 // holds ONE role there — Manager · Member · Viewer — or a workspace custom role,
 // and it is their role in every project of the workspace. The values are the
-// Prisma `WorkspaceRole` enum, stored in `workspace_membership.workspace_role`
-// beside the legacy column below. This file is the single source of the strings
-// so a gate, a migration and a page read the same constants.
+// Prisma `WorkspaceRole` enum, stored in `workspace_membership.workspace_role`,
+// which is NOT NULL (MOTIR-6561) and the ONLY place a role is read from. This
+// file is the single source of the strings so a gate, a migration and a page
+// read the same constants.
 //
 // The LEGACY `workspace_membership.role` column (Story 1.2 · Subtask 1.6.5) is
-// still written — NOT NULL until the contract story drops it — but nothing
-// outside `resolveWorkspaceRole` below reads it any more (MOTIR-6462).
+// still in the schema until the retirement's contract release drops it, and
+// NOTHING reads or writes it: the deploy-window fallback that read it
+// (`resolveWorkspaceRole`) was deleted by MOTIR-6561, and the writers stopped
+// with MOTIR-6562 (the database default fills the column).
 
 /** The three built-in workspace roles, in the order every surface lists them. */
 export const WORKSPACE_ROLES = [
@@ -34,25 +37,6 @@ export type { WorkspaceRole };
 export const CUSTOM_WORKSPACE_ROLE_TIER: WorkspaceRole = 'member';
 
 /**
- * A membership's WORKSPACE ROLE, read through the one place the deploy-window
- * fallback lives (MOTIR-6459): the stored `workspaceRole` when the mapping
- * (MOTIR-6458) has set it, else the legacy `role` mapped by the DECISION's table —
- * `owner` / `admin` → `manager`, `member` → `member`, `viewer` → `viewer`.
- *
- * The fallback is what keeps a row the STILL-SERVING old build writes during the
- * deploy window correct: that build knows nothing of `workspace_role`, so it
- * creates a membership with the column NULL. The follow-up contract story makes
- * the column NOT NULL once no NULL remains and deletes this arm in one place.
- */
-export function resolveWorkspaceRole(m: {
-  workspaceRole: WorkspaceRole | null;
-  role: MemberRole;
-}): WorkspaceRole {
-  if (m.workspaceRole) return m.workspaceRole;
-  return legacyToWorkspaceRole(m.role);
-}
-
-/**
  * The stored key array of the workspace CUSTOM role a membership holds — the
  * resolver's `customRolePermissions` input — or null for a built-in. A Manager's
  * is always null: the rail grants them everything, and the org Owner composed in
@@ -66,8 +50,21 @@ export function customRolePermissionsOf(
   return membership?.roleDefinition?.permissions ?? null;
 }
 
-/** The DECISION's mapping from a legacy `MemberRole` to a workspace role. */
-export function legacyToWorkspaceRole(role: MemberRole): WorkspaceRole {
+/**
+ * A legacy membership role — the four values of the retired `member_role` type,
+ * spelled locally so application code imports nothing of it (MOTIR-6562).
+ */
+export type LegacyMemberRole = 'owner' | 'admin' | 'member' | 'viewer';
+
+/**
+ * The DECISION's mapping from a legacy role to a workspace role.
+ *
+ * It exists ONLY for an invite token minted before MOTIR-6562, whose payload
+ * carries `role` and no `workspaceRole`. Such a token expires after
+ * `INVITE_EXPIRY_MS` (7 days), so this and `LegacyMemberRole` are deleted by
+ * the phase-3 DROP card (MOTIR-6569), which runs long after the last one lapsed.
+ */
+export function legacyToWorkspaceRole(role: LegacyMemberRole): WorkspaceRole {
   switch (role) {
     case 'owner':
     case 'admin':

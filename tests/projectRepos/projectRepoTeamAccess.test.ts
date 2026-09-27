@@ -21,6 +21,7 @@ import {
 } from '../helpers/actionsVariableFake';
 import { spyOnJobDispatch } from '../helpers/jobs';
 import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
+import { legacyToWorkspaceRole } from '@/lib/workspaces/roles';
 
 // TEAM CODE ACCESS over real Postgres (Story MOTIR-1775 · MOTIR-1910).
 //
@@ -191,7 +192,7 @@ async function addMember(
     data: {
       userId: user.id,
       workspaceId: fx.workspaceId,
-      role: opts.workspaceRole ?? 'member',
+      workspaceRole: legacyToWorkspaceRole(opts.workspaceRole ?? 'member'),
     },
   });
   if (opts.projectRole) {
@@ -205,7 +206,6 @@ async function addMember(
         userId: user.id,
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
-        role: opts.projectRole,
       },
     });
   }

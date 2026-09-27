@@ -844,7 +844,7 @@ describe('SetNull: hard-deleting a project clears the member’s activeProjectId
       data: {
         userId: other.id,
         workspaceId: workspace.id,
-        role: 'member',
+        workspaceRole: 'member',
         activeProjectId: project.id,
       },
     });

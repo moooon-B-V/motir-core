@@ -411,7 +411,7 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
   // resolver lands on once C loses org A (findFirstByUserWithWorkspace orders by
   // createdAt asc, and C's own workspace predates the WA membership).
   const cOwnWorkspace = (await db.workspace.findFirst({
-    where: { memberships: { some: { userId: cUser.id, role: 'owner' } } },
+    where: { memberships: { some: { userId: cUser.id, workspaceRole: 'manager' } } },
   }))!;
 
   // ── Positive: while C is in org A, the GATED shell context resolves WA as the
@@ -435,7 +435,7 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
     data: { name: 'Side WS A', slug: `side-ws-a-${Date.now()}`, organizationId: orgA },
   });
   await db.workspaceMembership.create({
-    data: { userId: cUser.id, workspaceId: wb.id, role: 'member' },
+    data: { userId: cUser.id, workspaceId: wb.id, workspaceRole: 'member' },
   });
   // The owner is NOT a member of WB.
   expect(

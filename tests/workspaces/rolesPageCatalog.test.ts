@@ -42,7 +42,7 @@ async function build() {
   await workspacesService.addMember({
     userId: viewer.id,
     workspaceId: workspace.id,
-    role: 'viewer',
+    workspaceRole: 'viewer',
   });
   const contractor = await user('contractor');
   await workspacesService.addMember({ userId: contractor.id, workspaceId: workspace.id });

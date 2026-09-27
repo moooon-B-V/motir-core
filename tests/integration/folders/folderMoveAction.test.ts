@@ -140,7 +140,7 @@ describe('moveFolderAction', () => {
     await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
     await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       projectMembershipRepository.create(
-        { workspaceId: fx.workspaceId, projectId: fx.projectId, userId: viewer.id, role: 'viewer' },
+        { workspaceId: fx.workspaceId, projectId: fx.projectId, userId: viewer.id },
         tx,
       ),
     );

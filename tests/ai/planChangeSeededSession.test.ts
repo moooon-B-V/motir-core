@@ -93,7 +93,7 @@ async function teammate(): Promise<ProjectContext> {
     name: `Teammate ${seq}`,
   });
   await adminDb.workspaceMembership.create({
-    data: { userId: u.id, workspaceId: fx.workspaceId, role: 'member' },
+    data: { userId: u.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
   });
   await addToProjectAs({
     key: fx.project.identifier,
@@ -351,7 +351,6 @@ describe('startSeededWithFirstTurn — the seed guard refuses, and writes nothin
   it.each([
     ['design_result', 'changes_requested'],
     ['pull_request_approval', 'changes_requested'],
-    ['acceptance_result', 'changes_requested'],
   ] as const)('a refused gate of another kind (%s in %s)', async (kind, state) => {
     await expectRefused(await gate(card, kind, state));
   });

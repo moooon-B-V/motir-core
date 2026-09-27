@@ -113,7 +113,6 @@ export async function memberWithPermissions(
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
         userId: user.id,
-        role: CUSTOM_ROLE_TIER,
       },
       tx,
     );

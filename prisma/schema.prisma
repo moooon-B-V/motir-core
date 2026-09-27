@@ -1771,10 +1771,10 @@ model Project {
 /// the `owner` row is the workspace founder, who always has access to every
 /// project regardless of project membership.
 model WorkspaceMembership {
-  id               String         @id @default(cuid())
+  id               String        @id @default(cuid())
   userId           String
   workspaceId      String
-  role             MemberRole     @default(member)
+  role             MemberRole    @default(member)
   /// The member's currently-active project within this workspace. Clears
   /// to NULL (onDelete: SetNull) — not cascades — when that project is
   /// archived/deleted, so losing a project never removes the membership.
@@ -1782,26 +1782,25 @@ model WorkspaceMembership {
   activeProjectId  String?
   /// The person's ONE workspace role (Story MOTIR-6168 · MOTIR-6457) — Manager,
   /// Member or Viewer, the same in every project of the workspace
-  /// (`docs/decisions/role-model.md` §2). Added BESIDE the legacy `role`: NULL
-  /// means "not migrated yet — derive it from `role`", which is what keeps a row
-  /// the still-serving old build writes during the deploy window correct. It
-  /// has NO default on purpose: a default would silently hand `member` to a row
-  /// the old build creates as `owner`. The follow-up contract story makes it
-  /// NOT NULL once no NULL remains.
+  /// (`docs/decisions/role-model.md` §2). NOT NULL since MOTIR-6561, which
+  /// backfilled the deploy window's stragglers and deleted the fallback that read
+  /// the legacy `role` — this column is now the ONLY place a role is read from.
+  /// It has NO default on purpose: every writer names the role, and a default
+  /// would hide one that forgot to.
   ///
   /// ⚠️ This column and `roleDefinitionId` MOVE TOGETHER, and
   /// `workspaceMembershipRepository.setWorkspaceRole` is their only writer. A
   /// membership on a workspace custom role carries `workspaceRole =
   /// CUSTOM_WORKSPACE_ROLE_TIER` (`member`, `lib/workspaces/roles.ts`).
-  workspaceRole    WorkspaceRole? @map("workspace_role")
+  workspaceRole    WorkspaceRole @map("workspace_role")
   /// The workspace CUSTOM role this membership holds, or NULL for a built-in.
   /// `onDelete: Restrict` for the reason `ProjectMembership.roleDefinitionId`
   /// gives: Cascade would drop the member, SetNull would silently re-grant, so
   /// the DATABASE refuses and the only route to deleting a held role is the
   /// service's reassign-then-delete path.
-  roleDefinitionId String?        @map("role_definition_id")
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  roleDefinitionId String?       @map("role_definition_id")
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace      Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -4862,9 +4861,10 @@ enum ApprovalGateDecisionSource {
   @@map("approval_gate_decision_source")
 }
 
-/// The VERDICT a Motir-pressed refusal of a `design_result` gate carries (Story
-/// MOTIR-6070 · MOTIR-6421; ADR `approval-gates.md` §10d). Required on that press
-/// and refused on every other kind, verb and source by the decide door.
+/// The VERDICT a Motir-pressed refusal carries (Story MOTIR-6070 · MOTIR-6421; ADR
+/// `approval-gates.md` §10d; widened by MOTIR-6501, `acceptance-refusal-verdict.md`
+/// §1). Required on a Motir-pressed design refusal and a story-run acceptance refusal,
+/// and refused on every other kind, run shape, verb and source by the decide door.
 enum ApprovalGateRefusalVerdict {
   /// Send it back to be REVISED — the card returns to To do for the next run.
   revise
@@ -4989,9 +4989,10 @@ model ApprovalGate {
   /// A page arm (MOTIR-5761) is a new `kind`, never a migration. Null on every
   /// other kind and on an undecided or overturned decision.
   confirmedRecord       Json?                       @map("confirmed_record")
-  /// WHAT A PERSON MEANT BY "NO" on a refused `design_result` gate (Story MOTIR-6070 ·
-  /// MOTIR-6421; ADR `approval-gates.md` §10d, amended by
-  /// `design-refusal-verdict.md`) — `revise` or `re_plan`, chosen at the press and
+  /// WHAT A PERSON MEANT BY "NO" on a refused `design_result` gate, or a story run's
+  /// `acceptance_result` gate (Story MOTIR-6070 · MOTIR-6421, MOTIR-6501; ADR
+  /// `approval-gates.md` §10d, amended by `design-refusal-verdict.md` and
+  /// `acceptance-refusal-verdict.md`) — `revise` or `re_plan`, chosen at the press and
   /// stamped IN the deciding write, so `trg_approval_gate_decided_immutable` holds it
   /// with the rest of the row. ⚠️ A COLUMN OF ITS OWN, NOT `outcomeRef`: the surfaces
   /// that repaint a card read `outcomeRef` as a status key. Null on every approval, on

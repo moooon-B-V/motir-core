@@ -10,10 +10,7 @@ import {
   type GateVerb,
 } from '@/components/approvals/ApprovalGateControl';
 import { useRefusalVerb, type DesignRefusalFacts } from '@/components/approvals/RefusalReason';
-import {
-  asksToReplanAfterPress,
-  useRefusalReplanSlots,
-} from '@/components/approvals/RefusalReplan';
+import { asksAfterPress, useRefusalReplanSlots } from '@/components/approvals/RefusalReplan';
 import { useOptimisticStatusWriter } from '@/app/(authed)/items/[key]/_components/OptimisticStatusProvider';
 import type {
   approveAndMergeAction,
@@ -575,11 +572,16 @@ export function DevelopmentGateFrame({
     });
     if (!result.ok) return result.refusal;
     setDecided(result.gate);
-    applyOptimisticStatus(result.gate.outcomeRef);
+    // ⚠️ AN ACCEPTANCE SENT BACK WRITES NO STATUS (MOTIR-6506; `acceptance-refusal-verdict.md`
+    // §2), so the rail is never repainted for one — whatever the row's `outcomeRef` holds.
+    if (gate.kind !== 'acceptance_result') applyOptimisticStatus(result.gate.outcomeRef);
     announceGateDecided({ gate: result.gate, filesKept: null });
     // A DECISION sent back offers the seeded planner (§10h) — it ASKS first, in the band
     // the record now draws. Commits sent back (`pull_request_approval`) offer nothing yet.
-    if (asksToReplanAfterPress(result.gate)) setReplanAsk(result.gate.id);
+    // An ACCEPTANCE asks after a Re-plan (never after a Re-run, which `motir fix` serves).
+    // `router.refresh()` below re-reads the page: the withdrawn merge band and the repair
+    // part are the server's (the overlay host re-reads its own rows).
+    if (asksAfterPress(result.gate)) setReplanAsk(result.gate.id);
     router.refresh();
     return null;
   }
@@ -705,6 +707,12 @@ export function DevelopmentGateFrame({
       : t('meta.count', { count: prCount });
   }
 
+  // ⚠️ A STORY RUN'S ACCEPTANCE LEADS WITH ITS OWN WORDS (Story MOTIR-4949 · Subtask
+  // MOTIR-5790; `acceptance-panel--approve-and-merge.mock.html` panel A). The press accepts
+  // the story AND merges its code, and the sentence says in words that the video is NOT
+  // merged — it is an uploaded receipt, never a file in any of these pull requests.
+  const acceptanceLeads = gate.kind === 'acceptance_result';
+
   // ── Band 3 ────────────────────────────────────────────────────────────────────
   const verbs: GateVerb[] = decideActions
     ? [
@@ -712,11 +720,23 @@ export function DevelopmentGateFrame({
         // the REQUIRED reason is written (ADR §10a) — the press asks why, not "are you sure".
         // A DESIGN that leads the frame is sent back WITH A VERDICT (MOTIR-6427) — the
         // design band, not the commits' one: the door requires it on a design refusal.
+        // An ACCEPTANCE that leads it asks by RUN SHAPE (MOTIR-6506): the Re-run / Re-plan
+        // pair when the gate offers a verdict — read off the DTO, never re-derived — and
+        // never the borrowed `commits` lines (design choice 2).
         refusalVerb(
-          isDecision ? 'decision' : gate.kind === 'design_result' ? 'design' : 'commits',
+          isDecision
+            ? 'decision'
+            : gate.kind === 'design_result'
+              ? 'design'
+              : acceptanceLeads
+                ? 'acceptance'
+                : 'commits',
           itemIdentifier,
           { disabled: verbsDisabled },
           designRefusal,
+          acceptanceLeads
+            ? { offersVerdict: gate.offersRefusalVerdict, pullRequestCount: Math.max(count, 1) }
+            : undefined,
         ),
         {
           decision: 'approve',
@@ -740,11 +760,6 @@ export function DevelopmentGateFrame({
   const settingHeld = membersIn('refusedSetting').length > 0;
   // One or two pull requests are NAMED; three or more are COUNTED, because band 3 is one line
   // and an unbounded list pushes the verbs off the frame. The confirm step names every one.
-  // ⚠️ A STORY RUN'S ACCEPTANCE LEADS WITH ITS OWN WORDS (Story MOTIR-4949 · Subtask
-  // MOTIR-5790; `acceptance-panel--approve-and-merge.mock.html` panel A). The press accepts
-  // the story AND merges its code, and the sentence says in words that the video is NOT
-  // merged — it is an uploaded receipt, never a file in any of these pull requests.
-  const acceptanceLeads = gate.kind === 'acceptance_result';
   const prsNamed = nameList(members.map(nameOf));
   const consequence = isDecision
     ? decideActions

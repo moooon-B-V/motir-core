@@ -548,7 +548,9 @@ export class ApprovalGateDecisionUnresolvableError extends ApprovalGateError {
  * (`approval-gates.md` §8's FIFTH AMENDMENT). ONE refusal names either, so two primaries
  * holding one merge cannot drift into two differently-worded rules.
  */
-export type PendingPrimary = 'design' | 'decision';
+/** Which primary holds the merge. `acceptance` is a STORY RUN's refused acceptance video
+ *  (MOTIR-6503): not an open question, and still no merge until a newer video is approved. */
+export type PendingPrimary = 'design' | 'decision' | 'acceptance';
 
 /**
  * APPROVE on a card's approve-to-merge gate while its PRIMARY question is unanswered

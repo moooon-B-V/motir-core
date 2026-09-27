@@ -484,6 +484,8 @@ describe('an EJECTED card offers `motir fix` beside Queue again (MOTIR-5721)', (
   });
   const offer = (rawReason?: string): WorkItemRepairViewDto => ({
     state: 'offer',
+    repairClass: 'ci',
+    acceptanceRefusal: null,
     failing: [ejectedRef(rawReason)],
     lastGaveUp: null,
   });
@@ -548,6 +550,8 @@ describe('an EJECTED card offers `motir fix` beside Queue again (MOTIR-5721)', (
   it('X4 · a repair in progress: no command and no sentence, and Queue again is still offered', () => {
     renderWithRepair({
       state: 'in_progress',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
       failing: [ejectedRef()],
       holder: { id: 'u-2', name: 'Mara S.' },
       byViewer: false,

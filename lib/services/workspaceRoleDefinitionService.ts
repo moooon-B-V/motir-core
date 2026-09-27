@@ -3,11 +3,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { workspaceRoleDefinitionRepository } from '@/lib/repositories/workspaceRoleDefinitionRepository';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { readReachRole } from '@/lib/workspaces/membershipGate';
-import {
-  CUSTOM_WORKSPACE_ROLE_TIER,
-  WORKSPACE_ROLES,
-  resolveWorkspaceRole,
-} from '@/lib/workspaces/roles';
+import { CUSTOM_WORKSPACE_ROLE_TIER, WORKSPACE_ROLES } from '@/lib/workspaces/roles';
 import {
   NotAMemberError,
   WorkspaceRoleForbiddenError,
@@ -165,7 +161,7 @@ export const workspaceRoleDefinitionService = {
       );
       const builtInCounts: Partial<Record<WorkspaceRole, number>> = {};
       for (const row of builtInRows) {
-        const key = resolveWorkspaceRole(row);
+        const key = row.workspaceRole;
         builtInCounts[key] = (builtInCounts[key] ?? 0) + row.count;
       }
       return toWorkspaceRoleCatalogDTO(workspaceId, builtInCounts, customRoles, customCounts);
@@ -196,7 +192,7 @@ export const workspaceRoleDefinitionService = {
       );
       const builtInCounts: Partial<Record<WorkspaceRole, number>> = {};
       for (const row of builtInRows) {
-        const key = resolveWorkspaceRole(row);
+        const key = row.workspaceRole;
         builtInCounts[key] = (builtInCounts[key] ?? 0) + row.count;
       }
       return {

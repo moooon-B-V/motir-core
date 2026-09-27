@@ -101,7 +101,6 @@ test.beforeAll(async () => {
       workspaceId: workspace.id,
       projectId: project.id,
       userId: reader.id,
-      role: 'member',
     },
     update: {},
   });

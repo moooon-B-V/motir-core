@@ -101,7 +101,7 @@ export async function seedWhatToReview(slug: string): Promise<WhatToReviewSeed> 
   });
   await workspacesService.addMember({ userId: reviewer.id, workspaceId: workspace.id });
   await adminDb.projectMembership.create({
-    data: { userId: reviewer.id, projectId: project.id, workspaceId: workspace.id, role: 'member' },
+    data: { userId: reviewer.id, projectId: project.id, workspaceId: workspace.id },
   });
   await pin(reviewer.id);
   await pin(owner.id);

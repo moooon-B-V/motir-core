@@ -8,6 +8,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PlanItemDto, PlanItemPatch, PlanItemProposedFields } from '@/lib/dto/plans';
 import { DEFAULT_PROPOSED_KIND } from '@/lib/plans/validateProposals';
+import { edgeDisposition, type EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { WorkItem } from '@/generated/prisma/client';
 
 // ── The PROJECTION, lifted (Story MOTIR-3093 · Subtask MOTIR-3096) ───────────
@@ -778,4 +779,40 @@ export async function projectedSearchDelta(
     removedIds: [...proj.removedIds],
     modifiedIds: [...proj.patchByWorkItemId.keys()],
   };
+}
+
+/**
+ * The DISPOSITION of one projected `blocked_by` edge (MOTIR-6362) — what the plan
+ * review canvas draws for it once the plan materializes: `covered` when the
+ * PROJECTED parents carry the edge, `uncovered` / `cross_level` when the validators
+ * would call it invalid, `exempt` when an end has no parent. The same
+ * `edgeDisposition` the committed roadmap read asks (MOTIR-6359), fed the
+ * projection instead of the tree — so a proposal that also wires its parents'
+ * edge previews clean, and one whose plan removes that edge previews flagged.
+ * `undefined` when an end is not in the projection. Pure over `proj`.
+ */
+export function projectedEdgeDisposition(
+  proj: Projection,
+  blockedId: string,
+  blockerId: string,
+): EdgeDisposition | undefined {
+  const chainOf = (id: string): string[] => {
+    const up: string[] = [];
+    const seen = new Set<string>([id]);
+    let cur = proj.nodes.get(id)?.parentId ?? null;
+    while (cur !== null && !seen.has(cur) && proj.nodes.has(cur)) {
+      up.push(cur);
+      seen.add(cur);
+      cur = proj.nodes.get(cur)!.parentId;
+    }
+    return up;
+  };
+  return edgeDisposition(
+    { blockedId, blockerId },
+    (id) => {
+      const n = proj.nodes.get(id);
+      return n ? { parentId: n.parentId, ancestors: chainOf(id), kind: n.kind } : undefined;
+    },
+    (from, to) => proj.blockedBy.get(from)?.has(to) ?? false,
+  );
 }

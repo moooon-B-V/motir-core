@@ -8,12 +8,19 @@ import {
 import {
   REFUSAL_SEED_COMPOSERS,
   REFUSAL_SEED_NAMESPACE,
+  anchorOf,
+  isPickSeedGate,
+  isPlanningSeedGate,
   isRefusalSeedGate,
+  readChosenOption,
   refusalSeedAnchorsOnParent,
   refusalSeedComposerFor,
+  seedIntentOf,
+  type SeedAncestor,
   type SeedComposerInput,
   type SeedTranslator,
 } from '@/lib/planning/refusalSeed';
+import type { ChosenOption } from '@/lib/approvalGates/choiceOptions';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 
@@ -28,6 +35,10 @@ const SEEDS = new Set([
   'decision_choice:changes_requested:*',
   'decision_confirmation:overturned:*',
   'design_result:changes_requested:re_plan',
+  // An acceptance sent back IN MOTIR seeds unless it is a Re-run (MOTIR-6504): a story
+  // run's Re-plan, or a finished story's verdict-less refusal (a remedy).
+  'acceptance_result:changes_requested:re_plan',
+  'acceptance_result:changes_requested:null',
 ]);
 
 describe('isRefusalSeedGate', () => {
@@ -48,7 +59,9 @@ describe('isRefusalSeedGate', () => {
         const expected =
           SEEDS.has(`${kind}:${state}:*`) || SEEDS.has(`${kind}:${state}:${refusalVerdict}`);
         it(`${kind} in ${state} (verdict ${refusalVerdict}) → ${expected}`, () => {
-          expect(isRefusalSeedGate({ kind, state, refusalVerdict })).toBe(expected);
+          expect(isRefusalSeedGate({ kind, state, refusalVerdict, decisionSource: 'ui' })).toBe(
+            expected,
+          );
         });
       }
     }
@@ -56,7 +69,7 @@ describe('isRefusalSeedGate', () => {
 
   it('a design refusal: only Re-plan seeds — Revise, a GitHub-synced (verdict-less) refusal, approved and awaiting do not', () => {
     const design = (state: ApprovalGateState, refusalVerdict: ApprovalGateRefusalVerdict | null) =>
-      isRefusalSeedGate({ kind: 'design_result', state, refusalVerdict });
+      isRefusalSeedGate({ kind: 'design_result', state, refusalVerdict, decisionSource: 'ui' });
     expect(design('changes_requested', 're_plan')).toBe(true);
     expect(design('changes_requested', 'revise')).toBe(false);
     expect(design('changes_requested', null)).toBe(false);
@@ -70,6 +83,33 @@ describe('isRefusalSeedGate', () => {
         kind: 'not_a_kind' as ApprovalGateKind,
         state: 'changes_requested',
         refusalVerdict: 're_plan',
+        decisionSource: 'ui',
+      }),
+    ).toBe(false);
+  });
+
+  it('an acceptance refusal: a Re-plan or a finished story’s remedy seeds; a Re-run and anything from GitHub do not (MOTIR-6504)', () => {
+    const acceptance = (
+      refusalVerdict: ApprovalGateRefusalVerdict | null,
+      decisionSource: 'ui' | 'api' | 'mcp' | 'github' | null = 'ui',
+    ) =>
+      isRefusalSeedGate({
+        kind: 'acceptance_result',
+        state: 'changes_requested',
+        refusalVerdict,
+        decisionSource,
+      });
+    expect(acceptance('re_plan')).toBe(true);
+    expect(acceptance(null)).toBe(true);
+    expect(acceptance('re_plan', 'api')).toBe(true);
+    expect(acceptance('revise')).toBe(false);
+    expect(acceptance(null, 'github')).toBe(false);
+    expect(
+      isRefusalSeedGate({
+        kind: 'acceptance_result',
+        state: 'approved',
+        refusalVerdict: null,
+        decisionSource: 'ui',
       }),
     ).toBe(false);
   });
@@ -105,7 +145,7 @@ function input(
 ): SeedComposerInput {
   return {
     card: { key: 'PROD-7', title: 'Pick the queue' },
-    gate: { kind, state, noteMd },
+    gate: { kind, state, noteMd, refusalVerdict: null },
     supersedesKeys,
     anchorKey,
     waitingKeys,
@@ -113,8 +153,9 @@ function input(
 }
 
 describe('REFUSAL_SEED_COMPOSERS', () => {
-  it('holds exactly the three decision refusals and the design Re-plan', () => {
+  it('holds exactly the three decision refusals, the design Re-plan and the acceptance refusal', () => {
     expect(Object.keys(REFUSAL_SEED_COMPOSERS).sort()).toEqual([
+      'acceptance_result',
       'decision_approval',
       'decision_choice',
       'decision_confirmation',
@@ -123,7 +164,7 @@ describe('REFUSAL_SEED_COMPOSERS', () => {
   });
 
   it('refusalSeedComposerFor answers null for a kind with no entry (and for a prototype name)', () => {
-    expect(refusalSeedComposerFor('acceptance_result')).toBeNull();
+    expect(refusalSeedComposerFor('pull_request_approval')).toBeNull();
     expect(refusalSeedComposerFor('toString' as ApprovalGateKind)).toBeNull();
     expect(refusalSeedComposerFor('decision_approval')).toBe(
       REFUSAL_SEED_COMPOSERS.decision_approval,
@@ -224,6 +265,207 @@ describe('REFUSAL_SEED_COMPOSERS', () => {
   });
 });
 
+// ── MOTIR-6433 — the PICK seed: its own predicate, the umbrella, the intent, the
+// defensive stamp read, the total anchor resolver, and the pick composer. The
+// refusal predicate above is asserted UNCHANGED by the table it already runs.
+
+const STAMP: ChosenOption = {
+  optionId: 'managed-object-storage',
+  label: 'Managed {object} storage',
+  bestFor: "less to operate — it's managed",
+  followUp: 'Report exports — the storage adapter,\nthe retention rule and the download page.',
+  situation: 'better_than_your_decision',
+};
+
+describe('isPickSeedGate / isPlanningSeedGate / seedIntentOf', () => {
+  const kinds = Object.values(ApprovalGateKind);
+  const states = Object.values(ApprovalGateState);
+
+  for (const kind of kinds) {
+    for (const state of states) {
+      const pick = kind === 'decision_choice' && state === 'approved';
+      it(`${kind} in ${state} with a stamp → pick ${pick}`, () => {
+        const gate = {
+          kind,
+          state,
+          refusalVerdict: null,
+          decisionSource: 'ui' as const,
+          chosenOption: STAMP as never,
+        };
+        expect(isPickSeedGate(gate)).toBe(pick);
+        expect(isPlanningSeedGate(gate)).toBe(pick || isRefusalSeedGate(gate));
+        if (isPlanningSeedGate(gate)) expect(seedIntentOf(gate)).toBe(pick ? 'plan' : 'replan');
+      });
+    }
+  }
+
+  it('a chosen gate WITHOUT a stamp (decided before the stamp existed) is not a pick seed', () => {
+    const gate = {
+      kind: 'decision_choice' as const,
+      state: 'approved' as const,
+      refusalVerdict: null,
+      decisionSource: 'ui' as const,
+      chosenOption: null,
+    };
+    expect(isPickSeedGate(gate)).toBe(false);
+    expect(isPlanningSeedGate(gate)).toBe(false);
+  });
+
+  it('isRefusalSeedGate stays false for a pick — the ask and the Re-plan door never widen', () => {
+    expect(
+      isRefusalSeedGate({
+        kind: 'decision_choice',
+        state: 'approved',
+        refusalVerdict: null,
+        decisionSource: 'ui',
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('readChosenOption — the stamped JSON, read defensively', () => {
+  it('returns a well-formed stamp as is', () => {
+    expect(readChosenOption(STAMP)).toBe(STAMP);
+  });
+  it.each([
+    ['null', null],
+    ['a string', 'Managed object storage'],
+    ['an array', [STAMP]],
+    ['a missing followUp', { ...STAMP, followUp: undefined }],
+    ['a non-string label', { ...STAMP, label: 7 }],
+    ['a missing optionId', { ...STAMP, optionId: undefined }],
+    ['a missing bestFor', { ...STAMP, bestFor: undefined }],
+  ])('treats %s as no stamp', (_label, value) => {
+    expect(readChosenOption(value)).toBeNull();
+  });
+});
+
+describe('anchorOf — a TOTAL per-kind resolver', () => {
+  const PICK = {
+    kind: 'decision_choice' as const,
+    state: 'approved' as const,
+    chosenOption: STAMP as never,
+  };
+  const a = (key: string, statusCategory: string | null, archived = false): SeedAncestor => ({
+    key,
+    statusCategory,
+    archived,
+  });
+
+  it('a pick anchors on the PARENT when it is not done', () => {
+    expect(anchorOf(PICK, 'ACME-42', [a('ACME-1', 'in_progress'), a('ACME-40', 'todo')])).toBe(
+      'ACME-40',
+    );
+  });
+  it('a pick walks up past a DONE parent to the grandparent — by CATEGORY, not the literal key', () => {
+    // The resolver reads the status CATEGORY (the service maps each project status key
+    // to it), so a custom done-category status like `shipped` counts as done too.
+    expect(anchorOf(PICK, 'ACME-42', [a('ACME-1', 'in_progress'), a('ACME-40', 'done')])).toBe(
+      'ACME-1',
+    );
+  });
+  it('a pick walks up past an ARCHIVED parent', () => {
+    expect(anchorOf(PICK, 'ACME-42', [a('ACME-1', 'todo'), a('ACME-40', 'todo', true)])).toBe(
+      'ACME-1',
+    );
+  });
+  it('a ROOT or FOLDER-FILED choice (no ancestors) anchors at the project', () => {
+    expect(anchorOf(PICK, 'ACME-42', [])).toBeNull();
+  });
+  it('an all-done chain anchors at the project', () => {
+    expect(anchorOf(PICK, 'ACME-42', [a('ACME-1', 'done'), a('ACME-40', 'done')])).toBeNull();
+  });
+  it('an ancestor whose status has no known category counts as open', () => {
+    expect(anchorOf(PICK, 'ACME-42', [a('ACME-40', null)])).toBe('ACME-40');
+  });
+
+  const kinds = Object.values(ApprovalGateKind);
+  for (const kind of kinds) {
+    it(`${kind} as a refusal (or any non-pick) anchors on its OWN card`, () => {
+      const gate = { kind, state: 'changes_requested' as const, chosenOption: null };
+      expect(anchorOf(gate, 'ACME-42', [a('ACME-40', 'todo')])).toBe('ACME-42');
+    });
+  }
+
+  it('answers its own card for a kind outside the enum rather than throwing', () => {
+    const gate = {
+      kind: 'not_a_kind' as ApprovalGateKind,
+      state: 'approved' as const,
+      chosenOption: null,
+    };
+    expect(anchorOf(gate, 'ACME-42', [a('ACME-40', 'todo')])).toBe('ACME-42');
+  });
+});
+
+describe('the decision_choice composer — TWO cases, dispatched on state', () => {
+  const pickInput = (anchorKey: string | null): SeedComposerInput => ({
+    card: { key: 'ACME-42', title: 'Choose where exports live' },
+    gate: { kind: 'decision_choice', state: 'approved', noteMd: null, refusalVerdict: null },
+    supersedesKeys: [],
+    chosenOption: STAMP,
+    anchorKey,
+    waitingKeys: [],
+  });
+
+  it('a PICK on a parent anchor (en) — heading, the follow-up line, option + best-if, what it gates (verbatim), the plan ask', () => {
+    expect(REFUSAL_SEED_COMPOSERS.decision_choice!(pickInput('ACME-40'), t('en'))).toBe(
+      [
+        'ACME-42 · Choose where exports live',
+        'I just chose an option on this choice — this is the follow-up planning it was waiting for.',
+        `The option chosen: ${STAMP.label}\nBest if you want: ${STAMP.bestFor}`,
+        `What this choice gates:\n${STAMP.followUp}`,
+        'Plan this work with the option chosen.',
+      ].join('\n\n'),
+    );
+  });
+
+  it('a PICK at the PROJECT anchor says so right after the follow-up line (en + zh)', () => {
+    const en = REFUSAL_SEED_COMPOSERS.decision_choice!(pickInput(null), t('en'));
+    expect(en.split('\n\n')[2]).toBe(
+      'This choice has no open container, so Motir AI opened on the project.',
+    );
+    const zh = REFUSAL_SEED_COMPOSERS.decision_choice!(pickInput(null), t('zh'));
+    expect(zh).toBe(
+      [
+        'ACME-42 · Choose where exports live',
+        '我刚在这个选择上选定了一个选项——这就是它在等的后续规划。',
+        '这个选择没有未完成的上级工作项，所以 Motir AI 在项目上打开。',
+        `选中的选项：${STAMP.label}\n如果你更看重：${STAMP.bestFor}`,
+        `这个选择决定的工作：\n${STAMP.followUp}`,
+        '请按选中的选项规划这项工作。',
+      ].join('\n\n'),
+    );
+  });
+
+  it('a PICK turn never says re-plan', () => {
+    const turn = REFUSAL_SEED_COMPOSERS.decision_choice!(pickInput('ACME-40'), t('en'));
+    expect(turn).not.toMatch(/re-plan/i);
+  });
+
+  it('None of these (changes_requested) still composes the refusal turn byte-for-byte', () => {
+    const none = REFUSAL_SEED_COMPOSERS.decision_choice!(
+      {
+        ...pickInput('ACME-40'),
+        gate: {
+          kind: 'decision_choice',
+          state: 'changes_requested',
+          noteMd: REASON,
+          refusalVerdict: null,
+        },
+      },
+      t('en'),
+    );
+    expect(none).toBe(
+      [
+        'ACME-42 · Choose where exports live',
+        'None of the options on this choice was picked.',
+        `The reason given:\n“${REASON}”`,
+        'Re-plan this work item from that reason.',
+      ].join('\n\n'),
+    );
+  });
+});
+
 // MOTIR-6424 — the DESIGN Re-plan composer: the MOTIR-6420 design's first-turn
 // contract, in both locales.
 describe('the design Re-plan composer', () => {
@@ -271,5 +513,65 @@ describe('the design Re-plan composer', () => {
     expect(REFUSAL_SEED_COMPOSERS.design_result!(design([], null), t('en'))).toBe(
       'PROD-7 · Pick the queue\n\nChanges were requested on this design.\n\nRe-plan PROD-3 from that reason: this design and the work waiting on it.',
     );
+  });
+});
+
+describe('the acceptance composer (MOTIR-6504) — anchored on the STORY', () => {
+  const acceptance = (
+    refusalVerdict: 're_plan' | null,
+    noteMd: string | null = REASON,
+  ): SeedComposerInput => ({
+    card: { key: 'PROD-60', title: 'Exports list' },
+    gate: { kind: 'acceptance_result', state: 'changes_requested', noteMd, refusalVerdict },
+    supersedesKeys: [],
+    anchorKey: 'PROD-60',
+    waitingKeys: [],
+  });
+
+  it('a story-run Re-plan quotes the reason and says every subtask may be re-planned (en)', () => {
+    expect(REFUSAL_SEED_COMPOSERS.acceptance_result!(acceptance('re_plan'), t('en'))).toBe(
+      [
+        'PROD-60 · Exports list',
+        "This story's acceptance video was sent back to be re-planned. The story was run as a whole, so none of its subtasks is done yet.",
+        `The reason given:\n“${REASON}”`,
+        'Re-plan PROD-60 from that reason. Any of its subtasks may be re-planned.',
+      ].join('\n\n'),
+    );
+  });
+
+  it('a finished story asks for a REMEDY and promises no re-run (en)', () => {
+    const turn = REFUSAL_SEED_COMPOSERS.acceptance_result!(acceptance(null), t('en'));
+    expect(turn).toBe(
+      [
+        'PROD-60 · Exports list',
+        "This story's acceptance video was sent back. Every subtask has already merged, so there is nothing left to re-run.",
+        `The reason given:\n“${REASON}”`,
+        'Plan a remedy under PROD-60 from that reason: new work that fixes what the video showed.',
+      ].join('\n\n'),
+    );
+  });
+
+  it('renders both turns in zh from the zh catalogue', () => {
+    expect(REFUSAL_SEED_COMPOSERS.acceptance_result!(acceptance('re_plan'), t('zh'))).toBe(
+      [
+        'PROD-60 · Exports list',
+        '这个故事的验收视频被退回重新规划。这个故事是整体运行的，所以它的子任务都还没有完成。',
+        `给出的理由：\n“${REASON}”`,
+        '请根据这个理由重新规划 PROD-60。它的任何子任务都可以重新规划。',
+      ].join('\n\n'),
+    );
+    expect(REFUSAL_SEED_COMPOSERS.acceptance_result!(acceptance(null), t('zh'))).toContain(
+      '请根据这个理由在 PROD-60 下规划补救',
+    );
+  });
+
+  it('a refusal with no reason omits the reason line', () => {
+    expect(
+      REFUSAL_SEED_COMPOSERS.acceptance_result!(acceptance(null, null), t('en')),
+    ).not.toContain('The reason given');
+  });
+
+  it('never anchors on the parent — the story is the work item re-planned', () => {
+    expect(refusalSeedAnchorsOnParent('acceptance_result')).toBe(false);
   });
 });

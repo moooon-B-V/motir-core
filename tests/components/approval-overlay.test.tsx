@@ -89,6 +89,7 @@ const GATE: ApprovalGateDTO = {
   outcomeRef: null,
   confirmedRecord: null,
   refusalVerdict: null,
+  offersRefusalVerdict: false,
   replanOwed: null,
   chosenOption: null,
   createdAt: '2026-09-08T04:00:00.000Z',
@@ -1158,6 +1159,142 @@ describe('the ACCEPTANCE port — a story\u2019s recording, in the shared frame'
       'acceptance_result',
     ]);
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  // THE REFUSAL ASKS BY RUN SHAPE, THEN HANDS OFF (Story MOTIR-6071 · MOTIR-6506; design
+  // `approval-control--acceptance-verdict.mock.html` panels 3a, 7a, 8a).
+  const reasonCopy = en.approvalGate.reason;
+  const acceptanceCopy = en.approvalGate.acceptanceResult;
+  const REASON = 'Scheduled exports send at UTC midnight, not the workspace time zone.';
+  const STATUSES = [
+    { key: 'in_review', label: 'In Review', category: 'in_progress', isInitial: false },
+    { key: 'done', label: 'Done', category: 'done', isInitial: false },
+  ] as ApprovalGateOverlayReadDTO['statuses'];
+
+  async function openRefusable(offersRefusalVerdict: boolean) {
+    openAt('GATE-1', 'acceptance_result');
+    fetchApprovalGateOverlay.mockResolvedValue(
+      readOf({
+        gate: { ...ACCEPTANCE_GATE, offersRefusalVerdict },
+        canReplan: true,
+        statuses: STATUSES,
+        subject: { state: 'resolved', kind: 'acceptance_result', evidence: RECEIPT } as never,
+      }),
+    );
+    await renderOverlay();
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: en.approvalGate.verb.requestChanges }),
+    );
+    return dialog;
+  }
+
+  const refused = (refusalVerdict: ApprovalGateDTO['refusalVerdict']): ApprovalGateDTO => ({
+    ...ACCEPTANCE_GATE,
+    state: 'changes_requested',
+    decidedById: 'user-1',
+    decidedByLabel: 'Ada L.',
+    decidedAt: '2026-09-26T10:00:00.000Z',
+    decisionSource: 'ui',
+    noteMd: REASON,
+    refusalVerdict,
+  });
+
+  it('a FINISHED story: the reason only, the no-re-run line, the shipped two lines — and no verdict group', async () => {
+    const dialog = await openRefusable(false);
+    expect(within(dialog).getByLabelText(reasonCopy.label)).toBeTruthy();
+    expect(within(dialog).queryByTestId('refusal-verdict-group')).toBeNull();
+    expect(within(dialog).getByTestId('refusal-no-rerun').textContent).toBe(
+      acceptanceCopy.refusal.noRerun,
+    );
+    expect(within(dialog).getByText(reasonCopy.consequence.versionBack)).toBeTruthy();
+    expect(within(dialog).getByText('Leave GATE-1 where it is — nothing moves yet.')).toBeTruthy();
+  });
+
+  it('a STORY RUN in the standalone arm: the Re-run / Re-plan pair, and no no-re-run line', async () => {
+    const dialog = await openRefusable(true);
+    const group = within(dialog).getByRole('radiogroup', { name: acceptanceCopy.verdict.legend });
+    expect(within(group).getByRole('radio', { name: /^Re-run/ })).toBeTruthy();
+    expect(within(group).getByRole('radio', { name: /^Re-plan/ })).toBeTruthy();
+    expect(within(dialog).queryByTestId('refusal-no-rerun')).toBeNull();
+    expect(within(dialog).queryByText('Leave GATE-1 where it is — nothing moves yet.')).toBeNull();
+  });
+
+  it('a finished-story press sends NO verdict, never repaints the header, and ASKS for a remedy', async () => {
+    decideApprovalGateAction.mockResolvedValue({
+      ok: true,
+      gate: refused(null),
+      filesKept: null,
+      // Even a stale server answering a status is not painted for an acceptance refusal.
+      statusWritten: 'done',
+    });
+    const dialog = await openRefusable(false);
+    fireEvent.change(within(dialog).getByLabelText(reasonCopy.label), {
+      target: { value: REASON },
+    });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: reasonCopy.proceed }));
+    });
+
+    const sent = decideApprovalGateAction.mock.calls[0]![0] as Record<string, unknown>;
+    expect(sent).toMatchObject({ decision: 'request_changes', noteMd: REASON });
+    expect(sent).not.toHaveProperty('refusalVerdict');
+    expect(within(dialog).getAllByText('In Review', { exact: true })).toHaveLength(1);
+    expect(within(dialog).queryByText('Done', { exact: true })).toBeNull();
+    // The chip: this reader's own press knows the story is finished.
+    expect(within(dialog).getByTestId('refusal-verdict').textContent).toBe(
+      reasonCopy.record.verdict.remedy,
+    );
+    const ask = screen.getByTestId('refusal-replan-ask');
+    expect(ask.getAttribute('data-mode')).toBe('remedy');
+    expect(
+      within(ask).getByText(acceptanceCopy.remedyAsk.title.replace('{key}', 'GATE-1')),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: en.planningWorkspace.handoff.notNow }));
+    const door = screen.getByTestId('refusal-replan-door');
+    expect(door.getAttribute('data-mode')).toBe('remedy');
+    expect(door.textContent).toBe(acceptanceCopy.remedyDoor.label);
+  });
+
+  it('a story-run Re-run in the standalone arm sends `revise` and asks NOTHING', async () => {
+    decideApprovalGateAction.mockResolvedValue({
+      ok: true,
+      gate: refused('revise'),
+      filesKept: null,
+      statusWritten: null,
+    });
+    const dialog = await openRefusable(true);
+    fireEvent.change(within(dialog).getByLabelText(reasonCopy.label), {
+      target: { value: REASON },
+    });
+    fireEvent.click(within(dialog).getByRole('radio', { name: /^Re-run/ }));
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: reasonCopy.proceed }));
+    });
+    expect(decideApprovalGateAction).toHaveBeenCalledWith(
+      expect.objectContaining({ refusalVerdict: 'revise' }),
+    );
+    expect(within(dialog).getByTestId('refusal-verdict').textContent).toBe(
+      reasonCopy.record.verdict.rerun,
+    );
+    expect(screen.queryByTestId('refusal-replan-ask')).toBeNull();
+    expect(screen.queryByTestId('refusal-replan-door')).toBeNull();
+  });
+
+  it('a later reader of a verdict-less record sees the door but no remedy chip (the run shape is unknown here)', async () => {
+    openAt('GATE-1', 'acceptance_result');
+    fetchApprovalGateOverlay.mockResolvedValue(
+      readOf({
+        gate: refused(null),
+        canDecide: false,
+        canReplan: true,
+        subject: { state: 'resolved', kind: 'acceptance_result', evidence: RECEIPT } as never,
+      }),
+    );
+    await renderOverlay();
+    expect(screen.queryByTestId('refusal-verdict')).toBeNull();
+    expect(screen.getByTestId('refusal-replan-door').getAttribute('data-mode')).toBe('remedy');
   });
 
   it('a recording that no longer resolves is the GONE state, not an empty player', async () => {

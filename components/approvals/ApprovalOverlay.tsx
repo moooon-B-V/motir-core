@@ -20,12 +20,12 @@ import { ChoiceGateFrame } from '@/components/approvals/ChoiceGate';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import { DecisionConfirmGateFrame } from '@/components/approvals/DecisionConfirmGate';
 import { StatusPill } from '@/components/issues/StatusPill';
-import { useRefusalVerb, type DesignRefusalFacts } from './RefusalReason';
 import {
-  asksToReplanAfterPress,
-  useRefusalReplanSlots,
-  type RefusalReplanProps,
-} from './RefusalReplan';
+  useRefusalVerb,
+  type AcceptanceRefusalFacts,
+  type DesignRefusalFacts,
+} from './RefusalReason';
+import { asksAfterPress, useRefusalReplanSlots, type RefusalReplanProps } from './RefusalReplan';
 import {
   ApprovalGateControl,
   type ApprovalGateControlProps,
@@ -256,13 +256,14 @@ function LoadingBands() {
 /** The three arms that mount NO frame are centred in the body with the card
  *  padding around them (§ 22 *The three arms that mount NO frame*). */
 /**
- * THE DESIGN ARM'S FRAME (Story MOTIR-6070 · MOTIR-6427) — the shared control with the
- * refusal's two slots filled: the Re-plan with AI DOOR on a record sent back with Re-plan,
- * or, right after this reader pressed it, the ASK in the door's place (design panels
- * 6a–6c). Both name the design card's PARENT (§10h), which is where the planner opens. A
- * Revise, a GitHub-synced or a pre-verdict refusal fills neither (6d, 4d).
+ * THE DESIGN AND ACCEPTANCE ARMS' FRAME (Story MOTIR-6070 · MOTIR-6427; Story MOTIR-6071 ·
+ * MOTIR-6506) — the shared control with the refusal's two slots filled: the Re-plan with
+ * AI DOOR on a record whose refusal offers the planner, or, right after this reader pressed
+ * it, the ASK in the door's place (design panels 6a–6c; acceptance panels 7–8). A design
+ * names its PARENT (§10h); an acceptance names the STORY itself. A Revise / Re-run, a
+ * GitHub-synced or a pre-verdict design refusal fills neither (6d, 4d).
  */
-function DesignGateFrame({
+function RefusalReplanFrame({
   replanKey,
   replan,
   ...frame
@@ -550,7 +551,7 @@ export function ApprovalOverlay() {
         if (fresh?.subject.state !== 'resolved' || fresh.subject.kind !== 'pull_request_approval') {
           return;
         }
-        const { pullRequests, repoDelivery, deliveries, members } = fresh.subject;
+        const { pullRequests, repoDelivery, deliveries, members, repair } = fresh.subject;
         setLoad((prev) =>
           prev?.token === forToken &&
           prev.outcome === 'read' &&
@@ -566,6 +567,9 @@ export function ApprovalOverlay() {
                     repoDelivery,
                     deliveries,
                     members,
+                    // `motir fix` after an acceptance Re-run (MOTIR-6506) — the repair
+                    // view is the server's, never guessed from the verdict here.
+                    repair,
                   },
                 },
               }
@@ -788,14 +792,22 @@ export function ApprovalOverlay() {
         variant: 'primary',
         confirms: true,
       };
-      // A recording sent back: the reason is REQUIRED (ADR §10a; design
-      // `approval-control--refusal-reason.mock.html` Panel 1).
-      const verbs: GateVerb[] = [refusalVerb('version', identifier), approveVerb];
-      // A DESIGN sent back also takes a VERDICT — Revise or Re-plan (MOTIR-6427; design
-      // `approval-control--design-verdict.mock.html` panels 1–3). Its own subject, because
-      // `version` keeps the *Leave {key} where it is* line the acceptance still needs.
+      // A DESIGN sent back takes a reason (ADR §10a) AND a VERDICT — Revise or Re-plan
+      // (MOTIR-6427; design `approval-control--design-verdict.mock.html` panels 1–3).
       const designVerbs: GateVerb[] = [
         refusalVerb('design', identifier, {}, designRefusal),
+        approveVerb,
+      ];
+      // AN ACCEPTANCE ASKS BY RUN SHAPE (MOTIR-6506): the Re-run / Re-plan pair when the
+      // AWAITING gate offers a verdict (a story run — `offersRefusalVerdict`, read off the
+      // DTO, never re-derived), the reason plus the no-re-run line on a finished story. The
+      // standalone arm cannot count the story's pull requests, so the tile reads one.
+      const acceptanceRefusal: AcceptanceRefusalFacts = {
+        offersVerdict: read.gate.offersRefusalVerdict,
+        pullRequestCount: 1,
+      };
+      const acceptanceVerbs: GateVerb[] = [
+        refusalVerb('acceptance', identifier, {}, undefined, acceptanceRefusal),
         approveVerb,
       ];
 
@@ -824,8 +836,15 @@ export function ApprovalOverlay() {
         // stays open over it.
         if (!result.ok) return result.refusal;
         setDecided({ token: token!, gate: result.gate, filesKept: result.filesKept });
-        // The exit row's chip, from what the decision WROTE (panel 5b).
-        if (result.statusWritten) setWritten({ token: token!, status: result.statusWritten });
+        // The exit row's chip, from what the decision WROTE (panel 5b). ⚠️ NEVER for an
+        // acceptance sent back (MOTIR-6506; `acceptance-refusal-verdict.md` §2): no
+        // acceptance refusal writes a status, so the chip keeps the story's — even if a
+        // stale server answered one.
+        const acceptanceRefused =
+          result.gate.kind === 'acceptance_result' && decision === 'request_changes';
+        if (result.statusWritten && !acceptanceRefused) {
+          setWritten({ token: token!, status: result.statusWritten });
+        }
         // The WHOLE decision, not only its state: the To-approve row reads the
         // state, and the item page underneath reads `outcomeRef` for its status
         // rail and `filesKept` for its record (MOTIR-5570).
@@ -837,8 +856,9 @@ export function ApprovalOverlay() {
           statusWritten: result.statusWritten,
         });
         // A refusal that offers the seeded planner ASKS first (§10h; the design gate's
-        // amendment of 2026-09-25) — nothing opens until the reader says yes.
-        if (asksToReplanAfterPress(result.gate)) setReplanAsk(result.gate.id);
+        // amendment of 2026-09-25), and so does an option CHOSEN (MOTIR-6436) — nothing
+        // opens until the reader says yes.
+        if (asksAfterPress(result.gate)) setReplanAsk(result.gate.id);
         router.refresh();
         return null;
       };
@@ -920,7 +940,13 @@ export function ApprovalOverlay() {
               // The exit row's chip repaints from what the press WROTE (MOTIR-6427, 5b).
               decide: async (input) => {
                 const result = await decideApprovalGateAction(input);
-                if (result.ok && result.statusWritten) {
+                // ⚠️ A STORY RUN'S ACCEPTANCE SENT BACK (MOTIR-6506) writes no status — the
+                // chip is never repainted for it — and it withdrew the merge gate and (on a
+                // Re-run) opened `motir fix`: the rows and the repair part are RE-READ, so
+                // the block shows what the server now holds.
+                if (result.ok && result.gate.kind === 'acceptance_result') {
+                  rereadRows();
+                } else if (result.ok && result.statusWritten) {
                   setWritten({ token: token!, status: result.statusWritten });
                 }
                 return result;
@@ -962,8 +988,18 @@ export function ApprovalOverlay() {
           // by the gate's own `subjectId`, in the same player and provenance the story
           // page shows. The frame, its verbs, its confirm step and its refusals are
           // `ApprovalGateControl`'s, exactly as for a design: one approve control.
-          <ApprovalGateControl
+          // Its refusal asks by run shape and hands off (MOTIR-6506): the door or the ask,
+          // named on the STORY, filled exactly as the design arm fills them.
+          <RefusalReplanFrame
             key={`${gate.id}:${settled?.outcome === 'read' ? settled.reread : 0}`}
+            replanKey={identifier}
+            replan={replan}
+            // *Sent back for a remedy* needs the run shape of a DECIDED gate, which its DTO
+            // no longer carries (`offersRefusalVerdict` is false once decided). The overlay
+            // knows it only for THIS reader's own press — the gate it pressed awaited without
+            // offering a verdict, so the story is finished. A later reader sees the remedy
+            // chip in `AcceptancePanel`, which renders only for a finished story.
+            refusalRemedy={local !== null && !read.gate.offersRefusalVerdict}
             layout="fill"
             gate={gate}
             canDecide={read.canDecide && !decidedState}
@@ -980,7 +1016,7 @@ export function ApprovalOverlay() {
                 <AcceptanceReceiptProvenance evidence={subject.evidence} />
               </div>
             }
-            verbs={verbs}
+            verbs={acceptanceVerbs}
             consequence={tAcceptance('consequence', { key: identifier })}
             confirmConsequences={[
               tAcceptance('confirm.records'),
@@ -1047,7 +1083,7 @@ export function ApprovalOverlay() {
             focusPortOnMount={settled?.outcome === 'read' && settled.reread > 0}
           />
         ) : (
-          <DesignGateFrame
+          <RefusalReplanFrame
             // A fresh read is a fresh frame: a stale refusal clears and the verbs return.
             key={`${gate.id}:${settled?.outcome === 'read' ? settled.reread : 0}`}
             replanKey={designRefusal.replanKey}

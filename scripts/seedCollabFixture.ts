@@ -314,7 +314,7 @@ export async function seedCollabFixture(): Promise<CollabSeedManifest> {
     await workspacesService.addMember({
       userId: user.id,
       workspaceId: workspace.id,
-      role: 'member',
+      workspaceRole: 'member',
     });
     memberIds.push(user.id);
     nameById.set(user.id, name);
@@ -339,7 +339,6 @@ export async function seedCollabFixture(): Promise<CollabSeedManifest> {
           workspaceId: workspace.id,
           projectId: project.id,
           userId,
-          role: userId === owner.id ? 'admin' : 'member',
         },
         tx,
       );

@@ -99,7 +99,7 @@ async function buildScenario(slug: string): Promise<Scenario> {
     await workspacesService.addMember({
       userId: u.id,
       workspaceId: workspace.id,
-      role: role ?? 'member',
+      workspaceRole: role === 'admin' ? 'manager' : (role ?? 'member'),
     });
     if (role) {
       await addToProjectAs({

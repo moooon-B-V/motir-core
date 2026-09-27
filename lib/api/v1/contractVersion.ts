@@ -610,9 +610,36 @@
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.40.0` at `b4588d153`, so this claims `1.41.0`. If a sibling has taken
- *   it since, RENUMBER this entry — it names the FIELD.
+ *   it since, RENUMBER this entry — it names the FIELD. *
+ * - `1.42.0` — MOTIR-6501 adds `offersRefusalVerdict` (boolean) to the
+ *   `ApprovalGateDecision` component `getWorkItemApprovalGate` answers: whether a refusal
+ *   of this gate, pressed in Motir, must carry a verdict. True on an awaiting
+ *   `design_result`, and on an awaiting `acceptance_result` whose story has an open
+ *   delivery of its own (a story run, `acceptance-refusal-verdict.md` §1); false on every
+ *   other kind and state. `refusalVerdict` may now be set on a story run's
+ *   `acceptance_result` as well.
  *
- * - `1.42.0` — MOTIR-6558 adds `getDispatchRun` (`GET /api/v1/dispatch-runs/{id}`):
+ *   Additive: one new field on an existing component (§8's allowed list); no existing
+ *   field changes meaning. Still a READ — no v1 operation decides a gate.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.41.0` at `70c845f0a`, so this claims `1.42.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the FIELD. *
+ * - `1.43.0` — MOTIR-6502 adds `repairClass` (`ci` | `acceptance_rerun`) and
+ *   `acceptanceRefusal` (`{ reasonMd, decidedByLabel, decidedAt }`, nullable) to the
+ *   `WorkItemRepairClaim` component `claimWorkItemRepair` answers. `acceptance_rerun`
+ *   admits a story whose acceptance video was sent back with Re-run in Motir
+ *   (`acceptance-refusal-verdict.md` §4): its checks may be green, so every open member
+ *   is handed over, and the reason rides beside them. Every shipped admission is `ci`.
+ *
+ *   Additive: two new fields on an existing component (§8's allowed list) and a new
+ *   admission of an existing operation; no existing field changes meaning.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: this claims `1.43.0` on top
+ *   of MOTIR-6501's `1.42.0` in the same pull request. RENUMBER both if a sibling has
+ *   taken either since.
+ *
+ * - `1.44.0` — MOTIR-6558 adds `getDispatchRun` (`GET /api/v1/dispatch-runs/{id}`):
  *   one run with its SET, the same `DispatchRun` component the ingest operations
  *   already answer with. A hosted run is opened by the SERVER, and the `motir`
  *   CLI in its container ADOPTS it (`hosted-run-runs-the-cli-as-the-app.md` §3) —
@@ -623,10 +650,10 @@
  *   list); nothing existing changes.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.41.0` at `c6cf7e5b4`, so this claims `1.42.0`. If a sibling has taken
+ *   was `1.43.0` on `origin/main` when this was merged (MOTIR-6501 and MOTIR-6502 took `1.42.0` and `1.43.0`), so this claims `1.44.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
  *
- * - `1.43.0` — MOTIR-6538 adds `issueDispatchRunGitCredentials`:
+ * - `1.45.0` — MOTIR-6538 adds `issueDispatchRunGitCredentials`:
  *   `POST /api/v1/dispatch-runs/{id}/git-credential`, a running HOSTED run's git
  *   credentials — one entry per repository of the run, each an installation token
  *   of the Motir GitHub App that writes it, with the App's bot as author and the
@@ -639,10 +666,10 @@
  *   included), so no person's grant is widened by it.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.42.0` at `a51c5476f`, so this claims `1.43.0`. If a sibling has taken
+ *   was `1.44.0` after MOTIR-6558, so this claims `1.45.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
  *
- * - `1.44.0` — MOTIR-6539 adds `workBranch` (nullable) to the `DispatchPrompt`
+ * - `1.46.0` — MOTIR-6539 adds `workBranch` (nullable) to the `DispatchPrompt`
  *   component `getWorkItemDispatchPrompt` answers: the branch the prompt tells the
  *   agent to CREATE for its work — the same name in every repository the item
  *   ships in — or `null` for a manual item. A runner names it on `checkout_ready`
@@ -653,7 +680,7 @@
  *   nothing existing changes meaning, and `sessionBranch` still names the lineage.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.43.0` at `7b087b907`, so this claims `1.44.0`. If a sibling has taken
+ *   was `1.45.0` after MOTIR-6538, so this claims `1.46.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.44.0';
+export const V1_CONTRACT_VERSION = '1.46.0';

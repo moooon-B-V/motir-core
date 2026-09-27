@@ -274,7 +274,11 @@ describe('deleteStatus — delete-with-reassign (2.3.1)', () => {
       name: 'Member',
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: member.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     const err = await workflowsService
       .deleteStatus({

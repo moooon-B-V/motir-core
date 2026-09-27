@@ -63,7 +63,7 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
   // roles moved to the workspace (Story MOTIR-6168) a Member holds
   // `sprint:manage` in every project.
   await adminDb.workspaceMembership.create({
-    data: { userId: member.id, workspaceId, role: 'viewer', workspaceRole: 'viewer' },
+    data: { userId: member.id, workspaceId, workspaceRole: 'viewer' },
   });
 
   return {

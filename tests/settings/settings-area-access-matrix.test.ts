@@ -106,7 +106,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   await workspacesService.addMember({
     userId: wsAdmin.id,
     workspaceId: workspace.id,
-    role: 'admin',
+    workspaceRole: 'manager',
   });
 
   const plainMember = await makeUser(`plain-${slug}@ex.com`, 'Plain');

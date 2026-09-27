@@ -113,6 +113,7 @@ function frameGateFor(
   r: LateReads,
   acceptanceLeads: boolean,
   anyPullRequestOpen: boolean,
+  acceptanceSentBack = false,
 ): DevelopmentGateRead | null {
   const primary = (read: {
     gate: DevelopmentGateRead['gate'] | null;
@@ -158,6 +159,14 @@ function frameGateFor(
   if (acceptanceLeads && r.mergeGate.gate && r.acceptanceGate.gate) {
     return primary(r.acceptanceGate);
   }
+  // ⚠️ ONE SENT BACK KEEPS THE FRAME (Story MOTIR-6071 · MOTIR-6506; design
+  // `approval-control--acceptance-verdict.mock.html` choice 4). A story run's acceptance
+  // refusal withdrew the merge gate (`pulled_back`), and handing the frame to it would draw
+  // *"The work was pulled back out of review…"* — false: the story never left review, and
+  // only a NEWER receipt asks again. So while the latest acceptance over the CURRENT receipt
+  // is `changes_requested`, the acceptance stays the frame's gate: its record, the
+  // `motir fix` offer or the re-plan door, and no merge band.
+  if (acceptanceSentBack) return primary(r.acceptanceGate);
   if (r.designGate.gate?.state === 'awaiting' && r.mergeGate.gate) return primary(r.designGate);
   if (merge?.gate.state === 'superseded' && !anyPullRequestOpen) return null;
   return merge;
@@ -326,6 +335,12 @@ export async function LateUpperSections({
     hasOpenPullRequest(r.pullRequests, deliveries ?? []) &&
     (!acceptanceAwaiting || r.mergeGate.gate !== null);
   const acceptanceLeads = acceptanceInDevelopment && acceptanceAwaiting;
+  // A story run's acceptance SENT BACK over the receipt that is still current (MOTIR-6506,
+  // choice 4) — the merge is held until a newer receipt, so the acceptance keeps the frame.
+  const acceptanceSentBack =
+    acceptanceInDevelopment &&
+    r.acceptanceGate.gate?.state === 'changes_requested' &&
+    r.acceptanceGate.gate.subjectId === r.acceptanceEvidence?.id;
 
   // THE DECISION PORT (Story MOTIR-4907 · Subtask MOTIR-5678; design `design/github` §27).
   // A card that asks the decision question and holds a decision gate shows its document
@@ -336,6 +351,7 @@ export async function LateUpperSections({
     r,
     acceptanceLeads,
     hasOpenPullRequest(r.pullRequests, deliveries ?? []),
+    acceptanceSentBack,
   );
   // THE HEADER MARKER'S DESTINATIONS (Story MOTIR-4908 · MOTIR-5878; design
   // § *The item header — where pressing it takes you*). Each section names the
@@ -547,6 +563,8 @@ export async function LateUpperSections({
                 ? null
                 : r.acceptanceGate.routedToLabel
             }
+            // A finished story's refusal offers to plan a remedy from its record (MOTIR-6506).
+            canReplan={canReplan}
           />
         </ContentSectionCard>
       ) : null}

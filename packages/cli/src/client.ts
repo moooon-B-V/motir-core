@@ -670,6 +670,20 @@ export interface RepairQueueExit {
   failingCheckUrl: string | null;
 }
 
+/**
+ * Which repair a claim hands over (MOTIR-6502). `ci` — make the build pass.
+ * `acceptance_rerun` — the story's acceptance video was sent back with Re-run: fix what
+ * the reviewer saw, on the same pull requests, then re-record the video.
+ */
+export type WorkItemRepairClass = 'ci' | 'acceptance_rerun';
+
+/** What the reviewer said, on an `acceptance_rerun`. */
+export interface AcceptanceRefusal {
+  reasonMd: string | null;
+  decidedByLabel: string | null;
+  decidedAt: string;
+}
+
 /** The result of a repair claim. A refusal is a 200, as on the keyed claim. */
 export interface WorkItemRepairClaim {
   key: string;
@@ -682,6 +696,9 @@ export interface WorkItemRepairClaim {
   runId: string | null;
   holder: ClaimActor | null;
   startedAt: string | null;
+  repairClass: WorkItemRepairClass;
+  /** Set on an `acceptance_rerun` the caller holds; null otherwise. */
+  acceptanceRefusal: AcceptanceRefusal | null;
   /** Non-empty on `claimed` and `mine` only. */
   pullRequests: RepairPullRequest[];
 }

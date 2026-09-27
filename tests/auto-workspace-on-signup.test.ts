@@ -56,8 +56,8 @@ describe('email/password sign-up (Better-Auth databaseHooks)', () => {
 
     const memberships = await workspacesForUser(user!.id);
     expect(memberships).toHaveLength(1);
-    // The auto-created workspace's sole member is its creator → owner (1.6.5).
-    expect(memberships[0]!.role).toBe('owner');
+    // The auto-created workspace's sole member is its creator — its Manager (MOTIR-6462).
+    expect(memberships[0]!.workspaceRole).toBe('manager');
     expect(memberships[0]!.workspace.name).toBe("Alice's Workspace");
     expect(memberships[0]!.workspace.slug).toBe('alice-s-workspace');
 
@@ -161,8 +161,8 @@ describe('workspacesService.ensureDefaultWorkspace (lazy self-heal)', () => {
     });
     expect(workspace.name).toBe("Lonely's Workspace");
     expect(membership.userId).toBe(user.id);
-    // Creator of the auto-created workspace is its owner (1.6.5).
-    expect(membership.role).toBe('owner');
+    // Creator of the auto-created workspace is its Manager (MOTIR-6462).
+    expect(membership.workspaceRole).toBe('manager');
 
     const memberships = await workspacesForUser(user.id);
     expect(memberships).toHaveLength(1);

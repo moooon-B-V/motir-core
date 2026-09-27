@@ -12,7 +12,9 @@ of the kinds that come later too — but only the design gate exists right now, 
 than leaving you to find out.
 
 The decision record behind it is
-[`docs/decisions/approval-gates.md`](./decisions/approval-gates.md).
+[`docs/decisions/approval-gates.md`](./decisions/approval-gates.md). What sending back
+a story's acceptance video does is decided in
+[`docs/decisions/acceptance-refusal-verdict.md`](./decisions/acceptance-refusal-verdict.md).
 
 ---
 
@@ -86,7 +88,9 @@ requirement allows two workflows), the options and what the pick gates — and *
 choose**, which opens the full-screen view where you pick.
 
 **Select an option, then press _Choose {option}_**, and confirm. Choosing records your
-pick and moves the work item to **Done**; the planning the pick unblocks is owed next.
+pick and moves the work item to **Done**, and then asks whether Motir AI should start
+planning what the pick unblocks — see
+[After you pick an option, Motir AI offers to plan the follow-up](#after-you-pick-an-option-motir-ai-offers-to-plan-the-follow-up).
 _None of these — revise the options_ sends it back without moving anything, and the
 question is asked again once the options change.
 
@@ -186,11 +190,12 @@ is built this way and why the buttons are never moved above the subject.
 
 ## The two verbs, and what each one does
 
-| verb                                 | what it records                                                                               | what it moves                                                                                                                        |
-| ------------------------------------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **Approve**                          | that you said yes, to **this exact version**, and when                                        | the work item to **Done** — unless a pull request is going to merge for it, in which case see below                                  |
-| **Request changes** on a **design**  | that you sent it back, your note explaining why, and your verdict — **Revise** or **Re-plan** | the work item back to **To do**, whichever verdict you chose — see [Sending back a design](#sending-back-a-design-revise-or-re-plan) |
-| **Request changes** on anything else | that you sent it back, and your note explaining why                                           | **nothing.** The card stays where it is; the agent revises and publishes a new version to be decided                                 |
+| verb                                                  | what it records                                                                                                      | what it moves                                                                                                                                                                                                                         |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Approve**                                           | that you said yes, to **this exact version**, and when                                                               | the work item to **Done** — unless a pull request is going to merge for it, in which case see below                                                                                                                                   |
+| **Request changes** on a **design**                   | that you sent it back, your note explaining why, and your verdict — **Revise** or **Re-plan**                        | the work item back to **To do**, whichever verdict you chose — see [Sending back a design](#sending-back-a-design-revise-or-re-plan)                                                                                                  |
+| **Request changes** on a story's **acceptance video** | that you sent it back and your note explaining why; on a **story run** also your verdict — **Re-run** or **Re-plan** | **no status, on either shape.** On a story run the waiting merge approval is withdrawn and the merge is held until a newer video is approved — see [Sending back a story's acceptance video](#sending-back-a-storys-acceptance-video) |
+| **Request changes** on anything else                  | that you sent it back, and your note explaining why                                                                  | **nothing.** The card stays where it is; the agent revises and publishes a new version to be decided                                                                                                                                  |
 
 **Approving asks you to confirm. Sending something back asks you WHY.** Pressing
 _Request changes_ — or _None of these_ on a choice — opens the same band, with a field
@@ -230,9 +235,11 @@ the refusal; a reload shows the button.
 
 A design sent back with **Re-plan** asks the same question — see the next section.
 
-**Other refusals do not open the planner yet.** Sending back a story's recording or a
-set of pull requests records your reason and moves nothing, as above; none of them
-offers Motir AI today.
+A story's acceptance video sent back with **Re-plan**, or sent back on a finished
+story, asks too — see [Sending back a story's acceptance video](#sending-back-a-storys-acceptance-video).
+
+**Sending back a set of pull requests does not open the planner.** It records your
+reason and moves nothing, as above, and does not offer Motir AI.
 
 **Neither verb re-runs the agent.** Requesting changes records the decision. A design
 sent back is at **To do**, ready for the next run, which is shown your reason — but
@@ -280,6 +287,107 @@ keeps a **Re-plan with AI** button that opens the same thing later, as above.
 
 A design sent back on GitHub, rather than in Motir, carries no verdict: it records the
 review, and the card stays where it is.
+
+### Sending back a story's acceptance video
+
+A story's acceptance video is where you watch the whole story working. What
+**Request changes** offers depends on how the story was built, and Motir reads that
+from the story itself — you never pick it:
+
+- **A story run** — the story was run as a whole and **its own pull request is open**.
+  Nothing under it is finished yet: the work exists and is waiting to merge.
+- **A finished story** — it was built subtask by subtask and **every subtask has
+  already merged**. There is no pull request of the story's own left to change.
+
+**On either shape, nothing on the board moves.** The story and its subtasks stay
+exactly where they are — the work you watched still exists.
+
+#### On a story run: Re-run or Re-plan
+
+Request changes asks for your **reason** and a **verdict**, and will not send without
+both. Nothing is chosen for you:
+
+- **Re-run** — _For a fix to what was built_: a colour, a layout, a detail. The band
+  says: _Nothing moves; the merge approval is withdrawn, and `motir fix` works on the
+  same pull request with your reason._
+- **Re-plan** — _For a change to the story's shape._ The band says: _Nothing moves;
+  the merge approval is withdrawn, and you are asked whether to re-plan._
+
+**Either verdict withdraws the merge approval, and the merge stays held until a newer
+video is approved.** The merge row disappears from Development and from _To approve_,
+and it does not come back on its own — not on the next CI result, and not after a fix
+is pushed and goes green. The code you sent back cannot be merged until a new video
+is recorded and you approve it; that new video asks the acceptance question and the
+merge question together again.
+
+**After a Re-run**, the story's Development section offers the command that fixes it:
+
+```bash
+motir fix <story>
+```
+
+It works on the **same pull request**, hands the agent your reason, pushes the fix,
+waits for the checks to pass, and then records a new acceptance video — which asks
+you again, with the merge beside it. Nothing moves on the board while it does. The
+decided record reads _Sent back to re-run_ above your quoted reason.
+
+**After a Re-plan**, the decided record asks before Motir AI opens, as a refused
+decision does:
+
+> **Re-plan {story} with Motir AI?**
+
+**Re-plan with AI** opens Motir AI on the story, with your reason already written as
+the first message and a note that none of its subtasks is done, so any of them may be
+re-planned. Nothing is sent until you send it. **Not now** opens nothing, and the
+record keeps a **Re-plan with AI** button. If the plan you approve changes cards, the
+plan moves them: a card a plan names waits at Planning, and approving the plan returns
+it to To do. The decided record reads _Sent back to re-plan_.
+
+#### On a finished story: plan a remedy
+
+Every subtask has already merged, so there is **nothing left to re-run**, and the band
+says so where the verdict would be. Request changes asks for your reason only. Nothing
+moves, and there is no merge approval to withdraw.
+
+After you send it, the record asks:
+
+> **Plan a remedy for {story} with Motir AI?**
+
+**Plan a remedy with AI** opens Motir AI on the story with your reason as the first
+message, asking for new work under the story that fixes what the video showed. Nothing
+is sent until you send it. **Not now** leaves a **Plan a remedy with AI** button on the
+record. The decided record reads _Sent back for a remedy_.
+
+A refusal made on GitHub, rather than in Motir, records the review and does nothing
+else: no verdict, no withdrawal, no Motir AI.
+
+### After you pick an option, Motir AI offers to plan the follow-up
+
+A choice exists because the planning stopped until someone picked. Once you press
+**Choose {option}** and confirm, the decided record asks, right where you pressed:
+
+> **Plan the follow-up with Motir AI?** Motir AI opens on {key} and starts planning the
+> follow-up right away, from your choice. There is nothing to write or send — your
+> choice is the first message.
+
+- **Plan with AI** (Enter) opens Motir AI on the work item the choice sits under — or on
+  the project, when the choice has no open container — and **the planning starts at
+  once**. Your choice is sent for you as the first message (the option, what it is best
+  for, and what the choice gates), so there is nothing to type, review or send. Saying
+  yes is what spends the AI credits for that first message.
+- **Not now** (or Esc) opens nothing and keeps you on the decided record, which now
+  carries a **Plan with AI** button in place of the question.
+
+**The button stays on the record.** Where the record used to say _"Follow-up planning
+owed"_, it now shows what the choice gates and a **Plan with AI** button, for anyone who
+may plan on the work item — on its page and in the approval view. Pressing it starts the
+planning the same way; if you already started that conversation recently, it takes you
+back to it and sends nothing again. The Plans page lists the conversation as the
+**Follow-up to {key}**, with the option you chose.
+
+**None of these is different.** It is a refusal, so it offers **Re-plan with AI**
+instead, with your reason written into the message box and nothing sent until you send
+it, as above.
 
 ### One qualification on Approve
 
@@ -391,6 +499,9 @@ Reopening the card is still allowed, and is an ordinary board move (**Done → I
 Progress**) that a person makes. The next run publishes a new design, which
 raises a new gate to be decided on its own terms. No agent ever reopens a card
 for you.
+
+A refused acceptance video never merges on its own. Its code waits until a newer
+video is recorded and approved.
 
 ## Approving on GitHub
 

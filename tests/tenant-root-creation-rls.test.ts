@@ -154,7 +154,7 @@ describe('creating a tenant as the non-bypass role', () => {
       await tx.$executeRaw`SELECT set_config('app.user_id', ${invitee.id}, true)`;
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${a}, true)`;
       return tx.workspaceMembership.create({
-        data: { userId: invitee.id, workspaceId: a, role: 'member' },
+        data: { userId: invitee.id, workspaceId: a, workspaceRole: 'member' },
       });
     });
     expect(admitted.workspaceId).toBe(a);
@@ -166,7 +166,7 @@ describe('creating a tenant as the non-bypass role', () => {
         await tx.$executeRaw`SELECT set_config('app.user_id', ${invitee.id}, true)`;
         await tx.$executeRaw`SELECT set_config('app.workspace_id', ${a}, true)`;
         return tx.workspaceMembership.create({
-          data: { userId: invitee.id, workspaceId: b, role: 'member' },
+          data: { userId: invitee.id, workspaceId: b, workspaceRole: 'member' },
         });
       }),
     ).rejects.toThrow(/row-level security/i);

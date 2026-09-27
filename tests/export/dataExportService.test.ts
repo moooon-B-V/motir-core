@@ -125,15 +125,17 @@ async function makeFixture(): Promise<Fixture> {
   });
 
   // The exporter is a member of `shared` ONLY.
-  await adminDb.workspaceMembership.create({ data: { userId: user.id, workspaceId: shared.id } });
+  await adminDb.workspaceMembership.create({
+    data: { userId: user.id, workspaceId: shared.id, workspaceRole: 'member' },
+  });
   await adminDb.organizationMembership.create({
     data: { organizationId: org.id, userId: user.id, role: 'member' },
   });
   await adminDb.workspaceMembership.create({
-    data: { userId: other.id, workspaceId: shared.id },
+    data: { userId: other.id, workspaceId: shared.id, workspaceRole: 'member' },
   });
   await adminDb.workspaceMembership.create({
-    data: { userId: other.id, workspaceId: foreign.id },
+    data: { userId: other.id, workspaceId: foreign.id, workspaceRole: 'member' },
   });
 
   const project = await adminDb.project.create({

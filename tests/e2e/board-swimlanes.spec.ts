@@ -82,7 +82,7 @@ async function seedProjectAndMember(email: string): Promise<Seeded> {
     name: 'Morgan Member',
   });
   await db.workspaceMembership.create({
-    data: { userId: member.id, workspaceId: ws!.id, role: 'member' },
+    data: { userId: member.id, workspaceId: ws!.id, workspaceRole: 'member' },
   });
   // Story 6.10.4: a workspace member is also an org member (the upward invariant
   // the org access gate enforces). This member is only an assignee here, but keep

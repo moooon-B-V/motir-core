@@ -115,7 +115,7 @@ async function teammate(): Promise<ProjectContext> {
     name: `Teammate ${seq}`,
   });
   await adminDb.workspaceMembership.create({
-    data: { userId: u.id, workspaceId: fx.workspaceId, role: 'member' },
+    data: { userId: u.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
   });
   await addToProjectAs({
     key: fx.project.identifier,
@@ -157,17 +157,52 @@ describe('a seeded session’s row carries its seed', () => {
     const page = await planSessionsService.listSessions(fx.projectId, fx.ctx);
 
     expect(page.sessions.map((s) => [s.id, s.seed])).toEqual([
-      [approval.sessionId, { cardKey: approval.card.identifier, gateKind: 'decision_approval' }],
+      [
+        approval.sessionId,
+        {
+          cardKey: approval.card.identifier,
+          gateKind: 'decision_approval',
+          origin: 'refusal',
+          chosenLabel: null,
+        },
+      ],
       [
         confirmation.sessionId,
-        { cardKey: confirmation.card.identifier, gateKind: 'decision_confirmation' },
+        {
+          cardKey: confirmation.card.identifier,
+          gateKind: 'decision_confirmation',
+          origin: 'refusal',
+          chosenLabel: null,
+        },
       ],
-      [choice.sessionId, { cardKey: choice.card.identifier, gateKind: 'decision_choice' }],
+      [
+        choice.sessionId,
+        {
+          cardKey: choice.card.identifier,
+          gateKind: 'decision_choice',
+          origin: 'refusal',
+          chosenLabel: null,
+        },
+      ],
     ]);
     // A browsable seed leaves the title alone.
     expect(page.sessions[0]!.firstTurn).toBe(
       `${approval.card.identifier} · ${approval.card.title}\nRe-plan this work item from that reason.`,
     );
+  });
+
+  it('an ACCEPTANCE refusal stamps its session and names its kind (MOTIR-6504)', async () => {
+    const accepted = await seededSession('acceptance_result', 'changes_requested', 1);
+
+    const row = await planSessionsService.getSessionRow(fx.projectId, accepted.sessionId, fx.ctx);
+
+    expect(row!.seed).toEqual({
+      cardKey: accepted.card.identifier,
+      gateKind: 'acceptance_result',
+      // A refusal seed, never a pick (MOTIR-6069's two origins) — so no option was chosen.
+      origin: 'refusal',
+      chosenLabel: null,
+    });
   });
 
   it('an unseeded session’s seed is null and its row is otherwise unchanged', async () => {
@@ -183,7 +218,12 @@ describe('a seeded session’s row carries its seed', () => {
 
     const row = await planSessionsService.getSessionRow(fx.projectId, sessionId, fx.ctx);
 
-    expect(row!.seed).toEqual({ cardKey: card.identifier, gateKind: 'decision_approval' });
+    expect(row!.seed).toEqual({
+      cardKey: card.identifier,
+      gateKind: 'decision_approval',
+      origin: 'refusal',
+      chosenLabel: null,
+    });
   });
 
   it('another member of the project sees the same seed (the list is project-wide)', async () => {
@@ -197,7 +237,60 @@ describe('a seeded session’s row carries its seed', () => {
       })
     ).sessions;
 
-    expect(row!.seed).toEqual({ cardKey: card.identifier, gateKind: 'decision_choice' });
+    expect(row!.seed).toEqual({
+      cardKey: card.identifier,
+      gateKind: 'decision_choice',
+      origin: 'refusal',
+      chosenLabel: null,
+    });
+  });
+});
+
+describe('a PICK-seeded session is named as the follow-up to its choice (MOTIR-6434)', () => {
+  it('carries origin pick and the stamped label, linked to the CHOICE card; None of these stays a refusal', async () => {
+    const parent = await createTestWorkItem(fx, { kind: 'story', title: 'Reporting' });
+    const choice = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      type: 'choice',
+      title: 'Choose where exports live',
+      parentId: parent.id,
+    });
+    seq += 1;
+    const gate = await adminDb.approvalGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: choice.id,
+        kind: 'decision_choice',
+        subjectId: `subject-pick-${seq}`,
+        state: 'approved',
+        decidedById: fx.ownerId,
+        decidedAt: new Date(),
+        decidedByLabel: 'Owner',
+        chosenOption: {
+          optionId: 'managed-object-storage',
+          label: 'Managed object storage',
+          bestFor: 'less to operate',
+          followUp: 'Report exports.',
+          situation: 'better_than_your_decision',
+        },
+      },
+    });
+    const s = await planChangeSessionsService.startSeededWithFirstTurn(
+      pctx(),
+      buildScope([parent.identifier]),
+      `${choice.identifier} · ${choice.title}`,
+      gate.id,
+    );
+    const row = (await planSessionsService.listSessions(fx.projectId, fx.ctx)).sessions.find(
+      (r) => r.id === s.id,
+    );
+    expect(row!.seed).toEqual({
+      cardKey: choice.identifier,
+      gateKind: 'decision_choice',
+      origin: 'pick',
+      chosenLabel: 'Managed object storage',
+    });
   });
 });
 
@@ -233,10 +326,10 @@ describe('an unresolvable seed resolves to null', () => {
 
   it('a gate kind outside the allowlist: no seed, the title untouched', async () => {
     const { sessionId, card } = await seededSession('decision_approval', 'changes_requested', 1);
-    // A seed the stamp never writes today — the union is the three decision refusals
-    // and the design Re-plan, and widening it further is MOTIR-6071's. The mapper
-    // still answers null.
-    const other = await refusedGate(card, 'acceptance_result', 'changes_requested');
+    // A seed the stamp never writes — the union is the three decision refusals, the
+    // design Re-plan and the acceptance refusal (MOTIR-6504). The mapper still answers
+    // null for any other kind.
+    const other = await refusedGate(card, 'pull_request_approval', 'changes_requested');
     await adminDb.planChangeSession.update({
       where: { id: sessionId },
       data: { seedGateId: other },
@@ -328,6 +421,11 @@ describe('a design Re-plan seed', () => {
     expect(stored.seedGateId).toBe(gate.id);
 
     const row = await planSessionsService.getSessionRow(fx.projectId, s.id, fx.ctx);
-    expect(row!.seed).toEqual({ cardKey: design.identifier, gateKind: 'design_result' });
+    expect(row!.seed).toEqual({
+      cardKey: design.identifier,
+      gateKind: 'design_result',
+      origin: 'refusal',
+      chosenLabel: null,
+    });
   });
 });

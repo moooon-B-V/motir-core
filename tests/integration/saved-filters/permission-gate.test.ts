@@ -58,7 +58,7 @@ async function makeTeam(): Promise<Team> {
     await workspacesService.addMember({
       userId: user.id,
       workspaceId: fx.workspaceId,
-      role: 'member',
+      workspaceRole: 'member',
     });
     await addToProjectAs({
       key,
@@ -214,7 +214,7 @@ describe('the manage-ANY tier is a PERMISSION a custom role can hold (MOTIR-5293
     await workspacesService.addMember({
       userId: user.id,
       workspaceId: t.fx.workspaceId,
-      role: 'member',
+      workspaceRole: 'member',
     });
     await addToProjectAs({
       key: t.key,

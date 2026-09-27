@@ -658,8 +658,25 @@ export const workItemRepairClaimSchema = z.object({
   holder: actorRefSchema.nullable(),
   /** When that run started. */
   startedAt: z.string().datetime().nullable(),
+  /** WHICH REPAIR this is (MOTIR-6502). `ci` — make the build pass. `acceptance_rerun`
+   *  — the story's acceptance video was sent back with Re-run: fix what the reviewer
+   *  saw (`acceptanceRefusal`), on the same pull requests, then re-record the video.
+   *  `ci` on every refusal. */
+  repairClass: z.enum(['ci', 'acceptance_rerun']),
+  /** What the reviewer said — set exactly on an `acceptance_rerun` with `claimed` or
+   *  `mine`, null otherwise. */
+  acceptanceRefusal: z
+    .object({
+      /** The reason, verbatim. */
+      reasonMd: z.string().nullable(),
+      /** Who sent it back, as recorded at the decision. */
+      decidedByLabel: z.string().nullable(),
+      decidedAt: z.string().datetime(),
+    })
+    .nullable(),
   /** The failing OPEN pull requests — non-empty on `claimed` and `mine`, empty on
-   *  every other outcome. */
+   *  every other outcome. On an `acceptance_rerun`, EVERY open member, green ones
+   *  included: the fix is to the delivered work, not to a red check. */
   pullRequests: z.array(repairPullRequestSchema),
 });
 export type V1WorkItemRepairClaim = z.infer<typeof workItemRepairClaimSchema>;
@@ -675,6 +692,15 @@ export function presentWorkItemRepairClaim(dto: WorkItemRepairClaimDto): V1WorkI
     runId: dto.runId,
     holder: dto.holder === null ? null : { id: dto.holder.id, name: dto.holder.name },
     startedAt: dto.startedAt,
+    repairClass: dto.repairClass,
+    acceptanceRefusal:
+      dto.acceptanceRefusal === null
+        ? null
+        : {
+            reasonMd: dto.acceptanceRefusal.reasonMd,
+            decidedByLabel: dto.acceptanceRefusal.decidedByLabel,
+            decidedAt: dto.acceptanceRefusal.decidedAt,
+          },
     pullRequests: dto.pullRequests.map((pr) => ({
       repo: pr.repo,
       number: pr.number,

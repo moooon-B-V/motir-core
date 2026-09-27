@@ -156,7 +156,6 @@ describe('DELETE /api/projects/[key]/members/[userId] — no last-admin guard', 
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
         userId: fx.memberId,
-        role: 'admin',
       },
     });
     ctxRef.current = fx.ownerCtx;

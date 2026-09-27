@@ -139,9 +139,13 @@ function summarize(record: ApprovalGateRecordDTO): string {
   if (gate.subjectVersion) lines.push(`on version: ${gate.subjectVersion}`);
   if (gate.supersededCause) lines.push(`withdrawn because: ${gate.supersededCause}`);
   if (gate.outcomeRef) lines.push(`outcome: ${gate.outcomeRef}`);
-  // What a DESIGN refusal meant (MOTIR-6421; ADR §10d): `revise` — change the design;
-  // `re_plan` — the plan around it is wrong too.
+  // What a refusal meant (MOTIR-6421; ADR §10d; MOTIR-6501): `revise` — change what was
+  // built (a design, or a story run's delivered work); `re_plan` — the plan is wrong too.
   if (gate.refusalVerdict) lines.push(`verdict: ${gate.refusalVerdict}`);
+  // Whether a refusal pressed now must say which (MOTIR-6501) — only an awaiting gate asks.
+  if (gate.offersRefusalVerdict) {
+    lines.push('a refusal of this gate must carry a verdict: revise or re_plan');
+  }
   lines.push('', STATE_HELP[gate.state] ?? '');
   if (gate.noteMd) {
     lines.push('', 'What they wrote:', gate.noteMd);

@@ -138,6 +138,7 @@ import {
   uncoveredCrossParentEdges,
   type CoverageNodeInfo,
 } from '@/lib/workItems/crossParentCoverage';
+import { edgeDisposition } from '@/lib/workItems/edgeDisposition';
 import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/components/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
@@ -235,6 +236,7 @@ import type {
   WorkItemTreeNodeDto,
   TreeLevelDto,
   ProjectRoadmapDto,
+  RoadmapEdgeDto,
   WorkItemValidityDto,
   WorkItemSoftBlockDto,
   WorkItemCoverageAdvisoryDto,
@@ -4880,12 +4882,35 @@ export const workItemsService = {
       .filter((s) => levelMemberIds.has(s.id))
       .map((s) => ({ id: s.id, isDone: s.status === 'done' }));
 
+    // WHAT EACH OFF-LEVEL EDGE DRAWS (MOTIR-6359; design `design/roadmap/design-notes.md`
+    // § "Covered cross-parent edges"). Today's single verdict — every off-level
+    // blocker is the bad-plan tangle — is replaced by the validators' own: an edge the
+    // parents CARRY is valid and is drawn one level up, so the canvas skips it; a
+    // cross-level or uncovered edge is invalid and keeps the flag; an edge with no
+    // parent to carry it keeps a neutral anchor. `edgeDisposition` asks the same two
+    // predicates `validate_work_item` does, so the flag and the verdict cannot part.
+    //
+    // PROJECT scope only: the sprint arm asks sprint VALIDITY, a different question
+    // that runs before this in the builder and is unchanged. BOUNDED: two batched
+    // reads (the ancestor chains, then the parent pairs that carry an edge) however
+    // many off-level edges the level has, and none when it has none.
+    const edgesOut =
+      sprintId === null
+        ? await withRoadmapEdgeCoverage(
+            edges,
+            new Set(offLevelBlockers.map((b) => b.id)),
+            rows,
+            offLevelStubs,
+            ctx,
+          )
+        : edges;
+
     // The level's FOLDERS (decision 4): read WHOLE, never cut by the work-item cap —
     // the ceiling is a guard against a runaway read, not a page — and each carries
     // its DIRECT counts from ONE aggregate over the level (decision 3), never a read
     // per folder.
     if (folderParentId === undefined) {
-      return { nodes, edges, offLevelBlockers, levelMemberBlockers, levelTotal };
+      return { nodes, edges: edgesOut, offLevelBlockers, levelMemberBlockers, levelTotal };
     }
     const folders = await withWorkspaceServiceContext(project.workspaceId, async (tx) => {
       const rows = await folderRepository.findLevel(
@@ -4902,7 +4927,14 @@ export const workItemsService = {
       const countsById = new Map(counts.map((c) => [c.id, c]));
       return rows.map((r) => toRoadmapFolderDto(r, countsById.get(r.id)));
     });
-    return { nodes, edges, offLevelBlockers, levelMemberBlockers, levelTotal, folders };
+    return {
+      nodes,
+      edges: edgesOut,
+      offLevelBlockers,
+      levelMemberBlockers,
+      levelTotal,
+      folders,
+    };
   },
 
   /**
@@ -7884,6 +7916,58 @@ async function computeWorkItemValidity(
     advisories: [...prose, ...coverage, ...pathReferences],
     softBlocks,
   };
+}
+
+/**
+ * The roadmap's off-level edges, each carrying its `EdgeDisposition`
+ * (MOTIR-6359). `offLevelIds` names the blockers genuinely on ANOTHER level — the
+ * cap-dropped members are already set apart — so only those edges are judged; every
+ * other edge passes through unchanged. An end the reads cannot place (a blocker in
+ * another project) gets no disposition, and the canvas keeps its old treatment.
+ */
+async function withRoadmapEdgeCoverage(
+  edges: ReadonlyArray<{ blockedId: string; blockerId: string }>,
+  offLevelIds: ReadonlySet<string>,
+  rows: ReadonlyArray<{ id: string; parentId: string | null; kind: string }>,
+  stubs: ReadonlyArray<{ id: string; parentId: string | null; kind: string }>,
+  ctx: ServiceContext,
+): Promise<RoadmapEdgeDto[]> {
+  const offEdges = edges.filter((e) => offLevelIds.has(e.blockerId));
+  if (offEdges.length === 0) return [...edges];
+  const ends = new Map<string, { parentId: string | null; kind: string }>();
+  for (const r of rows) ends.set(r.id, { parentId: r.parentId, kind: r.kind });
+  for (const s of stubs) ends.set(s.id, { parentId: s.parentId, kind: s.kind });
+  const endIds = [...new Set(offEdges.flatMap((e) => [e.blockedId, e.blockerId]))].filter((id) =>
+    ends.has(id),
+  );
+  const parentPairs = offEdges.flatMap((e) => {
+    const from = ends.get(e.blockedId)?.parentId;
+    const to = ends.get(e.blockerId)?.parentId;
+    return from && to && from !== to ? [[from, to] as const] : [];
+  });
+  const [chains, carriedLinks] = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    Promise.all([
+      workItemRepository.findAncestorIdsForItems(endIds, ctx.workspaceId, tx),
+      workItemLinkRepository.findBlockedByAmong(
+        [...new Set(parentPairs.map(([from]) => from))],
+        [...new Set(parentPairs.map(([, to]) => to))],
+        ctx.workspaceId,
+        tx,
+      ),
+    ]),
+  );
+  const carried = new Set(carriedLinks.map((l) => `${l.fromId}\u0000${l.toId}`));
+  const info = (id: string): CoverageNodeInfo | undefined => {
+    const end = ends.get(id);
+    return end
+      ? { parentId: end.parentId, kind: end.kind, ancestors: chains.get(id) ?? [] }
+      : undefined;
+  };
+  return edges.map((e) => {
+    if (!offLevelIds.has(e.blockerId)) return e;
+    const coverage = edgeDisposition(e, info, (from, to) => carried.has(`${from}\u0000${to}`));
+    return coverage === undefined ? e : { ...e, coverage };
+  });
 }
 
 /**

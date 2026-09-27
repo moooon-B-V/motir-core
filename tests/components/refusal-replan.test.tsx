@@ -48,6 +48,11 @@ const { shallowPush, shallowReplace } = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace }));
 
+// The PICK ask names where the planner opens from the SEED READ (MOTIR-6436); the
+// refusal ask never calls it.
+const { fetchPlanningSeed } = vi.hoisted(() => ({ fetchPlanningSeed: vi.fn() }));
+vi.mock('@/lib/planning/planningSeedClient', () => ({ fetchPlanningSeed }));
+
 const { fetchApprovalGateOverlay } = vi.hoisted(() => ({ fetchApprovalGateOverlay: vi.fn() }));
 vi.mock('@/lib/approvals/approvalOverlayClient', () => ({ fetchApprovalGateOverlay }));
 
@@ -76,8 +81,14 @@ const { DevelopmentSectionBody } = await import('@/components/github/Development
 const { ChoiceSection } = await import('@/app/(authed)/items/[key]/_components/ChoiceSection');
 const { DecisionConfirmSection } =
   await import('@/app/(authed)/items/[key]/_components/DecisionConfirmSection');
-const { asksToReplanAfterPress, RefusalReplanAsk } =
-  await import('@/components/approvals/RefusalReplan');
+const {
+  asksToReplanAfterPress,
+  asksToPlanAfterPress,
+  RefusalReplanAsk,
+  RefusalReplanDoor,
+  refusalReplanModeOf,
+  useRefusalReplanSlots,
+} = await import('@/components/approvals/RefusalReplan');
 const { useOpenRefusalReplan } = await import('@/components/approvals/useOpenRefusalReplan');
 
 const ask = en.approvalGate.replanAsk;
@@ -93,6 +104,7 @@ beforeEach(() => {
   fetchApprovalGateOverlay.mockReset();
   decideApprovalGateAction.mockReset();
   refresh.mockReset();
+  fetchPlanningSeed.mockReset().mockResolvedValue({ anchorKey: 'ACME-40' });
 });
 afterEach(cleanup);
 
@@ -497,7 +509,9 @@ describe('the item page — the door on None of these and on the overturn', () =
     expect(new URLSearchParams(href.split('?')[1]).get('planGate')).toBe('gate-choice-1');
   });
 
-  it('a chosen option carries no door', () => {
+  it('a chosen option carries the Plan with AI door (MOTIR-6436), never the Re-plan door', () => {
+    pathname = '/items/ACME-42';
+    params = new URLSearchParams();
     render(
       <ChoiceSection
         body={{ ok: true, port: choicePort() }}
@@ -521,6 +535,41 @@ describe('the item page — the door on None of these and on the overturn', () =
       />,
     );
     expect(theDoor()).toBeNull();
+    const d = screen.getByTestId('pick-plan-door');
+    expect(d.getAttribute('aria-label')).toBe(
+      en.approvalGate.planDoor.aria.replace('{item}', 'ACME-42'),
+    );
+    expect(d.textContent).toBe(en.approvalGate.planDoor.label);
+    expect(d.getAttribute('data-mode')).toBe('plan');
+    expect(screen.queryByText(/planning owed/)).toBeNull();
+    fireEvent.click(d);
+    const href = shallowReplace.mock.calls[0]![0] as string;
+    expect(new URLSearchParams(href.split('?')[1]).get('planGate')).toBe('gate-choice-1');
+  });
+
+  it('a chosen option shows no door to a reader who may not plan', () => {
+    render(
+      <ChoiceSection
+        body={{ ok: true, port: choicePort() }}
+        gate={{
+          ...CHOICE_AWAITING,
+          ...DECIDED,
+          state: 'approved',
+          chosenOption: {
+            optionId: 'managed-object-storage',
+            label: 'Managed object storage',
+            bestFor: 'less to operate',
+            followUp: 'The export story.',
+            situation: 'better_than_your_decision',
+          },
+        }}
+        canDecide={false}
+        routedToLabel="Yue"
+        routedToViewer
+        itemIdentifier="ACME-42"
+      />,
+    );
+    expect(screen.queryByTestId('pick-plan-door')).toBeNull();
   });
 
   it('Overturned: the door REPLACES the plain epic entrance; the owed chip and every supersedes chip stay', () => {
@@ -732,7 +781,7 @@ describe('the approval overlay — Overturn and None of these ask first', () => 
     expect(within(dialog).getByRole('button', { name: z.yes })).toBeTruthy();
   });
 
-  it('a pick asks nothing', async () => {
+  async function choosePostgres() {
     decideApprovalGateAction.mockResolvedValue({
       ok: true,
       gate: {
@@ -772,9 +821,50 @@ describe('the approval overlay — Overturn and None of these ask first', () => 
         }),
       );
     });
+    return dialog;
+  }
+  const planAsk = en.approvalGate.planAsk;
+
+  it('a PICK asks to plan the follow-up (MOTIR-6436): the planner starts, nothing to send, focus on yes', async () => {
+    const dialog = await choosePostgres();
+    const group = within(dialog).getByTestId('pick-plan-ask');
+    expect(within(group).getByText(planAsk.title)).toBeTruthy();
+    // Where it opens comes from the seed read's resolved anchor.
+    expect(within(group).getByText(planAsk.opens.replace('{key}', 'ACME-40'))).toBeTruthy();
+    expect(within(group).getByText(planAsk.nothingToSend)).toBeTruthy();
+    expect(document.activeElement).toBe(within(group).getByRole('button', { name: planAsk.yes }));
+    // Never the refusal's words, and nothing says the person must send a message.
     expect(theAsk()).toBeNull();
-    expect(theDoor()).toBeNull();
+    expect(group.textContent).not.toMatch(/until you send|edit it first/i);
     expect(shallowReplace).not.toHaveBeenCalled();
+  });
+
+  it('a PICK’s yes opens the planner through the planGate address, in one replace', async () => {
+    const dialog = await choosePostgres();
+    fireEvent.click(within(dialog).getByRole('button', { name: planAsk.yes }));
+    const href = shallowReplace.mock.calls[0]![0] as string;
+    const q = new URLSearchParams(href.split('?')[1]);
+    expect(q.get('approval')).toBeNull();
+    expect(q.get('planGate')).toBe('gate-choice-1');
+  });
+
+  it('a PICK’s Not now opens nothing and focuses the Plan with AI door; Esc does the same without closing', async () => {
+    const dialog = await choosePostgres();
+    fireEvent.keyDown(within(dialog).getByRole('button', { name: planAsk.yes }), {
+      key: 'Escape',
+    });
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(shallowPush).not.toHaveBeenCalled();
+    expect(within(dialog).queryByTestId('pick-plan-ask')).toBeNull();
+    const d = within(dialog).getByTestId('pick-plan-door');
+    expect(document.activeElement).toBe(d);
+    expect(shallowReplace).not.toHaveBeenCalled();
+  });
+
+  it('a PICK at the project says the planner opens on your project', async () => {
+    fetchPlanningSeed.mockResolvedValue({ anchorKey: null });
+    const dialog = await choosePostgres();
+    expect(within(dialog).getByText(planAsk.opensProject)).toBeTruthy();
   });
 
   it('a Confirm asks nothing', async () => {
@@ -869,6 +959,25 @@ describe('the approval overlay — Overturn and None of these ask first', () => 
 
 // ── the predicate and the hook ─────────────────────────────────────────────────────────
 
+describe('who asks a PICK — `asksToPlanAfterPress` (MOTIR-6436)', () => {
+  const STAMP = { optionId: 'a', label: 'A', bestFor: 'x', followUp: 'y', situation: 'z' };
+  it.each([
+    ['decision_choice', 'approved', 'ui', STAMP, true],
+    ['decision_choice', 'approved', 'mcp', STAMP, true],
+    ['decision_choice', 'approved', 'github', STAMP, false],
+    ['decision_choice', 'approved', 'ui', null, false],
+    ['decision_choice', 'changes_requested', 'ui', null, false],
+    ['decision_approval', 'approved', 'ui', STAMP, false],
+  ] as const)(
+    '%s · %s · %s · stamp %# → %s',
+    (kind, state, decisionSource, chosenOption, expected) => {
+      expect(
+        asksToPlanAfterPress({ kind, state, decisionSource, chosenOption, refusalVerdict: null }),
+      ).toBe(expected);
+    },
+  );
+});
+
 describe('who asks — `asksToReplanAfterPress`', () => {
   it.each([
     ['decision_approval', 'changes_requested', 'ui', true],
@@ -881,7 +990,9 @@ describe('who asks — `asksToReplanAfterPress`', () => {
     ['decision_confirmation', 'approved', 'ui', false],
     ['pull_request_approval', 'changes_requested', 'ui', false],
     ['design_result', 'changes_requested', 'ui', false],
-    ['acceptance_result', 'changes_requested', 'ui', false],
+    // MOTIR-6504 — a finished story's refusal (no verdict) asks for a remedy.
+    ['acceptance_result', 'changes_requested', 'ui', true],
+    ['acceptance_result', 'changes_requested', 'github', false],
     ['plan_approval', 'declined', 'ui', false],
   ] as const)('%s · %s · %s → %s', (kind, state, decisionSource, expected) => {
     expect(asksToReplanAfterPress({ kind, state, decisionSource, refusalVerdict: null })).toBe(
@@ -904,6 +1015,27 @@ describe('who asks — `asksToReplanAfterPress`', () => {
       expect(
         asksToReplanAfterPress({
           kind: 'design_result',
+          state: 'changes_requested',
+          decisionSource,
+          refusalVerdict,
+        }),
+      ).toBe(expected);
+    },
+  );
+
+  // MOTIR-6504 — an acceptance asks after a Re-plan or a finished story's refusal, never
+  // after a Re-run (that is `motir fix`'s) and never from GitHub.
+  it.each([
+    ['re_plan', 'ui', true],
+    [null, 'ui', true],
+    ['revise', 'ui', false],
+    ['re_plan', 'github', false],
+  ] as const)(
+    'acceptance_result · changes_requested · verdict %s · %s → %s',
+    (refusalVerdict, decisionSource, expected) => {
+      expect(
+        asksToReplanAfterPress({
+          kind: 'acceptance_result',
           state: 'changes_requested',
           decisionSource,
           refusalVerdict,
@@ -966,5 +1098,155 @@ describe('the ask in the frame’s SECTION form (MOTIR-6212)', () => {
     const band = screen.getByTestId('refusal-replan-ask');
     expect(band.classList.contains('mt-3')).toBe(spaced);
     expect(within(band).getByRole('button', { name: ask.yes })).toBeTruthy();
+  });
+});
+
+// THE REMEDY COPY SET (Story MOTIR-6071 · MOTIR-6506; design
+// `approval-control--acceptance-verdict.mock.html` panels 7–8): the ask and the door speak
+// `replan` or `remedy`, keyed off the gate's verdict, and say which as `data-mode`.
+describe('the ask and the door in their two copy sets (MOTIR-6506)', () => {
+  const remedyAsk = en.approvalGate.acceptanceResult.remedyAsk;
+  const remedyDoor = en.approvalGate.acceptanceResult.remedyDoor;
+
+  it.each([
+    ['acceptance_result', null, 'remedy'],
+    ['acceptance_result', 're_plan', 'replan'],
+    ['design_result', 're_plan', 'replan'],
+    ['decision_approval', null, 'replan'],
+  ] as const)('%s · verdict %s → %s', (kind, refusalVerdict, mode) => {
+    expect(
+      refusalReplanModeOf({
+        kind,
+        state: 'changes_requested',
+        decisionSource: 'ui',
+        refusalVerdict,
+      }),
+    ).toBe(mode);
+  });
+
+  it('the REMEDY ask: *Plan a remedy for {key} with Motir AI?*, the shipped two lines, its own yes', () => {
+    const onAnswered = vi.fn();
+    render(
+      <RefusalReplanAsk
+        gateId="gate-70"
+        itemKey="ACME-70"
+        sectioned={false}
+        intent="remedy"
+        onAnswered={onAnswered}
+        onNotNow={vi.fn()}
+      />,
+    );
+    const band = screen.getByRole('group', {
+      name: remedyAsk.title.replace('{key}', 'ACME-70'),
+    });
+    expect(band.getAttribute('data-mode')).toBe('remedy');
+    expect(within(band).getByText(ask.opens.replace('{key}', 'ACME-70'))).toBeTruthy();
+    expect(within(band).getByText(ask.unsent)).toBeTruthy();
+    const yes = within(band).getByRole('button', { name: remedyAsk.yes });
+    expect(document.activeElement).toBe(yes);
+    fireEvent.click(yes);
+    expect(onAnswered).toHaveBeenCalledTimes(1);
+    expect(shallowReplace.mock.calls[0]![0] as string).toContain('gate-70');
+  });
+
+  it('the shipped ask is the `replan` set', () => {
+    render(
+      <RefusalReplanAsk
+        gateId="gate-60"
+        itemKey="ACME-60"
+        sectioned={false}
+        onAnswered={vi.fn()}
+        onNotNow={vi.fn()}
+      />,
+    );
+    const band = screen.getByTestId('refusal-replan-ask');
+    expect(band.getAttribute('data-mode')).toBe('replan');
+    expect(within(band).getByText(ask.title.replace('{key}', 'ACME-60'))).toBeTruthy();
+  });
+
+  it('the REMEDY door: *Plan a remedy with AI*, named for the story', () => {
+    render(<RefusalReplanDoor gateId="gate-70" itemKey="ACME-70" intent="remedy" />);
+    const link = screen.getByTestId('refusal-replan-door');
+    expect(link.getAttribute('data-mode')).toBe('remedy');
+    expect(link.textContent).toBe(remedyDoor.label);
+    expect(link.getAttribute('aria-label')).toBe(remedyDoor.aria.replace('{item}', 'ACME-70'));
+  });
+
+  it('the slots pick the set from the gate: a finished story’s refusal asks for a remedy, Not now leaves the remedy door', () => {
+    function Slots({ asking }: { asking: boolean }) {
+      const { door, ask: theAsk } = useRefusalReplanSlots({
+        gate: {
+          id: 'gate-70',
+          kind: 'acceptance_result',
+          state: 'changes_requested',
+          decisionSource: 'ui',
+          refusalVerdict: null,
+        },
+        itemKey: 'ACME-70',
+        replan: { canReplan: true, asking, onAskDone: vi.fn() },
+        sectioned: true,
+      });
+      return (
+        <>
+          {door}
+          {theAsk}
+        </>
+      );
+    }
+    const { rerender } = render(<Slots asking />);
+    expect(screen.getByTestId('refusal-replan-ask').getAttribute('data-mode')).toBe('remedy');
+    fireEvent.click(screen.getByRole('button', { name: NOT_NOW }));
+    rerender(<Slots asking={false} />);
+    const link = screen.getByTestId('refusal-replan-door');
+    expect(link.getAttribute('data-mode')).toBe('remedy');
+    expect(document.activeElement).toBe(link);
+  });
+
+  it('a Re-run never offers the planner — no ask and no door', () => {
+    function Slots() {
+      const { door, ask: theAsk } = useRefusalReplanSlots({
+        gate: {
+          id: 'gate-60',
+          kind: 'acceptance_result',
+          state: 'changes_requested',
+          decisionSource: 'ui',
+          refusalVerdict: 'revise',
+        },
+        itemKey: 'ACME-60',
+        replan: { canReplan: true, asking: true },
+        sectioned: false,
+      });
+      return (
+        <>
+          {door}
+          {theAsk}
+        </>
+      );
+    }
+    render(<Slots />);
+    expect(screen.queryByTestId('refusal-replan-ask')).toBeNull();
+    expect(screen.queryByTestId('refusal-replan-door')).toBeNull();
+  });
+
+  it('the remedy set in zh', () => {
+    render(
+      <RefusalReplanAsk
+        gateId="gate-70"
+        itemKey="ACME-70"
+        sectioned={false}
+        intent="remedy"
+        onAnswered={vi.fn()}
+        onNotNow={vi.fn()}
+      />,
+      { messages: zh as unknown as typeof en, locale: 'zh' },
+    );
+    expect(
+      screen.getByText(
+        zh.approvalGate.acceptanceResult.remedyAsk.title.replace('{key}', 'ACME-70'),
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: zh.approvalGate.acceptanceResult.remedyAsk.yes }),
+    ).toBeTruthy();
   });
 });

@@ -337,7 +337,7 @@ describe('1 · one gate, every surface', () => {
     await workspacesService.addMember({
       userId: viewer.id,
       workspaceId: fx.workspaceId,
-      role: 'viewer',
+      workspaceRole: 'viewer',
     });
     await adminDb.projectMembership.deleteMany({
       where: { userId: viewer.id, projectId: fx.projectId },
@@ -347,7 +347,6 @@ describe('1 · one gate, every surface', () => {
         userId: viewer.id,
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
-        role: 'viewer',
       },
     });
     await adminDb.workItem.update({ where: { id: ids.A }, data: { assigneeId: viewer.id } });

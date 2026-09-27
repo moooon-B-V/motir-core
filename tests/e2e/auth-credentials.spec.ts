@@ -111,7 +111,7 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   expect(currentRes.ok(), 'GET /api/workspaces/current should be 200').toBe(true);
   const current = (await currentRes.json()) as {
     workspace: { id: string; name: string; slug: string };
-    membership: { role: string; userId: string; workspaceId: string };
+    membership: { workspaceRole: string; userId: string; workspaceId: string };
   };
   // The sign-up page sends name = email.split('@')[0] (see
   // app/(auth)/sign-up/page.tsx), so the auto-created workspace is named
@@ -119,9 +119,9 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   const localPart = TEST_EMAIL.split('@')[0]!;
   expect(current.workspace.name).toBe(`${localPart}'s Workspace`);
   expect(current.workspace.id).toBeTruthy();
-  // The signed-up user is the creator → owner of their auto-created workspace
-  // (Subtask 1.6.5 — the role the operator-dashboard replay gate keys off).
-  expect(current.membership.role).toBe('owner');
+  // The signed-up user is the creator → the Manager of their auto-created
+  // workspace (MOTIR-6462; the DTO carries the workspace role since MOTIR-6562).
+  expect(current.membership.workspaceRole).toBe('manager');
   expect(current.membership.workspaceId).toBe(current.workspace.id);
 
   // --- Step d: sign out via the form on the dashboard.

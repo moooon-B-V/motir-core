@@ -53,7 +53,11 @@ async function addUser(
   projectRole?: 'admin' | 'member' | 'viewer',
 ) {
   const user = await usersService.createUser({ email, password: 'hunter2hunter2', name: email });
-  await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId, role: wsRole });
+  await workspacesService.addMember({
+    userId: user.id,
+    workspaceId: fx.workspaceId,
+    workspaceRole: wsRole === 'admin' ? 'manager' : 'member',
+  });
   if (projectRole) {
     await addToProjectAs({
       ...actorInput(fx),

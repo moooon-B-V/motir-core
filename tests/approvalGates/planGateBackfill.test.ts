@@ -214,6 +214,11 @@ describe('the MIGRATION raises what the shipped raise would (MOTIR-6039, §11.9 
     const [askedGate] = await awaitingOf(p.asked);
     const dry = await planGateBackfillService.backfill({ dryRun: true });
 
+    // The migration ran over rows whose founder carried the legacy `owner`, and its
+    // frozen fallback still picks by it. Nothing writes that column any more
+    // (MOTIR-6562), so recreate the state it ran over — raw, as the column stood.
+    await adminDb.$executeRaw`
+      UPDATE "workspace_membership" SET "role" = 'owner' WHERE "workspace_role" = 'manager'`;
     await adminDb.$executeRawUnsafe(migrationSql);
 
     const inserted = await adminDb.approvalGate.findMany({
@@ -427,7 +432,7 @@ describe('the script', () => {
     // legacy column follows so neither reads as one.
     await adminDb.workspaceMembership.updateMany({
       where: { workspaceId: fx.workspaceId },
-      data: { role: 'member', workspaceRole: 'member' },
+      data: { workspaceRole: 'member' },
     });
     const c = capture();
     expect(await run(['--dry-run'], { out: c.out })).toBe(0);

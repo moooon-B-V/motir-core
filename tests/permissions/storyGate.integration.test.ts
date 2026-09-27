@@ -98,7 +98,6 @@ async function scenario(slug: string): Promise<Scenario> {
           userId: u.id,
           projectId: project.id,
           workspaceId: workspace.id,
-          role: projectRole,
         },
       });
     }

@@ -653,6 +653,16 @@ export function toWorkItemRepairClaim(
     runId: body.runId,
     holder: body.holder ? { id: body.holder.id, name: body.holder.name } : null,
     startedAt: body.startedAt,
+    // A server older than contract 1.43.0 sends neither field; every repair it can
+    // hand over is a CI one.
+    repairClass: body.repairClass ?? 'ci',
+    acceptanceRefusal: body.acceptanceRefusal
+      ? {
+          reasonMd: body.acceptanceRefusal.reasonMd,
+          decidedByLabel: body.acceptanceRefusal.decidedByLabel,
+          decidedAt: body.acceptanceRefusal.decidedAt,
+        }
+      : null,
     pullRequests: body.pullRequests.map((pr) => ({
       repo: pr.repo,
       number: pr.number,

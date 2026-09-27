@@ -135,9 +135,12 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
     });
     expect(rows).toHaveLength(1);
     const payload = JSON.parse(rows[0]!.value);
+    // Both role keys (MOTIR-6562): `workspaceRole` for this build, the legacy
+    // `role` so a machine still on the previous image can redeem the token.
     expect(payload).toEqual({
       workspaceId: workspace.id,
       email: 'newbie@example.com',
+      workspaceRole: 'member',
       role: 'member',
       inviterUserId: user.id,
     });
@@ -375,6 +378,106 @@ describe('POST /api/invites/[token]/accept', () => {
     const second = await postAccept(token);
     expect(second.status).toBe(404);
     expect((await second.json()).code).toBe('INVITE_EXPIRED_OR_MISSING');
+  });
+});
+
+describe('accept — the invite payload across the release boundary (MOTIR-6562)', () => {
+  // A pending invite is a Verification row whose `value` is the JSON payload, and
+  // it lives up to 7 days — so a token minted by the PREVIOUS build (legacy
+  // `role` only) is still redeemable, and so is one naming only `workspaceRole`.
+  async function plantInvite(workspaceId: string, email: string, fields: object): Promise<string> {
+    const token = `planted-${email.split('@')[0]}`;
+    await adminDb.verification.create({
+      data: {
+        identifier: INVITE_IDENTIFIER_PREFIX + token,
+        value: JSON.stringify({ workspaceId, email, ...fields }),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+    return token;
+  }
+
+  async function acceptAs(email: string, token: string) {
+    const invitee = await usersService.createUser({
+      email,
+      password: 'hunter2hunter2',
+      name: email.split('@')[0]!,
+    });
+    mockSession.current = { user: { id: invitee.id, email: invitee.email, name: invitee.name } };
+    const res = await postAccept(token);
+    return { res, invitee };
+  }
+
+  async function workspaceRoleOf(userId: string, workspaceId: string) {
+    const m = await adminDb.workspaceMembership.findUnique({
+      where: { userId_workspaceId: { userId, workspaceId } },
+    });
+    return m?.workspaceRole;
+  }
+
+  it('a pre-release token (legacy `role` only) lands as that role’s mapped workspace role', async () => {
+    const { user, workspace } = await makeInviter();
+    const token = await plantInvite(workspace.id, 'legacy@example.com', {
+      role: 'viewer',
+      inviterUserId: user.id,
+    });
+    const { res, invitee } = await acceptAs('legacy@example.com', token);
+    expect(res.status).toBe(200);
+    expect(await workspaceRoleOf(invitee.id, workspace.id)).toBe('viewer');
+  });
+
+  it('a pre-release `admin` token maps to the Manager', async () => {
+    const { user, workspace } = await makeInviter();
+    const token = await plantInvite(workspace.id, 'legacy-admin@example.com', {
+      role: 'admin',
+      inviterUserId: user.id,
+    });
+    const { res, invitee } = await acceptAs('legacy-admin@example.com', token);
+    expect(res.status).toBe(200);
+    expect(await workspaceRoleOf(invitee.id, workspace.id)).toBe('manager');
+  });
+
+  it('a token naming only `workspaceRole` is accepted as that role', async () => {
+    const { user, workspace } = await makeInviter();
+    const token = await plantInvite(workspace.id, 'new@example.com', {
+      workspaceRole: 'viewer',
+      inviterUserId: user.id,
+    });
+    const { res, invitee } = await acceptAs('new@example.com', token);
+    expect(res.status).toBe(200);
+    expect(await workspaceRoleOf(invitee.id, workspace.id)).toBe('viewer');
+  });
+
+  it('`workspaceRole` wins over the legacy `role` when a token carries both', async () => {
+    const { user, workspace } = await makeInviter();
+    const token = await plantInvite(workspace.id, 'both@example.com', {
+      workspaceRole: 'member',
+      role: 'owner',
+      inviterUserId: user.id,
+    });
+    const { res, invitee } = await acceptAs('both@example.com', token);
+    expect(res.status).toBe(200);
+    expect(await workspaceRoleOf(invitee.id, workspace.id)).toBe('member');
+  });
+
+  it('a token naming neither role — or only unknown values — is refused as invalid', async () => {
+    const { user, workspace } = await makeInviter();
+    const neither = await plantInvite(workspace.id, 'neither@example.com', {
+      inviterUserId: user.id,
+    });
+    const bogus = await plantInvite(workspace.id, 'bogus@example.com', {
+      workspaceRole: 'superuser',
+      role: 'root',
+      inviterUserId: user.id,
+    });
+    for (const [email, token] of [
+      ['neither@example.com', neither],
+      ['bogus@example.com', bogus],
+    ] as const) {
+      const { res, invitee } = await acceptAs(email, token);
+      expect(res.status).toBe(404);
+      expect(await workspaceRoleOf(invitee.id, workspace.id)).toBeUndefined();
+    }
   });
 });
 

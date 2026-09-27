@@ -320,7 +320,11 @@ describe('POST /api/internal/ai/plan-proposals — typed refusals, never a 500',
   async function viewerOf(fx: Awaited<ReturnType<typeof makeFixture>>): Promise<string> {
     const user = await createTestUser();
     await adminDb.workspaceMembership.create({
-      data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: user.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     await addToProjectAs({
       key: fx.projectIdentifier,

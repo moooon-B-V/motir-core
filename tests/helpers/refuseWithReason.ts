@@ -9,7 +9,8 @@ import en from '@/messages/en.json';
 //
 // A DESIGN sent back also takes a VERDICT (Story MOTIR-6070 · MOTIR-6427): when the band
 // draws the Revise / Re-plan group, the helper picks `verdict` (Revise unless told
-// otherwise) — a spec about the verdict itself presses the tiles by hand.
+// otherwise) — a spec about the verdict itself presses the tiles by hand. A story run's
+// ACCEPTANCE draws Re-run / Re-plan (MOTIR-6506): `revise` picks Re-run there.
 
 type Messages = typeof en;
 type Scope = typeof screen | ReturnType<typeof within>;
@@ -39,12 +40,24 @@ export async function refuseWithReason(
     target: { value: opts.reason ?? 'Needs changes.' },
   });
   const verdicts = scope.queryByRole('radiogroup', { name: m.approvalGate.reason.verdict.legend });
+  // A STORY RUN'S ACCEPTANCE asks Re-run or Re-plan in its own words (MOTIR-6506).
+  const acceptanceVerdicts = scope.queryByRole('radiogroup', {
+    name: m.approvalGate.acceptanceResult.verdict.legend,
+  });
   if (verdicts) {
     const label =
       opts.verdict === 're_plan'
         ? m.approvalGate.reason.verdict.replan.label
         : m.approvalGate.reason.verdict.revise.label;
     fireEvent.click(within(verdicts).getByRole('radio', { name: new RegExp(`^${label}`) }));
+  } else if (acceptanceVerdicts) {
+    const label =
+      opts.verdict === 're_plan'
+        ? m.approvalGate.reason.verdict.replan.label
+        : m.approvalGate.acceptanceResult.verdict.rerun.label;
+    fireEvent.click(
+      within(acceptanceVerdicts).getByRole('radio', { name: new RegExp(`^${label}`) }),
+    );
   }
   await act(async () => {
     fireEvent.click(scope.getByRole('button', { name: words.proceed }));

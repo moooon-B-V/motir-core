@@ -107,7 +107,7 @@ async function seedTenant(prefix: string): Promise<Tenant> {
   await workspacesService.addMember({
     workspaceId: workspace.id,
     userId: watcher.id,
-    role: 'member',
+    workspaceRole: 'member',
   });
   const project = await projectsService.createProject({
     workspaceId: workspace.id,

@@ -284,7 +284,11 @@ describe('the route contract, and the two verbs it joins', () => {
     await claimAndRename('acme');
     const member = await createTestUser();
     await adminDb.workspaceMembership.create({
-      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: member.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     ctxRef.current = { userId: member.id, workspaceId: fx.workspaceId };
 
