@@ -52,6 +52,8 @@ function claim(over: Partial<WorkItemRepairClaim> = {}): WorkItemRepairClaim {
     runId: 'run_fix_1',
     holder: { id: 'user_me', name: 'Me' },
     startedAt: '2026-09-16T10:00:00.000Z',
+    repairClass: 'ci',
+    acceptanceRefusal: null,
     pullRequests: [pr()],
     ...over,
   };
@@ -309,6 +311,150 @@ describe('motir fix — the happy path', () => {
     const lines = h.git.map((g) => g.args.join(' '));
     expect(lines).toContain('worktree add /work/motir-core-fix-prod-7-131 subtask/PROD-7-thing');
     expect(lines).toContain('merge --ff-only origin/subtask/PROD-7-thing');
+  });
+});
+
+describe('motir fix — an acceptance sent back with Re-run (MOTIR-6502)', () => {
+  const REASON = 'The empty board should say how to add the first card.';
+  const rerunClaim = (over: Partial<WorkItemRepairClaim> = {}) =>
+    claim({
+      key: 'PROD-60',
+      title: 'Exports list',
+      repairClass: 'acceptance_rerun',
+      acceptanceRefusal: {
+        reasonMd: REASON,
+        decidedByLabel: 'Yue Zhu',
+        decidedAt: '2026-09-26T10:00:00.000Z',
+      },
+      pullRequests: [pr({ headRef: 'parent/PROD-60-exports', ci: 'passing', failingChecks: [] })],
+      ...over,
+    });
+
+  it('runs the agent ONCE with the reason before the CI watch, then re-records the video on green', async () => {
+    const deps = setup({
+      claims: [rerunClaim()],
+      // The fix's push goes pending, then green.
+      verdicts: [[delivery('running')], [delivery('passing')]],
+    });
+
+    await fixCommand('PROD-60', {}, deps);
+
+    // Checked out ON the open delivery's own branch — the same pull request.
+    const add = h.git.find((g) => g.args[0] === 'worktree')!;
+    expect(add.args).toContain('parent/PROD-60-exports');
+
+    expect(h.agents).toHaveLength(2);
+    const [rerun, record] = h.agents;
+    expect(rerun!.prompt).toContain('# Answer the acceptance review — PROD-60 (Exports list)');
+    expect(rerun!.prompt).toContain(`> ${REASON}`);
+    expect(rerun!.prompt).toContain('Yue Zhu sent it back');
+    expect(rerun!.prompt).toContain('Anything structural is a Re-plan, not a Re-run');
+    expect(rerun!.prompt).toContain('Do not record or publish the acceptance video');
+    expect(record!.prompt).toContain('# Re-record the acceptance video — PROD-60');
+    expect(record!.prompt).toContain('publish_acceptance_result');
+
+    // The re-run turn is reported BEFORE the CI verdict, the record turn after it.
+    const kinds = events().map((e) => e.kind);
+    expect(kinds).toEqual([
+      'run_opened',
+      'checkout_ready',
+      'agent_started',
+      'agent_exited',
+      'ci_verdict',
+      'agent_started',
+      'agent_exited',
+      'card_settled',
+    ]);
+    expect(events().at(-1)?.disposition).toBe('implemented');
+    expect(closes()).toEqual([{ runId: 'run_fix_1', stopReason: 'completed' }]);
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('opens no pull request, links nothing and writes no status', async () => {
+    const deps = setup({ claims: [rerunClaim()], verdicts: [[delivery('passing')]] });
+
+    await fixCommand('PROD-60', {}, deps);
+
+    expect(tools()).not.toContain('link_pull_request');
+    expect(tools()).not.toContain('transition_status');
+    expect(tools()).not.toContain('open_run');
+  });
+
+  it('a failed re-run agent stops before the CI watch, closes halted and exits non-zero', async () => {
+    const deps = setup({
+      claims: [rerunClaim()],
+      verdicts: [[delivery('passing')]],
+      agentExit: 2,
+    });
+
+    await fixCommand('PROD-60', {}, deps);
+
+    expect(h.agents).toHaveLength(1);
+    expect(tools()).not.toContain('get_work_item');
+    expect(h.stderr).toContain('PROD-60: the re-run agent failed — exit 2');
+    expect(closes()).toEqual([{ runId: 'run_fix_1', stopReason: 'halted' }]);
+    expect(events().at(-1)?.disposition).toBe('failed');
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('a red build is fixed by the shipped loop between the two turns', async () => {
+    const deps = setup({
+      claims: [rerunClaim()],
+      verdicts: [[delivery('failing')], [delivery('passing')]],
+    });
+
+    await fixCommand('PROD-60', {}, deps);
+
+    expect(h.agents.map((a) => a.prompt.split('\n')[0])).toEqual([
+      '# Answer the acceptance review — PROD-60 (Exports list)',
+      '# Make the build pass — PROD-60 (Exports list)',
+      '# Re-record the acceptance video — PROD-60 (Exports list)',
+    ]);
+  });
+
+  it('no re-record when the build gives up — the video would show red work', async () => {
+    const deps = setup({
+      claims: [rerunClaim(), rerunClaim({ outcome: 'mine' })],
+      verdicts: [[delivery('failing')]],
+    });
+
+    await fixCommand('PROD-60', {}, deps);
+
+    expect(h.agents.some((a) => a.prompt.startsWith('# Re-record'))).toBe(false);
+    expect(closes()).toEqual([{ runId: 'run_fix_1', stopReason: 'halted' }]);
+  });
+
+  it('a failed re-record leaves CI green but exits non-zero and says what is left to do', async () => {
+    let n = 0;
+    const deps = setup({ claims: [rerunClaim()], verdicts: [[delivery('passing')]] });
+    const base = deps.runAgentFn;
+    deps.runAgentFn = async (input: { prompt: string; cwd: string }) => {
+      n += 1;
+      const result = (await base(input)) as { exitCode: number; signal: null; model: null };
+      return (n === 2 ? { ...result, exitCode: 1 } : result) as never;
+    };
+
+    await fixCommand('PROD-60', {}, deps);
+
+    expect(h.stderr).toContain('CI is green, but re-recording the acceptance video failed');
+    expect(closes()).toEqual([{ runId: 'run_fix_1', stopReason: 'halted' }]);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('a reason with no text still reads as a refusal, never a blank quote', async () => {
+    const deps = setup({
+      claims: [
+        rerunClaim({
+          acceptanceRefusal: { reasonMd: null, decidedByLabel: null, decidedAt: '2026-09-26' },
+        }),
+      ],
+      verdicts: [[delivery('passing')]],
+    });
+
+    await fixCommand('PROD-60', {}, deps);
+
+    expect(h.agents[0]!.prompt).toContain('The reviewer sent it back on 2026-09-26');
+    expect(h.agents[0]!.prompt).toContain('> (no reason was recorded)');
   });
 });
 

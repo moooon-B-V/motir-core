@@ -14,7 +14,10 @@ import type { ChosenOption } from '@/lib/approvalGates/choiceOptions';
 
 /** The fields the predicate reads — a whole `ApprovalGate` row satisfies it (and so
  *  does the gate DTO, which carries `refusalVerdict` since MOTIR-6421). */
-export type RefusalSeedGateFacts = Pick<ApprovalGate, 'kind' | 'state' | 'refusalVerdict'>;
+export type RefusalSeedGateFacts = Pick<
+  ApprovalGate,
+  'kind' | 'state' | 'refusalVerdict' | 'decisionSource'
+>;
 
 /**
  * Is this gate a REFUSAL that may seed a re-plan?
@@ -27,7 +30,12 @@ export type RefusalSeedGateFacts = Pick<ApprovalGate, 'kind' | 'state' | 'refusa
  *    (`refusalVerdict === 're_plan'`; MOTIR-6070 · MOTIR-6424,
  *    `docs/decisions/design-refusal-verdict.md` §3). A **Revise**, a GitHub-synced
  *    refusal (which carries no verdict) and a refusal recorded before the verdict
- *    existed are NOT: they ask nothing and seed nothing.
+ *    existed are NOT: they ask nothing and seed nothing;
+ *  - `acceptance_result` in `changes_requested`, decided IN MOTIR, and NOT a Re-run
+ *    (MOTIR-6071 · MOTIR-6504; `acceptance-refusal-verdict.md` §5–§6): a story run's
+ *    **Re-plan** (`re_plan`), or a finished story's refusal, which carries no verdict
+ *    and asks for a remedy. A **Re-run** (`revise`) is `motir fix`'s, and a GitHub
+ *    refusal asks nothing.
  *
  * Every other kind answers `false` in every state until its own story adds a
  * case. The switch is EXHAUSTIVE over `ApprovalGateKind` (the `never` arm), so a
@@ -44,9 +52,14 @@ export function isRefusalSeedGate(gate: RefusalSeedGateFacts): boolean {
       return gate.state === 'overturned';
     case 'design_result':
       return gate.state === 'changes_requested' && gate.refusalVerdict === 're_plan';
+    case 'acceptance_result':
+      return (
+        gate.state === 'changes_requested' &&
+        gate.decisionSource !== 'github' &&
+        gate.refusalVerdict !== 'revise'
+      );
     case 'pull_request_approval':
     case 'pull_request_merge':
-    case 'acceptance_result':
     case 'plan_approval':
       return false;
     default: {
@@ -203,7 +216,7 @@ export function anchorOf(
  *  resolved ANCHOR (`anchorKey`; `null` = the project, a pick only). */
 export interface SeedComposerInput {
   card: { key: string; title: string };
-  gate: Pick<ApprovalGate, 'kind' | 'state' | 'noteMd'>;
+  gate: Pick<ApprovalGate, 'kind' | 'state' | 'noteMd' | 'refusalVerdict'>;
   supersedesKeys: readonly string[];
   chosenOption?: ChosenOption | null;
   /** The work item the seeded session anchors on — the card itself for the
@@ -313,6 +326,37 @@ function composeDesignReplanTurn(input: SeedComposerInput, t: SeedTranslator): s
 }
 
 /**
+ * An ACCEPTANCE sent back (MOTIR-6504; `acceptance-refusal-verdict.md` §5–§6) — the
+ * shared shape, anchored on the STORY (the gate's own card), with its verb and its ask
+ * chosen by the RUN SHAPE the verdict records:
+ *
+ *  - `re_plan` — a story run: nothing under it is `done`, so the turn says every
+ *    subtask may be re-planned (`verb.acceptanceReplan` · `askAcceptanceReplan`);
+ *  - no verdict — a finished story: every subtask has merged and nothing is left to
+ *    re-run, so the turn asks for a REMEDY under the still-open story
+ *    (`verb.acceptanceRemedy` · `askAcceptanceRemedy`).
+ *
+ * Neither promises a re-run: a Re-run is never a seed (`isRefusalSeedGate`).
+ */
+function composeAcceptanceTurn(input: SeedComposerInput, t: SeedTranslator): string {
+  const replan = input.gate.refusalVerdict === 're_plan';
+  const parts = [
+    t('heading', { key: input.card.key, title: input.card.title }),
+    t(replan ? 'verb.acceptanceReplan' : 'verb.acceptanceRemedy'),
+  ];
+  const reason = input.gate.noteMd;
+  if (reason && reason.trim() !== '') parts.push(t('reason', { reason }));
+  // The acceptance anchors on the story itself, so the anchor is always the card; the
+  // fallback only satisfies the type main widened for a pick's project-level anchor.
+  parts.push(
+    t(replan ? 'askAcceptanceReplan' : 'askAcceptanceRemedy', {
+      key: input.anchorKey ?? input.card.key,
+    }),
+  );
+  return parts.join('\n\n');
+}
+
+/**
  * THE REGISTRY — one composer per gate kind whose refusal seeds a re-plan.
  *
  * `Partial` ON PURPOSE: a kind with no entry has no seed, and the read answers
@@ -322,8 +366,10 @@ function composeDesignReplanTurn(input: SeedComposerInput, t: SeedTranslator): s
  * here (and widen the predicate above by the same case) rather than building a
  * read of their own:
  *
- *  - MOTIR-6069 — a PICKED option on a `decision_choice` is planned;
- *  - MOTIR-6071 — an `acceptance_result` sent back is re-planned.
+ *  - MOTIR-6069 — a PICKED option on a `decision_choice` is planned.
+ *
+ * MOTIR-6071 (MOTIR-6504) added `acceptance_result`: a story run's Re-plan, or a
+ * finished story's refusal asking for a remedy — anchored on the story itself.
  */
 export const REFUSAL_SEED_COMPOSERS: Partial<Record<ApprovalGateKind, SeedComposer>> = {
   /** Request changes on a decision (`changes_requested`). */
@@ -342,6 +388,8 @@ export const REFUSAL_SEED_COMPOSERS: Partial<Record<ApprovalGateKind, SeedCompos
   /** A design sent back with the Re-plan verdict (`changes_requested` +
    *  `re_plan`) — anchored on the design card's parent. */
   design_result: composeDesignReplanTurn,
+  /** A story's acceptance sent back — a Re-plan, or a finished story's remedy. */
+  acceptance_result: composeAcceptanceTurn,
 };
 
 /** The composer for a gate's kind, or `null` when that kind has none yet. */

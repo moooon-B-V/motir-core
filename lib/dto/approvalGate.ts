@@ -333,6 +333,16 @@ export interface ApprovalGateDTO {
    *  GitHub-synced refusal, and every gate decided before the column existed. Written in
    *  the deciding write, so it is as immutable as the rest of the decided row. */
   refusalVerdict: ApprovalGateRefusalVerdictDTO | null;
+  /**
+   * WHETHER A REFUSAL OF THIS GATE ASKS FOR A VERDICT (Story MOTIR-6071 · MOTIR-6501;
+   * `acceptance-refusal-verdict.md` §1) — true exactly where the decide door REQUIRES
+   * `revise` / `re_plan` on a Motir press: every `design_result`, and an
+   * `acceptance_result` whose story has an open delivery of its own (a STORY RUN). False
+   * on a finished story's acceptance and on every other kind. Computed for an `awaiting`
+   * gate by the same `refusalVerdictOfferFor` the door calls, so the band and the door
+   * read ONE answer; false on every decided or withdrawn gate, which offers nothing.
+   */
+  offersRefusalVerdict: boolean;
   /** WHAT it caused — the merge commit sha, or the transition applied. Written
    *  in the deciding write, never backfilled: a decided gate is immutable. */
   outcomeRef: string | null;
@@ -1293,6 +1303,12 @@ export interface ApprovalGateDecisionDTO {
    * `noteMd`: the note says what to change, the verdict whether the plan itself is wrong.
    */
   refusalVerdict: ApprovalGateRefusalVerdictDTO | null;
+  /**
+   * WHETHER A REFUSAL OF THIS GATE ASKS FOR A VERDICT (MOTIR-6501) — true exactly where
+   * a Motir press of `request_changes` must carry `revise` / `re_plan`: a `design_result`,
+   * or an `acceptance_result` on a STORY RUN. False once the gate is decided or withdrawn.
+   */
+  offersRefusalVerdict: boolean;
   createdAt: string;
   updatedAt: string;
 }

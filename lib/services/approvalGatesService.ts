@@ -79,6 +79,7 @@ import { heldMoves } from '@/lib/approvalGates/heldMoves';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { CANCELLED_STATUS_KEY } from '@/lib/approvalGates/heldMoves';
 import { requireGateCard } from '@/lib/approvalGates/gateCard';
+import { refusalVerdictOfferFor } from '@/lib/approvalGates/verdictOffer';
 import { planGateStampInputs, planSubjectVersion } from '@/lib/approvalGates/planApprovalDigest';
 import { readPlanGateHeld } from '@/lib/approvalGates/planApprovalHandler';
 import { planRepository } from '@/lib/repositories/planRepository';
@@ -125,8 +126,6 @@ const CHOICE_KIND = 'decision_choice';
 /** The one kind whose refusal is OVERTURN rather than `request_changes` (ADR §1's
  *  MOTIR-5952 amendment, point 6). */
 const CONFIRMATION_KIND = 'decision_confirmation';
-/** The one kind whose Motir-pressed refusal carries a VERDICT (ADR §10d, MOTIR-6421). */
-const VERDICT_KIND = 'design_result';
 /** The one kind that offers no `request_changes` because a plan is changed by TALKING
  *  to the planner (ADR §11.4, MOTIR-6035). */
 const PLAN_KIND = 'plan_approval';
@@ -851,8 +850,15 @@ export const approvalGatesService = {
             ).get(input.workItemId)
           : undefined;
 
+      // WHETHER A REFUSAL HERE ASKS FOR A VERDICT (MOTIR-6501) — the same function the
+      // decide door calls under its lock, so the band draws the tiles exactly when the
+      // door will require them. Only an `awaiting` gate can be refused, so only one pays
+      // the read (an `acceptance_result`'s open-delivery count).
+      const offersRefusalVerdict =
+        row.state === 'awaiting' ? await refusalVerdictOfferFor(row, tx) : false;
+
       return {
-        gate: toApprovalGateDto(row, item.descriptionMd),
+        gate: toApprovalGateDto(row, item.descriptionMd, offersRefusalVerdict),
         canDecide,
         stamp,
         movedSince,
@@ -2053,18 +2059,22 @@ export const approvalGatesService = {
       ) {
         throw new ApprovalGateVerbNotOfferedError(input.gateId, 'request_changes_needs_a_note');
       }
-      // A DESIGN REFUSAL IS A VERDICT (ADR §10d, MOTIR-6421; `design-refusal-verdict.md`) —
-      // `revise` or `re_plan`, and the ONE place one is offered is a `request_changes` a
-      // person pressed on a `design_result` gate. Total over kind × verb × source: that
-      // case REQUIRES one, and every other case that names one is refused, so a verdict
-      // never lands on a row that did not ask for it. Keyed on the source exactly as the
-      // reason is — a `github` refusal was never asked, so it is recorded verdict-less
-      // rather than refused, and a verdict SENT with one is refused as not offered.
+      // A REFUSAL CAN BE A VERDICT (ADR §10d, MOTIR-6421; `design-refusal-verdict.md`,
+      // widened by `acceptance-refusal-verdict.md` §1, MOTIR-6501) — `revise` or
+      // `re_plan`, offered on a `request_changes` a person pressed on a gate that ASKS
+      // for one: a `design_result`, or an `acceptance_result` on a STORY RUN (the story
+      // has an open delivery of its own). `refusalVerdictOfferFor` answers that under
+      // this lock, so the shape cannot change between the question and the write. Total
+      // over kind × run shape × verb × source: the offered case REQUIRES one, and every
+      // other case that names one is refused, so a verdict never lands on a row that did
+      // not ask for it. Keyed on the source exactly as the reason is — a `github` refusal
+      // was never asked, so it is recorded verdict-less rather than refused, and a
+      // verdict SENT with one is refused as not offered.
       const refusalVerdict = input.refusalVerdict ?? null;
       const offersVerdict =
         input.decision === 'request_changes' &&
-        locked.kind === VERDICT_KIND &&
-        input.source !== 'github';
+        input.source !== 'github' &&
+        (await refusalVerdictOfferFor(locked, tx));
       if (
         refusalVerdict !== null &&
         (!offersVerdict ||

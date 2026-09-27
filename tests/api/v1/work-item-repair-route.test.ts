@@ -136,6 +136,65 @@ describe('POST /api/v1/work-items/{key}/repair', () => {
     await expect(res.json()).resolves.toMatchObject({ outcome: 'mine', runId: first.runId });
   });
 
+  it('an acceptance sent back with RE-RUN is claimed on the wire with its class and reason, and PARSES (MOTIR-6502)', async () => {
+    // A story run whose checks are GREEN — only the standing Re-run admits it.
+    const fx = caller.fixture;
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Exports list' });
+    const child = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'The empty state',
+      parentId: story.id,
+    });
+    await setStatus(child.id, 'implemented');
+    await setStatus(story.id, 'in_review');
+    const repo = await connectRepairRepo(fx, 'web');
+    await deliveredPr(fx, story.id, repo, {
+      headRef: 'parent/exports-list',
+      checks: { Vitest: 'success' },
+    });
+    const receipt = await adminDb.acceptanceEvidence.create({
+      data: { workspaceId: fx.workspaceId, workItemId: story.id, status: 'changes_requested' },
+    });
+    const decidedAt = new Date('2026-09-26T10:00:00Z');
+    await adminDb.approvalGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: story.id,
+        kind: 'acceptance_result',
+        subjectId: receipt.id,
+        subjectVersion: 'c'.repeat(40),
+        state: 'changes_requested',
+        decidedById: fx.ownerId,
+        decidedAt,
+        decidedByLabel: 'Yue Zhu',
+        decisionSource: 'ui',
+        decidedUnderAuthority: 'assignee',
+        noteMd: 'The empty board should say how to add the first card.',
+        refusalVerdict: 'revise',
+      },
+    });
+
+    const res = await repair(story.identifier, caller);
+
+    expect(res.status).toBe(200);
+    const parsed = workItemRepairClaimSchema.safeParse(await res.json());
+    expect(parsed.success, JSON.stringify(parsed.error?.issues, null, 2)).toBe(true);
+    expect(parsed.data).toMatchObject({
+      key: story.identifier,
+      outcome: 'claimed',
+      repairClass: 'acceptance_rerun',
+      acceptanceRefusal: {
+        reasonMd: 'The empty board should say how to add the first card.',
+        decidedByLabel: 'Yue Zhu',
+        decidedAt: decidedAt.toISOString(),
+      },
+    });
+    expect(parsed.data?.pullRequests).toEqual([
+      expect.objectContaining({ repo: 'acme/web', headRef: 'parent/exports-list', ci: 'passing' }),
+    ]);
+  });
+
   it('a MALFORMED key is 422', async () => {
     const res = await repair('not-a-key', caller);
     expect(res.status).toBe(422);

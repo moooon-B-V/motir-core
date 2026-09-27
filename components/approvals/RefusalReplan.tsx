@@ -58,7 +58,8 @@ export type RefusalReplanGateFacts = RefusalSeedGateFacts & {
 
 /**
  * Should a press that just RECORDED `gate` ask to re-plan? Only a refusal of the three
- * decision kinds, or a design sent back with the Re-plan verdict (`isRefusalSeedGate`,
+ * decision kinds, a design sent back with the Re-plan verdict, or an acceptance sent back
+ * with Re-plan or on a finished story — never with Re-run (`isRefusalSeedGate`,
  * the one predicate the seed read and the session stamp also answer — a Revise never
  * asks), and never one synced out of GitHub — that was not pressed in Motir at all.
  */
@@ -79,8 +80,26 @@ export function asksAfterPress(gate: RefusalReplanGateFacts & { chosenOption: un
   return asksToReplanAfterPress(gate) || asksToPlanAfterPress(gate);
 }
 
-/** Whether the seeded door and ask speak for a refusal (`replan`) or a pick (`plan`). */
-export type SeedDoorIntent = 'plan' | 'replan';
+/** Whether the seeded door and ask speak for a refusal (`replan`), an acceptance refusal
+ *  that asks for a REMEDY (`remedy`, MOTIR-6506), or a pick (`plan`). */
+export type SeedDoorIntent = 'plan' | 'replan' | 'remedy';
+
+/** The two refusal copy sets — the intents a REFUSAL can take. */
+export type RefusalReplanMode = Extract<SeedDoorIntent, 'replan' | 'remedy'>;
+
+/**
+ * WHICH WORDS a refusal's ask and door speak (Story MOTIR-6071 · Subtask MOTIR-6506; design
+ * `approval-control--acceptance-verdict.mock.html` panels 7–8). `replan` — every shipped
+ * refusal, and a story run's acceptance sent back with **Re-plan**. `remedy` — an
+ * acceptance sent back with NO verdict: a finished story has nothing left to re-run, so
+ * the planner is offered to plan a remedy for it. KEYED OFF THE GATE'S VERDICT, which is
+ * the run-shape fact the press recorded: a story run's refusal always carries one.
+ */
+export function refusalReplanModeOf(gate: RefusalSeedGateFacts): RefusalReplanMode {
+  return gate.kind === 'acceptance_result' && gate.refusalVerdict !== 're_plan'
+    ? 'remedy'
+    : 'replan';
+}
 
 /** The door's face — `WorkItemPlanEntrance`'s RE-PLAN face, class for class (design
  *  § *The door is the Re-plan entrance's own face*). */
@@ -108,11 +127,18 @@ export function RefusalReplanDoor({
   itemKey: string;
   /** Not now just replaced the ask with this door: it takes focus (design 0f). */
   focusOnMount?: boolean;
-  /** `plan` — a pick's *Plan with AI* door (MOTIR-6436). */
+  /** `plan` — a pick's *Plan with AI* door (MOTIR-6436); `remedy` — *Plan a remedy with
+   *  AI* on an acceptance refused on a finished story (MOTIR-6506). */
   intent?: SeedDoorIntent;
 }) {
   const plan = intent === 'plan';
-  const t = useTranslations(plan ? 'approvalGate.planDoor' : 'approvalGate.replanDoor');
+  const t = useTranslations(
+    plan
+      ? 'approvalGate.planDoor'
+      : intent === 'remedy'
+        ? 'approvalGate.acceptanceResult.remedyDoor'
+        : 'approvalGate.replanDoor',
+  );
   const { hrefFor, open } = useOpenRefusalReplan();
   const ref = useRef<HTMLAnchorElement>(null);
   useEffect(() => {
@@ -127,7 +153,7 @@ export function RefusalReplanDoor({
       aria-label={t('aria', { item: itemKey })}
       data-testid={plan ? 'pick-plan-door' : 'refusal-replan-door'}
       data-depth="key"
-      data-mode={plan ? 'plan' : 'replan'}
+      data-mode={intent}
       onClick={(event) => {
         if (!isPlainPrimaryClick(event)) return;
         event.preventDefault();
@@ -167,12 +193,16 @@ export function RefusalReplanAsk({
   /** Yes was pressed — the press site forgets the ask as the planner opens. */
   onAnswered: () => void;
   onNotNow: () => void;
-  /** `plan` — a pick's ask (MOTIR-6436): the planner STARTS on yes, nothing to send. */
+  /** `plan` — a pick's ask (MOTIR-6436): the planner STARTS on yes, nothing to send.
+   *  `remedy` — an acceptance refused on a finished story (MOTIR-6506): *Plan a remedy
+   *  for {key} with Motir AI?*; its two consequence lines are the Re-plan ask's. */
   intent?: SeedDoorIntent;
 }) {
   const plan = intent === 'plan';
   const t = useTranslations('approvalGate.replanAsk');
   const tp = useTranslations('approvalGate.planAsk');
+  const tRemedy = useTranslations('approvalGate.acceptanceResult.remedyAsk');
+  const words = intent === 'remedy' ? tRemedy : t;
   // WHERE the pick's planner opens is resolved on the SERVER (MOTIR-6433's anchor):
   // the ask renders what the seed read returns rather than guessing from the tree.
   // Until it answers, the line waits; a failure leaves it out rather than guess.
@@ -218,13 +248,14 @@ export function RefusalReplanAsk({
       role="group"
       aria-labelledby={titleId}
       data-testid={plan ? 'pick-plan-ask' : 'refusal-replan-ask'}
+      data-mode={intent}
       className={cn(
         sectioned && 'mt-3',
         'border-t border-(--el-border-soft) bg-(--el-surface-soft) px-4 py-3',
       )}
     >
       <p id={titleId} className="text-[13px] font-semibold text-(--el-text)">
-        {plan ? tp('title') : t('title', { key: itemKey })}
+        {plan ? tp('title') : words('title', { key: itemKey })}
       </p>
       <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[13px] text-(--el-text-secondary)">
         {plan ? (
@@ -256,7 +287,7 @@ export function RefusalReplanAsk({
           }}
           leftIcon={<Sparkles className="size-3.5 shrink-0" aria-hidden />}
         >
-          {plan ? tp('yes') : t('yes')}
+          {plan ? tp('yes') : words('yes')}
         </Button>
       </div>
     </div>
@@ -288,7 +319,7 @@ export function useRefusalReplanSlots({
   // A refusal re-plans; a PICK plans its follow-up (MOTIR-6436) through the same
   // slots, with its own words and door face.
   const intent: SeedDoorIntent | null = isRefusalSeedGate(gate)
-    ? 'replan'
+    ? refusalReplanModeOf(gate)
     : isPickSeedGate({ ...gate, chosenOption: gate.chosenOption ?? null })
       ? 'plan'
       : null;

@@ -8,7 +8,11 @@ import {
   githubPullRequestRepository,
   type GithubPullRequestWithInstallation,
 } from '@/lib/repositories/githubPullRequestRepository';
-import { designHoldsMerge, primaryApprovalStandsForMerge } from '@/lib/approvalGates/gateSet';
+import {
+  acceptanceRefusalHoldsMerge,
+  designHoldsMerge,
+  primaryApprovalStandsForMerge,
+} from '@/lib/approvalGates/gateSet';
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -166,6 +170,23 @@ export async function designResultHoldsMerge(
     approvalGateRepository.findLatestByWorkItem(workItemId, 'design_result', tx),
   ]);
   return designHoldsMerge(currentDesign, latestDesignGate);
+}
+
+/**
+ * {@link acceptanceRefusalHoldsMerge}, read from the story's own rows — whether a story
+ * run's refused acceptance holds its merge (Story MOTIR-6071 · MOTIR-6503). Read by the
+ * two manual-mode merge paths that do not go through the acceptance's own press: the
+ * approve-to-merge gate's `approve` and the GitHub review sync.
+ */
+export async function acceptanceResultHoldsMerge(
+  workItemId: string,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const [currentReceipt, latestAcceptanceGate] = await Promise.all([
+    acceptanceEvidenceRepository.findCurrentByWorkItem(workItemId, tx),
+    approvalGateRepository.findLatestByWorkItem(workItemId, 'acceptance_result', tx),
+  ]);
+  return acceptanceRefusalHoldsMerge(currentReceipt, latestAcceptanceGate);
 }
 
 export async function settleGreenVerdict(

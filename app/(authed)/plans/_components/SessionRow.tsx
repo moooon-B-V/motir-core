@@ -159,6 +159,7 @@ const SEED_VERB_KEY: Record<PlanSessionSeedGateKindDto, string> = {
   decision_confirmation: 'seed.verb.decisionConfirmation',
   decision_choice: 'seed.verb.decisionChoice',
   design_result: 'seed.verb.designResult',
+  acceptance_result: 'seed.verb.acceptanceResult',
 };
 
 /** Meta 5 (MOTIR-6209) — `Re-plan of {KEY} · {verb}`, a link to the refused work

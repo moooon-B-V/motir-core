@@ -6570,11 +6570,14 @@
       },
       "fix": {
         "title": "Fix the checks",
+        "titleSentBack": "Fix what was sent back",
         "aria": {
-          "part": "Fix the checks"
+          "part": "Fix the checks",
+          "partSentBack": "Fix what was sent back"
         },
         "failingOn": "Checks are failing on <prs></prs>.",
         "leftQueueOn": "<prs></prs> left the merge queue.",
+        "sentBack": "The acceptance video was sent back to re-run. An agent fixes it on {count, plural, one {the same pull request} other {the same pull requests}}, from the reason given, then records a new video.",
         "lead": "Hand the repair to an agent from your terminal:",
         "how": "An agent works on the pull request's own branch, pushes, and the checks run again.",
         "howMany": "An agent works on each pull request's own branch, pushes, and the checks run again.",
@@ -6793,7 +6796,8 @@
           "decisionApproval": "Request changes",
           "decisionConfirmation": "Overturn",
           "decisionChoice": "None of these",
-          "designResult": "Request changes"
+          "designResult": "Request changes",
+          "acceptanceResult": "Request changes"
         },
         "aria": "Open {key}, the work item this conversation re-plans",
         "pickLabel": "Follow-up to <mono>{key}</mono>",
@@ -6809,7 +6813,9 @@
         "decisionApproval": "Changes were requested on this decision.",
         "decisionConfirmation": "This decision was overturned.",
         "decisionChoice": "None of the options on this choice was picked.",
-        "designResult": "Changes were requested on this design."
+        "designResult": "Changes were requested on this design.",
+        "acceptanceReplan": "This story's acceptance video was sent back to be re-planned. The story was run as a whole, so none of its subtasks is done yet.",
+        "acceptanceRemedy": "This story's acceptance video was sent back. Every subtask has already merged, so there is nothing left to re-run."
       },
       "reason": "The reason given:\n“{reason}”",
       "supersedes": "The work items it superseded: {keys}",
@@ -6817,6 +6823,8 @@
       "ask": "Re-plan this work item from that reason.",
       "blockedBy": "The work items waiting on this design: {keys}",
       "askDesign": "Re-plan {parent} from that reason: this design and the work waiting on it.",
+      "askAcceptanceReplan": "Re-plan {key} from that reason. Any of its subtasks may be re-planned.",
+      "askAcceptanceRemedy": "Plan a remedy under {key} from that reason: new work that fixes what the video showed.",
       "pick": {
         "followUp": "I just chose an option on this choice — this is the follow-up planning it was waiting for.",
         "noContainer": "This choice has no open container, so Motir AI opened on the project.",
@@ -8804,6 +8812,10 @@
         "decision": {
           "title": "Accept the decision before these pull requests merge.",
           "next": "Approve the decision document above. One press accepts it and merges them."
+        },
+        "acceptance": {
+          "title": "Approve a newer acceptance video before these pull requests merge.",
+          "next": "The story's video was sent back. Once a new one is recorded, approving it merges them."
         }
       },
       "alreadyAwaiting": {
@@ -8888,7 +8900,34 @@
       "consequenceMerges": "Approving accepts {key} and merges {prs}, then moves {key} to Approved. The video is not merged — it is evidence and is never committed.",
       "accepted": "Acceptance approved by {name} · {when}",
       "stands": "Acceptance approved by {name} · {when} — the video stands",
-      "mergeHeld": "The pull request merges when its checks pass — no second press."
+      "mergeHeld": "The pull request merges when its checks pass — no second press.",
+      "cta": {
+        "body": "Watch the recording full screen, then approve or request changes."
+      },
+      "verdict": {
+        "legend": "Is it a re-run or a re-plan?",
+        "required": "Choose Re-run or Re-plan — an acceptance sent back needs one.",
+        "rerun": {
+          "label": "Re-run",
+          "hint": "For a fix to what was built.",
+          "consequence": "Nothing moves; the merge approval is withdrawn, and motir fix works on {count, plural, one {the same pull request} other {the same pull requests}} with your reason."
+        },
+        "replan": {
+          "hint": "For a change to the story's shape.",
+          "consequence": "Nothing moves; the merge approval is withdrawn, and you are asked whether to re-plan."
+        }
+      },
+      "refusal": {
+        "noRerun": "Every subtask has already merged — there is nothing left to re-run, so sending this back asks for a remedy."
+      },
+      "remedyAsk": {
+        "title": "Plan a remedy for {key} with Motir AI?",
+        "yes": "Plan a remedy with AI"
+      },
+      "remedyDoor": {
+        "label": "Plan a remedy with AI",
+        "aria": "Plan a remedy for {item} with AI from this refusal"
+      }
     },
     "pullRequestApproval": {
       "kindLabel": "Pull requests",
@@ -9275,7 +9314,9 @@
         "noneOnGithub": "No reason given on GitHub.",
         "verdict": {
           "revise": "Sent back to revise",
-          "replan": "Sent back to re-plan"
+          "replan": "Sent back to re-plan",
+          "rerun": "Sent back to re-run",
+          "remedy": "Sent back for a remedy"
         }
       },
       "row": {

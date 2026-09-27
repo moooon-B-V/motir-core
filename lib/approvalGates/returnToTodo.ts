@@ -9,8 +9,10 @@ import { requireGateCard } from './gateCard';
 //
 // A refusal that sends the work back writes the card to the project's To do and
 // withdraws every OTHER question still waiting on it, inside the decide door's
-// transaction. The design refusal is the first caller (either verdict); the
-// acceptance Re-run (MOTIR-6071) is ruled by the same record to reuse it.
+// transaction. The design refusal is its caller (either verdict). An acceptance
+// refusal does NOT use it: no acceptance refusal moves a status
+// (`acceptance-refusal-verdict.md` §2 and §8), so its handler withdraws the merge gate
+// without a return (MOTIR-6503).
 //
 // ⚠️ THE TARGET IS RESOLVED BY `isInitial` AND CATEGORY, NEVER THROUGH THE DOOR'S
 // `resolvedStatusKey`, which the door resolves from the kind's `statusIntent` — `done`

@@ -16,8 +16,12 @@ import { BILLING_PLANS_PATH } from '@/components/ai/AiPaywall';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { AcceptanceVideoEligibilityDTO } from '@/lib/dto/acceptanceVideoEligibility';
 import { turnOnAcceptanceVideoAction } from '@/app/(authed)/items/[key]/acceptanceActions';
-import { ApprovalGateControl } from '@/components/approvals/ApprovalGateControl';
+import {
+  ApprovalGateControl,
+  type ApprovalGateControlProps,
+} from '@/components/approvals/ApprovalGateControl';
 import { GateCallToActionBand } from '@/components/approvals/GateCallToActionBand';
+import { useRefusalReplanSlots } from '@/components/approvals/RefusalReplan';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 
 // The acceptance panel body (Story MOTIR-1627 · Subtask MOTIR-1634), built to
@@ -55,6 +59,12 @@ export interface AcceptancePanelProps {
   canDecide: boolean;
   /** Who the gate is routed to, when that is not this reader. */
   routedElsewhereName: string | null;
+  /**
+   * `WorkItemPlanEntrance`'s condition for this reader on this story — may plan, not
+   * archived (Story MOTIR-6071 · MOTIR-6506). A finished story sent back offers *Plan a
+   * remedy with AI* from its record when true. Omitted, no door.
+   */
+  canReplan?: boolean;
 }
 
 /**
@@ -85,6 +95,34 @@ async function noDecisionHere(): Promise<null> {
   return null;
 }
 
+/**
+ * THE DECIDED RECORD, WITH ITS DOOR (Story MOTIR-6071 · MOTIR-6506; design
+ * `approval-control--acceptance-verdict.mock.html` panels 4c and 8b). The shared frame with
+ * the refusal's two slots filled exactly as the overlay's design arm fills them: the door
+ * on a record that offers the planner (`useRefusalReplanSlots` → `isRefusalSeedGate`), and
+ * the ask only while this reader's own press is unanswered — which never happens here,
+ * because this section never presses (the door case).
+ *
+ * ⚠️ THIS SECTION DRAWS ONLY A FINISHED STORY'S DECIDED ACCEPTANCE. `LateSections` moves a
+ * story with an open pull request of its own into the Development block (*one question,
+ * one place*), so every refusal recorded here is a finished story's — which is the run-shape
+ * fact *Sent back for a remedy* needs, and the DTO no longer carries once the gate is
+ * decided. It is passed as `refusalRemedy` rather than read again from the server.
+ */
+function AcceptanceRecordFrame({
+  itemIdentifier,
+  canReplan,
+  ...frame
+}: ApprovalGateControlProps & { itemIdentifier: string; canReplan: boolean }) {
+  const { door, ask } = useRefusalReplanSlots({
+    gate: frame.gate,
+    itemKey: itemIdentifier,
+    replan: { canReplan },
+    sectioned: true,
+  });
+  return <ApprovalGateControl {...frame} recordDetail={door} recordBand={ask} refusalRemedy />;
+}
+
 export function AcceptancePanel({
   itemIdentifier,
   projectId,
@@ -93,6 +131,7 @@ export function AcceptancePanel({
   gate,
   canDecide,
   routedElsewhereName,
+  canReplan = false,
 }: AcceptancePanelProps) {
   const t = useTranslations('acceptance');
   const tGate = useTranslations('approvalGate.acceptanceResult');
@@ -263,7 +302,9 @@ export function AcceptancePanel({
   if (gate && !(gate.state === 'awaiting' && canDecide)) {
     return (
       <>
-        <ApprovalGateControl
+        <AcceptanceRecordFrame
+          itemIdentifier={itemIdentifier}
+          canReplan={canReplan}
           // FLUSH IN THE SECTION: `ContentSectionCard` already carries the border and
           // the title *Acceptance*. One container, one label.
           layout="section"
@@ -297,6 +338,8 @@ export function AcceptancePanel({
             askedAt={gate.createdAt}
             itemIdentifier={itemIdentifier}
             routedElsewhereName={routedElsewhereName}
+            // The acceptance's own line — the band's default names a DESIGN (MOTIR-6506).
+            body={tGate('cta.body')}
           />
         </div>
       ) : // ⚠️ NO GATE AT ALL, so there is no decision to speak about — a receipt that

@@ -109,6 +109,8 @@ function members(over: Partial<PullRequestApprovalMemberDTO>): PullRequestApprov
 /** F1: the part offers `motir fix ACME-12` for the member the queue threw out. */
 const repairOffer = (): WorkItemRepairViewDto => ({
   state: 'offer',
+  repairClass: 'ci',
+  acceptanceRefusal: null,
   failing: [
     {
       repo: 'moooon/motir-gateway',

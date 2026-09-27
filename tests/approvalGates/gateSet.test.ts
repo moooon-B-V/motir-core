@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import {
+  acceptanceRefusalHoldsMerge,
   designHoldsMerge,
   primaryApprovalStandsForMerge,
   resolveGateSet,
@@ -755,5 +756,77 @@ describe('resolveGateSet — the ACCEPTANCE question (MOTIR-5789; timing: MOTIR-
         latestAcceptanceGate: decided('ae_1', 'c0ffee1', 'changes_requested'),
       }),
     ).toBe(false);
+  });
+});
+
+describe('acceptanceRefusalHoldsMerge + resolveGateSet — MOTIR-6503: a story-run refusal HOLDS the merge', () => {
+  const RECEIPT = { id: 'ae_1', commitSha: 'c0ffee1' };
+  const refused = (verdict: string | null, subjectId = 'ae_1'): ExistingGate => ({
+    state: 'changes_requested',
+    subjectId,
+    subjectVersion: 'c0ffee1',
+    refusalVerdict: verdict,
+  });
+
+  for (const verdict of ['revise', 're_plan']) {
+    it(`${verdict} over the CURRENT receipt holds: a green set asks nothing — not the merge alone`, () => {
+      expect(acceptanceRefusalHoldsMerge(RECEIPT, refused(verdict))).toBe(true);
+      const set = resolveGateSet(
+        input({
+          currentReceipt: RECEIPT,
+          latestAcceptanceGate: refused(verdict),
+          members: GREEN_TWO,
+        }),
+      );
+      expect(set).toEqual({ awaited: [], primary: null });
+    });
+  }
+
+  it('the hold survives a push: a NEW set version with no new receipt still asks nothing', () => {
+    const set = resolveGateSet(
+      input({
+        currentReceipt: RECEIPT,
+        latestAcceptanceGate: refused('revise'),
+        members: [member('moooon/motir-core#10@fff9')],
+        // The withdrawn merge gate the refusal left behind.
+        latestMergeGate: {
+          ...decided(WORK_ITEM, 'moooon/motir-core#10@aaa1'),
+          state: 'superseded',
+        },
+      }),
+    );
+    expect(set.awaited).toEqual([]);
+  });
+
+  it('a NEWER receipt releases it: the acceptance and the merge are asked together, acceptance leading', () => {
+    const newer = { id: 'ae_2', commitSha: 'c0ffee2' };
+    expect(acceptanceRefusalHoldsMerge(newer, refused('revise'))).toBe(false);
+    const set = resolveGateSet(
+      input({ currentReceipt: newer, latestAcceptanceGate: refused('revise'), members: GREEN_ONE }),
+    );
+    expect(set.awaited.map((g) => g.kind)).toEqual(['acceptance_result', 'pull_request_approval']);
+    expect(set.primary).toBe('acceptance_result');
+  });
+
+  it('a VERDICT-LESS refusal (GitHub, or a finished story) holds nothing', () => {
+    expect(acceptanceRefusalHoldsMerge(RECEIPT, refused(null))).toBe(false);
+    expect(
+      acceptanceRefusalHoldsMerge(RECEIPT, { state: 'changes_requested', subjectId: 'ae_1' }),
+    ).toBe(false);
+    const set = resolveGateSet(
+      input({ currentReceipt: RECEIPT, latestAcceptanceGate: refused(null), members: GREEN_ONE }),
+    );
+    expect(set.awaited.map((g) => g.kind)).toEqual(['pull_request_approval']);
+  });
+
+  it('an approval, an awaiting question, or no receipt at all holds nothing', () => {
+    expect(acceptanceRefusalHoldsMerge(RECEIPT, { ...refused('revise'), state: 'approved' })).toBe(
+      false,
+    );
+    expect(acceptanceRefusalHoldsMerge(RECEIPT, { ...refused('revise'), state: 'awaiting' })).toBe(
+      false,
+    );
+    expect(acceptanceRefusalHoldsMerge(null, refused('revise'))).toBe(false);
+    expect(acceptanceRefusalHoldsMerge(RECEIPT, null)).toBe(false);
   });
 });

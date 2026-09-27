@@ -6,6 +6,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 import type { AcceptanceVideoEligibilityDTO } from '@/lib/dto/acceptanceVideoEligibility';
+import messages from '@/messages/en.json';
 
 // AcceptancePanel (Story MOTIR-1627 · Subtask MOTIR-1634) — the three eligibility
 // states + the gate action, rendered in happy-dom. The server actions + router
@@ -244,5 +245,89 @@ describe('AcceptancePanel', () => {
     });
     const upgrade = screen.getByRole('link', { name: /upgrade/i });
     expect(upgrade.getAttribute('href')).toBe('/settings/organization/billing');
+  });
+});
+
+// A FINISHED STORY SENT BACK (Story MOTIR-6071 · MOTIR-6506; design
+// `approval-control--acceptance-verdict.mock.html` panels 3b, 4c, 8b). This section renders
+// only a story with no open pull request of its own, so its decided refusal is a finished
+// story's: the record reads *Sent back for a remedy* and carries the remedy door. It never
+// presses, so it never asks, and it never repaints anything.
+describe('AcceptancePanel — a finished story sent back', () => {
+  const REASON = 'Scheduled exports send at UTC midnight, not the workspace time zone.';
+  const acc = messages.approvalGate.acceptanceResult;
+  const FULL_GATE = {
+    id: 'gate_1',
+    workItemId: 'wi_1',
+    kind: 'acceptance_result',
+    subjectId: 'ev_1',
+    state: 'changes_requested',
+    decidedById: 'u_2',
+    decidedAt: '2026-09-26T10:00:00.000Z',
+    noteMd: REASON,
+    supersededCause: null,
+    subjectVersion: 'a981c09abc',
+    decidedByLabel: 'Ada L.',
+    routedToId: 'u_1',
+    decidedUnderAuthority: null,
+    decisionSource: 'ui',
+    outcomeRef: null,
+    confirmedRecord: null,
+    refusalVerdict: null,
+    offersRefusalVerdict: false,
+    replanOwed: null,
+    chosenOption: null,
+    createdAt: '2026-09-19T10:00:00.000Z',
+    updatedAt: '2026-09-26T10:00:00.000Z',
+  } as ApprovalGateDTO;
+
+  const renderRefused = (gate: ApprovalGateDTO, canReplan = true) =>
+    renderPanel({
+      ...baseProps,
+      gate,
+      eligibility: eligibility({}),
+      initialEvidence: evidence({ status: 'changes_requested' }),
+      canDecide: true,
+      canReplan,
+    });
+
+  it('the record reads *Sent back for a remedy*, quotes the reason, and carries the REMEDY door', () => {
+    refresh.mockClear();
+    renderRefused(FULL_GATE);
+    expect(screen.getByTestId('refusal-verdict').textContent).toBe(
+      messages.approvalGate.reason.record.verdict.remedy,
+    );
+    expect(screen.getByText(`“${REASON}”`)).toBeTruthy();
+    const door = screen.getByTestId('refusal-replan-door');
+    expect(door.getAttribute('data-mode')).toBe('remedy');
+    expect(door.textContent).toBe(acc.remedyDoor.label);
+    expect(door.getAttribute('aria-label')).toBe(acc.remedyDoor.aria.replace('{item}', 'MOTIR-1'));
+    // Never the ask — that is the presser's, in the overlay — and nothing is repainted.
+    expect(screen.queryByTestId('refusal-replan-ask')).toBeNull();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('a reader who may not plan sees the record and no door', () => {
+    renderRefused(FULL_GATE, false);
+    expect(screen.getByTestId('refusal-verdict')).toBeTruthy();
+    expect(screen.queryByTestId('refusal-replan-door')).toBeNull();
+  });
+
+  it('a GitHub-decided acceptance record shows no chip, no ask and no door', () => {
+    renderRefused({ ...FULL_GATE, decisionSource: 'github', noteMd: null } as ApprovalGateDTO);
+    expect(screen.queryByTestId('refusal-verdict')).toBeNull();
+    expect(screen.queryByTestId('refusal-replan-ask')).toBeNull();
+    expect(screen.queryByTestId('refusal-replan-door')).toBeNull();
+  });
+
+  it('the call-to-action band speaks of the RECORDING, not a design', () => {
+    renderPanel({
+      ...baseProps,
+      eligibility: eligibility({}),
+      initialEvidence: evidence(),
+      canDecide: true,
+    });
+    expect(screen.getByText(acc.cta.body)).toBeTruthy();
+    expect(screen.queryByText(messages.approvalGate.cta.body)).toBeNull();
   });
 });
