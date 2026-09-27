@@ -3,11 +3,14 @@ import { isConflictedAtCurrentHead } from '@/lib/github/mergeability';
 import type { GithubCheckRun, GithubPullRequestQueueExit, Prisma } from '@/generated/prisma/client';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
+  AcceptanceRefusalDto,
   RepairPullRequestDto,
   WorkItemRepairClaimDto,
+  WorkItemRepairClass,
   WorkItemRepairRefusal,
   WorkItemRepairViewDto,
 } from '@/lib/dto/workItemRepair';
+import { readAcceptanceRerun } from '@/lib/approvalGates/acceptanceRefusal';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -41,6 +44,12 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // the run's open state is the lock. Nothing here writes the card's status or its
 // assignee; `ciPromotion` moves the card when the build goes green.
 //
+// ── An acceptance sent back with Re-run is a repair too (MOTIR-6502) ────────
+// A story run whose acceptance video was refused with **Re-run** has GREEN checks and
+// is admitted as the `acceptance_rerun` class (`acceptance-refusal-verdict.md` §4):
+// every open member is handed over with the reviewer's reason, and the class ends when
+// a newer receipt asks again (`lib/approvalGates/acceptanceRefusal.ts`).
+//
 // ── Why one transaction under the CARD's lock ───────────────────────────────
 // The lock read is "is an open `fix` run holding this card?", and it guards the
 // insert of exactly that run. Both claimants lock the card's row first, so the
@@ -63,12 +72,19 @@ function refused(
     runId: null,
     holder: null,
     startedAt: null,
+    repairClass: 'ci',
+    acceptanceRefusal: null,
     pullRequests: [],
   };
 }
 
 type Evaluation =
-  | { ok: true; pullRequests: RepairPullRequestDto[] }
+  | {
+      ok: true;
+      pullRequests: RepairPullRequestDto[];
+      repairClass: WorkItemRepairClass;
+      acceptanceRefusal: AcceptanceRefusalDto | null;
+    }
   | {
       ok: false;
       reason: WorkItemRepairRefusal;
@@ -132,6 +148,48 @@ function repairableOutcome(exit: { rawReason: string; disposition: string }): bo
   return landingClass === 'retryable' && exit.disposition === 'failure';
 }
 
+/** One open member as a repair hands it over — the claim's wire row. */
+function toRepairPullRequest(m: {
+  row: DeliveryWithChecks;
+  ci: ReturnType<typeof derivePrCiState>;
+  exit: GithubPullRequestQueueExit | null;
+  conflicted: boolean;
+}): RepairPullRequestDto {
+  const { row, ci, exit, conflicted } = m;
+  return {
+    conflicted,
+    repo: `${row.repo.owner}/${row.repo.name}`,
+    number: row.pullRequest.number,
+    url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.pullRequest.number}`,
+    headRef: row.pullRequest.headRef,
+    baseRef: row.pullRequest.baseRef,
+    ci,
+    // The names behind the verdict, from the SAME window `derivePrCiState`
+    // judged — so a give-up can say which check is still red.
+    failingChecks: [
+      ...new Set(
+        liveRowsAtLatestSha(row.pullRequest.checkRuns)
+          .filter((c) => c.conclusion === 'failure')
+          .map((c) => c.checkName),
+      ),
+    ].sort(),
+    queueExit:
+      exit === null
+        ? null
+        : {
+            rawReason: exit.rawReason,
+            exitedAt: exit.exitedAt.toISOString(),
+            headSha: exit.headSha,
+            failingCheckName: exit.failingCheckName,
+            failingCheckUrl: exit.failingCheckUrl,
+          },
+  };
+}
+
+type DeliveryWithChecks = Awaited<
+  ReturnType<typeof workItemDeliveryRepository.listByWorkItemWithChecks>
+>[number];
+
 /**
  * THE PREDICATE — whether a card can be repaired, and with what. ONE function,
  * read by the claim (under its row lock) and by the Development block (without
@@ -178,6 +236,37 @@ async function evaluate(
     new Map(openRows.map((d) => [d.pullRequest.id, d.pullRequest])),
     tx,
   );
+  // ⚠️ AN ACCEPTANCE SENT BACK WITH RE-RUN IS A REPAIR CLASS OF ITS OWN (MOTIR-6502;
+  // `acceptance-refusal-verdict.md` §4). The story's checks are usually GREEN — the
+  // reviewer watched the video and asked for a fix to what was built — so it is checked
+  // BEFORE the red-work arms below, which would refuse it `not_failing`. It hands over
+  // EVERY open member, green ones included, because the fix is to the code the reviewer
+  // saw, and it carries the reason. It holds at either rung until a newer receipt asks
+  // again (`readAcceptanceRerun`), and only on the story's OWN run target: a child that
+  // shares the pull requests is pointed at the story below, as for any repair.
+  const rerun = openRows.length > 0 ? await readAcceptanceRerun(item.id, tx) : null;
+  if (rerun !== null) {
+    const target = await resolveRunTargetFor({ id: item.id, workspaceId: ctx.workspaceId }, tx);
+    if (target.kind !== 'ancestor') {
+      return {
+        ok: true,
+        repairClass: 'acceptance_rerun',
+        acceptanceRefusal: {
+          reasonMd: rerun.reasonMd,
+          decidedByLabel: rerun.decidedByLabel,
+          decidedAt: rerun.decidedAt.toISOString(),
+        },
+        pullRequests: openRows.map((row) =>
+          toRepairPullRequest({
+            row,
+            ci: derivePrCiState(row.pullRequest.checkRuns),
+            exit: queueHeld.get(row.pullRequest.id) ?? null,
+            conflicted: isConflictedAtCurrentHead(row.pullRequest),
+          }),
+        ),
+      };
+    }
+  }
   // In Review: the ONLY admission is a standing outcome at a member's current head whose
   // reason a CODE CHANGE could answer. The read is of EVERY disposition, not just the
   // failures `standingQueueFailures` holds the promotion on, because the two refusals
@@ -210,34 +299,7 @@ async function evaluate(
   }));
   const failing: RepairPullRequestDto[] = open
     .filter((m) => m.ci === 'failing' || m.exit !== null || m.conflicted)
-    .map(({ row, ci, exit, conflicted }) => ({
-      conflicted,
-      repo: `${row.repo.owner}/${row.repo.name}`,
-      number: row.pullRequest.number,
-      url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.pullRequest.number}`,
-      headRef: row.pullRequest.headRef,
-      baseRef: row.pullRequest.baseRef,
-      ci,
-      // The names behind the verdict, from the SAME window `derivePrCiState`
-      // judged — so a give-up can say which check is still red.
-      failingChecks: [
-        ...new Set(
-          liveRowsAtLatestSha(row.pullRequest.checkRuns)
-            .filter((c) => c.conclusion === 'failure')
-            .map((c) => c.checkName),
-        ),
-      ].sort(),
-      queueExit:
-        exit === null
-          ? null
-          : {
-              rawReason: exit.rawReason,
-              exitedAt: exit.exitedAt.toISOString(),
-              headSha: exit.headSha,
-              failingCheckName: exit.failingCheckName,
-              failingCheckUrl: exit.failingCheckUrl,
-            },
-    }));
+    .map(toRepairPullRequest);
 
   // The repair runs where the run that delivered the pull requests was launched.
   // The resolution is `runTarget.ts`'s, shared with How to test and the
@@ -262,7 +324,7 @@ async function evaluate(
       failing,
     };
   }
-  return { ok: true, pullRequests: failing };
+  return { ok: true, repairClass: 'ci', acceptanceRefusal: null, pullRequests: failing };
 }
 
 /** The `attempts` a `ci_gave_up` event carries, or null when it carries none. */
@@ -333,6 +395,7 @@ export const workItemRepairService = {
         );
         if (!verdict.ok) return refused(item, verdict.reason, verdict.runTargetKey);
         const pullRequests = verdict.pullRequests;
+        const { repairClass, acceptanceRefusal } = verdict;
 
         const held = await dispatchRunRepository.findRunningByCommandForWorkItem(
           item.id,
@@ -350,7 +413,9 @@ export const workItemRepairService = {
             runId: held.id,
             holder: held.createdBy,
             startedAt: held.startedAt.toISOString(),
-            // The holder is handed the branches again; a rival is handed nothing.
+            repairClass,
+            // The holder is handed the reason and the branches again; a rival nothing.
+            acceptanceRefusal: mine ? acceptanceRefusal : null,
             pullRequests: mine ? pullRequests : [],
           };
         }
@@ -379,6 +444,8 @@ export const workItemRepairService = {
           runId: opened.id,
           holder: opened.createdBy,
           startedAt: opened.startedAt.toISOString(),
+          repairClass,
+          acceptanceRefusal,
           pullRequests,
         };
       },
@@ -418,6 +485,7 @@ export const workItemRepairService = {
             : { state: 'hidden' };
         }
         const failing = verdict.pullRequests.map(refOf);
+        const { repairClass, acceptanceRefusal } = verdict;
 
         const latest = await dispatchRunRepository.findLatestByCommandForWorkItem(
           item.id,
@@ -427,6 +495,8 @@ export const workItemRepairService = {
         if (latest?.status === 'running') {
           return {
             state: 'in_progress',
+            repairClass,
+            acceptanceRefusal,
             failing,
             holder: latest.createdBy,
             byViewer: latest.createdById === ctx.userId,
@@ -443,6 +513,8 @@ export const workItemRepairService = {
           );
           return {
             state: 'offer',
+            repairClass,
+            acceptanceRefusal,
             failing,
             lastGaveUp: {
               attempts: attemptsOf(event?.data ?? null),
@@ -450,7 +522,7 @@ export const workItemRepairService = {
             },
           };
         }
-        return { state: 'offer', failing, lastGaveUp: null };
+        return { state: 'offer', repairClass, acceptanceRefusal, failing, lastGaveUp: null };
       },
     );
   },

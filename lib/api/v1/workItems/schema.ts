@@ -1621,9 +1621,14 @@ export const approvalGateDecisionSchema = z.object({
   supersededCause: z.enum(APPROVAL_GATE_SUPERSEDE_CAUSE_VALUES).nullable(),
   /** WHAT it caused — a merge commit sha, a status key, a chosen option's id. */
   outcomeRef: z.string().nullable(),
-  /** WHAT A DESIGN REFUSAL MEANT — `revise` or `re_plan` — on a `design_result` gate sent
-   *  back from Motir (MOTIR-6421). Null on every other kind, verb and source. */
+  /** WHAT A REFUSAL MEANT — `revise` or `re_plan` — on a `design_result` gate, or a story
+   *  run's `acceptance_result` gate, sent back from Motir (MOTIR-6421, MOTIR-6501). Null on
+   *  every other kind, run shape, verb and source. */
   refusalVerdict: z.enum(APPROVAL_GATE_REFUSAL_VERDICT_VALUES).nullable(),
+  /** WHETHER A REFUSAL OF THIS GATE ASKS FOR A VERDICT (MOTIR-6501) — true exactly where a
+   *  Motir `request_changes` must carry one: a `design_result`, or an `acceptance_result`
+   *  whose story has an open delivery of its own. False once the gate is decided. */
+  offersRefusalVerdict: z.boolean(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });
@@ -1672,6 +1677,7 @@ function presentApprovalGateDecision(gate: ApprovalGateDecisionDTO): V1ApprovalG
     supersededCause: gate.supersededCause,
     outcomeRef: gate.outcomeRef,
     refusalVerdict: gate.refusalVerdict,
+    offersRefusalVerdict: gate.offersRefusalVerdict,
     createdAt: gate.createdAt,
     updatedAt: gate.updatedAt,
   };

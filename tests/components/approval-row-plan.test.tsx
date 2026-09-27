@@ -126,6 +126,7 @@ function gateDto(id: string, state: ApprovalGateDTO['state']): ApprovalGateDTO {
     chosenOption: null,
     confirmedRecord: null,
     refusalVerdict: null,
+    offersRefusalVerdict: false,
     replanOwed: null,
     createdAt: '2026-09-23T00:00:00.000Z',
     updatedAt: '2026-09-23T00:00:00.000Z',

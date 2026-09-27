@@ -351,7 +351,6 @@ describe('startSeededWithFirstTurn — the seed guard refuses, and writes nothin
   it.each([
     ['design_result', 'changes_requested'],
     ['pull_request_approval', 'changes_requested'],
-    ['acceptance_result', 'changes_requested'],
   ] as const)('a refused gate of another kind (%s in %s)', async (kind, state) => {
     await expectRefused(await gate(card, kind, state));
   });

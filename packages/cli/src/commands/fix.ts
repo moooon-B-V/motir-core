@@ -1,11 +1,14 @@
 import { existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import type { AgentRunResult } from '../agentRun.js';
+import { runAgent as defaultRunAgent, type AgentRunResult } from '../agentRun.js';
 import type { ParsedAgentCommand } from '../agentProfiles.js';
 import {
   pluralize,
   queueReasonInWords,
+  renderAcceptanceRecordPrompt,
+  renderAcceptanceRerunPrompt,
   runCiWatchPhase,
+  type AcceptanceRerunInput,
   type CiWatchOutcome,
   type FixCheckout,
 } from '../ciWatch.js';
@@ -45,6 +48,15 @@ import { CI_WATCH_EVENT, CI_WATCH_STOP_REASON } from './dispatch.js';
 // is — and would refuse every later `motir fix` as `taken`. So the close is
 // idempotent and is reached from the refusal of a checkout, from green, from a
 // give-up, from a thrown error, and from Ctrl-C.
+//
+// ── An ACCEPTANCE RE-RUN is a repair too (MOTIR-6502) ─────────────────────────
+// A story whose acceptance video was sent back with **Re-run** is claimed as an
+// `acceptance_rerun`: its checks are usually green, and the claim hands over every
+// open member with the reviewer's reason. Before the CI loop, the agent runs ONCE on
+// the re-run prompt (the reason, the scope, push to the same branches); the loop then
+// runs unchanged; and once it is green, a CLOSING turn re-records and publishes the
+// acceptance video, which asks the question again (`acceptance-refusal-verdict.md` §4).
+// The `ci` class is byte for byte what it was.
 //
 // ── What it never does ────────────────────────────────────────────────────────
 // It writes no status (the build moves the card, through `ciPromotion`), opens
@@ -325,6 +337,39 @@ async function repair(input: {
       data: { checkouts: prepared.checkouts },
     });
 
+    const runAgentFn = deps.runAgentFn ?? defaultRunAgent;
+    const rerun: AcceptanceRerunInput | null =
+      claim.repairClass === 'acceptance_rerun' && claim.acceptanceRefusal !== null
+        ? {
+            key,
+            title: claim.title,
+            refusal: claim.acceptanceRefusal,
+            pullRequests: claim.pullRequests,
+            checkouts: prepared.checkouts,
+          }
+        : null;
+
+    // THE RE-RUN TURN — the reviewer's reason, once, before the CI loop. A failed agent
+    // is a stop: nothing was pushed, so there is nothing for CI to judge.
+    if (rerun) {
+      info(`${key}: answering the acceptance review sent back with Re-run.`);
+      const ran = await runAgentStep(runAgentFn, {
+        reporter,
+        key,
+        step: 'acceptance_rerun',
+        command: agent.parsed,
+        prompt: renderAcceptanceRerunPrompt(rerun),
+        cwd: prepared.checkouts[0]!.path,
+      });
+      if (!ran.ok) {
+        info(`${key}: the re-run agent failed — ${ran.detail}. Nothing was pushed by this step.`);
+        reporter.event({ kind: 'card_settled', workItemKey: key, disposition: 'failed' });
+        process.exitCode = 1;
+        await close('halted');
+        return;
+      }
+    }
+
     const watch = await runCiWatchPhase({
       client,
       key,
@@ -353,6 +398,29 @@ async function repair(input: {
       info(renderRepairGaveUp({ key, watch, pullRequests }));
       reporter.event({ kind: 'card_settled', workItemKey: key, disposition: 'failed' });
       process.exitCode = 1;
+    } else if (rerun) {
+      // THE CLOSING TURN — CI is green on the fixed work, so the recording is re-made
+      // and published now, and the fresh receipt asks the reviewer again.
+      info(`${key}: re-recording the acceptance video.`);
+      const recorded = await runAgentStep(runAgentFn, {
+        reporter,
+        key,
+        step: 'acceptance_record',
+        command: agent.parsed,
+        prompt: renderAcceptanceRecordPrompt(rerun),
+        cwd: prepared.checkouts[0]!.path,
+      });
+      if (!recorded.ok) {
+        info(
+          `${key}: CI is green, but re-recording the acceptance video failed — ` +
+            `${recorded.detail}. Record and publish it, or run \`motir fix ${key}\` again.`,
+        );
+        reporter.event({ kind: 'card_settled', workItemKey: key, disposition: 'failed' });
+        process.exitCode = 1;
+        await close('halted');
+        return;
+      }
+      reporter.event({ kind: 'card_settled', workItemKey: key, disposition: 'implemented' });
     } else {
       reporter.event({ kind: 'card_settled', workItemKey: key, disposition: 'implemented' });
     }
@@ -363,4 +431,35 @@ async function repair(input: {
   } finally {
     detach();
   }
+}
+
+/** One agent turn outside the CI loop (the re-run and its closing record), reported
+ *  into the run as a started / exited pair. */
+async function runAgentStep(
+  runAgentFn: NonNullable<FixDeps['runAgentFn']>,
+  input: {
+    reporter: ReturnType<typeof createDispatchRunReporter>;
+    key: string;
+    step: 'acceptance_rerun' | 'acceptance_record';
+    command: ParsedAgentCommand;
+    prompt: string;
+    cwd: string;
+  },
+): Promise<{ ok: true } | { ok: false; detail: string }> {
+  input.reporter.event({
+    kind: 'agent_started',
+    workItemKey: input.key,
+    data: { step: input.step },
+  });
+  const result = await runAgentFn({ command: input.command, prompt: input.prompt, cwd: input.cwd });
+  input.reporter.event({
+    kind: 'agent_exited',
+    workItemKey: input.key,
+    data: { step: input.step, exitCode: result.exitCode, signal: result.signal ?? null },
+  });
+  if (result.exitCode === 0) return { ok: true };
+  return {
+    ok: false,
+    detail: result.signal ? `killed by ${result.signal}` : `exit ${result.exitCode}`,
+  };
 }

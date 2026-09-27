@@ -556,9 +556,10 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
     // whose merge did not land for a reason THE CODE could answer (MOTIR-5803: a
     // conflict waits at Implemented, a failed check at In Review; a setting or a
     // hand removal is refused). It sits beside `run` — the same work loop's repair.
+    // MOTIR-6502 adds a story whose acceptance video was sent back with Re-run.
     signature: '<key>',
     description:
-      'Hand a work item whose pull requests are failing, or whose merge could not land because of its code, to your agent, on their own branches.',
+      'Hand a work item whose pull requests are failing, whose merge could not land because of its code, or whose acceptance video was sent back to re-run, to your agent, on their own branches.',
     helpGroup: HELP_GROUP.workLoop,
     options: [
       {

@@ -51,6 +51,29 @@ export type WorkItemRepairRefusal =
   | 'not_failing'
   | 'repair_not_code';
 
+/**
+ * WHICH KIND OF REPAIR a claim hands over (Story MOTIR-6071 · MOTIR-6502;
+ * `acceptance-refusal-verdict.md` §4).
+ *
+ * - `ci` — the shipped classes: red checks, a standing merge-queue failure, a conflict.
+ *   The agent makes the build pass.
+ * - `acceptance_rerun` — the story's acceptance video was sent back with **Re-run**
+ *   (`revise`), pressed in Motir, and the refusal still stands over the current receipt.
+ *   The checks are usually GREEN: the fix is to what the reviewer SAW, so every open
+ *   member is handed over, and the agent is told the reason.
+ */
+export type WorkItemRepairClass = 'ci' | 'acceptance_rerun';
+
+/** The refusal an `acceptance_rerun` repair answers — what the reviewer said. */
+export interface AcceptanceRefusalDto {
+  /** The reason, verbatim. */
+  reasonMd: string | null;
+  /** Who sent it back, as recorded at the decision. */
+  decidedByLabel: string | null;
+  /** ISO-8601. */
+  decidedAt: string;
+}
+
 /** One failing pull request the fixing agent is handed. */
 export interface RepairPullRequestDto {
   /** `owner/name`. */
@@ -110,8 +133,14 @@ export interface WorkItemRepairClaimDto {
   holder: ClaimActorDto | null;
   /** When that run started, ISO-8601 — set on `claimed`, `mine` and `taken`. */
   startedAt: string | null;
+  /** Which kind of repair this is (MOTIR-6502). `ci` on every refusal. */
+  repairClass: WorkItemRepairClass;
+  /** The acceptance refusal an `acceptance_rerun` answers — set exactly on that class
+   *  with `claimed` / `mine`, null otherwise. */
+  acceptanceRefusal: AcceptanceRefusalDto | null;
   /** The failing OPEN pull requests — non-empty on `claimed` and `mine`, empty
-   *  otherwise, so a refused caller is handed nothing to act on. */
+   *  otherwise, so a refused caller is handed nothing to act on. On an
+   *  `acceptance_rerun` it is EVERY open member, green ones included. */
   pullRequests: RepairPullRequestDto[];
 }
 
@@ -151,6 +180,10 @@ export type WorkItemRepairViewDto =
   | { state: 'hidden' }
   | {
       state: 'offer';
+      /** `acceptance_rerun`: the pull requests are the story's open delivery, not red
+       *  ones, and the part names the refusal instead of failing checks (MOTIR-6502). */
+      repairClass: WorkItemRepairClass;
+      acceptanceRefusal: AcceptanceRefusalDto | null;
       failing: RepairPullRequestRefDto[];
       /** The latest `fix` run ended `failed`: when, and after how many attempts
        *  (null when the run reported no count — a give-up older than the event). */
@@ -158,6 +191,8 @@ export type WorkItemRepairViewDto =
     }
   | {
       state: 'in_progress';
+      repairClass: WorkItemRepairClass;
+      acceptanceRefusal: AcceptanceRefusalDto | null;
       failing: RepairPullRequestRefDto[];
       holder: ClaimActorDto | null;
       /** The viewer started it — the copy says *you*. */
