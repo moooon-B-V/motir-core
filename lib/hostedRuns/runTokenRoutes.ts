@@ -169,6 +169,16 @@ export const RUN_TOKEN_ROUTES: readonly RunTokenRoute[] = [
     calledBy: 'cli',
   },
   {
+    // A hosted run's own liveness is its server supervision, not a beat
+    // (`run-death-keeps-work.md` §2) — but the reporter beats whatever run it
+    // holds, adopted or opened, with no branch for hosted (MOTIR-6528 · MOTIR-6558).
+    operationId: 'heartbeatDispatchRun',
+    method: 'POST',
+    path: '/api/v1/dispatch-runs/{id}/heartbeat',
+    binding: 'own_run',
+    calledBy: 'cli',
+  },
+  {
     operationId: 'issueDispatchRunGitCredentials',
     method: 'POST',
     path: '/api/v1/dispatch-runs/{id}/git-credential',

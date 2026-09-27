@@ -70,6 +70,7 @@ describe('client.getDispatchRun — the run a hosted CLI adopts', () => {
           scopeLabel: 'PROD-1',
           status: 'running',
           stopReason: null,
+          lastHeartbeatAt: null,
           agent: 'opencode',
           model: 'claude-opus-5-5',
           startedAt: '2026-09-27T00:00:00.000Z',

@@ -440,3 +440,49 @@ export function markSessionPrReady(
   }
   return { ok: true, changed: true };
 }
+
+export type MergeBaseOutcome = 'up_to_date' | 'merged' | 'conflict';
+
+/**
+ * Merge `origin/<base>` INTO a session branch that already exists on origin, and
+ * push the result (MOTIR-6535) — the first thing a RESUMED parent run does, so the
+ * children it still has to build start from what landed on the base while its
+ * dead predecessor was stopped.
+ *
+ * Done in a THROWAWAY detached worktree, so nothing in the person's own checkout
+ * is touched. A conflict is ABORTED and reported, never resolved here — the branch
+ * is left exactly as it was, and the children's own lineage prompts merge the base
+ * themselves.
+ */
+export function mergeBaseIntoRemoteBranch(
+  cwd: string,
+  branch: string,
+  run: CommandRunner = execCommand,
+  base = 'main',
+): MergeBaseOutcome {
+  const contained = run(
+    'git',
+    ['merge-base', '--is-ancestor', `origin/${base}`, `origin/${branch}`],
+    cwd,
+  );
+  if (contained.exitCode === 0) return 'up_to_date';
+  const tmp = `${cwd}.motir-merge-${branch.replace(/[^A-Za-z0-9._-]/g, '-')}`;
+  requireOk(
+    run('git', ['worktree', 'add', '--detach', tmp, `origin/${branch}`], cwd),
+    `checking ${branch} out to merge ${base}`,
+  );
+  try {
+    const merged = run('git', ['merge', '--no-edit', `origin/${base}`], tmp);
+    if (merged.exitCode !== 0) {
+      run('git', ['merge', '--abort'], tmp);
+      return 'conflict';
+    }
+    requireOk(
+      run('git', ['push', 'origin', `HEAD:refs/heads/${branch}`], tmp),
+      `pushing ${branch}`,
+    );
+    return 'merged';
+  } finally {
+    run('git', ['worktree', 'remove', '--force', tmp], cwd);
+  }
+}

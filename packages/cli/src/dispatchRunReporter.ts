@@ -57,10 +57,25 @@ export const REPORTER_OFFLINE_WARNING =
   'motir: run reporting is unavailable — this run will not appear in Motir. ' +
   'The run itself is unaffected.';
 
+/**
+ * How often an open run tells the server it is alive (MOTIR-6530).
+ *
+ * The SERVER's number, restated: `RUN_HEARTBEAT_INTERVAL_MS` in
+ * `lib/runs/runLiveness.ts`, which reads a local run as DEAD after five missed
+ * beats. The CLI cannot import the server's module, so
+ * `tests/cli/runHeartbeatInterval.test.ts` pins the two to each other.
+ */
+export const RUN_HEARTBEAT_INTERVAL_MS = 60_000;
+
+/** The one line printed when the server has closed the run under us. */
+export const REPORTER_RUN_CLOSED_WARNING =
+  'motir: Motir closed this run — it heard nothing from it for five minutes. ' +
+  'The work on this machine continues; it is no longer reported.';
+
 /** What a command hands the reporter when it opens a run. */
 export interface OpenDispatchRunInput {
   projectKey: string;
-  command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto' | 'fix';
+  command: 'next' | 'run' | 'run_scope' | 'batch' | 'auto' | 'fix' | 'continue';
   /** `runIdFromDate`'s id — carried, never re-minted. */
   runId: string;
   /**
@@ -92,7 +107,8 @@ export interface DispatchRunReporter {
   event(event: DispatchRunEventInput): void;
   /** Send whatever is queued. Never throws. */
   flush(): Promise<void>;
-  /** Flush, then close the run with its stop reason. Never throws. */
+  /** Flush, then close the run with its stop reason, and stop the heartbeat. Never
+   *  throws; a second call is a no-op. */
   close(stopReason: DispatchStopReason): Promise<void>;
   /** True once a failure has taken reporting down for this session. */
   readonly offline: boolean;
@@ -113,7 +129,12 @@ export interface DispatchRunReporter {
 }
 
 export interface DispatchRunReporterDeps {
-  client: Pick<MotirClient, 'openDispatchRun' | 'appendDispatchRunEvents' | 'closeDispatchRun'>;
+  /**
+   * `heartbeatDispatchRun` is OPTIONAL so a test fake that predates the heartbeat
+   * still type-checks; production always passes the real client, which has it.
+   */
+  client: Pick<MotirClient, 'openDispatchRun' | 'appendDispatchRunEvents' | 'closeDispatchRun'> &
+    Partial<Pick<MotirClient, 'heartbeatDispatchRun'>>;
   /** Where the single offline warning goes. `console.error` in production. */
   warn?: (message: string) => void;
   /**
@@ -156,8 +177,56 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
   /** The open call's own arguments, kept so `addCard` can re-issue it. */
   let opened: OpenDispatchRunInput | null = null;
   let offline = false;
+  /** Set by the first `close`; every later one is a no-op (an interrupt and the
+   *  command's own close can both reach it). */
+  let closed = false;
   /** Serialises flushes, so two callers cannot interleave a batch's order. */
   let inFlight: Promise<void> = Promise.resolve();
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+
+  function stopHeartbeat(): void {
+    if (heartbeat !== null) clearInterval(heartbeat);
+    heartbeat = null;
+  }
+
+  /**
+   * THE HEARTBEAT (Story MOTIR-6526 · MOTIR-6530) — while this reporter holds an
+   * open run, tell the server every {@link RUN_HEARTBEAT_INTERVAL_MS} that the run
+   * is alive. The reporter owns the run's lifetime, so it owns the heartbeat: no
+   * command has to remember to send one.
+   *
+   * ⚠️ A FAILED BEAT DOES NOT TAKE THE REPORTER OFFLINE, and that is a deliberate
+   * departure from the rule every other call here follows. Offline is for the
+   * session; one lost beat is a blip the next beat repairs. Going offline on it
+   * would stop every later beat, and the server would then read a run that is
+   * working as DEAD and offer it to somebody else to continue — the one outcome
+   * this timer exists to prevent. So a failure is swallowed and the next tick
+   * tries again. Only `closed` (the server has already closed the run) stops it.
+   *
+   * `unref`: the timer must never be the thing that keeps a finished process
+   * alive.
+   */
+  function startHeartbeat(id: string): void {
+    const client = deps.client;
+    if (client.heartbeatDispatchRun === undefined || heartbeat !== null) return;
+    heartbeat = setInterval(() => {
+      // Called directly (not through a hoisted, pre-bound local): the run-token
+      // route table's CLI scan (`tests/hostedRuns/runTokenRouteTable.test.ts`)
+      // finds a call by the literal text `client.<operation>(`, on any run path
+      // this reporter serves — local and hosted alike (MOTIR-6558).
+      if (client.heartbeatDispatchRun === undefined) return;
+      void client.heartbeatDispatchRun(id).then(
+        (answer) => {
+          if (answer === 'closed' && heartbeat !== null) {
+            stopHeartbeat();
+            warn(REPORTER_RUN_CLOSED_WARNING);
+          }
+        },
+        () => undefined,
+      );
+    }, RUN_HEARTBEAT_INTERVAL_MS);
+    heartbeat.unref?.();
+  }
 
   /** Take the reporter down for the rest of the session, once, with one line. */
   function goOffline(): void {
@@ -217,11 +286,13 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
         runId = result.runId;
         opened = input;
       });
+      if (runId !== null) startHeartbeat(runId);
     },
 
     adopt(id) {
       if (runId !== null) return;
       runId = id;
+      startHeartbeat(id);
     },
 
     async addCard(card) {
@@ -279,7 +350,9 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
 
     async close(stopReason) {
       const id = runId;
-      if (id === null) return;
+      if (id === null || closed) return;
+      closed = true;
+      stopHeartbeat();
       await this.flush();
       await attempt(() => deps.client.closeDispatchRun({ runId: id, stopReason }));
     },

@@ -672,7 +672,41 @@
  *   MOTIR-6581's `1.44.0` (it claimed `1.42.0`, then `1.44.0`, as siblings landed
  *   first). If a sibling has taken it since, RENUMBER this entry — it names the FIELD.
  *
- * - `1.46.0` — MOTIR-6558 adds `getDispatchRun` (`GET /api/v1/dispatch-runs/{id}`):
+ * - `1.46.0` — MOTIR-6528 adds `heartbeatDispatchRun`:
+ *   `POST /api/v1/dispatch-runs/{id}/heartbeat`, no body, `204` — a LOCAL run says
+ *   it is still alive (`docs/decisions/run-death-keeps-work.md` §2). And one field on
+ *   the `DispatchRun` component: `lastHeartbeatAt` (nullable), when the run last did.
+ *   `DISPATCH_RUN_TERMINAL` (409) answers a heartbeat on a closed run;
+ *   `DISPATCH_RUN_NOT_FOUND` (404) an unknown, cross-tenant or another operator's run.
+ *   MOTIR-6530 adds one field to the `DispatchPrompt` component, `branch`
+ *   (nullable): the branch the prompt tells the agent to work on — the session
+ *   branch, else the card's per-item branch — which a local run records on its
+ *   leg's `checkout_ready` event.
+ *   MOTIR-6532 adds `claimWorkItemContinue`: `POST /api/v1/work-items/{key}/continue`
+ *   — the CONTINUE claim `motir continue <key>` makes on a work item whose last run
+ *   died (`WorkItemContinueClaim` component; a refusal is a 200 with an `outcome`),
+ *   and `continue` as a member of the `DispatchCommand` vocabulary.
+ *   MOTIR-6531 adds one optional query parameter to `getWorkItemDispatchPrompt`,
+ *   `continueFrom` (a dead run's id): the prompt then CONTINUES that run on its
+ *   branch; an invalid one is `CONTINUE_FROM_INVALID` (422). Every git workflow
+ *   also gains a checkpoint instruction (push after each commit) — prompt TEXT,
+ *   not contract.
+ *   MOTIR-6535 / MOTIR-6537: `WorkItemContinueClaim` also carries `resumedKeys`
+ *   (the dead parent run's in-flight legs, now the caller's), and `claimScope`'s
+ *   `work_item` body takes an optional `exceptLanded` (leave children already at
+ *   Implemented or later out of the claim instead of refusing on them) — both for
+ *   `motir continue <PARENT>`; a body without the flag claims exactly as before.
+ *
+ *   Additive: a NEW operation and NEW nullable fields (§8's allowed list); no
+ *   existing field changes meaning. Gated on `work_item:edit`, a key
+ *   `CLI_TOKEN_GRANT` already carries, so the grant is NOT widened.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.45.0` at `f9f970569`, so this claims `1.46.0` (renumbered from `1.42.0`
+ *   and then `1.44.0`, which MOTIR-6501/6502 and MOTIR-6581/6547 took first). If a sibling has taken
+ *   it since, RENUMBER this entry — it names the OPERATION.
+ *
+ * - `1.47.0` — MOTIR-6558 adds `getDispatchRun` (`GET /api/v1/dispatch-runs/{id}`):
  *   one run with its SET, the same `DispatchRun` component the ingest operations
  *   already answer with. A hosted run is opened by the SERVER, and the `motir`
  *   CLI in its container ADOPTS it (`hosted-run-runs-the-cli-as-the-app.md` §3) —
@@ -683,10 +717,12 @@
  *   list); nothing existing changes.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.45.0` on `origin/main` when this was merged (MOTIR-6501, MOTIR-6502, MOTIR-6581 and MOTIR-6547 took `1.42.0`–`1.45.0`), so this claims `1.46.0`. If a sibling has taken
- *   it since, RENUMBER this entry — it names the OPERATION.
+ *   was `1.46.0` on `origin/main` when this was merged (MOTIR-6528, MOTIR-6530,
+ *   MOTIR-6532, MOTIR-6531 and MOTIR-6535/6537 took `1.46.0` together), so this
+ *   claims `1.47.0`. If a sibling has taken it since, RENUMBER this entry — it
+ *   names the OPERATION.
  *
- * - `1.47.0` — MOTIR-6538 adds `issueDispatchRunGitCredentials`:
+ * - `1.48.0` — MOTIR-6538 adds `issueDispatchRunGitCredentials`:
  *   `POST /api/v1/dispatch-runs/{id}/git-credential`, a running HOSTED run's git
  *   credentials — one entry per repository of the run, each an installation token
  *   of the Motir GitHub App that writes it, with the App's bot as author and the
@@ -699,10 +735,10 @@
  *   included), so no person's grant is widened by it.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.46.0` after MOTIR-6558, so this claims `1.47.0`. If a sibling has taken
+ *   was `1.47.0` after MOTIR-6558, so this claims `1.48.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
  *
- * - `1.48.0` — MOTIR-6539 adds `workBranch` (nullable) to the `DispatchPrompt`
+ * - `1.49.0` — MOTIR-6539 adds `workBranch` (nullable) to the `DispatchPrompt`
  *   component `getWorkItemDispatchPrompt` answers: the branch the prompt tells the
  *   agent to CREATE for its work — the same name in every repository the item
  *   ships in — or `null` for a manual item. A runner names it on `checkout_ready`
@@ -713,7 +749,7 @@
  *   nothing existing changes meaning, and `sessionBranch` still names the lineage.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.47.0` after MOTIR-6538, so this claims `1.48.0`. If a sibling has taken
+ *   was `1.48.0` after MOTIR-6538, so this claims `1.49.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.48.0';
+export const V1_CONTRACT_VERSION = '1.49.0';

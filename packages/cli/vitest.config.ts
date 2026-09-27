@@ -118,6 +118,11 @@ export default defineConfig({
         // which leaves only the second-Ctrl-C `process.exit(130)` uncovered —
         // one line, and the file clears 90% branches without it.
         'src/commands/scopeDrain.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-6526 · MOTIR-6537 — `motir continue` and the interrupt that
+        // closes a run `interrupted`. Measured first: continue.ts 100 / 93.5 br,
+        // interrupt.ts 100.
+        'src/commands/continue.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/interrupt.ts': { branches: 90, functions: 90, lines: 90 },
 
         // These two gate on FUNCTIONS + LINES only (both are at 100% / ~98%):
         // each carries DEFENSIVE branches that are unreachable under shipped

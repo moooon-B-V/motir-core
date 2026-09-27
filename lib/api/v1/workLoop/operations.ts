@@ -16,6 +16,7 @@ import {
   planTurnBodySchema,
   workItemClaimSchema,
   workItemRepairClaimSchema,
+  workItemContinueClaimSchema,
   scopeClaimBodySchema,
   scopeClaimSchema,
   ACTIVITY_VIEWS,
@@ -103,6 +104,20 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
           'approving a plan the agent was told not to submit is not a lane.',
         schema: z.string(),
       },
+      {
+        name: 'continueFrom',
+        in: 'query',
+        required: false,
+        description:
+          'The id of a DEAD run of this item to CONTINUE (MOTIR-6531, `motir continue`). The ' +
+          'prompt then carries a CONTINUE block — how that run ended, when it was last heard ' +
+          'from, who ran it, its branch and its open pull request — and a git workflow that ' +
+          'CHECKS THAT BRANCH OUT instead of cutting one. The branch is the item\u2019s open ' +
+          'pull request\u2019s head, else the one the run recorded on `checkout_ready`. A run ' +
+          'that is still open, that succeeded, that holds no leg for this item or that belongs ' +
+          'to another workspace is `CONTINUE_FROM_INVALID` (422).',
+        schema: z.string(),
+      },
     ],
     response: {
       status: 200,
@@ -149,6 +164,49 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     },
     // 404 for an unknown or cross-workspace key (no existence leak); 422 for a
     // malformed key. A LOST claim is not an error status \u2014 see `outcome`.
+    errorStatuses: [404, 422],
+  }),
+
+  // ── The CONTINUE claim (Story MOTIR-6526 · MOTIR-6532) ──────────────────
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/continue',
+    operationId: 'claimWorkItemContinue',
+    summary: 'Claim the continue of a work item whose last run died',
+    description:
+      'Take over a work item whose last run DIED (`motir continue <key>`), for any member who ' +
+      'may edit the project, and hand back what the continuing agent needs: the dead run, the ' +
+      'branch its work is on, and its open pull request. In ONE transaction the item\u2019s row ' +
+      'is locked and, in order: an open dispatch run with command `continue` already holding ' +
+      'the item answers `mine` (yours \u2014 same `runId`, the branch again) or `taken` (named, ' +
+      'with its start); a run that is still ALIVE (a local run that heartbeat within 5 minutes, ' +
+      'an open hosted run) is `not_continuable` (`run_alive`, naming its dispatcher); an item at ' +
+      'Implemented / In Review / Approved is `use_fix` (its pull request is open \u2014 CI or ' +
+      '`motir fix` owns it); any other status but In Progress is `not_in_progress`; a leg of a ' +
+      'dead PARENT run is `continue_the_parent` (naming `parentKey`); no run that ended without ' +
+      'success is `no_dead_run`; a dead run that left no branch is `no_branch`. Otherwise a ' +
+      'LAPSED run still reading `running` is closed `abandoned`, the item is RE-ASSIGNED to the ' +
+      'caller, and a `continue` run is opened: `claimed`. \u26a0\ufe0f A refusal is a 200 with an ' +
+      '`outcome`, not an error. \u26a0\ufe0f The item\u2019s STATUS is never written. Heartbeat the ' +
+      'run (`heartbeatDispatchRun`) and CLOSE it (`closeDispatchRun`) when the continue ends.',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item\u2019s `MOTIR-<n>` key (case-insensitive).',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: workItemContinueClaimSchema },
+      description:
+        'What the continue claim resolved to, the `continue` run, the dead run and the branch.',
+    },
+    // 404 for an unknown or cross-workspace key (no existence leak); 422 for a
+    // malformed key. A refused continue is not an error status — see `outcome`.
     errorStatuses: [404, 422],
   }),
 
@@ -925,6 +983,38 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     errorStatuses: [403, 404, 409, 503],
   }),
   defineOperation({
+    method: 'POST',
+    path: '/api/v1/dispatch-runs/{id}/heartbeat',
+    operationId: 'heartbeatDispatchRun',
+    summary: 'Report that a local dispatch run is still alive',
+    description:
+      'A LOCAL run says it is still working. The CLI sends one every 60 seconds while a run is ' +
+      'open; a local run silent for 5 minutes is DEAD — its card shows the run died and ' +
+      '`motir continue` may take the work over — and the server closes it `abandoned`. ' +
+      'The server stamps the time itself; the request carries no body. ' +
+      'Only the operator who opened the run may beat for it. A run that is already closed — ' +
+      'usually by that lapse — is a conflict, and the answer is to stop beating, not to retry. ' +
+      'It writes NO work-item status and no event.',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'id',
+        in: 'path',
+        required: true,
+        description: 'The dispatch run’s id, as `openDispatchRun` returned it.',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 204,
+      body: { kind: 'empty' },
+      description: 'The heartbeat was recorded.',
+    },
+    // 404 for an unknown, cross-workspace or another operator's run; 409 when the
+    // run is already closed.
+    errorStatuses: [404, 409],
+  }),
+  defineOperation({
     method: 'GET',
     path: '/api/v1/dispatch-runs/{id}/close-out-prompt',
     operationId: 'getDispatchRunCloseOutPrompt',
@@ -995,6 +1085,7 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   DispatchPrompt: dispatchPromptSchema,
   WorkItemClaim: workItemClaimSchema,
   WorkItemRepairClaim: workItemRepairClaimSchema,
+  WorkItemContinueClaim: workItemContinueClaimSchema,
   ScopeClaim: scopeClaimSchema,
   IntegrationResult: integrationResultSchema,
   SessionCloseOut: sessionCloseOutSchema,

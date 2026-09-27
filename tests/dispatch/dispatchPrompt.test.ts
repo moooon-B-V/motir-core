@@ -619,6 +619,8 @@ describe('dispatch_prompt tool — access + shape', () => {
     const dto = struct(res);
     expect(Object.keys(dto).sort()).toEqual([
       'advisories',
+      // MOTIR-6530 — the branch the prompt instructs, recorded on checkout_ready.
+      'branch',
       'key',
       // MOTIR-2445 — the parent the prompt already names, as a field.
       'parentKey',

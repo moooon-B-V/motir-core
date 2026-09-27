@@ -480,7 +480,11 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     // `project:browse`) and 64 with MOTIR-6538's
     // `POST …/dispatch-runs/{id}/git-credential` (`issueDispatchRunGitCredentials`,
     // on `work_item:edit`) — both answered to a hosted run's own credential.
-    expect(V1_OPERATIONS.length).toBe(64);
+    // 65 with MOTIR-6528's `POST …/dispatch-runs/{id}/heartbeat`
+    // (`heartbeatDispatchRun`) and 66 with MOTIR-6532's
+    // `POST …/work-items/{key}/continue` (`claimWorkItemContinue`), both
+    // `work_item:edit`.
+    expect(V1_OPERATIONS.length).toBe(66);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

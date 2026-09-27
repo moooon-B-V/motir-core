@@ -77,6 +77,7 @@ export function toDispatchRunDto(
     model: row.model,
     startedAt: row.startedAt.toISOString(),
     endedAt: row.endedAt?.toISOString() ?? null,
+    lastHeartbeatAt: row.lastHeartbeatAt?.toISOString() ?? null,
     createdById: row.createdById,
     cards: row.cards.map(toDispatchRunCardDto),
     seq,

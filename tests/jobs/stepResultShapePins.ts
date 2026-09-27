@@ -454,6 +454,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ failed: number; fired: number; outcomes: Array<{ error: string; projectId: string; status: "failed" } | { itemKey: string; jobId: string; planId: string; projectId: string; status: "fired" } | { projectId: string; reason: "code_blind" | "no_expandable_stub" | "no_owner" | "pending_proposal" | "project_gone" | "ready_set_healthy"; status: "skipped" }>; scanned: number; skipped: number }',
   },
+  'reap-lapsed-runs': {
+    file: 'lib/jobs/definitions/runLivenessSweep.ts',
+    shape: '{ runsFailed: number; runsRacedByClose: number; runsReaped: number }',
+  },
   'sweep-dispatch-runs': {
     file: 'lib/jobs/definitions/dispatchRunSweep.ts',
     shape:

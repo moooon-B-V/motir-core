@@ -504,6 +504,11 @@ export interface JobEventDataMap {
    *  carries no payload beyond the scheduled envelope. Cross-tenant by design:
    *  it DISCOVERS across workspaces and WRITES within each. */
   'system.dispatch-run-sweep': SystemScheduledData;
+  /** The run-liveness sweep (Story MOTIR-6526 · MOTIR-6528) — closes a LOCAL
+   *  run whose heartbeat has lapsed as `abandoned`, writing no card status, so
+   *  the run's record agrees with what `isRunAlive` already reads. Cron
+   *  triggered; cross-tenant by design, like the dispatch-run sweep. */
+  'system.run-liveness-sweep': SystemScheduledData;
   /** The open-delivery reconcile (MOTIR-5390) — re-reads open, delivering pull
    *  requests from GitHub and replays a close whose webhook delivery was lost, so
    *  a missed merge no longer holds its card at In Review for ever. Carries no

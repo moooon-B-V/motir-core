@@ -113,6 +113,7 @@ function run(cards: DispatchRunCardDto[]): DispatchRunDto {
     startedAt: '2026-08-30T14:02:00.000Z',
     endedAt: null,
     createdById: null,
+    lastHeartbeatAt: null,
     cards,
     seq: 3,
   };

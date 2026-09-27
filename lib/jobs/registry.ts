@@ -57,6 +57,7 @@ import { jobRunReap } from './definitions/jobRunReap';
 import { dataExportBuild } from './definitions/dataExportBuild';
 import { dataExportExpirySweep } from './definitions/dataExportExpirySweep';
 import { dispatchRunSweep } from './definitions/dispatchRunSweep';
+import { runLivenessSweep } from './definitions/runLivenessSweep';
 import { pullRequestReconcile } from './definitions/pullRequestReconcile';
 import { pullRequestAutoMerge } from './definitions/pullRequestAutoMerge';
 import { pullRequestBaseMoved } from './definitions/pullRequestBaseMoved';
@@ -141,6 +142,7 @@ export const jobDefinitions = [
   dataExportBuild,
   dataExportExpirySweep,
   dispatchRunSweep,
+  runLivenessSweep,
   accountErasureSweep,
   organizationDeletionReminders,
   organizationErasureSweep,

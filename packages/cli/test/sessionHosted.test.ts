@@ -56,6 +56,7 @@ function run(over: { status?: 'running' | 'failed'; endedAt?: string | null } = 
     scopeLabel: 'ACME-1',
     status: over.status ?? ('running' as const),
     stopReason: null,
+    lastHeartbeatAt: null,
     agent: 'opencode',
     model: 'claude-opus-5-5',
     startedAt: '2026-09-27T00:00:00.000Z',

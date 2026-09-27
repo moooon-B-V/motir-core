@@ -185,6 +185,9 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // 422 — the run has reached its per-run event ceiling, the bound that makes
   // accepting a log body safe at all. The run stays closable.
   DISPATCH_RUN_EVENT_LIMIT: 422,
+  // MOTIR-6531 — `dispatch-prompt?continueFrom=` naming a run that cannot be
+  // continued (open, succeeded, not this item's, another tenant's).
+  CONTINUE_FROM_INVALID: 422,
 
   // ── Story 11.2, the work-item resource ────────────────────────────────────
   // Each row is added deliberately and each is exercised by a test that drives

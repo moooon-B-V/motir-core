@@ -4,7 +4,13 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { buildDispatchProseAdvisories } from '@/lib/services/proseGraphAdvisoryService';
-import { assembleDispatchPrompt, type FindingsPolicy } from '@/lib/dispatch/promptTemplate';
+import {
+  assembleDispatchPrompt,
+  type ContinueFromForPrompt,
+  type FindingsPolicy,
+} from '@/lib/dispatch/promptTemplate';
+import { ContinueFromInvalidError } from '@/lib/dispatchRuns/errors';
+import { endedHow, resolveContinueBranch } from '@/lib/services/workItemContinueService';
 import type { DispatchPromptDto, DispatchRepoDto } from '@/lib/dto/dispatch';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { listDispatchRepoNames, resolveDispatchRepoForItem } from '@/lib/workItems/dispatchRepo';
@@ -173,6 +179,43 @@ export interface DispatchPromptOptions {
    * template gets the same answer for an absent policy.
    */
   findingsPolicy?: FindingsPolicy;
+  /**
+   * The id of a DEAD run of this item to CONTINUE (MOTIR-6531). When set, the
+   * prompt carries the CONTINUE block and the continue git workflow, on the dead
+   * run's branch. The run must hold a leg for this item (or be scoped to it) and
+   * have ended without success, else `ContinueFromInvalidError` (422).
+   */
+  continueFrom?: string;
+}
+
+/**
+ * Resolve `continueFrom` into what the template renders — the dead run, how it
+ * ended, and where its work is, through the SAME branch resolution the continue
+ * claim uses (`resolveContinueBranch`), so the claim and the prompt name one branch.
+ */
+async function resolveContinueFrom(
+  runId: string,
+  itemId: string,
+  ctx: ServiceContext,
+): Promise<ContinueFromForPrompt> {
+  return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+    const run = await dispatchRunRepository.findForWorkItemById(runId, itemId, tx);
+    if (!run) throw new ContinueFromInvalidError(runId, 'unknown');
+    if (run.status === 'running') throw new ContinueFromInvalidError(runId, 'still_running');
+    if (run.status === 'succeeded') throw new ContinueFromInvalidError(runId, 'succeeded');
+    const { branch, pullRequest } = await resolveContinueBranch(itemId, run, tx);
+    if (branch === null) throw new ContinueFromInvalidError(runId, 'unknown');
+    return {
+      deadRunId: run.id,
+      endedHow: endedHow(run),
+      lastHeardAt: (run.lastHeartbeatAt ?? run.endedAt ?? run.startedAt).toISOString(),
+      dispatcherName: run.createdBy?.name ?? null,
+      branch,
+      pullRequest: pullRequest
+        ? { repo: pullRequest.repo, number: pullRequest.number, url: pullRequest.url }
+        : null,
+    };
+  });
 }
 
 export const dispatchPromptService = {
@@ -206,6 +249,11 @@ export const dispatchPromptService = {
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
     // A hosted run's own credential reads only its run's cards' prompts — checked
     // inside `getWorkItemByIdentifier` above (MOTIR-6557), before any read below.
+    // Validated FIRST, before the fan-out: a continue that cannot happen is the
+    // caller's to fix, and the answer must not wait on ten reads.
+    const continueFrom = opts.continueFrom
+      ? await resolveContinueFrom(opts.continueFrom, item.id, ctx)
+      : null;
 
     // ⚠️ `allSettledOrThrow`, NOT `Promise.all` (MOTIR-6235). The access gate
     // (`getWorkItemByIdentifier`) is awaited above, but one of these arms DOES
@@ -325,6 +373,7 @@ export const dispatchPromptService = {
       confirmedDecisions,
       errorEvidence,
       changesRequested,
+      continueFrom,
       parent: parentRow ? { key: parentRow.identifier, title: parentRow.title } : null,
       projectName: project.name,
       projectKey: project.identifier,
@@ -371,6 +420,7 @@ export const dispatchPromptService = {
       workflowMode: assembled.workflowMode,
       sessionBranch: assembled.sessionBranch,
       workBranch: assembled.workBranch,
+      branch: assembled.branch,
       // Handed over SEPARATELY as well as rendered into the prompt: the prompt
       // reaches the agent, this reaches the human watching the CLI. Always an
       // array, never omitted.

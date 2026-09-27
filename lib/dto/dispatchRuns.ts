@@ -96,6 +96,11 @@ export interface DispatchRunDto {
   model: string | null;
   startedAt: string;
   endedAt: string | null;
+  /**
+   * When the run last said it was alive (MOTIR-6528) — read through `isRunAlive`
+   * (`lib/runs/runLiveness.ts`), never compared to a clock anywhere else.
+   */
+  lastHeartbeatAt: string | null;
   createdById: string | null;
   /** The run's cards, in the run's own stored order. */
   cards: DispatchRunCardDto[];

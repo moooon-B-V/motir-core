@@ -167,7 +167,13 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
     data: {
       repositories: over.map((t) => t.targetRepo),
       failures: materialized.failures.length,
-      // Every repository's branch, named before the agent exists (MOTIR-6539).
+      // WHERE THIS LEG'S WORK WILL BE (MOTIR-6530) — the session branch on a
+      // lineage run, else the per-card branch the prompt names. The one place a
+      // local run records its branch: if the process dies, `motir continue`
+      // reads it here. `null` only from a server too old to name the branch.
+      branch: input.sessionBranch ?? dispatch.branch ?? null,
+      // Every repository's branch, named before the agent exists (MOTIR-6539) —
+      // the CHECKPOINT push target, per repository (`checkpoint.ts`).
       branches: legBranches(dispatch, over),
     },
   });
