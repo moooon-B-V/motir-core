@@ -106,7 +106,7 @@ async function openAndStart(
   const models = modelsResponse(page);
   await page.goto(`/items/${card.identifier}`);
   await models;
-  await expect(page.getByTestId('run-hosted-door')).toBeVisible();
+  await expect(page.getByRole('main').getByTestId('run-hosted-door')).toBeVisible();
   if (model !== DEFAULT_MODEL) {
     await modelCombobox(page).click();
     await page.getByRole('option').filter({ hasText: model }).click();
@@ -114,12 +114,12 @@ async function openAndStart(
   await expect(modelCombobox(page)).toContainText(model);
   const started = startResponse(page, card.identifier);
   const runs = runsListResponse(page, card.identifier);
-  await page.getByTestId('run-hosted').click();
+  await page.getByRole('main').getByTestId('run-hosted').click();
   const startRes = await started;
   expect(startRes.status(), await startRes.text()).toBe(201);
   const body = (await startRes.json()) as { dispatchRunId: string };
   await runs;
-  await expect(page.getByTestId('hosted-run')).toBeVisible();
+  await expect(page.getByRole('main').getByTestId('hosted-run')).toBeVisible();
   return body.dispatchRunId;
 }
 
@@ -162,7 +162,7 @@ test.describe('a card runs on the hosted agent', () => {
 
       const started = startResponse(page, card.identifier);
       const runs = runsListResponse(page, card.identifier);
-      await page.getByTestId('run-hosted').click();
+      await page.getByRole('main').getByTestId('run-hosted').click();
       const startRes = await started;
       expect(startRes.status(), await startRes.text()).toBe(201);
       dispatchRunId = ((await startRes.json()) as { dispatchRunId: string }).dispatchRunId;
@@ -182,8 +182,8 @@ test.describe('a card runs on the hosted agent', () => {
     await beat();
 
     await chapter('The run section shows it starting, with its model named', async () => {
-      await expect(page.getByTestId('hosted-run')).toBeVisible();
-      await expect(page.getByTestId('hosted-run')).toContainText(ALT_MODEL);
+      await expect(page.getByRole('main').getByTestId('hosted-run')).toBeVisible();
+      await expect(page.getByRole('main').getByTestId('hosted-run')).toContainText(ALT_MODEL);
       await expect(phase(page, 'starting')).toHaveAttribute('data-state', 'now');
     });
     await beat();
@@ -207,7 +207,7 @@ test.describe('a card runs on the hosted agent', () => {
       await appendEvents(api, dispatchRunId, [
         { kind: 'log', workItemKey: card.identifier, body: 'opencode: implementing…' },
       ]);
-      await expect(page.getByTestId('hosted-run')).toContainText('opencode');
+      await expect(page.getByRole('main').getByTestId('hosted-run')).toContainText('opencode');
     });
     await beat();
 
@@ -240,23 +240,31 @@ test.describe('a card runs on the hosted agent', () => {
       ]);
       await closeRun(api, dispatchRunId, 'drained');
 
-      await expect(page.getByTestId('hosted-end')).toHaveAttribute('data-end', 'succeeded', {
-        timeout: 30_000,
-      });
-      await expect(page.getByTestId('hosted-end')).toContainText('#21101');
+      await expect(page.getByRole('main').getByTestId('hosted-end')).toHaveAttribute(
+        'data-end',
+        'succeeded',
+        {
+          timeout: 30_000,
+        },
+      );
+      await expect(page.getByRole('main').getByTestId('hosted-end')).toContainText('#21101');
       await expect(statusCard(page)).toContainText('Implemented', { timeout: 30_000 });
       // The chosen model's provenance, stamped at start (MOTIR-690's step 5) —
       // visible on the run panel's own meta row.
-      await expect(page.getByTestId('hosted-run')).toContainText(ALT_MODEL);
+      await expect(page.getByRole('main').getByTestId('hosted-run')).toContainText(ALT_MODEL);
     });
     await beat();
 
     await chapter("It reads the run's cost", async () => {
-      await expect(page.getByTestId('hosted-cost-tokens')).toBeVisible();
-      await expect(page.getByTestId('hosted-cost-tokens')).toContainText('in');
-      await expect(page.getByTestId('hosted-cost-tokens')).toContainText('out');
-      await expect(page.getByTestId('hosted-cost-credits')).toContainText('credits');
-      await expect(page.getByTestId('hosted-cost-machine')).toContainText('Charged in credits');
+      await expect(page.getByRole('main').getByTestId('hosted-cost-tokens')).toBeVisible();
+      await expect(page.getByRole('main').getByTestId('hosted-cost-tokens')).toContainText('in');
+      await expect(page.getByRole('main').getByTestId('hosted-cost-tokens')).toContainText('out');
+      await expect(page.getByRole('main').getByTestId('hosted-cost-credits')).toContainText(
+        'credits',
+      );
+      await expect(page.getByRole('main').getByTestId('hosted-cost-machine')).toContainText(
+        'Charged in credits',
+      );
     });
     await beat();
   });
@@ -288,15 +296,19 @@ test.describe('a card runs on the hosted agent', () => {
 
     const reload = modelsResponse(page);
     const started = startResponse(page, card.identifier);
-    await page.getByTestId('run-hosted').click();
+    await page.getByRole('main').getByTestId('run-hosted').click();
     const startRes = await started;
     expect(startRes.status()).toBe(422);
     const reloadRes = await reload;
     const reloadBody = (await reloadRes.json()) as { models: { id: string }[] };
     expect(reloadBody.models.map((m) => m.id)).toEqual([DEFAULT_MODEL]);
 
-    await expect(page.getByTestId('hosted-refused-modelNotOffered')).toBeVisible();
-    await expect(page.getByTestId('hosted-refused-modelNotOffered')).toContainText(ALT_MODEL);
+    await expect(
+      page.getByRole('main').getByTestId('hosted-refused-modelNotOffered'),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('main').getByTestId('hosted-refused-modelNotOffered'),
+    ).toContainText(ALT_MODEL);
     await expect(modelCombobox(page)).not.toContainText(ALT_MODEL);
 
     expect(fakeContainerCount()).toBe(before);
@@ -321,8 +333,8 @@ test.describe('a card runs on the hosted agent', () => {
     const modelsRes = await models;
     expect(modelsRes.status()).toBe(503);
 
-    await expect(page.getByTestId('hosted-models-unavailable')).toBeVisible();
-    await expect(page.getByTestId('run-hosted')).toBeDisabled();
+    await expect(page.getByRole('main').getByTestId('hosted-models-unavailable')).toBeVisible();
+    await expect(page.getByRole('main').getByTestId('run-hosted')).toBeDisabled();
   });
 
   test('out of credits refuses before any container, with zero provisions', async ({ page }) => {
@@ -344,11 +356,11 @@ test.describe('a card runs on the hosted agent', () => {
     await expect(modelCombobox(page)).toContainText(DEFAULT_MODEL);
 
     const started = startResponse(page, card.identifier);
-    await page.getByTestId('run-hosted').click();
+    await page.getByRole('main').getByTestId('run-hosted').click();
     const startRes = await started;
     expect(startRes.status()).toBe(402);
 
-    await expect(page.getByTestId('hosted-refused-outOfCredits')).toBeVisible();
+    await expect(page.getByRole('main').getByTestId('hosted-refused-outOfCredits')).toBeVisible();
     expect(fakeContainerCount()).toBe(before);
     expect(readHostedRunJournal().some((e) => e.type === 'gateway_mint')).toBe(false);
   });
@@ -360,20 +372,24 @@ test.describe('a card runs on the hosted agent', () => {
 
     const dispatchRunId = await openAndStart(page, card, DEFAULT_MODEL);
 
-    await page.getByTestId('hosted-run-cancel').click();
-    await expect(page.getByTestId('hosted-run-cancel-confirm')).toBeVisible();
+    await page.getByRole('main').getByTestId('hosted-run-cancel').click();
+    await expect(page.getByRole('dialog').getByTestId('hosted-run-cancel-confirm')).toBeVisible();
     const cancelled = page.waitForResponse(
       (res) =>
         res.url().endsWith(`/api/dispatch-runs/${dispatchRunId}/cancel`) &&
         res.request().method() === 'POST',
     );
-    await page.getByTestId('hosted-run-cancel-confirm').click();
+    await page.getByRole('dialog').getByTestId('hosted-run-cancel-confirm').click();
     const cancelRes = await cancelled;
     expect(cancelRes.status()).toBe(200);
 
-    await expect(page.getByTestId('hosted-end')).toHaveAttribute('data-end', 'cancelled', {
-      timeout: 30_000,
-    });
+    await expect(page.getByRole('main').getByTestId('hosted-end')).toHaveAttribute(
+      'data-end',
+      'cancelled',
+      {
+        timeout: 30_000,
+      },
+    );
 
     // The revoke the CANCEL press itself makes, in this (the webServer) process.
     await expect
@@ -402,10 +418,16 @@ test.describe('a card runs on the hosted agent', () => {
     // this spec waits on — the assertion below polls the PANEL'S OWN state,
     // pushed by the same SSE connection the happy path relies on, with no
     // `page.reload()` anywhere in this test.
-    await expect(page.getByTestId('hosted-end')).toHaveAttribute('data-end', 'timedOut', {
-      timeout: 90_000,
+    await expect(page.getByRole('main').getByTestId('hosted-end')).toHaveAttribute(
+      'data-end',
+      'timedOut',
+      {
+        timeout: 90_000,
+      },
+    );
+    await expect(page.getByRole('main').getByTestId('hosted-reason')).toContainText('stalled', {
+      timeout: 5_000,
     });
-    await expect(page.getByTestId('hosted-reason')).toContainText('stalled', { timeout: 5_000 });
   });
 
   test('the door shows starting while the request is in flight, and the failed state when it errors', async ({
@@ -437,13 +459,15 @@ test.describe('a card runs on the hosted agent', () => {
     await expect(modelCombobox(page)).toContainText(DEFAULT_MODEL);
 
     const started = startResponse(page, card.identifier);
-    await page.getByTestId('run-hosted').click();
+    await page.getByRole('main').getByTestId('run-hosted').click();
     // LOADING: the request is still in flight (the route above is holding it).
-    await expect(page.getByTestId('run-hosted')).toHaveText(en.runs.hosted.door.starting);
+    await expect(page.getByRole('main').getByTestId('run-hosted')).toHaveText(
+      en.runs.hosted.door.starting,
+    );
 
     const startRes = await started;
     expect(startRes.status()).toBe(503);
     // ERROR: the refused state, never a silently-started run.
-    await expect(page.getByTestId('hosted-refused-unavailable')).toBeVisible();
+    await expect(page.getByRole('main').getByTestId('hosted-refused-unavailable')).toBeVisible();
   });
 });
