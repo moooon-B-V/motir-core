@@ -2,7 +2,6 @@ import type { Project } from '@/generated/prisma/client';
 import { accessModeOf, levelForMode } from '@/lib/projects/accessMode';
 import type { ProjectMembershipWithUser } from '@/lib/repositories/projectMembershipRepository';
 import type { MembershipWithUser } from '@/lib/repositories/workspaceMembershipRepository';
-import { resolveWorkspaceRole } from '@/lib/workspaces/roles';
 import type {
   AccessLossPersonDTO,
   ProjectMemberDTO,
@@ -29,7 +28,7 @@ export function toAccessLossPersonDTO(row: MembershipWithUser): AccessLossPerson
     userId: row.user.id,
     name: row.user.name || row.user.email.split('@')[0]!,
     email: row.user.email,
-    workspaceRole: resolveWorkspaceRole(row),
+    workspaceRole: row.workspaceRole,
     customRoleName: row.roleDefinition?.name ?? null,
   };
 }

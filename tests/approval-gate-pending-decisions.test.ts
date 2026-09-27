@@ -109,7 +109,7 @@ async function projectViewer() {
     where: { userId: user.id, projectId: fx.projectId },
   });
   await adminDb.projectMembership.create({
-    data: { userId: user.id, projectId: fx.projectId, workspaceId: fx.workspaceId, role: 'viewer' },
+    data: { userId: user.id, projectId: fx.projectId, workspaceId: fx.workspaceId },
   });
   await setWorkspaceRoleFor(user.id, fx.workspaceId, 'viewer');
   return user;

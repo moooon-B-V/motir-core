@@ -60,7 +60,7 @@ describe('tenant-root writes under the restricted runtime role', () => {
       name: 'Bootstrap Co',
       ownerUserId: owner.id,
     });
-    expect(membership.role).toBe('owner');
+    expect(membership.workspaceRole).toBe('manager');
     // The creator is the workspace's MANAGER (Story MOTIR-6168 · MOTIR-6462).
     expect(membership.workspaceRole).toBe('manager');
 

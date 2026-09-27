@@ -133,7 +133,11 @@ describe('restoreDefaultTransitions — additive merge', () => {
       name: 'Member',
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+      data: {
+        userId: member.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: 'member',
+      },
     });
     await expect(
       workflowsService.restoreDefaultTransitions({

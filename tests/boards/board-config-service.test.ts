@@ -20,6 +20,7 @@ import { truncateAuthTables } from '../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
+import { legacyToWorkspaceRole } from '@/lib/workspaces/roles';
 
 // boardsService.setSwimlaneGroupBy / setColumnWipLimit (Story 3.3 · Subtask
 // 3.3.3) — the board-config write path. Real Postgres (no mocks), per CLAUDE.md.
@@ -74,7 +75,7 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
     name: 'Config Member',
   });
   await adminDb.workspaceMembership.create({
-    data: { userId: member.id, workspaceId, role: 'member' },
+    data: { userId: member.id, workspaceId, workspaceRole: 'member' },
   });
 
   const board = await withWorkspaceServiceContext(workspaceId, (tx) =>
@@ -235,7 +236,11 @@ describe('the MOTIR-2296 WIDENING — who may configure a board, before and afte
       name: label,
     });
     await adminDb.workspaceMembership.create({
-      data: { userId: user.id, workspaceId: fx.workspaceId, role: roles.workspaceRole ?? 'member' },
+      data: {
+        userId: user.id,
+        workspaceId: fx.workspaceId,
+        workspaceRole: legacyToWorkspaceRole(roles.workspaceRole ?? 'member'),
+      },
     });
     if (roles.projectRole) {
       // The tier lives on the WORKSPACE role since Story MOTIR-6168: the project
@@ -248,7 +253,6 @@ describe('the MOTIR-2296 WIDENING — who may configure a board, before and afte
           userId: user.id,
           projectId: fx.projectId,
           workspaceId: fx.workspaceId,
-          role: roles.projectRole,
         },
       });
     }

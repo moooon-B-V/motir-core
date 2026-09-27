@@ -106,6 +106,7 @@ const FIRST_TURN = `ACME-44 · Where exports live\n\nChanges were requested on t
 const SEED: PlanningSeedDTO = {
   gateId: GATE,
   gateKind: 'decision_approval',
+  intent: 'replan',
   anchorKey: 'ACME-44',
   firstTurn: FIRST_TURN,
   seededSessionId: null,

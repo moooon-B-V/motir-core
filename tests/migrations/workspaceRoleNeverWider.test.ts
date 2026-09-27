@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Client } from 'pg';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import {
   BUILTIN_ROLE_PERMISSIONS,
@@ -11,7 +11,12 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { currentWorkerAdminUrl } from '../helpers/parallelDb';
-import { makeTenant, runMigrationFile, type Tenant } from './_workspaceRoleTenant';
+import {
+  makeTenant,
+  restoreWorkspaceRoleNotNull,
+  runMigrationFile,
+  type Tenant,
+} from './_workspaceRoleTenant';
 
 // The never-wider CHECK (Story MOTIR-6168 · Subtask MOTIR-6461) — the second
 // migration, run over the mapping's fixture tenant exactly as `migrate deploy`
@@ -57,6 +62,11 @@ beforeEach(async () => {
   await truncateAuthTables();
 });
 
+// The fixture drops MOTIR-6561's NOT NULL to seed pre-migration rows; put it back.
+afterEach(async () => {
+  await restoreWorkspaceRoleNotNull();
+});
+
 afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
@@ -90,7 +100,7 @@ async function tenantWithLevels(): Promise<Tenant & { p3: { id: string; identifi
   });
   // Only the plain member is added to the private project.
   await adminDb.projectMembership.create({
-    data: { workspaceId: t.wsId, projectId: p3.id, userId: t.people.member!, role: 'member' },
+    data: { workspaceId: t.wsId, projectId: p3.id, userId: t.people.member! },
   });
   return { ...t, p3: { id: p3.id, identifier: p3.identifier } };
 }

@@ -77,7 +77,11 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
       password: PASSWORD,
       name,
     });
-    await workspacesService.addMember({ userId: user.id, workspaceId: workspace.id, role });
+    await workspacesService.addMember({
+      userId: user.id,
+      workspaceId: workspace.id,
+      workspaceRole: role ? 'manager' : 'member',
+    });
     return user;
   }
   const wsAdmin = await workspaceUser('wsadmin', 'admin');

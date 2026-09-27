@@ -50,7 +50,7 @@ describe('seedGenerationTestProject (MOTIR-1426)', () => {
     await workspacesService.addMember({
       userId: member.id,
       workspaceId: workspace.id,
-      role: 'member',
+      workspaceRole: 'member',
     });
 
     // The real `motir` analogue: a first project, pinned active (as the seed pins it).
@@ -81,14 +81,11 @@ describe('seedGenerationTestProject (MOTIR-1426)', () => {
     expect(persisted?.name).toBe(SEED_TEST_PROJECT_NAME);
     expect(persisted?.onboardingRanAt).toBeNull();
 
-    // Team enrolled: owner → admin, teammate → member (the whole team can switch to it).
+    // Team enrolled — owner and teammate both (the whole team can switch to it).
     const memberships = await adminDb.projectMembership.findMany({
       where: { projectId: testProject.id },
     });
-    const roleByUser = new Map(memberships.map((m) => [m.userId, m.role]));
-    expect(memberships).toHaveLength(2);
-    expect(roleByUser.get(owner.id)).toBe('admin');
-    expect(roleByUser.get(member.id)).toBe('member');
+    expect(memberships.map((m) => m.userId).sort()).toEqual([owner.id, member.id].sort());
 
     // The active-project pin is NOT stolen — `motir` stays every member's landing project.
     const pins = await adminDb.workspaceMembership.findMany({

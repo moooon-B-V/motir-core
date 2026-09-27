@@ -83,7 +83,7 @@ export async function seedDesignVerdict(slug: string): Promise<DesignVerdictSeed
   });
   await workspacesService.addMember({ userId: reviewer.id, workspaceId: workspace.id });
   await adminDb.projectMembership.create({
-    data: { userId: reviewer.id, projectId: project.id, workspaceId: workspace.id, role: 'member' },
+    data: { userId: reviewer.id, projectId: project.id, workspaceId: workspace.id },
   });
   for (const userId of [reviewer.id, owner.id]) {
     await adminDb.workspaceMembership.update({

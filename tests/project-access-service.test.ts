@@ -127,7 +127,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   await workspacesService.addMember({
     userId: wsAdmin.id,
     workspaceId: workspace.id,
-    role: 'admin',
+    workspaceRole: 'manager',
   });
 
   // Plain workspace member — NO project role.
@@ -144,13 +144,13 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
     await workspacesService.addMember({
       userId: u.id,
       workspaceId: workspace.id,
-      ...(role === 'viewer' ? { role: 'viewer' as const } : {}),
+      workspaceRole: role === 'viewer' ? 'viewer' : 'member',
     });
     // The LEGACY project row, written raw: `role` is only what a project admin
     // used to be, and nothing reads it now (MOTIR-6464 retired the writer).
-    await adminDb.projectMembership.create({
-      data: { userId: u.id, projectId: project.id, workspaceId: workspace.id, role },
-    });
+    await adminDb.$executeRaw`
+      INSERT INTO "project_membership" ("id", "workspace_id", "project_id", "user_id", "role", "updated_at")
+      VALUES (gen_random_uuid()::text, ${workspace.id}, ${project.id}, ${u.id}, ${role}::"member_role", now())`;
     return u;
   }
   const viewer = await projectActor('Viewer', 'viewer');

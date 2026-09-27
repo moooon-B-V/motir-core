@@ -94,7 +94,11 @@ async function teammate(email: string): Promise<string> {
     name: email.split('@')[0]!,
   });
   await adminDb.workspaceMembership.create({
-    data: { userId: u.id, workspaceId: caller.fixture.workspaceId, role: 'member' },
+    data: {
+      userId: u.id,
+      workspaceId: caller.fixture.workspaceId,
+      workspaceRole: 'member',
+    },
   });
   await addToProjectAs({
     key: caller.projectKey,

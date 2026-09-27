@@ -45,7 +45,11 @@ async function memberCaller(workspace: Workspace) {
   // membership too (`organizationsService.resolveWorkspaceAccess` refuses a
   // stale workspace-membership row with no org row behind it), and `addMember`
   // is what performs that upward auto-join.
-  await workspacesService.addMember({ userId: user.id, workspaceId: workspace.id, role: 'member' });
+  await workspacesService.addMember({
+    userId: user.id,
+    workspaceId: workspace.id,
+    workspaceRole: 'member',
+  });
   return withTokenFor(user, workspace, { scopes: ['read'] });
 }
 

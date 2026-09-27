@@ -276,7 +276,7 @@ describe('listFields', () => {
     await workspacesService.addMember({
       userId: viewer.id,
       workspaceId: fx.workspaceId,
-      role: 'member',
+      workspaceRole: 'member',
     });
     await addToProjectAs({
       ...actorInput(fx),
@@ -305,7 +305,7 @@ describe('listFields', () => {
     await workspacesService.addMember({
       userId: outsider.id,
       workspaceId: fx.workspaceId,
-      role: 'member',
+      workspaceRole: 'member',
     });
 
     await expect(
@@ -573,7 +573,7 @@ describe('the 6.4 two-tier admin gate', () => {
     await workspacesService.addMember({
       userId: user.id,
       workspaceId: fx.workspaceId,
-      role: wsRole,
+      workspaceRole: wsRole === 'admin' ? 'manager' : 'member',
     });
     if (projectRole) {
       await addToProjectAs({
@@ -730,7 +730,7 @@ describe('the 5.3.6 additions — description edit + per-option usage counts', (
     await workspacesService.addMember({
       userId: member.id,
       workspaceId: fx.workspaceId,
-      role: 'member',
+      workspaceRole: 'member',
     });
     await expect(
       customFieldsService.updateFieldDescription({

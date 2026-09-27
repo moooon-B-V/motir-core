@@ -599,6 +599,7 @@ export function GhostAnchor({
   parentTitle,
   folderPath = null,
   outOfSprint = false,
+  tone = 'danger',
 }: {
   identifier: string;
   /** The blocker's title; falls back to the localized default when absent. */
@@ -611,9 +612,19 @@ export function GhostAnchor({
   /** Sprint scope (MOTIR-1379): the anchor reads "not in this sprint" — the
    *  blocker is an out-of-sprint, not-done dependency, not a cross-story tangle. */
   outOfSprint?: boolean;
+  /** `danger` (default) names an INVALID edge's blocker — the "blocked elsewhere"
+   *  treatment. `neutral` names the blocker of a VALID edge no level above draws —
+   *  an end with no work-item parent (MOTIR-6359; design
+   *  `design/roadmap/design-notes.md` § "Covered cross-parent edges", sheet 7): the
+   *  same box and lines, with the danger tokens swapped for neutral ones. */
+  tone?: 'danger' | 'neutral';
 }) {
   const t = useTranslations('roadmap.canvas.anchor');
   const tFolders = useTranslations('folders');
+  const neutral = tone === 'neutral';
+  // The location line's ink: danger on an invalid edge's anchor, secondary on a
+  // valid one's — the neutral anchor must not say "wrong" in its smallest line.
+  const lineInk = neutral ? 'text-(--el-text-secondary)' : 'text-(--el-danger)';
   return (
     <div
       // Fixed height (= the layout's NODE_H) + `overflow-hidden`, the SAME fixed-box
@@ -624,12 +635,20 @@ export function GhostAnchor({
       style={{
         width: 200,
         height: NODE_H,
-        backgroundImage:
-          'repeating-linear-gradient(135deg, var(--el-surface), var(--el-surface) 7px, var(--el-danger-surface) 7px, var(--el-danger-surface) 9px)',
+        backgroundImage: neutral
+          ? 'repeating-linear-gradient(135deg, var(--el-surface), var(--el-surface) 7px, var(--el-border-soft) 7px, var(--el-border-soft) 9px)'
+          : 'repeating-linear-gradient(135deg, var(--el-surface), var(--el-surface) 7px, var(--el-danger-surface) 7px, var(--el-danger-surface) 9px)',
       }}
-      className="overflow-hidden rounded-(--radius-card) border border-dashed border-(--el-danger) p-(--spacing-card-padding)"
+      data-anchor-tone={tone}
+      className={`overflow-hidden rounded-(--radius-card) border border-dashed p-(--spacing-card-padding) ${
+        neutral ? 'border-(--el-border-strong)' : 'border-(--el-danger)'
+      }`}
     >
-      <span className="flex items-center gap-1.5 font-mono text-xs font-semibold text-(--el-danger-on-surface)">
+      <span
+        className={`flex items-center gap-1.5 font-mono text-xs font-semibold ${
+          neutral ? 'text-(--el-text-secondary)' : 'text-(--el-danger-on-surface)'
+        }`}
+      >
         <ArrowUpRight className="size-3.5" aria-hidden="true" />
         {identifier}
       </span>
@@ -650,11 +669,11 @@ export function GhostAnchor({
           />
         </span>
       ) : parentTitle ? (
-        <span className="mt-0.5 line-clamp-1 text-xs text-(--el-danger)">
+        <span className={`mt-0.5 line-clamp-1 text-xs ${lineInk}`}>
           {t('inParent', { parent: parentTitle })}
         </span>
       ) : (
-        <span className="mt-0.5 line-clamp-1 text-xs text-(--el-danger)">{t('elsewhere')}</span>
+        <span className={`mt-0.5 line-clamp-1 text-xs ${lineInk}`}>{t('elsewhere')}</span>
       )}
     </div>
   );

@@ -10,8 +10,8 @@ import { truncateAuthTables } from './helpers/db';
 // data model. This is the schema-level companion to the future enforcement
 // suite (6.4.8); it covers ONLY what 6.4.2 ships:
 //   * `project.accessLevel` defaults to `open` (the no-lockout backfill);
-//   * `workspace_membership.role` is now the `member_role` enum, and the
-//     founder mapping (owner) round-trips as a value;
+//   * the founder's membership carries the Manager workspace role (the legacy
+//     `member_role` column this once proved is no longer written, MOTIR-6562);
 //   * `project_membership` round-trips + is RLS-isolated by workspace
 //     (the same pure workspace gate `workflow_status` / `project` use);
 //   * the `[userId, projectId]` uniqueness + the FK cascade on project delete.
@@ -81,10 +81,10 @@ async function makeMembershipTenants(): Promise<MembershipTenantFixture> {
     data: { workspaceId: w2.workspace.id, name: 'PM P2', slug: 'pm-rls', identifier: 'PMR' },
   });
   const m1 = await adminDb.projectMembership.create({
-    data: { workspaceId: w1.workspace.id, projectId: p1.id, userId: userA.id, role: 'admin' },
+    data: { workspaceId: w1.workspace.id, projectId: p1.id, userId: userA.id },
   });
   const m2 = await adminDb.projectMembership.create({
-    data: { workspaceId: w2.workspace.id, projectId: p2.id, userId: userB.id, role: 'member' },
+    data: { workspaceId: w2.workspace.id, projectId: p2.id, userId: userB.id },
   });
 
   return {
@@ -162,8 +162,8 @@ describe('project.accessLevel — default', () => {
   });
 });
 
-describe('workspace_membership.role — member_role enum', () => {
-  it('the workspace founder is seeded with the `owner` role (the migration-aware mapping, value-level)', async () => {
+describe('workspace_membership.workspace_role', () => {
+  it('the workspace founder is seeded as its Manager', async () => {
     const user = await usersService.createUser({
       email: 'pm-owner@example.com',
       password: 'hunter2hunter2',
@@ -176,12 +176,12 @@ describe('workspace_membership.role — member_role enum', () => {
     const membership = await adminDb.workspaceMembership.findUnique({
       where: { userId_workspaceId: { userId: user.id, workspaceId: ws.workspace.id } },
     });
-    expect(membership?.role).toBe('owner');
+    expect(membership?.workspaceRole).toBe('manager');
   });
 });
 
-describe('project_membership — round-trip + role default', () => {
-  it('a project membership round-trips, defaulting role to `member`', async () => {
+describe('project_membership — round-trip', () => {
+  it('a project membership round-trips', async () => {
     const user = await usersService.createUser({
       email: 'pm-roundtrip@example.com',
       password: 'hunter2hunter2',
@@ -197,7 +197,6 @@ describe('project_membership — round-trip + role default', () => {
     const created = await adminDb.projectMembership.create({
       data: { workspaceId: ws.workspace.id, projectId: project.id, userId: user.id },
     });
-    expect(created.role).toBe('member'); // column default
     const read = await adminDb.projectMembership.findUnique({
       where: { userId_projectId: { userId: user.id, projectId: project.id } },
     });
@@ -242,12 +241,10 @@ describe('project_membership — RLS write isolation (WITH CHECK)', () => {
           workspaceId: fx.workspaceW1Id,
           projectId: fx.projectP1Id,
           userId: fx.userB1Id,
-          role: 'viewer',
         },
       }),
     );
     expect(created.workspaceId).toBe(fx.workspaceW1Id);
-    expect(created.role).toBe('viewer');
   });
 
   it('a tenant CANNOT INSERT a membership carrying a FOREIGN workspaceId (WITH CHECK rejects)', async () => {
@@ -259,7 +256,6 @@ describe('project_membership — RLS write isolation (WITH CHECK)', () => {
             workspaceId: fx.workspaceW2Id,
             projectId: fx.projectP2Id,
             userId: fx.userA1Id,
-            role: 'member',
           },
         }),
       ),
@@ -276,7 +272,6 @@ describe('project_membership — constraints', () => {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
         userId: fx.userA1Id,
-        role: 'member',
       },
     });
     await expect(duplicate).rejects.toThrow();

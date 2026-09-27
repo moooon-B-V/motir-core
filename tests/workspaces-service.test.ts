@@ -70,8 +70,8 @@ describe('createWorkspace', () => {
     expect(toProjectDTO(firstProject).prMergeMode).toBe('manual');
     expect(membership.userId).toBe(owner.id);
     expect(membership.workspaceId).toBe(workspace.id);
-    // The workspace creator is its owner (Subtask 1.6.5 — replay gate tier).
-    expect(membership.role).toBe('owner');
+    // The workspace creator is its Manager (MOTIR-6462).
+    expect(membership.workspaceRole).toBe('manager');
 
     const persistedMembership = await adminDb.workspaceMembership.findUnique({
       where: { id: membership.id },
@@ -125,7 +125,7 @@ describe('addMember', () => {
       workspaceId: workspace.id,
     });
     expect(membership.userId).toBe(invitee.id);
-    expect(membership.role).toBe('member');
+    expect(membership.workspaceRole).toBe('member');
 
     const count = await adminDb.workspaceMembership.count({
       where: { workspaceId: workspace.id },
@@ -366,7 +366,7 @@ describe('getActiveWorkspace (bound read — MOTIR-2874)', () => {
     expect(dto).not.toBeNull();
     expect(dto!.membership.userId).toBe(user.id);
     expect(dto!.membership.workspaceId).toBe(workspace.id);
-    expect(dto!.membership.role).toBe('owner');
+    expect(dto!.membership.workspaceRole).toBe('manager');
     // ...and so was the `include: { workspace: true }` join, which
     // `workspace_membership_visible` gates on the same `app.user_id`. A DTO
     // whose workspace half came back empty is the other half of this bug.

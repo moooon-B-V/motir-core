@@ -18,7 +18,6 @@ import { asAccessLevel } from '@/lib/projects/roles';
 import { bindOrganizationContext } from '@/lib/organizations/context';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
-import { resolveWorkspaceRole } from '@/lib/workspaces/roles';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import {
@@ -231,7 +230,6 @@ export const projectMembersService = {
             workspaceId: input.ctx.workspaceId,
             projectId: project.id,
             userId: input.targetUserId,
-            role: 'member',
           },
           tx,
         );
@@ -382,7 +380,7 @@ export const projectMembersService = {
         .filter(
           (m) =>
             m.accessScope === 'full' &&
-            resolveWorkspaceRole(m) !== 'manager' &&
+            m.workspaceRole !== 'manager' &&
             !orgManagers.has(m.userId) &&
             !added.has(m.userId),
         )

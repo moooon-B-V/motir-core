@@ -135,7 +135,7 @@ async function seed(): Promise<Seeded> {
   await workspacesService.addMember({
     userId: colleague.id,
     workspaceId: workspace.id,
-    role: 'member',
+    workspaceRole: 'member',
   });
   const project = await projectsService.createProject({
     name: 'Motir',

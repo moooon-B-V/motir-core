@@ -4,7 +4,6 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectKeyAliasRepository } from '@/lib/repositories/projectKeyAliasRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
-import { resolveWorkspaceRole } from '@/lib/workspaces/roles';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import {
@@ -1146,7 +1145,7 @@ export const projectsService = {
         tx,
       );
       if (!membership) return true;
-      return resolveWorkspaceRole(membership) === 'manager' || membership.accessScope !== 'limited';
+      return membership.workspaceRole === 'manager' || membership.accessScope !== 'limited';
     });
   },
 

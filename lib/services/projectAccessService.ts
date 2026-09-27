@@ -5,7 +5,7 @@ import { projectMembershipRepository } from '@/lib/repositories/projectMembershi
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { composeOwnerReach } from '@/lib/workspaces/membershipGate';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { customRolePermissionsOf, resolveWorkspaceRole } from '@/lib/workspaces/roles';
+import { customRolePermissionsOf } from '@/lib/workspaces/roles';
 import type { Project, ProjectAccessMode } from '@/generated/prisma/client';
 import { accessModeOf } from '@/lib/projects/accessMode';
 import {
@@ -511,7 +511,7 @@ export const projectAccessService = {
 
         for (const userId of userIds) {
           const membership = byUser.get(userId) ?? null;
-          const workspaceRole = membership ? resolveWorkspaceRole(membership) : null;
+          const workspaceRole = membership?.workspaceRole ?? null;
           result.set(
             userId,
             canEdit({

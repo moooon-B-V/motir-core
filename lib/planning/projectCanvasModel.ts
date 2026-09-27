@@ -58,6 +58,11 @@ export interface ProjectCanvasNode {
    *  `autoDescendSingleParent` asks. A ghost anchor for an off-level blocker is NOT
    *  decorative — it names a real, peekable work item and is a reason to stop. */
   decorative?: boolean;
+  /** A GHOST ANCHOR standing in for an off-level blocker (`ghostAnchorNode`) — never
+   *  a member of the level, whichever arrow joins it. Read by the plan-review merge,
+   *  which must not mistake the builder's anchors for the level's own cards: a
+   *  NEUTRAL anchor (MOTIR-6359) carries a firm/pending arrow, not a `cross` one. */
+  anchor?: boolean;
   /** A signature of the node's CONTENT, read only by a canvas with `motion` on: a
    *  change while the id stays plays the DEEPEN cue (MOTIR-6297, Part XXIII §23.4).
    *  The consumer that opts into motion supplies it (MOTIR-6300). */

@@ -42,7 +42,7 @@ describe('assignableMembersService.list — a private project', () => {
     await workspacesService.addMember({
       userId: viewer.id,
       workspaceId: workspace.id,
-      role: 'viewer',
+      workspaceRole: 'viewer',
     });
     const project = await projectsService.createProject({
       workspaceId: workspace.id,

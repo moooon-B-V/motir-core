@@ -46,7 +46,11 @@ async function setup(mode: ProjectAccessMode) {
       password: 'hunter2hunter2',
       name: label,
     });
-    await workspacesService.addMember({ userId: u.id, workspaceId: fx.workspaceId, role });
+    await workspacesService.addMember({
+      userId: u.id,
+      workspaceId: fx.workspaceId,
+      workspaceRole: role,
+    });
     await adminDb.workspaceMembership.update({
       where: { userId_workspaceId: { userId: u.id, workspaceId: fx.workspaceId } },
       data: { accessScope: scope },

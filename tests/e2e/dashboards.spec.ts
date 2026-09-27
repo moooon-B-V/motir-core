@@ -102,7 +102,7 @@ async function addMember(t: Tenant, label: string): Promise<string> {
   await workspacesService.addMember({
     userId: user.id,
     workspaceId: t.fx.workspaceId,
-    role: 'member',
+    workspaceRole: 'member',
   });
   await pinActiveProject(user.id, t.fx.workspaceId, t.fx.projectId);
   return user.email;

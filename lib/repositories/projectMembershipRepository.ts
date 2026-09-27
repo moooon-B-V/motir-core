@@ -1,10 +1,4 @@
-import {
-  type MemberRole,
-  Prisma,
-  type Project,
-  type ProjectMembership,
-  type User,
-} from '@/generated/prisma/client';
+import { Prisma, type Project, type ProjectMembership, type User } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 
 // A project-membership row joined with the slice of its user the members list
@@ -98,6 +92,9 @@ export const projectMembershipRepository = {
     });
   },
 
+  // Neither writer takes the legacy `role` (MOTIR-6562): nothing reads it, and the
+  // database default fills the column until the phase-3 release drops it.
+
   /**
    * How many people were ADDED to the project (Story MOTIR-6169 · MOTIR-6541) —
    * the size of a Members-only project's entry list. Takes `tx` for the
@@ -107,11 +104,6 @@ export const projectMembershipRepository = {
     return tx.projectMembership.count({ where: { projectId } });
   },
 
-  /**
-   * How many projects of `workspaceId` each person was ADDED to, keyed by user id
-   * (Story MOTIR-6169 · MOTIR-6545) — the Members page's "N projects" cell, in ONE
-   * grouped query for the whole workspace. A person added to none is absent.
-   */
   /**
    * The non-archived projects one person was ADDED to in a workspace, by name —
    * the workspace Members page's "N projects" popover (Story MOTIR-6169 ·
@@ -130,6 +122,11 @@ export const projectMembershipRepository = {
     return rows.map((r) => r.project);
   },
 
+  /**
+   * How many projects of `workspaceId` each person was ADDED to, keyed by user id
+   * (Story MOTIR-6169 · MOTIR-6545) — the Members page's "N projects" cell, in ONE
+   * grouped query for the whole workspace. A person added to none is absent.
+   */
   async countProjectsByUserInWorkspace(
     workspaceId: string,
     tx: Prisma.TransactionClient,
@@ -157,7 +154,7 @@ export const projectMembershipRepository = {
   },
 
   async create(
-    data: { workspaceId: string; projectId: string; userId: string; role: MemberRole },
+    data: { workspaceId: string; projectId: string; userId: string },
     tx: Prisma.TransactionClient,
   ): Promise<ProjectMembership> {
     return tx.projectMembership.create({ data });
@@ -170,7 +167,7 @@ export const projectMembershipRepository = {
    * accept uses it to add the person to the projects the invite named (MOTIR-6546).
    */
   async createManySkipDuplicates(
-    data: Array<{ workspaceId: string; projectId: string; userId: string; role: MemberRole }>,
+    data: Array<{ workspaceId: string; projectId: string; userId: string }>,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     if (data.length === 0) return 0;

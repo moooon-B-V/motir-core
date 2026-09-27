@@ -103,7 +103,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   await workspacesService.addMember({
     userId: wsAdmin.id,
     workspaceId: workspace.id,
-    role: 'admin',
+    workspaceRole: 'manager',
   });
 
   const plainMember = await usersService.createUser({
@@ -124,12 +124,12 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
     await workspacesService.addMember({
       userId: u.id,
       workspaceId: workspace.id,
-      ...(role === 'viewer' ? { role: 'viewer' as const } : {}),
+      workspaceRole: role === 'viewer' ? 'viewer' : 'member',
     });
     // The LEGACY project row, written raw — the project role nothing reads now.
-    await adminDb.projectMembership.create({
-      data: { userId: u.id, projectId: project.id, workspaceId: workspace.id, role },
-    });
+    await adminDb.$executeRaw`
+      INSERT INTO "project_membership" ("id", "workspace_id", "project_id", "user_id", "role", "updated_at")
+      VALUES (gen_random_uuid()::text, ${workspace.id}, ${project.id}, ${u.id}, ${role}::"member_role", now())`;
     return u;
   }
   const viewer = await projectActor('viewer');
@@ -759,23 +759,6 @@ describe('the workspace role decides every project at once (MOTIR-6459)', () => 
     expect(await adminDb.projectMembership.count({ where: { userId: who.userId } })).toBe(
       projectRowsBefore,
     );
-  });
-
-  it('a NULL workspace_role resolves by the legacy mapping — the deploy-window fallback', async () => {
-    const s = await buildScenario('open', 'null-fallback');
-    // The row the still-serving OLD build writes during a deploy: the legacy
-    // column only, workspace_role NULL. (The service writes both since MOTIR-6462,
-    // so the fixture clears the new column to recreate that row.)
-    await adminDb.workspaceMembership.update({
-      where: { userId_workspaceId: { userId: s.ctxs.wsAdmin.userId, workspaceId: s.workspaceId } },
-      data: { workspaceRole: null },
-    });
-    const row = await adminDb.workspaceMembership.findUniqueOrThrow({
-      where: { userId_workspaceId: { userId: s.ctxs.wsAdmin.userId, workspaceId: s.workspaceId } },
-    });
-    expect([row.role, row.workspaceRole]).toEqual(['admin', null]);
-    const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.wsAdmin);
-    expect([...held].sort()).toEqual([...ROLE_GATED_PERMISSIONS].sort());
   });
 
   it('the org Owner with NO workspace membership still passes every role-gated key in a private project (MOTIR-6308)', async () => {

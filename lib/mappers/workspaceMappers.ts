@@ -1,7 +1,6 @@
 import type { Workspace, WorkspaceMembership } from '@/generated/prisma/client';
 import type { MembershipWithUser } from '@/lib/repositories/workspaceMembershipRepository';
 import type { RoleMigrationReportWithPeople } from '@/lib/repositories/roleMigrationReportRepository';
-import { resolveWorkspaceRole } from '@/lib/workspaces/roles';
 import type {
   CurrentWorkspaceDTO,
   MembershipDTO,
@@ -27,7 +26,7 @@ export function toWorkspaceDTO(workspace: Workspace): WorkspaceDTO {
 export function toMembershipDTO(membership: WorkspaceMembership): MembershipDTO {
   return {
     id: membership.id,
-    role: membership.role,
+    workspaceRole: membership.workspaceRole,
     userId: membership.userId,
     workspaceId: membership.workspaceId,
   };
@@ -50,9 +49,7 @@ export function toWorkspaceMemberDTO(row: MembershipWithUser): WorkspaceMemberDT
     // (OAuth users without a name claim, or pre-name-collection rows).
     name: row.user.name || row.user.email.split('@')[0]!,
     email: row.user.email,
-    // Read through the deploy-window fallback, so a not-yet-migrated row still
-    // reports the role it resolves to (MOTIR-6463).
-    workspaceRole: resolveWorkspaceRole(row),
+    workspaceRole: row.workspaceRole,
     customRole: row.roleDefinition
       ? { id: row.roleDefinition.id, name: row.roleDefinition.name }
       : null,

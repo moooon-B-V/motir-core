@@ -57,7 +57,7 @@ async function fixture(slug: string) {
   await workspacesService.addMember({
     userId: plain.id,
     workspaceId: workspace.id,
-    role: 'member',
+    workspaceRole: 'member',
   });
   const as = (userId: string) =>
     getWorkspaceContext.mockResolvedValue({ userId, workspaceId: workspace.id });

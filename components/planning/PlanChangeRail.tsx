@@ -35,6 +35,8 @@ import { PlanningTargetKeyChip } from '@/components/planning/PlanningTargetChip'
 import { PlanStaleBand, SeeOnlyLine } from '@/components/planning/PlanChangeConfirmBar';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
 import type { PlanGateView } from '@/lib/planning/planGateView';
+import type { PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
+import { claimPickAutoSend } from '@/lib/planning/pickAutoSend';
 import {
   dispositionMarkerFor,
   pendingQuestion,
@@ -135,6 +137,25 @@ export interface PlanChangeRailProps {
    * so pressing one would silently throw the seed away.
    */
   initialDraft?: string;
+  /**
+   * A PICK'S FIRST TURN, SENT FOR THE PERSON (story MOTIR-6069 · MOTIR-6435;
+   * `picked-option-planning-starts.md`). Where `initialDraft` pre-fills and waits,
+   * this is sent ONCE, as their first message, as soon as the conversation is
+   * idle with no user turn — the yes that opened the planner was the consent. It
+   * never lands in the composer unless the send FAILS, and then it is put back
+   * there with the rail's ordinary error, so nothing is lost.
+   */
+  autoSendTurn?: string;
+  /** The gate the one-time send is claimed under (`claimPickAutoSend`), so a
+   *  remount or a second open cannot send it again. Paired with `autoSendTurn`. */
+  autoSendKey?: string | null;
+  /**
+   * THE FOLLOW-UP FRAMING (design MOTIR-6432, revisions 2–3): the conversation
+   * is the follow-up to a choice just made. The chip, the lead and the opener's
+   * second line say so, and the *Follow-up to a choice* card sits under the
+   * opener. Absent on every other launch.
+   */
+  followUp?: PlanningSeedPickDTO | null;
   state: PlanChangeConversationState;
   /** The indexed proposal — the rail MIRRORS the canvas bar's counts. */
   index: PlanChangeDiffIndex;
@@ -197,6 +218,9 @@ export function PlanChangeRail({
   projectName,
   justReturnedFromOnboarding,
   initialDraft,
+  autoSendTurn,
+  autoSendKey = null,
+  followUp = null,
   state,
   index,
   targets,
@@ -279,14 +303,34 @@ export function PlanChangeRail({
       : null;
   if (state.errorCode !== seenErrorCode) {
     setSeenErrorCode(state.errorCode);
-    if (state.errorCode && seededSend !== null && userTurns.length === 0) {
-      if (draft === '') setDraft(seededSend);
+    // A pick's turn (MOTIR-6435) is restored from its prop: the rail sent it
+    // itself, so the failure of that send is the one this error answers.
+    const restore = seededSend ?? autoSendTurn ?? null;
+    if (state.errorCode && restore !== null && userTurns.length === 0) {
+      if (draft === '') setDraft(restore);
       setSeededSend(null);
     }
   }
+  // THE PICK'S ONE-TIME SEND (MOTIR-6435). Fired once the conversation is idle
+  // with no user turn — the first moment a send has a thread to land in. The ref
+  // absorbs a StrictMode double effect; `claimPickAutoSend` a remount or a second
+  // open on this page; the overlay only hands a turn over when the server has no
+  // session this gate already seeded. A refused send puts the turn back in the
+  // composer through the failed-send restore above.
+  const autoSentRef = useRef(false);
+  const autoSendReady =
+    Boolean(autoSendTurn) && state.phase === 'idle' && !state.readOnly && userTurns.length === 0;
+  useEffect(() => {
+    if (!autoSendReady || !autoSendTurn || autoSentRef.current) return;
+    autoSentRef.current = true;
+    if (autoSendKey !== null && !claimPickAutoSend(autoSendKey)) return;
+    onSend(autoSendTurn);
+  }, [autoSendReady, autoSendTurn, autoSendKey, onSend]);
+
   // No starters while the rail HOLDS A SEED (design MOTIR-6206 sheet 2): the seed
-  // is the start. Cleared, the rail is an ordinary item re-plan again.
-  const holdsSeed = Boolean(initialDraft) && draft.trim() !== '';
+  // is the start. Cleared, the rail is an ordinary item re-plan again. A pick's
+  // follow-up never shows them: its first turn is the start, sent for the person.
+  const holdsSeed = (Boolean(initialDraft) && draft.trim() !== '') || followUp !== null;
   const showStarters = userTurns.length === 0 && !busy && state.phase !== 'loading' && !holdsSeed;
   // An ITEM re-plan opens by ASKING (MOTIR-910 / design panels 2 + 4 + 5): the
   // composer is pre-focused and prompts for what's wrong, and what the user types
@@ -350,7 +394,7 @@ export function PlanChangeRail({
           {t('railLabel')}
         </span>
         <Pill tone="neutral" className="ml-auto" data-testid="planning-mode-chip">
-          {t(MODE_LABEL_KEY[launch.mode])}
+          {followUp ? t('mode.followUp') : t(MODE_LABEL_KEY[launch.mode])}
         </Pill>
       </div>
 
@@ -439,14 +483,19 @@ export function PlanChangeRail({
             blank screen; only the conversation is empty (design panel 6). */}
         <Bubble role="assistant">
           <span>
-            {t(leadKey(launch), {
-              project: projectName,
-              item: launch.itemKey ?? '',
-              repo: launch.repoKey ?? '',
-            })}
+            {followUp
+              ? launch.itemKey
+                ? t('lead.followUp', { choice: followUp.choiceKey, item: launch.itemKey })
+                : t('lead.followUpProject', { choice: followUp.choiceKey, project: projectName })
+              : t(leadKey(launch), {
+                  project: projectName,
+                  item: launch.itemKey ?? '',
+                  repo: launch.repoKey ?? '',
+                })}
           </span>{' '}
-          <span>{tc('opener')}</span>
+          <span>{followUp ? tc('openerFollowUp', { label: followUp.label }) : tc('opener')}</span>
         </Bubble>
+        {followUp ? <FollowUpCard pick={followUp} /> : null}
 
         {/* The starter hints sit WITH the opener (design panel 6's `emptyhint`),
             not docked above the composer — they are a continuation of the
@@ -1417,6 +1466,49 @@ function GatedReviewBlock({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * THE *FOLLOW-UP TO A CHOICE* CARD (design MOTIR-6432, revision 2; MOTIR-6435) —
+ * what the conversation is ABOUT, pinned under the opener: the choice's key and
+ * title, what was chosen and its best-if line (the chosen record's own chips),
+ * and who chose it when, in the chosen record's own words. `--el-text-secondary`
+ * on `--el-surface-soft` clears AA; the label and best-for sit in mint / sky tint
+ * chips with `--el-text-strong` ink.
+ */
+function FollowUpCard({ pick }: { pick: PlanningSeedPickDTO }) {
+  const t = useTranslations('planningWorkspace');
+  const tc = useTranslations('approvalGate.choice');
+  const format = useFormatter();
+  const when = pick.decidedAt ? format.relativeTime(new Date(pick.decidedAt)) : '';
+  return (
+    <div
+      data-testid="pick-followup-card"
+      className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2"
+    >
+      <p className="text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase">
+        {t('followUpCard.label')}
+      </p>
+      <p className="mt-1.5 text-[13px] font-medium text-(--el-text)">
+        <span className="font-mono">{pick.choiceKey}</span> · {pick.choiceTitle}
+      </p>
+      <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-(--el-text-secondary)">
+        <span className="text-(--el-text)">{tc('record.chose')}</span>
+        <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-tint-mint) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-strong)">
+          {pick.label}
+        </span>
+        <span>{tc('bestIfYouWant')}</span>
+        <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-tint-sky) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-strong)">
+          {pick.bestFor}
+        </span>
+      </p>
+      {pick.decidedByLabel ? (
+        <p className="mt-1.5 text-xs text-(--el-text-secondary)">
+          {tc('record.lead', { name: pick.decidedByLabel, when })}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -45,7 +45,7 @@ async function build() {
   await workspacesService.addMember({
     userId: viewer.id,
     workspaceId: workspace.id,
-    role: 'viewer',
+    workspaceRole: 'viewer',
   });
   await adminDb.workspaceRoleDefinition.create({
     data: { workspaceId: workspace.id, name: 'Contractor', permissions: ['project:browse'] },

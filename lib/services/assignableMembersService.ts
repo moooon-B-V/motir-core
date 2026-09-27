@@ -6,7 +6,6 @@ import { projectMembershipRepository } from '@/lib/repositories/projectMembershi
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { toWorkspaceMemberDTO } from '@/lib/mappers/workspaceMappers';
-import { resolveWorkspaceRole } from '@/lib/workspaces/roles';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 
@@ -64,7 +63,7 @@ export const assignableMembersService = {
         .filter((m) =>
           canEnter({
             accessMode: input.accessMode,
-            workspaceRole: orgManagers.has(m.userId) ? 'manager' : resolveWorkspaceRole(m),
+            workspaceRole: orgManagers.has(m.userId) ? 'manager' : m.workspaceRole,
             accessScope: m.accessScope,
             addedToProject: added.has(m.userId),
           }),

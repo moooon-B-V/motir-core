@@ -308,7 +308,7 @@ test('a viewer gets NO edit affordance on any rail row — the boundary is visib
   await workspacesService.addMember({
     userId: viewer.id,
     workspaceId: owner.workspaceId,
-    role: 'member',
+    workspaceRole: 'member',
   });
   await addToProjectAs({
     key: owner.projectKey,
