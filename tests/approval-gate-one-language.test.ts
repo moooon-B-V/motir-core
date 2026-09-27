@@ -327,7 +327,12 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
     {
       method: 'supersedeOtherAwaitingByWorkItem',
       writes: 'superseded',
-      callers: ['lib/approvalGates/returnToTodo.ts'],
+      // …and, since MOTIR-6503, a story run's acceptance refusal, which withdraws the
+      // story's merge gate WITHOUT a return (no acceptance refusal moves a status).
+      callers: [
+        'lib/approvalGates/acceptanceResultHandler.ts',
+        'lib/approvalGates/returnToTodo.ts',
+      ],
     },
     // Story MOTIR-6012 (ADR `approval-gates.md` §11.7): the CARD-LESS plan gate's raise
     // and supersede, keyed on `(subjectId, kind)` because a plan gate has no work item.

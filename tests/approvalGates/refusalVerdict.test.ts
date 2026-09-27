@@ -22,6 +22,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { connectRepairRepo, deliveredPr } from '../helpers/repairFixtures';
 
 let fx: WorkItemFixture;
 
@@ -189,6 +190,9 @@ describe('a design refusal pressed in Motir REQUIRES a verdict', () => {
 });
 
 describe('the rule is TOTAL over kind × verb × source for a pressed decision', () => {
+  // Every gate here is a bare row on a task with NO delivery, so an `acceptance_result`
+  // among them is a FINISHED story's — which offers no verdict (MOTIR-6501). The story-run
+  // shape has its own block below.
   for (const kind of CARD_KINDS) {
     for (const decision of VERBS) {
       const press = pressFor(kind, decision);
@@ -296,6 +300,198 @@ describe('the rule is TOTAL over kind × verb × source for a pressed decision',
       fx.ctx,
     );
     expect(decided.gate).toMatchObject({ state: 'approved', refusalVerdict: null });
+  });
+});
+
+describe('an ACCEPTANCE refusal offers a verdict by RUN SHAPE (MOTIR-6501; acceptance-refusal-verdict.md §1)', () => {
+  /** A story with a pending receipt and its awaiting acceptance gate; `run` gives it an
+   *  open delivery of its own — a STORY RUN — and `closed` a delivery that is not open. */
+  let repos = 0;
+  async function acceptanceGate(shape: 'run' | 'finished' | 'closed') {
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: `A ${shape} story` },
+      fx.ctx,
+    );
+    if (shape !== 'finished') {
+      const repo = await connectRepairRepo(fx, `web-${shape}-${repos++}`);
+      await deliveredPr(fx, story.id, repo, {
+        headRef: `parent/${shape}`,
+        state: shape === 'run' ? 'open' : 'closed',
+        merged: shape === 'closed',
+      });
+    }
+    const receipt = await adminDb.acceptanceEvidence.create({
+      data: { workspaceId: fx.workspaceId, workItemId: story.id },
+    });
+    return adminDb.approvalGate.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        workItemId: story.id,
+        kind: 'acceptance_result',
+        subjectId: receipt.id,
+        subjectVersion: 'v1',
+        state: 'awaiting',
+      },
+    });
+  }
+
+  const REASON = 'The empty board should say how to add the first card.';
+
+  for (const source of PRESSED) {
+    it(`story run · request_changes · ${source} · no verdict → refusal_verdict_required, nothing written`, async () => {
+      const gate = await acceptanceGate('run');
+      await expect(
+        approvalGatesService.decide(
+          {
+            gateId: gate.id,
+            decision: 'request_changes',
+            source,
+            noteMd: REASON,
+            stamp: DECIDED_WITHOUT_A_READER,
+          },
+          fx.ctx,
+        ),
+      ).rejects.toMatchObject({ reason: 'refusal_verdict_required' });
+      expect(await gateRow(gate.id)).toMatchObject({ state: 'awaiting', refusalVerdict: null });
+    });
+
+    for (const verdict of ['revise', 're_plan'] as const) {
+      it(`story run · request_changes · ${source} · ${verdict} → accepted, stored on the row and the DTO`, async () => {
+        const gate = await acceptanceGate('run');
+        const decided = await approvalGatesService.decide(
+          {
+            gateId: gate.id,
+            decision: 'request_changes',
+            source,
+            noteMd: REASON,
+            refusalVerdict: verdict,
+            stamp: DECIDED_WITHOUT_A_READER,
+          },
+          fx.ctx,
+        );
+        expect(decided.gate).toMatchObject({
+          state: 'changes_requested',
+          noteMd: REASON,
+          refusalVerdict: verdict,
+          // A decided gate asks nothing more.
+          offersRefusalVerdict: false,
+        });
+        expect(await gateRow(gate.id)).toMatchObject({
+          state: 'changes_requested',
+          refusalVerdict: verdict,
+        });
+      });
+    }
+  }
+
+  for (const shape of ['finished', 'closed'] as const) {
+    it(`${shape === 'finished' ? 'finished story' : 'a story whose only delivery is closed'} · WITH a verdict → refusal_verdict_not_offered`, async () => {
+      const gate = await acceptanceGate(shape);
+      await expect(
+        approvalGatesService.decide(
+          {
+            gateId: gate.id,
+            decision: 'request_changes',
+            source: 'ui',
+            noteMd: REASON,
+            refusalVerdict: 'revise',
+            stamp: DECIDED_WITHOUT_A_READER,
+          },
+          fx.ctx,
+        ),
+      ).rejects.toMatchObject({ reason: 'refusal_verdict_not_offered' });
+      expect((await gateRow(gate.id)).state).toBe('awaiting');
+    });
+
+    it(`${shape === 'finished' ? 'finished story' : 'a story whose only delivery is closed'} · WITHOUT a verdict → accepted, verdict NULL`, async () => {
+      const gate = await acceptanceGate(shape);
+      const decided = await approvalGatesService.decide(
+        {
+          gateId: gate.id,
+          decision: 'request_changes',
+          source: 'ui',
+          noteMd: REASON,
+          stamp: DECIDED_WITHOUT_A_READER,
+        },
+        fx.ctx,
+      );
+      expect(decided.gate).toMatchObject({ state: 'changes_requested', refusalVerdict: null });
+    });
+  }
+
+  it('story run · request_changes · github · WITH a verdict → not offered; WITHOUT one → accepted verdict-less', async () => {
+    const withVerdict = await acceptanceGate('run');
+    await expect(
+      approvalGatesService.decide(
+        {
+          gateId: withVerdict.id,
+          decision: 'request_changes',
+          source: 'github',
+          noteMd: null,
+          refusalVerdict: 're_plan',
+          stamp: DECIDED_WITHOUT_A_READER,
+        },
+        fx.ctx,
+        SYNCED,
+      ),
+    ).rejects.toMatchObject({ reason: 'refusal_verdict_not_offered' });
+
+    const bare = await acceptanceGate('run');
+    const decided = await approvalGatesService.decide(
+      {
+        gateId: bare.id,
+        decision: 'request_changes',
+        source: 'github',
+        noteMd: null,
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
+      fx.ctx,
+      SYNCED,
+    );
+    expect(decided.gate).toMatchObject({ state: 'changes_requested', refusalVerdict: null });
+  });
+
+  it('story run · APPROVE with a verdict → not offered (a verdict belongs to a refusal)', async () => {
+    const gate = await acceptanceGate('run');
+    await expect(
+      approvalGatesService.decide(
+        {
+          gateId: gate.id,
+          decision: 'approve',
+          source: 'ui',
+          refusalVerdict: 'revise',
+          stamp: DECIDED_WITHOUT_A_READER,
+        },
+        fx.ctx,
+      ),
+    ).rejects.toMatchObject({ reason: 'refusal_verdict_not_offered' });
+  });
+
+  it('the gate read advertises the offer: true on a story run, false on a finished story, false once decided', async () => {
+    const run = await acceptanceGate('run');
+    const finished = await acceptanceGate('finished');
+    const readOf = (workItemId: string) =>
+      approvalGatesService.getForWorkItem({ workItemId, kind: 'acceptance_result' }, fx.ctx);
+
+    expect((await readOf(run.workItemId!)).gate?.offersRefusalVerdict).toBe(true);
+    expect((await readOf(finished.workItemId!)).gate?.offersRefusalVerdict).toBe(false);
+
+    await approvalGatesService.decide(
+      {
+        gateId: run.id,
+        decision: 'request_changes',
+        source: 'ui',
+        noteMd: REASON,
+        refusalVerdict: 'revise',
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
+      fx.ctx,
+    );
+    expect((await readOf(run.workItemId!)).gate).toMatchObject({
+      state: 'changes_requested',
+      offersRefusalVerdict: false,
+    });
   });
 });
 

@@ -6566,11 +6566,14 @@
       },
       "fix": {
         "title": "修复检查",
+        "titleSentBack": "修复被退回的内容",
         "aria": {
-          "part": "修复检查"
+          "part": "修复检查",
+          "partSentBack": "修复被退回的内容"
         },
         "failingOn": "<prs></prs> 的检查未通过。",
         "leftQueueOn": "<prs></prs> 已离开合并队列。",
+        "sentBack": "验收视频被退回重新运行。智能体会根据给出的理由在同一个拉取请求上修复，然后录制新的视频。",
         "lead": "在终端中将修复交给智能体：",
         "how": "智能体在该拉取请求自己的分支上工作并推送，然后检查会重新运行。",
         "howMany": "智能体在每个拉取请求自己的分支上工作并推送，然后检查会重新运行。",
@@ -6836,7 +6839,8 @@
           "decisionApproval": "要求修改",
           "decisionConfirmation": "推翻",
           "decisionChoice": "都不合适",
-          "designResult": "要求修改"
+          "designResult": "要求修改",
+          "acceptanceResult": "要求修改"
         },
         "aria": "打开 {key}，即此对话重新规划的工作项",
         "pickLabel": "<mono>{key}</mono> 的后续规划",
@@ -6852,7 +6856,9 @@
         "decisionApproval": "这个决策被要求修改。",
         "decisionConfirmation": "这个决策已被推翻。",
         "decisionChoice": "这个选择的选项都没有被选中。",
-        "designResult": "这个设计被要求修改。"
+        "designResult": "这个设计被要求修改。",
+        "acceptanceReplan": "这个故事的验收视频被退回重新规划。这个故事是整体运行的，所以它的子任务都还没有完成。",
+        "acceptanceRemedy": "这个故事的验收视频被退回。所有子任务都已合并，没有可以重新运行的内容。"
       },
       "reason": "给出的理由：\n“{reason}”",
       "supersedes": "它曾取代的工作项：{keys}",
@@ -6860,6 +6866,8 @@
       "ask": "请根据这个理由重新规划这个工作项。",
       "blockedBy": "等待这个设计的工作项：{keys}",
       "askDesign": "请根据这个理由重新规划 {parent}：这个设计以及等待它的工作。",
+      "askAcceptanceReplan": "请根据这个理由重新规划 {key}。它的任何子任务都可以重新规划。",
+      "askAcceptanceRemedy": "请根据这个理由在 {key} 下规划补救：修复视频中所示问题的新工作。",
       "pick": {
         "followUp": "我刚在这个选择上选定了一个选项——这就是它在等的后续规划。",
         "noContainer": "这个选择没有未完成的上级工作项，所以 Motir AI 在项目上打开。",
@@ -8850,6 +8858,10 @@
         "decision": {
           "title": "请先接受决策，这些拉取请求才能合并。",
           "next": "请批准上方的决策文档。一次点击即可接受决策并合并它们。"
+        },
+        "acceptance": {
+          "title": "请先批准新的验收视频，这些拉取请求才能合并。",
+          "next": "这个故事的视频已被退回。录制新视频后，批准它即可合并它们。"
         }
       },
       "alreadyAwaiting": {
@@ -8934,7 +8946,34 @@
       "consequenceMerges": "批准即验收 {key} 并合并 {prs}，随后将 {key} 移至“已批准”。视频不会被合并——它是证据，从不提交。",
       "accepted": "{name} 于 {when} 批准了验收",
       "stands": "{name} 于 {when} 批准了验收 — 视频保持不变",
-      "mergeHeld": "拉取请求在检查通过后自动合并，无需再次点击。"
+      "mergeHeld": "拉取请求在检查通过后自动合并，无需再次点击。",
+      "cta": {
+        "body": "全屏观看录像，然后批准或请求修改。"
+      },
+      "verdict": {
+        "legend": "是重新运行还是重新规划？",
+        "required": "请选择“重新运行”或“重新规划”——退回的验收需要其中之一。",
+        "rerun": {
+          "label": "重新运行",
+          "hint": "用于修正已构建的内容。",
+          "consequence": "状态不变；合并审批被撤回，motir fix 会带着你的理由在同一个拉取请求上修复。"
+        },
+        "replan": {
+          "hint": "用于改变故事的结构。",
+          "consequence": "状态不变；合并审批被撤回，然后会询问你是否重新规划。"
+        }
+      },
+      "refusal": {
+        "noRerun": "所有子任务都已合并——没有可重新运行的内容，因此退回它将请求一个补救方案。"
+      },
+      "remedyAsk": {
+        "title": "用 Motir AI 为 {key} 规划补救方案？",
+        "yes": "用 AI 规划补救方案"
+      },
+      "remedyDoor": {
+        "label": "用 AI 规划补救方案",
+        "aria": "根据这次退回，用 AI 为 {item} 规划补救方案"
+      }
     },
     "pullRequestApproval": {
       "kindLabel": "拉取请求",
@@ -9321,7 +9360,9 @@
         "noneOnGithub": "GitHub 上未给出原因。",
         "verdict": {
           "revise": "已退回修订",
-          "replan": "已退回重新规划"
+          "replan": "已退回重新规划",
+          "rerun": "已退回重新运行",
+          "remedy": "已退回以制定补救方案"
         }
       },
       "row": {

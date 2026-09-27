@@ -149,6 +149,14 @@ export interface GateVerb {
    */
   verdict?: RefusalVerdictField;
   /**
+   * WHY NO VERDICT IS ASKED (Story MOTIR-6071 · Subtask MOTIR-6506; design
+   * `approval-control--acceptance-verdict.mock.html` choice 1) — ONE line in the verdict's
+   * slot, below the reason and above the buttons, for a verb whose kind offers a verdict
+   * elsewhere but not on this gate (a finished story has nothing left to re-run). No box,
+   * no icon, `--el-text-secondary`. Absent on every other verb.
+   */
+  absentVerdict?: string;
+  /**
    * The confirm band's words FOR THIS VERB, when a kind's verbs confirm different acts
    * (MOTIR-5960 — *Confirming this will:* and *Overturning this will:*). Absent, the
    * frame-level `confirmTitle` / `confirmConsequences` / `confirmProceedLabel` apply.
@@ -277,6 +285,14 @@ export interface ApprovalGateControlProps {
    * decided frame is unchanged.
    */
   recordBand?: ReactNode;
+  /**
+   * The SURFACE knows the gate's work item has no open delivery of its own (Story
+   * MOTIR-6071 · MOTIR-6506) — a finished story, whose refusal stores no verdict. The
+   * record's chip then reads *Sent back for a remedy* for a verdict-less refusal pressed in
+   * Motir (`RefusalVerdictChip` decides which kinds that applies to). Omitted: a
+   * verdict-less record shows no chip (a record from before the verdict existed).
+   */
+  refusalRemedy?: boolean;
   /**
    * State `G`'s dead-port words, when the KIND knows its own reason for the withdrawal
    * (MOTIR-5484 / MOTIR-5604: a push moved a pull request's head). Absent, the frame's
@@ -957,6 +973,7 @@ export function ApprovalGateControl({
   alert,
   recordDetail,
   recordBand,
+  refusalRemedy = false,
   withdrawnPort,
   recordLead,
   onDecide,
@@ -1361,7 +1378,12 @@ export function ApprovalGateControl({
             {/* A DESIGN SENT BACK IS A VERDICT (MOTIR-6427; design panel 4): the chip sits
               after the kind's line and BEFORE the quote, which starts the next line. */}
             {gate.state === 'changes_requested' ? (
-              <RefusalVerdictChip verdict={gate.refusalVerdict} />
+              <RefusalVerdictChip
+                verdict={gate.refusalVerdict}
+                kind={gate.kind}
+                decisionSource={gate.decisionSource}
+                remedy={refusalRemedy}
+              />
             ) : null}
             {/* A REFUSAL SAYS WHY (MOTIR-6075; design Panel 4) — quoted as the overturned
               record quotes its note, after who / when / version and the kind's line. */}
@@ -1447,6 +1469,14 @@ export function ApprovalGateControl({
                     if (verdictRefused) setVerdictRefused(false);
                   }}
                 />
+              ) : phase.verb.absentVerdict ? (
+                // WHY NO VERDICT (MOTIR-6506, choice 1): the one line where the tiles would be.
+                <p
+                  className="mt-3 text-[13px] leading-snug text-(--el-text-secondary)"
+                  data-testid="refusal-no-rerun"
+                >
+                  {phase.verb.absentVerdict}
+                </p>
               ) : null}
               <div className="mt-3 flex flex-wrap justify-end gap-2">
                 <Button

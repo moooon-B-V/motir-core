@@ -610,9 +610,36 @@
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.40.0` at `b4588d153`, so this claims `1.41.0`. If a sibling has taken
- *   it since, RENUMBER this entry — it names the FIELD.
+ *   it since, RENUMBER this entry — it names the FIELD. *
+ * - `1.42.0` — MOTIR-6501 adds `offersRefusalVerdict` (boolean) to the
+ *   `ApprovalGateDecision` component `getWorkItemApprovalGate` answers: whether a refusal
+ *   of this gate, pressed in Motir, must carry a verdict. True on an awaiting
+ *   `design_result`, and on an awaiting `acceptance_result` whose story has an open
+ *   delivery of its own (a story run, `acceptance-refusal-verdict.md` §1); false on every
+ *   other kind and state. `refusalVerdict` may now be set on a story run's
+ *   `acceptance_result` as well.
  *
- * - `1.42.0` — MOTIR-6528 adds `heartbeatDispatchRun`:
+ *   Additive: one new field on an existing component (§8's allowed list); no existing
+ *   field changes meaning. Still a READ — no v1 operation decides a gate.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.41.0` at `70c845f0a`, so this claims `1.42.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the FIELD. *
+ * - `1.43.0` — MOTIR-6502 adds `repairClass` (`ci` | `acceptance_rerun`) and
+ *   `acceptanceRefusal` (`{ reasonMd, decidedByLabel, decidedAt }`, nullable) to the
+ *   `WorkItemRepairClaim` component `claimWorkItemRepair` answers. `acceptance_rerun`
+ *   admits a story whose acceptance video was sent back with Re-run in Motir
+ *   (`acceptance-refusal-verdict.md` §4): its checks may be green, so every open member
+ *   is handed over, and the reason rides beside them. Every shipped admission is `ci`.
+ *
+ *   Additive: two new fields on an existing component (§8's allowed list) and a new
+ *   admission of an existing operation; no existing field changes meaning.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: this claims `1.43.0` on top
+ *   of MOTIR-6501's `1.42.0` in the same pull request. RENUMBER both if a sibling has
+ *   taken either since.
+ *
+ * - `1.44.0` — MOTIR-6528 adds `heartbeatDispatchRun`:
  *   `POST /api/v1/dispatch-runs/{id}/heartbeat`, no body, `204` — a LOCAL run says
  *   it is still alive (`docs/decisions/run-death-keeps-work.md` §2). And one field on
  *   the `DispatchRun` component: `lastHeartbeatAt` (nullable), when the run last did.
@@ -642,7 +669,8 @@
  *   `CLI_TOKEN_GRANT` already carries, so the grant is NOT widened.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.41.0` at `874665544`, so this claims `1.42.0`. If a sibling has taken
+ *   was `1.43.0` at `e3be83c90`, so this claims `1.44.0` (renumbered from `1.42.0`,
+ *   which MOTIR-6501 took first). If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
  */
-export const V1_CONTRACT_VERSION = '1.42.0';
+export const V1_CONTRACT_VERSION = '1.44.0';

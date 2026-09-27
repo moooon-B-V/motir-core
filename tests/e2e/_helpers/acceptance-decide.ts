@@ -83,6 +83,17 @@ export async function decideAcceptanceInOverlay(
       .or(overlay.getByText('Changes requested', { exact: true })),
   ).toBeVisible();
 
+  // ⚠️ A REFUSAL ON A FINISHED STORY NOW ASKS (Story MOTIR-6071 · MOTIR-6506): the decided
+  // band offers *Plan a remedy for {key} with Motir AI?*, and Esc answers THAT question
+  // (Not now) before it would close the overlay. The ask renders in the same update as the
+  // decided record awaited above, and only for a viewer who may plan with AI — so its
+  // presence is read now, with no wait, and answered with Not now, which leaves the door.
+  const ask = overlay.getByTestId('refusal-replan-ask');
+  if ((await ask.count()) > 0) {
+    await ask.getByRole('button', { name: 'Not now', exact: true }).click();
+    await expect(ask).toHaveCount(0);
+  }
+
   // Esc closes the overlay by stripping the two parameters it added — a shallow pop, so
   // the page underneath was never re-rendered by the navigation. Whatever it shows next
   // is the decision's own repaint, which is the thing these specs exist to measure.

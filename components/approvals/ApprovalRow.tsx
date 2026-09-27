@@ -729,8 +729,10 @@ export function ApprovalRow({
             <RefusalReasonCell
               reason={record.row.refusalReason}
               version={record.row.subjectVersion}
-              // A design sent back LEADS with its verdict (MOTIR-6427; design 4e/4f).
+              // A design sent back LEADS with its verdict (MOTIR-6427; design 4e/4f), and an
+              // acceptance's `revise` leads with *Re-run* (MOTIR-6506, panel 5b).
               verdict={record.row.refusalVerdict}
+              kind={row.kind}
             />
           ) : record.section === 'decided' ? (
             <SubjectMeta
