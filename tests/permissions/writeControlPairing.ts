@@ -261,6 +261,10 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
     role: 'workspace:manager',
   },
   'settings/workspace/actions.ts#loadRoleMigrationPageAction': { kind: 'read' },
+  'settings/workspace/actions.ts#setMemberAccessScopeAction': {
+    kind: 'role',
+    role: 'workspace:manager',
+  },
   'settings/workspace/actions.ts#setMemberRoleAction': { kind: 'role', role: 'workspace:manager' },
   'settings/workspace/jobs/actions.ts#replayDlqAction': { kind: 'role', role: 'workspace:manager' },
   'settings/workspace/security/actions.ts#setWorkspaceRequireTwoFactorAction': {
