@@ -1,3 +1,4 @@
+import type { Prisma } from '@/generated/prisma/client';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { publicAddressesService } from '@/lib/services/publicAddressesService';
 import { publicSiteOrigin } from '@/lib/publicProjects/urls';
@@ -202,25 +203,40 @@ async function resolveHiddenIds(
  * descendants (counting them would leak the hidden subtree's size — an aggregate
  * tell). The triage / upvote counts are unaffected (a triage item is parentless,
  * so never a private epic's descendant).
+ *
+ * `tx` is the caller's transaction, ALREADY BOUND to `workspaceId`: the two bound
+ * counts run on it one after the other, and the upvote count — deliberately
+ * unbound, the RLS-secondary posture `countByProject` documents — runs beside them.
  */
 async function computeStats(
   projectId: string,
   workspaceId: string,
   excludeIds: readonly string[],
+  tx: Prisma.TransactionClient,
 ): Promise<PublicProjectStatsDto> {
-  // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
-  // `computeStats` runs after `resolvePublicProject`'s anonymous gate, and
-  // all three arms are bounded counts with no refusal path.
-  const [byCategory, publicRequests, upvotes] = await Promise.all([
+  // MOTIR-6627 — the two bound counts share the caller's ONE transaction rather
+  // than opening one each. Each `withWorkspaceServiceContext` is a pool slot held
+  // for the length of its read, and `getOverview` used to ask for three at once
+  // (these two plus its workspace read) on every anonymous render: a handful of
+  // concurrent renders drained the pool, and the next `$transaction` died at
+  // Prisma's 2 s `maxWait` with "Unable to start a transaction in the given
+  // time". The reads share one binding, so they are not the structural
+  // exception `lib/workspaces/context.ts` allows this service.
+  const countBound = async () => {
     // Bound (MOTIR-2789): this count JOINS `workflow_status` to resolve each item's
     // category, and that table has no public arm — so unbound the join matched nothing
     // and every stat read zero on a project full of work.
-    withWorkspaceServiceContext(workspaceId, (tx) =>
-      workItemRepository.countByStatusCategory(projectId, workspaceId, { excludeIds }, tx),
-    ),
-    withWorkspaceServiceContext(workspaceId, (tx) =>
-      workItemRepository.countTriageItems(projectId, workspaceId, tx),
-    ),
+    const byCategory = await workItemRepository.countByStatusCategory(
+      projectId,
+      workspaceId,
+      { excludeIds },
+      tx,
+    );
+    const publicRequests = await workItemRepository.countTriageItems(projectId, workspaceId, tx);
+    return { byCategory, publicRequests };
+  };
+  const [{ byCategory, publicRequests }, upvotes] = await Promise.all([
+    countBound(),
     publicRequestVoteRepository.countByProject(projectId),
   ]);
   return {
@@ -478,15 +494,22 @@ export const publicProjectsService = {
     // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
     // `resolvePublicProject` gated this read above; neither the workspace read
     // nor `computeStats` refuses.
-    const [workspace, stats, addresses] = await Promise.all([
-      // `workspace` has no public arm either; the project's own workspace is known here.
-      withWorkspaceServiceContext(project.workspaceId, (tx) =>
-        workspaceRepository.findById(project.workspaceId, tx),
-      ),
-      computeStats(project.id, project.workspaceId, hiddenIds),
+    //
+    // MOTIR-6627 — but every BOUND read here shares one binding (the project's own
+    // workspace), so they share ONE transaction: one pool slot per render, not
+    // three. `docs/decisions/bound-read-transaction-shape.md` is the rule; the
+    // fan-out that stays is between that transaction and the reads that are
+    // deliberately unbound.
+    const [{ workspace, stats }, addresses] = await Promise.all([
+      withWorkspaceServiceContext(project.workspaceId, async (tx) => {
+        // `workspace` has no public arm either; the project's own workspace is known here.
+        const workspace = await workspaceRepository.findById(project.workspaceId, tx);
+        const stats = await computeStats(project.id, project.workspaceId, hiddenIds, tx);
+        return { workspace, stats };
+      }),
       // The project's canonical address and its alternates (Story MOTIR-3878 ·
       // the ADR §7). In the SAME `Promise.all` rather than awaited after it: it
-      // is a peer read with no dependency on the other two, and the renderer
+      // is a peer read with no dependency on the bound reads, and the renderer
       // needs it on the first paint to emit a canonical.
       publicAddressesService.addressesForProject(
         project.id,
