@@ -2,13 +2,17 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { FolderGit2 } from 'lucide-react';
+import { CircleCheckBig, ExternalLink, FolderGit2, TriangleAlert } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import type { OrgSectionEntry } from '@/lib/projectRepos/roomSections';
-import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
+import type {
+  HostedRunRepoAccessDto,
+  HostedRunRepoAccessMapDto,
+  ProjectRepoDto,
+} from '@/lib/dto/projectRepos';
 
 // FROM YOUR ORGANISATION — the project's organisation repositories (Story
 // MOTIR-4669 · MOTIR-4681), `design/repository-set/design-notes.md` §17.2 / §17.6.
@@ -74,6 +78,11 @@ export interface OrganizationRepositoriesProps {
   organizationName: string;
   /** Whether the actor may ADD. The remove action is NOT gated on this. */
   canAdd: boolean;
+  /**
+   * Whether Motir's app can write each row's repository for a hosted run, keyed
+   * by row id (MOTIR-1895 · design §18.1). A row with no entry draws no line.
+   */
+  hostedRunAccess?: HostedRunRepoAccessMapDto;
   /** Resolves once the row is gone; the caller owns the optimistic update. */
   onRemove: (row: ProjectRepoDto) => Promise<void>;
   /** The add door, rendered in the section head when the actor may use it. */
@@ -84,6 +93,7 @@ export function OrganizationRepositories({
   entries,
   organizationName,
   canAdd,
+  hostedRunAccess = {},
   onRemove,
   addButton,
 }: OrganizationRepositoriesProps) {
@@ -165,22 +175,24 @@ export function OrganizationRepositories({
             {entries.map((entry) => (
               <li
                 key={entry.id}
-                className="flex items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y)"
+                id={`repo-${entry.id}`}
+                className="flex flex-col gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y)"
               >
-                <FolderGit2
-                  className="h-[18px] w-[18px] shrink-0 text-(--el-icon-muted)"
-                  aria-hidden
-                />
-                <span className="min-w-0 flex-1 truncate font-sans text-sm">
-                  <span className="text-(--el-text-muted)">{ownerPrefix(entry)}</span>
-                  <span className="font-medium text-(--el-text)">{repoName(entry)}</span>
-                </span>
-                {defaultBranch(entry) ? (
-                  <span className="shrink-0 rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-xs text-(--el-code-text)">
-                    {defaultBranch(entry)}
+                <div className="flex items-center gap-3">
+                  <FolderGit2
+                    className="h-[18px] w-[18px] shrink-0 text-(--el-icon-muted)"
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1 truncate font-sans text-sm">
+                    <span className="text-(--el-text-muted)">{ownerPrefix(entry)}</span>
+                    <span className="font-medium text-(--el-text)">{repoName(entry)}</span>
                   </span>
-                ) : null}
-                {/* ⚠️ EVERY ROW CARRIES THIS NOW, AND THAT IS THE CARD (MOTIR-4954).
+                  {defaultBranch(entry) ? (
+                    <span className="shrink-0 rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-xs text-(--el-code-text)">
+                      {defaultBranch(entry)}
+                    </span>
+                  ) : null}
+                  {/* ⚠️ EVERY ROW CARRIES THIS NOW, AND THAT IS THE CARD (MOTIR-4954).
                   It used to be conditional: a ladder-layered repository had no
                   `project_repository` row, so there was nothing for a remove to
                   delete, and a control that cannot keep its promise is worse than
@@ -191,15 +203,19 @@ export function OrganizationRepositories({
                   (§18.2). With the layered half gone every row is a link, the
                   action is unconditional, and the distinction it was silently
                   carrying is now the page's own boundary. */}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setConfirming(entry.row)}
-                  className="shrink-0 text-(--el-danger-on-surface) hover:bg-(--el-danger-surface)"
-                >
-                  {t('remove.action')}
-                </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setConfirming(entry.row)}
+                    className="shrink-0 text-(--el-danger-on-surface) hover:bg-(--el-danger-surface)"
+                  >
+                    {t('remove.action')}
+                  </Button>
+                </div>
+                {hostedRunAccess[entry.id] ? (
+                  <HostedRunLine access={hostedRunAccess[entry.id]!} />
+                ) : null}
               </li>
             ))}
           </ul>
@@ -270,4 +286,76 @@ function ownerPrefix(entry: OrgSectionEntry): string {
 
 function defaultBranch(entry: OrgSectionEntry): string | null {
   return entry.row.realizedRepo?.defaultBranch ?? null;
+}
+
+/**
+ * CAN MOTIR'S APP WRITE HERE (MOTIR-1895 · `design/repository-set/design-notes.md`
+ * §18.1, §18.4–§18.6). One line under a connected repository's row.
+ *
+ * ⚠️ READY IS A QUIET FACT; THE OTHER TWO ARE THE WARNING SURFACE, because each
+ * is the one state that refuses a run. And their copy names WHO fixes it — an
+ * owner of that GitHub account — because the admin reading this room often is not
+ * one, and the person who pressed Run hosted may not be on GitHub at all.
+ */
+function HostedRunLine({ access }: { access: HostedRunRepoAccessDto }) {
+  const t = useTranslations('repositoryPicker.hostedRuns');
+  if (access.state === 'ready') {
+    return (
+      <div className="ml-[30px] flex items-center gap-2.5 font-sans text-sm leading-relaxed text-(--el-text-secondary)">
+        <CircleCheckBig className="size-4 shrink-0 text-(--el-success)" aria-hidden="true" />
+        <span className="min-w-0">{t('ready')}</span>
+      </div>
+    );
+  }
+  const permissions = access.state === 'needs_permissions';
+  return (
+    <div
+      role="status"
+      className="ml-[30px] flex items-center gap-2.5 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-warning-surface) px-(--spacing-control-x) py-(--spacing-control-y) font-sans text-sm leading-relaxed text-(--el-warning-text)"
+    >
+      <TriangleAlert className="size-4 shrink-0 text-(--el-warning)" aria-hidden="true" />
+      <span className="min-w-0 flex-1">
+        {permissions ? (
+          <>
+            <span className="font-semibold">{t('needsPermissionsTitle')}</span>{' '}
+            {t('needsPermissionsBody', { account: access.account })}
+          </>
+        ) : (
+          <>
+            <span className="font-semibold">
+              {t('unreachableTitle', { repo: access.repository })}
+            </span>{' '}
+            {t('unreachableBody')}
+          </>
+        )}
+      </span>
+      {permissions ? (
+        <GithubHandoff href={access.reviewHref} label={t('reviewPermissions')} />
+      ) : (
+        <GithubHandoff href={access.reconnectHref} label={t('reconnect')} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * A hand-off to GitHub, drawn as a small secondary button — the shipped
+ * `ExternalAction` shape (`TakeoverRow`). A NEW TAB, so the room is still here
+ * when the reader comes back, and it re-reads itself when shown again
+ * (`RepositoriesRoom`). A null `href` renders nothing: a dead control is worse
+ * than an absent one.
+ */
+function GithubHandoff({ href, label }: { href: string | null; label: string }) {
+  if (!href) return null;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="inline-flex h-(--height-btn-sm) shrink-0 items-center gap-1.5 whitespace-nowrap rounded-(--radius-btn) border border-(--el-button-border) px-(--spacing-btn-x-sm) font-sans text-xs font-medium text-(--el-text) hover:bg-(--el-surface)"
+    >
+      <ExternalLink className="size-3.5 shrink-0" aria-hidden="true" />
+      {label}
+    </a>
+  );
 }

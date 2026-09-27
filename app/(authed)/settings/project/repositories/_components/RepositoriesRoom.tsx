@@ -14,7 +14,11 @@ import { TakeoverModal } from './TakeoverModal';
 import { OrganizationRepositories } from './OrganizationRepositories';
 import { AddRepositoryButton, AddRepositoryPicker } from './AddRepositoryPicker';
 import type { OrgRepoOptionDto, OrgRepoProviderDto } from '@/lib/dto/organizationRepos';
-import type { ProjectRepoDto, ProjectRepoRoomViewDto } from '@/lib/dto/projectRepos';
+import type {
+  HostedRunRepoAccessMapDto,
+  ProjectRepoDto,
+  ProjectRepoRoomViewDto,
+} from '@/lib/dto/projectRepos';
 
 // The TAKE-IT-OVER room's ROWS — the client island of
 // `/settings/project/repositories` (Story MOTIR-1775 · MOTIR-1939).
@@ -107,6 +111,13 @@ export interface RepositoriesRoomProps {
   organizationInventoryHref: string;
   /** The request's `now`, stamped once on the server (see `TakeoverRow`). */
   nowIso: string;
+  /**
+   * Whether Motir's app can write each organisation repository, keyed by row id
+   * (MOTIR-1895 · design §18.1). A PROP, read on every render and never copied
+   * into state: `router.refresh()` re-renders it after an add or remove, and
+   * after a return from GitHub (below) — a `useState` seed would ignore both.
+   */
+  hostedRunAccess?: HostedRunRepoAccessMapDto;
 }
 
 export function RepositoriesRoom({
@@ -118,6 +129,7 @@ export function RepositoriesRoom({
   projectName,
   organizationInventoryHref,
   nowIso,
+  hostedRunAccess = {},
 }: RepositoriesRoomProps) {
   const t = useTranslations('repositoryTakeover');
   // The inventory link keeps its own namespace: the STRING is the picker's
@@ -331,6 +343,23 @@ export function RepositoriesRoom({
     return () => clearInterval(id);
   }, [inFlight, refetch]);
 
+  // ⚠️ BACK FROM GITHUB, THE WARNING RE-READS ITSELF (MOTIR-1895 · design §18.2).
+  // `Review permissions on GitHub` and `Reconnect` open GitHub in a new tab, and
+  // accepting permissions there may never redirect back — so when this tab is
+  // shown again while any line still warns, the server render is re-run and the
+  // lines come back from `hostedRunWriteAccess` fresh. A just-accepted
+  // installation then reads *ready* without a reload. Nothing warns, nothing to
+  // re-ask: the listener is only attached while a warning is on screen.
+  const hostedRunWarns = Object.values(hostedRunAccess).some((a) => a.state !== 'ready');
+  useEffect(() => {
+    if (!hostedRunWarns) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') router.refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [hostedRunWarns, router]);
+
   // ⚠️ ONE SPLIT, ONE PLACE (MOTIR-4681 · MOTIR-4820 · MOTIR-4954). `seedSource`
   // decides which set rows are Motir-hosted takeover rows and which are
   // organisation LINKS — a FACT the write records rather than a heuristic the
@@ -441,6 +470,7 @@ export function RepositoriesRoom({
           entries={fromOrganization}
           organizationName={organizationName}
           canAdd={canAddRepositories}
+          hostedRunAccess={hostedRunAccess}
           onRemove={onRemoveFromProject}
           addButton={<AddRepositoryButton onClick={openPicker} />}
         />

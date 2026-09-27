@@ -6470,7 +6470,7 @@
       "state_error": "无法验证此次 GitHub 登录，请重新尝试连接。",
       "error": "连接 GitHub 时出错，请重试。",
       "not_configured": "此部署尚未配置 GitHub。",
-      "installed": "已安装 Motir GitHub App——Motir 现在可以读取你选择的仓库。",
+      "installed": "已安装 Motir GitHub App——Motir 现在可以读取你选择的仓库，它的应用会推送托管运行的分支并打开它们的拉取请求。",
       "repos_updated": "仓库访问权限已更新。Motir会读取你在GitHub上选择的仓库，无需再做任何操作。",
       "install_unbound": "已在GitHub上安装Motir GitHub App，但安装并非从此工作区发起，因此尚未与它关联。请从这里重新发起安装以完成关联。",
       "install_expired": "安装链接在你停留GitHub期间已过期。并未出错——请从设置中重新开始。",
@@ -8607,6 +8607,15 @@
       "body": "它仍与 {org} 保持连接，其他项目继续保留，代码索引不受影响。你可以随时重新添加，且不会重新建立索引。",
       "confirm": "移除",
       "cancel": "取消"
+    },
+    "hostedRuns": {
+      "ready": "托管运行可以写入这里——Motir 的应用会推送它们的分支并打开它们的拉取请求。",
+      "needsPermissionsTitle": "需要更新权限。",
+      "needsPermissionsBody": "{account} 上的 Motir Integration 还不能写入——需要 {account} 的所有者在 GitHub 上接受它更新后的权限。在此之前，涉及此仓库的托管运行会在开始前被拒绝。",
+      "reviewPermissions": "在 GitHub 上查看权限",
+      "unreachableTitle": "Motir Integration 已无法访问 {repo}。",
+      "unreachableBody": "它的安装已被移除或暂停，或不再包含此仓库。请在 GitHub 上重新连接；在此之前，涉及它的托管运行会被拒绝。",
+      "reconnect": "重新连接"
     }
   },
   "code": {

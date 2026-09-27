@@ -6474,7 +6474,7 @@
       "state_error": "The GitHub sign-in couldn't be verified. Please try connecting again.",
       "error": "Something went wrong connecting to GitHub. Please try again.",
       "not_configured": "GitHub isn't configured on this deployment yet.",
-      "installed": "GitHub App installed — Motir can now read your selected repositories.",
+      "installed": "GitHub App installed — Motir can now read your selected repositories, and its app pushes hosted runs’ branches and opens their pull requests.",
       "repos_updated": "Repository access updated. Motir reads the repositories you selected on GitHub — there is nothing else to finish here.",
       "install_unbound": "The Motir GitHub App was installed on GitHub, but not from this workspace, so it isn't connected to it yet. Start the install from here to connect it.",
       "install_expired": "The install link expired while you were on GitHub. Nothing is broken — start again from Settings.",
@@ -8611,6 +8611,15 @@
       "body": "It stays connected to {org}, other projects keep it, and the code index is untouched. You can add it back at any time and nothing will re-index.",
       "confirm": "Remove",
       "cancel": "Cancel"
+    },
+    "hostedRuns": {
+      "ready": "Hosted runs can write here — Motir’s app pushes their branches and opens their pull requests.",
+      "needsPermissionsTitle": "Needs updated permissions.",
+      "needsPermissionsBody": "Motir Integration on {account} can’t write yet — an owner of {account} accepts its updated permissions on GitHub. Until then a hosted run that touches this repository is refused before anything starts.",
+      "reviewPermissions": "Review permissions on GitHub",
+      "unreachableTitle": "Motir Integration can no longer reach {repo}.",
+      "unreachableBody": "Its installation was removed or suspended, or no longer includes this repository. Reconnect it on GitHub; until then a hosted run that touches it is refused.",
+      "reconnect": "Reconnect"
     }
   },
   "code": {
