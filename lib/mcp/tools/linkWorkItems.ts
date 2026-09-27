@@ -27,9 +27,10 @@ import { resolveWorkItemIdPair, workItemKeyField } from './workItemRef';
 // `transition_status` self-correcting pattern).
 //
 // Addressing matches the UI relationship model (`linkRelationships.ts`), not the
-// raw storage kind: the FIVE user-facing relationships (`blocked_by`, `blocks`,
-// `relates_to`, `duplicates`, `clones`) map to the four directed storage kinds —
-// `blocks` is the inverse direction of `blocked_by`. The agent says
+// raw storage kind: the SEVEN user-facing relationships (`blocked_by`, `blocks`,
+// `relates_to`, `duplicates`, `clones`, `supersedes`, `superseded_by`) map to the
+// five directed storage kinds — `blocks` is the inverse direction of `blocked_by`
+// and `superseded_by` the inverse of `supersedes` (MOTIR-6580). The agent says
 // "ACME-3 blocked_by ACME-1"; the tool resolves both keys to ids and maps the
 // pair to the directed `LinkWorkItemsInput` the service consumes. Link targets
 // may be cross-PROJECT within the workspace (a blocker can live in another
@@ -47,8 +48,10 @@ const RELATIONSHIP_IDS = RELATIONSHIP_KINDS.map((r) => r.kind) as [
 const relationshipDescription =
   'The relationship FROM the first item TO the second, read "fromKey <relationship> toKey": ' +
   '"blocked_by" (fromKey is blocked by toKey — the dependency edge that holds fromKey out of the ' +
-  'ready set), "blocks" (the inverse — fromKey blocks toKey), "relates_to", "duplicates", or ' +
-  '"clones".';
+  'ready set), "blocks" (the inverse — fromKey blocks toKey), "relates_to", "duplicates", ' +
+  '"clones", "supersedes" (fromKey is the NEWER work item that replaces toKey), or ' +
+  '"superseded_by" (the inverse — fromKey is the OLDER item, replaced by toKey). The supersedes ' +
+  'pair is one stored edge read from either end; it gates nothing.';
 
 const inputSchema = {
   fromKey: workItemKeyField,
@@ -132,13 +135,15 @@ export function registerLinkWorkItems(server: McpServer, resolveContext: McpCont
         'Create a relationship between two work items (by identifier, e.g. "ACME-3" / "ACME-1"): ' +
         'use "blocked_by" to record a DEPENDENCY EDGE (the first item is blocked by the second, so ' +
         'it leaves the ready set until the second is done), or "blocks" / "relates_to" / ' +
-        '"duplicates" / "clones". Targets may be in another project in the same workspace. ' +
+        '"duplicates" / "clones". Use "supersedes" to record that the first item REPLACES the ' +
+        'second (the first is the newer one; "superseded_by" writes the same edge from the older ' +
+        'end) — it does not affect readiness. Targets may be in another project in the same workspace. ' +
         'A dependency should join two items on the SAME LEVEL — the same depth below their ' +
         'nearest common ancestor, a folder adding none — and may cross parents; an epic ' +
         'should be blocked only by another epic. A blocked_by / blocks between two levels is ' +
         'still WRITTEN, because the dependency is real and it holds the item out of the ready ' +
         'set; `validate_work_item` then reports it INVALID in `crossLevelEdges` ("blocked ' +
-        'elsewhere") until it is re-wired. Re-creating an existing link is idempotent; a self / cycle / ' +
+        'elsewhere") until it is re-wired. Re-creating an existing link is idempotent; a self / cycle (blocked_by only) / ' +
         'cross-workspace link returns a typed error. Honors the same access checks as the UI.',
       inputSchema,
     },

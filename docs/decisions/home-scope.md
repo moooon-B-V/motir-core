@@ -91,6 +91,36 @@ readiness) · **Unblocks:** MOTIR-2761 · **Files:** MOTIR-2920, MOTIR-2921
 >
 > Amended, never silently superseded: §2.2 and §2.3 keep their text below.
 
+> ### ⚠️ §1's ZERO-PROJECTS FRAME IS LIVE AGAIN — FOR ONE ACTOR (2026-09-27, Story MOTIR-6169 · MOTIR-6548)
+>
+> The amendment above holds only while every workspace member can see every
+> project. Story MOTIR-6169 put access on the project (`docs/decisions/role-model.md`
+> Q1): a project is Open to the workspace, Members only or Public, and a
+> workspace member is Full or **Limited**. A **Limited** member added to no
+> project — or a Full member whose every project is Members only — can see
+> ZERO projects in a workspace that HAS projects. That is exactly §1's frame,
+> and for that reader `getActiveProject()` returns `null` again.
+>
+> **What answers it is NOT §2.2's create-first door.** `ensureDefaultProject`
+> still heals an EMPTY workspace, exactly as MOTIR-4870 made it. For a workspace
+> that has projects, it answers the first project the caller can ENTER, or
+> nothing: it never hands a reader someone else's project, and never creates
+> one for someone who may not have one. Every project-scoped route sends a
+> `null` active project to ONE landing, `/no-project` (`NO_PROJECT_PATH` in
+> `lib/navigation/landing.ts`). It renders the no-project shell
+> (`design/shell/no-project--limited.mock.html`): an "ask a Manager of the
+> workspace" message, a project tier reading _No project_ with an empty
+> switcher, and no work-item Create. Its create door shows **only** to someone
+> who could enter what they made (`projectsService.canOfferCreateProject`): it
+> is withheld from a Limited member.
+>
+> The redirect target is load-bearing. Before this, every page answered a `null`
+> project with `/sign-in`, which bounces a signed-in reader straight back to
+> `/workbench`: a redirect loop, and the reason the landing exists rather than a
+> per-page empty state. MOTIR-4872's guard
+> (`tests/navigation/no-create-project-screen-guard.test.ts`) stays green and
+> untouched, because the retired surface has not come back.
+
 ## Context
 
 MOTIR-2649 shipped `/home` as the signed-in landing surface: two tabs (My work,

@@ -246,11 +246,10 @@ export async function listCandidateParentsAction(
   if (!ctx) return { ok: false, error: t('actions.noProjectForParent') };
   if (!isIssueType(childType)) return { ok: false, error: t('actions.unknownIssueType') };
 
-  const candidates = await workItemsService.listCandidateParents(
-    ctx.projectId,
-    childType,
-    ctx.workspaceId,
-  );
+  const candidates = await workItemsService.listCandidateParents(ctx.projectId, childType, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
   return { ok: true, candidates };
 }
 

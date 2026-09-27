@@ -80,6 +80,9 @@ describe('ActivityEntryRow — the changed field is named by its label (MOTIR-61
     ['targetRepos', 'Repositories', '仓库'],
     ['folderId', 'Folder', '文件夹'],
     ['todos', 'Step', '步骤'],
+    // The obsolescence mark and its note (MOTIR-6579).
+    ['obsolescence', 'Obsolescence', '失效状态'],
+    ['obsolescenceNoteMd', 'Obsolescence note', '失效说明'],
   ])('%s reads "%s" / "%s", never the diff key', (key, en, zh) => {
     const [part] = namedFieldParts(key);
     expect(part).toBeDefined();

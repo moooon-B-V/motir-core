@@ -6,6 +6,7 @@ import type {
   RelationshipLinkGroups,
   WorkItemDto,
   WorkItemKindDto,
+  WorkItemObsolescenceDto,
   WorkItemPriorityDto,
   WorkItemRevisionDto,
   WorkItemTypeDto,
@@ -58,6 +59,11 @@ export interface PlanTreeSkeletonItem {
   // A `human` decision's confirmation (MOTIR-5958) — null on every other item.
   // Populated by ONE batched read per response, never N+1.
   decision: AiDecisionBlock | null;
+  // The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6582) — `outdated` ·
+  // `deprecated`, null when the card is still true of the code. The MARK only:
+  // the note is a body, and bodies stay off the breadth read (`get-item` carries
+  // it). Informational — no read in this family drops or re-sorts a marked row.
+  obsolescence: WorkItemObsolescenceDto | null;
 }
 
 // One folder of the project, as the tree read carries it (MOTIR-5410). `path` is
@@ -103,8 +109,11 @@ export interface WorkItemHistoryPage {
 // DEPTH context 7.1.6 deferred: the full comment thread and the change log, each
 // bounded/paginated. `comments` / `history` are present ONLY when asked for.
 /**
- * The AI boundary's item shape: the work-item DTO PLUS all five relationship
- * groups (MOTIR-4063).
+ * The AI boundary's item shape: the work-item DTO PLUS every relationship group
+ * (MOTIR-4063; `supersedes` / `supersededBy` since MOTIR-6580). The DTO half
+ * carries the OBSOLESCENCE mark and its note (`obsolescence`,
+ * `obsolescenceNoteMd` — MOTIR-6579 / MOTIR-6582), so the planner reads whether
+ * a card is still current, why, and what replaced it from this one item.
  *
  * ⚠️ The links ride the ITEM rather than sitting beside it, because that is
  * where the planner reads them (`motir-ai` `readLinks` indexes `blockedBy` /
@@ -119,9 +128,53 @@ export interface WorkItemHistoryPage {
  */
 export type AiWorkItemDto = WorkItemDto & RelationshipLinkGroups;
 
+/**
+ * Where a card's UNMERGED code lives in one repository (MOTIR-6618) — the open
+ * pull request's branch, read off the delivery rows with no provider call.
+ *
+ * - `repo` is `owner/name`, exactly the `repoRef` `GET /api/internal/ai/repo-file`
+ *   (motir-ai's `read_file`) accepts, so the planner passes it straight through
+ *   together with `branch` as the `ref`.
+ * - `branch` is the pull request's `headRef` — the NAME a reader reads at.
+ *   `headSha` only dates the observation (the head the latest check rows ran on,
+ *   else the head the mergeability was last observed at; null when neither was
+ *   ever recorded).
+ * - `source: 'own'` — the card's own open delivery in that repository.
+ *   `source: 'inherited'` — the card has none there, so the entry is the NEAREST
+ *   ancestor's open delivery in that repository (the story's
+ *   `parent/MOTIR-<id>-<slug>` branch a child's commit rides); `fromKey` names
+ *   that ancestor.
+ * - `draft` is true only for a pull request recorded as a draft (null — never
+ *   recorded — reads as false, as every other reader of the row treats it).
+ */
+export type InFlightCodeDto = {
+  repo: string;
+  branch: string;
+  headSha: string | null;
+  prNumber: number;
+  prUrl: string;
+  draft: boolean;
+  baseRef: string | null;
+} & ({ source: 'own' } | { source: 'inherited'; fromKey: string });
+
+/**
+ * The in-flight half of the get-item read (MOTIR-6618). Both are ARRAYS on every
+ * item, never null: empty is the ordinary answer.
+ *
+ * `mergedRepos` names the repositories where the card's OWN delivery has merged
+ * and no in-flight entry (own or inherited) remains — so a reader can tell "on
+ * the default branch now" (`inFlightCode: []`, `mergedRepos: ['o/r']`) from
+ * "nothing was ever written" (both empty).
+ */
+export interface AiInFlightCodeFields {
+  inFlightCode: InFlightCodeDto[];
+  mergedRepos: string[];
+}
+
 export interface GetItemResponse {
   // `decision` — a `human` decision's confirmation (MOTIR-5958), null otherwise.
-  item: AiWorkItemDto & { decision: AiDecisionBlock | null };
+  // `inFlightCode` / `mergedRepos` — the card's unmerged code (MOTIR-6618).
+  item: AiWorkItemDto & { decision: AiDecisionBlock | null } & AiInFlightCodeFields;
   comments?: CommentsPageDTO;
   history?: WorkItemHistoryPage;
 }
@@ -176,6 +229,9 @@ export interface SearchResultRow {
   status: string;
   priority: WorkItemPriorityDto;
   revision: string | null;
+  // The OBSOLESCENCE mark (MOTIR-6582) — the same cheap field the skeleton row
+  // carries, so a hit can be triaged as stale before a `get-item` depth read.
+  obsolescence: WorkItemObsolescenceDto | null;
 }
 
 // POST /api/internal/ai/search-work-items (Subtask 7.5.2) — the on-demand SEARCH

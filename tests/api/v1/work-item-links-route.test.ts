@@ -45,6 +45,8 @@ interface LinkGroups {
   relatesTo: Array<{ key: string }>;
   duplicates: Array<{ key: string }>;
   clones: Array<{ key: string }>;
+  supersedes: Array<{ key: string }>;
+  supersededBy: Array<{ key: string }>;
 }
 
 describe('GET + POST + DELETE /api/v1/work-items/{key}/links', () => {
@@ -56,7 +58,7 @@ describe('GET + POST + DELETE /api/v1/work-items/{key}/links', () => {
     caller = await createV1ProjectCaller({ scopes: ['read', 'work_items:write'] });
   });
 
-  it('returns ALL FIVE groups, empty ones as [] rather than absent keys', async () => {
+  it('returns ALL SEVEN groups, empty ones as [] rather than absent keys', async () => {
     const item = await createTestWorkItem(caller.fixture, { kind: 'task', title: 'Lonely' });
 
     const groups = (await (await call(LINKS, 'GET', item.identifier, caller)).json()) as LinkGroups;
@@ -68,6 +70,8 @@ describe('GET + POST + DELETE /api/v1/work-items/{key}/links', () => {
       'clones',
       'duplicates',
       'relatesTo',
+      'supersededBy',
+      'supersedes',
     ]);
     for (const value of Object.values(groups)) expect(value).toEqual([]);
   });
@@ -128,6 +132,64 @@ describe('GET + POST + DELETE /api/v1/work-items/{key}/links', () => {
     ).json();
 
     expect(subResource).toEqual(detail.links);
+  });
+
+  it('superseded_by writes ONE supersedes edge from the NEWER item, read on both ends, and DELETE removes it (MOTIR-6580)', async () => {
+    const newer = await createTestWorkItem(caller.fixture, { kind: 'task', title: 'Newer' });
+    const older = await createTestWorkItem(caller.fixture, { kind: 'task', title: 'Older' });
+
+    // Written from the OLDER end: "older superseded_by newer".
+    const created = await call(LINKS, 'POST', older.identifier, caller, {
+      body: { toKey: newer.identifier, relationship: 'superseded_by' },
+    });
+    expect(created.status).toBe(201);
+    await expect(created.json()).resolves.toEqual({
+      toKey: newer.identifier,
+      relationship: 'superseded_by',
+    });
+
+    const fromNewer = (await (
+      await call(LINKS, 'GET', newer.identifier, caller)
+    ).json()) as LinkGroups;
+    const fromOlder = (await (
+      await call(LINKS, 'GET', older.identifier, caller)
+    ).json()) as LinkGroups;
+    expect(fromNewer.supersedes.map((r) => r.key)).toEqual([older.identifier]);
+    expect(fromNewer.supersededBy).toEqual([]);
+    expect(fromOlder.supersededBy.map((r) => r.key)).toEqual([newer.identifier]);
+    expect(fromOlder.supersedes).toEqual([]);
+    // Directed, no reciprocal: nothing lands in relatesTo on either end.
+    expect(fromNewer.relatesTo).toEqual([]);
+    expect(fromOlder.relatesTo).toEqual([]);
+
+    // The SAME edge named from the newer end is a duplicate, not a second row.
+    const duplicate = await call(LINKS, 'POST', newer.identifier, caller, {
+      body: { toKey: older.identifier, relationship: 'supersedes' },
+    });
+    expect(duplicate.status).toBe(409);
+
+    // Removing it by the NEWER end's name clears both groups.
+    const removed = await call(LINKS, 'DELETE', newer.identifier, caller, {
+      query: `?toKey=${older.identifier}&relationship=supersedes`,
+    });
+    expect(removed.status).toBe(204);
+    const afterNewer = (await (
+      await call(LINKS, 'GET', newer.identifier, caller)
+    ).json()) as LinkGroups;
+    const afterOlder = (await (
+      await call(LINKS, 'GET', older.identifier, caller)
+    ).json()) as LinkGroups;
+    expect(afterNewer.supersedes).toEqual([]);
+    expect(afterOlder.supersededBy).toEqual([]);
+  });
+
+  it('a supersedes self-link is 422 SELF_LINK', async () => {
+    const a = await createTestWorkItem(caller.fixture, { kind: 'task', title: 'A' });
+    const self = await call(LINKS, 'POST', a.identifier, caller, {
+      body: { toKey: a.identifier, relationship: 'supersedes' },
+    });
+    expect(self.status).toBe(422);
+    await expect(self.json()).resolves.toMatchObject({ code: 'SELF_LINK' });
   });
 
   it('DELETE is IDEMPOTENT — 204 on the second call, and on an edge that never existed', async () => {

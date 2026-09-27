@@ -261,6 +261,18 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
     role: 'workspace:manager',
   },
   'settings/workspace/actions.ts#loadRoleMigrationPageAction': { kind: 'read' },
+  'settings/workspace/actions.ts#setMemberAccessScopeAction': {
+    kind: 'role',
+    role: 'workspace:manager',
+  },
+  // The "N projects" popover's list (MOTIR-6551) — a READ, narrowed to what the viewer can enter.
+  'settings/workspace/actions.ts#listMemberAddedProjectsAction': READ,
+  // The door to one project's Access & members page (MOTIR-6551): it sets the
+  // actor's OWN active project, through `setActiveProject`'s entry gate.
+  'settings/workspace/actions.ts#openProjectAccessAction': {
+    kind: 'self',
+    reason: 'the actor’s own active project, through setActiveProject’s entry gate',
+  },
   'settings/workspace/actions.ts#setMemberRoleAction': { kind: 'role', role: 'workspace:manager' },
   'settings/workspace/jobs/actions.ts#replayDlqAction': { kind: 'role', role: 'workspace:manager' },
   'settings/workspace/security/actions.ts#setWorkspaceRequireTwoFactorAction': {
@@ -357,5 +369,4 @@ export const CONTROL_EXEMPTIONS: Record<string, ControlExemption> = {
     kind: 'known-gap',
     card: 'MOTIR-6168',
   },
-  'app/(authed)/_components/ProjectSwitcher.tsx': { kind: 'known-gap', card: 'MOTIR-6319' },
 };

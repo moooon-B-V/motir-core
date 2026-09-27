@@ -22,6 +22,7 @@ const { session, activeCtx } = vi.hoisted(() => ({
 vi.mock('@/lib/auth', () => ({ getSession: async () => session.current }));
 vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.current }));
 
+import { accessModeOf } from '@/lib/projects/accessMode';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
@@ -358,7 +359,13 @@ describe('readPlanHold — the up-front read', () => {
 
 describe('the quick-view read carries the plan hold (MOTIR-6267)', () => {
   const peek = (identifier: string) =>
-    workItemsService.getQuickView(fx.project.id, identifier, fx.project.accessLevel, fx.ctx, 'en');
+    workItemsService.getQuickView(
+      fx.project.id,
+      identifier,
+      accessModeOf(fx.project),
+      fx.ctx,
+      'en',
+    );
 
   it(
     'a held card’s peek carries the same PlanHoldDTO the up-front read returns; a free one carries null',

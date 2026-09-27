@@ -516,7 +516,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // next run is told to address, so the line names it.
     summary:
       'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
-    descriptionFingerprint: '882e56fda8df',
+    // Re-pinned for MOTIR-6580, summary UNCHANGED: the text block gains the
+    // Supersedes / Superseded by link groups — two more edge groups, which the
+    // summary's "dependency edges" already covers without enumerating groups.
+    // Re-pinned for MOTIR-6582, summary UNCHANGED: the item and its child rows carry
+    // the obsolescence mark + note — fields of the item, which "one item in full"
+    // already covers; the summary enumerates questions, not columns.
+    descriptionFingerprint: 'fda118ef0ca9',
   },
   get_design: {
     // Story MOTIR-5553 · MOTIR-5561.
@@ -563,9 +569,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-3096, summary UNCHANGED — same reasoning as
     // `get_work_item`'s. The projected mode is documented in `docs/mcp.md`'s
     // AI-planning section, where somebody would look for it.
+    // Re-pinned for MOTIR-6582, summary UNCHANGED: each row carries the obsolescence
+    // mark + note — row fields, not a new way to search; the summary names none.
     summary:
       "Search a project's items with the same filter grammar the advanced filter builder writes.",
-    descriptionFingerprint: 'fa9850f5a29c',
+    descriptionFingerprint: '9ca981741d3b',
   },
   whoami: {
     summary:
@@ -574,7 +582,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   list_projects: {
     summary: 'Every project this token can reach, each with the projectKey every other tool takes.',
-    descriptionFingerprint: 'f2ba367c391a',
+    descriptionFingerprint: 'ada98598846a',
   },
   get_project_state: {
     summary:
@@ -584,9 +592,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   skeleton: {
     // Re-pinned for MOTIR-5410: the description now names the folder placement
     // (`folderId` on a filed row, the project's `folders`) the read carries.
+    // Re-pinned for MOTIR-6582, summary WIDENED: every row carries the obsolescence
+    // mark, and this summary enumerates the row's fields, so it names it.
     summary:
-      "The whole project's tree shape in one read — every item's key, kind, title, status, parent and folder, with no paging loop.",
-    descriptionFingerprint: 'e2e04caf7f60',
+      "The whole project's tree shape in one read — every item's key, kind, title, status, parent, folder and obsolescence mark, with no paging loop.",
+    descriptionFingerprint: 'a655e6804ec8',
   },
   list_folders: {
     summary:
@@ -871,9 +881,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   create_work_item: {
     // Re-pinned for MOTIR-5413: `folderId` files the new item into a folder.
     // Re-pinned for MOTIR-6098: a leaf's `difficulty` joins the leaf fields.
+    // Re-pinned for MOTIR-6582, summary WIDENED: the obsolescence mark joins the
+    // fields settable in the one call, and this summary enumerates them.
     summary:
-      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty and repo in one call.',
-    descriptionFingerprint: 'caa65846168d',
+      'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo and obsolescence mark in one call.',
+    descriptionFingerprint: 'cbd9bea08d9d',
   },
   update_work_item: {
     // Re-pinned for MOTIR-5585: the description now names PROJECT-repository
@@ -881,9 +893,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // summary never named the rule, so it still holds.
     // Re-pinned for MOTIR-6098: the description names `difficulty` among the
     // patchable fields; the summary names no field list, so it still holds.
+    // Re-pinned for MOTIR-6582, summary UNCHANGED: the description names the
+    // obsolescence mark + note (any kind, any status; INVALID_OBSOLESCENCE) among
+    // the patchable fields; "any subset of an item's fields" already covers them.
     summary:
       "Edit any subset of an item's fields, including the explanation body create cannot set.",
-    descriptionFingerprint: 'e344328ca728',
+    descriptionFingerprint: '70af156c1527',
   },
   transition_status: {
     summary:
@@ -977,7 +992,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-6509, summary UNCHANGED: the description stops naming a
     // CROSS_LEVEL_LINK refusal — a cross-level edge is written and reported by
     // `validate_work_item` instead. The summary named no refusal either way.
-    descriptionFingerprint: '6e24487c17e0',
+    // Re-pinned for MOTIR-6580, summary UNCHANGED: the relationship enum gains
+    // `supersedes` / `superseded_by`; blocked_by is still the only edge that holds
+    // an item out of the ready set, which is all the summary claims.
+    descriptionFingerprint: 'a5762942a5e1',
   },
   unlink_work_items: {
     summary: 'Remove an edge, given the same relationship used to create it.',

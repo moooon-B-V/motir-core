@@ -2362,6 +2362,55 @@ jobs:
       - run: pnpm prisma migrate deploy
       - run: pnpm coverage:approved-status
 
+  # STORY MOTIR-6617's COVERAGE FLOOR (MOTIR-6621) — the in-flight code a planner
+  # reads: `inFlightCode` on the item read, and the changed-files route through both
+  # providers. Same shape and reasoning as `story-4905-coverage` above: a scoped
+  # `include`, per-file thresholds, and a real Postgres for the delivery rows.
+  story-6617-coverage:
+    name: Coverage (in-flight code)
+    runs-on: ubuntu-latest
+    # Observed ~0.6 min of test time locally; the ceiling bounds a hang rather
+    # than setting a target, and the fixed cost (checkout + Postgres + install +
+    # `migrate deploy`) is ~75 s on this runner class.
+    timeout-minutes: 15
+    needs: changes
+    # Same predicate as the sharded suite: a diff that reaches no app code has
+    # nothing here to cover.
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-6617
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-6617
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-6617.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-6617.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm coverage:in-flight-code
+
   # Story MOTIR-683 (9.1, a card runs on the hosted agent) — MOTIR-692's story
   # gate: a per-file 90% floor over the story's hosted-run server files
   # (`vitest.coverage.hosted-agent-run.config.ts`), measured by running only the
@@ -2445,6 +2494,7 @@ jobs:
         coverage,
         story-4753-coverage,
         story-4905-coverage,
+        story-6617-coverage,
         story-683-coverage,
         e2e,
         e2e-at-scale,

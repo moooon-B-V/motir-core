@@ -41,6 +41,7 @@ const projectDto = {
   slug: 'motir',
   identifier: 'PROD',
   archivedAt: null as string | null,
+  accessMode: 'workspace' as const,
   accessLevel: 'open' as const,
   // The project MARK (MOTIR-2676) — null means the project has no image, which
   // is the case every MCP payload should carry through unchanged: neither the

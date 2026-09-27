@@ -161,8 +161,8 @@ describe('GET /api/work-items/mention-search — candidate read', () => {
       name: 'Private',
       identifier: 'PRIV',
     });
-    // Make PRIV private BEFORE adding the outsider so they're not auto-seeded as a
-    // member.
+    // Make PRIV private; going private adds nobody (Story MOTIR-6169), so the
+    // outsider below is not a member.
     await projectMembersService.setAccessLevel({
       key: priv.identifier,
       actorUserId: owner.id,

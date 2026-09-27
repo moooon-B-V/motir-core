@@ -4,11 +4,12 @@ import {
   type PointScale,
   type PrMergeMode,
   type Project,
-  type ProjectAccessLevel,
+  type ProjectAccessMode,
   type ProjectRepoOwnership,
   type WorkflowPolicyMode,
 } from '@/generated/prisma/client';
 import { db, dbRead } from '@/lib/db';
+import { levelForMode } from '@/lib/projects/accessMode';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ProjectSquareRank } from '@/lib/projectSquare/rank';
 
@@ -254,6 +255,24 @@ export const projectRepository = {
     return tx.project.findMany({
       where: { id: { in: [...ids] }, archivedAt: null },
       orderBy: { name: 'asc' },
+    });
+  },
+
+  /**
+   * EVERY project of a workspace — ARCHIVED ones included — as the three columns
+   * the entry rule reads (Story MOTIR-6169 · MOTIR-6549). The notification feed
+   * filters by entry at READ time, and a notification about an archived
+   * project's item must stay visible to someone who could enter that project, so
+   * this read does not drop archived rows the way `findByWorkspace` does. Takes
+   * `tx`: `project_active_workspace` gates on `app.workspace_id`.
+   */
+  async findAccessRowsByWorkspace(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<Project, 'id' | 'accessLevel' | 'accessMode'>>> {
+    return tx.project.findMany({
+      where: { workspaceId },
+      select: { id: true, accessLevel: true, accessMode: true },
     });
   },
 
@@ -752,24 +771,26 @@ export const projectRepository = {
   },
 
   /**
-   * Set the project's browse-access level (Story 6.4 · Subtask 6.4.4). When
-   * `stampMadePublicAt` is set (the service passes it on a transition INTO
-   * `public`, Subtask 6.13.4), also stamp `madePublicAt = now()` — the "newest"
-   * axis the project square's Recent rank orders by. The service stamps only on
-   * the not-public → public edge, so a re-save of an already-public project
-   * keeps its original go-public moment; a re-publish after going private gets a
-   * fresh stamp.
+   * Set the project's ACCESS MODE (Story MOTIR-6169 · MOTIR-6541) — `access_mode`
+   * AND the legacy `accessLevel` (`levelForMode`), in ONE update. THE ONLY
+   * WRITER of `access_mode`: the two columns move together until the follow-up
+   * contract story drops `accessLevel`, so the RLS policies that still key on
+   * `"accessLevel" = 'public'` never disagree with the mode the application
+   * reads. `stampMadePublicAt` stamps `madePublicAt` (the project square's
+   * "newest" axis, Subtask 6.13.4); the service passes it only on the
+   * not-public → public edge, so a re-save keeps the original go-public moment.
    */
-  async setAccessLevel(
+  async setAccessMode(
     id: string,
-    accessLevel: ProjectAccessLevel,
-    options: { stampMadePublicAt: boolean },
+    accessMode: ProjectAccessMode,
     tx: Prisma.TransactionClient,
+    options: { stampMadePublicAt?: boolean } = {},
   ): Promise<Project> {
     return tx.project.update({
       where: { id },
       data: {
-        accessLevel,
+        accessMode,
+        accessLevel: levelForMode(accessMode),
         ...(options.stampMadePublicAt ? { madePublicAt: new Date() } : {}),
       },
     });

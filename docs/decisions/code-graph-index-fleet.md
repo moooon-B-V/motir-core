@@ -1768,3 +1768,23 @@ Each count is `git grep -c 'isMeta' <ref> -- <paths>` for that file; the totals 
 | `src/services/gatewaySyncService.ts`           |      1 | BRANCH file (branch line listed above; remaining hits are the type and the read) |
 | `src/services/orgReconciliationService.ts`     |      3 | operator report field                                                            |
 | **total**                                      | **30** |                                                                                  |
+
+---
+
+## §21 — A `redispatchable` exit is re-dispatched, once, inside the run (MOTIR-6586, 2026-09-27)
+
+**Dated 2026-09-27. Read at `motir-core` `e3be83c90`.** Nothing above this line is edited.
+
+**The defect.** `classifyIndexExit` has marked `20` repo_unfetchable, `40` upload_failed and `41` pointer_unrecorded `redispatchable: true` since the classifier was written, and nothing in the application read the flag (`git grep -n redispatchable` found only its definition, the classifier, a test of the classifier's own value, and a step-shape pin). The job's retry did not stand in for it. A settle RETURNS its verdict rather than throwing, so `index-settle:<pid>` is memoized, and `lib/jobs/engine/step.ts` is explicit that a retry does not clear the step ledger — so attempts 2–5 of `system.code-graph-refresh` / `system.code-graph-index` replayed admit → boot → settle out of `job_step` and threw the identical error without booting a container. One transient fault left a repository's graph stale until its next push. MOTIR-6585's Sentry issue carries `job_terminal_failure=true` for an exit the classifier calls re-dispatchable.
+
+**The decision: honour the flag, inside the run, with a cap of two containers.** `advanceIndexContainer` now drives dispatch ATTEMPTS: when an attempt settles un-indexed with a `redispatchable` verdict and fewer than `MAX_DISPATCH_ATTEMPTS` (2) have run, it dispatches again — fresh admission, fresh boot (so a fresh tarball URL, which is what clears `20`), fresh supervision. When the cap is spent the run fails on the LAST attempt's verdict, and `IndexDispatchFailedError` names the class and the attempt count. The alternative the card offered — delete the flag — was refused: the three classes it marks really are transients, and `40` was the commonest failure in production.
+
+- **Attempt 1's ids are byte-identical to every id written before this change.** An attempt is named by its supervision subject, `indexAttemptSubject(projectId, n)`: the bare `projectId` for attempt 1, `<projectId>:r<n>` after. The subject keys the three memoized steps and the `job_supervision` row, so a run in flight across the deploy resumes on the memos it holds, and a run whose attempt-1 settle already failed re-dispatches on its next pass. The `r` keeps the suffix apart from the retired `index-admit:<pid>:<n>` shape of the old admission loop.
+- **The attempt number is re-derived on every pass, never stored.** A settled attempt replays its settle memo and polls nothing, so which attempt a run is on is a fact of `job_step`.
+- **The abandoned-supervision sweep needs no change.** It reads the boot memo back as `index-boot:<subject>`, and the subject is the same string for the row and the memo on every attempt.
+- **The admission slot is per attempt.** Each attempt's settle releases its slot, and the next attempt queues for admission like any dispatch. The `dispatchId` does not change, because it names the dispatch rather than the container.
+- **The count rides OUT of the dispatch, not INTO a memo.** `IndexDispatchOutcome` is what `index-boot:` and `index-settle:` memoize, and those steps provision and tear down, so they may not take new ids. The count is attached after the steps return (`IndexAdvanceOutcome`), as `coreTimings` is.
+
+**`supervision_timed_out` stops being re-dispatchable.** It was `true` only because nothing read it. The deadline and the poll ceiling are the whole supervision budget, so such a container already cost the most any container may, and a fresh one on the same tree at the same size mostly repeats it — the reasoning `137` already carries. `never_started` stays re-dispatchable: nothing ran, and its boot deadline is minutes.
+
+**Unchanged.** A non-re-dispatchable class (`10`, `30`, `50`, `137`, `null`, unclassified, a timed-out supervision) is final after one container, as before. Every non-`settled` outcome (deferred admission, refused provision, unpullable image, failed teardown) is returned as it stands, from whichever attempt produced it.

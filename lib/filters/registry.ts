@@ -30,6 +30,7 @@
 
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
+import { WORK_ITEM_OBSOLESCENCES } from '@/lib/issues/obsolescence';
 import { CI_STATES } from '@/lib/github/prCiState';
 import { ISSUE_TYPES } from '@/lib/issues/parentRules';
 import {
@@ -64,6 +65,7 @@ export type FilterValueEditorKind =
   | 'priority-select'
   | 'type-select'
   | 'difficulty-select'
+  | 'obsolescence-select'
   | 'member-select'
   | 'sprint-select'
   | 'label-select'
@@ -193,6 +195,15 @@ export const FILTER_FIELDS: ReadonlyArray<FilterFieldDef> = [
   enumField('difficulty', 'difficulty-select', {
     nullable: true,
     valueWhitelist: WORK_ITEM_DIFFICULTIES,
+  }),
+  // A card's OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6583) — the same shape
+  // as `difficulty`: a closed nullable enum over `WORK_ITEM_OBSOLESCENCES`, so
+  // the empty pair addresses the UNMARKED cards and `is_none_of ['outdated']`
+  // INCLUDES them. The filter only narrows when a condition asks for it — no
+  // read excludes or re-sorts a marked card by default.
+  enumField('obsolescence', 'obsolescence-select', {
+    nullable: true,
+    valueWhitelist: WORK_ITEM_OBSOLESCENCES,
   }),
   enumField('assignee', 'member-select', {
     nullable: true,

@@ -30,6 +30,7 @@ import { NewIssueButton } from '../items/_components/NewIssueButton';
 import { BacklogContainer } from './_components/BacklogContainer';
 import { BacklogFilterControls } from './_components/BacklogFilterControls';
 import { BacklogAppliedFilterBar } from './_components/BacklogAppliedFilterBar';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The Backlog / sprint-planning surface (Story 4.2 · Subtask 4.2.3) — Motir's
 // clone of the Jira backlog. The destination the new "Backlog" sidebar item +
@@ -70,10 +71,10 @@ export default async function BacklogPage({
   const t = await getTranslations('backlog');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   // Parse the URL filter exactly as /items + the board (6.15.3): the quick
   // facets + the decoded advanced AST. A malformed/forged `?filter=` degrades to
@@ -124,7 +125,7 @@ export default async function BacklogPage({
     // are access-scoped (6.4.6): a private project lists only its members.
     assignableMembersService.list({
       projectId: ctx.projectId,
-      accessLevel: ctx.project.accessLevel,
+      accessMode: ctx.project.accessMode,
       ctx: accessCtx,
     }),
     sprintsService.listByProject(ctx.projectId, accessCtx),

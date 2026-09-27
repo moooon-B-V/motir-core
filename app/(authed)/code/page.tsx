@@ -16,6 +16,7 @@ import { CodeHealthClient } from './_components/CodeHealthClient';
 import { CodeRepositories } from './_components/CodeRepositories';
 import { CodeSections } from './_components/CodeSections';
 import { sectionFromParam } from './_section';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // THE CODE PAGE (Story MOTIR-1754 · MOTIR-1768) — one room, two sections.
 //
@@ -105,16 +106,10 @@ export default async function CodePage({
   const t = await getTranslations('code');
   const ctx = await getActiveProject();
 
-  // ⚠️ UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier, and MOTIR-4815 retired every no-project surface). The
-  // guard stays because the TYPE does — the only null left is a session-less
-  // request — and it redirects rather than rendering a state nobody can reach.
-  //
-  // Carried from `code-health/page.tsx`, which this route absorbed: main made
-  // exactly this change to that file while this branch was turning it into a
-  // redirect, so taking "my" side of that conflict would have silently kept the
-  // retired branch alive one route over.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   const svcCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
 

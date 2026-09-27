@@ -23,6 +23,7 @@ import { WorkbenchReconnecting } from './_components/WorkbenchLive';
 import { WorkbenchList } from './_components/WorkbenchList';
 import { ApprovalsTab } from './_components/ApprovalsTab';
 import { toWorkbenchRowViews } from './_components/workbenchRows';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // `/workbench` — the signed-in landing surface (Story MOTIR-2649 · MOTIR-2653,
 // renamed and split by lifecycle in Story MOTIR-4777 · MOTIR-4782), per
@@ -210,17 +211,10 @@ export default async function WorkbenchPage({
   if (!session) redirect('/sign-in');
 
   const ctx = await getActiveProject();
-  // NO ACTIVE PROJECT — UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a
-  // default project at the WORKSPACE tier, so `getActiveProject()` returns null
-  // on no path a member can take). This used to render `ProjectsEmptyState` — a
-  // Create-project screen inside project chrome — which is the defect MOTIR-4815
-  // removes: the Workbench has ONE empty state, *no work*, and the design draws
-  // no other (`design/workbench/design-notes.md`).
-  //
-  // The guard STAYS because the type does: the only null left is a request with
-  // no session, which the redirect above has already answered. So what remains
-  // for the unreachable case is a redirect, never a rendered screen.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   const params = await searchParams;
   const tab = parseWorkbenchTab(params['tab']);

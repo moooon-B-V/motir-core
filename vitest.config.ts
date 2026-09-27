@@ -161,6 +161,16 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: [
+        // Story MOTIR-6574 · MOTIR-6584 — the OBSOLESCENCE story's two NEW modules
+        // (the scale's one list, and the MCP write fields + text-block lines) and
+        // the relationship model it widened with the `supersedes` pair, which had
+        // no coverage entry at all. Pinned at the project floor in `thresholds`
+        // below after being MEASURED on this branch against the story's own specs:
+        // 100 / 100 / 100 / 100 on all three. The already-gated files the story
+        // touched are measured by the PR's coverage job, suite-wide.
+        'lib/issues/obsolescence.ts',
+        'lib/mcp/obsolescence.ts',
+        'lib/workItems/linkRelationships.ts',
         // Story MOTIR-6016 · MOTIR-6102 — the three modules the DIFFICULTY story
         // added, pinned at the project floor in `thresholds` below after being
         // measured on this branch against the story's own specs.
@@ -2698,6 +2708,30 @@ export default defineConfig({
         'lib/planning/planningSeedClient.ts',
         'components/approvals/RefusalReplan.tsx',
         'components/approvals/useOpenRefusalReplan.ts',
+        // ── Story MOTIR-6169 · ACCESS LIVES ON THE PROJECT (Subtask MOTIR-6552) ──
+        // The files this story CREATED, measured on this branch with the story's
+        // specs before being pinned: every one at 100 lines / functions /
+        // statements, and 100 branches except `AccessScopeCell` (92.9) and
+        // `InviteAccessFields` (94.1). The access-scope route is already gated by
+        // the members-route glob above.
+        //
+        // ⚠️ THE EXISTING FILES THE STORY EDITED ARE NOT ADDED HERE, as MOTIR-6212's
+        // note sets out: the gated ones (`projectAccessService`, `notificationsService`,
+        // `lib/permissions/**`, `roleErrorResponse`, …) keep their floors; for the
+        // ungated ones the story's own LINES were measured (diff coverage over the
+        // story's specs), and the recorded gaps are defensive arms named in the
+        // MOTIR-6552 PR notes. The ~45 pages whose one changed line routes a null
+        // active project to `/no-project` are held by a structural guard instead
+        // (`tests/permissions/projectAccessArchitecture.test.ts`) and by the e2e walk.
+        'lib/projects/accessMode.ts',
+        'app/**/no-project/page.tsx',
+        'app/**/_components/NoProjectShell.tsx',
+        'app/**/_components/NoProjectCreateButton.tsx',
+        'app/**/members/_components/MemberChips.tsx',
+        'app/**/members/_components/MembersOnlyConfirmDialog.tsx',
+        'app/**/workspace/_components/AccessScopeCell.tsx',
+        'app/**/workspace/_components/InviteAccessFields.tsx',
+        'app/api/projects/**/access/preview/route.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -2708,6 +2742,52 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // ── Story MOTIR-6169 · ACCESS LIVES ON THE PROJECT (Subtask MOTIR-6552) ──
+        // Pinned at the project's 90, not at the measurement (see `include`).
+        'lib/projects/accessMode.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'app/**/no-project/page.tsx': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'app/**/_components/NoProjectShell.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/_components/NoProjectCreateButton.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/members/_components/MemberChips.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/members/_components/MembersOnlyConfirmDialog.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/workspace/_components/AccessScopeCell.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/workspace/_components/InviteAccessFields.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/projects/**/access/preview/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // ── Story MOTIR-6179 · THE ROOMS' VIEW-ANY KEYS (Subtask MOTIR-6336) ──
         'lib/rooms/roomView.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/approvalGates/actPermissions.ts': {
@@ -2760,6 +2840,17 @@ export default defineConfig({
         // return` ref guards that cannot be reached without breaking the ref, so
         // the honest ceiling is close to the floor.
         'components/planning/PlanChangeComposer.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ── Story MOTIR-6574 · OBSOLESCENCE (Subtask MOTIR-6584) ─────────────
+        // Pinned at the floor, not at the 100 measured, so the gate stays about
+        // regressions rather than ratcheting on the next unrelated line.
+        'lib/issues/obsolescence.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/mcp/obsolescence.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/workItems/linkRelationships.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

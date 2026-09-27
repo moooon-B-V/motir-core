@@ -189,7 +189,7 @@ describe('/items/[key]/edit — the branches a source read cannot reach', () => 
     // unchanged: nothing is read before the gate.
     getActiveProject.mockResolvedValue(null);
 
-    await expect(renderTree(EditIssuePage, params())).rejects.toThrow('REDIRECT:/sign-in');
+    await expect(renderTree(EditIssuePage, params())).rejects.toThrow('REDIRECT:/no-project');
     expect(getIssueDetail).not.toHaveBeenCalled();
   });
 

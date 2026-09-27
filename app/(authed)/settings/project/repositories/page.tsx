@@ -15,6 +15,7 @@ import { guardSettingsPage } from '../_guard';
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { isOrgAdminForWorkspace } from '@/lib/services/organizationAccessService';
 import { organizationsService } from '@/lib/services/organizationsService';
+import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 /** The member's own git account (MOTIR-4682) — where the room's connect prompt
  *  hands off. It was `/settings/workspace/github`, a page MOTIR-4680 redirects
@@ -75,10 +76,10 @@ export default async function ProjectRepositoriesPage({
   const t = await getTranslations('repositoryTakeover');
 
   const ctx = await getActiveProject();
-  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
-  // the WORKSPACE tier). The guard stays because the type does — the only null
-  // left is a session-less request — and it redirects rather than rendering.
-  if (!ctx) redirect('/sign-in');
+  // No active project: the reader can enter none of the workspace's projects
+  // (MOTIR-6548) — the no-project landing, never `/sign-in`, which would
+  // bounce a signed-in reader straight back.
+  if (!ctx) redirect(NO_PROJECT_PATH);
 
   // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
   // protection: this page is still one typed URL away once its rail row is

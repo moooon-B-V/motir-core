@@ -127,7 +127,7 @@ describe('proxy config.matcher', () => {
     expect(source).toContain('404-not-403');
   });
 
-  it('the twenty (authed) segments are the ones measured, not a copied list', async () => {
+  it('the twenty-one (authed) segments are the ones measured, not a copied list', async () => {
     // A regression guard on the ENUMERATION, not on the matcher: if this number
     // moves, a segment was added or removed and the first test above is the one
     // that should have failed. Kept because the card's own measurement is the
@@ -148,6 +148,8 @@ describe('proxy config.matcher', () => {
       'filters',
       'invite',
       'items',
+      // MOTIR-6548 — the no-project landing, and the TWENTY-FIRST segment.
+      'no-project',
       // MOTIR-4732 — the FORWARD for old `/planning` links, and the eighteenth
       // segment. The route GROUP that served this path is gone; what is here is
       // a page inside `(authed)`, which is why the sweep now finds it.

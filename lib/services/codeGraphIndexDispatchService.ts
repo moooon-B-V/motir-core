@@ -321,6 +321,38 @@ const POLL_BACKOFF_FACTOR = 2;
 const MAX_POLL_ITERATIONS = 500;
 
 /**
+ * How many containers ONE dispatch may boot before a `redispatchable` exit is
+ * final (MOTIR-6586, `docs/decisions/code-graph-index-fleet.md` §21).
+ *
+ * ⚠️ THE JOB'S OWN RETRY CANNOT STAND IN FOR THIS, which is why it exists. A
+ * settle RETURNS its verdict rather than throwing, so `index-settle:<pid>` is
+ * memoized, and a job retry does not clear the step ledger — attempts 2–5 of
+ * the job replay the failed verdict out of `job_step` without booting anything.
+ * So the second container has to be asked for HERE, under step ids of its own.
+ *
+ * Two, not more: a class the classifier calls re-dispatchable is a transient
+ * (an expired tarball URL, a dropped PUT), and one fresh container either
+ * clears it or says it was not transient. Every attempt is a billed container.
+ */
+export const MAX_DISPATCH_ATTEMPTS = 2;
+
+/**
+ * The supervision SUBJECT of dispatch attempt `attempt` (1-based) — and so the
+ * suffix of its `index-admit:` / `index-boot:` / `index-settle:` step ids and of
+ * its `job_supervision` row.
+ *
+ * ⚠️ ATTEMPT 1 IS THE BARE `projectId`, BYTE-IDENTICAL TO EVERY ID WRITTEN
+ * BEFORE MOTIR-6586. A run in flight across the deploy resumes on the memos it
+ * already holds; a suffix on attempt 1 would re-execute `index-boot` and bill a
+ * second container for a run that never failed. The abandoned-supervision sweep
+ * reads the boot memo back as `index-boot:<subject>`, so the same string names
+ * the row and the memo for every attempt.
+ */
+export function indexAttemptSubject(projectId: string, attempt: number): string {
+  return attempt <= 1 ? projectId : `${projectId}:r${attempt}`;
+}
+
+/**
  * How many CONSECUTIVE provider status reads may fail before supervision gives up
  * and tears the container down. Not zero, because one 500 from the provider must
  * not end a healthy index; not unbounded, because a provider that is genuinely
@@ -457,6 +489,10 @@ export interface IndexSupervisionOptions {
    *  way and for the same reason — a test may lower it to drive the ceiling
    *  branch in milliseconds, never raise it past the shipped guard. */
   maxPollIterations?: number;
+  /** How many containers one dispatch may boot for a `redispatchable` exit
+   *  (MOTIR-6586). Bounded by {@link MAX_DISPATCH_ATTEMPTS} the same way — a
+   *  test may lower it (to 1, to watch a single container), never raise it. */
+  maxDispatchAttempts?: number;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
   /**
@@ -654,7 +690,12 @@ export interface IndexExitVerdict {
    * repoRef is indexed", forever, to every reader.
    */
   readonly indexed: boolean;
-  /** Would dispatching this same (repo × project) again plausibly succeed? */
+  /**
+   * Would dispatching this same (repo × project) again plausibly succeed?
+   * READ by {@link codeGraphIndexDispatchService.advanceIndexContainer}, which
+   * boots a fresh container for it, up to {@link MAX_DISPATCH_ATTEMPTS}
+   * (MOTIR-6586 — for months it had no reader at all).
+   */
   readonly redispatchable: boolean;
   /** One sentence an operator can act on. */
   readonly detail: string;
@@ -765,6 +806,22 @@ export type IndexDispatchOutcome =
    * backstop that still destroys it.
    */
   | { outcome: 'teardown_failed'; detail: string };
+
+/**
+ * What {@link codeGraphIndexDispatchService.advanceIndexContainer} returns: the
+ * LAST attempt's outcome, plus how many attempts it took when that was more than
+ * one (MOTIR-6586).
+ *
+ * ⚠️ A SEPARATE TYPE, NOT A FIELD ON {@link IndexDispatchOutcome}. That union is
+ * what `index-boot:` and `index-settle:` MEMOIZE, and its shape is pinned by id
+ * (`tests/jobs/stepResultShapePins.ts`); widening it would change the memo
+ * shape of two steps that provision and tear down, which may not take new ids.
+ * The count is attached after the steps return, like `coreTimings`.
+ */
+export type IndexAdvanceOutcome = IndexDispatchOutcome & {
+  /** Absent on a first-attempt outcome; `2..MAX_DISPATCH_ATTEMPTS` otherwise. */
+  readonly attempts?: number;
+};
 
 /** One container's core-side spans: the `phasesMs` map, plus the sum of what is in it. */
 export interface IndexCoreSpans {
@@ -976,6 +1033,8 @@ function supervisionVerdict(
 ): IndexExitVerdict {
   return exitClass === 'never_started'
     ? {
+        // Nothing ran: the machine never left the provider's boot. A fresh one
+        // is cheap — the boot deadline is minutes — and usually lands.
         exitClass,
         exitCode: null,
         indexed: false,
@@ -986,7 +1045,12 @@ function supervisionVerdict(
         exitClass,
         exitCode: null,
         indexed: false,
-        redispatchable: true,
+        // ⚠️ NOT RE-DISPATCHABLE, since the flag gained a reader (MOTIR-6586).
+        // The deadline and the poll ceiling are the ENTIRE index budget, so a
+        // container here already cost the most any container may cost; a fresh
+        // one on the same tree at the same size mostly repeats it, like `137`.
+        // It was `true` for as long as nothing read it. The next push re-indexes.
+        redispatchable: false,
         detail: 'supervision gave up on the container before it reported a terminal state',
       };
 }
@@ -1648,8 +1712,56 @@ export const codeGraphIndexDispatchService = {
   },
 
   /**
-   * ONE PASS of a (repo × project) supervision: admit, boot, and then advance
+   * ONE PASS of a (repo × project) dispatch — {@link advanceIndexAttempt} for
+   * attempt 1, and again for a fresh container while the last one settled with
+   * a `redispatchable` verdict, up to {@link MAX_DISPATCH_ATTEMPTS} (MOTIR-6586).
+   *
+   * ⚠️ THE ATTEMPT NUMBER IS RE-DERIVED ON EVERY PASS, NEVER STORED. A pass
+   * enters at attempt 1: a settled attempt replays its `index-settle:<subject>`
+   * memo and polls nothing, so walking past it costs a memo read, and the first
+   * attempt that has not settled advances by one poll and throws `JobRunDefer`
+   * exactly as a single attempt always has. Which attempt a run is on is
+   * therefore a fact of `job_step`, and a restart cannot lose it.
+   *
+   * ⚠️ ONLY A SETTLED, UN-INDEXED, RE-DISPATCHABLE VERDICT GOES ROUND AGAIN.
+   * Every other outcome — an index, a non-re-dispatchable class, a deferred
+   * admission, a refused provision, a failed teardown — is returned as it
+   * stands, from whichever attempt produced it.
+   */
+  async advanceIndexContainer(
+    /** The `job_queue` row this supervision hangs off — `ctx.runId` for a job. */
+    runId: string,
+    input: IndexDispatchInput,
+    options: IndexSupervisionOptions = {},
+  ): Promise<IndexAdvanceOutcome> {
+    const maxAttempts = Math.max(
+      1,
+      Math.min(options.maxDispatchAttempts ?? MAX_DISPATCH_ATTEMPTS, MAX_DISPATCH_ATTEMPTS),
+    );
+    for (let attempt = 1; ; attempt += 1) {
+      const outcome = await this.advanceIndexAttempt(
+        runId,
+        input,
+        indexAttemptSubject(input.projectId, attempt),
+        options,
+      );
+      const again =
+        outcome.outcome === 'settled' &&
+        !outcome.verdict.indexed &&
+        outcome.verdict.redispatchable &&
+        attempt < maxAttempts;
+      if (!again) return attempt === 1 ? outcome : { ...outcome, attempts: attempt };
+    }
+  },
+
+  /**
+   * ONE PASS of ONE dispatch attempt's supervision: admit, boot, and then advance
    * the state machine by exactly one poll (Story MOTIR-3778 · MOTIR-3828).
+   *
+   * `subject` names the attempt ({@link indexAttemptSubject}): it keys the three
+   * memoized steps and the `job_supervision` row, and for attempt 1 it is the
+   * bare `projectId` every id before MOTIR-6586 was built from. Until MOTIR-6586
+   * this method WAS `advanceIndexContainer`, and the header below is its own.
    *
    * ⚠️ IT USUALLY DOES NOT RETURN — it THROWS `JobRunDefer`, and that is the
    * whole shape. `docs/decisions/job-queue-foundation.md` §16 replaces the loop
@@ -1696,16 +1808,16 @@ export const codeGraphIndexDispatchService = {
    * transition now (§16.4) and a `finally` would tear the container down on the
    * first suspension, which is exactly what §15.4 measured.
    */
-  async advanceIndexContainer(
-    /** The `job_queue` row this supervision hangs off — `ctx.runId` for a job. */
+  async advanceIndexAttempt(
     runId: string,
     input: IndexDispatchInput,
+    /** The attempt's supervision subject — {@link indexAttemptSubject}. */
+    subject: string,
     options: IndexSupervisionOptions = {},
   ): Promise<IndexDispatchOutcome> {
     const sleep = options.sleep ?? sleepFor;
     const steps = options.steps ?? INLINE_STEPS;
     const now = options.now ?? ((): Date => new Date());
-    const { projectId } = input;
 
     // ── 0 · QUEUE FOR ADMISSION — over the cap means WAIT, never drop ─────────
     // ONE memoized step containing the whole backoff, unchanged (§13.3(c)).
@@ -1725,7 +1837,7 @@ export const codeGraphIndexDispatchService = {
     // admission service's vocabulary and is asserted on by suites that have
     // nothing to do with timing. The spread preserves `outcome`, `reason` and
     // `admission`, so both branches below read exactly as they did.
-    const admitted = await steps.run(`index-admit:${projectId}`, async () => {
+    const admitted = await steps.run(`index-admit:${subject}`, async () => {
       const requestedAt = now().toISOString();
       const verdict = await this.waitForAdmission(input, sleep, options);
       return { ...verdict, requestedAt, admittedAt: now().toISOString() };
@@ -1738,7 +1850,7 @@ export const codeGraphIndexDispatchService = {
       };
     }
 
-    const booted = await steps.run(`index-boot:${projectId}`, () =>
+    const booted = await steps.run(`index-boot:${subject}`, () =>
       this.bootIndexContainer(input, admitted.admission, options),
     );
     if (booted.phase === 'terminal') return booted.outcome;
@@ -1760,7 +1872,7 @@ export const codeGraphIndexDispatchService = {
       runId,
       {
         kind: 'index',
-        subject: projectId,
+        subject,
         workspaceId: input.workspaceId,
         // From the MEMOIZED boot, so the wall clock stays anchored to the
         // SESSION and a resumed pass settles a container already past its
@@ -1797,7 +1909,7 @@ export const codeGraphIndexDispatchService = {
         // THE TEARDOWN, still a memoized step. The driver calls it from three
         // named transitions and from nowhere else, and never on a defer.
         settle: async (reason, state, verdict) =>
-          steps.run(`index-settle:${projectId}`, () =>
+          steps.run(`index-settle:${subject}`, () =>
             this.settleIndexContainer(
               session,
               verdict ?? {

@@ -125,7 +125,7 @@ interface CommentGate {
     canBrowse: boolean;
     canComment: boolean;
     canModerate: boolean;
-    accessLevel: 'open' | 'limited' | 'private' | 'public';
+    accessMode: 'workspace' | 'members' | 'public';
   };
 }
 
@@ -169,15 +169,15 @@ async function resolveComment(
 }
 
 /**
- * The user ids the body may validly mention — the members who can VIEW the
- * issue, via the 6.4 `assignableMembersService` scoping (reused, not
- * duplicated). Reference-data read; runs OUTSIDE the write transaction (the
+ * The user ids the body may validly mention — the members who can ENTER the
+ * project, via `assignableMembersService` (the entry rule, reused, not
+ * duplicated — Story MOTIR-6169 · MOTIR-6547). Reference-data read; runs OUTSIDE the write transaction (the
  * member service binds its own workspace context).
  */
 async function resolveMentionableIds(gate: CommentGate, ctx: ServiceContext): Promise<Set<string>> {
   const members = await assignableMembersService.list({
     projectId: gate.item.projectId,
-    accessLevel: gate.caps.accessLevel,
+    accessMode: gate.caps.accessMode,
     ctx,
   });
   return new Set(members.map((m) => m.userId));

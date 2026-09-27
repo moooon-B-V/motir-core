@@ -28,7 +28,7 @@ export interface paths {
         put?: never;
         /**
          * Create a work item
-         * @description Create a work item in a project. The parent, if given, is named by its key and must be a kind-legal parent in the same project. Alternatively send `folderId` to file the new item into one of the project’s folders; naming both a parent and a folder is refused with `PLACEMENT_CONFLICT`.
+         * @description Create a work item in a project. The parent, if given, is named by its key and must be a kind-legal parent in the same project. Alternatively send `folderId` to file the new item into one of the project’s folders; naming both a parent and a folder is refused with `PLACEMENT_CONFLICT`. `obsolescence` (`outdated` / `deprecated`) and `obsolescenceNoteMd` may be set on any kind and in any status; a value outside the enum is refused with `INVALID_OBSOLESCENCE`.
          *
          *     Requires the `work_item:edit` permission.
          */
@@ -82,7 +82,7 @@ export interface paths {
         head?: never;
         /**
          * Update a work item
-         * @description Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field explicitly set to `null` CLEARS it. Send `If-Match` to make the update conditional on the item not having moved. `folderId` files the item into a folder (or `null` takes it out), in the same write as every other field; setting `parentKey` on a filed item takes it out of its folder, and sending both is refused with `PLACEMENT_CONFLICT`.
+         * @description Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field explicitly set to `null` CLEARS it. Send `If-Match` to make the update conditional on the item not having moved. `folderId` files the item into a folder (or `null` takes it out), in the same write as every other field; setting `parentKey` on a filed item takes it out of its folder, and sending both is refused with `PLACEMENT_CONFLICT`. `obsolescence` and `obsolescenceNoteMd` mark the item as no longer true of the code on ANY kind and in ANY status — a `done` item included — and `null` clears either; a value outside the enum is refused with `INVALID_OBSOLESCENCE`.
          *
          *     Requires the `work_item:edit` permission.
          */
@@ -126,7 +126,7 @@ export interface paths {
         };
         /**
          * Read a work item’s relationship edges
-         * @description All five edge groups. An empty group is `[]`, never an absent key — to a typed client those are different things.
+         * @description All seven edge groups. An empty group is `[]`, never an absent key — to a typed client those are different things. `supersedes` lists the older work items this one replaces; `supersededBy` the newer ones that replace it.
          *
          *     Requires the `project:browse` permission.
          */
@@ -134,7 +134,7 @@ export interface paths {
         put?: never;
         /**
          * Create a relationship edge
-         * @description Link this work item to another by key. Creating an edge that already exists is a 409 — the body is valid, the state is not what the request assumed.
+         * @description Link this work item to another by key. Creating an edge that already exists is a 409 — the body is valid, the state is not what the request assumed. `supersedes` records that this (newer) work item replaces `toKey`; `superseded_by` writes the same edge from the older end. Neither gates readiness — only `blocked_by` / `blocks` do.
          *
          *     Requires the `work_item:edit` permission.
          */
@@ -1249,6 +1249,8 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            obsolescence: components["schemas"]["WorkItemObsolescence"] | null;
+            obsolescenceNoteMd: string | null;
             dependencies: {
                 blockedBy: {
                     key: string;
@@ -1283,6 +1285,8 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            obsolescence: components["schemas"]["WorkItemObsolescence"] | null;
+            obsolescenceNoteMd: string | null;
             descriptionMd: string | null;
             parentKey: string | null;
             folderId: string | null;
@@ -1372,6 +1376,34 @@ export interface components {
                     archived: boolean;
                 }[];
                 clones: {
+                    key: string;
+                    /** @enum {string} */
+                    kind: "epic" | "story" | "task" | "subtask" | "bug";
+                    title: string;
+                    status: string;
+                    /** @enum {string} */
+                    priority: "lowest" | "low" | "medium" | "high" | "highest";
+                    assigneeId: string | null;
+                    estimateMinutes: number | null;
+                    storyPoints: number | null;
+                    parentKey: string | null;
+                    archived: boolean;
+                }[];
+                supersedes: {
+                    key: string;
+                    /** @enum {string} */
+                    kind: "epic" | "story" | "task" | "subtask" | "bug";
+                    title: string;
+                    status: string;
+                    /** @enum {string} */
+                    priority: "lowest" | "low" | "medium" | "high" | "highest";
+                    assigneeId: string | null;
+                    estimateMinutes: number | null;
+                    storyPoints: number | null;
+                    parentKey: string | null;
+                    archived: boolean;
+                }[];
+                supersededBy: {
                     key: string;
                     /** @enum {string} */
                     kind: "epic" | "story" | "task" | "subtask" | "bug";
@@ -1521,6 +1553,34 @@ export interface components {
                 parentKey: string | null;
                 archived: boolean;
             }[];
+            supersedes: {
+                key: string;
+                /** @enum {string} */
+                kind: "epic" | "story" | "task" | "subtask" | "bug";
+                title: string;
+                status: string;
+                /** @enum {string} */
+                priority: "lowest" | "low" | "medium" | "high" | "highest";
+                assigneeId: string | null;
+                estimateMinutes: number | null;
+                storyPoints: number | null;
+                parentKey: string | null;
+                archived: boolean;
+            }[];
+            supersededBy: {
+                key: string;
+                /** @enum {string} */
+                kind: "epic" | "story" | "task" | "subtask" | "bug";
+                title: string;
+                status: string;
+                /** @enum {string} */
+                priority: "lowest" | "low" | "medium" | "high" | "highest";
+                assigneeId: string | null;
+                estimateMinutes: number | null;
+                storyPoints: number | null;
+                parentKey: string | null;
+                archived: boolean;
+            }[];
         };
         CommentThread: {
             id: string;
@@ -1643,7 +1703,7 @@ export interface components {
             decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission") | null;
             decisionSource: ("ui" | "api" | "mcp" | "github") | null;
             subjectVersion: string | null;
-            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded") | null;
+            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed") | null;
             outcomeRef: string | null;
             refusalVerdict: ("revise" | "re_plan") | null;
             offersRefusalVerdict: boolean;
@@ -1670,7 +1730,15 @@ export interface components {
         Project: {
             key: string;
             name: string;
-            /** @enum {string} */
+            /**
+             * @description Who may enter the project — the authoritative access field.
+             * @enum {string}
+             */
+            accessMode: "workspace" | "members" | "public";
+            /**
+             * @description DEPRECATED — derived from `accessMode` (workspace → open, members → private, public → public), so `limited` is never emitted. Read `accessMode`.
+             * @enum {string}
+             */
             accessLevel: "open" | "limited" | "private" | "public";
             archived: boolean;
         };
@@ -1716,6 +1784,8 @@ export interface components {
             type: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "choice" | "deploy" | "manual" | "legal" | "chore") | null;
             executor: ("coding_agent" | "human") | null;
             difficulty: ("trivial" | "low" | "medium" | "high") | null;
+            obsolescence: components["schemas"]["WorkItemObsolescence"] | null;
+            obsolescenceNoteMd: string | null;
             assigneeId: string | null;
             assignee: {
                 id: string;
@@ -2420,6 +2490,8 @@ export interface components {
             movedFolderIds: string[];
             movedWorkItemIds: string[];
         };
+        /** @enum {string} */
+        WorkItemObsolescence: "outdated" | "deprecated";
     };
     responses: never;
     parameters: never;
@@ -2610,6 +2682,8 @@ export interface operations {
                     type?: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "choice" | "deploy" | "manual" | "legal" | "chore") | null;
                     executor?: ("coding_agent" | "human") | null;
                     difficulty?: ("trivial" | "low" | "medium" | "high") | null;
+                    obsolescence?: components["schemas"]["WorkItemObsolescence"] | null;
+                    obsolescenceNoteMd?: string | null;
                     storyPoints?: number | null;
                     estimateMinutes?: number | null;
                     targetRepo?: string | null;
@@ -3063,6 +3137,8 @@ export interface operations {
                     type?: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "choice" | "deploy" | "manual" | "legal" | "chore") | null;
                     executor?: ("coding_agent" | "human") | null;
                     difficulty?: ("trivial" | "low" | "medium" | "high") | null;
+                    obsolescence?: components["schemas"]["WorkItemObsolescence"] | null;
+                    obsolescenceNoteMd?: string | null;
                     storyPoints?: number | null;
                     estimateMinutes?: number | null;
                     targetRepo?: string | null;
@@ -3522,7 +3598,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The five edge groups. */
+            /** @description The seven edge groups. */
             200: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -3654,7 +3730,7 @@ export interface operations {
                 "application/json": {
                     toKey: string;
                     /** @enum {string} */
-                    relationship: "blocked_by" | "blocks" | "relates_to" | "duplicates" | "clones";
+                    relationship: "blocked_by" | "blocks" | "relates_to" | "duplicates" | "clones" | "supersedes" | "superseded_by";
                 };
             };
         };
@@ -3678,7 +3754,7 @@ export interface operations {
                     "application/json": {
                         toKey: string;
                         /** @enum {string} */
-                        relationship: "blocked_by" | "blocks" | "relates_to" | "duplicates" | "clones";
+                        relationship: "blocked_by" | "blocks" | "relates_to" | "duplicates" | "clones" | "supersedes" | "superseded_by";
                     };
                 };
             };
@@ -3823,7 +3899,7 @@ export interface operations {
                 /** @description The other endpoint’s key. */
                 toKey: string;
                 /** @description The relationship to remove. */
-                relationship: "blocked_by" | "blocks" | "relates_to" | "duplicates" | "clones";
+                relationship: "blocked_by" | "blocks" | "relates_to" | "duplicates" | "clones" | "supersedes" | "superseded_by";
             };
             header?: never;
             path: {
@@ -5310,7 +5386,7 @@ export interface operations {
                             decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission") | null;
                             decisionSource: ("ui" | "api" | "mcp" | "github") | null;
                             subjectVersion: string | null;
-                            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded") | null;
+                            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed") | null;
                             outcomeRef: string | null;
                             refusalVerdict: ("revise" | "re_plan") | null;
                             offersRefusalVerdict: boolean;

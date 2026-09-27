@@ -599,10 +599,19 @@ export function resolveGateSet(input: GateSetInput): GateSet {
     input.currentReceipt,
     input.latestAcceptanceGate,
   );
+  // ⚠️ A STANDING CAN'T-LAND OUTCOME ASKS NOTHING, WHATEVER THE LATEST GATE SAYS (§4
+  // FOURTH AMENDMENT, point 3; MOTIR-6595). Until the convergence of MOTIR-6595 this held
+  // only because the latest merge gate was the APPROVAL the outcome spent, which
+  // `answered` reads. Withdrawing a gate the OLD rule re-asked from a queue failure leaves
+  // the latest gate `superseded`, and without this clause the reconcile would ask again
+  // over the very commits that cannot land. A push is what ends the outcome, and the next
+  // green asks about the new commits.
+  const cantLandHolds = outcome?.landingClass === 'cant_land';
   if (
     input.prMergeMode === 'manual' &&
     !answered &&
     !acceptanceHolds &&
+    !cantLandHolds &&
     everyMemberMergeable &&
     version !== null
   ) {

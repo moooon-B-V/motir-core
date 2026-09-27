@@ -227,13 +227,16 @@ describe('the publish path cannot be reached without the gate', () => {
   it('exactly ONE service method writes the public access level, and it is gated', () => {
     // The repository write is the narrow waist: everything that can publish a
     // project goes through it. A second caller added later lands here.
-    const writers = filesMatching('projectRepository.setAccessLevel(', 'app', 'lib');
+    // Since Story MOTIR-6169 the write is the ACCESS MODE (`setAccessMode`, which
+    // writes the legacy level beside it); the level-only writer is gone.
+    const writers = filesMatching('projectRepository.setAccessMode(', 'app', 'lib');
     expect(writers).toEqual(['lib/services/projectMembersService.ts']);
+    expect(filesMatching('projectRepository.setAccessLevel(', 'app', 'lib')).toEqual([]);
 
     const service = stripSourceComments(
       readFileSync(join(REPO_ROOT, 'lib/services/projectMembersService.ts'), 'utf8'),
     );
-    expect(service).toContain("level === 'public' && !isCloud()");
+    expect(service).toContain("mode === 'public' && !isCloud()");
     expect(service).toContain('PublicAccessUnavailableError');
   });
 
@@ -277,7 +280,7 @@ describe('the publish path cannot be reached without the gate', () => {
     ).toEqual([]);
   });
 
-  it('the selector offers the level from a gated set, not from the constant', () => {
+  it('the selector gates Public on the build, whatever it renders', () => {
     const selector = stripSourceComments(
       readFileSync(
         join(
@@ -287,10 +290,12 @@ describe('the publish path cannot be reached without the gate', () => {
         'utf8',
       ),
     );
-    // Rendering straight from ACCESS_LEVELS is exactly the regression this
-    // guards: it puts `public` back on the control on every build.
-    expect(selector).not.toContain('ACCESS_LEVELS.map(');
-    expect(selector).toContain('offeredLevels.map(');
-    expect(selector).toContain('publicAccessAvailable');
+    // AMENDED BY THE DESIGN (Story MOTIR-6169 · MOTIR-6550 · A10): the three modes
+    // are all DRAWN, and off-cloud Public is disabled with its reason rather than
+    // removed. So the regression is no longer "rendered from the constant" — it is
+    // Public becoming CHOOSABLE off-cloud. Both halves of the gate must stand: the
+    // card is disabled on `publicAccessAvailable`, and the handler refuses it too.
+    expect(selector).toContain("mode === 'public' && !publicAccessAvailable");
+    expect(selector).toContain("if (mode === 'public' && !publicAccessAvailable) return;");
   });
 });

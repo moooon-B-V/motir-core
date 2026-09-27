@@ -1,6 +1,12 @@
 import type { Project } from '@/generated/prisma/client';
+import { accessModeOf, levelForMode } from '@/lib/projects/accessMode';
 import type { ProjectMembershipWithUser } from '@/lib/repositories/projectMembershipRepository';
-import type { ProjectMemberDTO, ProjectAccessDTO } from '@/lib/dto/projectMembers';
+import type { MembershipWithUser } from '@/lib/repositories/workspaceMembershipRepository';
+import type {
+  AccessLossPersonDTO,
+  ProjectMemberDTO,
+  ProjectAccessDTO,
+} from '@/lib/dto/projectMembers';
 
 // Prisma → DTO converters for the project membership + access domain. The
 // service calls these just before returning so no Prisma row shape leaks
@@ -16,9 +22,21 @@ export function toProjectMemberDTO(row: ProjectMembershipWithUser): ProjectMembe
   };
 }
 
+/** A workspace member a change of access mode would lock out (MOTIR-6544). */
+export function toAccessLossPersonDTO(row: MembershipWithUser): AccessLossPersonDTO {
+  return {
+    userId: row.user.id,
+    name: row.user.name || row.user.email.split('@')[0]!,
+    email: row.user.email,
+    workspaceRole: row.workspaceRole,
+    customRoleName: row.roleDefinition?.name ?? null,
+  };
+}
+
 export function toProjectAccessDTO(project: Project): ProjectAccessDTO {
   return {
     key: project.identifier,
-    accessLevel: project.accessLevel,
+    accessMode: accessModeOf(project),
+    accessLevel: levelForMode(accessModeOf(project)),
   };
 }

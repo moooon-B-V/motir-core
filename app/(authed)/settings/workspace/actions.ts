@@ -9,18 +9,24 @@ import { getWorkspaceContext, WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
 import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { roleMigrationReportService } from '@/lib/services/roleMigrationReportService';
-import type { RoleMigrationPageDTO } from '@/lib/dto/workspaces';
+import { projectsService } from '@/lib/services/projectsService';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
+import type { MemberAddedProjectDTO, RoleMigrationPageDTO } from '@/lib/dto/workspaces';
 import {
+  AccessScopeForbiddenError,
+  InvalidAccessScopeError,
   InvalidWorkspaceRoleError,
   LastManagerError,
   LastMemberError,
   NotAMemberError,
   OrgManagedWorkspaceRoleError,
+  ScopeNotApplicableError,
   WorkspaceMemberNotFoundError,
   WorkspaceRoleForbiddenError,
 } from '@/lib/workspaces/errors';
 import { RoleDefinitionNotFoundError } from '@/lib/permissions/errors';
 import type { WorkspaceRole } from '@/lib/workspaces/roles';
+import type { WorkspaceAccessScope } from '@/generated/prisma/client';
 
 // Server Actions for the workspace settings page. HTTP/transport layer:
 // each reads the session + active workspace, calls exactly one service
@@ -166,6 +172,84 @@ export async function setMemberRoleAction(
   }
   revalidateWorkspaceSettingsSurfaces();
   return { ok: true };
+}
+
+/**
+ * Set a member's ACCESS SCOPE — Full or Limited (Story MOTIR-6169 · MOTIR-6545).
+ * Manager-only, the role action's twin: a refusal comes back as `{ ok: false,
+ * error }`, and a success revalidates the same settings surfaces.
+ */
+export async function setMemberAccessScopeAction(
+  targetUserId: string,
+  scope: WorkspaceAccessScope,
+): Promise<ActionResult> {
+  const { userId, workspaceId } = await requireContext();
+  const t = await getErrorsTranslator();
+  try {
+    await workspacesService.setMemberAccessScope({
+      actorUserId: userId,
+      workspaceId,
+      targetUserId,
+      scope,
+    });
+  } catch (err) {
+    if (err instanceof AccessScopeForbiddenError || err instanceof NotAMemberError) {
+      return { ok: false, error: t('actions.scopeManagerOnly'), code: err.code };
+    }
+    if (err instanceof ScopeNotApplicableError) {
+      return { ok: false, error: t('actions.scopeNotApplicable'), code: err.code };
+    }
+    if (err instanceof WorkspaceMemberNotFoundError || err instanceof InvalidAccessScopeError) {
+      return { ok: false, error: t('actions.scopeChangeFailed'), code: err.code };
+    }
+    throw err;
+  }
+  revalidateWorkspaceSettingsSurfaces();
+  return { ok: true };
+}
+
+/**
+ * The projects one member was added to, for the Members page's "N projects"
+ * popover (Story MOTIR-6169 · MOTIR-6551, design W3) — a READ, fetched when the
+ * popover opens. The service narrows it to the projects the viewer can enter.
+ */
+export async function listMemberAddedProjectsAction(
+  targetUserId: string,
+): Promise<{ ok: true; projects: MemberAddedProjectDTO[] } | { ok: false; error: string }> {
+  const { userId, workspaceId } = await requireContext();
+  try {
+    return {
+      ok: true,
+      projects: await workspacesService.listMemberAddedProjects(workspaceId, userId, targetUserId),
+    };
+  } catch (err) {
+    if (err instanceof NotAMemberError) {
+      return { ok: false, error: (await getErrorsTranslator())('actions.memberProjectsFailed') };
+    }
+    throw err;
+  }
+}
+
+/**
+ * Go to ONE project's Access & members page (Story MOTIR-6169 · MOTIR-6551,
+ * design W3 / W10). That page edits the ACTIVE project, so the door makes this
+ * project active first — through `setActiveProject`, which refuses a project the
+ * actor cannot enter (MOTIR-6319) — and then lands there. A form action, so it
+ * answers nothing: a key the actor cannot resolve (gone, renamed away, or not
+ * theirs to enter) simply leaves them where they are, exactly as a key that
+ * never existed would.
+ */
+export async function openProjectAccessAction(projectKey: string): Promise<void> {
+  const { userId, workspaceId } = await requireContext();
+  try {
+    const project = await projectsService.getByKey(projectKey, { userId, workspaceId });
+    await projectsService.setActiveProject({ userId, workspaceId, projectId: project.id });
+  } catch (err) {
+    if (err instanceof ProjectNotFoundError) return;
+    throw err;
+  }
+  revalidatePath('/', 'layout');
+  redirect('/settings/project/members');
 }
 
 /**

@@ -9,6 +9,7 @@ import { NotificationNotFoundError } from '@/lib/notifications/errors';
 import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -48,6 +49,10 @@ async function makeScenario(): Promise<Scenario> {
   const fx = await makeWorkItemFixture();
   const issue = await createTestWorkItem(fx, { kind: 'task', title: 'Notified task' });
   const recipient = await createTestUser({ name: 'Recipient' });
+  // A workspace member, so the project the rows are about is one they can ENTER:
+  // the feed honours entry at read time (Story MOTIR-6169 · MOTIR-6549), and a
+  // stranger to the workspace would read an empty inbox.
+  await workspacesService.addMember({ userId: recipient.id, workspaceId: fx.workspaceId });
   const actor = await createTestUser({ name: 'Actor' });
   return {
     fx,
@@ -297,6 +302,8 @@ describe('notificationsService.markAllRead', () => {
   it('leaves other recipients’ unread rows untouched', async () => {
     const s = await makeScenario();
     const other = await createTestUser({ name: 'Other' });
+    // Reads their own feed below, so they too are a member who can enter.
+    await workspacesService.addMember({ userId: other.id, workspaceId: s.fx.workspaceId });
     await seed(s, s.recipient.id, [{ dedupeKey: 'mine' }]);
     await seed(s, other.id, [{ dedupeKey: 'theirs' }]);
 

@@ -73,10 +73,12 @@ export function classifyQueueExit(rawReason: string | null | undefined): QueueEx
  * MOTIR-5802 · MOTIR-5805). One question decides it: could re-running these SAME
  * commits land them?
  *
- *  · `retryable`  — yes (a flaky check, a cleared queue, a hand removal): ask again.
- *  · `cant_land`  — no, not as they stand (a conflict): asking would offer a button
- *                   guaranteed to fail, so the card goes back to Implemented and
- *                   `motir fix` is the way forward.
+ *  · `retryable`  — yes (a cleared queue, a hand removal — nothing FAILED): ask again.
+ *  · `cant_land`  — no, not as they stand (a conflict, and — since the FIFTH AMENDMENT
+ *                   (MOTIR-6591) — every queue FAILURE: the checks failed or timed out,
+ *                   the merge commit or tree could not be built): asking would offer a
+ *                   button guaranteed to fail, so the card goes back to Implemented and
+ *                   `motir fix` is the way forward. A new green head asks again.
  *  · `setting`    — yes, once a person changes a SETTING (branch protection): ask
  *                   again, and name the setting.
  *  · `landed`     — it merged; there is nothing to ask.
@@ -88,12 +90,21 @@ export function classifyQueueExit(rawReason: string | null | undefined): QueueEx
  */
 export type LandingClass = 'retryable' | 'cant_land' | 'setting' | 'landed';
 
-/** Every reason the table above names, with its class. Total by construction. */
+/**
+ * Every reason the table above names, with its class. Total by construction.
+ *
+ * ⚠️ A QUEUE FAILURE IS CAN'T-LAND (`approval-gates.md` §4 FIFTH AMENDMENT; MOTIR-6594).
+ * Yue, 2026-09-27: *"when a PR failed in the merge queue, we should not open a new
+ * approval gate"*. A second yes to the same head re-queues the commits the queue just
+ * refused, so the four failures join `MERGE_CONFLICT`. The NEUTRAL removals stay
+ * `retryable` (nothing failed) and `BRANCH_PROTECTIONS` stays `setting` (changing a
+ * setting is not a push, so only a gate brings the question back).
+ */
 const QUEUE_EXIT_CLASSES = {
-  CI_FAILURE: 'retryable',
-  CI_TIMEOUT: 'retryable',
-  INVALID_MERGE_COMMIT: 'retryable',
-  GIT_TREE_INVALID: 'retryable',
+  CI_FAILURE: 'cant_land',
+  CI_TIMEOUT: 'cant_land',
+  INVALID_MERGE_COMMIT: 'cant_land',
+  GIT_TREE_INVALID: 'cant_land',
   MANUAL: 'retryable',
   QUEUE_CLEARED: 'retryable',
   ROLL_BACK: 'retryable',

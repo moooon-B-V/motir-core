@@ -149,7 +149,9 @@ describe('the publish path, end to end, in both builds', () => {
         ctx: fx.ctx,
         level,
       });
-      expect(res.accessLevel).toBe(level);
+      // The level adapter lands `limited` and `private` at Members only (Story
+      // MOTIR-6169), so the mode is what the call answers for.
+      expect(res.accessMode).toBe(level === 'open' ? 'workspace' : 'members');
     }
   });
 

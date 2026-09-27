@@ -92,7 +92,13 @@ class StubServer {
 }
 
 /** A valid `Project`, the smallest real resource to round-trip. */
-const PROJECT = { key: 'MOTIR', name: 'Motir', accessLevel: 'open', archived: false };
+const PROJECT = {
+  key: 'MOTIR',
+  name: 'Motir',
+  accessLevel: 'open',
+  accessMode: 'workspace',
+  archived: false,
+};
 
 /** A spec document advertising `version`, for the skew probe. */
 function specWithVersion(version: string): unknown {

@@ -106,12 +106,13 @@ describe('GitHub’s parseMergeQueueExitEvent, over the captured deliveries', ()
 
 // THE CLASS MAP (§4 FOURTH AMENDMENT, point 2; MOTIR-5802) — what a person can DO about
 // an un-landed merge, which is a different question from what the removal did to the card.
-// Stated here row for row, from the record rather than from the module under test.
+// Stated here row for row, from the record rather than from the module under test. The
+// four queue FAILURES are CAN'T-LAND since the FIFTH AMENDMENT (MOTIR-6594).
 const CLASSES: ReadonlyArray<[string, LandingClass]> = [
-  ['CI_FAILURE', 'retryable'],
-  ['CI_TIMEOUT', 'retryable'],
-  ['INVALID_MERGE_COMMIT', 'retryable'],
-  ['GIT_TREE_INVALID', 'retryable'],
+  ['CI_FAILURE', 'cant_land'],
+  ['CI_TIMEOUT', 'cant_land'],
+  ['INVALID_MERGE_COMMIT', 'cant_land'],
+  ['GIT_TREE_INVALID', 'cant_land'],
   ['MANUAL', 'retryable'],
   ['QUEUE_CLEARED', 'retryable'],
   ['ROLL_BACK', 'retryable'],
@@ -137,6 +138,20 @@ describe('what can be DONE about an un-landed merge — the class map', () => {
     expect(classOfQueueExit('SOME_NEW_REASON')).toBe('retryable');
     expect(classOfQueueExit(null)).toBe('retryable');
     expect(classOfQueueExit(undefined)).toBe('retryable');
+  });
+
+  // THE FIFTH AMENDMENT's line (MOTIR-6594): every FAILURE is can't-land EXCEPT the one a
+  // setting answers, and nothing that is not a failure is can't-land. Asserted over the
+  // whole reason map, so a reason added later cannot slip into either side unclassed.
+  it('a failure is CAN’T-LAND unless a setting answers it; nothing else is', () => {
+    for (const [reason, disposition] of Object.entries(QUEUE_EXIT_REASONS)) {
+      const cls = classOfQueueExit(reason);
+      if (disposition === 'failure' && reason !== 'BRANCH_PROTECTIONS') {
+        expect(cls, reason).toBe('cant_land');
+      } else {
+        expect(cls, reason).not.toBe('cant_land');
+      }
+    }
   });
 
   it('the class is not the disposition — BRANCH_PROTECTIONS and MANUAL are the tells', () => {

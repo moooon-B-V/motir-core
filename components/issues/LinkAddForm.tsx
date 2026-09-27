@@ -4,7 +4,7 @@ import { CircleAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { Button } from '@/components/ui/Button';
-import { RELATIONSHIP_KINDS } from '@/lib/workItems/linkRelationships';
+import { LINK_FORM_RELATIONSHIP_KINDS } from '@/lib/workItems/linkRelationships';
 import type { RelationshipKind } from '@/lib/dto/workItemLinks';
 
 // The inline "add a link" form, per `design/work-items/links.mock.html` — a
@@ -71,7 +71,7 @@ export function LinkAddForm({
   const tLabels = useTranslations('labels');
   const t = useTranslations('ui');
   const tc = useTranslations('common');
-  const kindOptions: ComboboxOption<RelationshipKind>[] = RELATIONSHIP_KINDS.map((r) => ({
+  const kindOptions: ComboboxOption<RelationshipKind>[] = LINK_FORM_RELATIONSHIP_KINDS.map((r) => ({
     value: r.kind,
     label: tLabels(`relationship.${r.kind}`),
   }));

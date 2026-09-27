@@ -27,7 +27,13 @@ import { validateFilterAst } from '@/lib/filters/registry';
 // degenerate done-less-workflow built-ins.
 
 function inputs(over: Partial<ProjectAccessInputs> = {}): ProjectAccessInputs {
-  return { accessLevel: 'open', workspaceRole: 'member', addedToProject: false, ...over };
+  return {
+    accessMode: 'workspace',
+    workspaceRole: 'member',
+    accessScope: 'full',
+    addedToProject: false,
+    ...over,
+  };
 }
 
 function caps(over: Partial<SavedFilterProjectCapabilities> = {}): SavedFilterProjectCapabilities {

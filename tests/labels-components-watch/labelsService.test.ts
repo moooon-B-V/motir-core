@@ -473,8 +473,8 @@ describe('labelsService — the permission matrix', () => {
 
   it('hides a PRIVATE project from a non-member as 404 — never "exists but forbidden"', async () => {
     const s = await buildScenario();
-    // Flip private FIRST, then add the late joiner (auto-enrolment only
-    // covers then-current members — the comments-suite pattern).
+    // Flip private, then add the late joiner — going private adds nobody
+    // (Story MOTIR-6169), so they are not a project member.
     await projectMembersService.setAccessLevel({
       key: s.fx.projectIdentifier,
       actorUserId: s.fx.ownerId,

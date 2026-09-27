@@ -563,6 +563,10 @@
       "medium": "中",
       "high": "高"
     },
+    "obsolescence": {
+      "outdated": "已过时",
+      "deprecated": "已弃用"
+    },
     "priority": {
       "highest": "最高",
       "high": "高",
@@ -575,7 +579,9 @@
       "blocks": "阻塞",
       "relates_to": "关联",
       "duplicates": "重复",
-      "clones": "克隆"
+      "clones": "克隆",
+      "supersedes": "取代",
+      "superseded_by": "被取代"
     },
     "role": {
       "owner": "所有者",
@@ -641,6 +647,9 @@
       "rolesManagerOnly": "只有工作区管理者可以更改角色。",
       "orgManagedRole": "组织所有者或管理员是所有工作区的管理者。请在组织的成员页面更改。",
       "roleChangeFailed": "无法更改角色。",
+      "scopeManagerOnly": "只有工作区管理者可以更改谁能进入项目。",
+      "scopeNotApplicable": "管理者可以进入每个项目，因此其访问范围始终为“完整”。",
+      "scopeChangeFailed": "无法更改访问范围。",
       "keyLabelRequired": "键和标签为必填项。",
       "noProjectForIssue": "添加工作项前请先选择或创建一个项目。",
       "titleRequired": "请填写工作项标题。",
@@ -652,7 +661,8 @@
       "orgSecurityForbidden": "只有组织的所有者或管理员才能更改其安全设置。",
       "workspaceSecurityForbidden": "只有工作区的所有者或管理员才能更改其安全设置。",
       "refused": "操作未完成：{reason}",
-      "organizationClosing": "该组织已计划删除，目前为只读状态。只有组织所有者可以取消删除。"
+      "organizationClosing": "该组织已计划删除，目前为只读状态。只有组织所有者可以取消删除。",
+      "memberProjectsFailed": "无法加载其项目。"
     },
     "links": {
       "notFound": "该工作项已不存在。",
@@ -1204,6 +1214,12 @@
           "description": "回答关于计划、文档与工作项的问题"
         }
       }
+    },
+    "noProject": {
+      "title": "你尚未加入任何项目",
+      "body": "{workspace} 的管理者可以将你添加到项目中。一旦添加，你就会在这里看到它。",
+      "switcherEmpty": "你尚未被添加到 {workspace} 的任何项目。",
+      "create": "创建项目"
     }
   },
   "issueViews": {
@@ -1622,6 +1638,8 @@
       "type": "工作类型",
       "executor": "执行者",
       "difficulty": "难度",
+      "obsolescence": "失效状态",
+      "obsolescenceNoteMd": "失效说明",
       "targetRepo": "目标仓库",
       "targetRepos": "仓库",
       "folderId": "文件夹",
@@ -1638,7 +1656,8 @@
       "is_blocked_by": "被阻塞",
       "relates_to": "关联",
       "duplicates": "重复",
-      "clones": "克隆"
+      "clones": "克隆",
+      "supersedes": "取代"
     }
   },
   "attachments": {
@@ -1924,7 +1943,7 @@
       },
       "onlyManager": "你是唯一的管理者。请先将其他人设为管理者，再更改你自己的角色。",
       "orgAdminRole": "组织管理员——{org} 所有工作区的管理者。请在组织的成员页面更改。",
-      "rolesManagerOnly": "只有工作区管理者可以更改角色。",
+      "rolesManagerOnly": "只有工作区管理者可以更改角色和访问范围。",
       "roleChanged": "{name} 现在在 {workspace} 的每个项目中都是{role}",
       "lastManagerTitle": "无法更改角色",
       "lastManagerBody": "工作区至少需要一名管理者。{name} 仍是管理者。",
@@ -1935,10 +1954,10 @@
       "selfDemoteKeep": "保持管理者",
       "selfDemoteConfirm": "将我设为{role}",
       "migration": {
-        "title": "因迁移到工作区角色而变更",
+        "title": "因迁移到工作区角色和项目访问而变更",
         "managersOnly": "仅管理者可见",
         "count": "{count} 人",
-        "body": "角色现在属于工作区——每人一个角色，在所有项目中相同。以下成员并非按常规映射迁移。请逐一核对；如有错误，请在上方更改其角色。",
+        "body": "以下成员并非按常规映射迁移。请逐一核对。",
         "dismiss": "忽略",
         "dismissLabel": "忽略 {name}",
         "dismissed": "已忽略",
@@ -1966,9 +1985,48 @@
           "custom_role_recreated": "其自定义项目角色已在工作区重新创建。",
           "custom_role_merged": "两个自定义角色合并为一个，仅保留两者共有的权限。",
           "org_admin_granted": "成为组织管理员（每位工作区所有者均如此）。",
-          "mapped_narrower": "在某个项目中的权限比以前更窄。"
-        }
-      }
+          "mapped_narrower": "在某个项目中的权限比以前更窄。",
+          "project_access_lost": "不再能进入 {projectKey}——该项目原为“受限”，且其未被添加。"
+        },
+        "rolesHeading": "角色",
+        "accessHeading": "项目访问",
+        "accessBody": "原为“受限”的项目现在为“仅限成员”。如需保留某人的访问权限，请在该项目的“访问与成员”页面添加。",
+        "accessBefore": "可打开 {projectKey}",
+        "accessAfter": "无法访问 {projectKey}",
+        "openProjectAccess": "打开项目访问"
+      },
+      "accessColumn": "访问",
+      "scope": {
+        "full": "完全",
+        "limited": "受限"
+      },
+      "scopeDesc": {
+        "full": "可打开所有开放给工作区的项目，另加其被添加到的项目。",
+        "limited": "只能打开其被添加到的项目。"
+      },
+      "scopeSelectLabel": "{name} 的访问范围",
+      "scopeLockedManager": "完全 · 管理者",
+      "scopeLockedReason": "管理者可以打开每个项目，因此访问范围对其不适用。",
+      "projectCount": "{count} 个项目",
+      "noProjects": "无项目",
+      "noProjectsHelp": "受限且未被添加到任何项目——{name} 目前无法打开 {workspace} 中的任何内容。",
+      "projectsPopoverTitle": "{name} 可打开",
+      "projectsPopoverFoot": "请在各项目的“访问与成员”页面添加或移除 {name}。",
+      "scopeChangedFull": "{name} 现在可打开所有开放给 {workspace} 的项目",
+      "scopeChangedLimited": "{name} 现在只能打开其被添加到的项目",
+      "scopeChangeErrorTitle": "无法更改 {name} 的访问范围",
+      "scopeNotApplicableBody": "{name} 刚被设为管理者，而管理者可以打开每个项目。其访问范围保持为完全。",
+      "inviteAccessLabel": "访问范围",
+      "inviteAccessFullDesc": "所有开放给工作区的项目。",
+      "inviteAccessLimitedDesc": "仅限你在下方选择的项目。",
+      "inviteProjectsLabel": "要加入的项目",
+      "inviteProjectsPlaceholder": "选择项目…",
+      "inviteProjectsHint": "他们接受邀请时将加入这些项目。",
+      "inviteProjectsRemove": "移除 {project}",
+      "inviteNoProjectsWarning": "在管理者将其添加到某个项目之前，他们将无法打开任何内容。",
+      "inviteJoinsAsMember": "他们将以成员身份加入。接受后你可以更改其角色。",
+      "errorInviteProjects": "其中某个项目无法加入。请重新选择。",
+      "errorInviteNotAllowed": "你无法发送此邀请。只有工作区管理者可以发送受限访问的邀请。"
     },
     "danger": {
       "cantLeaveTitle": "无法离开",
@@ -2335,24 +2393,9 @@
     "access": {
       "title": "访问与成员",
       "cardDescription": "谁可以找到、查看和编辑此项目，以及项目中的成员。",
-      "subtitle": "控制谁可以查看和编辑 <strong>{projectName}</strong>。工作区管理者始终拥有访问权限。",
+      "subtitle": "控制谁可以打开 {projectName}。工作区管理者始终可以。",
       "accessHeading": "项目访问权限",
-      "accessSubheading": "{workspaceName} 工作区中谁可以访问此项目。",
-      "levelGroupLabel": "项目访问级别",
-      "level": {
-        "open": "开放",
-        "limited": "受限",
-        "private": "私有",
-        "public": "公开构建"
-      },
-      "levelDesc": {
-        "open": "{workspaceName} 工作区的任何成员都可以查看和编辑此项目。",
-        "limited": "任何工作区成员都可以查看和评论，但只有项目成员才能编辑。",
-        "private": "只有下方添加到项目中的人才能找到或打开它，对其他人隐藏。",
-        "public": "将此项目作为公开构建页面发布到网上——任何人都可以关注看板、路线图和工作项，无需账号，且可被搜索引擎收录。访客仅在提交、点赞或评论时才需登录。这与“公开”访问级别相同，只是以一种可随时开始和停止的状态呈现。"
-      },
-      "goPrivateNote": "当前可以访问 <strong>{projectName}</strong> 的 {count} 人将被添加为项目成员，因此没有人会失去访问权限。你可以在成员列表中调整其角色或将其移除。",
-      "levelChangedToast": "项目访问权限已设为{level}",
+      "accessSubheading": "{workspaceName} 工作区中谁可以打开此项目。",
       "changeAccessErrorTitle": "无法更改访问权限",
       "membersHeading": "成员",
       "memberCountLabel": "{count} 名成员",
@@ -2375,8 +2418,38 @@
       "addMemberErrorTitle": "无法添加成员",
       "removeMemberErrorTitle": "无法移除成员",
       "errorGeneric": "出了点问题，请重试。",
-      "membersFromWorkspaceRole": "已添加到此项目的成员。每人能做什么取决于其工作区角色——请在工作区设置中管理角色。",
-      "workspaceRolesLink": "工作区角色 →"
+      "membersFromWorkspaceRole": "已添加到此项目的人。无论访问模式如何，他们始终可以打开它。每人能做什么取决于其工作区角色。",
+      "workspaceRolesLink": "工作区角色 →",
+      "mode": {
+        "workspace": "开放给工作区",
+        "members": "仅限成员",
+        "public": "公开"
+      },
+      "modeDesc": {
+        "workspace": "{workspaceName} 中拥有完全访问权限的每个人都可以打开它，另加下方添加的人。",
+        "members": "只有下方添加的人才能找到或打开它，对其他人隐藏。",
+        "public": "开放给工作区，另加任何拥有链接的人——即公开构建页面。访客无需账号即可查看，仅在提交、点赞或评论时需登录。"
+      },
+      "modeGroupLabel": "项目访问模式",
+      "publicUnavailable": "公开发布依赖 Motir Cloud——此自托管实例没有可发布的公开站点。",
+      "membersOnlyConfirmTitle": "将 {projectName} 设为仅限成员？",
+      "membersOnlyConfirmBody": "<b>{count} 人</b>将失去访问权限。他们拥有 {workspaceName} 的完全访问权限，但未被添加到此项目：",
+      "membersOnlyConfirmHint": "如需保留某人的访问权限，请先添加，或之后再添加。管理者始终保有访问权限。",
+      "membersOnlyConfirmNobody": "没有人会失去访问权限——目前能打开 {projectName} 的每个人都已被添加或是管理者。",
+      "membersOnlyConfirmAction": "设为仅限成员",
+      "modeChangedToast": "{projectName} 现为{mode}",
+      "changeAccessErrorBody": "{projectName} 仍为{mode}。请重试。",
+      "addPeople": "添加人员…",
+      "addPeopleSearch": "搜索人员…",
+      "addPeopleFoot": "尚未添加的工作区成员。管理者本来就能进入每个项目。",
+      "alwaysEnters": "始终可进入",
+      "scope": {
+        "full": "完全",
+        "limited": "受限"
+      },
+      "emptyMembersOnlyTitle": "只有管理者可以打开此项目",
+      "emptyMembersOnlyBody": "此项目仅限成员，且尚未添加任何人。添加人员即可让他们进入。",
+      "readOnlyModeNote": "只有工作区管理者可以更改谁能打开此项目。"
     },
     "publicPage": {
       "title": "公开页面",
@@ -6594,9 +6667,8 @@
           "pointer": "请从 <link>{key}</link> 运行修复——此工作项是作为该运行的一部分构建的，修复也在那里运行。"
         },
         "which": {
-          "checks": "你这边没有改动？<b>批准</b>会把同样的提交再送一次。如果未通过的检查指向真实的代码问题，<code>motir fix</code> 会把它交给智能体。",
           "conflict": "冲突需要新的提交。<code>motir fix</code> 会把它交给智能体；再次批准也无法让这些提交合入，因此在分支变化之前不会提供任何按钮。",
-          "other": "<b>批准</b>会把同样的提交再送一次。如果它以同样的方式离开队列，<code>motir fix</code> 会把它交给智能体。"
+          "failed": "合并队列失败需要新的提交，即使只是偶发失败也一样。<code>motir fix</code> 会把它交给代理：代理先合并目标分支再推送。这里不提供再次批准：那只会把队列刚刚拒绝的同一批提交重新排队。"
         },
         "conflictOn": "<prs></prs> 与 {base} 冲突，无法合并。",
         "conflictOnNoBase": "<prs></prs> 与其目标分支冲突，无法合并。",
@@ -8870,6 +8942,7 @@
         "ci_failed": "这些提交的检查未通过，因此该问题已撤回。",
         "plan_stale": "此计划要改动的工作已经完成，计划因此过期，该问题已撤回。",
         "plan_discarded": "计划中的所有建议都已撤回，计划随之结束，该问题也一并撤回。",
+        "queue_failed": "合并队列未能合并这些提交，因此该问题已撤回。",
         "unknown": "该问题已撤回。原因未被记录。"
       },
       "causeByKind": {
@@ -8974,6 +9047,10 @@
         "title": "这些提交没有合入，发起它们的那次批准已经用掉了。",
         "next": "再次批准该工作项即可再试一次；如果检查失败确有原因，请改用 motir fix。"
       },
+      "mergeQueueFailedNeedsFix": {
+        "title": "这个拉取请求在合并队列中失败了。",
+        "next": "把同一批提交重新排队只会以同样方式失败，因此没有任何内容进入队列。motir fix 会把它交给代理处理，新的推送检查通过后，Motir 会再次请求审批。"
+      },
       "mergeAppPermissionMissing": {
         "title": "Motir 的 GitHub App 无权在此合并。",
         "next": "请由组织所有者在 GitHub 上为 Motir 的 GitHub App 授予 {permission} 权限，然后再次批准。",
@@ -9066,7 +9143,8 @@
         "withdrawnPulledBack": "{count} 个拉取请求 · 已撤出评审",
         "withdrawnUnknown": "{count} 个拉取请求 · 已撤回",
         "withdrawnConflict": "{count} 个拉取请求 · {pr} 与 {base} 冲突",
-        "withdrawnConflictNoBase": "{count} 个拉取请求 · {pr} 与目标分支冲突"
+        "withdrawnConflictNoBase": "{count} 个拉取请求 · {pr} 与目标分支冲突",
+        "withdrawnQueueFailed": "{count} 个拉取请求 · {pr} 在合并队列中失败"
       },
       "verb": {
         "approveAndMerge": "批准并合并"
@@ -9122,7 +9200,9 @@
         "citePulledBack": "没有人对它做出决定。{key} 回到评审中后，Motir 会再次请求审批。",
         "portConflict": "{pr} 与 {base} 冲突，因此该问题已撤回。没有批准任何内容。",
         "portConflictNoBase": "{pr} 与其目标分支冲突，因此该问题已撤回。没有批准任何内容。",
-        "citeConflict": "没有人对它做出决定。推送解决冲突且检查通过后，Motir 会再次请求审批。"
+        "citeConflict": "没有人对它做出决定。推送解决冲突且检查通过后，Motir 会再次请求审批。",
+        "portQueueFailed": "{pr} 因失败离开了合并队列，因此该问题已撤回。没有批准任何内容。",
+        "citeQueueFailed": "没有人对它做出决定。推送后检查通过，Motir 会再次请求审批。"
       },
       "list": {
         "pair": "{a} 和 {b}",
@@ -9147,6 +9227,12 @@
         "failingCheck": "未通过的检查：<link>{check}</link>",
         "unchanged": "你这边没有任何改动？<b>重新排队</b>会再次批准这些相同的提交，并把它们放回合并队列。",
         "cannotLand": "这些提交按现状无法合入。<b>motir fix</b> 会把修复交给智能体；推送新的提交后，检查通过时会再次询问。",
+        "failed": {
+          "checks": "<b>{pr}</b> 离开了合并队列：<b>{check}</b> 未通过。",
+          "timedOut": "<b>{pr}</b> 离开了合并队列：<b>{check}</b> 超时。",
+          "mergeCommit": "<b>{pr}</b> 离开了合并队列：队列无法为它构建合并提交。",
+          "held": "这些提交按现状无法合并，因此 Motir 不再征求批准。<b>{key}</b> 停留在“已实现”，保持在这个提交上。"
+        },
         "newCommits": "你批准后它有了新提交。所有检查通过后，Motir 会再次征求批准。",
         "auto": "Motir 会在检查通过后合并本项目的拉取请求。<b>重新排队</b>会以相同的提交将它放回队列。",
         "partTitle": "合并队列",

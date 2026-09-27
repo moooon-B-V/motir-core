@@ -161,14 +161,16 @@ const EXPECTED: Record<ProjectAccessLevel, Record<Role, { browse: boolean; manag
     admin: { browse: true, manage: true },
     nonMember: { browse: true, manage: false },
   },
+  // A legacy `limited` project resolves as Members only (Story MOTIR-6169):
+  // the two workspace members never added to it no longer enter it.
   limited: {
     owner: { browse: true, manage: true },
     wsAdmin: { browse: true, manage: true },
-    plainMember: { browse: true, manage: false },
+    plainMember: { browse: false, manage: false },
     viewer: { browse: true, manage: false },
     member: { browse: true, manage: false },
     admin: { browse: true, manage: true },
-    nonMember: { browse: true, manage: false },
+    nonMember: { browse: false, manage: false },
   },
   private: {
     owner: { browse: true, manage: true },

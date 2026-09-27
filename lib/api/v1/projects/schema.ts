@@ -1,4 +1,5 @@
 import { z } from 'zod/v4';
+import { levelForMode } from '@/lib/projects/accessMode';
 import type { ProjectDTO } from '@/lib/dto/projects';
 
 // The v1 PROJECT resource, declared once (Story 11.3 · Subtask 11.3.3 —
@@ -76,7 +77,30 @@ const _accessLevelsTotal: AssertTotal<ProjectDTO['accessLevel'], (typeof ACCESS_
 // is load-bearing rather than a leftover.
 void _accessLevelsTotal;
 
-const accessLevelSchema = z.enum(ACCESS_LEVELS);
+const accessLevelSchema = z
+  .enum(ACCESS_LEVELS)
+  .describe(
+    'DEPRECATED — derived from `accessMode` (workspace → open, members → private, public → public), so `limited` is never emitted. Read `accessMode`.',
+  );
+
+/**
+ * The project's ACCESS MODE (Story MOTIR-6169 · MOTIR-6547) — who may ENTER it:
+ * `workspace` (Open to the workspace), `members` (Members only) or `public`.
+ * Guarded exactly as the level is: `satisfies` rejects a member that is not a
+ * DTO value, `AssertTotal` rejects a DTO value missing from the tuple.
+ */
+const ACCESS_MODES = [
+  'workspace',
+  'members',
+  'public',
+] as const satisfies readonly ProjectDTO['accessMode'][];
+const _accessModesTotal: AssertTotal<ProjectDTO['accessMode'], (typeof ACCESS_MODES)[number]> =
+  true;
+void _accessModesTotal;
+
+const accessModeSchema = z
+  .enum(ACCESS_MODES)
+  .describe('Who may enter the project — the authoritative access field.');
 
 /** A project key: the canonical upper-case identifier, e.g. `MOTIR`. */
 export const projectKeySchema = z.string().regex(/^[A-Z][A-Z0-9]*$/);
@@ -85,6 +109,7 @@ export const projectKeySchema = z.string().regex(/^[A-Z][A-Z0-9]*$/);
 export const projectSchema = z.object({
   key: projectKeySchema,
   name: z.string(),
+  accessMode: accessModeSchema,
   accessLevel: accessLevelSchema,
   /**
    * `true` when the project is soft-deleted. The LIST never returns one
@@ -107,7 +132,9 @@ export function presentProject(project: ProjectDTO): V1Project {
   return {
     key: project.identifier,
     name: project.name,
-    accessLevel: project.accessLevel,
+    accessMode: project.accessMode,
+    // Derived, never read back: `ProjectDTO.accessLevel` is `levelForMode(accessMode)`.
+    accessLevel: levelForMode(project.accessMode),
     archived: project.archivedAt !== null,
   };
 }

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
-import type { MemberRoleContextDTO, WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import type { MemberRoleContextDTO, WorkspaceMemberWithAccessDTO } from '@/lib/dto/workspaces';
 
 // The workspace Members page's role column (Story MOTIR-6168 · MOTIR-6465;
 // `design/workspaces/workspace-roles.mock.html` panels 1a–1f, 6a, 6c): a Manager
@@ -18,18 +18,23 @@ const setMemberRoleAction = vi.fn();
 vi.mock('@/app/(authed)/settings/workspace/actions', () => ({
   setMemberRoleAction: (...a: unknown[]) => setMemberRoleAction(...a),
   removeMemberAction: vi.fn(async () => ({ ok: true })),
+  setMemberAccessScopeAction: vi.fn(async () => ({ ok: true })),
+  listMemberAddedProjectsAction: vi.fn(async () => ({ ok: true, projects: [] })),
+  openProjectAccessAction: vi.fn(async () => undefined),
 }));
 
 import { MembersCard } from '@/app/(authed)/settings/workspace/_components/MembersCard';
 
 const ME = 'u-me';
-const members: WorkspaceMemberDTO[] = [
+const members: WorkspaceMemberWithAccessDTO[] = [
   {
     userId: ME,
     name: 'Zhu Yue',
     email: 'zhuyue@motir.co',
     workspaceRole: 'manager',
     customRole: null,
+    accessScope: 'full',
+    addedProjectCount: 1,
   },
   {
     userId: 'u-bo',
@@ -37,6 +42,8 @@ const members: WorkspaceMemberDTO[] = [
     email: 'bo@motir.co',
     workspaceRole: 'manager',
     customRole: null,
+    accessScope: 'full',
+    addedProjectCount: 1,
   },
   {
     userId: 'u-odie',
@@ -44,6 +51,8 @@ const members: WorkspaceMemberDTO[] = [
     email: 'odie@motir.co',
     workspaceRole: 'viewer',
     customRole: null,
+    accessScope: 'full',
+    addedProjectCount: 1,
   },
   {
     userId: 'u-julian',
@@ -51,12 +60,16 @@ const members: WorkspaceMemberDTO[] = [
     email: 'julian@motir.co',
     workspaceRole: 'member',
     customRole: { id: 'role-contractor', name: 'Contractor' },
+    accessScope: 'full',
+    addedProjectCount: 1,
   },
 ];
 
 function context(overrides: Partial<MemberRoleContextDTO> = {}): MemberRoleContextDTO {
   return {
     canManageRoles: true,
+    canInvite: true,
+    inviteProjects: [],
     orgManagedUserIds: [],
     organizationName: 'moooon',
     customRoles: [{ id: 'role-contractor', name: 'Contractor' }],
@@ -65,7 +78,7 @@ function context(overrides: Partial<MemberRoleContextDTO> = {}): MemberRoleConte
 }
 
 function renderCard(
-  props: { members?: WorkspaceMemberDTO[]; roleContext?: MemberRoleContextDTO } = {},
+  props: { members?: WorkspaceMemberWithAccessDTO[]; roleContext?: MemberRoleContextDTO } = {},
 ) {
   return render(
     <ToastProvider>
@@ -95,7 +108,7 @@ describe('a Manager (1a–1b)', () => {
     expect(screen.getByText('Workspace role')).toBeTruthy();
     for (const m of members) expect(picker(m.name)).toBeTruthy();
     expect(picker('Julian').textContent).toContain('Contractor');
-    expect(screen.queryByText('Only a workspace Manager can change roles.')).toBeNull();
+    expect(screen.queryByText('Only a workspace Manager can change roles and access.')).toBeNull();
   });
 
   it('offers the built-ins with their descriptions, then the custom roles under their own heading', async () => {
@@ -207,7 +220,7 @@ describe('a Member or a Viewer (1f)', () => {
   it('reads every role as text, with no role control in the DOM, and one note says why', () => {
     renderCard({ roleContext: context({ canManageRoles: false }) });
     expect(screen.queryAllByRole('combobox')).toHaveLength(0);
-    expect(screen.getByText('Only a workspace Manager can change roles.')).toBeTruthy();
+    expect(screen.getByText('Only a workspace Manager can change roles and access.')).toBeTruthy();
     expect(screen.getByLabelText('Role for Julian: Contractor')).toBeTruthy();
     expect(screen.getByLabelText('Role for Odie: Viewer')).toBeTruthy();
     // No lock reasons for a reader — they cannot act on them.

@@ -50,10 +50,10 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
  *
  * ⚠️ THE TWELVE ADMINISTRATIVE KEYS ARE HERE, AND THAT IS BEHAVIOUR-NEUTRAL.
  * They enter alongside `project:administer` and nowhere else: `member` /
- * `viewer` gain none. Because `levelGrants` in `lib/permissions/resolve.ts`
- * treats every key but `work_item:edit` identically, each of the twelve resolves
- * to EXACTLY the actors `project:administer` resolves to, on all four access
- * levels. `tests/permissions/accessParity.test.ts` proves that over the whole
+ * `viewer` gain none. Because entry in `lib/permissions/resolve.ts` (`canEnter`,
+ * Story MOTIR-6169) treats every key identically — an entrant holds their role's
+ * whole set — each of the twelve resolves to EXACTLY the actors
+ * `project:administer` resolves to, in every access mode. `tests/permissions/accessParity.test.ts` proves that over the whole
  * input space rather than asserting it here.
  */
 /**
@@ -69,8 +69,8 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
  * `ProjectMembership.role` and `.roleDefinitionId` move together, and this is
  * the value the first takes whenever the second is set. It exists because the
  * model still needs a tier for two things a permission set cannot answer:
- * `private` gates on holding a membership at all, and `levelGrants` reads the
- * column.
+ * a Members-only project gates on holding a membership at all, and entry
+ * (`canEnter`) reads the column.
  *
  * ⚠️ IT IS `member`, AND THAT MEANS THE ACCESS LEVEL SUBTRACTS NOTHING FROM A
  * CUSTOM ROLE — a custom role grants EXACTLY WHAT IT LISTS, on every access
@@ -127,8 +127,8 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   // MOTIR-6328 — the Plans and Runs rooms' view-any keys, beside the Approvals
   // room's (Story MOTIR-6179). `admin` holds both through this whole set and a
   // custom role can be granted or denied them, which is how a team closes a room.
-  // `levelGrants` does not name them, so each resolves exactly like
-  // `project:browse` on all four access levels and both rails —
+  // Entry (`canEnter`) names no key, so each resolves exactly like
+  // `project:browse` in every access mode and on both rails —
   // `tests/permissions/accessParity.test.ts` proves that rather than assuming it.
   'plan:view_any',
   'run:view_any',
@@ -164,8 +164,8 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   // MOTIR-5293 — the saved-filter "anyone's" tier, and it lands in `admin` ALONE
   // (not `member`, `viewer` or the implicit grant). It replaces a ROLE read —
   // workspace owner/admin, or project role `admin` — and the manager rail plus
-  // this set resolve to exactly those actors; `levelGrants` does not name it, so
-  // a project admin keeps it on every level, as the role read (which ignored the
+  // this set resolve to exactly those actors; entry (`canEnter`) names no key,
+  // so a Manager keeps it in every mode, as the role read (which ignored the
   // level) did. Behaviour-neutral for every built-in role, proved over all 64
   // inputs in `tests/permissions/accessParity.test.ts`. What it ADDS is that a
   // custom role can list it.
@@ -178,9 +178,8 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   // MOTIR-3188 — DECIDE, split out of the conflated `ai:view_plan`. It enters
   // here and at `member` (below) and nowhere else, which is what makes the split
   // behaviour-neutral: every actor who could approve a plan before can approve
-  // one after. `levelGrants` names only the three edit-ish keys, so this one
-  // takes the default arm and resolves exactly as `ai:view_plan` does on all
-  // four access levels and both rails — `tests/permissions/planDecisionSplit.test.ts`
+  // one after. Entry (`canEnter`) names no key, so this one resolves exactly as
+  // `ai:view_plan` does in every access mode and on both rails — `tests/permissions/planDecisionSplit.test.ts`
   // proves that equivalence rather than asserting it here.
   'ai:decide_plan',
   // MOTIR-3336 — the lesson library. Role-gated (a role may hold or withhold

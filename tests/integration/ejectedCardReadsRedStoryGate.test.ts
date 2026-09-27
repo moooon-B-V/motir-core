@@ -256,9 +256,10 @@ describe('1 · exit → badge, and the promotion refuses', () => {
     await check(7, 'sha-a', 'success', 'Lint');
 
     expect(await ciStateOf(item.id)).toBe('failing');
-    expect(await statusOf(item.id)).toBe('in_review');
-    // The re-asked gate, and no second one.
-    expect(await awaiting(item.id)).toHaveLength(1);
+    // A queue FAILURE is CAN'T-LAND since the FIFTH AMENDMENT (MOTIR-6594): held at
+    // Implemented, and a green at the SAME head asks nothing at all.
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await awaiting(item.id)).toHaveLength(0);
     // Guard (a): the pull request's own verdict — the pill — is untouched.
     expect(derivePrCiState((await prRow(7)).checkRuns)).toBe('passing');
   });
@@ -280,7 +281,9 @@ describe('2 · Queue again → clear', () => {
   });
 
   it('manual: APPROVING the re-asked gate re-queues and clears the red (MOTIR-5805)', async () => {
-    const { s, item } = await ejectedManual('reask-clears@example.com');
+    // A failure that still RE-ASKS: branch protection (MOTIR-6594 made a queue failure
+    // can't-land, so it raises no gate to approve).
+    const { s, item } = await ejectedManual('reask-clears@example.com', 'BRANCH_PROTECTIONS');
     const [reasked] = await awaiting(item.id);
     stubHost({ outcome: 'enqueued', entryId: 'MQE_7r' });
 
@@ -453,18 +456,20 @@ describe('5 · claim ⟸ exit, and the page’s repair view', () => {
     // Queue again no longer re-queues a failure exit (MOTIR-5802), so the card stays where
     // the ejection left it and the repair view still offers `motir fix`.
     expect(await queueAgain(s, gateId, 7)).toMatchObject({ outcome: 'refused' });
-    expect(await statusOf(item.id)).toBe('in_review');
+    // Held at Implemented, where the FIFTH AMENDMENT (MOTIR-6594) puts a queue failure.
+    expect(await statusOf(item.id)).toBe('implemented');
     expect((await workItemRepairService.getRepairView(item.id, s.ctx)).state).toBe('offer');
   });
 });
 
 describe('6 · the v1 resource → the CLI', () => {
   it('the published deliveries read RED through the CLI’s adapter and verdict, and GREEN once the exit is re-queued', async () => {
-    const { s, item } = await ejectedManual('v1-cli@example.com');
+    const { s, item } = await ejectedManual('v1-cli@example.com', 'BRANCH_PROTECTIONS');
     expect(ciVerdict(await cliDeliveries(s, item.identifier))).toBe('red');
 
-    // The re-queue stamp is what lifts the red (MOTIR-5717). A manual failure is re-queued
-    // by approving the re-asked gate (MOTIR-5805), never by Queue again (MOTIR-5802).
+    // The re-queue stamp is what lifts the red (MOTIR-5717). A manual re-asking failure is
+    // re-queued by approving the re-asked gate (MOTIR-5805), never by Queue again
+    // (MOTIR-5802).
     const [reasked] = await awaiting(item.id);
     stubHost({ outcome: 'enqueued', entryId: 'MQE_7d' });
     await pullRequestMergeService.approveAndMerge(

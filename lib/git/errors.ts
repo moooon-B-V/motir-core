@@ -258,3 +258,21 @@ export class DeliveredItemsTransitionFailedError extends Error {
     this.failed = failed;
   }
 }
+
+/**
+ * The repository a changed-files listing named is not in the JOB's project set
+ * (Story MOTIR-6617 · MOTIR-6619) — not connected to the organisation at all, or
+ * connected but not realized by any `ProjectRepo` row of the token's project.
+ * The route answers 404 and the provider is never called.
+ *
+ * ⚠️ ONE CLASS FOR BOTH CASES, on purpose: a job must not be able to tell a
+ * repository connected elsewhere in the organisation from one that exists
+ * nowhere, which is `repo-file`'s no-existence-leak rule one scope tighter.
+ */
+export class RepoNotInProjectError extends Error {
+  readonly code = 'REPO_NOT_IN_PROJECT' as const;
+  constructor(readonly repoRef: string) {
+    super(`The repository ${repoRef} is not in this project's repository set.`);
+    this.name = 'RepoNotInProjectError';
+  }
+}

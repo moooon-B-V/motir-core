@@ -1,0 +1,1924 @@
+<!doctype html>
+<!--
+  THE NO-PROJECT SHELL — A LIMITED PERSON ADDED TO NO PROJECT. A delta of design/shell/top-bar.mock.html
+  (MOTIR-6540 · Story MOTIR-6169). "You are always in a project" (MOTIR-4815) holds only while everyone
+  can open every project; a Limited member added to none can open NOTHING in a workspace that has
+  projects. This draws the ONE no-project state that returns — not the retired create-first screen:
+  its create door shows only to someone allowed to create a project.
+  Rendered against /items and the top bar's project switcher at origin/main @ c6cf7e5b4 on a
+  `pnpm db:seed` tenant. Spec: design/shell/design-notes.md § "The no-project shell (MOTIR-6540)".
+-->
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>No-project shell for a Limited member (MOTIR-6540)</title>
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — app/globals.css (light) ─────────── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-pressed: #4534b3;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --color-link-pressed: #005bab;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-control-x: 10px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+        --height-input: 44px;
+        --spacing-control-y: 6px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+      }
+
+      /* Tier 3 — the semantic element layer components consume.
+         ⚠️ DECLARED ON `:root, [data-appearance-scope]`, which is
+         packages/design-system/theme.css's own selector and is what makes the
+         nested dark panel (6) actually recompute: a custom property's `var()` is
+         substituted where the property is DECLARED, so a Tier-3 layer declared
+         on `:root` alone inherits its LIGHT literal into a nested
+         `data-theme="dark"` subtree and the panel renders light under a dark
+         caption (MOTIR-3592 · tests/design-dark-parity.test.ts). */
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        /* the app-shell RAIL — theme.css's values verbatim; the hover shade is a
+           concrete hex there too and so carries its own dark value below. */
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+        /* the member-role hues — packages/design-system/theme.css verbatim */
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-card: var(--color-background);
+        /* the build-in-public hues — packages/design-system/theme.css verbatim */
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        /* neutral chip + muted glyph + warning tint — theme.css verbatim */
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-danger-surface: var(--color-tint-rose);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --el-sidebar-item-bg-hover: #222222;
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome + the shipped primitives, as they render ───────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      html[lang='en'] .zh,
+      html[lang='zh'] .en {
+        display: none;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 86ch;
+        line-height: 1.55;
+      }
+      .toggles {
+        display: flex;
+        gap: 8px;
+        flex: none;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+        line-height: 1.55;
+      }
+      .panel-note {
+        max-width: 1180px;
+        margin: 14px auto 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .panel-note b {
+        color: var(--el-text);
+      }
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .rail {
+        flex: none;
+        width: 252px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .ico {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .ico.xs {
+        width: 12px;
+        height: 12px;
+      }
+      .card {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 20px var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-md);
+        padding: 0 16px;
+        border-radius: var(--radius-btn);
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+        border: 1px solid transparent;
+      }
+      .btn-sm {
+        height: 32px;
+        padding: 0 var(--spacing-btn-x-sm);
+        font-size: 13px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: var(--el-page-bg);
+        border-color: var(--el-border);
+        color: var(--el-text);
+      }
+      .chev {
+        width: 14px;
+        height: 14px;
+        color: var(--el-icon-muted);
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 56px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .brand {
+        flex: none;
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        color: var(--el-accent-on-surface);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-serif);
+        font-weight: 700;
+      }
+      .crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-family: var(--font-serif);
+        font-size: 15px;
+        color: var(--el-text);
+      }
+      .crumb.is-open {
+        border: 1px solid var(--el-border-strong);
+      }
+      .crumb.is-empty {
+        color: var(--el-text-secondary);
+        font-style: italic;
+      }
+      .crumb-sep {
+        color: var(--el-icon-muted);
+      }
+      .bar-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .bar-ico {
+        width: 36px;
+        height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-secondary);
+      }
+      .me {
+        width: 34px;
+        height: 34px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .app {
+        display: flex;
+        min-height: 440px;
+      }
+      .home {
+        flex: 1;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 72px 36px;
+      }
+      .empty-card {
+        width: 460px;
+        align-items: center;
+        text-align: center;
+      }
+      .es-ico {
+        width: 48px;
+        height: 48px;
+        color: var(--el-icon-muted);
+      }
+      .es-title {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .es-desc {
+        margin: 0;
+        max-width: 46ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .es-act {
+        margin-top: 6px;
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+      }
+      .switcher-pop {
+        position: absolute;
+        left: 196px;
+        top: 50px;
+        z-index: 2;
+        width: 318px;
+        padding: 6px;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+      }
+      .pop-label {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        padding: 8px 8px 4px;
+      }
+      .pop-empty {
+        padding: 6px 8px 10px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .pop-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 8px;
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .pop-sep {
+        height: 1px;
+        background: var(--el-border-soft);
+        margin: 4px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="review-head">
+      <div>
+        <h1>The no-project shell — a Limited member added to no project (MOTIR-6540)</h1>
+        <p>The one no-project state that returns. Toggle Theme and Language at the top right.</p>
+      </div>
+      <div class="toggles">
+        <button
+          class="toggle"
+          type="button"
+          onclick="
+            document.documentElement.dataset.theme =
+              document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+          "
+        >
+          Theme
+        </button>
+        <button
+          class="toggle"
+          type="button"
+          onclick="
+            document.documentElement.lang = document.documentElement.lang === 'zh' ? 'en' : 'zh'
+          "
+        >
+          Language · 语言
+        </button>
+      </div>
+    </header>
+    <div class="panel-label">
+      S1 · A Limited member added to no project — the landing after sign-in or a workspace switch
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="topbar">
+          <span class="brand" aria-hidden="true">M</span
+          ><span class="crumb"
+            >moooon<svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="crumb-sep">›</span
+          ><span class="crumb is-empty" role="button" aria-haspopup="listbox" aria-expanded="false"
+            ><span class="en">No project</span><span class="zh">无项目</span
+            ><svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="bar-right"
+            ><span class="btn btn-secondary btn-sm"
+              ><svg
+                class="ico xs"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m21 21-4.34-4.34" />
+                <circle cx="11" cy="11" r="8" /></svg
+              ><span class="en">Shortcut</span><span class="zh">快捷键</span></span
+            ><span class="bar-ico"
+              ><svg
+                class="ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                <path
+                  d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                /></svg></span
+            ><span class="me" aria-hidden="true">E</span></span
+          >
+        </div>
+        <div class="app">
+          <aside class="rail">
+            <div class="grp">
+              <span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Workbench</span><span class="zh">工作台</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Work Items</span><span class="zh">工作项</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" x2="12" y1="8" y2="12" />
+                  <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                ><span class="en">Ready</span><span class="zh">就绪</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg
+                ><span class="en">Runs</span><span class="zh">运行</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"
+                  />
+                  <path d="M8 10v4" />
+                  <path d="M12 10v2" />
+                  <path d="M16 10v6" /></svg
+                ><span class="en">Boards</span><span class="zh">看板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" /></svg
+                ><span class="en">Roadmap</span><span class="zh">路线图</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Plans</span><span class="zh">计划</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Backlog</span><span class="zh">待办</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Dashboard</span><span class="zh">仪表板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                  <path
+                    d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                  /></svg
+                ><span class="en">Triage</span><span class="zh">分诊</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  /></svg
+                ><span class="en">Reports</span><span class="zh">报表</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                  />
+                  <path d="m9 12 2 2 4-4" /></svg
+                ><span class="en">Approval records</span><span class="zh">审批记录</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Codebase</span><span class="zh">代码库</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                  />
+                  <circle cx="12" cy="12" r="3" /></svg
+                ><span class="en">Settings</span><span class="zh">设置</span></span
+              >
+            </div>
+          </aside>
+          <div class="home">
+            <section class="card empty-card">
+              <svg
+                class="es-ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"
+                />
+                <path d="M8 10v4" />
+                <path d="M12 10v2" />
+                <path d="M16 10v6" />
+              </svg>
+              <h2 class="es-title">
+                <span class="en">You’re not in a project yet</span
+                ><span class="zh">你尚未加入任何项目</span>
+              </h2>
+              <p class="es-desc">
+                <span class="en"
+                  >A Manager of moooon can add you to a project. You’ll see it here as soon as they
+                  do.</span
+                ><span class="zh"
+                  >moooon 的管理者可以将你添加到项目中。一旦添加，你就会在这里看到它。</span
+                >
+              </p>
+            </section>
+          </div>
+        </div>
+      </div>
+      <p class="panel-note">
+        <b>Eikooc</b> is a Limited Member of moooon added to no project (the 0-projects row of the
+        workspace Members delta). Every project-scoped route renders this shell instead of a project
+        page: the top bar keeps the workspace switcher and swaps the project crumb for an italic
+        <i>No project</i>; the top bar’s <b>Create</b> (a work item, into the active project) is NOT
+        rendered, because there is no project to create into; the rail is the shipped rail, and each
+        of its project-scoped rows lands on this same shell. The home area is the shipped
+        <b>EmptyState</b> (a <b>Card</b>, <span class="mono">FolderKanban</span> glyph, serif title,
+        <span class="mono">--el-text-secondary</span> body) saying who can fix it. Access path: this
+        is the landing — <span class="mono">lib/navigation/landing.ts</span> after sign-in, and the
+        target of a workspace switch.
+      </p>
+    </div>
+
+    <div class="panel-label">S2 · The project switcher opens on an empty list</div>
+    <div class="panel">
+      <div class="stage">
+        <div class="topbar">
+          <span class="brand" aria-hidden="true">M</span
+          ><span class="crumb"
+            >moooon<svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="crumb-sep">›</span
+          ><span
+            class="crumb is-empty is-open"
+            role="button"
+            aria-haspopup="listbox"
+            aria-expanded="true"
+            ><span class="en">No project</span><span class="zh">无项目</span
+            ><svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="bar-right"
+            ><span class="btn btn-secondary btn-sm"
+              ><svg
+                class="ico xs"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m21 21-4.34-4.34" />
+                <circle cx="11" cy="11" r="8" /></svg
+              ><span class="en">Shortcut</span><span class="zh">快捷键</span></span
+            ><span class="bar-ico"
+              ><svg
+                class="ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                <path
+                  d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                /></svg></span
+            ><span class="me" aria-hidden="true">E</span></span
+          >
+        </div>
+        <div class="app">
+          <aside class="rail">
+            <div class="grp">
+              <span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Workbench</span><span class="zh">工作台</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Work Items</span><span class="zh">工作项</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" x2="12" y1="8" y2="12" />
+                  <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                ><span class="en">Ready</span><span class="zh">就绪</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg
+                ><span class="en">Runs</span><span class="zh">运行</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"
+                  />
+                  <path d="M8 10v4" />
+                  <path d="M12 10v2" />
+                  <path d="M16 10v6" /></svg
+                ><span class="en">Boards</span><span class="zh">看板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" /></svg
+                ><span class="en">Roadmap</span><span class="zh">路线图</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Plans</span><span class="zh">计划</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Backlog</span><span class="zh">待办</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Dashboard</span><span class="zh">仪表板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                  <path
+                    d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                  /></svg
+                ><span class="en">Triage</span><span class="zh">分诊</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  /></svg
+                ><span class="en">Reports</span><span class="zh">报表</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                  />
+                  <path d="m9 12 2 2 4-4" /></svg
+                ><span class="en">Approval records</span><span class="zh">审批记录</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Codebase</span><span class="zh">代码库</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                  />
+                  <circle cx="12" cy="12" r="3" /></svg
+                ><span class="en">Settings</span><span class="zh">设置</span></span
+              >
+            </div>
+          </aside>
+          <div class="home">
+            <section class="card empty-card">
+              <svg
+                class="es-ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"
+                />
+                <path d="M8 10v4" />
+                <path d="M12 10v2" />
+                <path d="M16 10v6" />
+              </svg>
+              <h2 class="es-title">
+                <span class="en">You’re not in a project yet</span
+                ><span class="zh">你尚未加入任何项目</span>
+              </h2>
+              <p class="es-desc">
+                <span class="en"
+                  >A Manager of moooon can add you to a project. You’ll see it here as soon as they
+                  do.</span
+                ><span class="zh"
+                  >moooon 的管理者可以将你添加到项目中。一旦添加，你就会在这里看到它。</span
+                >
+              </p>
+            </section>
+          </div>
+        </div>
+        <div class="switcher-pop" role="listbox" aria-label="Projects">
+          <span class="pop-label"
+            ><span class="en">Projects</span><span class="zh">项目</span></span
+          >
+          <p class="pop-empty">
+            <span class="en">You haven’t been added to a project in moooon yet.</span
+            ><span class="zh">你尚未被添加到 moooon 的任何项目。</span>
+          </p>
+        </div>
+      </div>
+      <p class="panel-note">
+        The shipped switcher popover (<i>PROJECTS</i> mono label, rows, a separator,
+        <i>Create project</i>) with no rows: one sentence in their place, and no Create row for
+        someone who may not create. It is still a listbox with a label, so a screen reader hears
+        “Projects, empty”.
+      </p>
+    </div>
+
+    <div class="panel-label">S3 · The same person when they MAY create projects</div>
+    <div class="panel">
+      <div class="stage">
+        <div class="topbar">
+          <span class="brand" aria-hidden="true">M</span
+          ><span class="crumb"
+            >moooon<svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="crumb-sep">›</span
+          ><span
+            class="crumb is-empty is-open"
+            role="button"
+            aria-haspopup="listbox"
+            aria-expanded="true"
+            ><span class="en">No project</span><span class="zh">无项目</span
+            ><svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="bar-right"
+            ><span class="btn btn-secondary btn-sm"
+              ><svg
+                class="ico xs"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m21 21-4.34-4.34" />
+                <circle cx="11" cy="11" r="8" /></svg
+              ><span class="en">Shortcut</span><span class="zh">快捷键</span></span
+            ><span class="bar-ico"
+              ><svg
+                class="ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                <path
+                  d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                /></svg></span
+            ><span class="me" aria-hidden="true">E</span></span
+          >
+        </div>
+        <div class="app">
+          <aside class="rail">
+            <div class="grp">
+              <span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Workbench</span><span class="zh">工作台</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Work Items</span><span class="zh">工作项</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" x2="12" y1="8" y2="12" />
+                  <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                ><span class="en">Ready</span><span class="zh">就绪</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg
+                ><span class="en">Runs</span><span class="zh">运行</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"
+                  />
+                  <path d="M8 10v4" />
+                  <path d="M12 10v2" />
+                  <path d="M16 10v6" /></svg
+                ><span class="en">Boards</span><span class="zh">看板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" /></svg
+                ><span class="en">Roadmap</span><span class="zh">路线图</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Plans</span><span class="zh">计划</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Backlog</span><span class="zh">待办</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Dashboard</span><span class="zh">仪表板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                  <path
+                    d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                  /></svg
+                ><span class="en">Triage</span><span class="zh">分诊</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  /></svg
+                ><span class="en">Reports</span><span class="zh">报表</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                  />
+                  <path d="m9 12 2 2 4-4" /></svg
+                ><span class="en">Approval records</span><span class="zh">审批记录</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Codebase</span><span class="zh">代码库</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                  />
+                  <circle cx="12" cy="12" r="3" /></svg
+                ><span class="en">Settings</span><span class="zh">设置</span></span
+              >
+            </div>
+          </aside>
+          <div class="home">
+            <section class="card empty-card">
+              <svg
+                class="es-ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"
+                />
+                <path d="M8 10v4" />
+                <path d="M12 10v2" />
+                <path d="M16 10v6" />
+              </svg>
+              <h2 class="es-title">
+                <span class="en">You’re not in a project yet</span
+                ><span class="zh">你尚未加入任何项目</span>
+              </h2>
+              <p class="es-desc">
+                <span class="en"
+                  >A Manager of moooon can add you to a project. You’ll see it here as soon as they
+                  do.</span
+                ><span class="zh"
+                  >moooon 的管理者可以将你添加到项目中。一旦添加，你就会在这里看到它。</span
+                >
+              </p>
+              <div class="es-act">
+                <span class="btn btn-primary"
+                  ><svg
+                    class="ico"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="M12 5v14" /></svg
+                  ><span class="en">Create a project</span><span class="zh">创建项目</span></span
+                >
+              </div>
+            </section>
+          </div>
+        </div>
+        <div class="switcher-pop" role="listbox" aria-label="Projects">
+          <span class="pop-label"
+            ><span class="en">Projects</span><span class="zh">项目</span></span
+          >
+          <p class="pop-empty">
+            <span class="en">You haven’t been added to a project in moooon yet.</span
+            ><span class="zh">你尚未被添加到 moooon 的任何项目。</span>
+          </p>
+          <div class="pop-sep"></div>
+          <div class="pop-row">
+            <svg
+              class="ico xs"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M5 12h14" />
+              <path d="M12 5v14" /></svg
+            ><span class="en">Create project</span><span class="zh">创建项目</span>
+          </div>
+        </div>
+      </div>
+      <p class="panel-note">
+        The only difference is the door: <i>Create project</i> returns to the switcher and the empty
+        state gains a primary <b>Create a project</b>. Shown only when the actor holds the create
+        permission — this is NOT the create-first screen MOTIR-4872 retired, which showed to
+        everyone.
+      </p>
+    </div>
+
+    <div class="panel-label">S4 · Dark</div>
+    <div class="panel">
+      <div class="stage" data-theme="dark" data-appearance-scope>
+        <div class="topbar">
+          <span class="brand" aria-hidden="true">M</span
+          ><span class="crumb"
+            >moooon<svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="crumb-sep">›</span
+          ><span class="crumb is-empty" role="button" aria-haspopup="listbox" aria-expanded="false"
+            ><span class="en">No project</span><span class="zh">无项目</span
+            ><svg
+              class="chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" /></svg></span
+          ><span class="bar-right"
+            ><span class="btn btn-secondary btn-sm"
+              ><svg
+                class="ico xs"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m21 21-4.34-4.34" />
+                <circle cx="11" cy="11" r="8" /></svg
+              ><span class="en">Shortcut</span><span class="zh">快捷键</span></span
+            ><span class="bar-ico"
+              ><svg
+                class="ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                <path
+                  d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                /></svg></span
+            ><span class="me" aria-hidden="true">E</span></span
+          >
+        </div>
+        <div class="app">
+          <aside class="rail">
+            <div class="grp">
+              <span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Workbench</span><span class="zh">工作台</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Work Items</span><span class="zh">工作项</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" x2="12" y1="8" y2="12" />
+                  <line x1="12" x2="12.01" y1="16" y2="16" /></svg
+                ><span class="en">Ready</span><span class="zh">就绪</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg
+                ><span class="en">Runs</span><span class="zh">运行</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"
+                  />
+                  <path d="M8 10v4" />
+                  <path d="M12 10v2" />
+                  <path d="M16 10v6" /></svg
+                ><span class="en">Boards</span><span class="zh">看板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" /></svg
+                ><span class="en">Roadmap</span><span class="zh">路线图</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Plans</span><span class="zh">计划</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <rect x="3" y="4" width="6" height="6" rx="1" /></svg
+                ><span class="en">Backlog</span><span class="zh">待办</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" /></svg
+                ><span class="en">Dashboard</span><span class="zh">仪表板</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                  <path
+                    d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                  /></svg
+                ><span class="en">Triage</span><span class="zh">分诊</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  /></svg
+                ><span class="en">Reports</span><span class="zh">报表</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                  />
+                  <path d="m9 12 2 2 4-4" /></svg
+                ><span class="en">Approval records</span><span class="zh">审批记录</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+                  />
+                  <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" /></svg
+                ><span class="en">Codebase</span><span class="zh">代码库</span></span
+              ><span class="nav-row"
+                ><svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                  />
+                  <circle cx="12" cy="12" r="3" /></svg
+                ><span class="en">Settings</span><span class="zh">设置</span></span
+              >
+            </div>
+          </aside>
+          <div class="home">
+            <section class="card empty-card">
+              <svg
+                class="es-ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"
+                />
+                <path d="M8 10v4" />
+                <path d="M12 10v2" />
+                <path d="M16 10v6" />
+              </svg>
+              <h2 class="es-title">
+                <span class="en">You’re not in a project yet</span
+                ><span class="zh">你尚未加入任何项目</span>
+              </h2>
+              <p class="es-desc">
+                <span class="en"
+                  >A Manager of moooon can add you to a project. You’ll see it here as soon as they
+                  do.</span
+                ><span class="zh"
+                  >moooon 的管理者可以将你添加到项目中。一旦添加，你就会在这里看到它。</span
+                >
+              </p>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
