@@ -423,6 +423,9 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   PLAN_GRAMMAR_VIOLATION: 422,
   INVALID_PLAN_REF_GRAPH: 422,
   PLAN_TARGET_IMMUTABLE: 409,
+  // MOTIR-6663 — the approve gate refusing a `modify` that MARKS a target no
+  // longer finished (reopened since the append). 422, as at the proposal doors.
+  INVALID_PROPOSAL: 422,
   PLAN_ITEM_UNKNOWN_TARGET_REPO: 422,
   PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE: 422,
   UNRESOLVED_PLAN_REF: 422,

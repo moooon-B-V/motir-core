@@ -97,7 +97,12 @@ import {
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { validateProposedDifficulty } from '@/lib/plans/validateProposedDifficulty';
-import { validateProposedObsolescence } from '@/lib/plans/validateProposedObsolescence';
+import {
+  assertMarkTargetIsFinished,
+  patchSetsObsolescence,
+  validateProposedObsolescence,
+} from '@/lib/plans/validateProposedObsolescence';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import { isMarkOnlyPatch } from '@/lib/plans/markOnlyPatch';
 import { validateProposedBodyRefs } from '@/lib/plans/validateProposedBodyRefs';
 import { patchRescopes } from '@/lib/plans/rescopeReset';
@@ -1122,6 +1127,19 @@ async function runPersistGate(
   // The COMMITTED ancestor chains the same-level check places live ends with
   // (MOTIR-6411) — one batched read, skipped when the plan writes no edge.
   const edgeAncestorsById = await resolveEdgeAncestors(nodes, ctx, tx);
+  // The live status CATEGORY of every target a `modify` MARKS (MOTIR-6663), in
+  // the target's own project's workflow — skipped entirely when no proposal sets
+  // a mark, so a plan that marks nothing costs exactly what it cost before.
+  const markTargetIds = new Set(
+    nodes
+      .filter((n) => n.op === 'modify' && n.workItemId && patchSetsObsolescence(n.patch))
+      .map((n) => n.workItemId!),
+  );
+  const markTargetStatusCategoryById = await resolveStatusCategories(
+    rows.filter((r) => markTargetIds.has(r.id)),
+    ctx,
+    tx,
+  );
   validatePlanProposals({
     items: nodes,
     liveById,
@@ -1130,9 +1148,48 @@ async function runPersistGate(
     ancestorIdsById,
     existingBlockedByEdges,
     existingSupersedesEdges,
+    markTargetStatusCategoryById,
     folderById,
     edgeAncestorsById,
   });
+}
+
+/**
+ * The workflow-status CATEGORY of each row's status, by row id, read against the
+ * row's OWN project's workflow (MOTIR-6663) — the question the finished-target
+ * rule asks, answered per project because every project defines its own
+ * statuses. One batched read over the rows' projects; none when `rows` is empty.
+ * A row whose status key its workflow does not define is absent from the map,
+ * which the rule reads as not finished.
+ *
+ * With a `tx`, the read runs on it (the caller holds the workspace GUC, and
+ * lifts the project narrowing where the targets may sit in another project);
+ * without one it opens its own workspace context, as `runPersistGate`'s
+ * pre-transaction pass does.
+ */
+async function resolveStatusCategories(
+  rows: ReadonlyArray<{ id: string; projectId: string; status: string }>,
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<Map<string, StatusCategoryDto>> {
+  const out = new Map<string, StatusCategoryDto>();
+  if (rows.length === 0) return out;
+  const byProject = await workflowsService.getStatusKeysByCategoryByProjects(
+    rows.map((r) => r.projectId),
+    ctx.workspaceId,
+    tx,
+  );
+  for (const r of rows) {
+    const groups = byProject.get(r.projectId);
+    if (!groups) continue;
+    for (const category of Object.keys(groups) as StatusCategoryDto[]) {
+      if (groups[category].includes(r.status)) {
+        out.set(r.id, category);
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -1387,7 +1444,10 @@ async function persistGateVerdict(
     if (
       err instanceof PlanRefGraphError ||
       err instanceof PlanGrammarError ||
-      err instanceof PlanTargetImmutableError
+      err instanceof PlanTargetImmutableError ||
+      // The gate's mark-on-an-unfinished-target refusal (MOTIR-6663) — a verdict
+      // about the plan, like the three above, never a fault.
+      err instanceof InvalidProposalError
     ) {
       return err;
     }
@@ -3672,6 +3732,51 @@ async function assertModifyDifficultiesLegalAtAppend(
 }
 
 /**
+ * The FINISHED-TARGET rule for a `modify` that sets an obsolescence mark, at the
+ * APPEND (MOTIR-6663) — the half `validateProposal` cannot judge, because it
+ * needs the target's live status CATEGORY. Either mark lands only on a card in
+ * the `done` category; an unfinished card nobody will build is removed instead.
+ *
+ * Only the INCOMING batch is judged: rows already on the plan were judged when
+ * they were appended, and a target reopened since is the approve gate's case. A
+ * target that resolves to nothing is left to the close. Skipped with no read
+ * when no incoming `modify` sets a mark.
+ */
+async function assertMarkTargetsFinishedAtAppend(
+  proposals: readonly ProposalInput[],
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const judged = proposals.filter(
+    (p) => p.op === 'modify' && p.workItemId && patchSetsObsolescence(p.patch),
+  );
+  if (judged.length === 0) return;
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const rows = await workItemRepository.findByIdsInWorkspace(
+      [...new Set(judged.map((p) => p.workItemId!))],
+      ctx.workspaceId,
+      tx,
+    );
+    const rowById = new Map(rows.map((r) => [r.id, r]));
+    const categoryById = await resolveStatusCategories(rows, ctx, tx);
+    for (const p of judged) {
+      const row = rowById.get(p.workItemId!);
+      if (!row) continue;
+      assertMarkTargetIsFinished(
+        p.patch,
+        {
+          key: row.identifier,
+          status: row.status,
+          statusCategory: categoryById.get(row.id) ?? null,
+        },
+        proposalLabel({ op: p.op, workItemId: p.workItemId }),
+      );
+    }
+  });
+}
+
+/**
  * Judge the LEVEL of every `blocked_by` the batch writes, at the APPEND (Story
  * MOTIR-6015 · MOTIR-6367) — the same `assertBlockedByLevels` the persist gate
  * runs at the close, correction, `validate_plan` and approve, asked here so the
@@ -4576,6 +4681,11 @@ export const plansService = {
           // one batched read, and only when the batch sets a non-null one.
           await assertModifyDifficultiesLegalAtAppend(proposals, ctx, fresh.projectId, tx);
 
+          // The FINISHED-TARGET rule for a `modify` that sets a mark (MOTIR-6663),
+          // which `validateProposal` could not judge without the target's live
+          // status category. One batched read, only when the batch sets a mark.
+          await assertMarkTargetsFinishedAtAppend(proposals, ctx, fresh.projectId, tx);
+
           // ⚠️ REFUSE AN UNRESOLVABLE `planItem:` REF HERE, WHERE IT IS WRITTEN
           // (MOTIR-3539) — before the first row of the batch is inserted, so a
           // refusal leaves the plan byte-identical rather than half-appended.
@@ -4839,6 +4949,19 @@ export const plansService = {
           {
             code: err.code,
             reason: err instanceof PlanTargetImmutableError ? null : err.reason,
+            item: `${TEMP_REF_PREFIX}${err.planItemId}`,
+            message: err.message,
+          },
+        ];
+      }
+      // A mark on a target that is no longer finished (MOTIR-6663) — the gate
+      // names the persisted proposal on the error, so it is reported like the
+      // three above rather than surfacing as a fault.
+      if (err instanceof InvalidProposalError && err.planItemId) {
+        return [
+          {
+            code: err.code,
+            reason: null,
             item: `${TEMP_REF_PREFIX}${err.planItemId}`,
             message: err.message,
           },
@@ -5678,6 +5801,32 @@ export const plansService = {
               input.patch,
               proposalLabel({ op: item.op, workItemId: item.workItemId }),
             );
+            // ...and to the append's FINISHED-TARGET rule (MOTIR-6663), against
+            // the target's live status category. Asked HERE rather than left to
+            // the before/after gate below, which admits a correction to a plan
+            // that was already unapprovable — and a mark on an unfinished card is
+            // a mistake this write introduces, not a repair of one it inherits.
+            if (item.workItemId && patchSetsObsolescence(input.patch)) {
+              const targetId = item.workItemId;
+              await withProjectNarrowingSuspended(tx, plan.projectId, async () => {
+                const [target] = await workItemRepository.findByIdsInWorkspace(
+                  [targetId],
+                  ctx.workspaceId,
+                  tx,
+                );
+                if (!target) return;
+                const categoryById = await resolveStatusCategories([target], ctx, tx);
+                assertMarkTargetIsFinished(
+                  input.patch,
+                  {
+                    key: target.identifier,
+                    status: target.status,
+                    statusCategory: categoryById.get(target.id) ?? null,
+                  },
+                  proposalLabel({ op: item.op, workItemId: item.workItemId }),
+                );
+              });
+            }
             // The replacement patch's bodies, held to the append's link check (bug MOTIR-6494).
             validateProposedBodyRefs(
               input.patch ?? {},

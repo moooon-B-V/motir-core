@@ -10,9 +10,18 @@
  */
 export class InvalidProposalError extends Error {
   readonly code = 'INVALID_PROPOSAL' as const;
-  constructor(message: string) {
+  /**
+   * The offending proposal's id, when the refusal is raised over a PERSISTED
+   * plan rather than at the write door that received the proposal — the approve
+   * gate's mark-target check (MOTIR-6663), which `validate_plan` reports as a
+   * rejection naming `planItem:<id>`. `null` at the write doors, where the
+   * proposal has no id yet or the caller already knows which one it sent.
+   */
+  readonly planItemId: string | null;
+  constructor(message: string, planItemId: string | null = null) {
     super(message);
     this.name = 'InvalidProposalError';
+    this.planItemId = planItemId;
   }
 }
 

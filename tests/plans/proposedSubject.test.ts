@@ -63,6 +63,7 @@ function validateAll(nodes: ProposalNode[]): void {
     ancestorIdsById: new Map(),
     existingBlockedByEdges: [],
     existingSupersedesEdges: [],
+    markTargetStatusCategoryById: new Map(),
   });
 }
 

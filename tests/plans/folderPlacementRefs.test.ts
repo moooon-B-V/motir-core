@@ -94,6 +94,7 @@ function validate(
     ancestorIdsById: new Map(),
     existingBlockedByEdges: [],
     existingSupersedesEdges: [],
+    markTargetStatusCategoryById: new Map(),
     ...(opts.omitFolders ? {} : { folderById: opts.folderById ?? DEFAULT_FOLDERS }),
   });
 }

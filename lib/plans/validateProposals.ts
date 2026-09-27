@@ -35,6 +35,11 @@ import { isWorkItemType, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
 import { isDifficultyRefusedOnKind } from '@/lib/plans/validateProposedDifficulty';
 import { isMarkOnlyPatch } from '@/lib/plans/markOnlyPatch';
+import {
+  assertMarkTargetIsFinished,
+  patchSetsObsolescence,
+} from '@/lib/plans/validateProposedObsolescence';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
 import { crossLevelReason, isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
 import {
@@ -105,10 +110,10 @@ export interface ProposalNode {
     difficulty?: string | null;
     blockedByAdd?: string[] | null;
     blockedByRemove?: string[] | null;
-    /** The obsolescence MARK and its note (MOTIR-6629) — never judged here
-     *  (membership is the proposal doors'); step 4 reads only whether the patch
-     *  carries mark keys ALONE (`isMarkOnlyPatch`), which admits it to a terminal
-     *  target. The gate reads the patch's whole KEY SET for that, so every other
+    /** The obsolescence MARK and its note (MOTIR-6629) — membership is the
+     *  proposal doors'; step 4 reads whether the patch carries mark keys ALONE
+     *  (`isMarkOnlyPatch`), which admits it to a terminal target, and step 4b
+     *  (MOTIR-6663) refuses a patch SETTING a mark on an unfinished target. The gate reads the patch's whole KEY SET for that, so every other
      *  key the row holds counts against the carve-out even though it is not
      *  typed here. */
     obsolescence?: string | null;
@@ -228,6 +233,18 @@ export interface ValidatePlanProposalsInput {
    * defaulting to empty would let a caller that forgot it pass a cycle silently.
    */
   existingSupersedesEdges: readonly SupersedesEdge[];
+  /**
+   * The workflow-status CATEGORY of every `modify` target whose patch SETS an
+   * obsolescence mark (MOTIR-6663), by work-item id — read against the target's
+   * OWN project's workflow by `plansService.runPersistGate`, so a custom
+   * done-category status (`shipped`) counts as finished and a status key is
+   * never judged.
+   *
+   * REQUIRED, and its absence fails in the SAFE direction: a mark target missing
+   * from the map reads as not finished, so a caller that forgot to resolve it
+   * refuses a mark rather than writing one onto an unfinished card.
+   */
+  markTargetStatusCategoryById: ReadonlyMap<string, StatusCategoryDto>;
   /**
    * The live FOLDERS every `folder:<id>` ref names, by id (MOTIR-5414) — resolved
    * by the service in one batched, workspace-scoped read with the project
@@ -1546,7 +1563,8 @@ export function assertBlockedByLevels(
 /**
  * THE GATE. Re-validate an approved proposal set independently, before it
  * becomes rows. Throws the first violation as a typed error — `PlanRefGraphError`
- * / `PlanGrammarError` (→ 400) or `PlanTargetImmutableError` (→ 409) — and
+ * / `PlanGrammarError` (→ 400), `PlanTargetImmutableError` (→ 409), or
+ * `InvalidProposalError` (→ 422) for a mark on an unfinished target — and
  * writes nothing, ever (it is pure). An empty / all-declined plan is a valid
  * no-op and passes.
  *
@@ -1568,6 +1586,7 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
     ancestorIdsById,
     existingBlockedByEdges,
     existingSupersedesEdges,
+    markTargetStatusCategoryById,
   } = input;
   const folderById = input.folderById ?? new Map<string, LiveFolderState>();
 
@@ -1743,5 +1762,28 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
         target.title,
       );
     }
+  }
+  // 4b. A MARK lands only on a FINISHED card (MOTIR-6663) — the direct doors'
+  //     rule (MOTIR-6575), carried onto the plan path through the same shared
+  //     predicate. Re-asked HERE, against the LIVE row, because a target that was
+  //     finished at the append can be reopened (after its mark is cleared) while
+  //     the plan waits. Clearing (`null`) and a patch that leaves the mark alone
+  //     pass; a target that resolves to nothing is left to `materialize`.
+  for (const item of items) {
+    if (item.op !== 'modify' || !item.workItemId) continue;
+    if (!patchSetsObsolescence(item.patch)) continue;
+    const target = liveById.get(item.workItemId);
+    if (!target) continue;
+    assertMarkTargetIsFinished(
+      item.patch,
+      {
+        key: target.key,
+        status: target.status,
+        statusCategory: markTargetStatusCategoryById.get(target.id) ?? null,
+      },
+      // The doors' own `proposalLabel` wording, so every moment reads alike.
+      `the \`modify\` of work item ${item.workItemId}`,
+      item.id,
+    );
   }
 }

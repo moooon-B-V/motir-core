@@ -61,6 +61,13 @@ async function refusalOnTheWay(fx: WorkItemFixture, planId: string): Promise<unk
 
 const row = (id: string) => adminDb.workItem.findUniqueOrThrow({ where: { id } });
 
+/** A leaf already FINISHED — the only card a plan may mark (MOTIR-6663). */
+async function finishedLeaf(fx: WorkItemFixture, title = 'Leaf', status = 'done') {
+  const leaf = await createTestWorkItem(fx, { kind: 'task', title });
+  await adminDb.workItem.update({ where: { id: leaf.id }, data: { status } });
+  return leaf;
+}
+
 /** The revisions of `workItemId` that carry an `obsolescence` cell. */
 async function markRevisions(workItemId: string) {
   const all = await adminDb.workItemRevision.findMany({
@@ -73,7 +80,7 @@ async function markRevisions(workItemId: string) {
 describe('append — a `modify` patch carries the mark (MOTIR-6629)', () => {
   it('persists both keys, and an explicit `null` for each', async () => {
     const fx = await makeWorkItemFixture();
-    const target = await createTestWorkItem(fx, { kind: 'task', title: 'Leaf' });
+    const target = await finishedLeaf(fx);
     const planId = await newPlan(fx);
     const set = await plansService.addProposals(
       planId,
@@ -156,7 +163,7 @@ describe('append — a `modify` patch carries the mark (MOTIR-6629)', () => {
 
   it('a second modify of one card MERGES both keys — later wins, `null` clears', async () => {
     const fx = await makeWorkItemFixture();
-    const target = await createTestWorkItem(fx, { kind: 'task', title: 'Leaf' });
+    const target = await finishedLeaf(fx);
     const planId = await newPlan(fx);
     const first = await plansService.addProposals(
       planId,
@@ -193,7 +200,7 @@ describe('append — a `modify` patch carries the mark (MOTIR-6629)', () => {
 
   it("correctProposal holds a modify's replacement patch to the same mark check", async () => {
     const fx = await makeWorkItemFixture();
-    const target = await createTestWorkItem(fx, { kind: 'task', title: 'Leaf' });
+    const target = await finishedLeaf(fx);
     const planId = await modifyPlan(fx, target.id, { obsolescence: 'outdated' });
     const id = (await adminDb.planItem.findFirstOrThrow({ where: { planId } })).id;
 
@@ -224,9 +231,9 @@ describe('append — a `modify` patch carries the mark (MOTIR-6629)', () => {
 });
 
 describe('approve — writes the mark onto a live card (MOTIR-6629)', () => {
-  it('writes both onto a `todo` card with ONE revision carrying both diff cells', async () => {
+  it('writes both onto a finished card with ONE revision carrying both diff cells', async () => {
     const fx = await makeWorkItemFixture();
-    const target = await createTestWorkItem(fx, { kind: 'task', title: 'Leaf' });
+    const target = await finishedLeaf(fx);
     const planId = await modifyPlan(fx, target.id, {
       obsolescence: 'outdated',
       obsolescenceNoteMd: 'Replaced by the new flow.',
@@ -237,8 +244,7 @@ describe('approve — writes the mark onto a live card (MOTIR-6629)', () => {
     expect(after.obsolescence).toBe('outdated');
     expect(after.obsolescenceNoteMd).toBe('Replaced by the new flow.');
 
-    // ONE revision carries the mark, with both cells (the park's resting-status
-    // move records its own, separate revision).
+    // ONE revision carries the mark, with both cells.
     const revisions = await markRevisions(target.id);
     expect(revisions).toHaveLength(1);
     expect(revisions[0]!.diff).toEqual({
@@ -379,5 +385,179 @@ describe('a MARK-ONLY modify reaches a finished card (MOTIR-6629)', () => {
 
     const page = await plansService.resolveApprovedShapeVerdict(fx.projectId, [card.id], fx.ctx);
     expect(page.items[0]).toMatchObject({ workItemId: card.id, verdict: 'unchanged' });
+  });
+});
+
+describe('a plan marks only a FINISHED card (MOTIR-6663)', () => {
+  /** The refusal text, exactly as every plan moment words it. */
+  const refusal = (workItemId: string, key: string, status: string) =>
+    `the \`modify\` of work item ${workItemId}: a plan may mark only a finished work item; ` +
+    `${key} is at ${status}. A work item nobody will finish is removed — ` +
+    "send `{ op: 'remove', workItemId, reason }` instead.";
+
+  /** A custom workflow status on the fixture's project (a per-project workflow). */
+  async function customStatus(
+    fx: WorkItemFixture,
+    key: string,
+    category: 'todo' | 'in_progress' | 'done',
+  ): Promise<void> {
+    const anyStatus = await adminDb.workflowStatus.findFirstOrThrow({
+      where: { projectId: fx.projectId },
+      orderBy: { position: 'desc' },
+    });
+    await adminDb.workflowStatus.create({
+      data: {
+        projectId: fx.projectId,
+        workspaceId: fx.workspaceId,
+        key,
+        label: key,
+        category,
+        position: `${anyStatus.position}z`,
+        isInitial: false,
+      },
+    });
+  }
+
+  it.each([
+    ['outdated', 'todo'],
+    ['deprecated', 'todo'],
+    ['outdated', 'in_progress'],
+    ['deprecated', 'in_progress'],
+  ] as const)(
+    'the APPEND refuses `%s` on a `%s` target with INVALID_PROPOSAL pointing at `remove`, and writes nothing',
+    async (mark, status) => {
+      const fx = await makeWorkItemFixture();
+      const target = await createTestWorkItem(fx, { kind: 'task', title: 'Unfinished' });
+      await adminDb.workItem.update({ where: { id: target.id }, data: { status } });
+      const planId = await newPlan(fx);
+
+      const err = await plansService
+        .addProposals(
+          planId,
+          [{ op: 'modify', workItemId: target.id, patch: { obsolescence: mark } }],
+          fx.ctx,
+        )
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(InvalidProposalError);
+      expect((err as InvalidProposalError).code).toBe('INVALID_PROPOSAL');
+      expect((err as Error).message).toBe(refusal(target.id, target.identifier, status));
+      expect(await adminDb.planItem.count({ where: { planId } })).toBe(0);
+    },
+  );
+
+  it.each([
+    ['outdated', 'done'],
+    ['deprecated', 'cancelled'],
+  ] as const)('the APPEND accepts `%s` on a `%s` target', async (mark, status) => {
+    const fx = await makeWorkItemFixture();
+    const target = await finishedLeaf(fx, 'Finished', status);
+    const planId = await newPlan(fx);
+    await plansService.addProposals(
+      planId,
+      [{ op: 'modify', workItemId: target.id, patch: { obsolescence: mark } }],
+      fx.ctx,
+    );
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(1);
+  });
+
+  it('the APPEND accepts `obsolescence: null` on a to-do target', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'Unfinished' });
+    await adminDb.workItem.update({ where: { id: target.id }, data: { status: 'todo' } });
+    const planId = await newPlan(fx);
+    await plansService.addProposals(
+      planId,
+      [{ op: 'modify', workItemId: target.id, patch: { obsolescence: null } }],
+      fx.ctx,
+    );
+    expect(await adminDb.planItem.count({ where: { planId } })).toBe(1);
+  });
+
+  it('a CORRECTION setting a mark on an unfinished target is refused, and the patch is left alone', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await createTestWorkItem(fx, { kind: 'task', title: 'Unfinished' });
+    await adminDb.workItem.update({ where: { id: target.id }, data: { status: 'todo' } });
+    const planId = await modifyPlan(fx, target.id, { priority: 'high' });
+    const id = (await adminDb.planItem.findFirstOrThrow({ where: { planId } })).id;
+
+    const err = await plansService
+      .correctProposal(planId, id, { patch: { obsolescence: 'deprecated' } }, fx.ctx)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(InvalidProposalError);
+    // The append PARKED the target (`planning`, an in-progress status), and the
+    // refusal names the status it is live at.
+    const live = await row(target.id);
+    expect(live.status).toBe('planning');
+    expect((err as Error).message).toBe(refusal(target.id, target.identifier, live.status));
+    expect((await adminDb.planItem.findUniqueOrThrow({ where: { id } })).patch).toEqual({
+      priority: 'high',
+    });
+
+    // Clearing is legal on the same card.
+    await plansService.correctProposal(planId, id, { patch: { obsolescence: null } }, fx.ctx);
+    expect((await adminDb.planItem.findUniqueOrThrow({ where: { id } })).patch).toEqual({
+      obsolescence: null,
+    });
+  });
+
+  it('a target REOPENED after the append fails APPROVE with the same error and writes nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await finishedLeaf(fx, 'Finished then reopened');
+    const planId = await modifyPlan(fx, target.id, {
+      obsolescence: 'outdated',
+      obsolescenceNoteMd: 'Replaced.',
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+    await adminDb.workItem.update({ where: { id: target.id }, data: { status: 'todo' } });
+
+    // `validate_plan`'s verdict names the proposal before anyone presses Approve.
+    const itemId = (await adminDb.planItem.findFirstOrThrow({ where: { planId } })).id;
+    expect(await plansService.checkApprovability(planId, fx.ctx)).toEqual([
+      {
+        code: 'INVALID_PROPOSAL',
+        reason: null,
+        item: `planItem:${itemId}`,
+        message: refusal(target.id, target.identifier, 'todo'),
+      },
+    ]);
+
+    const err = await plansService.approvePlan(planId, fx.ctx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(InvalidProposalError);
+    expect((err as InvalidProposalError).code).toBe('INVALID_PROPOSAL');
+    expect((err as Error).message).toBe(refusal(target.id, target.identifier, 'todo'));
+
+    const after = await row(target.id);
+    expect(after.obsolescence).toBeNull();
+    expect(after.obsolescenceNoteMd).toBeNull();
+    expect(after.status).toBe('todo');
+    expect(await markRevisions(target.id)).toHaveLength(0);
+    expect((await adminDb.plan.findUniqueOrThrow({ where: { id: planId } })).status).toBe(
+      'planned',
+    );
+  });
+
+  it('reads the status CATEGORY — a custom done-category `shipped` is finished, a custom to-do one is not', async () => {
+    const fx = await makeWorkItemFixture();
+    await customStatus(fx, 'shipped', 'done');
+    await customStatus(fx, 'awaiting_legal', 'todo');
+
+    const shipped = await finishedLeaf(fx, 'Shipped', 'shipped');
+    const planId = await modifyPlan(fx, shipped.id, { obsolescence: 'deprecated' });
+    await closeAndApprove(fx, planId);
+    const after = await row(shipped.id);
+    expect(after.obsolescence).toBe('deprecated');
+    expect(after.status).toBe('shipped');
+
+    const waiting = await finishedLeaf(fx, 'Waiting', 'awaiting_legal');
+    const refused = await newPlan(fx);
+    const err = await plansService
+      .addProposals(
+        refused,
+        [{ op: 'modify', workItemId: waiting.id, patch: { obsolescence: 'outdated' } }],
+        fx.ctx,
+      )
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(InvalidProposalError);
+    expect((err as Error).message).toBe(refusal(waiting.id, waiting.identifier, 'awaiting_legal'));
   });
 });

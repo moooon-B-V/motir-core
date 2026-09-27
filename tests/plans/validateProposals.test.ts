@@ -9,7 +9,13 @@ import {
   type LiveWorkItemState,
   type ProposalNode,
 } from '@/lib/plans/validateProposals';
-import { PlanGrammarError, PlanRefGraphError, PlanTargetImmutableError } from '@/lib/plans/errors';
+import {
+  InvalidProposalError,
+  PlanGrammarError,
+  PlanRefGraphError,
+  PlanTargetImmutableError,
+} from '@/lib/plans/errors';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
@@ -98,16 +104,34 @@ function validate(
     /** Committed ancestor chains the same-level check places live ends with
      *  (MOTIR-6411). Absent means no live end is placed, so it is skipped. */
     edgeAncestorsById?: Map<string, readonly string[]>;
+    /** The mark targets' status CATEGORIES (MOTIR-6663). Absent derives them the
+     *  way the service's per-project read would for the default workflow: a
+     *  terminal key is `done`, `in_progress` is itself, anything else `todo`. */
+    markTargetStatusCategoryById?: Map<string, StatusCategoryDto>;
   } = {},
 ): void {
+  const liveById = opts.liveById ?? liveMap(live({ id: REAL_PARENT }), live({ id: REAL_TARGET }));
+  const terminalStatusKeys = opts.terminalStatusKeys ?? new Set(['done', 'cancelled']);
   validatePlanProposals({
     items,
-    liveById: opts.liveById ?? liveMap(live({ id: REAL_PARENT }), live({ id: REAL_TARGET })),
-    terminalStatusKeys: opts.terminalStatusKeys ?? new Set(['done', 'cancelled']),
+    liveById,
+    terminalStatusKeys,
     planProjectId: opts.planProjectId ?? PLAN_PROJECT,
     ancestorIdsById: opts.ancestorIdsById ?? new Map(),
     existingBlockedByEdges: opts.existingBlockedByEdges ?? [],
     existingSupersedesEdges: opts.existingSupersedesEdges ?? [],
+    markTargetStatusCategoryById:
+      opts.markTargetStatusCategoryById ??
+      new Map(
+        [...liveById.values()].map((l): [string, StatusCategoryDto] => [
+          l.id,
+          terminalStatusKeys.has(l.status)
+            ? 'done'
+            : l.status === 'in_progress'
+              ? 'in_progress'
+              : 'todo',
+        ]),
+      ),
     folderById: opts.folderById ?? new Map(),
     edgeAncestorsById: opts.edgeAncestorsById ?? new Map(),
   });
@@ -668,6 +692,87 @@ describe('validatePlanProposals — a MARK-ONLY `modify` may reach a terminal ta
         liveById: liveMap(live({ id: REAL_TARGET, status: 'done' })),
       }),
     ).toThrow(PlanTargetImmutableError);
+  });
+});
+
+describe('validatePlanProposals — a MARK lands only on a FINISHED target (MOTIR-6663)', () => {
+  it.each([
+    ['outdated', 'todo'],
+    ['deprecated', 'todo'],
+    ['outdated', 'in_progress'],
+    ['deprecated', 'in_progress'],
+  ])(
+    'REFUSES `%s` on a target at `%s`, naming the target and pointing at `remove`',
+    (mark, status) => {
+      let caught: unknown;
+      try {
+        validate([modify('m1', { patch: { obsolescence: mark } })], {
+          liveById: liveMap(live({ id: REAL_TARGET, status })),
+        });
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(InvalidProposalError);
+      const err = caught as InvalidProposalError;
+      expect(err.code).toBe('INVALID_PROPOSAL');
+      expect(err.planItemId).toBe('m1');
+      expect(err.message).toBe(
+        `the \`modify\` of work item ${REAL_TARGET}: a plan may mark only a finished work item; ` +
+          `MOTIR-${REAL_TARGET} is at ${status}. A work item nobody will finish is removed — ` +
+          "send `{ op: 'remove', workItemId, reason }` instead.",
+      );
+    },
+  );
+
+  it('ADMITS clearing the mark (`null`) and a patch that leaves it alone on a to-do target', () => {
+    for (const patch of [
+      { obsolescence: null },
+      { obsolescence: null, obsolescenceNoteMd: null },
+      { obsolescenceNoteMd: 'Only the note.' },
+      { title: 'Rewritten' },
+    ] as ProposalNode['patch'][]) {
+      expect(() =>
+        validate([modify('m1', { patch })], {
+          liveById: liveMap(live({ id: REAL_TARGET, status: 'todo' })),
+        }),
+      ).not.toThrow();
+    }
+  });
+
+  it('reads the CATEGORY, never the key — a custom done-category `shipped` is finished', () => {
+    const shipped = liveMap(live({ id: REAL_TARGET, status: 'shipped' }));
+    expect(() =>
+      validate([modify('m1', { patch: { obsolescence: 'deprecated' } })], {
+        liveById: shipped,
+        terminalStatusKeys: new Set(['shipped']),
+        markTargetStatusCategoryById: new Map([[REAL_TARGET, 'done']]),
+      }),
+    ).not.toThrow();
+    // ...and a status literally keyed `done` whose category is NOT done is not.
+    expect(() =>
+      validate([modify('m1', { patch: { obsolescence: 'deprecated' } })], {
+        liveById: liveMap(live({ id: REAL_TARGET, status: 'done' })),
+        terminalStatusKeys: new Set(['shipped']),
+        markTargetStatusCategoryById: new Map([[REAL_TARGET, 'in_progress']]),
+      }),
+    ).toThrow(InvalidProposalError);
+  });
+
+  it('fails SAFE — a mark target with no resolved category reads as not finished', () => {
+    expect(() =>
+      validate([modify('m1', { patch: { obsolescence: 'outdated' } })], {
+        liveById: liveMap(live({ id: REAL_TARGET, status: 'done' })),
+        markTargetStatusCategoryById: new Map(),
+      }),
+    ).toThrow(InvalidProposalError);
+  });
+
+  it('leaves a target that resolves to nothing to materialize', () => {
+    expect(() =>
+      validate([modify('m1', { patch: { obsolescence: 'outdated' } })], {
+        liveById: new Map(),
+      }),
+    ).not.toThrow();
   });
 });
 

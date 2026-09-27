@@ -1284,10 +1284,15 @@ export interface PlanStalenessDto {
  */
 export interface PlanApprovabilityRejectionDto {
   /** The stable code the approve path raises — what a caller branches on. */
-  code: 'INVALID_PLAN_REF_GRAPH' | 'PLAN_GRAMMAR_VIOLATION' | 'PLAN_TARGET_IMMUTABLE';
+  code:
+    | 'INVALID_PLAN_REF_GRAPH'
+    | 'PLAN_GRAMMAR_VIOLATION'
+    | 'PLAN_TARGET_IMMUTABLE'
+    // A `modify` marking a target that is not finished (MOTIR-6663).
+    | 'INVALID_PROPOSAL';
   /** The narrower reason where the code has one (`dangling` / `duplicate` /
-   *  `cycle` / `illegal_parent` / `unknown_kind`); `null` for immutability,
-   *  which has exactly one shape. */
+   *  `cycle` / `illegal_parent` / `unknown_kind`); `null` for immutability and
+   *  for `INVALID_PROPOSAL`, which each have exactly one shape here. */
   reason: string | null;
   /** The offending proposal, as `planItem:<id>` — the same form the blockers
    *  array uses for a proposed node, so both halves address a proposal alike. */

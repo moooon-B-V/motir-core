@@ -5,6 +5,7 @@ import { planDecisionService } from '@/lib/services/planDecisionService';
 import { planDecisionRefusalResponse } from '@/lib/approvalGates/decisionRefusalResponse';
 import { readPlanDecisionPress } from '@/lib/plans/decisionPress';
 import {
+  InvalidProposalError,
   PlanApproveTimedOutError,
   PlanGrammarError,
   PlanHasNoProposalsError,
@@ -121,6 +122,16 @@ export async function POST(
       return NextResponse.json(
         { code: err.code, planItemId: err.planItemId, error: err.message },
         { status: 409 },
+      );
+    }
+    // A `modify` MARKS a target that is not finished — reopened since the append
+    // (MOTIR-6663). 422, the status the same refusal gets at the proposal doors:
+    // the plan's author removes the card instead. Raised by the gate before any
+    // write, so the tree is untouched.
+    if (err instanceof InvalidProposalError) {
+      return NextResponse.json(
+        { code: err.code, planItemId: err.planItemId, error: err.message },
+        { status: 422 },
       );
     }
     // A proposal pinned to a repo outside the project's set (MOTIR-1884) — 422,
