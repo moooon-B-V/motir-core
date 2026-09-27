@@ -341,6 +341,10 @@ export function presentMcpWorkItem(dto: WorkItemDto): McpWorkItem {
     storyPoints: dto.storyPoints,
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt,
+    // The obsolescence mark rides the SHARED half since MOTIR-6581 put it on the
+    // v1 row this payload derives from; the MCP card (MOTIR-6582) owns its docs.
+    obsolescence: dto.obsolescence,
+    obsolescenceNoteMd: dto.obsolescenceNoteMd,
     // the MCP widening
     id: dto.id,
     projectId: dto.projectId,
@@ -443,6 +447,8 @@ export function presentMcpWorkItemRow(
     estimateMinutes: item.estimateMinutes,
     storyPoints: item.storyPoints,
     updatedAt: item.updatedAt,
+    obsolescence: item.obsolescence,
+    obsolescenceNoteMd: item.obsolescenceNoteMd,
     dependencies: edges ?? { blockedBy: [], blocks: [] },
     id: item.id,
     numericKey: item.key,
@@ -516,6 +522,9 @@ function readyRowFields(
     type: item.type,
     executor: item.executor,
     difficulty: item.difficulty,
+    // Derived from the v1 ready row (MOTIR-6581), as every field here is.
+    obsolescence: item.obsolescence,
+    obsolescenceNoteMd: item.obsolescenceNoteMd,
     // The v1 field, derived from the object MCP already carried. Additive.
     assigneeId: item.assignee?.id ?? null,
     descriptionExcerpt: item.descriptionExcerpt,

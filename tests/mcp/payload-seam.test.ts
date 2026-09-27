@@ -611,6 +611,8 @@ describe('presentMcpReadyRow / presentMcpReadyDispatch', () => {
     type: 'code' as const,
     executor: 'coding_agent' as const,
     difficulty: null,
+    obsolescence: 'outdated' as const,
+    obsolescenceNoteMd: 'Superseded by the new flow.',
     descriptionMd: 'the body',
   };
 

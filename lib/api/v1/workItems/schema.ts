@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { z } from 'zod/v4';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
+import { WORK_ITEM_OBSOLESCENCES } from '@/lib/issues/obsolescence';
 import type {
   ExecutorDto,
   IssueDetailDto,
@@ -9,6 +10,7 @@ import type {
   WorkItemKindDto,
   WorkItemDependencyEdgesDto,
   WorkItemDifficultyDto,
+  WorkItemObsolescenceDto,
   WorkItemPlanningSourceDto,
   WorkItemPriorityDto,
   WorkItemSummaryDto,
@@ -139,6 +141,13 @@ const _difficultiesTotal: AssertTotal<
   WorkItemDifficultyDto,
   (typeof WORK_ITEM_DIFFICULTIES)[number]
 > = true;
+// The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6581) — imported for the same
+// reason: `lib/issues/obsolescence.ts` is the one list the service validates
+// against, so the wire and the service cannot disagree on the members.
+const _obsolescencesTotal: AssertTotal<
+  WorkItemObsolescenceDto,
+  (typeof WORK_ITEM_OBSOLESCENCES)[number]
+> = true;
 
 /**
  * EXPORTED (MOTIR-2986) so the MCP plan payload's `authorSource` enum is THIS
@@ -174,6 +183,7 @@ void [
   _typesTotal,
   _executorsTotal,
   _difficultiesTotal,
+  _obsolescencesTotal,
   _planningTotal,
   _implementationTotal,
 ];
@@ -183,6 +193,18 @@ const prioritySchema = z.enum(WORK_ITEM_PRIORITIES);
 const typeSchema = z.enum(WORK_ITEM_TYPES);
 const executorSchema = z.enum(EXECUTORS);
 const difficultySchema = z.enum(WORK_ITEM_DIFFICULTIES);
+/**
+ * Whether the card is still TRUE OF THE CODE (Story MOTIR-6574) — `outdated`
+ * (the text no longer describes the code; the capability lives on in another
+ * shape) or `deprecated` (retired or overturned on purpose — do not build on it).
+ *
+ * EXPORTED, and emitted as ONE named OpenAPI component (`WorkItemObsolescence`,
+ * via `WORK_ITEM_SHARED_SCHEMAS` in `./operations.ts`) that every carrier —
+ * the detail, the collection row, the ready row and both write bodies —
+ * `$ref`s. The ready row imports THIS instance rather than re-declaring the
+ * enum, because the emitter recognises the component by schema identity.
+ */
+export const obsolescenceSchema = z.enum(WORK_ITEM_OBSOLESCENCES);
 const planningSourceSchema = z.enum(PLANNING_SOURCES);
 const implementationSourceSchema = z.enum(IMPLEMENTATION_SOURCES);
 
@@ -287,6 +309,14 @@ const workItemFieldsSchema = z.object({
   storyPoints: z.number().nullable(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
+  /** The OBSOLESCENCE mark (Story MOTIR-6574 · MOTIR-6581) — `null` when the card
+   *  is current. Carried on EVERY kind and EVERY status, a `done` card included:
+   *  a finished card is exactly the one whose text the code can outgrow.
+   *  ADDITIVE under §8; `V1_CONTRACT_VERSION` moves for it. */
+  obsolescence: obsolescenceSchema.nullable(),
+  /** Why the card is marked, in Markdown — `null` when there is no note. Stored
+   *  independently of `obsolescence`: clearing the mark does not erase the note. */
+  obsolescenceNoteMd: z.string().nullable(),
 });
 
 /**
@@ -626,6 +656,8 @@ export interface WorkItemSummarySource {
   storyPoints: number | null;
   createdAt: string;
   updatedAt: string;
+  obsolescence: WorkItemObsolescenceDto | null;
+  obsolescenceNoteMd: string | null;
 }
 
 /**
@@ -673,6 +705,8 @@ function presentWorkItemFields(
     storyPoints: source.storyPoints,
     createdAt: source.createdAt,
     updatedAt: source.updatedAt,
+    obsolescence: source.obsolescence,
+    obsolescenceNoteMd: source.obsolescenceNoteMd,
   };
 }
 
@@ -791,6 +825,8 @@ export function presentWorkItemDetail(
       storyPoints: item.storyPoints,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
+      obsolescence: item.obsolescence,
+      obsolescenceNoteMd: item.obsolescenceNoteMd,
     }),
     descriptionMd: item.descriptionMd,
     parentKey: detail.parent === null ? null : detail.parent.identifier,
@@ -991,6 +1027,11 @@ export const createWorkItemBodySchema = z
     // Leaf-only, as `type` is: a non-null value on an epic or story is refused
     // by the service as `DIFFICULTY_NOT_ALLOWED_ON_KIND` (422).
     difficulty: difficultySchema.nullish(),
+    // The OBSOLESCENCE mark (MOTIR-6581): settable on ANY kind and in ANY status —
+    // a `done` card included — with no kind refusal, unlike `difficulty`. `null`
+    // clears it. A value outside the enum is `INVALID_OBSOLESCENCE` (422).
+    obsolescence: obsolescenceSchema.nullish(),
+    obsolescenceNoteMd: z.string().nullish(),
     storyPoints: storyPointsSchema.optional(),
     estimateMinutes: estimateMinutesSchema.optional(),
     targetRepo: z.string().nullish(),
@@ -1040,6 +1081,11 @@ export const updateWorkItemBodySchema = z
     // Leaf-only, as `type` is: a non-null value on an epic or story is refused
     // by the service as `DIFFICULTY_NOT_ALLOWED_ON_KIND` (422).
     difficulty: difficultySchema.nullish(),
+    // The OBSOLESCENCE mark (MOTIR-6581): settable on ANY kind and in ANY status —
+    // a `done` card included — with no kind refusal, unlike `difficulty`. `null`
+    // clears it. A value outside the enum is `INVALID_OBSOLESCENCE` (422).
+    obsolescence: obsolescenceSchema.nullish(),
+    obsolescenceNoteMd: z.string().nullish(),
     storyPoints: storyPointsSchema.optional(),
     estimateMinutes: estimateMinutesSchema.optional(),
     targetRepo: z.string().nullish(),
@@ -1056,6 +1102,28 @@ export const updateWorkItemBodySchema = z
   })
   .strict();
 export type UpdateWorkItemBody = z.infer<typeof updateWorkItemBodySchema>;
+
+/**
+ * Body fields whose refusal carries a TYPED code of its own rather than the
+ * generic `INVALID_BODY`, per body schema (MOTIR-6581).
+ *
+ * WHY. `obsolescence` is validated TWICE, by design: here, by the enum the
+ * document publishes, and in the service, whose `InvalidObsolescenceError`
+ * (`INVALID_OBSOLESCENCE`, 422) is the backstop for a caller that bypasses the
+ * wire schema. Without this map the SAME mistake would answer two different
+ * codes depending on which check caught it — and over v1 the schema always
+ * catches it first, so the typed code would be unreachable. Mapping the schema's
+ * refusal to the service's code makes one mistake one code on every door.
+ *
+ * Keyed by schema IDENTITY, so the mapping applies to exactly these two bodies
+ * and never to an unrelated body that happens to have a field of the same name.
+ * Only a refusal AT the field itself (path `[field]`) is re-coded; the status is
+ * the same 422 either way.
+ */
+const TYPED_FIELD_REFUSALS = new WeakMap<z.ZodType, Readonly<Record<string, string>>>([
+  [createWorkItemBodySchema, { obsolescence: 'INVALID_OBSOLESCENCE' }],
+  [updateWorkItemBodySchema, { obsolescence: 'INVALID_OBSOLESCENCE' }],
+]);
 
 /**
  * Parse a request body against a schema, or raise the v1 422.
@@ -1075,8 +1143,10 @@ export async function parseV1Body<T>(req: Request, schema: z.ZodType<T>): Promis
   if (!parsed.success) {
     const first = parsed.error.issues[0];
     const at = first?.path.length ? ` at \`${first.path.join('.')}\`` : '';
+    const field = first?.path.length === 1 ? String(first.path[0]) : undefined;
+    const typedCode = field === undefined ? undefined : TYPED_FIELD_REFUSALS.get(schema)?.[field];
     throw new InvalidRequestError(
-      'INVALID_BODY',
+      typedCode ?? 'INVALID_BODY',
       `The request body is invalid${at}: ${first?.message ?? 'validation failed'}.`,
     );
   }

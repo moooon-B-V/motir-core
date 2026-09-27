@@ -338,7 +338,16 @@ describe('every operation’s REAL response validates against its declared schem
     const created = await drive(
       'createWorkItem',
       () => import('@/app/api/v1/projects/[projectKey]/work-items/route'),
-      send(`/api/v1/projects/${pk}/work-items`, 'POST', { kind: 'story', title: 'A story' }),
+      // MARKED at birth (MOTIR-6581), so every read of this item below — the
+      // collection row, the detail, the update answer — validates a NON-null
+      // obsolescence against the `$ref`'d `WorkItemObsolescence` component,
+      // rather than only the `null` branch every unmarked item exercises.
+      send(`/api/v1/projects/${pk}/work-items`, 'POST', {
+        kind: 'story',
+        title: 'A story',
+        obsolescence: 'outdated',
+        obsolescenceNoteMd: 'Kept for the drift guard.',
+      }),
       { projectKey: pk },
     );
     const key = (created.body as { key: string }).key;

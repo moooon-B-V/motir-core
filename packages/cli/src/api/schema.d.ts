@@ -28,7 +28,7 @@ export interface paths {
         put?: never;
         /**
          * Create a work item
-         * @description Create a work item in a project. The parent, if given, is named by its key and must be a kind-legal parent in the same project. Alternatively send `folderId` to file the new item into one of the project’s folders; naming both a parent and a folder is refused with `PLACEMENT_CONFLICT`.
+         * @description Create a work item in a project. The parent, if given, is named by its key and must be a kind-legal parent in the same project. Alternatively send `folderId` to file the new item into one of the project’s folders; naming both a parent and a folder is refused with `PLACEMENT_CONFLICT`. `obsolescence` (`outdated` / `deprecated`) and `obsolescenceNoteMd` may be set on any kind and in any status; a value outside the enum is refused with `INVALID_OBSOLESCENCE`.
          *
          *     Requires the `work_item:edit` permission.
          */
@@ -82,7 +82,7 @@ export interface paths {
         head?: never;
         /**
          * Update a work item
-         * @description Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field explicitly set to `null` CLEARS it. Send `If-Match` to make the update conditional on the item not having moved. `folderId` files the item into a folder (or `null` takes it out), in the same write as every other field; setting `parentKey` on a filed item takes it out of its folder, and sending both is refused with `PLACEMENT_CONFLICT`.
+         * @description Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field explicitly set to `null` CLEARS it. Send `If-Match` to make the update conditional on the item not having moved. `folderId` files the item into a folder (or `null` takes it out), in the same write as every other field; setting `parentKey` on a filed item takes it out of its folder, and sending both is refused with `PLACEMENT_CONFLICT`. `obsolescence` and `obsolescenceNoteMd` mark the item as no longer true of the code on ANY kind and in ANY status — a `done` item included — and `null` clears either; a value outside the enum is refused with `INVALID_OBSOLESCENCE`.
          *
          *     Requires the `work_item:edit` permission.
          */
@@ -1205,6 +1205,8 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            obsolescence: components["schemas"]["WorkItemObsolescence"] | null;
+            obsolescenceNoteMd: string | null;
             dependencies: {
                 blockedBy: {
                     key: string;
@@ -1239,6 +1241,8 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            obsolescence: components["schemas"]["WorkItemObsolescence"] | null;
+            obsolescenceNoteMd: string | null;
             descriptionMd: string | null;
             parentKey: string | null;
             folderId: string | null;
@@ -1727,6 +1731,8 @@ export interface components {
             type: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "choice" | "deploy" | "manual" | "legal" | "chore") | null;
             executor: ("coding_agent" | "human") | null;
             difficulty: ("trivial" | "low" | "medium" | "high") | null;
+            obsolescence: components["schemas"]["WorkItemObsolescence"] | null;
+            obsolescenceNoteMd: string | null;
             assigneeId: string | null;
             assignee: {
                 id: string;
@@ -2422,6 +2428,8 @@ export interface components {
             movedFolderIds: string[];
             movedWorkItemIds: string[];
         };
+        /** @enum {string} */
+        WorkItemObsolescence: "outdated" | "deprecated";
     };
     responses: never;
     parameters: never;
@@ -2612,6 +2620,8 @@ export interface operations {
                     type?: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "choice" | "deploy" | "manual" | "legal" | "chore") | null;
                     executor?: ("coding_agent" | "human") | null;
                     difficulty?: ("trivial" | "low" | "medium" | "high") | null;
+                    obsolescence?: components["schemas"]["WorkItemObsolescence"] | null;
+                    obsolescenceNoteMd?: string | null;
                     storyPoints?: number | null;
                     estimateMinutes?: number | null;
                     targetRepo?: string | null;
@@ -3065,6 +3075,8 @@ export interface operations {
                     type?: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "choice" | "deploy" | "manual" | "legal" | "chore") | null;
                     executor?: ("coding_agent" | "human") | null;
                     difficulty?: ("trivial" | "low" | "medium" | "high") | null;
+                    obsolescence?: components["schemas"]["WorkItemObsolescence"] | null;
+                    obsolescenceNoteMd?: string | null;
                     storyPoints?: number | null;
                     estimateMinutes?: number | null;
                     targetRepo?: string | null;

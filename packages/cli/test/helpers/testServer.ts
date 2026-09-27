@@ -265,6 +265,8 @@ export function v1ReadyRow(key: string, over: Record<string, unknown> = {}) {
     type: 'code',
     executor: 'coding_agent',
     difficulty: null,
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     assigneeId: null,
     assignee: null,
     descriptionExcerpt: null,
@@ -341,6 +343,9 @@ export function v1Detail(key: string, over: Record<string, unknown> = {}) {
     storyPoints: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+    // The OBSOLESCENCE mark (MOTIR-6581) — required-and-nullable on the detail.
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     descriptionMd: null,
     parentKey: null,
     folderId: null,
@@ -505,6 +510,8 @@ export function v1WorkItem(key: string, over: Record<string, unknown> = {}) {
     storyPoints: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     dependencies: v1Edges(),
     ...over,
   };

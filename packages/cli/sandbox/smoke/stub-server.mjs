@@ -110,6 +110,9 @@ const ITEMS = Array.from({ length: ITEM_COUNT }, (_unused, i) => ({
   type: 'code',
   executor: 'coding_agent',
   difficulty: null,
+  // The OBSOLESCENCE mark (MOTIR-6581) — a real ReadyItem carries both.
+  obsolescence: null,
+  obsolescenceNoteMd: null,
   // The READY row stays unclaimed: the loop re-reads the set each iteration, and
   // an item it already took is held out by its STATUS (in review), not by the
   // claim — so leaving this null keeps the fixture honest about which rule does
@@ -349,6 +352,8 @@ function workItemDetail(key) {
     storyPoints: null,
     createdAt: NOW,
     updatedAt: NOW,
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     descriptionMd: null,
     parentKey: null,
     folderId: null,

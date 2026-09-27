@@ -611,5 +611,27 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.40.0` at `b4588d153`, so this claims `1.41.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD.
+ *
+ * - `1.42.0` — MOTIR-6581 adds a work item's OBSOLESCENCE mark: `obsolescence`
+ *   (`outdated` / `deprecated`, nullable) and `obsolescenceNoteMd` (Markdown,
+ *   nullable) on `WorkItemDetail`, on the `WorkItemSummary` collection row and on
+ *   the `ReadyItem` row, and as optional fields on the `createWorkItem` /
+ *   `updateWorkItem` bodies (`null` clears either), on ANY kind and in ANY
+ *   status. The enum is ONE new named component, `WorkItemObsolescence`, that
+ *   every carrier `$ref`s. `INVALID_OBSOLESCENCE` (422) is the refusal for a
+ *   value outside it — from the body schema and the service alike. The SAME
+ *   story's MOTIR-6580 rides this entry too: the `supersedes` / `superseded_by`
+ *   members of the links route's `relationship` enum, and the `supersedes` /
+ *   `supersededBy` groups on `WorkItemLinkGroups` (newer item supersedes older).
+ *
+ *   Additive: new nullable response fields, new optional request fields, a new
+ *   component, new enum members and link groups, and a new code for a new
+ *   condition (§8's allowed list); no
+ *   declared field changes meaning, and a marked card is neither hidden from nor
+ *   re-sorted in any read. Gated on the same keys.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.41.0` at `ac061991f`, so this claims `1.42.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.41.0';
+export const V1_CONTRACT_VERSION = '1.42.0';
