@@ -773,7 +773,10 @@ describe('a container that did not index FAILS the run', () => {
     expect(error?.message).toContain('never_started');
     expect(error?.message).toContain('the container never started');
     // It was still torn down: a machine nothing destroys is billed until the reaper.
-    expect(fakeOrchestrator.teardowns).toHaveLength(1);
+    // `never_started` is re-dispatchable (MOTIR-6586), so there were two, and
+    // both were destroyed.
+    expect(fakeOrchestrator.teardowns).toHaveLength(2);
+    expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
     expect((await indexRuns()).filter((run) => run.status === 'succeeded')).toEqual([]);
   }, 30_000);
 
