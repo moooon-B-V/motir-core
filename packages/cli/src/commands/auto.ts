@@ -60,6 +60,7 @@ import {
 import { inLane, renderElsewhereAnchored, renderLaneDecline, type Lane } from '../replanLane.js';
 import {
   ensureSessionBranchOnOrigin,
+  mergeBaseIntoRemoteBranch,
   execCommand,
   workReachedRemote,
   GitError,
@@ -206,6 +207,12 @@ export class RepoSessions {
   constructor(
     private readonly branch: string,
     private readonly run: CommandRunner,
+    /**
+     * A RESUMED scope (MOTIR-6535, `motir continue <parent>`): a session branch
+     * already on origin is the dead run's, and `origin/main` is merged into it
+     * before the first child builds on it. A fresh run never sets this.
+     */
+    private readonly opts: { mergeBaseOnReuse?: boolean } = {},
   ) {}
 
   /**
@@ -276,6 +283,16 @@ export class RepoSessions {
           ? `Session branch ${this.branch} created on origin in ${target.cwd}.`
           : `Session branch ${this.branch} already on origin in ${target.cwd} — reusing it.`,
       );
+      if (outcome === 'already_on_origin' && this.opts.mergeBaseOnReuse) {
+        const merged = mergeBaseIntoRemoteBranch(target.cwd, this.branch, this.run);
+        info(
+          merged === 'merged'
+            ? `Merged origin/main into ${this.branch} in ${target.cwd}.`
+            : merged === 'up_to_date'
+              ? `${this.branch} already contains origin/main in ${target.cwd}.`
+              : `origin/main does not merge cleanly into ${this.branch} in ${target.cwd} — left as it was; each child merges it itself.`,
+        );
+      }
       return { repoName: target.targetRepo, cwd: target.cwd, branch: this.branch, keys: [] };
     } catch (err) {
       if (!opts.tolerateFailure) throw err;

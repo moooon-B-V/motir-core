@@ -9,7 +9,15 @@ import type { LinkConfig } from '../config/linkConfig.js';
 import { info } from '../output.js';
 import { withProjectSession } from '../session.js';
 import { requireAgent } from './auto.js';
-import { deliver, type DeliveryDeps, type DeliveryOptions } from './dispatch.js';
+import {
+  deliver,
+  resolveOwnerId,
+  runClaimedScope,
+  type DeliveryDeps,
+  type RunOptions,
+} from './dispatch.js';
+import { claimScopeForRun } from './scope.js';
+import { runIdFromDate } from '../git.js';
 
 // `motir continue <key>` (Story MOTIR-6526 · MOTIR-6533,
 // `docs/decisions/run-death-keeps-work.md` §4) — carry on the work of a run that
@@ -34,7 +42,9 @@ import { deliver, type DeliveryDeps, type DeliveryOptions } from './dispatch.js'
 // worktree is reused AS FOUND, dirty or clean — the claim proved its run dead, so
 // nobody else is in it — and one on another branch is a refusal naming it.
 
-export type ContinueOptions = DeliveryOptions;
+/** `motir run`'s options: a card continue uses its delivery flags, a parent
+ *  continue its scope flags (`--max`, `--keep-going`). */
+export type ContinueOptions = RunOptions;
 
 /** Injectable seams; never overridden in production. */
 export interface ContinueDeps extends DeliveryDeps {
@@ -181,7 +191,7 @@ export async function continueCommand(
     const { client, link } = session;
     // The agent is resolved BEFORE the claim: a continue nobody can run must not
     // take a card over and then have to hand it back.
-    requireAgent({ ...opts, print: false }, 'motir continue');
+    const agent = requireAgent({ ...opts, print: false }, 'motir continue');
 
     const claim = await client.claimWorkItemContinue(trimmed);
     if (claim.outcome !== 'claimed' && claim.outcome !== 'mine') {
@@ -190,6 +200,11 @@ export async function continueCommand(
       return;
     }
     info(renderTakeover(claim));
+
+    if (claim.mode === 'parent') {
+      await continueParent({ session, claim, opts, deps, agent });
+      return;
+    }
 
     // The run the SERVER opened, adopted — so this process heartbeats it and
     // closes it `interrupted` on a signal (MOTIR-6530), exactly as a `motir run`.
@@ -240,5 +255,64 @@ export async function continueCommand(
       deps,
       reporter,
     });
+  });
+}
+
+/**
+ * `motir continue <PARENT>` (Story MOTIR-6526 · MOTIR-6535) — the dead run was a
+ * SCOPED run over this container, so the WHOLE scope resumes: on the dead run's
+ * session branch (with `origin/main` merged into it first), through its existing
+ * draft pull request (`openSessionPr` finds it by head, so no second one opens),
+ * dispatching only what has not landed.
+ *
+ * The drain is `motir run <parent>`'s own (`runClaimedScope`), not a copy: the
+ * scope claim recomputes the set from what is ready NOW — the claim re-assigned
+ * the dead run's in-flight legs to the caller, so they come back as `mine`, and a
+ * leg already Implemented or later is not in that set at all.
+ */
+async function continueParent(input: {
+  session: Parameters<Parameters<typeof withProjectSession>[0]>[0];
+  claim: WorkItemContinueClaim;
+  opts: ContinueOptions;
+  deps: ContinueDeps;
+  agent: ReturnType<typeof requireAgent>;
+}): Promise<void> {
+  const { session, claim, opts, deps, agent } = input;
+  const reporter = createDispatchRunReporter({
+    client: session.client,
+    reportLogBodies: opts.reportLog === true,
+  });
+  reporter.adopt(claim.runId as string);
+
+  if (claim.landedKeys.length > 0) {
+    info(`Already landed — not run again: ${claim.landedKeys.join(', ')}.`);
+    reporter.event({ kind: 'log', data: { alreadyLanded: claim.landedKeys } });
+  }
+
+  const target = { kind: 'work_item' as const, key: claim.key };
+  const ownerId = await resolveOwnerId(session.client);
+  const claimed = await claimScopeForRun(session, target, opts, ownerId);
+  if (!claimed) {
+    // Nothing left to dispatch (or the scope claim refused and said why).
+    await reporter.close('completed');
+    return;
+  }
+  const branch = claim.branch as string;
+  // The run id the session branch was minted from, so the pull request's title
+  // and body keep naming the run the reviewer has been following.
+  const runId = branch.startsWith('motir/auto-')
+    ? branch.slice('motir/auto-'.length)
+    : runIdFromDate((deps.now ?? (() => new Date()))());
+  await runClaimedScope({
+    session,
+    target,
+    claimed,
+    opts,
+    deps,
+    agent,
+    runId,
+    branch,
+    reporter,
+    resumeBranch: true,
   });
 }

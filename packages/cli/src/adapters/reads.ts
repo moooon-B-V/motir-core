@@ -673,6 +673,8 @@ export function toWorkItemContinueClaim(
         }
       : null,
     previousAssignee: ref(body.previousAssignee),
+    mode: body.mode,
+    landedKeys: [...body.landedKeys],
   };
 }
 

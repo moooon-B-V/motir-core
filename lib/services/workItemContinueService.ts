@@ -8,6 +8,7 @@ import type {
   WorkItemContinueRefusal,
   WorkItemContinueViewDto,
 } from '@/lib/dto/workItemContinue';
+import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import {
   dispatchRunRepository,
@@ -131,6 +132,13 @@ export async function resolveContinueBranch(
   );
   if (recorded !== null) return { branch: recorded, pullRequest: null };
   if (leg?.sessionBranch) return { branch: leg.sessionBranch, pullRequest: null };
+  // A SCOPE run's container holds no leg of its own: its branch is the session
+  // branch its legs were integrated onto (MOTIR-6535) — one name across repos.
+  if (leg === null) {
+    const legs = await dispatchRunCardRepository.listByRun(run.id, tx);
+    const session = legs.find((l) => l.sessionBranch !== null)?.sessionBranch ?? null;
+    if (session !== null) return { branch: session, pullRequest: null };
+  }
   // A `continue` run that has not checked out yet still KNOWS its branch: the
   // claim wrote it onto the run's `run_opened` event. Without this, a continue
   // that dies before its checkout could not be continued again.
@@ -254,6 +262,8 @@ function refused(
     branch: null,
     pullRequest: null,
     previousAssignee: null,
+    mode: 'card',
+    landedKeys: [],
     ...extra,
   };
 }
@@ -316,6 +326,8 @@ export const workItemContinueService = {
             branch,
             pullRequest: null,
             previousAssignee: null,
+            mode: verdict.run.scopeWorkItemId === item.id ? 'parent' : 'card',
+            landedKeys: [],
           };
         }
         if (verdict.kind === 'alive') {
@@ -353,6 +365,26 @@ export const workItemContinueService = {
           };
         }
 
+        // A PARENT run (MOTIR-6535): the dead run was SCOPED to this container, so
+        // the takeover is of the whole scope — its legs that are still In Progress
+        // are re-assigned too (so the scope claim that follows answers `mine`),
+        // and the ones already landed are named, so they are never re-dispatched.
+        const parent = verdict.run.scopeWorkItemId === item.id;
+        const deadLegs = parent ? await dispatchRunCardRepository.listByRun(deadRun.id, tx) : [];
+        const legKeys = deadLegs.map((l) => l.workItemKey).filter((k): k is string => k !== null);
+        const legItems = await workItemRepository.findByIdentifiers(projectId, legKeys, tx);
+        const landedKeys: string[] = [];
+        const inFlight: string[] = [];
+        for (const leg of legItems) {
+          const rank = rankOfStatus(leg.status, statuses, ladderKeysOf(statuses));
+          if (rank >= RUNG_RANK.implemented) landedKeys.push(leg.identifier);
+          else if (leg.status === IN_PROGRESS_STATUS_KEY) inFlight.push(leg.id);
+        }
+        if (inFlight.length > 0) await workItemRepository.lockByIds(inFlight, tx);
+        for (const id of inFlight) {
+          await workItemRepository.update(id, { assigneeId: ctx.userId }, tx);
+        }
+
         const previousAssignee =
           state.assigneeId === null
             ? null
@@ -363,7 +395,14 @@ export const workItemContinueService = {
 
         const opened = await dispatchRunService.openWithin(
           projectId,
-          { command: 'continue', cards: [{ key: item.identifier, disposition: 'queued' }] },
+          parent
+            ? {
+                command: 'continue',
+                scopeKey: item.identifier,
+                scopeLabel: item.identifier,
+                cards: legKeys.map((key) => ({ key, disposition: 'queued' as const })),
+              }
+            : { command: 'continue', cards: [{ key: item.identifier, disposition: 'queued' }] },
           ctx,
           tx,
         );
@@ -398,6 +437,8 @@ export const workItemContinueService = {
           branch: verdict.branch,
           pullRequest: verdict.pullRequest,
           previousAssignee,
+          mode: parent ? 'parent' : 'card',
+          landedKeys: landedKeys.sort(),
         };
       },
     );

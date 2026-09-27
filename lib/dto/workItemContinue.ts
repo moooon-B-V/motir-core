@@ -96,6 +96,15 @@ export interface WorkItemContinueClaimDto {
   pullRequest: ContinuePullRequestDto | null;
   /** Who the item was assigned to before this claim took it over. */
   previousAssignee: ClaimActorDto | null;
+  /**
+   * `parent` when the dead run was a SCOPED run over this container (MOTIR-6535):
+   * the continue resumes the whole scope on `branch`, the session branch. `card`
+   * otherwise.
+   */
+  mode: 'card' | 'parent';
+  /** The dead scope run's legs that already LANDED (Implemented or later) — never
+   *  re-dispatched. Empty for a card. */
+  landedKeys: string[];
 }
 
 /**

@@ -2299,6 +2299,11 @@ export const workItemContinueClaimSchema = z.object({
     .nullable(),
   /** Who the item was assigned to before this claim took it over. */
   previousAssignee: actorRefSchema.nullable(),
+  /** `parent` when the dead run was a SCOPED run over this container: the whole
+   *  scope resumes on `branch`, the session branch. */
+  mode: z.enum(['card', 'parent']),
+  /** The dead scope run's legs already landed — never re-dispatched. */
+  landedKeys: z.array(workItemKeySchema),
 });
 export type V1WorkItemContinueClaim = z.infer<typeof workItemContinueClaimSchema>;
 
@@ -2340,5 +2345,7 @@ export function presentWorkItemContinueClaim(
             headRef: dto.pullRequest.headRef,
           },
     previousAssignee: ref(dto.previousAssignee),
+    mode: dto.mode,
+    landedKeys: [...dto.landedKeys],
   };
 }

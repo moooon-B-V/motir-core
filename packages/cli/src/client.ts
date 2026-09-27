@@ -701,6 +701,10 @@ export interface WorkItemContinueClaim {
   branch: string | null;
   pullRequest: { repo: string; number: number; url: string; headRef: string } | null;
   previousAssignee: { id: string; name: string } | null;
+  /** `parent` when the dead run was a scoped run over this container (MOTIR-6535). */
+  mode: 'card' | 'parent';
+  /** The dead scope run's legs that already landed — never re-dispatched. */
+  landedKeys: string[];
 }
 
 export interface WorkItemRepairClaim {

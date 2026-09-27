@@ -90,6 +90,11 @@ export interface ScopeDrainInput {
    * skipped ones entirely.
    */
   reporter?: DispatchRunReporter;
+  /**
+   * `branch` is a DEAD run's session branch being resumed (MOTIR-6535): reuse it,
+   * and merge `origin/main` into it before the first child. Unset for a fresh run.
+   */
+  resumeBranch?: boolean;
 }
 
 /**
@@ -114,7 +119,7 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
   const records: DispatchRecord[] = [];
   const skipped: SkipRecord[] = [];
   const planning: PlanningRecord[] = [];
-  const repos = new RepoSessions(branch, run);
+  const repos = new RepoSessions(branch, run, { mergeBaseOnReuse: input.resumeBranch === true });
   /** Cards that have LANDED — what an in-scope blocker is satisfied by. */
   const satisfied = new Set<string>();
   /**

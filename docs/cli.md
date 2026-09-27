@@ -412,7 +412,10 @@ local run tells Motir it is alive once a minute; five minutes of silence and the
 page says its run **died**, with the branch its work is on. The card keeps its status.
 Anyone who may edit the project carries it on with **`motir continue <key>`**, which
 checks that branch out — reusing the worktree when it is on this machine — and finishes
-the card in one pull request. Starting over instead is a deliberate act: set the card
+the card in one pull request. On a **parent** whose `motir run <parent>` died,
+`motir continue <parent>` resumes the whole scope on the dead run's session branch —
+merging `origin/main` into it first, reusing its draft pull request, and never
+re-running a child that already landed. Starting over instead is a deliberate act: set the card
 to **To Do** and `motir run` it. Pressing Ctrl-C closes the run as _interrupted_, and
 the card stays where it was.
 

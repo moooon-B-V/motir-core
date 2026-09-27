@@ -1,0 +1,378 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { resolveFakeClaim } from './helpers/fakeClaim.js';
+import type { CommandRunner } from '../src/git.js';
+import type {
+  DispatchItem,
+  DispatchPrompt,
+  ScopeClaim,
+  WorkItemContinueClaim,
+  WorkItemDetail,
+} from '../src/client.js';
+
+// `motir continue <PARENT>` (Story MOTIR-6526 · MOTIR-6535) — a dead SCOPED run
+// resumes through `motir run <parent>`'s own drain, on the dead run's session
+// branch, through its existing draft pull request, and never re-runs a landed
+// child. Driven through the real `continueCommand` against a scripted client and
+// a recording git/gh, the same shape as `scopeCommand.test.ts`.
+
+const { runAgentMock, sessionRef } = vi.hoisted(() => ({
+  runAgentMock: vi.fn(),
+  sessionRef: { current: null as unknown },
+}));
+
+vi.mock('../src/agentRun.js', () => ({ runAgent: runAgentMock }));
+vi.mock('../src/session.js', () => ({
+  withProjectSession: async (fn: (s: unknown) => Promise<unknown>) => fn(sessionRef.current),
+}));
+
+const { continueCommand } = await import('../src/commands/continue.js');
+const { mergeBaseIntoRemoteBranch } = await import('../src/git.js');
+
+const SERVER = 'https://app.motir.co';
+const OWNER = 'user_me';
+
+/** A child row: a bare key is `todo`, or `KEY@status` pins one. */
+function childRow(spec: string): WorkItemDetail['children'][number] {
+  const [key = spec, status = 'todo'] = spec.split('@');
+  return {
+    identifier: key,
+    kind: 'subtask',
+    title: `Item ${key}`,
+    status,
+    dependencies: { blockedBy: [], blocks: [] },
+  };
+}
+
+function detail(
+  over: Partial<WorkItemDetail['item']> = {},
+  children: string[] = [],
+): WorkItemDetail {
+  return {
+    item: {
+      identifier: 'PROD-1',
+      kind: 'story',
+      title: 'The story',
+      status: 'todo',
+      priority: 'high',
+      assigneeId: null,
+      type: null,
+      executor: null,
+      storyPoints: null,
+      estimateMinutes: null,
+      targetRepo: 'motir-core',
+      sprintId: null,
+      descriptionMd: null,
+      ...over,
+    },
+    ancestors: [],
+    children: children.map(childRow),
+    blockedBy: [],
+    blocks: [],
+    relatesTo: [],
+    readiness: { ready: true, openBlockers: [], blockedByAncestor: null },
+  };
+}
+
+function readyRow(key: string): DispatchItem {
+  return {
+    key,
+    kind: 'subtask',
+    title: `Item ${key}`,
+    priority: 'medium',
+    status: { key: 'todo', category: 'todo' },
+    assigneeId: null,
+    type: 'code',
+    executor: 'coding_agent',
+    inheritedSessionBranch: null,
+  };
+}
+
+function scopeClaim(over: Partial<ScopeClaim> = {}): ScopeClaim {
+  return {
+    scope: { kind: 'work_item', key: 'PROD-1', sprintId: null, name: 'The story' },
+    outcome: 'claimed',
+    claimed: true,
+    members: [
+      {
+        key: 'PROD-1',
+        title: 'The story',
+        status: { key: 'in_progress', category: 'in_progress' },
+      },
+      {
+        key: 'PROD-2',
+        title: 'Item PROD-2',
+        status: { key: 'in_progress', category: 'in_progress' },
+      },
+    ],
+    offender: null,
+    shape: null,
+    blockers: [],
+    ...over,
+  };
+}
+
+const BRANCH = 'motir/auto-20260927-0900';
+const ok = (stdout = '') => ({ exitCode: 0, stdout, stderr: '' });
+
+function parentClaim(over: Partial<WorkItemContinueClaim> = {}): WorkItemContinueClaim {
+  return {
+    key: 'PROD-1',
+    title: 'The story',
+    outcome: 'claimed',
+    reason: null,
+    parentKey: null,
+    runId: 'run_continue_parent',
+    holder: { id: OWNER, name: 'Me' },
+    startedAt: '2026-09-27T10:00:00.000Z',
+    deadRun: {
+      id: 'run_dead_scope',
+      command: 'run_scope',
+      origin: 'local',
+      status: 'timed_out',
+      stopReason: 'abandoned',
+      lastHeardAt: '2026-09-27T09:50:00.000Z',
+      dispatcher: { id: 'user_mara', name: 'Mara S.' },
+    },
+    branch: BRANCH,
+    pullRequest: null,
+    previousAssignee: { id: 'user_mara', name: 'Mara S.' },
+    mode: 'parent',
+    landedKeys: ['PROD-2'],
+    ...over,
+  };
+}
+
+interface H {
+  calls: { tool: string; args: unknown }[];
+  commands: string[];
+  stderr: string;
+  root: string;
+}
+let h: H;
+
+/** git/gh that RECORDS: the dead run's branch is ON ORIGIN and behind main, and
+ *  it already has an OPEN pull request (the draft) — so the resume must merge
+ *  main in, and must not `gh pr create` a second one. */
+function recordingGit(): CommandRunner {
+  return (bin, args) => {
+    h.commands.push([bin, ...args].join(' '));
+    if (bin === 'git' && args[0] === 'rev-parse' && args[3] === `refs/remotes/origin/${BRANCH}`)
+      return ok('abc');
+    if (bin === 'git' && args[0] === 'merge-base') return { exitCode: 1, stdout: '', stderr: '' };
+    if (bin === 'git' && args[0] === 'rev-list' && args[1] === '--count') return ok('1');
+    if (bin === 'git' && (args[0] === 'ls-remote' || args[0] === 'log'))
+      return ok(`abc\trefs/heads/${BRANCH}`);
+    if (bin === 'gh' && args[1] === 'list' && !args.includes('isDraft')) {
+      return ok('https://github.com/moooon/motir-core/pull/77');
+    }
+    return ok();
+  };
+}
+
+function setup() {
+  const calls: H['calls'] = [];
+  const root = mkdtempSync(join(tmpdir(), 'motir-continue-parent-'));
+  mkdirSync(join(root, 'motir-core'));
+  // Only the NOT-landed child is ready: PROD-2 is Implemented, PROD-3 is in flight.
+  const ready: DispatchItem[] = [readyRow('PROD-3')];
+  const client = {
+    whoami: async () => ({
+      user: { id: OWNER, name: 'Me', email: 'me@motir.test' },
+      workspace: null,
+    }),
+    claimWorkItemContinue: async (key: string) => {
+      calls.push({ tool: 'claim_continue', args: key });
+      return parentClaim();
+    },
+    getWorkItem: async (key: string) => {
+      calls.push({ tool: 'get_work_item', args: key });
+      return detail({ status: 'in_progress' }, ['PROD-2@implemented', 'PROD-3@in_progress']);
+    },
+    listReadyForDispatch: async (args: unknown) => {
+      calls.push({ tool: 'list_ready', args });
+      return ready;
+    },
+    claimScope: async (args: unknown) => {
+      calls.push({ tool: 'claim_scope', args });
+      return scopeClaim({
+        outcome: 'mine',
+        members: [
+          {
+            key: 'PROD-1',
+            title: 'The story',
+            status: { key: 'in_progress', category: 'in_progress' },
+          },
+          {
+            key: 'PROD-3',
+            title: 'Item PROD-3',
+            status: { key: 'in_progress', category: 'in_progress' },
+          },
+        ],
+      } as Partial<ScopeClaim>);
+    },
+    claimWorkItem: async (args: { key: string }) => {
+      calls.push({ tool: 'claim', args });
+      return resolveFakeClaim(
+        { key: args.key, title: `Item ${args.key}`, status: 'in_progress', assigneeId: OWNER },
+        { id: OWNER, name: 'Me' },
+      ).claim;
+    },
+    searchWorkItems: async () => ({
+      items: ready.map((r) => ({
+        identifier: r.key,
+        kind: r.kind,
+        title: r.title,
+        status: 'in_progress',
+        dependencies: { blockedBy: [], blocks: [] },
+      })),
+      nextCursor: null,
+    }),
+    dispatchPrompt: async (
+      key: string,
+      opts: { sessionBranch?: string },
+    ): Promise<DispatchPrompt> => {
+      calls.push({ tool: 'dispatch_prompt', args: { key, sessionBranch: opts?.sessionBranch } });
+      return {
+        key,
+        prompt: `PROMPT ${key}`,
+        parentKey: 'PROD-1',
+        targetRepo: 'motir-core',
+        workflowMode: 'session_lineage',
+        sessionBranch: opts?.sessionBranch ?? null,
+      };
+    },
+    markIntegrated: async (args: unknown) => {
+      calls.push({ tool: 'mark_integrated', args });
+      return {};
+    },
+    openDispatchRun: async (args: unknown) => {
+      calls.push({ tool: 'open_run', args });
+      return { runId: 'should-not-open', created: true };
+    },
+    appendDispatchRunEvents: async (args: { events: unknown[] }) => {
+      calls.push({ tool: 'append', args });
+      return { runId: 'x', appended: args.events.length, seq: 1 };
+    },
+    closeDispatchRun: async (args: unknown) => {
+      calls.push({ tool: 'close_run', args });
+    },
+    heartbeatDispatchRun: async () => 'ok' as const,
+    dispatchRunCloseOutPrompt: async () => ({
+      targetKey: 'PROD-1',
+      prompt: 'CLOSE OUT',
+      landedKeys: [],
+    }),
+    workItemHowToTest: async () => null,
+    transitionStatus: async (args: unknown) => {
+      calls.push({ tool: 'transition_status', args });
+    },
+    linkPullRequest: async (args: unknown) => {
+      calls.push({ tool: 'link_pr', args });
+      return {};
+    },
+  };
+  sessionRef.current = {
+    client,
+    serverUrl: SERVER,
+    projectKey: 'PROD',
+    link: {
+      dir: root,
+      path: join(root, '.motir.json'),
+      config: { serverUrl: SERVER, workspace: 'moooon', project: 'PROD' },
+    },
+  };
+  h = { calls, commands: [], stderr: '', root };
+  vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+    h.stderr += String(chunk);
+    return true;
+  });
+  vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+}
+
+beforeEach(() => {
+  process.env['MOTIR_CONFIG_HOME'] = mkdtempSync(join(tmpdir(), 'motir-cfg-'));
+  runAgentMock.mockReset();
+  runAgentMock.mockImplementation(async () => ({ exitCode: 0, signal: null, model: null }));
+  process.exitCode = undefined;
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  if (h?.root) rmSync(h.root, { recursive: true, force: true });
+  process.exitCode = undefined;
+});
+
+describe('motir continue <PARENT>', () => {
+  it('resumes on the dead run’s session branch, merges main first, reuses the draft, and never re-runs a landed child', async () => {
+    setup();
+    await continueCommand(
+      'PROD-1',
+      { agent: 'fake-agent' },
+      {
+        run: recordingGit(),
+        clock: () => 0,
+        now: () => new Date(0),
+      },
+    );
+
+    // The dead run's BRANCH, not a freshly minted one: every child's prompt is
+    // asked for with it as the session branch.
+    const prompts = h.calls.filter((c) => c.tool === 'dispatch_prompt');
+    expect(prompts.map((p) => p.args)).toEqual([{ key: 'PROD-3', sessionBranch: BRANCH }]);
+    // The LANDED child is never dispatched, and is named.
+    // ONE child agent (the other spawn is the close-out's How-to-test agent).
+    expect(
+      runAgentMock.mock.calls.filter((c) => String(c[0].prompt).startsWith('PROMPT ')),
+    ).toHaveLength(1);
+    expect(h.stderr).toContain('Already landed — not run again: PROD-2.');
+    // origin/main is merged into the reused branch BEFORE any child runs.
+    const mergeAt = h.commands.findIndex((c) => c.startsWith('git merge --no-edit origin/main'));
+    expect(mergeAt).toBeGreaterThan(-1);
+    expect(h.commands.some((c) => c.startsWith(`git push origin HEAD:refs/heads/${BRANCH}`))).toBe(
+      true,
+    );
+    // NO SECOND PULL REQUEST: the draft is found by its head and reused.
+    expect(h.commands.some((c) => c.startsWith('gh pr create'))).toBe(false);
+    // The run is the server's, adopted — never a second one opened.
+    expect(h.calls.map((c) => c.tool)).not.toContain('open_run');
+  });
+});
+
+describe('mergeBaseIntoRemoteBranch', () => {
+  const run = (answers: Record<string, number>): { run: CommandRunner; seen: string[] } => {
+    const seen: string[] = [];
+    return {
+      seen,
+      run: (_bin, args) => {
+        const line = args.join(' ');
+        seen.push(line);
+        const code = Object.entries(answers).find(([k]) => line.startsWith(k))?.[1] ?? 0;
+        return { exitCode: code, stdout: '', stderr: '' };
+      },
+    };
+  };
+
+  it('up_to_date when the branch already contains the base — touches nothing', () => {
+    const r = run({ 'merge-base': 0 });
+    expect(mergeBaseIntoRemoteBranch('/r', BRANCH, r.run)).toBe('up_to_date');
+    expect(r.seen.some((l) => l.startsWith('worktree'))).toBe(false);
+  });
+
+  it('merges in a throwaway worktree and pushes', () => {
+    const r = run({ 'merge-base': 1 });
+    expect(mergeBaseIntoRemoteBranch('/r', BRANCH, r.run)).toBe('merged');
+    expect(r.seen).toContain(`push origin HEAD:refs/heads/${BRANCH}`);
+    expect(r.seen.some((l) => l.startsWith('worktree remove --force'))).toBe(true);
+  });
+
+  it('a conflict is ABORTED and reported — nothing pushed', () => {
+    const r = run({ 'merge-base': 1, 'merge --no-edit': 1 });
+    expect(mergeBaseIntoRemoteBranch('/r', BRANCH, r.run)).toBe('conflict');
+    expect(r.seen).toContain('merge --abort');
+    expect(r.seen.some((l) => l.startsWith('push'))).toBe(false);
+    expect(r.seen.some((l) => l.startsWith('worktree remove --force'))).toBe(true);
+  });
+});

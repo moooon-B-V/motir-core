@@ -365,3 +365,96 @@ describe('the branch is read from EITHER checkout_ready shape', () => {
     expect((await claim(fx, card.identifier)).branch).toBe('subtask/per-repo');
   });
 });
+
+describe('claimContinue — a PARENT whose scope run died (MOTIR-6535)', () => {
+  it('takes the whole scope over on the session branch and names what already landed', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'the story' });
+    const landed = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'first',
+      parentId: story.id,
+    });
+    const inFlight = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'second',
+      parentId: story.id,
+    });
+    const waiting = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'third',
+      parentId: story.id,
+    });
+    await setStatus(story.id, 'in_progress');
+    await setStatus(landed.id, 'implemented');
+    await setStatus(inFlight.id, 'in_progress');
+    for (const id of [story.id, landed.id, inFlight.id]) {
+      await adminDb.workItem.update({ where: { id }, data: { assigneeId: fx.ownerId } });
+    }
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run_scope',
+        scopeKey: story.identifier,
+        cards: [landed, inFlight, waiting].map((c) => ({
+          key: c.identifier,
+          disposition: 'queued' as const,
+        })),
+      },
+      fx.ctx,
+    );
+    await dispatchRunService.appendEvents(
+      run.id,
+      [
+        {
+          kind: 'card_settled',
+          workItemKey: landed.identifier,
+          disposition: 'integrated',
+          sessionBranch: 'motir/auto-20260927-0900',
+        },
+      ],
+      fx.ctx,
+    );
+    await adminDb.dispatchRun.update({
+      where: { id: run.id },
+      data: { lastHeartbeatAt: new Date(Date.now() - 8 * 60_000) },
+    });
+    const other = await member(fx, 'Jo Pace');
+
+    const result = await claim(fx, story.identifier, other.ctx);
+
+    expect(result).toMatchObject({
+      outcome: 'claimed',
+      mode: 'parent',
+      branch: 'motir/auto-20260927-0900',
+      landedKeys: [landed.identifier],
+      deadRun: { id: run.id, stopReason: 'abandoned' },
+    });
+    // The container AND its in-flight leg are the claimant's now; the landed one
+    // and the never-started one are untouched; no status moved.
+    const rows = await adminDb.workItem.findMany({
+      where: { id: { in: [story.id, landed.id, inFlight.id, waiting.id] } },
+    });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(story.id)).toMatchObject({ assigneeId: other.user.id, status: 'in_progress' });
+    expect(byId.get(inFlight.id)).toMatchObject({
+      assigneeId: other.user.id,
+      status: 'in_progress',
+    });
+    expect(byId.get(landed.id)).toMatchObject({ assigneeId: fx.ownerId, status: 'implemented' });
+    // The continue run is scoped to the container and carries the dead run's legs.
+    const opened = await adminDb.dispatchRun.findUniqueOrThrow({
+      where: { id: result.runId! },
+      include: { cards: { orderBy: { position: 'asc' } } },
+    });
+    expect(opened).toMatchObject({ command: 'continue', scopeWorkItemId: story.id });
+    expect(opened.cards.map((c) => c.workItemKey)).toEqual([
+      landed.identifier,
+      inFlight.identifier,
+      waiting.identifier,
+    ]);
+    expect(await workItemContinueService.getContinueView(story.id, fx.ctx)).toMatchObject({
+      state: 'continuing',
+    });
+  });
+});

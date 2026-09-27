@@ -50,6 +50,8 @@ function claim(over: Partial<WorkItemContinueClaim> = {}): WorkItemContinueClaim
     branch: BRANCH,
     pullRequest: null,
     previousAssignee: { id: 'user_mara', name: 'Mara S.' },
+    mode: 'card',
+    landedKeys: [],
     ...over,
   };
 }

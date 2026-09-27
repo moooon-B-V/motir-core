@@ -21,13 +21,20 @@ import {
   refuseLeafOnlyFlag,
   resolveScopeTarget,
   softBlockAncestor,
+  type ClaimedScope,
   type ScopeRunOptions,
 } from './scope.js';
-import { orderClaimedSet } from '../scopedRun.js';
+import { orderClaimedSet, type ScopeTarget } from '../scopedRun.js';
 import { drainScope } from './scopeDrain.js';
 import { runCloseOutHowToTest } from '../closeOutHowToTest.js';
 import { autoExitCode, renderAutoSummary } from '../autoLoop.js';
-import { closeOutContainer, closeOutRepos, parseMax, requireAgent } from './auto.js';
+import {
+  closeOutContainer,
+  closeOutRepos,
+  parseMax,
+  requireAgent,
+  type ResolvedAgent,
+} from './auto.js';
 import {
   autoOnlyFlagError,
   findingsPolicyOf,
@@ -838,118 +845,16 @@ export async function runCommand(
       if (!claimed) return;
 
       const runId = runIdFromDate((deps.now ?? (() => new Date()))());
-      const branch = sessionBranchName(runId);
-      const run = deps.run ?? execCommand;
-
-      // ── THE RUN RECORD (Story MOTIR-1789 · MOTIR-1794) ──────────────────
-      //
-      // ⚠️ OPENED WITH THE CLAIM'S FULL MEMBER SET, IN `orderClaimedSet` ORDER,
-      // and this is the operation the whole record is shaped around. The claim
-      // has just locked every member — including the ones that are not startable
-      // yet — and the order has just been computed from edges the run already
-      // holds. That knowledge exists for exactly one moment, in one process:
-      // rebuilt afterwards from per-card events it becomes a list of what the
-      // run got round to, and the SKIPPED cards vanish entirely.
-      //
-      // The order comes from the SAME `orderClaimedSet` the drain uses, so the
-      // positions a person reads on the run page are the order the drain
-      // actually worked. Nothing is re-queried to produce it.
-      const reporter = createDispatchRunReporter({
-        client,
-        reportLogBodies: opts.reportLog === true,
-      });
-      const claimOrder = orderClaimedSet(
-        claimed.ready.map((m) => m.key),
-        claimed.edges,
-      );
-      await reporter.open({
-        projectKey: session.projectKey,
-        command: 'run_scope',
-        runId,
-        cards: claimOrder.map((key) => ({ key, disposition: 'queued' as const })),
-        ...(decision.target.kind === 'work_item' ? { scopeKey: decision.target.key } : {}),
-        scopeLabel: claimed.claim.scope.name,
-        agent: agent.parsed.binary,
-      });
-      reporter.event({
-        kind: 'scope_claimed',
-        data: { outcome: claimed.claim.outcome, members: claimOrder.length },
-      });
-
-      const summary = await drainScope({
+      await runClaimedScope({
         session,
+        target: decision.target,
+        claimed,
         opts,
-        members: claimed.ready,
-        edges: claimed.edges,
-        max: parseMax(opts.max),
+        deps,
         agent,
         runId,
-        branch,
-        run,
-        clock: deps.clock ?? Date.now,
-        runAgentFn: deps.runAgentFn ?? runAgent,
-        reporter,
+        branch: sessionBranchName(runId),
       });
-      // ⚠️ THE CLOSE-OUT RE-READS THE CONTAINER'S CHILDREN FIRST (Bug
-      // MOTIR-3268). The claim was taken at t=0; a bug filed mid-drain
-      // (MOTIR-3017) parents itself under this very container, so the set this
-      // run holds is a statement about the past by the time it is finished.
-      //
-      // ⚠️ THE READ SURVIVES; ITS CONSEQUENCE CHANGED (MOTIR-4967). It used to
-      // decide whether a pull request was opened AT ALL, because one opened over
-      // an unfinished container claims the story is built. The pull request is
-      // now a DRAFT either way, and a draft cannot be merged — so it cannot
-      // complete the container or cascade `done` onto the children that are
-      // missing. What this read decides now is whether the close-out marks it
-      // READY, which is the same question asked at the only moment it can be
-      // answered.
-      const open = await readOpenChildren(client, decision.target);
-      // ⚠️ HOW TO TEST IS WRITTEN BEFORE THE PULL REQUESTS GO READY (MOTIR-5358;
-      // `docs/decisions/approval-gates.md` §9's 2026-09-13 amendment). The run
-      // target is the claimed container; ONE agent, handed the server's close-out
-      // prompt, publishes the run's record onto it, and the record it reads back
-      // is rendered into every body below. It never strands the run — a failure
-      // is logged and the close-out carries on. A sprint scope has no work-item
-      // target, so it has no step.
-      const howToTest =
-        decision.target.kind === 'work_item'
-          ? await runCloseOutHowToTest({
-              client,
-              dispatchRunId: reporter.runId,
-              targetKey: decision.target.key,
-              summary,
-              agent,
-              runAgentFn: deps.runAgentFn ?? runAgent,
-            })
-          : undefined;
-      // ONE pull request per TOUCHED repo, through the shipped close-out. On a
-      // multi-repo scope that is one PER REPO, and the summary names each — "one
-      // pull request, one CI run" is exactly true for a single-repo scope only.
-      closeOutRepos(summary, run, open, howToTest);
-      // ⚠️ THEN THE CONTAINER (MOTIR-4969), and only then. The close-out above
-      // is what rewrites every repository's pull request and marks it ready; the
-      // story is told it is built afterwards, so a run that dies in between
-      // leaves drafts AND a container that is not Implemented — the pair that is
-      // true. It re-reads the same `open` the close-out did, through
-      // `summary.outstanding`, so the two cannot disagree about whether a child
-      // is missing.
-      await closeOutContainer(client, summary);
-      // Each repository's session pull request, with the outcome the close-out
-      // reported — `opened` · `existing` · `failed` · `empty`. Whether it was
-      // left a DRAFT rides on the report too, and it is the thing a person
-      // reading a run page most needs to see: a draft is not something to merge.
-      for (const pr of summary.prs) {
-        reporter.event({
-          kind: 'session_pr',
-          data: { repo: pr.repoName, branch: pr.branch, url: pr.url, outcome: pr.outcome },
-        });
-      }
-      reporter.event({ kind: 'run_closed', data: { stopReason: summary.stopReason } });
-      await reporter.close(summary.stopReason);
-      info('');
-      info(renderAutoSummary(summary));
-      info(renderFindingsPolicy(opts));
-      process.exitCode = autoExitCode(summary);
       return;
     }
 
@@ -1076,4 +981,147 @@ export async function doneCommand(key: string | undefined, opts: DoneOptions): P
     removeExclude(serverUrl, projectKey, trimmed);
     info(`${trimmed}: done.`);
   });
+}
+
+/** What {@link runClaimedScope} needs — the scope arm AFTER its claim. */
+export interface ClaimedScopeRunInput {
+  session: ProjectSession;
+  target: ScopeTarget;
+  claimed: ClaimedScope;
+  opts: RunOptions;
+  deps: DeliveryDeps;
+  agent: ResolvedAgent;
+  runId: string;
+  /** The session branch — minted for a fresh run, the dead run's on a resume. */
+  branch: string;
+  /** A run the SERVER already opened (`motir continue <parent>`, MOTIR-6535). */
+  reporter?: DispatchRunReporter;
+  /** `branch` is a dead run's, being resumed: merge the base into it first. */
+  resumeBranch?: boolean;
+}
+
+/**
+ * THE SCOPE ARM, after its claim (MOTIR-3199; extracted by MOTIR-6535 so a
+ * resumed parent run drains through exactly the code a fresh one does): open the
+ * run with the claimed set, drain it on `branch`, write How to test, close out one
+ * pull request per repository, and report.
+ */
+export async function runClaimedScope(input: ClaimedScopeRunInput): Promise<void> {
+  const { session, target, claimed, opts, deps, agent, runId, branch } = input;
+  const decision = { target };
+  const { client } = session;
+  const run = deps.run ?? execCommand;
+
+  // ── THE RUN RECORD (Story MOTIR-1789 · MOTIR-1794) ──────────────────
+  //
+  // ⚠️ OPENED WITH THE CLAIM'S FULL MEMBER SET, IN `orderClaimedSet` ORDER,
+  // and this is the operation the whole record is shaped around. The claim
+  // has just locked every member — including the ones that are not startable
+  // yet — and the order has just been computed from edges the run already
+  // holds. That knowledge exists for exactly one moment, in one process:
+  // rebuilt afterwards from per-card events it becomes a list of what the
+  // run got round to, and the SKIPPED cards vanish entirely.
+  //
+  // The order comes from the SAME `orderClaimedSet` the drain uses, so the
+  // positions a person reads on the run page are the order the drain
+  // actually worked. Nothing is re-queried to produce it.
+  const reporter =
+    input.reporter ??
+    createDispatchRunReporter({
+      client,
+      reportLogBodies: opts.reportLog === true,
+    });
+  const claimOrder = orderClaimedSet(
+    claimed.ready.map((m) => m.key),
+    claimed.edges,
+  );
+  await reporter.open({
+    projectKey: session.projectKey,
+    command: 'run_scope',
+    runId,
+    cards: claimOrder.map((key) => ({ key, disposition: 'queued' as const })),
+    ...(decision.target.kind === 'work_item' ? { scopeKey: decision.target.key } : {}),
+    scopeLabel: claimed.claim.scope.name,
+    agent: agent.parsed.binary,
+  });
+  reporter.event({
+    kind: 'scope_claimed',
+    data: { outcome: claimed.claim.outcome, members: claimOrder.length },
+  });
+
+  const summary = await drainScope({
+    session,
+    opts,
+    members: claimed.ready,
+    edges: claimed.edges,
+    max: parseMax(opts.max),
+    agent,
+    runId,
+    branch,
+    run,
+    ...(input.resumeBranch ? { resumeBranch: true } : {}),
+    clock: deps.clock ?? Date.now,
+    runAgentFn: deps.runAgentFn ?? runAgent,
+    reporter,
+  });
+  // ⚠️ THE CLOSE-OUT RE-READS THE CONTAINER'S CHILDREN FIRST (Bug
+  // MOTIR-3268). The claim was taken at t=0; a bug filed mid-drain
+  // (MOTIR-3017) parents itself under this very container, so the set this
+  // run holds is a statement about the past by the time it is finished.
+  //
+  // ⚠️ THE READ SURVIVES; ITS CONSEQUENCE CHANGED (MOTIR-4967). It used to
+  // decide whether a pull request was opened AT ALL, because one opened over
+  // an unfinished container claims the story is built. The pull request is
+  // now a DRAFT either way, and a draft cannot be merged — so it cannot
+  // complete the container or cascade `done` onto the children that are
+  // missing. What this read decides now is whether the close-out marks it
+  // READY, which is the same question asked at the only moment it can be
+  // answered.
+  const open = await readOpenChildren(client, decision.target);
+  // ⚠️ HOW TO TEST IS WRITTEN BEFORE THE PULL REQUESTS GO READY (MOTIR-5358;
+  // `docs/decisions/approval-gates.md` §9's 2026-09-13 amendment). The run
+  // target is the claimed container; ONE agent, handed the server's close-out
+  // prompt, publishes the run's record onto it, and the record it reads back
+  // is rendered into every body below. It never strands the run — a failure
+  // is logged and the close-out carries on. A sprint scope has no work-item
+  // target, so it has no step.
+  const howToTest =
+    decision.target.kind === 'work_item'
+      ? await runCloseOutHowToTest({
+          client,
+          dispatchRunId: reporter.runId,
+          targetKey: decision.target.key,
+          summary,
+          agent,
+          runAgentFn: deps.runAgentFn ?? runAgent,
+        })
+      : undefined;
+  // ONE pull request per TOUCHED repo, through the shipped close-out. On a
+  // multi-repo scope that is one PER REPO, and the summary names each — "one
+  // pull request, one CI run" is exactly true for a single-repo scope only.
+  closeOutRepos(summary, run, open, howToTest);
+  // ⚠️ THEN THE CONTAINER (MOTIR-4969), and only then. The close-out above
+  // is what rewrites every repository's pull request and marks it ready; the
+  // story is told it is built afterwards, so a run that dies in between
+  // leaves drafts AND a container that is not Implemented — the pair that is
+  // true. It re-reads the same `open` the close-out did, through
+  // `summary.outstanding`, so the two cannot disagree about whether a child
+  // is missing.
+  await closeOutContainer(client, summary);
+  // Each repository's session pull request, with the outcome the close-out
+  // reported — `opened` · `existing` · `failed` · `empty`. Whether it was
+  // left a DRAFT rides on the report too, and it is the thing a person
+  // reading a run page most needs to see: a draft is not something to merge.
+  for (const pr of summary.prs) {
+    reporter.event({
+      kind: 'session_pr',
+      data: { repo: pr.repoName, branch: pr.branch, url: pr.url, outcome: pr.outcome },
+    });
+  }
+  reporter.event({ kind: 'run_closed', data: { stopReason: summary.stopReason } });
+  await reporter.close(summary.stopReason);
+  info('');
+  info(renderAutoSummary(summary));
+  info(renderFindingsPolicy(opts));
+  process.exitCode = autoExitCode(summary);
 }

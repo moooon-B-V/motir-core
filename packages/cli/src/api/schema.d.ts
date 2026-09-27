@@ -1937,6 +1937,9 @@ export interface components {
                 id: string;
                 name: string;
             } | null;
+            /** @enum {string} */
+            mode: "card" | "parent";
+            landedKeys: string[];
         };
         ScopeClaim: {
             scope: {
