@@ -2345,24 +2345,9 @@
     "access": {
       "title": "Access & members",
       "cardDescription": "Who can find, view, and edit this project, and the people on it.",
-      "subtitle": "Control who can see and edit <strong>{projectName}</strong>. Workspace Managers always have access.",
+      "subtitle": "Control who can open {projectName}. Workspace Managers always can.",
       "accessHeading": "Project access",
-      "accessSubheading": "Who in the {workspaceName} workspace can reach this project.",
-      "levelGroupLabel": "Project access level",
-      "level": {
-        "open": "Open",
-        "limited": "Limited",
-        "private": "Private",
-        "public": "Building in public"
-      },
-      "levelDesc": {
-        "open": "Any member of the {workspaceName} workspace can view and edit this project.",
-        "limited": "Any workspace member can view and comment, but only project members can edit.",
-        "private": "Only people added to the project below can find or open it. Hidden from everyone else.",
-        "public": "Publish this project to the web as a build-in-public page — anyone can follow the board, roadmap, and work items without an account, indexable by search engines. Visitors sign in only to submit, upvote, or comment. It's the same public access level, presented as a status you can start and stop anytime."
-      },
-      "goPrivateNote": "The {count, plural, one {# person} other {# people}} who can currently access <strong>{projectName}</strong> will be added as project members so no one loses access. You can adjust roles or remove them in the Members list.",
-      "levelChangedToast": "Project access set to {level}",
+      "accessSubheading": "Who in the {workspaceName} workspace can open this project.",
       "changeAccessErrorTitle": "Could not change access",
       "membersHeading": "Members",
       "memberCountLabel": "{count, plural, one {# member} other {# members}}",
@@ -2385,8 +2370,38 @@
       "addMemberErrorTitle": "Could not add member",
       "removeMemberErrorTitle": "Could not remove member",
       "errorGeneric": "Something went wrong. Please try again.",
-      "membersFromWorkspaceRole": "People added to this project. What each can do comes from their workspace role — manage roles in workspace settings.",
-      "workspaceRolesLink": "Workspace roles →"
+      "membersFromWorkspaceRole": "People added to this project. They can always open it, whatever the access mode. What each can do comes from their workspace role.",
+      "workspaceRolesLink": "Workspace roles →",
+      "mode": {
+        "workspace": "Open to the workspace",
+        "members": "Members only",
+        "public": "Public"
+      },
+      "modeDesc": {
+        "workspace": "Everyone in {workspaceName} with Full access can open it, plus the people added below.",
+        "members": "Only the people added below can find or open it. Hidden from everyone else.",
+        "public": "Open to the workspace, plus anyone with the link — the build-in-public page. Visitors read without an account and sign in only to submit, upvote or comment."
+      },
+      "modeGroupLabel": "Project access mode",
+      "publicUnavailable": "Publishing runs on Motir Cloud — this self-hosted install has no public site to publish to.",
+      "membersOnlyConfirmTitle": "Make {projectName} members only?",
+      "membersOnlyConfirmBody": "{count, plural, one {<b># person</b> will lose access} other {<b># people</b> will lose access}}. They have Full access to {workspaceName} but were not added to this project:",
+      "membersOnlyConfirmHint": "Add anyone who should keep access first, or add them afterwards. Managers always keep access.",
+      "membersOnlyConfirmNobody": "Nobody loses access — everyone who can open {projectName} today was added to it or is a Manager.",
+      "membersOnlyConfirmAction": "Make members only",
+      "modeChangedToast": "{projectName} is now {mode}",
+      "changeAccessErrorBody": "{projectName} is still {mode}. Please try again.",
+      "addPeople": "Add people…",
+      "addPeopleSearch": "Search people…",
+      "addPeopleFoot": "Workspace members who are not added yet. Managers enter every project anyway.",
+      "alwaysEnters": "always enters",
+      "scope": {
+        "full": "Full",
+        "limited": "Limited"
+      },
+      "emptyMembersOnlyTitle": "Only Managers can open this project",
+      "emptyMembersOnlyBody": "It is members only and nobody has been added yet. Add people to let them in.",
+      "readOnlyModeNote": "Only a workspace Manager can change who can open this project."
     },
     "publicPage": {
       "title": "Public page",

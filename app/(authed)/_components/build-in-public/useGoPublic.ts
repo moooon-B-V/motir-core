@@ -42,7 +42,12 @@ export function useGoPublic(projectKey: string) {
       if (!res.ok) throw new Error('ACCESS_WRITE_FAILED');
       toast({
         variant: 'success',
-        title: t('access.levelChangedToast', { level: t('access.level.public') }),
+        // The mode's own words (MOTIR-6550 retired the level keys). The hook is
+        // handed the project KEY, not its name, and the key reads as the name.
+        title: t('access.modeChangedToast', {
+          projectName: projectKey,
+          mode: t('access.mode.public'),
+        }),
       });
       setOpen(false);
       // Re-run the server tree: the entry points (header / nudge / promo) are

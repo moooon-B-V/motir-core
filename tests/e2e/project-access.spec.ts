@@ -274,7 +274,7 @@ test.describe('project-access — gating end-to-end', () => {
 
     // The members panel + access controls render.
     await expect(page.getByRole('heading', { name: 'Access & members' })).toBeVisible();
-    await expect(page.getByRole('radio', { name: /Private/ })).toBeVisible();
+    await expect(page.getByRole('radio', { name: /^Members only/ })).toBeVisible();
     // The admin's own row is present (the self row carries no Remove).
     await expect(page.getByText('Ada Admin')).toBeVisible();
 
@@ -292,9 +292,18 @@ test.describe('project-access — gating end-to-end', () => {
         .getByRole('button', { name: 'Remove' }),
     ).toBeVisible();
 
-    // ── Flip the access level to Private (6.4.4 PATCH, optimistic) ────────────
-    await page.getByRole('radio', { name: /Private/ }).click();
-    await expect(page.getByRole('radio', { name: /Private/ })).toHaveAttribute(
+    // ── Switch to Members only: the preview-then-confirm, then the PATCH ───────
+    // (Story MOTIR-6169 · MOTIR-6550 · design A2). The radio does not flip until
+    // the confirm, and the confirm's own response is the authoritative signal.
+    await page.getByRole('radio', { name: /^Members only/ }).click();
+    const confirm = page.getByRole('dialog', { name: /members only\?/i });
+    await expect(confirm).toBeVisible();
+    const written = page.waitForResponse(
+      (r) => new URL(r.url()).pathname.endsWith('/access') && r.request().method() === 'PATCH',
+    );
+    await confirm.getByRole('button', { name: 'Make members only' }).click();
+    expect((await written).status()).toBe(200);
+    await expect(page.getByRole('radio', { name: /^Members only/ })).toHaveAttribute(
       'aria-checked',
       'true',
     );
