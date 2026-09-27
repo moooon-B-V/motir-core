@@ -11,6 +11,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The ONE entry rule, resolved through the database (Story MOTIR-6169 ·
 // MOTIR-6543): the access MODE on the project, the SCOPE on the membership,
@@ -47,25 +48,20 @@ async function tenant() {
   const ws = await adminDb.workspace.create({
     data: { name: `WS pe${n}`, slug: `pe-ws-${n}`, organizationId: org.id },
   });
-  const project = (
-    label: string,
-    accessMode: ProjectAccessMode | null,
-    accessLevel: 'open' | 'limited' | 'private' | 'public' = 'open',
-  ) =>
+  const project = (label: string, mode: ProjectAccessMode) =>
     adminDb.project.create({
       data: {
         name: label,
         slug: `pe-${label.toLowerCase()}-${n}`,
         identifier: `PE${label}${n}`,
         workspaceId: ws.id,
-        accessLevel,
-        accessMode,
+        ...projectAccessData(mode),
       },
     });
-  const A = await project('A', 'members', 'private');
-  const B = await project('B', 'members', 'private');
-  const C = await project('C', 'workspace', 'open');
-  const D = await project('D', 'public', 'public');
+  const A = await project('A', 'members');
+  const B = await project('B', 'members');
+  const C = await project('C', 'workspace');
+  const D = await project('D', 'public');
 
   const manager = await user('manager');
   const contractor = await user('contractor');
@@ -179,6 +175,7 @@ describe('a project the migration has not reached', () => {
         slug: `pe-legacy-${seq++}`,
         identifier: `PELEG${seq++}`,
         workspaceId: t.wsId,
+        // legacy-access-level: a NULL mode derived from the level is what this case tests.
         accessLevel: 'limited',
       },
     });
@@ -188,6 +185,7 @@ describe('a project the migration has not reached', () => {
     );
     const openLegacy = await adminDb.project.update({
       where: { id: legacy.id },
+      // legacy-access-level: a NULL mode derived from the level is what this case tests.
       data: { accessLevel: 'open' },
     });
     expect(openLegacy.accessMode).toBeNull();

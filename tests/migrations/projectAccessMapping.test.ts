@@ -50,6 +50,7 @@ async function tenant() {
         slug: `pam-${level}-${n}`,
         identifier: `PAM${level.slice(0, 2).toUpperCase()}${n}`,
         workspaceId: ws.id,
+        // legacy-access-level: the mapping migration of each legacy level is what this file tests.
         accessLevel: level,
       },
     });

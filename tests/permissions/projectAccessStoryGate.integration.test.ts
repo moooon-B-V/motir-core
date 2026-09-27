@@ -4,6 +4,7 @@ import type { ProjectAccessMode } from '@/generated/prisma/client';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { adminDb } from '../helpers/adminDb';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // THE STORY GATE for MOTIR-6169 (Subtask MOTIR-6552) — ACCESS on the project: the
 // three modes, the Full / Limited scope, and "was added". Run against the merged
@@ -137,7 +138,7 @@ async function tenant(mode: ProjectAccessMode): Promise<Tenant> {
     // both columns together, as the setter writes them.
     await adminDb.project.update({
       where: { id: project.id },
-      data: { accessMode: 'public', accessLevel: 'public' },
+      data: projectAccessData('public'),
     });
   } else if (mode === 'members') {
     await projectMembersService.setAccessMode({

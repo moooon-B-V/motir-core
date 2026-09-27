@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // MOTIR-3435 — `/items/[key]`'s GATE and its read SHAPE.
 //
@@ -257,7 +258,7 @@ const PROJECT = {
   projectId: 'p1',
   userId: 'u1',
   workspaceId: 'w1',
-  project: { identifier: 'MOTIR', accessLevel: 'private' },
+  project: { identifier: 'MOTIR', ...projectAccessData('members') },
 };
 const detailFor = (over: Record<string, unknown> = {}) => ({
   item: {

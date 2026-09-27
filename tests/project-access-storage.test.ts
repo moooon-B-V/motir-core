@@ -61,6 +61,7 @@ async function project(
       slug: `pas-${accessLevel}-${n}`,
       identifier: `PAS${n}`,
       workspaceId,
+      // legacy-access-level: the storage split of a legacy level is what this file tests.
       accessLevel,
     },
   });

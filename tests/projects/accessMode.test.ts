@@ -12,6 +12,9 @@ import { PROJECT_ACCESS_LEVELS } from '@/lib/projects/roles';
 // The pure mappers of the access storage (Story MOTIR-6169 · MOTIR-6541): the
 // DECISION's level → mode mapping (`role-model.md` Q1), its inverse used when
 // both columns are written, and the narrowing guards.
+//
+// legacy-access-level: the legacy level is an INPUT here on purpose — the
+// level → mode mapping is what these cases test (MOTIR-6685's guard allows this file).
 
 describe('accessModeOf', () => {
   it('derives the mode from the legacy level while accessMode is NULL', () => {

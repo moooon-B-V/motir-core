@@ -9,6 +9,7 @@ import { createTestUser } from '../../fixtures/userFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
+import { projectAccessData, setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // STORY GATE — A REFUSED DECISION OPENS THE PLANNER (Story MOTIR-6068 · Subtask
 // MOTIR-6212; ADR `approval-gates.md` §10f, `agent-authored-plans.md` AMENDMENT 17 §9).
@@ -109,13 +110,13 @@ const ownerOf = (f: WorkItemFixture): Actor => ({
   name: f.owner.name,
 });
 
-function signIn(actor: Actor, on: WorkItemFixture = fx, accessLevel?: 'private') {
+function signIn(actor: Actor, on: WorkItemFixture = fx, access?: 'members') {
   session.current = { user: { id: actor.id, email: actor.email, name: actor.name } };
   activeCtx.current = {
     userId: actor.id,
     workspaceId: on.workspaceId,
     projectId: on.projectId,
-    project: { ...on.project, ...(accessLevel ? { accessLevel } : {}) },
+    project: { ...on.project, ...(access ? projectAccessData(access) : {}) },
   } as ProjectContext;
 }
 
@@ -385,8 +386,8 @@ describe('no leak — two viewers who cannot see the card get the identical 404,
 
     // …a workspace member outside the (now private) project sees nothing…
     const outsider = await member(false);
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
-    signIn(outsider, fx, 'private');
+    await setProjectAccess(adminDb, fx.projectId, 'members');
+    signIn(outsider, fx, 'members');
     const hidden = await readSeed(gateId);
 
     // …and neither does the owner of another workspace.
@@ -508,8 +509,8 @@ describe('nothing on read — opening the seed creates no session, turn or job',
 
     for (let i = 0; i < 3; i += 1) expect((await readSeed(gateId)).status).toBe(200);
     const outsider = await member(false);
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
-    signIn(outsider, fx, 'private');
+    await setProjectAccess(adminDb, fx.projectId, 'members');
+    signIn(outsider, fx, 'members');
     expect((await readSeed(gateId)).status).toBe(404);
 
     expect(await counts()).toEqual(before);

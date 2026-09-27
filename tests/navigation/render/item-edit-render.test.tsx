@@ -71,12 +71,13 @@ import EditIssuePage from '@/app/(authed)/items/[key]/edit/page';
 import { EditIssueForm } from '@/app/(authed)/items/[key]/edit/_components/EditIssueForm';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 const PROJECT = {
   userId: 'u1',
   workspaceId: 'ws1',
   projectId: 'p1',
-  project: { identifier: 'ACME', name: 'Acme', accessLevel: 'open' },
+  project: { identifier: 'ACME', name: 'Acme', ...projectAccessData('workspace') },
 };
 
 const DETAIL = {

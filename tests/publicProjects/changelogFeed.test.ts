@@ -8,6 +8,7 @@ import {
 } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Story 8.9 · Subtask 8.9.6 — the feed's READ, against a real database.
 //
@@ -29,7 +30,7 @@ afterAll(async () => {
 describe('the feed read shares the page read’s privacy', () => {
   async function publicFixture(): Promise<WorkItemFixture> {
     const fx = await makeWorkItemFixture({ name: 'Acme' });
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+    await setProjectAccess(adminDb, fx.projectId, 'public');
     return fx;
   }
 

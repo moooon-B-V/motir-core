@@ -10,6 +10,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData, setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Story 6.12 · Subtask 6.12.9 — the STORY-level integration guarantees that the
 // per-subtask suites don't yet lock end-to-end, against a real Postgres (the
@@ -45,7 +46,7 @@ afterAll(async () => {
  *  shortcut the sibling public-project suites use). */
 async function makePublicProjectFixture(name = 'Acme'): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   return fx;
 }
 
@@ -146,13 +147,13 @@ describe('public READ access (6.12.9) — anonymous + cross-org, non-public 404'
     const b = await makeWorkItemFixture({ name: 'Sitemap Org B', identifier: 'SMB' });
     await adminDb.project.update({
       where: { id: b.projectId },
-      data: { accessLevel: 'public' },
+      data: projectAccessData('public'),
     });
     // A third public project, ARCHIVED — the read filters `archivedAt: null`.
     const archived = await makeWorkItemFixture({ name: 'Sitemap Org C', identifier: 'SMC' });
     await adminDb.project.update({
       where: { id: archived.projectId },
-      data: { accessLevel: 'public', archivedAt: new Date() },
+      data: { ...projectAccessData('public'), archivedAt: new Date() },
     });
     // And a NON-public one, which must never be crawlable.
     const priv = await makeWorkItemFixture({ name: 'Sitemap Private', identifier: 'SMP' });
@@ -189,7 +190,7 @@ describe('public READ access (6.12.9) — anonymous + cross-org, non-public 404'
     const b = await makeWorkItemFixture({ name: 'Index Org B', identifier: 'IXB' });
     await adminDb.project.update({
       where: { id: b.projectId },
-      data: { accessLevel: 'public' },
+      data: projectAccessData('public'),
     });
     const priv = await makeWorkItemFixture({ name: 'Index Private', identifier: 'IXP' });
 

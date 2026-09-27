@@ -69,6 +69,7 @@ import type { ApprovalGateKind } from '@/generated/prisma/client';
 import type { WorkItemFixture } from '../../fixtures';
 import type { IssueRowData } from '@/app/(authed)/items/_components/issueRows';
 import type { TreeTableRow } from '@/components/ui/TreeTable';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 type Actor = { userId: string; workspaceId: string };
 /** What ONE surface says about each card: `yours` / `others`, or absent. */
@@ -410,7 +411,7 @@ describe('3 · access', () => {
     await workspacesService.addMember({ userId: stranger.id, workspaceId: fx.workspaceId });
     await adminDb.workItem.update({ where: { id: ids.D }, data: { assigneeId: stranger.id } });
     await publishDesign(ids.D, 'd-v1');
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, fx.projectId, 'members');
     await adminDb.projectMembership.deleteMany({
       where: { userId: stranger.id, projectId: fx.projectId },
     });

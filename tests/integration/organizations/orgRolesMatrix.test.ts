@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RawSubscriptionResponse, RawUsageResponse } from '@/lib/ai/types';
 import { adminDb } from '../../helpers/adminDb';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // THE ORG-ROLES CAPABILITY MATRIX, END TO END (Story MOTIR-6167 · MOTIR-6315).
 //
@@ -466,7 +467,7 @@ describe('the Owner writes in a PRIVATE project of a workspace they never joined
       actorUserId: org.users.admin.id,
       identifier: 'SALE',
     });
-    await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, project.id, 'members');
     const item = await createTestWorkItem(
       {
         owner: org.users.admin,

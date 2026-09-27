@@ -5,6 +5,7 @@ import { pageRefresh } from './_helpers/authoritative-signal';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // ⚠️ THE ACCEPTANCE WALK FOR CUSTOMER-OWNED ADDRESSES (Story MOTIR-3878 ·
 // Subtask MOTIR-4225) — the APPLICATION half of the verification recipe, paced
@@ -90,7 +91,7 @@ test.beforeAll(async () => {
   // Public, because a private project has no address to give.
   await adminDb.project.update({
     where: { id: project.id },
-    data: { accessLevel: 'public' },
+    data: projectAccessData('public'),
   });
   await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },

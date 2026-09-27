@@ -7,6 +7,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { trackRequestedTransactions } from '../helpers/requestedTransactions';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // MOTIR-6653 — the public BOARD read had the shape MOTIR-6627 removed from the
 // overview. After the default-board lookup, `getBoard` ran three peer reads on
@@ -39,7 +40,7 @@ afterAll(async () => {
 
 async function makePublicProjectFixture(): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name: 'Acme' });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   return fx;
 }
 

@@ -8,6 +8,7 @@ import { createTestUser } from '../../fixtures/userFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
+import { projectAccessData, setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // STORY GATE — A PICKED OPTION IS PLANNED (Story MOTIR-6069 · Subtask MOTIR-6437;
 // `picked-option-planning.md`, `picked-option-planning-starts.md`). Harness lifted
@@ -113,13 +114,13 @@ const ownerOf = (f: WorkItemFixture): Actor => ({
   name: f.owner.name,
 });
 
-function signIn(actor: Actor, on: WorkItemFixture = fx, accessLevel?: 'private') {
+function signIn(actor: Actor, on: WorkItemFixture = fx, access?: 'members') {
   session.current = { user: { id: actor.id, email: actor.email, name: actor.name } };
   activeCtx.current = {
     userId: actor.id,
     workspaceId: on.workspaceId,
     projectId: on.projectId,
-    project: { ...on.project, ...(accessLevel ? { accessLevel } : {}) },
+    project: { ...on.project, ...(access ? projectAccessData(access) : {}) },
   } as ProjectContext;
 }
 
@@ -392,8 +393,8 @@ describe('guards — no leak, not-a-pick, refusals unchanged, tenancy', () => {
   it('a viewer who cannot browse the choice gets the SAME 404 as an unknown id', async () => {
     const { gateId } = await choose(null);
     const outsider = await member(false);
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
-    signIn(outsider, fx, 'private');
+    await setProjectAccess(adminDb, fx.projectId, 'members');
+    signIn(outsider, fx, 'members');
     const hidden = await readSeed(gateId);
     const unknown = await readSeed('cmunknowngate000000000000');
     expect(hidden.status).toBe(404);

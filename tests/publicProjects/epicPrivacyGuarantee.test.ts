@@ -19,6 +19,7 @@ import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Story 6.14 · Subtask 6.14.8 — the load-bearing GUARANTEE suite for epic
 // privacy on public projects. It locks the single security promise the whole
@@ -78,7 +79,7 @@ async function setPrivate(epicId: string, value: boolean): Promise<void> {
  *  set the column directly, the shortcut the other public-project tests use). */
 async function makePublicProjectFixture(name = 'Acme'): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   return fx;
 }
 

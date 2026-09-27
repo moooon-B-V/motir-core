@@ -11,6 +11,7 @@ import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ProjectDirectoryCursor } from '@/lib/repositories/projectRepository';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // Story 6.13 · Subtask 6.13.2 — the PROJECT SQUARE directory: the cross-org
 // list of every `public` project, cursor-paginated, card-projection,
@@ -31,7 +32,7 @@ afterAll(async () => {
 async function makePublic(projectId: string, overviewMd: string | null = null): Promise<void> {
   await adminDb.project.update({
     where: { id: projectId },
-    data: { accessLevel: 'public', publicOverviewMd: overviewMd },
+    data: { ...projectAccessData('public'), publicOverviewMd: overviewMd },
   });
 }
 
@@ -60,7 +61,7 @@ describe('projectSquareService.listDirectory — the public directory', () => {
     const bLimited = await makeWorkItemFixture({ name: 'Org B two', identifier: 'BLM' });
     await adminDb.project.update({
       where: { id: bLimited.projectId },
-      data: { accessLevel: 'limited' },
+      data: projectAccessData('members'),
     });
 
     const page = await projectSquareService.listDirectory();

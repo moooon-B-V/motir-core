@@ -17,6 +17,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { scannedTestCount, testsRidingTheDefaultTimeout } from '../helpers/timeoutBudget';
 import { runAsCloudBuild } from '../helpers/cloudBuild';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The project SQUARE is a cloud-only capability (Story MOTIR-3908), and this
 // file's `madePublicAt` cases publish a project — refused off-cloud, which is
@@ -120,7 +121,7 @@ async function makePublic(
   await adminDb.project.update({
     where: { id: projectId },
     data: {
-      accessLevel: 'public',
+      ...projectAccessData('public'),
       ...(pins.madePublicAt !== undefined ? { madePublicAt: pins.madePublicAt } : {}),
       ...(pins.createdAt !== undefined ? { createdAt: pins.createdAt } : {}),
     },

@@ -11,6 +11,7 @@ import { EmptyCommentBodyError } from '@/lib/comments/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Public-request UPVOTE + COMMENT (Story 6.12 · Subtask 6.12.6) — the two
 // remaining public-viewer writes, over the 6.12.3 `PublicRequestVote` model +
@@ -33,7 +34,7 @@ async function makeUser(name: string) {
  *  voters/commenters below are fresh cross-org accounts (no membership). */
 async function publicRequestFixture(): Promise<{ fx: WorkItemFixture; requestId: string }> {
   const fx = await makeWorkItemFixture();
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   const item = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'task', title: 'Dark mode please' },
     fx.ctx,
@@ -187,7 +188,7 @@ describe('publicRequestsService.addComment (6.12.6)', () => {
 describe('triage queue — vote count is the leading sort key (6.12.6)', () => {
   it('an upvoted request floats above newer-but-unvoted ones; voteCount rides the DTO; a zero-vote queue stays newest-first', async () => {
     const fx = await makeWorkItemFixture();
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+    await setProjectAccess(adminDb, fx.projectId, 'public');
 
     // Three triage requests, oldest → newest by triagedAt.
     const mk = async (title: string, triagedAt: Date) => {
