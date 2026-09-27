@@ -516,6 +516,62 @@ export interface CommitComparison {
   reason?: 'no_common_ancestor' | 'unsupported' | 'unreachable' | 'inexact';
 }
 
+// ─── WHICH PATHS a branch changed (Story MOTIR-6617 · MOTIR-6619) ────────────
+//
+// `compareCommits` answers HOW FAR; this answers WHAT. A planning session that
+// was told a neighbour card's code lives on a branch (the item read's
+// `inFlightCode`, MOTIR-6618) lists the paths that branch touched, then reads
+// them at that ref through `readFileAtRef`. NAMES ONLY — no patch hunks, no
+// commit list, no blame: the file read is the one channel for content.
+
+/** How one path changed between the merge base and `head`, in the seam's own
+ *  words. A host's copy / type-change / mode-change words fold into these four. */
+export type ChangedFileStatus = 'added' | 'modified' | 'removed' | 'renamed';
+
+export interface ChangedFile {
+  /** The path on `head` (for `removed`, the path that was removed). */
+  path: string;
+  status: ChangedFileStatus;
+  /** Only on `renamed`: the path the file had on the base side. */
+  previousPath?: string;
+}
+
+/**
+ * The result of {@link GitProvider.listChangedFiles}.
+ *
+ * ⚠️ A RESULT UNION, for `RepoFileReadResult`'s reason: the consumer is a model,
+ * and "that branch does not exist", "the connection is gone", "the host would
+ * not compute a diff that large" and "the host did not answer" are four
+ * different facts it must not collapse into "the branch changed nothing".
+ *
+ * `truncated: true` means the host's list stopped at its cap
+ * (`CHANGED_FILES_MAX`, `lib/git/provider.ts`) — the branch changed AT LEAST those paths. The
+ * SHAs are the ones the host resolved `base` and `head` to, or `null` when the
+ * host's answer did not say.
+ */
+export type ChangedFilesResult =
+  | {
+      outcome: 'ok';
+      base: string;
+      head: string;
+      files: ChangedFile[];
+      truncated: boolean;
+      baseSha: string | null;
+      headSha: string | null;
+    }
+  /** `base` or `head` names nothing the host can resolve (or the two share no history). */
+  | { outcome: 'no_such_ref'; base: string; head: string }
+  /** No usable connection on this deployment — the App / OAuth app is unwired, or the
+   *  connection row is gone. */
+  | { outcome: 'not_connected'; base: string; head: string }
+  /** The host refused the credential — an uninstalled / suspended App, a revoked
+   *  OAuth grant, a project the token can no longer see. */
+  | { outcome: 'revoked'; base: string; head: string }
+  /** The host declined to compute the comparison at all because it is too big. */
+  | { outcome: 'too_large'; base: string; head: string }
+  /** The host did not answer, or answered a status no arm above names. */
+  | { outcome: 'host_error'; base: string; head: string; detail: string };
+
 /**
  * MERGING one change request through its host (Story MOTIR-4882 · MOTIR-5514;
  * `approval-gates.md` §4 and its second amendment, decisions 5, 7 and 8).

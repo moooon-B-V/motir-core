@@ -17,6 +17,8 @@ export {
 export {
   requireRepoTarballUrlResolver,
   providerSupportsRepoTarballUrl,
+  CHANGED_FILES_MAX,
+  CHANGED_FILES_TIMEOUT_MS,
   REPO_FILE_MAX_BYTES,
   REPO_FILE_READ_TIMEOUT_MS,
   REPO_TARBALL_TIMEOUT_MS,
@@ -34,6 +36,9 @@ export {
 } from './errors';
 export type { RepoTarballUrlFailure } from './errors';
 export type {
+  ChangedFile,
+  ChangedFileStatus,
+  ChangedFilesResult,
   ChangeRequestLifecycle,
   ChangeRequestState,
   CiConclusion,
