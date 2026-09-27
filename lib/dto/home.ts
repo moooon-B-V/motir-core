@@ -1,3 +1,4 @@
+import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type {
   ExecutorDto,
   WorkItemKindDto,
@@ -58,6 +59,12 @@ export interface HomeWorkItemRowDto {
    *  GLYPH form only, and only `failing` / `running` off the `done` category
    *  (`ciBadgeState`), which is why *Recently finished* needs no special case. */
   ciState: string | null;
+  /** Why the card is stuck until something is repaired (`WorkItem.fixReason`,
+   *  MOTIR-6600), or `null` when nothing is. The To fix tab lists by it; the other
+   *  tabs carry it because every tab shares this row. */
+  fixReason: WorkItemFixReasonDto | null;
+  /** What the To fix row names for that reason — `null` exactly when `fixReason` is. */
+  fixDetail: FixDetailDto | null;
   priority: WorkItemPriorityDto;
   assigneeId: string | null;
   reporterId: string;

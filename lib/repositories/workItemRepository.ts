@@ -8,6 +8,7 @@ import {
   type Executor,
   type WorkItem,
   type WorkItemImplementationSource,
+  type WorkItemFixReason,
   type WorkItemKind,
   type WorkItemObsolescence,
   type WorkItemPlanningSource,
@@ -26,6 +27,7 @@ import {
 } from '@/lib/filters/registry';
 import { UnknownFilterOperatorError } from '@/lib/filters/errors';
 import type { DistributionGroupBy } from '@/lib/reports/statisticTypes';
+import type { FixDetailDto } from '@/lib/dto/fixReason';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
 // The ONE declaration of the ready order. The Workbench reads it rather than
@@ -187,6 +189,11 @@ export interface HomeWorkItemRow {
    *  a column omitted from one arrives `undefined` at the mapper while the type
    *  claims `string | null`. */
   ciState: string | null;
+  /** Why the card is stuck until something is repaired, and what the row names for it
+   *  (`WorkItem.fixReason` / `fixDetail`, MOTIR-6600) — the To fix tab's reason line.
+   *  In the shared projection for the reason `ciState` is. */
+  fixReason: WorkItemFixReason | null;
+  fixDetail: Prisma.JsonValue | null;
   priority: WorkItemPriority;
   assigneeId: string | null;
   reporterId: string;
@@ -218,6 +225,10 @@ export const HOME_WORK_ITEM_SELECT = {
   // every tab reads through this constant, so adding it here is what keeps the
   // tabs from drifting into different columns.
   ciState: true,
+  // The card's to-fix answer (MOTIR-6600) — the To fix tab's reason line, carried on
+  // every tab's rows through this ONE projection for the reason `ciState` is.
+  fixReason: true,
+  fixDetail: true,
   priority: true,
   assigneeId: true,
   reporterId: true,
@@ -4600,6 +4611,27 @@ export const workItemRepository = {
     } catch (err) {
       throw translateWriteError(err, { id });
     }
+  },
+
+  /**
+   * Write a card's to-fix answer (Story MOTIR-6588 · MOTIR-6600) — `fixReason` and
+   * `fixDetail` together, the only writer `fixReasonService.recomputeWorkItemFixReason`
+   * uses. A cleared detail writes SQL NULL through `Prisma.DbNull`, never the JSON value
+   * `null`, so `fixDetail IS NULL` holds exactly when `fixReason` does.
+   */
+  async updateFixReason(
+    id: string,
+    value: { fixReason: WorkItemFixReason | null; fixDetail: FixDetailDto | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.workItem.update({
+      where: { id },
+      data: {
+        fixReason: value.fixReason,
+        // A plain data record — every field a string, number or null.
+        fixDetail: value.fixDetail === null ? Prisma.DbNull : { ...value.fixDetail },
+      },
+    });
   },
 
   /**
