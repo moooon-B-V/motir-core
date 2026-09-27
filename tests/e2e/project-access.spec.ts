@@ -276,7 +276,10 @@ test.describe('project-access — gating end-to-end', () => {
     await expect(page.getByRole('heading', { name: 'Access & members' })).toBeVisible();
     await expect(page.getByRole('radio', { name: /^Members only/ })).toBeVisible();
     // The admin's own row is present (the self row carries no Remove).
-    await expect(page.getByText('Ada Admin')).toBeVisible();
+    // Scoped to the live subtree: the page's reads stream behind an in-page
+    // Suspense (MOTIR-6550), and Next holds the streamed copy in a hidden node
+    // before swapping it in — an unscoped text locator can see both.
+    await expect(page.locator('#main').getByText('Ada Admin')).toBeVisible();
 
     // ── Add the recruit through the real add-member combobox (6.4.4 POST) ─────
     const addPicker = page.getByRole('combobox', { name: 'Add a project member' });
