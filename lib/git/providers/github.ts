@@ -1,8 +1,15 @@
 import { registerGitProvider } from '../registry';
-import { createAppJwt, mintInstallationToken } from '@/lib/github/appAuth';
+import {
+  createAppJwt,
+  GithubAppNotConfiguredError,
+  GithubAppTokenError,
+  mintInstallationToken,
+} from '@/lib/github/appAuth';
 import { githubAppRoleForRepo } from '@/lib/github/appRoleForRepo';
 import { provisioningOrgLogin } from '@/lib/ciMetering/config';
 import {
+  CHANGED_FILES_MAX,
+  CHANGED_FILES_TIMEOUT_MS,
   REPO_FILE_MAX_BYTES,
   COMMIT_COMPARE_TIMEOUT_MS,
   MERGE_CHANGE_REQUEST_TIMEOUT_MS,
@@ -35,6 +42,9 @@ import type {
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
   CommitComparison,
+  ChangedFile,
+  ChangedFileStatus,
+  ChangedFilesResult,
   DeploymentState,
   ChangeRequestMergeability,
   ChangeRequestMergeabilityInput,
@@ -385,6 +395,67 @@ async function githubEnqueue(
   });
 }
 
+// ─── listChangedFiles (MOTIR-6619) ───────────────────────────────────────────
+
+/** GitHub's `files[].status` → the seam's four words. `copied` is a NEW path on
+ *  head (its source still exists), so it reads as `added`; `changed` (a mode /
+ *  type change) and `unchanged` both read as `modified`. */
+function githubChangedFileStatus(raw: unknown): ChangedFileStatus {
+  switch (raw) {
+    case 'added':
+    case 'copied':
+      return 'added';
+    case 'removed':
+      return 'removed';
+    case 'renamed':
+      return 'renamed';
+    default:
+      return 'modified';
+  }
+}
+
+/** One `files[]` entry → a {@link ChangedFile}, or null when it carries no path.
+ *  NAMES ONLY: `patch`, `blob_url`, `raw_url` and `contents_url` are never read. */
+function githubChangedFile(value: unknown): ChangedFile | null {
+  const file = asRecord(value);
+  const path = file?.['filename'];
+  if (typeof path !== 'string' || path.length === 0) return null;
+  const status = githubChangedFileStatus(file?.['status']);
+  const previous = file?.['previous_filename'];
+  return status === 'renamed' && typeof previous === 'string' && previous.length > 0
+    ? { path, status, previousPath: previous }
+    : { path, status };
+}
+
+/**
+ * A failed MINT, as a named absence. An App not configured on this deployment is
+ * `not_connected`; a token endpoint that answered 401/403/404 means the
+ * installation was removed or suspended, which is `revoked`; anything else — the
+ * endpoint unreachable, a body it could not parse — is `host_error`. The detail is
+ * the error's own message, which `GithubAppTokenError` guarantees never carries
+ * GitHub's raw body.
+ */
+function githubMintFailure(err: unknown, refs: { base: string; head: string }): ChangedFilesResult {
+  if (err instanceof GithubAppNotConfiguredError) return { outcome: 'not_connected', ...refs };
+  if (
+    err instanceof GithubAppTokenError &&
+    (err.status === 401 || err.status === 403 || err.status === 404)
+  ) {
+    return { outcome: 'revoked', ...refs };
+  }
+  return {
+    outcome: 'host_error',
+    ...refs,
+    detail: err instanceof Error ? err.message : 'the installation token could not be minted',
+  };
+}
+
+/** The hex sha at `value.sha`, or null. */
+function shaOf(value: unknown): string | null {
+  const sha = asRecord(value)?.['sha'];
+  return typeof sha === 'string' && /^[0-9a-f]{7,64}$/i.test(sha) ? sha : null;
+}
+
 export const githubProvider: GitProvider = {
   id: 'github',
 
@@ -692,6 +763,113 @@ export const githubProvider: GitProvider = {
       return { behindBy: null, reason: 'inexact' };
     }
     return { behindBy: behind };
+  },
+
+  /**
+   * `GET /repos/{owner}/{name}/compare/{base}...{head}` — the endpoint
+   * {@link compareCommits} reads `behind_by` from, read here for `files[]`
+   * (MOTIR-6619). THREE-DOT, so the list is what `head` changed since it left
+   * `base`, not everything `base` moved on since.
+   *
+   * ⚠️ NO PAGING PARAMETER, ON PURPOSE. Unpaged, GitHub returns up to 300
+   * `files` and makes the LAST entry of `commits[]` the head of the whole
+   * comparison — which is where `headSha` comes from. Asking for a page would
+   * trade that guarantee for a longer list this capability caps anyway.
+   *
+   * Status → outcome: 404 is `no_such_ref` (a missing ref and a pair with no
+   * common ancestor answer alike, and both mean "no such comparison"); 401, and
+   * a 403 that is not a rate limit, are `revoked`; a refusal whose body says
+   * the diff is too big or too slow to build is `too_large`; everything else,
+   * and no answer within {@link CHANGED_FILES_TIMEOUT_MS}, is `host_error`.
+   */
+  async listChangedFiles(
+    installationId: string,
+    owner: string,
+    name: string,
+    base: string,
+    head: string,
+  ): Promise<ChangedFilesResult> {
+    const refs = { base, head };
+    // Provenance, as every other read on this seam (MOTIR-5681 / MOTIR-5861).
+    let token: string;
+    try {
+      const role = githubAppRoleForRepo({ owner }, provisioningOrgLogin());
+      ({ token } = await mintInstallationToken(installationId, role));
+    } catch (err) {
+      return githubMintFailure(err, refs);
+    }
+    const url =
+      `${GITHUB_API}/repos/${owner}/${name}/compare/` +
+      `${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), CHANGED_FILES_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: 'application/vnd.github+json',
+          'user-agent': 'motir',
+        },
+        signal: controller.signal,
+      });
+    } catch (err) {
+      return {
+        outcome: 'host_error',
+        ...refs,
+        detail: controller.signal.aborted
+          ? `no response within ${CHANGED_FILES_TIMEOUT_MS}ms`
+          : err instanceof Error
+            ? err.message
+            : 'unknown',
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (res.status === 404) return { outcome: 'no_such_ref', ...refs };
+    if (res.status === 401) return { outcome: 'revoked', ...refs };
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      if (res.status === 403) {
+        // A PRIMARY or SECONDARY rate limit is 403 on GitHub too, and it is the
+        // host being busy — not the connection being gone.
+        const limited =
+          res.headers.get('x-ratelimit-remaining') === '0' || /rate limit/i.test(body);
+        if (!limited) return { outcome: 'revoked', ...refs };
+      } else if (/too (large|big|many)|taking too long|timed? ?out/i.test(body)) {
+        return { outcome: 'too_large', ...refs };
+      }
+      return { outcome: 'host_error', ...refs, detail: `GitHub compare returned ${res.status}` };
+    }
+
+    const body = asRecord(await res.json().catch(() => null));
+    const rawFiles = body?.['files'];
+    // A comparison with no changes still carries `files: []`; a body with no
+    // array at all is not an answer, and must never read as "changed nothing".
+    if (!body || !Array.isArray(rawFiles)) {
+      return { outcome: 'host_error', ...refs, detail: 'GitHub compare returned no files list' };
+    }
+    const files = rawFiles
+      .map(githubChangedFile)
+      .filter((f): f is ChangedFile => f !== null)
+      .slice(0, CHANGED_FILES_MAX);
+    const commits = Array.isArray(body['commits']) ? (body['commits'] as unknown[]) : [];
+    return {
+      outcome: 'ok',
+      ...refs,
+      files,
+      // AT the cap is truncated: a list sitting exactly on the host's limit is
+      // indistinguishable from one that was cut.
+      truncated: rawFiles.length >= CHANGED_FILES_MAX,
+      baseSha: shaOf(body['base_commit']),
+      // Head is the last commit of an unpaged comparison; with none (head is
+      // already contained in base), the merge base IS head.
+      headSha:
+        commits.length > 0 ? shaOf(commits[commits.length - 1]) : shaOf(body['merge_base_commit']),
+    };
   },
 
   async readFileAtRef(

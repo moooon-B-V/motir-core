@@ -68,7 +68,13 @@ export class GithubAppNotConfiguredError extends Error {
  *  unexpected response). Never carries GitHub's raw body. */
 export class GithubAppTokenError extends Error {
   readonly code = 'GITHUB_APP_TOKEN_FAILED' as const;
-  constructor(detail: string) {
+  constructor(
+    detail: string,
+    /** The token endpoint's HTTP status, when it ANSWERED with one (MOTIR-6619) —
+     *  a 401/403/404 there means the installation is gone or suspended, which a
+     *  caller reports differently from an endpoint that never answered. */
+    readonly status?: number,
+  ) {
     super(`GitHub installation-token mint failed: ${detail}`);
     this.name = 'GithubAppTokenError';
   }
@@ -165,7 +171,7 @@ export async function mintInstallationToken(
       `token endpoint unreachable (${err instanceof Error ? err.message : 'unknown'})`,
     );
   }
-  if (!res.ok) throw new GithubAppTokenError(`token endpoint returned ${res.status}`);
+  if (!res.ok) throw new GithubAppTokenError(`token endpoint returned ${res.status}`, res.status);
 
   let body: { token?: string; expires_at?: string };
   try {
