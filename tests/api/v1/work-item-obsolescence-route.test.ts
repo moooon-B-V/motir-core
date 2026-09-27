@@ -141,14 +141,14 @@ describe('every read carries the mark, null when unset', () => {
 
   it('the collection and the ready set return both fields on each row', async () => {
     const caller = await createV1ProjectCaller({ permissions: [...EDITOR] });
+    // A mark is a FINISHED card's state (MOTIR-6672): finish it, then mark it.
+    const created = await detail(await create(caller, { kind: 'task', title: 'Marked' }), 201);
+    await markDone(caller, created.key);
     const marked = await detail(
-      await create(caller, {
-        kind: 'task',
-        title: 'Marked',
+      await update(caller, created.key, {
         obsolescence: 'outdated',
         obsolescenceNoteMd: 'The flow moved to **MOTIR-9**.',
       }),
-      201,
     );
     const plain = await detail(await create(caller, { kind: 'task', title: 'Plain' }), 201);
 
@@ -160,13 +160,11 @@ describe('every read carries the mark, null when unset', () => {
     });
     expect(byKey.get(plain.key)).toMatchObject({ obsolescence: null, obsolescenceNoteMd: null });
 
-    // A mark does NOT gate readiness: the marked card is still in the set.
+    // The ready set carries both fields on every row it returns. (A marked card is
+    // finished, so it is never in the ready set — MOTIR-6672.)
     const ready = await readySet(caller);
     const readyByKey = new Map(ready.map((row) => [row.key, row]));
-    expect(readyByKey.get(marked.key)).toMatchObject({
-      obsolescence: 'outdated',
-      obsolescenceNoteMd: 'The flow moved to **MOTIR-9**.',
-    });
+    expect(readyByKey.has(marked.key)).toBe(false);
     expect(readyByKey.get(plain.key)).toMatchObject({
       obsolescence: null,
       obsolescenceNoteMd: null,
@@ -174,22 +172,23 @@ describe('every read carries the mark, null when unset', () => {
   });
 });
 
-describe('the writes set, change and clear the mark on any kind in any status', () => {
-  it('a `todo` subtask: POST sets it, GET reads it, PATCH changes it, PATCH null clears it', async () => {
+describe('the writes set, change and clear the mark on any kind of FINISHED card', () => {
+  it('a `done` subtask: PATCH sets it, GET reads it, PATCH changes it, PATCH null clears it', async () => {
     const caller = await createV1ProjectCaller({ permissions: [...EDITOR] });
     const story = await detail(await create(caller, { kind: 'story', title: 'S' }), 201);
 
+    const subtask = await detail(
+      await create(caller, { kind: 'subtask', title: 'Reorder the lock', parentKey: story.key }),
+      201,
+    );
+    await markDone(caller, subtask.key);
     const created = await detail(
-      await create(caller, {
-        kind: 'subtask',
-        title: 'Reorder the lock',
-        parentKey: story.key,
+      await update(caller, subtask.key, {
         obsolescence: 'outdated',
         obsolescenceNoteMd: 'Rewritten by the new scheduler.',
       }),
-      201,
     );
-    expect(created.status).toBe('todo');
+    expect(created.status).toBe('done');
     expect(created.obsolescence).toBe('outdated');
     expect(created.obsolescenceNoteMd).toBe('Rewritten by the new scheduler.');
     expect((await detail(await read(caller, created.key))).obsolescence).toBe('outdated');
@@ -231,12 +230,11 @@ describe('the writes set, change and clear the mark on any kind in any status', 
     expect(cleared.obsolescenceNoteMd).toBe('Overturned — do not build on it.');
   });
 
-  it('POST accepts the mark on a story (no kind refusal, unlike difficulty)', async () => {
+  it('PATCH accepts the mark on a finished story (no kind refusal, unlike difficulty)', async () => {
     const caller = await createV1ProjectCaller({ permissions: [...EDITOR] });
-    const story = await detail(
-      await create(caller, { kind: 'story', title: 'S', obsolescence: 'outdated' }),
-      201,
-    );
+    const created = await detail(await create(caller, { kind: 'story', title: 'S' }), 201);
+    await markDone(caller, created.key);
+    const story = await detail(await update(caller, created.key, { obsolescence: 'outdated' }));
     expect(story.obsolescence).toBe('outdated');
     expect(story.obsolescenceNoteMd).toBeNull();
   });
@@ -253,10 +251,9 @@ describe('a value outside the enum is a 422 naming INVALID_OBSOLESCENCE', () => 
 
   it('on PATCH — and the stored mark is unchanged', async () => {
     const caller = await createV1ProjectCaller({ permissions: [...EDITOR] });
-    const task = await detail(
-      await create(caller, { kind: 'task', title: 'T', obsolescence: 'outdated' }),
-      201,
-    );
+    const task = await detail(await create(caller, { kind: 'task', title: 'T' }), 201);
+    await markDone(caller, task.key);
+    await update(caller, task.key, { obsolescence: 'outdated' });
     expect(await refusal(await update(caller, task.key, { obsolescence: 'OUTDATED' }))).toEqual({
       status: 422,
       code: 'INVALID_OBSOLESCENCE',

@@ -48,6 +48,7 @@ import {
   ApprovalGatePendingError,
   IllegalTransitionError,
   MissingArtifactEvidenceError,
+  MarkedCardCannotReopenError,
   PlanTargetHeldError,
   UnknownStatusError,
 } from '@/lib/workItems/errors';
@@ -152,6 +153,7 @@ export type ChangeRequestSyncResult = {
     | 'open_children' // the item is a CONTAINER whose own children are not landed — it stays where it is (MOTIR-3229)
     | 'approval_pending' // an `awaiting` approval gate owns the target status — the merge waits for the decision (MOTIR-5526)
     | 'plan_held' // an UNDECIDED plan holds the item at `planning` — the merge moves nothing until the plan is decided (MOTIR-6265)
+    | 'marked_held' // the item carries an OBSOLESCENCE mark, and a marked card stays finished — the merge never reopens it (MOTIR-6672)
     | 'access_denied'
     | 'unknown_installation'
     | 'unknown_repo'
@@ -1509,6 +1511,12 @@ export function classifyTransitionError(
   // deciding the plan clears it, and the merge is already on the record.
   if (err instanceof PlanTargetHeldError)
     return { event: 'pull_request', outcome: 'plan_held', workItemId, toStatus };
+  // A MARKED card stays finished (Story MOTIR-6575 · MOTIR-6672). A pull request
+  // re-opened or re-pushed on a card someone has since marked outdated or
+  // deprecated must not drag it back out of the done category. A REFUSAL,
+  // recorded and never a failed delivery: a person clearing the mark clears it.
+  if (err instanceof MarkedCardCannotReopenError)
+    return { event: 'pull_request', outcome: 'marked_held', workItemId, toStatus };
   throw err;
 }
 

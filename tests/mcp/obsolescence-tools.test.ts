@@ -51,12 +51,16 @@ const text = (res: CallToolResult): string =>
 const mk = (fx: WorkItemFixture, title: string, kind: 'story' | 'task' = 'task') =>
   workItemsService.createWorkItem({ projectId: fx.projectId, kind, title }, fx.ctx);
 
-const mark = (
+/** Mark a card the only way it may be since MOTIR-6672: finish it, then mark it. */
+const mark = async (
   fx: WorkItemFixture,
   id: string,
   obsolescence: WorkItemObsolescenceDto | null,
   obsolescenceNoteMd: string | null,
-) => workItemsService.updateWorkItem(id, { obsolescence, obsolescenceNoteMd }, fx.ctx);
+) => {
+  await adminDb.workItem.update({ where: { id }, data: { status: 'done' } });
+  return workItemsService.updateWorkItem(id, { obsolescence, obsolescenceNoteMd }, fx.ctx);
+};
 
 async function connectClient(ctx: ServiceContext): Promise<Client> {
   const server = buildMcpServer(() => ctx);
@@ -107,21 +111,32 @@ describe('update_work_item / create_work_item write the mark', () => {
     expect((cleared.structuredContent as Marked).obsolescenceNoteMd).toBeNull();
   });
 
-  it('create_work_item sets both on any kind', async () => {
+  it('create_work_item takes the NOTE on any kind, and writes nothing for a MARK', async () => {
     const fx = await makeWorkItemFixture();
     const res = await runCreateWorkItem(
       {
         projectKey: 'PROD',
         kind: 'story',
-        title: 'Recorded as retired',
-        obsolescence: 'deprecated',
-        obsolescenceNoteMd: 'Overturned.',
+        title: 'Recorded with a note',
+        obsolescenceNoteMd: 'Kept for the record.',
       },
       fx.ctx,
     );
     expect(res.isError).toBeFalsy();
     const dto = res.structuredContent as Marked;
-    expect([dto.obsolescence, dto.obsolescenceNoteMd]).toEqual(['deprecated', 'Overturned.']);
+    expect([dto.obsolescence, dto.obsolescenceNoteMd]).toEqual([null, 'Kept for the record.']);
+
+    // A new card lands at the unfinished initial status, and a mark is a FINISHED
+    // card's state (MOTIR-6672) — so nothing is created. The tool's own wire code
+    // for the refusal is MOTIR-6673's; this pins only that no row is written.
+    const before = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    await Promise.resolve(
+      runCreateWorkItem(
+        { projectKey: 'PROD', kind: 'story', title: 'Retired', obsolescence: 'deprecated' },
+        fx.ctx,
+      ),
+    ).catch(() => null);
+    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(before);
   });
 
   it('a value outside the enum is the TYPED INVALID_OBSOLESCENCE — on the wire and at the runner', async () => {
@@ -259,10 +274,15 @@ describe('the MCP reads return the mark', () => {
     for (const row of items) expect(Object.keys(row)).not.toContain('obsolescenceNoteMd');
   });
 
-  it('list_ready and next_ready rows carry both — a marked card stays in the ready set', async () => {
+  it('list_ready and next_ready rows carry both — a LEGACY marked open card stays in the ready set', async () => {
     const fx = await makeWorkItemFixture();
     const task = await mk(fx, 'Ready but outdated');
-    await mark(fx, task.id, 'outdated', 'Check the new spec first.');
+    // No door may mark an open card since MOTIR-6672, but a row marked before that
+    // rule is not migrated, and the ready reads must still carry its mark.
+    await adminDb.workItem.update({
+      where: { id: task.id },
+      data: { obsolescence: 'outdated', obsolescenceNoteMd: 'Check the new spec first.' },
+    });
 
     const listed = (
       (await runListReady({ projectKey: 'PROD' }, fx.ctx)).structuredContent as {

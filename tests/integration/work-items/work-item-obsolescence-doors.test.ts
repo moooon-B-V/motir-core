@@ -281,13 +281,19 @@ describe('one mark, every door', () => {
     await adminDb.workItem.update({ where: { id: story.id }, data: { status: 'done' } });
     const keys = { epicKey: epic.identifier, storyKey: story.identifier, leafKey: leaf.identifier };
 
-    for (const key of [story.identifier, leaf.identifier]) {
-      const res = await runUpdateWorkItem(
-        { key, obsolescence: 'outdated', obsolescenceNoteMd: NOTE },
-        c.ctx,
-      );
-      expect(structured<Mark & { status: string }>(res).obsolescence).toBe('outdated');
-    }
+    const res = await runUpdateWorkItem(
+      { key: story.identifier, obsolescence: 'outdated', obsolescenceNoteMd: NOTE },
+      c.ctx,
+    );
+    expect(structured<Mark & { status: string }>(res).obsolescence).toBe('outdated');
+    // The LEAF stands in for the `list_ready` read, and a card in the ready set is
+    // unfinished, so no door may mark it any more (MOTIR-6672). It is seeded as a
+    // LEGACY row — one marked before that rule — which the story does not migrate
+    // and every read must still carry.
+    await adminDb.workItem.update({
+      where: { id: leaf.id },
+      data: { obsolescence: 'outdated', obsolescenceNoteMd: NOTE },
+    });
     // The write left the done story done.
     expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } })).status).toBe(
       'done',
@@ -445,8 +451,8 @@ describe('one supersedes edge, every door', () => {
 
 // ── every kind, every status ───────────────────────────────────────────────
 
-describe('the mark on every kind and every status changes nothing else', () => {
-  it('an epic, a story, a task, a bug and a subtask — one done, one cancelled, one archived — each take the mark; status, archivedAt, readiness and the parent rollup hold', async () => {
+describe('the mark on every kind of finished card changes nothing else', () => {
+  it('an epic, a story, a task, a bug and a subtask — done, cancelled, one archived — each take the mark; status, archivedAt, readiness and the parent rollup hold', async () => {
     const c = await createV1ProjectCaller({ permissions: [...EDITOR] });
     const epic = await create(c, 'epic', 'Epic');
     const story = await create(c, 'story', 'Story', epic.id);
@@ -459,8 +465,13 @@ describe('the mark on every kind and every status changes nothing else', () => {
       { fromId: task.id, toId: blocker.id, kind: 'is_blocked_by' },
       c.ctx,
     );
+    // Every card FINISHED (MOTIR-6672: a mark is a finished card's state) — across
+    // both done-category statuses — so the mark is the only thing that changes.
     await adminDb.workItem.update({ where: { id: subtask.id }, data: { status: 'done' } });
     await adminDb.workItem.update({ where: { id: bug.id }, data: { status: 'cancelled' } });
+    await adminDb.workItem.update({ where: { id: task.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: story.id }, data: { status: 'cancelled' } });
+    await adminDb.workItem.update({ where: { id: epic.id }, data: { status: 'done' } });
     await workItemsService.archiveWorkItem(story.id, c.ctx);
 
     const all = [epic, story, subtask, task, bug];
@@ -487,7 +498,6 @@ describe('the mark on every kind and every status changes nothing else', () => {
     expect(Object.values(before).map((s) => (s as { status: string }).status)).toEqual(
       expect.arrayContaining(['done', 'cancelled']),
     );
-    expect((before[task.identifier] as { ready: boolean }).ready).toBe(false);
     expect((before[story.identifier] as { archivedAt: string | null }).archivedAt).not.toBeNull();
 
     for (const it of all) {
@@ -609,13 +619,17 @@ describe('the refusals', () => {
 // ── nothing hides a marked card ────────────────────────────────────────────
 
 describe('nothing hides or re-sorts a marked card', () => {
-  it('the list, the tree, the board, the ready set, the skeleton and the unfiltered search keep the marked row where it was, beside unmarked rows', async () => {
+  it('the list, the tree, the board, the skeleton and the unfiltered search keep the marked row where it was, beside unmarked rows', async () => {
     const c = await createV1ProjectCaller({ permissions: [...EDITOR] });
-    // Five open root leaves; the MIDDLE one gets marked, so a read that dropped
-    // it, or sorted marked rows first or last, changes the sequence.
+    // Five FINISHED root leaves (MOTIR-6672: only a finished card is marked); the
+    // MIDDLE one gets marked, so a read that dropped it, or sorted marked rows
+    // first or last, changes the sequence. The ready set is not among the reads:
+    // a finished card is never in it, marked or not.
     const items: WorkItemDto[] = [];
     for (const title of ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo']) {
-      items.push(await create(c, 'task', title));
+      const item = await create(c, 'task', title);
+      await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'done' } });
+      items.push(item);
     }
     const target = items[2]!;
     const sort = { column: 'key', direction: 'asc' } as const;
@@ -628,17 +642,20 @@ describe('nothing hides or re-sorts a marked card', () => {
       );
       const tree = await workItemsService.listRootIssues(c.fixture.projectId, { sort }, c.ctx);
       const board = await boardsService.getBoard(c.fixture.projectId, c.ctx);
-      const ready = await workItemsService.listReady(c.fixture.projectId, {}, c.ctx);
       return {
         list: list.items.map((i) => i.identifier),
         tree: tree.rows.flatMap((r) => (r.kind === 'folder' ? [] : [r.identifier])),
         board: board.columns.flatMap((col) => col.cards.map((card) => card.identifier)),
-        ready: ready.items.map((i) => i.key),
         skeleton: (await mcpSkeleton(c)).map((r) => r.key),
         search: (await mcpSearch(c)).map((r) => r.key),
       };
     };
 
+    // A board's DONE column orders by recency (`updatedAt`, the done-age window),
+    // so ANY write moves a card to its top — a mark included. Touch the target
+    // with a neutral edit first, so the only difference the reads below can see is
+    // the mark itself.
+    await workItemsService.updateWorkItem(target.id, { descriptionMd: 'Touched.' }, c.ctx);
     const before = await sixReads();
     for (const [read, keys] of Object.entries(before)) {
       expect([read, keys.length]).toEqual([read, 5]);
@@ -685,6 +702,9 @@ describe('the obsolescence filter', () => {
     const outdated = await create(c, 'story', 'Outdated story');
     const deprecated = await create(c, 'task', 'Deprecated task');
     const unmarked = await create(c, 'task', 'Current task');
+    for (const item of [outdated, deprecated]) {
+      await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'done' } });
+    }
     // Written through two different doors — the filter reads the column either way.
     structured(
       await runUpdateWorkItem({ key: outdated.identifier, obsolescence: 'outdated' }, c.ctx),
