@@ -74,6 +74,7 @@ import {
   folderRefId,
   isFolderRef,
   isTempRef,
+  SUPERSEDES_PATCH_SITES,
   tempRefsOf,
   type ProposalRefCarrier,
 } from '@/lib/plans/refs';
@@ -82,6 +83,7 @@ import {
   assertFolderPlacementsLegal,
   assertProposalSetSelfConsistent,
   assertReparentLegal,
+  assertSupersedesGraphAcyclic,
   collectReferencedFolderIds,
   collectReferencedWorkItemIds,
   DEFAULT_PROPOSED_KIND,
@@ -90,6 +92,7 @@ import {
   type LiveFolderState,
   type LiveWorkItemState,
   type ProposalNode,
+  type SupersedesEdge,
 } from '@/lib/plans/validateProposals';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
@@ -660,6 +663,16 @@ function assertReasonLegal(p: ProposalInput): void {
 
 function validateProposal(p: ProposalInput): void {
   assertReasonLegal(p);
+  // `supersedesRefs` is an `add`'s column (MOTIR-6630); a `modify` spells its
+  // edges on the patch (`supersedesAdd` / `supersededByAdd` / the removes), and a
+  // `remove` has none. Refused by name rather than stored and never applied.
+  if (p.op !== 'add' && (p.supersedesRefs?.length ?? 0) > 0) {
+    throw new InvalidProposalError(
+      `${proposalLabel({ op: p.op, workItemId: p.workItemId })}: \`supersedesRefs\` is an \`add\`'s field. ` +
+        'A `modify` carries its supersedes edges on the patch — `supersedesAdd` / `supersedesRemove` ' +
+        '(the target replaces each ref) and `supersededByAdd` / `supersededByRemove` (each ref replaces the target).',
+    );
+  }
   assertFolderRefNotBlank(
     p.parentRef,
     'parentRef',
@@ -1025,6 +1038,7 @@ function toIncomingProposalNode(p: ProposalInput, index: number): ProposalNode {
     workItemId: p.op === 'add' ? null : (p.workItemId ?? null),
     parentRef: p.parentRef ?? null,
     blockedByRefs: p.blockedByRefs ?? [],
+    supersedesRefs: p.supersedesRefs ?? [],
     proposedFields: (p.proposedFields ?? null) as ProposalNode['proposedFields'],
     patch: (p.patch ?? null) as ProposalNode['patch'],
   };
@@ -1038,6 +1052,7 @@ function toProposalNode(item: PlanItem): ProposalNode {
     workItemId: item.workItemId,
     parentRef: item.parentRef,
     blockedByRefs: item.blockedByRefs,
+    supersedesRefs: item.supersedesRefs ?? [],
     proposedFields: (item.proposedFields ?? null) as ProposalNode['proposedFields'],
     patch: (item.patch ?? null) as ProposalNode['patch'],
   };
@@ -1098,6 +1113,9 @@ async function runPersistGate(
   // (MOTIR-3936) — skipped entirely when the plan writes no edge, so a plan that
   // wires nothing costs exactly what it cost before.
   const existingBlockedByEdges = await resolveBlockedByClosure(nodes, ctx, tx);
+  // The COMMITTED `supersedes` links the plan's supersedes edges join onto
+  // (MOTIR-6630) — skipped entirely when the plan draws none.
+  const existingSupersedesEdges = await resolveSupersedesClosure(nodes, ctx, tx);
   // The FOLDERS its `folder:` placements name (MOTIR-5414) — skipped entirely
   // when the plan files nothing. Bound the same way the row read above is.
   const folderById = await resolveFolderById(nodes, ctx, tx);
@@ -1111,6 +1129,7 @@ async function runPersistGate(
     planProjectId,
     ancestorIdsById,
     existingBlockedByEdges,
+    existingSupersedesEdges,
     folderById,
     edgeAncestorsById,
   });
@@ -1235,6 +1254,103 @@ async function resolveBlockedByClosure(
     frontier = [...new Set(edges.map((e) => e.blockerId))].filter((id) => !walked.has(id));
   }
   return collected;
+}
+
+/**
+ * The transitive `supersedes` closure DOWNSTREAM (newer → older) of every
+ * endpoint the plan's supersedes edges touch (Story MOTIR-6577 · MOTIR-6630) —
+ * what `assertSupersedesGraphAcyclic` walks the plan's own edges over. The
+ * twin of {@link resolveBlockedByClosure}, one batched read per level and the
+ * same level bound; no read at all for a plan that draws no supersedes edge.
+ *
+ * ⚠️ A `tx`, when given, must already have the project narrowing lifted, for the
+ * reason the row read in `runPersistGate` states: an edge may cross projects.
+ */
+async function resolveSupersedesClosure(
+  nodes: readonly ProposalNode[],
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<SupersedesEdge[]> {
+  const seeds = new Set<string>();
+  const addSeed = (ref: string | null | undefined): void => {
+    if (ref && !isTempRef(ref)) seeds.add(ref);
+  };
+  for (const node of nodes) {
+    if (node.op === 'add') {
+      for (const ref of node.supersedesRefs ?? []) addSeed(ref);
+      continue;
+    }
+    if (node.op !== 'modify' || !node.workItemId) continue;
+    const edges = SUPERSEDES_PATCH_SITES.flatMap((key) => node.patch?.[key] ?? []);
+    if (edges.length === 0) continue;
+    addSeed(node.workItemId);
+    for (const ref of edges) addSeed(ref);
+  }
+  if (seeds.size === 0) return [];
+
+  const read = (ids: string[]): Promise<SupersedesEdge[]> =>
+    tx
+      ? workItemLinkRepository.findSupersedesEdges(ids, tx)
+      : withWorkspaceServiceContext(ctx.workspaceId, (t) =>
+          workItemLinkRepository.findSupersedesEdges(ids, t),
+        );
+
+  const collected: SupersedesEdge[] = [];
+  const walked = new Set<string>();
+  let frontier = [...seeds];
+  for (let level = 0; level < BLOCKED_BY_CLOSURE_MAX_LEVELS && frontier.length > 0; level += 1) {
+    for (const id of frontier) walked.add(id);
+    const edges = await read(frontier);
+    collected.push(...edges);
+    frontier = [...new Set(edges.map((e) => e.toId))].filter((id) => !walked.has(id));
+  }
+  return collected;
+}
+
+/**
+ * Refuse a `supersedes` CYCLE at the APPEND (MOTIR-6630), where the edge is
+ * written — the database never will, and nothing a later call does can make a
+ * ring legal. One closure read, skipped when the batch draws no supersedes edge;
+ * judged over the plan's whole effective node set, because a ring can be closed
+ * by the proposal being added against one appended earlier.
+ *
+ * Suspended project narrowing, for the reason `resolveSupersedesClosure` states.
+ */
+async function assertSupersedesAcyclicAtAppend(
+  nodes: readonly ProposalNode[],
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const drawsEdge = nodes.some(
+    (n) =>
+      (n.op === 'add' && (n.supersedesRefs?.length ?? 0) > 0) ||
+      (n.op === 'modify' &&
+        ((n.patch?.supersedesAdd?.length ?? 0) > 0 || (n.patch?.supersededByAdd?.length ?? 0) > 0)),
+  );
+  if (!drawsEdge) return;
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const existing = await resolveSupersedesClosure(nodes, ctx, tx);
+    const ids = collectReferencedWorkItemIds(nodes);
+    const rows =
+      ids.length === 0
+        ? []
+        : await workItemRepository.findByIdsInWorkspace(ids, ctx.workspaceId, tx);
+    const liveById = new Map<string, LiveWorkItemState>(
+      rows.map((r) => [
+        r.id,
+        {
+          id: r.id,
+          key: r.identifier,
+          title: r.title,
+          kind: r.kind,
+          status: r.status,
+          projectId: r.projectId,
+        },
+      ]),
+    );
+    assertSupersedesGraphAcyclic(nodes, liveById, existing);
+  });
 }
 
 // ── THE CORRECTION DOORS MAY NOT BREAK A PLAN (MOTIR-3936) ───────────────────
@@ -1904,6 +2020,7 @@ function refCarrier(p: ProposalInput): ProposalRefCarrier {
     label: proposalLabel({ op: p.op, workItemId: p.workItemId, title: p.proposedFields?.title }),
     parentRef: p.parentRef,
     blockedByRefs: p.blockedByRefs,
+    supersedesRefs: p.supersedesRefs,
     patch: p.patch ?? null,
   };
 }
@@ -1919,6 +2036,7 @@ function refCarrierOfRow(item: PlanItem): ProposalRefCarrier {
     label: item.id,
     parentRef: item.parentRef,
     blockedByRefs: item.blockedByRefs,
+    supersedesRefs: item.supersedesRefs ?? [],
     patch: item.patch as ProposalRefCarrier['patch'],
   };
 }
@@ -2422,6 +2540,23 @@ async function materialize(
     }));
   });
   await workItemLinkRepository.createManyIfAbsent(blockedByRows, tx);
+
+  // Pass 2-bis — each `add`'s `supersedes` edges (Story MOTIR-6577 · MOTIR-6630):
+  // one row per ref, from = the created card (the NEWER one), to = the ref. The
+  // same one statement and `skipDuplicates` as the blockers — so the created card
+  // superseding a card a `modify` ALSO marks `supersededByAdd` it (the same row,
+  // spelled from the other end) lands once, whichever writes first.
+  const supersedesRows = adds.flatMap((item) => {
+    const fromId = planItemToWorkItem.get(item.id)!;
+    return (item.supersedesRefs ?? []).map((ref) => ({
+      workspaceId: ctx.workspaceId,
+      fromId,
+      toId: resolveRef(ref),
+      kind: 'supersedes' as const,
+      createdById: ctx.userId,
+    }));
+  });
+  await workItemLinkRepository.createManyIfAbsent(supersedesRows, tx);
 
   // Pass 2b — DERIVE THE BIRTH STATUS from the edges Pass 2 just wired
   // (MOTIR-3050). Pass 1 gives every created row the workflow's INITIAL status,
@@ -3315,6 +3450,51 @@ async function applyModify(
     if (link) {
       await workItemLinkRepository.delete(link.id, tx);
       linkRemoved.push({ toId, kind: 'is_blocked_by' });
+    }
+  }
+  // The `supersedes` edges (Story MOTIR-6577 · MOTIR-6630). ONE storage row per
+  // edge, directed NEWER → OLDER, so the two spellings write in opposite
+  // directions: `supersedesAdd` puts the target at `from`, `supersededByAdd` at
+  // `to`. `createIfAbsent` makes a row that already exists — wired by hand, or
+  // by this plan's own `add` carrying `supersedesRefs` — a no-op rather than a
+  // 409, and a remove of a row that does not exist is a no-op too. Recorded in
+  // the same `links` cell, as the relationship READ FROM THE TARGET
+  // (`supersedes` / `superseded_by`) with `toId` the other end, so the feed
+  // names the card on the far side either way.
+  const supersedesEdges: Array<{
+    refs: readonly string[];
+    relationship: 'supersedes' | 'superseded_by';
+    add: boolean;
+  }> = [
+    { refs: patch.supersedesAdd ?? [], relationship: 'supersedes', add: true },
+    { refs: patch.supersededByAdd ?? [], relationship: 'superseded_by', add: true },
+    { refs: patch.supersedesRemove ?? [], relationship: 'supersedes', add: false },
+    { refs: patch.supersededByRemove ?? [], relationship: 'superseded_by', add: false },
+  ];
+  for (const { refs, relationship, add } of supersedesEdges) {
+    for (const ref of refs) {
+      const other = resolveRef(ref);
+      const [fromId, toId] =
+        relationship === 'supersedes' ? [item.workItemId, other] : [other, item.workItemId];
+      if (add) {
+        const created = await workItemLinkRepository.createIfAbsent(
+          {
+            workspaceId: ctx.workspaceId,
+            fromId,
+            toId,
+            kind: 'supersedes',
+            createdById: ctx.userId,
+          },
+          tx,
+        );
+        if (created) linkAdded.push({ toId: other, kind: relationship });
+      } else {
+        const link = await workItemLinkRepository.findReciprocal(fromId, toId, 'supersedes', tx);
+        if (link) {
+          await workItemLinkRepository.delete(link.id, tx);
+          linkRemoved.push({ toId: other, kind: relationship });
+        }
+      }
     }
   }
   if (linkAdded.length > 0 || linkRemoved.length > 0) {
@@ -4386,6 +4566,11 @@ export const plansService = {
             tx,
           );
 
+          // A `supersedes` CYCLE (MOTIR-6630) — refused here, where the edge is
+          // written: the database never refuses one, and a ring cannot become
+          // legal later. One closure read, only when the plan draws such an edge.
+          await assertSupersedesAcyclicAtAppend(effectiveNodes, ctx, fresh.projectId, tx);
+
           // The container half of a `modify`'s DIFFICULTY (MOTIR-6133), which
           // `validateProposal` could not judge without the target's kind. Costs
           // one batched read, and only when the batch sets a non-null one.
@@ -4497,6 +4682,7 @@ export const plansService = {
               workItemId: p.op === 'add' ? null : (p.workItemId ?? null),
               parentRef: p.parentRef ?? null,
               blockedByRefs: p.blockedByRefs ?? [],
+              supersedesRefs: p.op === 'add' ? (p.supersedesRefs ?? []) : [],
               baseRevision: p.baseRevision ?? null,
               reason: p.op === 'remove' && p.reason ? p.reason.trim() : null,
               ...(p.op === 'add' && p.proposedFields
@@ -5457,14 +5643,17 @@ export const plansService = {
           );
           data.proposedFields = next as unknown as Prisma.InputJsonValue;
           touched.push(
-            ...Object.keys(input).filter((k) => k !== 'parentRef' && k !== 'blockedByRefs'),
+            ...Object.keys(input).filter(
+              (k) => k !== 'parentRef' && k !== 'blockedByRefs' && k !== 'supersedesRefs',
+            ),
           );
         } else {
           // A `modify` / `remove` targets an EXISTING work item, so it carries no
           // proposed body and no pin of its own — the content keys and
           // `targetRepo` are meaningless on it rather than merely unsupported.
           const contentKeys = Object.keys(input).filter(
-            (k) => k !== 'patch' && k !== 'blockedByRefs' && k !== 'parentRef',
+            (k) =>
+              k !== 'patch' && k !== 'blockedByRefs' && k !== 'parentRef' && k !== 'supersedesRefs',
           );
           if (contentKeys.length > 0) {
             throw new InvalidProposalError(
@@ -5538,6 +5727,17 @@ export const plansService = {
           data.blockedByRefs = input.blockedByRefs;
           touched.push('blockedByRefs');
         }
+        // REPLACES the `add`'s supersedes set (MOTIR-6630), as `blockedByRefs`
+        // does; a `modify` corrects its edges through its `patch`.
+        if (input.supersedesRefs !== undefined) {
+          if (item.op !== 'add') {
+            throw new InvalidProposalError(
+              "Only an `add` proposal carries `supersedesRefs`; correct a `modify`'s supersedes edges through its `patch`.",
+            );
+          }
+          data.supersedesRefs = input.supersedesRefs;
+          touched.push('supersedesRefs');
+        }
 
         if (touched.length === 0)
           throw new InvalidProposalError('A correction must change something.');
@@ -5554,6 +5754,8 @@ export const plansService = {
           }),
           parentRef: (data.parentRef as string | null | undefined) ?? item.parentRef,
           blockedByRefs: (data.blockedByRefs as string[] | undefined) ?? item.blockedByRefs,
+          supersedesRefs:
+            (data.supersedesRefs as string[] | undefined) ?? item.supersedesRefs ?? [],
           patch: (input.patch !== undefined
             ? input.patch
             : (item.patch as ProposalRefCarrier['patch'])) as ProposalRefCarrier['patch'],
@@ -5573,6 +5775,7 @@ export const plansService = {
           ...toProposalNode(item),
           parentRef: corrected.parentRef ?? null,
           blockedByRefs: [...(corrected.blockedByRefs ?? [])],
+          supersedesRefs: [...(corrected.supersedesRefs ?? [])],
           patch: (corrected.patch ?? null) as ProposalNode['patch'],
         };
         assertProposalSetSelfConsistent([correctedNode]);

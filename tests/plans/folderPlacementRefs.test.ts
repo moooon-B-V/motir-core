@@ -93,6 +93,7 @@ function validate(
     planProjectId: PLAN_PROJECT,
     ancestorIdsById: new Map(),
     existingBlockedByEdges: [],
+    existingSupersedesEdges: [],
     ...(opts.omitFolders ? {} : { folderById: opts.folderById ?? DEFAULT_FOLDERS }),
   });
 }

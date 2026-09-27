@@ -546,8 +546,8 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
    * sees for it. That is the whole ratchet: the answer may legitimately be
    * "nothing", but it has to be written down rather than defaulted into.
    *
-   * `noRow` holds only the obsolescence pair (MOTIR-6629), owed a row by
-   * MOTIR-6632; every other key a `modify` can carry is visible to the approver.
+   * `noRow` holds only the obsolescence pair (MOTIR-6629) and the four
+   * supersedes edge lists (MOTIR-6630), owed a row by MOTIR-6632; every other key a `modify` can carry is visible to the approver.
    */
   type ChangeRowDisposition = { row: PlanItemChangeField } | { noRow: string };
   const DISPOSITION: Record<PlanItemPatchKey, ChangeRowDisposition> = {
@@ -581,6 +581,12 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
     // defaulted, so that card replaces these with the row it draws.
     obsolescence: { noRow: 'owed — MOTIR-6632 renders the proposed mark on the review' },
     obsolescenceNoteMd: { noRow: 'owed — MOTIR-6632 renders the proposed note on the review' },
+    // The four `supersedes` edge lists — carried by MOTIR-6630, owed a change row
+    // by MOTIR-6632 on the same terms as the mark.
+    supersedesAdd: { noRow: 'owed — MOTIR-6632 renders the proposed supersedes edges' },
+    supersedesRemove: { noRow: 'owed — MOTIR-6632 renders the proposed supersedes edges' },
+    supersededByAdd: { noRow: 'owed — MOTIR-6632 renders the proposed superseded-by edges' },
+    supersededByRemove: { noRow: 'owed — MOTIR-6632 renders the proposed superseded-by edges' },
   };
 
   /**

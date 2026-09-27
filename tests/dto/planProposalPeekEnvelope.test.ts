@@ -54,6 +54,11 @@ const EVERY_PATCH_KEY: Required<PlanItemPatch> = {
   // so the denominator below is unchanged by their arrival.
   obsolescence: null,
   obsolescenceNoteMd: null,
+  // The supersedes edge lists (MOTIR-6630) — no rail row yet, likewise.
+  supersedesAdd: [],
+  supersedesRemove: [],
+  supersededByAdd: [],
+  supersededByRemove: [],
 };
 
 describe('the proposal envelope’s SETTABLE rail-field set (MOTIR-4183)', () => {

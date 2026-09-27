@@ -564,6 +564,35 @@ export interface PlanItemPatch {
    * A mark key: legal on a terminal target in a mark-only `modify`.
    */
   obsolescenceNoteMd?: string | null;
+  /**
+   * `supersedes` EDGES with the target as the NEWER card (Story MOTIR-6577 ·
+   * MOTIR-6630): each ref names an OLDER card the target replaces — a real
+   * work-item id or a `planItem:` temp-ref naming an `add` persisted by an
+   * EARLIER call. Approve writes one `supersedes` link per ref (from = the target,
+   * to = the ref; an existing row is a no-op) and records it in the revision's
+   * `links` cell. Checked like `blockedByAdd` (duplicate, self, folder, dangling)
+   * plus a projected supersedes-CYCLE walk, and with NO level rule — `supersedes`
+   * orders nothing and readiness never reads it. Unioned on merge, and cancelled
+   * by the same ref in {@link supersedesRemove}.
+   *
+   * A mark key ({@link PLAN_ITEM_MARK_PATCH_KEYS}): legal on a terminal target.
+   */
+  supersedesAdd?: string[];
+  /** The one `supersedes` row from the target to each ref, DELETED at approve; a
+   *  row that does not exist is a no-op. A mark key. */
+  supersedesRemove?: string[];
+  /**
+   * `supersedes` EDGES with the target as the OLDER card (MOTIR-6630): each ref
+   * names a NEWER card that replaces the target. The SAME storage row as the
+   * newer card's {@link supersedesAdd} spelled from the other end (from = the ref,
+   * to = the target), so both spellings in one plan land as ONE row. A mark key —
+   * marking a `done` card superseded by a proposed one is a legal mark-only
+   * `modify`.
+   */
+  supersededByAdd?: string[];
+  /** The one `supersedes` row from each ref to the target, DELETED at approve; a
+   *  row that does not exist is a no-op. A mark key. */
+  supersededByRemove?: string[];
 }
 
 /**
@@ -608,6 +637,10 @@ export const PLAN_ITEM_PATCH_KEYS = [
   'blockedByRemove',
   'obsolescence',
   'obsolescenceNoteMd',
+  'supersedesAdd',
+  'supersedesRemove',
+  'supersededByAdd',
+  'supersededByRemove',
 ] as const;
 
 export type PlanItemPatchKey = (typeof PLAN_ITEM_PATCH_KEYS)[number];
@@ -626,13 +659,19 @@ export type PlanItemPatchKey = (typeof PLAN_ITEM_PATCH_KEYS)[number];
  * cannot re-open finished work by the back door. The gate and the write read it
  * through ONE predicate, `isMarkOnlyPatch` (`lib/plans/markOnlyPatch.ts`).
  *
- * Extend it by appending a member (the supersedes edge carriers join it next,
- * MOTIR-6630); every member must also be a {@link PLAN_ITEM_PATCH_KEYS} member,
- * which the `satisfies` below holds at compile time.
+ * Extend it by appending a member; every member must also be a
+ * {@link PLAN_ITEM_PATCH_KEYS} member, which the `satisfies` below holds at
+ * compile time. The four `supersedes` edge carriers (MOTIR-6630) are members: an
+ * edge saying which card replaced this one is standing, not work, and it is what
+ * a mark on a finished card most often needs beside it.
  */
 export const PLAN_ITEM_MARK_PATCH_KEYS = [
   'obsolescence',
   'obsolescenceNoteMd',
+  'supersedesAdd',
+  'supersedesRemove',
+  'supersededByAdd',
+  'supersededByRemove',
 ] as const satisfies readonly PlanItemPatchKey[];
 
 export type PlanItemMarkPatchKey = (typeof PLAN_ITEM_MARK_PATCH_KEYS)[number];
@@ -668,6 +707,9 @@ export interface PlanItemDto {
   patch: PlanItemPatch | null;
   parentRef: string | null;
   blockedByRefs: string[];
+  /** `add` only: the older cards the created card supersedes (MOTIR-6630);
+   *  `[]` on every other op and on a plan item written before the column. */
+  supersedesRefs: string[];
   baseRevision: string | null;
   /** `remove` only: why the card is removed (AMENDMENT 18 §3); null otherwise. */
   reason: string | null;
@@ -822,6 +864,13 @@ export interface ProposalInput {
   parentRef?: string | null;
   /** `add` / edge changes: blocked-by refs (real ids or intra-plan temp-refs). */
   blockedByRefs?: string[];
+  /**
+   * `add` only: the OLDER work items the created card SUPERSEDES (Story
+   * MOTIR-6577 · MOTIR-6630) — real ids or intra-plan temp-refs naming an `add`
+   * persisted by an EARLIER call. Each becomes one `supersedes` link at approve
+   * (from = the created card, to = the ref).
+   */
+  supersedesRefs?: string[];
   /** `modify` / `remove`: the target's revision the change was computed against. */
   baseRevision?: string | null;
   /**
@@ -933,6 +982,9 @@ export interface CorrectProposalInput extends UpdateProposalInput {
   parentRef?: string | null;
   /** REPLACES the blocked-by set (see the note above); `[]` clears it. */
   blockedByRefs?: string[];
+  /** `add` only — REPLACES the supersedes set (MOTIR-6630), exactly as
+   *  {@link blockedByRefs} replaces its own; `[]` clears it. */
+  supersedesRefs?: string[];
   /** `add` only — the repo pin, re-validated against the project's connected
    *  repositories exactly as approve does; `null` unpins. */
   targetRepo?: string | null;
@@ -1044,6 +1096,7 @@ export const CORRECT_PROPOSAL_KEYS = [
   ...UPDATE_PROPOSAL_KEYS,
   'parentRef',
   'blockedByRefs',
+  'supersedesRefs',
   'targetRepo',
   'targetRepos',
   'targetRepositories',

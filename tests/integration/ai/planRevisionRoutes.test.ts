@@ -521,6 +521,10 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
   > = {
     parentRef: 'planItem.parentRef',
     blockedByRefs: 'planItem.blockedByRefs',
+    // An `add`'s supersedes set (MOTIR-6630) lands in `planItem.supersedesRefs`;
+    // its TRANSPORT through the internal route is MOTIR-6631's, so it is not
+    // driven through the request body here yet.
+    supersedesRefs: null,
     targetRepo: 'proposedFields.targetRepo',
     // The SET spellings (bug MOTIR-4904) — the same landing place, one field
     // over, and the same transport: `correctionFrom` reads each when PRESENT.

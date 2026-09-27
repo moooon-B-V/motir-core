@@ -62,6 +62,7 @@ function validateAll(nodes: ProposalNode[]): void {
     planProjectId: 'proj_plan',
     ancestorIdsById: new Map(),
     existingBlockedByEdges: [],
+    existingSupersedesEdges: [],
   });
 }
 

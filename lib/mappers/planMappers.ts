@@ -24,6 +24,8 @@ export function toPlanItemDto(row: PlanItem): PlanItemDto {
     patch: (row.patch as PlanItemPatch | null) ?? null,
     parentRef: row.parentRef,
     blockedByRefs: row.blockedByRefs,
+    // A row read through a narrow select may lack the column (MOTIR-6630).
+    supersedesRefs: row.supersedesRefs ?? [],
     baseRevision: row.baseRevision,
     reason: row.reason,
     createdAt: row.createdAt.toISOString(),

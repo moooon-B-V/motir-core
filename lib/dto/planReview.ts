@@ -145,6 +145,12 @@ const PATCH_KEY_RAIL_ROW = {
   // row the peek cannot draw.
   obsolescence: null,
   obsolescenceNoteMd: null,
+  // The four `supersedes` edge lists (MOTIR-6630) — the same disposition as the
+  // mark above: no rail row until MOTIR-6632 renders them.
+  supersedesAdd: null,
+  supersedesRemove: null,
+  supersededByAdd: null,
+  supersededByRemove: null,
 } satisfies Record<keyof PlanItemPatch, PlanItemChangeField | null>;
 
 /**

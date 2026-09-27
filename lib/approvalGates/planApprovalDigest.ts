@@ -19,6 +19,11 @@ import { planItemRepository } from '@/lib/repositories/planItemRepository';
 // purpose: `createdAt`, `workspaceId`, `planId`, and the plan's `title`, `summary` and
 // `status` (the status is a precondition the handler refuses on, not content).
 //
+// ⚠️ ONE ADDITIVE INPUT (MOTIR-6630): an `add`'s `supersedesRefs`, hashed ONLY when
+// non-empty. It is structural content exactly as `blockedByRefs` is — a correction
+// that replaces it must move the version — and omitting it when empty keeps every
+// digest computed before the column existed byte-identical, so no `plan.v2.` is owed.
+//
 // ⚠️ DERIVED, NEVER STORED. A revision leaves the plan `planned` and the gate `awaiting`
 // (§11.5c), so the version moves IN PLACE: it is recomputed each time it is asked for.
 
@@ -36,7 +41,7 @@ export type PlanDigestRow = Pick<
   | 'proposedFields'
   | 'patch'
   | 'baseRevision'
->;
+> & { supersedesRefs?: readonly string[] };
 
 /**
  * `JSON.stringify` over a copy in which every OBJECT's keys are sorted by UTF-16 code
@@ -77,6 +82,9 @@ export function planProposalDigest(rows: readonly PlanDigestRow[]): string {
       proposedFields: row.proposedFields ?? null,
       patch: row.patch ?? null,
       baseRevision: row.baseRevision ?? null,
+      ...(row.supersedesRefs && row.supersedesRefs.length > 0
+        ? { supersedesRefs: row.supersedesRefs }
+        : {}),
     }));
   return (
     PLAN_DIGEST_PREFIX + createHash('sha256').update(canonicalJson({ proposals })).digest('hex')

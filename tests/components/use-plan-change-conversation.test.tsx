@@ -175,6 +175,7 @@ const MATERIALIZED: PlanWithItemsDto = {
       patch: null,
       parentRef: null,
       blockedByRefs: [],
+      supersedesRefs: [],
       baseRevision: null,
       reason: null,
       createdAt: '2026-07-27T09:01:00.000Z',
