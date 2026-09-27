@@ -123,3 +123,68 @@ export class RunGitCredentialUnavailableError extends Error {
     this.name = 'RunGitCredentialUnavailableError';
   }
 }
+
+// --- Starting a hosted run (MOTIR-690) ---
+
+/**
+ * The card cannot be run hosted right now: a LEAF that is not in the to-do
+ * category or still has an open blocker, or a PARENT whose scope is not
+ * finishable, not one layer deep, or holds a child that is not claimable. `detail`
+ * says which, in words the person can act on. Nothing was opened, minted or
+ * booted — or, when the claim itself lost a race after the run opened, the run
+ * was ended as failed before this was thrown.
+ */
+export class HostedRunCardNotReadyError extends Error {
+  readonly code = 'hosted_run_card_not_ready' as const;
+  constructor(
+    readonly key: string,
+    readonly detail: string,
+  ) {
+    super(`${key} cannot be run hosted: ${detail}`);
+    this.name = 'HostedRunCardNotReadyError';
+  }
+}
+
+/**
+ * motir-ai answered the credit pre-flight `mayRun: false` — the dispatcher's
+ * organization has no credits for an agent run (`POST /v1/credits/agent-run-check`,
+ * the gateway's own balance rule). Nothing was opened, minted or booted.
+ */
+export class HostedRunOutOfCreditsError extends Error {
+  readonly code = 'hosted_run_out_of_credits' as const;
+  constructor(readonly balanceCredits: number | null) {
+    super('The organization has no credits left for a hosted run.');
+    this.name = 'HostedRunOutOfCreditsError';
+  }
+}
+
+/**
+ * The credit pre-flight could not be ASKED — motir-ai unreachable, unconfigured
+ * or answering something that is not a verdict. An unanswered question is never
+ * an acceptance, so nothing is started; the person tries again.
+ */
+export class HostedRunCreditsUnavailableError extends Error {
+  readonly code = 'hosted_run_credits_unavailable' as const;
+  constructor() {
+    super('The credit check for a hosted run could not be made. Try again shortly.');
+    this.name = 'HostedRunCreditsUnavailableError';
+  }
+}
+
+/**
+ * The run opened but its container could not be booted — the fleet at its
+ * ceiling, the image not pullable, a refused provision, or this deployment not
+ * wired for hosted runs. The run has already been ended as `failed` (its key and
+ * credential revoked) before this is thrown; `dispatchRunId` names it so the
+ * caller can show what happened.
+ */
+export class HostedRunBootFailedError extends Error {
+  readonly code = 'hosted_run_boot_failed' as const;
+  constructor(
+    readonly dispatchRunId: string,
+    readonly detail: string,
+  ) {
+    super(`The hosted run could not be started: ${detail}`);
+    this.name = 'HostedRunBootFailedError';
+  }
+}

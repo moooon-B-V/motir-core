@@ -219,6 +219,23 @@ export interface HostedAgentSupervisionOptions {
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
   supervisionStore?: SupervisionStore;
+  /**
+   * A session the caller ALREADY booted (MOTIR-690). The hosted start path boots
+   * the container in its own request, because the boot's env carries the run's
+   * two secrets and a job payload or a step memo is a database row: neither may
+   * hold them. Given this, {@link advance}'s boot step memoizes THIS session
+   * instead of booting, so the supervision still replays exactly one boot.
+   */
+  booted?: HostedAgentSession;
+  /**
+   * An extra verdict read before each poll: a failure detail when the run must
+   * end now, `null` while it may go on. The hosted supervisor's STALL read
+   * (MOTIR-690) — no run event inside the stall window. A detail settles the
+   * container through the ordinary settle (`job_timed_out`), so nothing about the
+   * teardown differs from a timeout. A read that throws is treated as alive: an
+   * unanswered question never ends a paying run.
+   */
+  liveness?: (session: HostedAgentSession, now: Date) => Promise<string | null>;
 }
 
 /**
@@ -733,8 +750,11 @@ export const hostedAgentContainerService = {
   ): Promise<HostedAgentContainerOutcome> {
     const steps = options.steps ?? INLINE_STEPS;
 
+    const preBooted = options.booted;
     const booted = await steps.run(hostedAgentBootStepId(request.dispatchId), () =>
-      this.boot(request, options),
+      preBooted
+        ? Promise.resolve<HostedAgentBootResult>({ phase: 'supervising', session: preBooted })
+        : this.boot(request, options),
     );
     if (booted.phase === 'terminal') return booted.outcome;
     const { session } = booted;
@@ -760,6 +780,19 @@ export const hostedAgentContainerService = {
         ...(options.now ? { now: options.now } : {}),
         ...(options.supervisionStore ? { store: options.supervisionStore } : {}),
         poll: async (state) => {
+          const stalled = await livenessVerdict(session, options);
+          if (stalled) {
+            return {
+              done: true,
+              verdict: {
+                done: true,
+                reason: 'job_timed_out',
+                startedAt: state.startedAt ? state.startedAt.toISOString() : null,
+                exitCode: null,
+                failureDetail: stalled,
+              },
+            };
+          }
           const polled = await this.poll(
             session,
             {
@@ -851,6 +884,24 @@ export const hostedAgentContainerService = {
     );
   },
 };
+
+/** The caller's liveness verdict, or `null` — never a throw (see the option). */
+async function livenessVerdict(
+  session: HostedAgentSession,
+  options: HostedAgentSupervisionOptions,
+): Promise<string | null> {
+  if (!options.liveness) return null;
+  const now = options.now ?? ((): Date => new Date());
+  try {
+    return await options.liveness(session, now());
+  } catch (err) {
+    console.warn('[hostedAgentContainerService] a liveness read failed — treated as alive', {
+      containerId: session.handle.id,
+      detail: detailOf(err),
+    });
+    return null;
+  }
+}
 
 /** The `failureDetail` a supervision writes when it settles for a reason of its
  *  own — `job_timed_out` covers all three, so the detail is where they differ. */

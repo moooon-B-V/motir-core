@@ -29,6 +29,7 @@
 // defineJob); the payload type therefore makes `workspaceId` optional.
 
 import type { TransactionalEmail } from '@/lib/services/emailService';
+import type { HostedAgentSession } from '@/lib/services/hostedAgentContainerService';
 
 export interface SystemScheduledData {
   /**
@@ -393,6 +394,26 @@ export interface CiRunnerBootData {
 }
 
 /**
+ * The `hosted-run/supervise` event payload (Story MOTIR-683 · MOTIR-690) — one
+ * per hosted run, emitted by the start path once its container is booted.
+ *
+ * ⚠️ IT CARRIES NO SECRET, and that is why the start path boots before it
+ * enqueues. The boot's env holds the run credential and the gateway key; this
+ * payload is a `job_queue` row. So the container is booted in the request, and
+ * the job supervises the SESSION the boot returned — a handle, attribution and
+ * instants, JSON by contract (`HostedAgentSession`).
+ */
+export interface HostedRunSuperviseData {
+  workspaceId: string;
+  /** The run — `DispatchRun.id`, the one id (§1). */
+  dispatchRunId: string;
+  /** The booted container, exactly as `hostedAgentContainerService.boot` returned it. */
+  session: HostedAgentSession;
+  /** `hosted-run:<dispatchRunId>` — one supervision per run, however often emitted. */
+  idempotencyKey: string;
+}
+
+/**
  * Map of event-name → payload. Each key is a job id and the event name that
  * triggers it; for an event's FIRST consumer the two are the same string (the
  * 1:1 convention). An event with MULTIPLE consumers (e.g.
@@ -516,6 +537,8 @@ export interface JobEventDataMap {
   'filter-subscription/deliver': FilterSubscriptionDeliverData;
   'public-follow/digest': PublicFollowDigestData;
   'account/data-export.requested': DataExportRequestedData;
+  /** A booted hosted run's supervision (Story MOTIR-683 · MOTIR-690). */
+  'hosted-run/supervise': HostedRunSuperviseData;
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;
   'work-item/mentioned': WorkItemMentionedData;

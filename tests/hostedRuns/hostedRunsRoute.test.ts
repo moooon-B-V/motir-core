@@ -1,0 +1,236 @@
+import { generateKeyPairSync } from 'node:crypto';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeOrchestrator } from '@motir/orchestrator';
+import { db } from '@/lib/db';
+import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
+import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
+import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { workItemsService } from '@/lib/services/workItemsService';
+import { adminDb } from '../helpers/adminDb';
+import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+
+// `POST /api/work-items/[id]/hosted-runs` (Story MOTIR-683 · MOTIR-690) — the
+// route Run hosted calls. The compliant-session gate is the one thing stubbed (a
+// route test has no cookie jar); the route, the service and every client are the
+// shipped path, with `fetch` stubbed at motir-ai, the gateway and GitHub and the
+// fleet on the fake orchestrator.
+
+const { requireCompliantWorkspaceContext } = vi.hoisted(() => ({
+  requireCompliantWorkspaceContext: vi.fn(),
+}));
+vi.mock('@/lib/auth/requireCompliantSession', () => ({ requireCompliantWorkspaceContext }));
+
+const { POST } = await import('@/app/api/work-items/[id]/hosted-runs/route');
+
+const MODEL = 'claude-opus-5-5';
+const AI = 'https://ai.test';
+const GATEWAY = 'https://gateway.test';
+const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+const PEM = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString();
+
+function stubHttp(s: { modelsStatus?: number; mayRun?: boolean; installation?: number } = {}) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const method = init?.method ?? 'GET';
+      const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null;
+      const json = (status: number, payload: unknown) =>
+        new Response(JSON.stringify(payload), {
+          status,
+          headers: { 'content-type': 'application/json' },
+        });
+      if (url === `${AI}/v1/agent-models`) {
+        return (s.modelsStatus ?? 200) === 200
+          ? json(200, { models: [{ id: MODEL, provider: 'anthropic' }], default: MODEL })
+          : json(s.modelsStatus!, {});
+      }
+      if (url === `${AI}/v1/credits/agent-run-check`) {
+        const mayRun = s.mayRun ?? true;
+        return json(200, { balanceCredits: mayRun ? 10 : 0, hasCredits: mayRun, mayRun });
+      }
+      if (url === `${GATEWAY}/api/motir/run-keys` && method === 'POST') {
+        return json(201, { key: 'sk-run', runRef: body?.runRef, expiresAt: body?.expiresAt });
+      }
+      if (url.startsWith(`${GATEWAY}/api/motir/run-keys/`) && method === 'DELETE') {
+        return json(200, { revoked: 1 });
+      }
+      if (/\/repos\/[^/]+\/[^/]+\/installation$/.test(url)) {
+        if ((s.installation ?? 200) !== 200) return json(s.installation!, {});
+        return json(200, {
+          id: 42,
+          account: { login: 'acme' },
+          permissions: { contents: 'write', pull_requests: 'write' },
+          suspended_at: null,
+          html_url: 'https://github.com/organizations/acme/settings/installations/42',
+        });
+      }
+      throw new Error(`unexpected fetch in test: ${method} ${url}`);
+    }),
+  );
+}
+
+let fx: WorkItemFixture;
+
+/** A card created the way the product creates one — in its workflow's initial status. */
+function newCard(input: { kind: 'task' | 'story'; title: string; parentId?: string }) {
+  return workItemsService.createWorkItem({ projectId: fx.projectId, ...input }, fx.ctx);
+}
+
+async function seedRepo(state: 'created' | 'connected'): Promise<void> {
+  const owner = state === 'created' ? 'motir-projects' : 'acme';
+  const inst = await adminDb.githubInstallation.create({
+    data: {
+      installationId: `inst-${fx.workspaceId}`,
+      workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
+      accountLogin: owner,
+      accountType: 'Organization',
+      provider: 'github',
+    },
+  });
+  const repo = await adminDb.githubRepo.create({
+    data: {
+      installationId: inst.id,
+      workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
+      repoId: '600001',
+      owner,
+      name: 'site',
+      defaultBranch: 'main',
+      archived: false,
+      provider: 'github',
+    },
+  });
+  await adminDb.projectRepo.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      role: 'web',
+      name: 'site',
+      seedSource: SEED_SOURCE_PLATFORM_STARTER,
+      state,
+      position: 'a000',
+      githubRepoId: repo.id,
+    },
+  });
+}
+
+function post(key: string, body: unknown): Promise<Response> {
+  return POST(
+    new Request(`https://app.test/api/work-items/${key}/hosted-runs`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ id: key }) },
+  );
+}
+
+beforeEach(async () => {
+  await truncateAuthTables();
+  await truncateJobRuns();
+  await adminDb.fleetInFlightSlot.deleteMany({});
+  fakeOrchestrator.reset();
+  _resetRunGitBotAuthors();
+  fx = await makeWorkItemFixture();
+  requireCompliantWorkspaceContext.mockResolvedValue({ ok: true, ctx: fx.ctx });
+  vi.stubEnv('MOTIR_CLOUD', 'true');
+  vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
+  vi.stubEnv('MOTIR_AI_URL', `${AI}/`);
+  vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
+  vi.stubEnv('MOTIR_GATEWAY_URL', GATEWAY);
+  vi.stubEnv('MOTIR_RUN_KEY_MINT_SECRET', 'mint-secret');
+  vi.stubEnv('GITHUB_STUDIO_APP_ID', '111');
+  vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', PEM);
+  vi.stubEnv('GITHUB_APP_ID', '222');
+  vi.stubEnv('GITHUB_APP_PRIVATE_KEY', PEM);
+  stubHttp();
+});
+
+afterEach(async () => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  await adminDb.fleetInFlightSlot.deleteMany({});
+});
+
+afterAll(async () => {
+  await db.$disconnect();
+  await adminDb.$disconnect();
+});
+
+describe('POST /api/work-items/[id]/hosted-runs (AC8)', () => {
+  it('201 with the run id for a ready card and an offered model', async () => {
+    await seedRepo('created');
+    const card = await newCard({ kind: 'task', title: 'a card' });
+
+    const res = await post(card.identifier, { model: MODEL, idempotencyKey: 'k1' });
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { dispatchRunId: string; created: boolean };
+    expect(body.created).toBe(true);
+    const run = await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: body.dispatchRunId } });
+    expect(run.origin).toBe('hosted');
+  });
+
+  it('422 hosted_model_not_offered on a model not offered', async () => {
+    await seedRepo('created');
+    const card = await newCard({ kind: 'task', title: 'a card' });
+    const res = await post(card.identifier, { model: 'gpt-9' });
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { code: string }).code).toBe('hosted_model_not_offered');
+  });
+
+  it('503 hosted_models_unavailable when the list cannot be read', async () => {
+    await seedRepo('created');
+    const card = await newCard({ kind: 'task', title: 'a card' });
+    stubHttp({ modelsStatus: 500 });
+    const res = await post(card.identifier, { model: MODEL });
+    expect(res.status).toBe(503);
+    expect(((await res.json()) as { code: string }).code).toBe('hosted_models_unavailable');
+  });
+
+  it('402 hosted_run_out_of_credits when the pre-flight says no', async () => {
+    await seedRepo('created');
+    const card = await newCard({ kind: 'task', title: 'a card' });
+    stubHttp({ mayRun: false });
+    const res = await post(card.identifier, { model: MODEL });
+    expect(res.status).toBe(402);
+    expect(((await res.json()) as { code: string }).code).toBe('hosted_run_out_of_credits');
+  });
+
+  it('409 hosted_repository_not_writable, listing each repository with its reason and fix', async () => {
+    await seedRepo('connected');
+    const card = await newCard({ kind: 'task', title: 'a card' });
+    stubHttp({ installation: 404 });
+    const res = await post(card.identifier, { model: MODEL });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { code: string; repositories: unknown[] };
+    expect(body.code).toBe('hosted_repository_not_writable');
+    expect(body.repositories).toEqual([
+      expect.objectContaining({ repository: 'acme/site', fix: 'reconnect' }),
+    ]);
+  });
+
+  it('409 hosted_run_card_not_ready on a card that is not ready', async () => {
+    await seedRepo('created');
+    const card = await newCard({ kind: 'task', title: 'a card' });
+    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'done' } });
+    const res = await post(card.identifier, { model: MODEL });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { code: string }).code).toBe('hosted_run_card_not_ready');
+  });
+
+  it('404 across tenants — a card in another workspace', async () => {
+    await seedRepo('created');
+    const card = await newCard({ kind: 'task', title: 'a card' });
+    const other = await makeWorkItemFixture({ name: 'Elsewhere', identifier: 'ELSE' });
+    requireCompliantWorkspaceContext.mockResolvedValue({ ok: true, ctx: other.ctx });
+    const res = await post(card.identifier, { model: MODEL });
+    expect(res.status).toBe(404);
+  });
+
+  it('400 without a model', async () => {
+    const res = await post('PROD-1', {});
+    expect(res.status).toBe(400);
+  });
+});

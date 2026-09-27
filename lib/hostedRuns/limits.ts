@@ -1,4 +1,5 @@
-// A hosted run's time limits (`docs/decisions/hosted-agent-run.md` §5).
+// A hosted run's time limits (`docs/decisions/hosted-agent-run.md` §5, as the
+// run-dies decision MOTIR-6525 amends it: no wall-clock limit but the backstop).
 //
 // ONE home for the numbers every credential's expiry is derived from, so the
 // run key, the run token and the git credential cannot drift apart: nothing a
@@ -6,13 +7,18 @@
 // leaf module with no imports, safe for any layer.
 
 /**
- * The wall-clock timeout of a hosted run, from boot: 90 minutes. A leaf's agent
- * run is capped at 60 minutes by the planning corpus; the rest is an allowance
- * for clone, install, codegraph index, push and pull request. The fleet seam's
- * own ceiling (`HOSTED_AGENT_MAX_TIMEOUT_MS`, 12 hours) is a spend backstop, not
- * this.
+ * The longest a hosted run lives, from boot: the fleet's 12-hour spend BACKSTOP.
+ *
+ * ⚠️ THERE IS NO OTHER WALL-CLOCK LIMIT (the run-dies decision, MOTIR-6525, which
+ * withdrew `hosted-agent-run.md` §5's 90 minutes). A healthy run producing output
+ * is not stopped by a clock — a parent worked through its children legitimately
+ * takes hours; only the 15-minute no-output stall below ends a live run early.
+ * So the container's hard kill, the run key's expiry and the run credential's
+ * expiry are all this one figure. It equals `HOSTED_AGENT_MAX_TIMEOUT_MS`, the
+ * container seam's own ceiling, and a test holds the two equal (this module stays
+ * a leaf with no imports, so it states the number rather than importing it).
  */
-export const HOSTED_RUN_TIMEOUT_MS = 90 * 60_000;
+export const HOSTED_RUN_TIMEOUT_MS = 12 * 60 * 60_000;
 
 /** The stall window: no agent output for this long ends the run as `timed_out`. */
 export const HOSTED_RUN_STALL_WINDOW_MS = 15 * 60_000;

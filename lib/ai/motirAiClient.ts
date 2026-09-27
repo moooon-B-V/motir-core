@@ -1941,6 +1941,48 @@ export async function getAgentModels(): Promise<AgentModelsRead> {
   }
 }
 
+/** motir-ai's answer to the hosted-run credit pre-flight (MOTIR-6447). */
+export interface AgentRunCreditVerdict {
+  /** The one boolean the start path acts on — the gateway's own balance rule. */
+  mayRun: boolean;
+  balanceCredits: number;
+}
+
+function parseAgentRunCreditVerdict(body: unknown): AgentRunCreditVerdict | null {
+  if (!body || typeof body !== 'object') return null;
+  const { mayRun, balanceCredits } = body as { mayRun?: unknown; balanceCredits?: unknown };
+  if (typeof mayRun !== 'boolean') return null;
+  return { mayRun, balanceCredits: typeof balanceCredits === 'number' ? balanceCredits : 0 };
+}
+
+/**
+ * POST /v1/credits/agent-run-check — may this organization start a hosted agent
+ * run? (MOTIR-6447; motir-ai `docs/contract.md`.) Asked by the start path BEFORE a
+ * run is opened, a key minted or a container booted (MOTIR-690).
+ *
+ * ⚠️ TOTAL: every failure — unconfigured, unreachable, a non-2xx, a body with no
+ * `mayRun` — returns `null`, which means "could not ask". The contract answers a
+ * refusal as a 200 with `mayRun: false` and an undecidable request as an error
+ * with NO `mayRun`, precisely so the two never read alike; the start path refuses
+ * on both, with different words.
+ */
+export async function checkAgentRunCredits(
+  coreOrganizationId: string,
+): Promise<AgentRunCreditVerdict | null> {
+  try {
+    const { url, serviceToken } = config();
+    const res = await aiFetch(`${url}/v1/credits/agent-run-check`, {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify({ coreOrganizationId }),
+    });
+    if (!res.ok) return null;
+    return parseAgentRunCreditVerdict(await res.json().catch(() => null));
+  } catch {
+    return null;
+  }
+}
+
 // ── Organization lifecycle (Story MOTIR-6306) ────────────────────────────────
 
 /** motir-ai's answer to a closing / reopen call: whether anything changed, and

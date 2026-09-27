@@ -240,6 +240,14 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ billableSeconds: number; containerId: string; costUsd: string; exitCode: null | number; failureDetail: null | string; outcome: "settled"; reason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; usage: { billableSeconds: number; costUsd: string; cpuKind: "performance" | "shared"; cpus: number; createdAt: Date; dispatchRunId?: null | string | undefined; handleId: string; memoryMb: number; orgId: string; projectId: string; provider: "arc" | "fake" | "fly" | "runs_on"; rateEffectiveFrom: Date | null; region: string; repoFullName: null | string; slices?: Array<{ projectId: string; repoFullName: string; seconds: number; sliceRef: string }> | undefined; startedAt: Date | null; stoppedAt: Date; teardownReason: "gate_revoked" | "job_completed" | "job_timed_out" | "provision_failed" | "reaped"; terminalState: string; usdPerSecond: string; workflowJobId: null | number; workload: "ci_runner" | "code_graph_index" | "hosted_agent"; workspaceId: string } } | { detail: string; outcome: "admission_deferred"; reason: string } | { detail: string; outcome: "image_unpullable" } | { detail: string; outcome: "provision_failed" } | { detail: string; outcome: "teardown_failed" }',
   },
+  // MOTIR-690 — a hosted run ended through the end path's seam once its
+  // container settled. Idempotent by construction (revocations are, and the close
+  // is skipped for a run already closed), so the memo only saves the calls.
+  'hostedRunEndStepId(data.dispatchRunId)': {
+    file: 'lib/services/hostedRunService.ts',
+    shape:
+      '{ closed: boolean; gitCredentials: { failed: number; revoked: number }; runCredential: number; runKey: "failed" | "revoked" }',
+  },
   'index-allowance': {
     file: 'lib/jobs/indexFleetSteps.ts',
     shape:
@@ -601,6 +609,8 @@ export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
 export const FORWARDING_SEAMS: Record<string, string> = {
   'lib/jobs/definitions/ciRunnerFleet.ts':
     "`stepSeam` — adapts `ctx.step` to `RunnerSupervisionSteps` for `ciRunnerBootService`, whose own `steps.run('boot-runner' | 'settle-runner', …)` sites are pinned above.",
+  'lib/jobs/definitions/hostedRunSupervise.ts':
+    '`ctx.step` adapted to `MemoizingSteps` for `hostedRunService.supervise` (MOTIR-690), whose own `steps.run(hostedRunEndStepId(…))` site is pinned above, and which hands the same seam to `hostedAgentContainerService.advance`, whose boot / settle / charge sites are pinned above.',
   'lib/jobs/indexFleetSteps.ts':
     '`stepSeam` — adapts `ctx.step` to `SupervisionSteps` for `codeGraphIndexDispatchService`, whose own `steps.run(`index-admit:` | `index-boot:` | `index-settle:`, …)` sites are pinned above.',
 };

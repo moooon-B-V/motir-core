@@ -139,6 +139,23 @@ export const dispatchRunEventRepository = {
     });
   },
 
+  /**
+   * When the run's LATEST event was written, or null — the hosted stall read
+   * (MOTIR-690): a run whose newest event is older than the stall window has an
+   * agent that is alive and silent. Ordered by `seq`, the server-assigned order.
+   */
+  async findLatestCreatedAt(
+    dispatchRunId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Date | null> {
+    const row = await tx.dispatchRunEvent.findFirst({
+      where: { dispatchRunId },
+      orderBy: { seq: 'desc' },
+      select: { createdAt: true },
+    });
+    return row?.createdAt ?? null;
+  },
+
   async countByRun(dispatchRunId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.dispatchRunEvent.count({ where: { dispatchRunId } });
   },

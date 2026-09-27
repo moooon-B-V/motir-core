@@ -38,6 +38,7 @@ import { autoPlanCadenceTick } from './definitions/autoPlanCadenceTick';
 import { ciMinutesReconcile } from './definitions/ciMinutesReconcile';
 import { ciActionsGateSweep } from './definitions/ciActionsGateSweep';
 import { ciRunnerProvisionSweep, ciRunnerBoot, ciRunnerReap } from './definitions/ciRunnerFleet';
+import { hostedRunSupervise } from './definitions/hostedRunSupervise';
 import {
   statusDerivationOnChildSetChanged,
   statusDerivationOnCreated,
@@ -123,6 +124,7 @@ export const jobDefinitions = [
   ciRunnerProvisionSweep,
   ciRunnerBoot,
   ciRunnerReap,
+  hostedRunSupervise,
   planDriftOnTransitioned,
   statusDerivationOnTransitioned,
   statusDerivationOnCreated,

@@ -319,15 +319,27 @@ async function findRun(dispatchRunId: string) {
  */
 export async function runRepositories(dispatchRunId: string): Promise<RunRepository[]> {
   const run = await findRun(dispatchRunId);
-  const { rows, chosen } = await withWorkspaceServiceContext(run.workspaceId, async (tx) => {
+  const itemIds = await withWorkspaceServiceContext(run.workspaceId, async (tx) => {
     const legs = await dispatchRunCardRepository.listByRun(run.id, tx);
-    const itemIds = legs.map((l) => l.workItemId).filter((id): id is string => id !== null);
-    const refs = await workItemRepoRepository.listByWorkItems(itemIds, tx);
-    const projectRows = await projectRepoRepository.listByProject(
-      run.projectId,
-      run.workspaceId,
-      tx,
-    );
+    return legs.map((l) => l.workItemId).filter((id): id is string => id !== null);
+  });
+  return repositoriesForItems(run.projectId, run.workspaceId, itemIds);
+}
+
+/**
+ * The repository set a run over `itemIds` WOULD cover — {@link runRepositories}'
+ * rule, answered from the cards rather than from a run. The start path (MOTIR-690)
+ * needs it BEFORE a run exists: it refuses a run that could not write, and a
+ * refusal must open nothing.
+ */
+export async function repositoriesForItems(
+  projectId: string,
+  workspaceId: string,
+  itemIds: readonly string[],
+): Promise<RunRepository[]> {
+  const { rows, chosen } = await withWorkspaceServiceContext(workspaceId, async (tx) => {
+    const refs = await workItemRepoRepository.listByWorkItems([...itemIds], tx);
+    const projectRows = await projectRepoRepository.listByProject(projectId, workspaceId, tx);
     const picked = new Set(refs.map((r) => r.projectRepoId));
     const itemsWithRefs = new Set(refs.map((r) => r.workItemId));
     const primary = projectRows[0];

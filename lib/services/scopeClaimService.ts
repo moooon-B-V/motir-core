@@ -225,6 +225,53 @@ export const scopeClaimService = {
       blockers: [],
     };
   },
+
+  /**
+   * WOULD this container's scope claim succeed? The same resolution, validation
+   * and shape rule as {@link claimScope}, and the same to-do-category test on
+   * every member — read WITHOUT a lock, and writing nothing.
+   *
+   * It exists for the hosted start path (MOTIR-690), which must refuse a run that
+   * could not be claimed BEFORE it opens a run, mints a key or boots a machine: a
+   * claim taken first and refused later (the model withdrawn, no credits) would
+   * strand every card in `in_progress`. The real claim still runs afterwards,
+   * under its lock, and is the arbiter of a race this read cannot see.
+   *
+   * Answers the root and its children in `position` order, or the reason in words.
+   */
+  async previewWorkItemScope(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+  ): Promise<{ ok: true; rootId: string; childIds: string[] } | { ok: false; detail: string }> {
+    const resolved = await resolveWorkItemScope(projectId, identifier, ctx);
+    if (!resolved.ok) {
+      const refusal = resolved.refusal;
+      return {
+        ok: false,
+        detail:
+          refusal.outcome === 'not_finishable'
+            ? `its scope is not finishable — waiting on ${[
+                ...new Set(refusal.blockers.map((b) => b.blockedBy)),
+              ].join(', ')}`
+            : `${refusal.shape.child} has children of its own; a parent run is one layer deep`,
+      };
+    }
+    const [rootId, ...childIds] = resolved.memberIds;
+    /* v8 ignore next -- `resolveWorkItemScope` always puts the root first */
+    if (!rootId) return { ok: false, detail: 'it could not be resolved' };
+    const states = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findClaimStatesByIds(resolved.memberIds, tx),
+    );
+    const offender = states.find((s) => !isClaimableState(s));
+    if (offender) {
+      return {
+        ok: false,
+        detail: `${offender.identifier} is ${offender.status}, not in the to-do category`,
+      };
+    }
+    return { ok: true, rootId, childIds };
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
