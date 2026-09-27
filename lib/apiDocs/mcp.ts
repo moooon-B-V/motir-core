@@ -516,7 +516,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // next run is told to address, so the line names it.
     summary:
       'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
-    descriptionFingerprint: '882e56fda8df',
+    // Re-pinned for MOTIR-6580, summary UNCHANGED: the text block gains the
+    // Supersedes / Superseded by link groups — two more edge groups, which the
+    // summary's "dependency edges" already covers without enumerating groups.
+    descriptionFingerprint: 'e4d933849bf1',
   },
   get_design: {
     // Story MOTIR-5553 · MOTIR-5561.
@@ -977,7 +980,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-6509, summary UNCHANGED: the description stops naming a
     // CROSS_LEVEL_LINK refusal — a cross-level edge is written and reported by
     // `validate_work_item` instead. The summary named no refusal either way.
-    descriptionFingerprint: '6e24487c17e0',
+    // Re-pinned for MOTIR-6580, summary UNCHANGED: the relationship enum gains
+    // `supersedes` / `superseded_by`; blocked_by is still the only edge that holds
+    // an item out of the ready set, which is all the summary claims.
+    descriptionFingerprint: 'a5762942a5e1',
   },
   unlink_work_items: {
     summary: 'Remove an edge, given the same relationship used to create it.',
