@@ -250,6 +250,34 @@ describe('PATCH /api/workspaces/:workspaceId/members/:userId/access-scope', () =
   });
 });
 
+describe('workspacesService.setMemberAccessScope — who is refused before anything is written', () => {
+  it('a reader who is not in the workspace is NOT_A_MEMBER', async () => {
+    const f = await build();
+    const stranger = await user('stranger2');
+    await expect(
+      workspacesService.setMemberAccessScope({
+        actorUserId: stranger.id,
+        workspaceId: f.workspaceId,
+        targetUserId: f.member.id,
+        scope: 'limited',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_A_MEMBER' });
+  });
+
+  it('a target who is not a member of the workspace is not found', async () => {
+    const f = await build();
+    const outsider = await user('outsider');
+    await expect(
+      workspacesService.setMemberAccessScope({
+        actorUserId: f.manager.id,
+        workspaceId: f.workspaceId,
+        targetUserId: outsider.id,
+        scope: 'limited',
+      }),
+    ).rejects.toMatchObject({ code: expect.stringMatching(/NOT_FOUND|NOT_A_MEMBER/) });
+  });
+});
+
 describe('workspacesService.getMemberRoleContext — who may invite, and with which projects (MOTIR-6551)', () => {
   it('a Manager may invite with Limited, and is handed every project for the picker', async () => {
     const f = await build();

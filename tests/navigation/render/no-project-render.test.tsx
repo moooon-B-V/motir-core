@@ -72,6 +72,21 @@ describe('/no-project', () => {
     getSession.mockResolvedValue(null);
     await expect(renderTree(NoProjectPage)).rejects.toThrow('REDIRECT:/sign-in');
   });
+
+  it('sends a reader with no workspace to sign-in too', async () => {
+    getSession.mockResolvedValue({ user: { id: 'u1' } });
+    getWorkspaceContext.mockResolvedValue(null);
+    await expect(renderTree(NoProjectPage)).rejects.toThrow('REDIRECT:/sign-in');
+  });
+
+  it('renders with an empty workspace name when the summary cannot be read', async () => {
+    signedIn();
+    getWorkspaceSummary.mockResolvedValue(null);
+    getActiveProject.mockResolvedValue(null);
+    canOfferCreateProject.mockResolvedValue(true);
+    const shell = findFirst(await renderTree(NoProjectPage), NoProjectShell);
+    expect(shell?.props).toEqual({ workspaceName: '', canCreateProject: true });
+  });
 });
 
 describe('NoProjectShell', () => {

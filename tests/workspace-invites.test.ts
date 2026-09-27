@@ -530,6 +530,20 @@ describe('an invite carries the access scope', () => {
     expect((await postInvite(f.workspace.id, { email: 'x4@example.com' })).status).toBe(200);
   });
 
+  it('a malformed projectIds is a 400 before anything is read (MOTIR-6546)', async () => {
+    const f = await setup();
+    mockSession.current = { user: { id: f.manager.id, email: f.manager.email, name: 'Manager' } };
+    for (const projectIds of ['p1', [1, 2], [f.alpha.id, null]]) {
+      const res = await postInvite(f.workspace.id, {
+        email: 'bad-ids@example.com',
+        accessScope: 'limited',
+        projectIds,
+      });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { code: string }).code).toBe('BAD_REQUEST');
+    }
+  });
+
   it('projects on a Full invite are a 400, and so is a project of another workspace or an archived one', async () => {
     const f = await setup();
     const { workspace: elsewhere, user: otherOwner } = await makeInviter(

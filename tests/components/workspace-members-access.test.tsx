@@ -255,3 +255,72 @@ describe('the invite (W7 / W8 / W9)', () => {
     expect(screen.queryByRole('button', { name: /Invite/ })).toBeNull();
   });
 });
+
+describe('the edges of the Access column and the invite', () => {
+  it('re-picking the scope a row already has writes nothing', async () => {
+    renderCard();
+    fireEvent.click(accessPicker('Ada')!);
+    fireEvent.click(await screen.findByRole('option', { name: /^Full/ }));
+    expect(setMemberAccessScopeAction).not.toHaveBeenCalled();
+  });
+
+  it('a failed "N projects" read says so in the popover', async () => {
+    listMemberAddedProjectsAction.mockResolvedValue({
+      ok: false,
+      error: 'Couldn’t load their projects.',
+    });
+    renderCard();
+    fireEvent.click(within(rowOf('Cy Contractor')).getByRole('button', { name: '2 projects' }));
+    expect(await screen.findByText('Couldn’t load their projects.')).toBeTruthy();
+  });
+
+  it('closing the popover reads nothing more', async () => {
+    listMemberAddedProjectsAction.mockResolvedValue({ ok: true, projects: [] });
+    renderCard();
+    const count = within(rowOf('Cy Contractor')).getByRole('button', { name: '2 projects' });
+    fireEvent.click(count);
+    await waitFor(() => expect(listMemberAddedProjectsAction).toHaveBeenCalledTimes(1));
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await waitFor(() => expect(listMemberAddedProjectsAction).toHaveBeenCalledTimes(1));
+  });
+
+  it('a picked project can be taken back out of a Limited invite', async () => {
+    renderCard();
+    fireEvent.click(screen.getByRole('button', { name: /Invite/ }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Email address'), {
+      target: { value: 'cy@ex.com' },
+    });
+    fireEvent.click(within(dialog).getByRole('radio', { name: /^Limited/ }));
+    fireEvent.focus(within(dialog).getByRole('combobox', { name: 'Projects to join' }));
+    fireEvent.click(await within(dialog).findByRole('option', { name: /Alpha · ALP/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove Alpha · ALP' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Send invite' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse((fetchMock.mock.calls.at(-1)![1] as RequestInit).body as string)).toEqual({
+      email: 'cy@ex.com',
+      accessScope: 'limited',
+      projectIds: [],
+    });
+  });
+
+  it('an invite the inviter may not send says who can', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ code: 'INVITE_SCOPE_FORBIDDEN' }),
+    });
+    renderCard(context({ canManageRoles: false, inviteProjects: [] }));
+    fireEvent.click(screen.getByRole('button', { name: /Invite/ }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Email address'), {
+      target: { value: 'x@ex.com' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Send invite' }));
+    expect(
+      await within(dialog).findByText(
+        'You can’t send this invite. Only a workspace Manager can invite with Limited access.',
+      ),
+    ).toBeTruthy();
+  });
+});

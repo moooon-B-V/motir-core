@@ -189,6 +189,28 @@ describe('the Members-only confirm (design A2 / A3)', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('a person with no name is shown by their email, initial included', async () => {
+    fetchMock.mockResolvedValueOnce(
+      ok({
+        losing: [
+          {
+            userId: 'u-anon',
+            name: '',
+            email: 'quinn@motir.co',
+            workspaceRole: 'viewer',
+            customRoleName: null,
+          },
+        ],
+      }),
+    );
+    renderAdmin();
+    fireEvent.click(radio(/^Members only/));
+    const dialog = await screen.findByRole('dialog', { name: 'Make motir members only?' });
+    expect(within(dialog).getByText('quinn@motir.co')).toBeTruthy();
+    expect(within(dialog).getByText('Q')).toBeTruthy();
+    expect(within(dialog).getByText('Viewer')).toBeTruthy();
+  });
+
   it('with nobody losing access, still confirms — one sentence in place of the list', async () => {
     fetchMock.mockResolvedValueOnce(ok({ losing: [] }));
     renderAdmin();

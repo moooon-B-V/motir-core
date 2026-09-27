@@ -158,6 +158,25 @@ describe('GET /api/projects/[key]/access/preview', () => {
     f.as(f.plain.id);
     expect((await preview(f.key, 'members')).status).toBe(403);
   });
+
+  it('401 with no session, the 2FA hold answered as-is, and an unknown fault rethrown', async () => {
+    const f = await fixture('route-preview-edges');
+    getWorkspaceContext.mockResolvedValue(null);
+    expect((await preview(f.key, 'members')).status).toBe(401);
+
+    f.as(f.owner.id);
+    refuseIfNonCompliant.mockResolvedValueOnce(
+      new Response(JSON.stringify({ code: 'TWO_FACTOR_REQUIRED' }), { status: 403 }) as never,
+    );
+    expect((await preview(f.key, 'members')).status).toBe(403);
+
+    const { projectMembersService } = await import('@/lib/services/projectMembersService');
+    const spy = vi
+      .spyOn(projectMembersService, 'previewAccessModeChange')
+      .mockRejectedValueOnce(new Error('the database went away'));
+    await expect(preview(f.key, 'members')).rejects.toThrow('the database went away');
+    spy.mockRestore();
+  });
 });
 
 describe('projectMembersService.getPageCapabilities — what the Access & members page offers (MOTIR-6550)', () => {
