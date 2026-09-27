@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { trackRequestedTransactions } from '../helpers/requestedTransactions';
 import { truncateAuthTables } from '../helpers/db';
 
 // MOTIR-6627 — Sentry `PrismaClientKnownRequestError: Transaction API error: Unable
@@ -38,29 +39,6 @@ async function makePublicProjectFixture(): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name: 'Acme' });
   await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
   return fx;
-}
-
-/**
- * Wrap `db.$transaction` and record the peak number of interactive transactions
- * REQUESTED at once — counted from the call, not from the callback, because the
- * pool demand starts when the caller asks for a connection. Counting inside the
- * callback measures only the ones that already got one, which is what a starved
- * pool hides.
- */
-function trackRequestedTransactions(): { peak: () => number } {
-  const original = db.$transaction.bind(db);
-  let inFlight = 0;
-  let peak = 0;
-  vi.spyOn(db, '$transaction').mockImplementation(((arg: unknown, options?: unknown) => {
-    // Only the interactive (callback) form holds a connection across awaits.
-    if (typeof arg !== 'function') return original(arg as never, options as never);
-    inFlight += 1;
-    peak = Math.max(peak, inFlight);
-    return original(arg as never, options as never).finally(() => {
-      inFlight -= 1;
-    });
-  }) as typeof db.$transaction);
-  return { peak: () => peak };
 }
 
 describe('publicProjectsService.getOverview — pool slots per render (MOTIR-6627)', () => {
