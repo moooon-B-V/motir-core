@@ -64,6 +64,25 @@ describe('mergeModifyPatch — per key class', () => {
     });
   });
 
+  it('the OBSOLESCENCE mark and its note (MOTIR-6629) merge as scalars — later wins, `null` clears', () => {
+    expect(
+      mergeModifyPatch(
+        { obsolescence: 'outdated', obsolescenceNoteMd: 'first' },
+        { obsolescence: 'deprecated' },
+      ),
+    ).toEqual({ obsolescence: 'deprecated', obsolescenceNoteMd: 'first' });
+    expect(mergeModifyPatch({ obsolescence: 'outdated' }, { obsolescenceNoteMd: 'why' })).toEqual({
+      obsolescence: 'outdated',
+      obsolescenceNoteMd: 'why',
+    });
+    expect(
+      mergeModifyPatch(
+        { obsolescence: 'outdated', obsolescenceNoteMd: 'why' },
+        { obsolescence: null, obsolescenceNoteMd: null },
+      ),
+    ).toEqual({ obsolescence: null, obsolescenceNoteMd: null });
+  });
+
   it('treats a missing patch on either side as empty', () => {
     expect(mergeModifyPatch(null, { title: 'T' })).toEqual({ title: 'T' });
     expect(mergeModifyPatch({ title: 'T' }, undefined)).toEqual({ title: 'T' });

@@ -546,9 +546,8 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
    * sees for it. That is the whole ratchet: the answer may legitimately be
    * "nothing", but it has to be written down rather than defaulted into.
    *
-   * `noRow` has no members today — every key a `modify` can carry is now visible
-   * to the approver — and the arm is kept because the next key is the one this
-   * guard exists for.
+   * `noRow` holds only the obsolescence pair (MOTIR-6629), owed a row by
+   * MOTIR-6632; every other key a `modify` can carry is visible to the approver.
    */
   type ChangeRowDisposition = { row: PlanItemChangeField } | { noRow: string };
   const DISPOSITION: Record<PlanItemPatchKey, ChangeRowDisposition> = {
@@ -577,6 +576,11 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
     // `+2 / −1 blockers` rather than naming each edge (MOTIR-3366's carriers).
     blockedByAdd: { row: 'links' },
     blockedByRemove: { row: 'links' },
+    // The OBSOLESCENCE mark and its note — carried by MOTIR-6629, OWED a change
+    // row by MOTIR-6632 (the review render). Recorded as owed rather than
+    // defaulted, so that card replaces these with the row it draws.
+    obsolescence: { noRow: 'owed — MOTIR-6632 renders the proposed mark on the review' },
+    obsolescenceNoteMd: { noRow: 'owed — MOTIR-6632 renders the proposed note on the review' },
   };
 
   /**

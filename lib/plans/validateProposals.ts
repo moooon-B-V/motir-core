@@ -34,6 +34,7 @@ import {
 import { isWorkItemType, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
 import { isDifficultyRefusedOnKind } from '@/lib/plans/validateProposedDifficulty';
+import { isMarkOnlyPatch } from '@/lib/plans/markOnlyPatch';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
 import { crossLevelReason, isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
 import {
@@ -97,6 +98,14 @@ export interface ProposalNode {
     difficulty?: string | null;
     blockedByAdd?: string[] | null;
     blockedByRemove?: string[] | null;
+    /** The obsolescence MARK and its note (MOTIR-6629) — never judged here
+     *  (membership is the proposal doors'); step 4 reads only whether the patch
+     *  carries mark keys ALONE (`isMarkOnlyPatch`), which admits it to a terminal
+     *  target. The gate reads the patch's whole KEY SET for that, so every other
+     *  key the row holds counts against the carve-out even though it is not
+     *  typed here. */
+    obsolescence?: string | null;
+    obsolescenceNoteMd?: string | null;
   } | null;
 }
 
@@ -1511,9 +1520,17 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   // 4. Done-work immutability. A `modify`/`remove` never rewrites completed work.
   //    A target that resolves to nothing is left to `materialize`, which raises
   //    `PlanItemTargetMissingError` and rolls the whole approve back.
+  //
+  //    ONE CARVE-OUT (Story MOTIR-6577 · MOTIR-6629): a `modify` whose patch
+  //    carries ONLY `PLAN_ITEM_MARK_PATCH_KEYS` — the obsolescence mark and its
+  //    note — may reach a terminal target, because marking finished work is what
+  //    the mark is for, and it changes the card's standing, never its work. It is
+  //    keyed on the patch's KEYS (`isMarkOnlyPatch`), so any other key beside a
+  //    mark is still refused, and a `remove` of a terminal card always is.
   for (const item of items) {
     if (item.op !== 'modify' && item.op !== 'remove') continue;
     if (!item.workItemId) continue;
+    if (item.op === 'modify' && isMarkOnlyPatch(item.patch)) continue;
     const target = liveById.get(item.workItemId);
     if (target && terminalStatusKeys.has(target.status)) {
       throw new PlanTargetImmutableError(

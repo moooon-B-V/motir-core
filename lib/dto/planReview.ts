@@ -139,6 +139,12 @@ const PATCH_KEY_RAIL_ROW = {
   // mutually exclusive with the four above at the append.
   targetRepositoryRef: 'targetRepo',
   parentRef: 'parent',
+  // The OBSOLESCENCE mark and its note (MOTIR-6629 carries them onto a `modify`).
+  // No rail row YET: the review render is MOTIR-6632's, which decides where the
+  // approver reads them. `null` until then, so the denominator does not promise a
+  // row the peek cannot draw.
+  obsolescence: null,
+  obsolescenceNoteMd: null,
 } satisfies Record<keyof PlanItemPatch, PlanItemChangeField | null>;
 
 /**

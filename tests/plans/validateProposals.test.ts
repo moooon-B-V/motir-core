@@ -607,6 +607,67 @@ describe('validatePlanProposals — done-work immutability', () => {
   });
 });
 
+describe('validatePlanProposals — a MARK-ONLY `modify` may reach a terminal target (MOTIR-6629)', () => {
+  const MARK_ONLY_PATCHES: ProposalNode['patch'][] = [
+    { obsolescence: 'outdated' },
+    { obsolescence: 'deprecated', obsolescenceNoteMd: 'Replaced by the new flow.' },
+    { obsolescenceNoteMd: 'Why it is marked.' },
+    { obsolescence: null, obsolescenceNoteMd: null },
+  ];
+
+  it.each(['done', 'cancelled'])(
+    'ADMITS a modify carrying only mark keys on a `%s` target',
+    (status) => {
+      for (const patch of MARK_ONLY_PATCHES) {
+        expect(() =>
+          validate([modify('m1', { patch })], {
+            liveById: liveMap(live({ id: REAL_TARGET, status })),
+          }),
+        ).not.toThrow();
+      }
+    },
+  );
+
+  it('still REFUSES a modify of a terminal target carrying ANY key beside the mark', () => {
+    for (const patch of [
+      { title: 'Rewritten', obsolescence: 'outdated' },
+      { obsolescence: 'deprecated', parentRef: null },
+      { obsolescenceNoteMd: 'n', blockedByAdd: [REAL_PARENT] },
+    ] as ProposalNode['patch'][]) {
+      expect(() =>
+        validate([modify('m1', { patch })], {
+          liveById: liveMap(live({ id: REAL_TARGET, status: 'done' }), live({ id: REAL_PARENT })),
+        }),
+      ).toThrow(PlanTargetImmutableError);
+    }
+  });
+
+  it('counts a key the gate does not TYPE against the carve-out — the whole key set is read', () => {
+    const patch = { obsolescence: 'outdated', storyPoints: 3 } as unknown as ProposalNode['patch'];
+    expect(() =>
+      validate([modify('m1', { patch })], {
+        liveById: liveMap(live({ id: REAL_TARGET, status: 'done' })),
+      }),
+    ).toThrow(PlanTargetImmutableError);
+  });
+
+  it('still REFUSES an empty patch on a terminal target — it marks nothing', () => {
+    expect(() =>
+      validate([modify('m1', { patch: {} })], {
+        liveById: liveMap(live({ id: REAL_TARGET, status: 'done' })),
+      }),
+    ).toThrow(PlanTargetImmutableError);
+  });
+
+  it('still REFUSES a `remove` of a terminal target, whatever its row carries', () => {
+    expect(() =>
+      validate([modify('r1', { op: 'remove', patch: { obsolescence: 'deprecated' } })], {
+        liveById: liveMap(live({ id: REAL_TARGET, status: 'done' })),
+      }),
+    ).toThrow(PlanTargetImmutableError);
+  });
+});
+
 describe('validatePlanProposals — a `modify` RE-PARENTS its target (MOTIR-3859)', () => {
   // AMENDMENT 11. The five guards a re-parent owes, each one on its own, written
   // against the CONTRACT rather than against the implementation — the same

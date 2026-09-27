@@ -50,6 +50,10 @@ const EVERY_PATCH_KEY: Required<PlanItemPatch> = {
   parentRef: null,
   blockedByAdd: [],
   blockedByRemove: [],
+  // The obsolescence pair (MOTIR-6629) — no rail row yet (MOTIR-6632 renders it),
+  // so the denominator below is unchanged by their arrival.
+  obsolescence: null,
+  obsolescenceNoteMd: null,
 };
 
 describe('the proposal envelope’s SETTABLE rail-field set (MOTIR-4183)', () => {

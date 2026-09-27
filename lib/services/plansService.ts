@@ -94,6 +94,8 @@ import {
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { validateProposedDifficulty } from '@/lib/plans/validateProposedDifficulty';
+import { validateProposedObsolescence } from '@/lib/plans/validateProposedObsolescence';
+import { isMarkOnlyPatch } from '@/lib/plans/markOnlyPatch';
 import { validateProposedBodyRefs } from '@/lib/plans/validateProposedBodyRefs';
 import { patchRescopes } from '@/lib/plans/rescopeReset';
 import { committedPlanTargets } from '@/lib/plans/planTargets';
@@ -748,6 +750,9 @@ function validateProposal(p: ProposalInput): void {
       null,
       proposalLabel({ op: p.op, workItemId: p.workItemId }),
     );
+    // A `modify` may MARK the target (MOTIR-6629) — membership of the mark and a
+    // string-or-null note, and nothing else: the mark is kind- and status-agnostic.
+    validateProposedObsolescence(p.patch, proposalLabel({ op: p.op, workItemId: p.workItemId }));
     // A `modify`'s rewritten bodies are rewritten at approve too (MOTIR-3804), so
     // they are held to the same link check as an `add`'s (bug MOTIR-6494).
     validateProposedBodyRefs(p.patch, proposalLabel({ op: p.op, workItemId: p.workItemId }));
@@ -3050,6 +3055,23 @@ async function applyModify(
     update.difficulty = patch.difficulty;
     diff.difficulty = { from: current.difficulty, to: patch.difficulty };
   }
+  // The OBSOLESCENCE mark and its note (MOTIR-6629) — the columns MOTIR-6574
+  // shipped, written with the SAME `obsolescence` / `obsolescenceNoteMd` diff
+  // cells `workItemsService` records, so the activity feed renders them through
+  // the dispositions already registered. Sparse: absent leaves, `null` clears.
+  // Membership was refused at the append / correction; no kind or status check,
+  // by design — marking finished work is what the mark is for.
+  if (patch.obsolescence !== undefined && patch.obsolescence !== current.obsolescence) {
+    update.obsolescence = patch.obsolescence;
+    diff.obsolescence = { from: current.obsolescence, to: patch.obsolescence };
+  }
+  if (
+    patch.obsolescenceNoteMd !== undefined &&
+    patch.obsolescenceNoteMd !== current.obsolescenceNoteMd
+  ) {
+    update.obsolescenceNoteMd = patch.obsolescenceNoteMd;
+    diff.obsolescenceNoteMd = { from: current.obsolescenceNoteMd, to: patch.obsolescenceNoteMd };
+  }
   // RE-PIN the repo (MOTIR-1884) — present in `repoPins` ONLY when the patch
   // carried a `targetRepo` key, which is what keeps "leave it alone" distinct
   // from "unpin it" (an explicit null resolves to null and clears the column).
@@ -3220,7 +3242,14 @@ async function applyModify(
   // exactly as `applyStatusTransition` clears it on a `done` write. Bookkeeping
   // rather than a content edit, so it stays out of the diff — the same
   // convention as before.
-  if (patchRescopes(patch, current)) {
+  //
+  // ⚠️ A MARK-ONLY `modify` never clears it (MOTIR-6629). That is the only
+  // `modify` step 4 lets reach a `done` / `cancelled` target, and marking a
+  // finished card changes its standing, not the work its branch delivered — so
+  // the branch, like the status (never parked, so `restPlanTargets` never rests
+  // it), is left exactly as it was. Asked through the SAME predicate the gate
+  // admitted it by, so the two cannot disagree.
+  if (!isMarkOnlyPatch(patch) && patchRescopes(patch, current)) {
     update.sessionBranch = null;
   }
 
@@ -5455,6 +5484,11 @@ export const plansService = {
             );
             validateStoryPoints(input.patch?.storyPoints ?? null);
             validateEstimateMinutes(input.patch?.estimateMinutes ?? null);
+            // The replacement patch's MARK (MOTIR-6629), held to the append's check.
+            validateProposedObsolescence(
+              input.patch,
+              proposalLabel({ op: item.op, workItemId: item.workItemId }),
+            );
             // The replacement patch's bodies, held to the append's link check (bug MOTIR-6494).
             validateProposedBodyRefs(
               input.patch ?? {},

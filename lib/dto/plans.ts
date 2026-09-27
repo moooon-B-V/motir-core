@@ -10,6 +10,7 @@ import type {
   ExecutorDto,
   InvalidEdgeDto,
   WorkItemDifficultyDto,
+  WorkItemObsolescenceDto,
   WorkItemPlanningSourceDto,
 } from '@/lib/dto/workItems';
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
@@ -540,6 +541,29 @@ export interface PlanItemPatch {
   parentRef?: string | null;
   blockedByAdd?: string[];
   blockedByRemove?: string[];
+  /**
+   * MARK the target as no longer true of the code (Story MOTIR-6577 · MOTIR-6629)
+   * — the plan-path twin of the direct door's `obsolescence` (MOTIR-6574):
+   * `outdated` (the text no longer describes what shipped) or `deprecated`
+   * (retired or overturned on purpose). Sparse: absent leaves the mark alone, an
+   * explicit `null` CLEARS it. Membership is checked at the append and at a
+   * correction (`validateProposedObsolescence`), refused as `INVALID_PROPOSAL`.
+   * Applied by `applyModify` with the same `obsolescence` revision diff cell
+   * `workItemsService` writes.
+   *
+   * Kind- and status-agnostic, like the column: it is one of the
+   * {@link PLAN_ITEM_MARK_PATCH_KEYS}, so a `modify` carrying ONLY mark keys is
+   * legal on a `done` / `cancelled` target — marking finished work is what the
+   * mark is for.
+   */
+  obsolescence?: WorkItemObsolescenceDto | null;
+  /**
+   * WHY the target is marked (Story MOTIR-6577 · MOTIR-6629) — the Markdown note
+   * beside {@link obsolescence}, independent of it exactly as on the direct door
+   * (clearing the mark keeps the note). Sparse: absent leaves it, `null` clears.
+   * A mark key: legal on a terminal target in a mark-only `modify`.
+   */
+  obsolescenceNoteMd?: string | null;
 }
 
 /**
@@ -582,9 +606,36 @@ export const PLAN_ITEM_PATCH_KEYS = [
   'parentRef',
   'blockedByAdd',
   'blockedByRemove',
+  'obsolescence',
+  'obsolescenceNoteMd',
 ] as const;
 
 export type PlanItemPatchKey = (typeof PLAN_ITEM_PATCH_KEYS)[number];
+
+/**
+ * The patch keys a `modify` may carry onto a TERMINAL (`done` / `cancelled`)
+ * target — THE SINGLE PLACE that names which keys are safe on finished work
+ * (Story MOTIR-6577 · MOTIR-6629; `agent-authored-plans.md` step 4's carve-out).
+ *
+ * `validatePlanProposals` refuses every `modify` of a terminal target with
+ * `PLAN_TARGET_IMMUTABLE` UNLESS every key its patch carries is listed here —
+ * keyed on the PATCH'S KEYS, never on a flag the caller sets, so the refusal
+ * cannot be talked around — and `applyModify` then leaves that target's status,
+ * `sessionBranch` and rollup alone. A key belongs here only when writing it
+ * changes a card's STANDING and never the work it describes, so a plan still
+ * cannot re-open finished work by the back door. The gate and the write read it
+ * through ONE predicate, `isMarkOnlyPatch` (`lib/plans/markOnlyPatch.ts`).
+ *
+ * Extend it by appending a member (the supersedes edge carriers join it next,
+ * MOTIR-6630); every member must also be a {@link PLAN_ITEM_PATCH_KEYS} member,
+ * which the `satisfies` below holds at compile time.
+ */
+export const PLAN_ITEM_MARK_PATCH_KEYS = [
+  'obsolescence',
+  'obsolescenceNoteMd',
+] as const satisfies readonly PlanItemPatchKey[];
+
+export type PlanItemMarkPatchKey = (typeof PLAN_ITEM_MARK_PATCH_KEYS)[number];
 
 /** A `remove` proposal's reason, after trimming, is 1–this many characters
  *  (`agent-authored-plans.md` AMENDMENT 18 §3, MOTIR-6052). */
