@@ -480,13 +480,31 @@ describe('proxy() — the Visitor route tree', () => {
     }
   });
 
-  it('a member route with no Visitor view is left alone, and the cookie cleared', async () => {
+  // MOTIR-6888: a request FOLLOWED FROM the Visitor view keeps the cookie. On
+  // Next 16 the proxy cannot tell that tab's PREFETCH of `/settings` (the account
+  // menu) from the click that leaves it — the adapter strips the prefetch header —
+  // and clearing on the prefetch broke every read after it. The member page the
+  // reader moves on to (referred by a member page) clears it instead.
+  it('a member route with no Visitor view is left alone, and the cookie kept for the Visitor tab', async () => {
     cookiePresent.value = true;
     const { NextRequest } = await import('next/server');
     const { proxy } = await import('@/proxy');
     const res = await proxy(
       new NextRequest('https://app.motir.co/settings/account', {
         headers: { cookie: 'motir_visitor=ACME', referer: 'https://app.motir.co/p/ACME/board' },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('set-cookie') ?? '').not.toMatch(/^motir_visitor=;/);
+  });
+
+  it('the next member page, referred by a member page, clears the cookie', async () => {
+    cookiePresent.value = true;
+    const { NextRequest } = await import('next/server');
+    const { proxy } = await import('@/proxy');
+    const res = await proxy(
+      new NextRequest('https://app.motir.co/workbench', {
+        headers: { cookie: 'motir_visitor=ACME', referer: 'https://app.motir.co/settings/account' },
       }),
     );
     expect(res.status).toBe(200);
