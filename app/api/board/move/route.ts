@@ -7,6 +7,7 @@ import {
   BoardColumnNotFoundError,
   BoardNotFoundError,
   IllegalBoardMoveError,
+  MarkedCardBoardMoveError,
   PlanTargetHeldBoardMoveError,
   UnmappedColumnTargetError,
 } from '@/lib/boards/errors';
@@ -22,6 +23,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 //   IllegalBoardMoveError    → 409  (illegal transition — the snap-back signal)
 //   ApprovalGatePendingBoardMoveError → 409 `{ code: 'APPROVAL_GATE_PENDING', gate }` (MOTIR-5526)
 //   PlanTargetHeldBoardMoveError → 409 `{ code: 'PLAN_TARGET_HELD', plan }` (MOTIR-6265)
+//   MarkedCardBoardMoveError → 409 `{ code: 'MARKED_CARD_CANNOT_REOPEN', key, mark }` (MOTIR-6682)
 //   UnmappedColumnTargetError → 422 (the target column maps no live status)
 //   Board/Column/WorkItem not found → 404
 // `boardId` rides in the body (the client holds it from the projection — the
@@ -93,6 +95,14 @@ export async function POST(req: Request): Promise<Response> {
     if (err instanceof PlanTargetHeldBoardMoveError) {
       return NextResponse.json(
         { code: err.code, error: err.message, plan: err.plan },
+        { status: 409 },
+      );
+    }
+    // A marked card dragged out of the done category (MOTIR-6682). The same 409
+    // and the same on-the-card rendering, with the mark its line names.
+    if (err instanceof MarkedCardBoardMoveError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message, key: err.key, mark: err.mark },
         { status: 409 },
       );
     }

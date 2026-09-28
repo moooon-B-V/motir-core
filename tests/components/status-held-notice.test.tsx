@@ -300,3 +300,129 @@ describe('StatusPicker — held targets', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 });
+
+// ── MOTIR-6676 — the MARK's line, per status-held-by-mark.mock.html ────────────
+
+describe('StatusHeldNotice — the mark', () => {
+  it('says what is refused, then the way out, with a SECONDARY Clear the mark door', () => {
+    render(
+      <StatusHeldNotice itemKey="PROD-7" lines={[]} mark={{ mark: 'outdated', refused: false }} />,
+    );
+    const box = screen.getByTestId('status-held-notice');
+    const markLine = box.querySelector<HTMLElement>('[data-waiting-on="mark"]')!;
+    within(markLine).getByText('Status can’t be reopened while this item is marked Outdated.');
+    within(markLine).getByText('Clear the mark to reopen this item.');
+    const door = within(markLine).getByRole('link', { name: 'Clear the mark' });
+    expect(door.getAttribute('href')).toBe('/items/PROD-7#obsolescence-field');
+    expect(door.className).not.toContain('--el-accent');
+  });
+
+  it('a refusal that arrived anyway says the move was not made', () => {
+    render(
+      <StatusHeldNotice itemKey="PROD-7" lines={[]} mark={{ mark: 'deprecated', refused: true }} />,
+    );
+    screen.getByText('Marked Deprecated elsewhere — this move was not made.');
+    screen.getByText('Clear the mark to reopen this item.');
+  });
+
+  it('the door goes to the field on this page and focuses it — it clears nothing and does not navigate', () => {
+    render(
+      <>
+        <StatusHeldNotice
+          itemKey="PROD-7"
+          lines={[]}
+          mark={{ mark: 'outdated', refused: false }}
+          markFieldId="obsolescence-field-peek"
+        />
+        <div id="obsolescence-field-peek" tabIndex={-1} />
+      </>,
+    );
+    const field = document.getElementById('obsolescence-field-peek')!;
+    field.scrollIntoView = vi.fn();
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    screen.getByRole('link', { name: 'Clear the mark' }).dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+    expect(field.scrollIntoView).toHaveBeenCalled();
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('with no field on the page (the edit page) the door is an ordinary link to the item page', () => {
+    render(
+      <StatusHeldNotice itemKey="PROD-7" lines={[]} mark={{ mark: 'outdated', refused: false }} />,
+    );
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    screen.getByRole('link', { name: 'Clear the mark' }).dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(false);
+  });
+
+  it('a mark AND an awaiting gate show both lines', () => {
+    render(
+      <StatusHeldNotice
+        itemKey="PROD-7"
+        lines={[line({ statusKey: 'shipped', statusLabel: 'Shipped' })]}
+        mark={{ mark: 'outdated', refused: false }}
+      />,
+    );
+    const box = screen.getByTestId('status-held-notice');
+    expect(box.querySelector('[data-waiting-on="mark"]')).toBeTruthy();
+    expect(box.querySelector('[data-waiting-on="decision"]')).toBeTruthy();
+  });
+
+  it('renders in zh', () => {
+    render(
+      <StatusHeldNotice itemKey="PROD-7" lines={[]} mark={{ mark: 'outdated', refused: false }} />,
+      {
+        messages: zhMessages,
+        locale: 'zh',
+      },
+    );
+    screen.getByText('该事项已标记为已过时，状态无法重新打开。');
+    screen.getByRole('link', { name: '清除标记' });
+  });
+});
+
+describe('StatusPicker — held by mark (MOTIR-6676)', () => {
+  const statuses: WorkflowStatusDto[] = [
+    ['todo', 'To Do', 'todo'],
+    ['in_progress', 'In Progress', 'in_progress'],
+    ['done', 'Done', 'done'],
+    ['cancelled', 'Cancelled', 'done'],
+  ].map(([key, label, category], i) => ({
+    id: `m${i}`,
+    projectId: 'p',
+    key: key!,
+    label: label!,
+    category: category as WorkflowStatusDto['category'],
+    color: null,
+    position: `a${i}`,
+    isInitial: i === 0,
+  }));
+
+  it('tags every non-done option *held by mark*, and Cancelled stays pickable', () => {
+    const onChange = vi.fn();
+    render(
+      <StatusPicker
+        statuses={statuses}
+        transitions={[]}
+        policyMode="open"
+        value="done"
+        onChange={onChange}
+        held={[
+          { statusKey: 'todo', waitingOn: 'mark' },
+          { statusKey: 'in_progress', waitingOn: 'mark' },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('combobox'));
+    for (const name of [/To Do/, /In Progress/]) {
+      const option = screen.getByRole('option', { name });
+      expect(option.getAttribute('aria-disabled')).toBe('true');
+      expect(option.textContent).toContain('held by mark');
+      expect(option.querySelector('[data-held-tag="mark"]')).toBeTruthy();
+      fireEvent.click(option);
+    }
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('option', { name: /Cancelled/ }));
+    expect(onChange).toHaveBeenCalledWith('cancelled');
+  });
+});

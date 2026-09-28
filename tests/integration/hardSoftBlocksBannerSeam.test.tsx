@@ -71,6 +71,8 @@ interface Payload {
   relatesTo: RelationshipLinkDto[];
   duplicates: RelationshipLinkDto[];
   clones: RelationshipLinkDto[];
+  supersedes: RelationshipLinkDto[];
+  supersededBy: RelationshipLinkDto[];
   workflow: WorkflowDto;
 }
 
@@ -85,6 +87,8 @@ async function renderBannerFor(fx: WorkItemFixture, key: string): Promise<HTMLEl
       relatesTo={p.relatesTo}
       duplicates={p.duplicates}
       clones={p.clones}
+      supersedes={p.supersedes}
+      supersededBy={p.supersededBy}
       readiness={p.readiness}
       currentStatus={p.item.status}
       workflow={p.workflow}

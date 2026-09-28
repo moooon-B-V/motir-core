@@ -30,7 +30,9 @@ import {
 // The relationships panel on the issue detail page (Story 2.4 · Subtasks 2.4.5
 // + 2.4.9), per `design/work-items/relationships.mock.html` + `links.mock.html`:
 // a LEFT-column section card grouping the work_item_link edges by kind
-// (blocked-by / blocks / relates-to / duplicates / clones), with the
+// (blocked-by / blocks / relates-to / duplicates / clones / supersedes /
+// superseded-by — the last two per `relationships--supersedes.mock.html`,
+// Story MOTIR-6575 · MOTIR-6675), with the
 // ready/blocked banner at the top. READ surface from 2.4.5; 2.4.9 makes it
 // EDITABLE on the detail page (`editable`): a "+ Link issue" add control + a
 // per-row remove. The EDIT page reuses it the same editable way (user directive)
@@ -81,6 +83,10 @@ export interface RelationshipsPanelProps {
   relatesTo: RelationshipLinkDto[];
   duplicates: RelationshipLinkDto[];
   clones: RelationshipLinkDto[];
+  /** The OLDER items this one replaces (MOTIR-6675). */
+  supersedes: RelationshipLinkDto[];
+  /** The NEWER items that replace this one. */
+  supersededBy: RelationshipLinkDto[];
   readiness: ReadinessVerdictDto;
   /** The current item's status key — the readiness banner shows only while the
    *  item is in the `todo` category (resolved via `workflow`); "can I start
@@ -206,6 +212,8 @@ export function RelationshipsPanel({
   relatesTo,
   duplicates,
   clones,
+  supersedes,
+  supersededBy,
   readiness,
   currentStatus,
   archived = false,
@@ -383,6 +391,20 @@ export function RelationshipsPanel({
       items: project(clones, 'clones'),
       blockerGroup: false,
     },
+    // After Clones, in `RELATIONSHIP_KINDS` order (MOTIR-6675). The same rows as
+    // every group; a marked card's pointer to what replaced it lives here.
+    {
+      key: 'supersedes' as const,
+      label: tl('relationship.supersedes'),
+      items: project(supersedes, 'supersedes'),
+      blockerGroup: false,
+    },
+    {
+      key: 'superseded_by' as const,
+      label: tl('relationship.superseded_by'),
+      items: project(supersededBy, 'superseded_by'),
+      blockerGroup: false,
+    },
   ];
   const nonEmpty = groups.filter((g) => g.items.length > 0);
   // The readiness banner shows for a TODO-category item that is NOT archived —
@@ -431,7 +453,11 @@ export function RelationshipsPanel({
           </p>
         ) : (
           nonEmpty.map((group) => (
-            <div key={group.key} className="flex flex-col gap-1">
+            <div
+              key={group.key}
+              className="flex flex-col gap-1"
+              data-relationship-group={group.key}
+            >
               <div className="flex items-center gap-2 px-2">
                 <SectionLabel label={group.label} />
                 <span className="text-(--el-text-muted) font-mono text-[11px]">

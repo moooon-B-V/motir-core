@@ -14,6 +14,8 @@ import {
   TypeNotAllowedOnKindError,
   DifficultyNotAllowedOnKindError,
   InvalidObsolescenceError,
+  MarkedCardCannotReopenError,
+  ObsolescenceRequiresFinishedError,
   UnknownStatusError,
   ContainerRepoSetNotWritableError,
   UnknownProjectRepoRefError,
@@ -287,6 +289,11 @@ export function toToolError(err: unknown): CallToolResult {
     // and that deciding the plan (or withdrawing the proposal naming it) is the
     // way out — so an agent reports the plan instead of retrying the move.
     err instanceof PlanTargetHeldError ||
+    // A MARKED card stays finished (MOTIR-6672 · MOTIR-6673). The message names the
+    // card and its mark and says to clear the mark first — on `transition_status`,
+    // and on `create_work_item` / `update_work_item` / `move_to_parent` for a child
+    // under a marked parent — so an agent reports it rather than retrying.
+    err instanceof MarkedCardCannotReopenError ||
     err instanceof IllegalParentTypeError ||
     err instanceof DepthLimitExceededError ||
     // Re-parent cycle (move_to_parent, MOTIR-1017): the DB cycle trigger's
@@ -309,6 +316,10 @@ export function toToolError(err: unknown): CallToolResult {
     // that bypasses it (a direct runner call, a looser future schema) on a typed
     // `INVALID_OBSOLESCENCE` naming the field instead of an opaque internal error.
     err instanceof InvalidObsolescenceError ||
+    // …and the FINISHED-card rule (MOTIR-6672 · MOTIR-6673): a mark set on an
+    // unfinished card. The message names the card and its status and says to
+    // archive instead — a refusal an agent acts on, never an internal error.
+    err instanceof ObsolescenceRequiresFinishedError ||
     // Target-repo validation (MOTIR-1804; project-scoped in MOTIR-1783): a
     // `targetRepo` naming a repo outside the item's PROJECT repository set on
     // create_work_item / update_work_item — a workspace-connected repo the

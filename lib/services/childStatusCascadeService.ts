@@ -300,6 +300,9 @@ export const childStatusCascadeService = {
             ctx,
             tx,
             // ⚠️ The privileged system set — see the module header.
+            // It never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): the target is
+            // `doneKey`, a done-category status, and the mark refuses only a move
+            // OUT of that category.
             { system: true },
           );
           // Null when the child reached `done` between the read and the write;

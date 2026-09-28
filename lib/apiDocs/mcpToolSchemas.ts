@@ -924,7 +924,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       obsolescence: {
         anyOf: [{ type: 'string', enum: ['outdated', 'deprecated'] }, { type: 'null' }],
         description:
-          'Mark the item as no longer TRUE OF THE CODE: "outdated" (the text no longer describes what shipped; the capability lives on in another shape) or "deprecated" (retired or overturned on purpose — do not build on it). Settable on ANY kind in ANY status, a `done` item included; null clears it. Link the replacing item with link_work_items `supersedes`. A value outside the enum is refused (INVALID_OBSOLESCENCE). Informational: no read hides or re-orders a marked item.',
+          'Mark the item as no longer TRUE OF THE CODE: "outdated" (the text no longer describes what shipped; the capability lives on in another shape) or "deprecated" (retired or overturned on purpose — do not build on it). Settable on ANY kind, but ONLY on a FINISHED item — one whose status is in the done category (`done`, `cancelled`, or a custom done-category status); on any other status it is refused (OBSOLESCENCE_REQUIRES_FINISHED) — archive an item nobody will finish instead. A marked item stays finished: moving it out of the done category, or adding a child under it, is refused (MARKED_CARD_CANNOT_REOPEN) until the mark is cleared. null clears it, always. Link the replacing item with link_work_items `supersedes`. A value outside the enum is refused (INVALID_OBSOLESCENCE). Informational: no read hides or re-orders a marked item.',
       },
       obsolescenceNoteMd: {
         type: ['string', 'null'],
@@ -2884,7 +2884,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       obsolescence: {
         anyOf: [{ type: 'string', enum: ['outdated', 'deprecated'] }, { type: 'null' }],
         description:
-          'Mark the item as no longer TRUE OF THE CODE: "outdated" (the text no longer describes what shipped; the capability lives on in another shape) or "deprecated" (retired or overturned on purpose — do not build on it). Settable on ANY kind in ANY status, a `done` item included; null clears it. Link the replacing item with link_work_items `supersedes`. A value outside the enum is refused (INVALID_OBSOLESCENCE). Informational: no read hides or re-orders a marked item.',
+          'Mark the item as no longer TRUE OF THE CODE: "outdated" (the text no longer describes what shipped; the capability lives on in another shape) or "deprecated" (retired or overturned on purpose — do not build on it). Settable on ANY kind, but ONLY on a FINISHED item — one whose status is in the done category (`done`, `cancelled`, or a custom done-category status); on any other status it is refused (OBSOLESCENCE_REQUIRES_FINISHED) — archive an item nobody will finish instead. A marked item stays finished: moving it out of the done category, or adding a child under it, is refused (MARKED_CARD_CANNOT_REOPEN) until the mark is cleared. null clears it, always. Link the replacing item with link_work_items `supersedes`. A value outside the enum is refused (INVALID_OBSOLESCENCE). Informational: no read hides or re-orders a marked item.',
       },
       obsolescenceNoteMd: {
         type: ['string', 'null'],

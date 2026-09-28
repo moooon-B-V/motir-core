@@ -66,3 +66,21 @@ export function canCarryObsolescence(
 ): boolean {
   return statusCategory === 'done';
 }
+
+/**
+ * True when moving a card that carries `obsolescence` to a status in
+ * `targetCategory` is HELD by the mark (MOTIR-6575 · MOTIR-6672): a marked card
+ * stays finished, so every move out of the `done` category is refused until the
+ * mark is cleared. A move WITHIN the done category (`done ↔ cancelled`) is not
+ * held, and neither is any move of an unmarked card.
+ *
+ * The status control and the board read it from data they already hold — the
+ * item's `obsolescence` and the workflow statuses' `category` — so a surface can
+ * say so before the click; `applyStatusTransition` enforces the same rule.
+ */
+export function isReopenHeldByMark(
+  obsolescence: WorkItemObsolescenceDto | null | undefined,
+  targetCategory: StatusCategoryDto | null | undefined,
+): boolean {
+  return obsolescence != null && targetCategory !== 'done';
+}

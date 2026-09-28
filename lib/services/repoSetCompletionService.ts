@@ -237,6 +237,8 @@ export const repoSetCompletionService = {
       // author and falls back to the owner; there is no author here — nobody
       // delivered anything — so the fallback is the whole answer, and it is the
       // same automation-engine precedent.
+      // Never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): `targetKey` is resolved
+      // by the DONE category above, and the mark refuses only a move out of it.
       await workItemsService.updateStatus(workItemId, targetKey, {
         userId: resolved.ownerUserId,
         workspaceId: resolved.workspaceId,

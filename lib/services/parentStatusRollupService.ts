@@ -9,6 +9,7 @@ import { workItemsService } from './workItemsService';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import {
   ApprovalGatePendingError,
+  MarkedCardCannotReopenError,
   IllegalTransitionError,
   UnknownStatusError,
 } from '@/lib/workItems/errors';
@@ -171,6 +172,11 @@ export type RollupOutcome =
    *  §5(b)): the derivation reads the parent's OLD shape, which the plan is
    *  replacing, so it declines to answer rather than failing its job. */
   | { outcome: 'plan_held'; parentId: string; toStatus: string }
+  /** The parent carries an OBSOLESCENCE mark (MOTIR-6672 · MOTIR-6681): a marked
+   *  card stays finished, and a derivation from a reopened child is exactly the
+   *  write that would reopen it. Recorded, never a failed job — the story's rule 4,
+   *  "no system write reopens one". Clearing the mark is a person's act. */
+  | { outcome: 'held_by_mark'; parentId: string; toStatus: string }
   | { outcome: 'access_denied'; parentId: string }
   | { outcome: 'unresolvable' };
 
@@ -641,6 +647,19 @@ export const parentStatusRollupService = {
         if (err instanceof ApprovalGatePendingError) {
           return {
             outcome: { outcome: 'approval_pending', parentId, toStatus: toStatusKey },
+            emit: null,
+          };
+        }
+        // A MARKED parent stays finished (MOTIR-6672 · MOTIR-6681). The BACKWARD arm
+        // is the case: a marked `done` story whose child reopened would be set back
+        // to the child set's rung, and `{ system: true }` does not exempt the mark.
+        // The FORWARD arm cannot meet it — a marked parent is already in the done
+        // category, the ladder's top, so there is nothing above it to walk to.
+        // Either way the refusal fires on the FIRST hop, before any write, so the
+        // transaction holds nothing to undo and nothing is emitted.
+        if (err instanceof MarkedCardCannotReopenError) {
+          return {
+            outcome: { outcome: 'held_by_mark', parentId, toStatus: toStatusKey },
             emit: null,
           };
         }

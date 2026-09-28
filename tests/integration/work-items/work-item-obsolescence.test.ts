@@ -3,7 +3,10 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { InvalidObsolescenceError } from '@/lib/workItems/errors';
+import {
+  InvalidObsolescenceError,
+  ObsolescenceRequiresFinishedError,
+} from '@/lib/workItems/errors';
 import { toWorkItemSummaryDto } from '@/lib/mappers/workItemMappers';
 import type { WorkItemKindDto, WorkItemObsolescenceDto } from '@/lib/dto/workItems';
 import { adminDb } from '../../helpers/adminDb';
@@ -14,8 +17,11 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 // driven through workItemsService against a REAL Postgres. Pins the service
 // contract every later door (REST, MCP, the filter) writes through:
 //   • persisted on EVERY kind, null when omitted, carried on the DTO;
-//   • written on a `done` / `cancelled` / archived card without touching its
-//     status or `archivedAt` — marking finished work is the field's purpose;
+//   • written on a `done` / `cancelled` card without touching its status or
+//     `archivedAt` — marking finished work is the field's purpose — and, since
+//     MOTIR-6575 · MOTIR-6672, ONLY there: a mark on an unfinished card is
+//     OBSOLESCENCE_REQUIRES_FINISHED, on create and update alike (the rest of
+//     that rule is `obsolescenceFinishedRule.test.ts`);
 //   • an unknown value refused with INVALID_OBSOLESCENCE, writing nothing;
 //   • every change recorded as a revision cell, a re-send recording nothing.
 
@@ -39,12 +45,38 @@ async function readRow(fx: WorkItemFixture, id: string) {
   return withWorkspaceServiceContext(fx.workspaceId, (tx) => workItemRepository.findById(id, tx));
 }
 
-/** Create one item of `kind`, giving a subtask the story parent it needs. */
+/**
+ * Create one item of `kind`, giving a subtask the story parent it needs. A mark in
+ * `extra` is applied the only way it may be since MOTIR-6672: the card is moved to
+ * `done` first, then marked through the service.
+ */
 async function createOf(
   fx: WorkItemFixture,
   kind: WorkItemKindDto,
   extra: { obsolescence?: WorkItemObsolescenceDto | null; obsolescenceNoteMd?: string | null } = {},
 ) {
+  const { obsolescence, obsolescenceNoteMd } = extra;
+  const item = await createUnmarked(fx, kind);
+  if (obsolescence == null && obsolescenceNoteMd === undefined) return item;
+  return markFinished(fx, item.id, obsolescence ?? null, obsolescenceNoteMd);
+}
+
+/** Move a card to `done` behind the service's back, then mark it through the service. */
+async function markFinished(
+  fx: WorkItemFixture,
+  id: string,
+  obsolescence: WorkItemObsolescenceDto | null,
+  obsolescenceNoteMd?: string | null,
+) {
+  await adminDb.workItem.update({ where: { id }, data: { status: 'done' } });
+  return workItemsService.updateWorkItem(
+    id,
+    { obsolescence, ...(obsolescenceNoteMd !== undefined ? { obsolescenceNoteMd } : {}) },
+    fx.ctx,
+  );
+}
+
+async function createUnmarked(fx: WorkItemFixture, kind: WorkItemKindDto) {
   const parent =
     kind === 'subtask'
       ? await workItemsService.createWorkItem(
@@ -58,7 +90,6 @@ async function createOf(
       kind,
       title: `A ${kind}`,
       ...(parent ? { parentId: parent.id } : {}),
-      ...extra,
     },
     fx.ctx,
   );
@@ -75,28 +106,49 @@ afterAll(async () => {
 
 describe('createWorkItem — obsolescence', () => {
   it.each(['epic', 'story', 'task', 'bug', 'subtask'] as const)(
-    'persists the mark and note on a %s and returns them on the DTO',
+    'refuses a mark on a new %s — it lands at the unfinished initial status — and writes nothing',
     async (kind) => {
       const fx = await makeWorkItemFixture();
-      const item = await createOf(fx, kind, {
-        obsolescence: 'deprecated',
-        obsolescenceNoteMd: 'Superseded by the **new** flow.',
-      });
-      expect(item.obsolescence).toBe('deprecated');
-      expect(item.obsolescenceNoteMd).toBe('Superseded by the **new** flow.');
-
-      const row = await readRow(fx, item.id);
-      expect(row?.obsolescence).toBe('deprecated');
-      expect(row?.obsolescenceNoteMd).toBe('Superseded by the **new** flow.');
-      // The created revision records the initial values.
-      const [created] = await revisionDiffs(item.id);
-      expect(created?.['obsolescence']).toEqual({ from: null, to: 'deprecated' });
-      expect(created?.['obsolescenceNoteMd']).toEqual({
-        from: null,
-        to: 'Superseded by the **new** flow.',
-      });
+      const parent =
+        kind === 'subtask'
+          ? await workItemsService.createWorkItem(
+              { projectId: fx.projectId, kind: 'story', title: 'Parent story' },
+              fx.ctx,
+            )
+          : null;
+      const before = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+      await expect(
+        workItemsService.createWorkItem(
+          {
+            projectId: fx.projectId,
+            kind,
+            title: `A ${kind}`,
+            ...(parent ? { parentId: parent.id } : {}),
+            obsolescence: 'deprecated',
+            obsolescenceNoteMd: 'Superseded by the **new** flow.',
+          },
+          fx.ctx,
+        ),
+      ).rejects.toBeInstanceOf(ObsolescenceRequiresFinishedError);
+      expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(before);
     },
   );
+
+  it('accepts a NOTE alone on create — only the mark needs a finished card', async () => {
+    const fx = await makeWorkItemFixture();
+    const task = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'Noted',
+        obsolescence: null,
+        obsolescenceNoteMd: 'A note on its own.',
+      },
+      fx.ctx,
+    );
+    expect(task.obsolescence).toBeNull();
+    expect(task.obsolescenceNoteMd).toBe('A note on its own.');
+  });
 
   it('persists NULL when omitted — and records no cell', async () => {
     const fx = await makeWorkItemFixture();
@@ -128,7 +180,31 @@ describe('createWorkItem — obsolescence', () => {
   });
 });
 
-describe('updateWorkItem — obsolescence on any status', () => {
+describe('updateWorkItem — obsolescence on a finished card', () => {
+  it.each(['epic', 'story', 'task', 'bug', 'subtask'] as const)(
+    'persists the mark and note on a finished %s and returns them on the DTO',
+    async (kind) => {
+      const fx = await makeWorkItemFixture();
+      const item = await createOf(fx, kind, {
+        obsolescence: 'deprecated',
+        obsolescenceNoteMd: 'Superseded by the **new** flow.',
+      });
+      expect(item.obsolescence).toBe('deprecated');
+      expect(item.obsolescenceNoteMd).toBe('Superseded by the **new** flow.');
+
+      const row = await readRow(fx, item.id);
+      expect(row?.obsolescence).toBe('deprecated');
+      expect(row?.obsolescenceNoteMd).toBe('Superseded by the **new** flow.');
+      // The marking revision records both values.
+      const marked = (await revisionDiffs(item.id)).at(-1);
+      expect(marked?.['obsolescence']).toEqual({ from: null, to: 'deprecated' });
+      expect(marked?.['obsolescenceNoteMd']).toEqual({
+        from: null,
+        to: 'Superseded by the **new** flow.',
+      });
+    },
+  );
+
   it.each([
     ['story', 'done'],
     ['task', 'cancelled'],
@@ -167,11 +243,14 @@ describe('updateWorkItem — obsolescence on any status', () => {
     });
   });
 
-  it('accepts the write on an ARCHIVED card, leaving it archived', async () => {
+  it('accepts the write on an ARCHIVED finished card, leaving it archived', async () => {
     const fx = await makeWorkItemFixture();
     const task = await createOf(fx, 'task');
     const archivedAt = new Date('2026-09-01T00:00:00.000Z');
-    await adminDb.workItem.update({ where: { id: task.id }, data: { archivedAt } });
+    await adminDb.workItem.update({
+      where: { id: task.id },
+      data: { archivedAt, status: 'done' },
+    });
 
     const updated = await workItemsService.updateWorkItem(
       task.id,
@@ -210,6 +289,7 @@ describe('updateWorkItem — obsolescence in the activity feed', () => {
   it('records null → outdated as ONE revision cell, and a re-send records nothing', async () => {
     const fx = await makeWorkItemFixture();
     const task = await createOf(fx, 'task');
+    await adminDb.workItem.update({ where: { id: task.id }, data: { status: 'done' } });
 
     await workItemsService.updateWorkItem(task.id, { obsolescence: 'outdated' }, fx.ctx);
     let diffs = await revisionDiffs(task.id);
@@ -242,17 +322,11 @@ describe('reads carry the mark', () => {
   it('a marked child reads as marked from its parent’s summary rows and the list read', async () => {
     const fx = await makeWorkItemFixture();
     const story = await createOf(fx, 'story');
-    const child = await workItemsService.createWorkItem(
-      {
-        projectId: fx.projectId,
-        kind: 'subtask',
-        title: 'Marked child',
-        parentId: story.id,
-        obsolescence: 'deprecated',
-        obsolescenceNoteMd: 'Gone.',
-      },
+    const created = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'subtask', title: 'Marked child', parentId: story.id },
       fx.ctx,
     );
+    const child = await markFinished(fx, created.id, 'deprecated', 'Gone.');
 
     const children = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       workItemRepository.findChildren(story.id, tx),
@@ -284,18 +358,19 @@ describe('reads carry the mark', () => {
 
   it('every list-shaped raw read projects both columns — forest, keyset, tree level, archived', async () => {
     const fx = await makeWorkItemFixture();
-    const story = await createOf(fx, 'story', { obsolescence: 'outdated' });
-    const child = await workItemsService.createWorkItem(
+    // The child first: new work under a MARKED story is refused (MOTIR-6672).
+    const unmarkedStory = await createOf(fx, 'story');
+    const created = await workItemsService.createWorkItem(
       {
         projectId: fx.projectId,
         kind: 'subtask',
         title: 'Marked child',
-        parentId: story.id,
-        obsolescence: 'deprecated',
-        obsolescenceNoteMd: 'Gone.',
+        parentId: unmarkedStory.id,
       },
       fx.ctx,
     );
+    const child = await markFinished(fx, created.id, 'deprecated', 'Gone.');
+    const story = await markFinished(fx, unmarkedStory.id, 'outdated');
     const archived = await createOf(fx, 'task', {
       obsolescence: 'deprecated',
       obsolescenceNoteMd: 'Archived and superseded.',

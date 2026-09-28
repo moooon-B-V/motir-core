@@ -38,6 +38,7 @@ import {
   ApprovalGatePendingError,
   PlanTargetHeldError,
   IllegalTransitionError,
+  MarkedCardCannotReopenError,
   UnknownStatusError,
 } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
@@ -106,6 +107,12 @@ const SKIPPABLE = [
   // card out of `implemented`, so it cannot meet a held card today — listed so a
   // widened source status inherits the right answer rather than a failed job.
   PlanTargetHeldError,
+  // A MARKED card stays finished (MOTIR-6672 · MOTIR-6681). A promotion moves a
+  // card from `implemented` to `in_review`, both outside the done category; a card
+  // marked under the rule is `done` and never here, but a LEGACY card marked while
+  // open is, and the mark refuses its promotion — which, like the rest of this list,
+  // says nothing about the other cards the run delivered.
+  MarkedCardCannotReopenError,
 ];
 
 /** The ONLY status a promotion moves a card out of. */

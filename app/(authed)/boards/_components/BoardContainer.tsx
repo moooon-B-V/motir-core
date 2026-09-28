@@ -52,6 +52,7 @@ import { SwimlaneBoard } from './SwimlaneBoard';
 import { BoardHeldRefusalProvider, planHoldName, type BoardHeldRefusal } from './BoardHeldRefusal';
 import { heldLineFromRefusal, readHeldRefusal } from '@/components/issues/heldRefusal';
 import { heldSentence } from '@/components/issues/StatusHeldNotice';
+import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
 import type { ApprovalGatePendingPayloadDTO } from '@/lib/dto/approvalGate';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
 import { UnmappedStatusesTray } from './UnmappedStatusesTray';
@@ -545,6 +546,20 @@ function BoardDnd({
     },
     [t, tHeld],
   );
+  // A MARK refusal (MOTIR-6682): a marked card dragged out of the done category
+  // returns, and the mark's one line opens under it with its Open item door.
+  const tMark = useTranslations('workItems.obsolescence');
+  const showMarkHeld = useCallback(
+    (card: BoardCardDto, mark: WorkItemObsolescenceDto) => {
+      setHeld({ kind: 'mark', workItemId: card.id, itemKey: card.identifier, mark });
+      const line = tMark.markup('heldLine', {
+        mark: tMark(`value.${mark}`),
+        strong: (chunks: string) => chunks,
+      });
+      setHeldAnnouncement(t('announcementHeld', { key: card.identifier, line }));
+    },
+    [t, tMark],
+  );
   // A PLAN refusal (MOTIR-6268): the item returns and the refusal opens in its own
   // plan footer, naming the plan and how many OTHER items it holds. The count is
   // the projection's server-side one; a plan the projection did not name (the
@@ -753,6 +768,8 @@ function BoardDnd({
           setColumns(args.snapshot);
           if (heldRefusal.code === 'PLAN_TARGET_HELD')
             showPlanHeld(args.card, heldRefusal.plan, columnsRef.current);
+          else if (heldRefusal.code === 'MARKED_CARD_CANNOT_REOPEN')
+            showMarkHeld(args.card, heldRefusal.mark);
           else showHeld(args.card, args.toColName, heldRefusal.gate);
           return;
         }
@@ -770,7 +787,7 @@ function BoardDnd({
         snapBack(args.snapshot, t('moveErrorDescription', { key: args.card.identifier }));
       }
     },
-    [board.boardId, snapBack, showHeld, showPlanHeld, t],
+    [board.boardId, snapBack, showHeld, showMarkHeld, showPlanHeld, t],
   );
 
   // SWIMLANE transition (column axis) — INDEPENDENT revert: on rejection, move
@@ -823,6 +840,8 @@ function BoardDnd({
         if (heldRefusal) {
           if (heldRefusal.code === 'PLAN_TARGET_HELD')
             showPlanHeld(args.card, heldRefusal.plan, columnsRef.current);
+          else if (heldRefusal.code === 'MARKED_CARD_CANNOT_REOPEN')
+            showMarkHeld(args.card, heldRefusal.mark);
           else showHeld(args.card, args.toColName, heldRefusal.gate);
           return;
         }
@@ -842,7 +861,7 @@ function BoardDnd({
         });
       }
     },
-    [board.boardId, showHeld, showPlanHeld, t, toast],
+    [board.boardId, showHeld, showMarkHeld, showPlanHeld, t, toast],
   );
 
   // SWIMLANE reassign (lane axis) — reuses the EXISTING 2.5 field-update action.

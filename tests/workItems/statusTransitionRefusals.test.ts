@@ -10,6 +10,7 @@ import {
   ApprovalGatePendingError,
   ContainerHasOpenChildrenError,
   IllegalTransitionError,
+  MarkedCardCannotReopenError,
   MissingArtifactEvidenceError,
   PlanTargetHeldError,
   StaleWorkItemError,
@@ -72,6 +73,12 @@ const INSTANCES: Record<string, () => Error> = {
       planStatus: 'planned',
       sessionId: 'session_1',
       anchorKey: 'ACME-4',
+    }),
+  MarkedCardCannotReopenError: () =>
+    new MarkedCardCannotReopenError({
+      key: 'ACME-5',
+      obsolescence: 'deprecated',
+      toStatusKey: 'in_progress',
     }),
 };
 
