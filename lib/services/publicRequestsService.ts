@@ -13,7 +13,26 @@ import { toCommentDto } from '@/lib/mappers/commentMappers';
 import { EmptyCommentBodyError } from '@/lib/comments/errors';
 import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
 import type { CommentDTO } from '@/lib/dto/comments';
-import type { PublicRequestVoteResultDTO } from '@/lib/dto/publicRequests';
+import type {
+  PublicRequestVoteResultDTO,
+  VisitorPendingRequestPageDto,
+} from '@/lib/dto/publicRequests';
+import { toVisitorPendingRequestDto } from '@/lib/mappers/publicProjectsMappers';
+import { PERSON_FALLBACK_LABEL, personName } from '@/lib/people/personLabel';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  decodeRoadmapCursor,
+  encodeRoadmapCursor,
+  InvalidRoadmapCursorError,
+  PUBLIC_ROADMAP_PAGE_SIZE,
+} from '@/lib/publicProjects/roadmapCursor';
+import type { PublicRoadmapCursor } from '@/lib/repositories/workItemRepository';
+import type { VisitorReadContext } from '@/lib/visitor/context';
+import {
+  VisitorConsentRequiredError,
+  VisitorEntersProjectError,
+  VisitorSignInRequiredError,
+} from '@/lib/visitor/errors';
 
 // publicRequestsService (Story 6.12 · Subtask 6.12.6) — the two remaining
 // public-viewer WRITES: UPVOTE and COMMENT on a public request. Both are
@@ -164,4 +183,118 @@ export const publicRequestsService = {
     const authors = await userRepository.findByIds([row.authorId]);
     return toCommentDto(row, new Map(authors.map((u) => [u.id, u])), new Map());
   },
+
+  /**
+   * A public project's PENDING requests, as its Visitor reads them in
+   * Requested features (Story MOTIR-6171 · MOTIR-6768;
+   * `docs/decisions/public-request-board-retired.md` Decision 2), addressed by
+   * the project's public identifier.
+   *
+   * The reader is settled by `resolveVisitor`, in its order, and only a
+   * `visitor` verdict is served:
+   *   - `not_found` (cloud off, unknown, not public) → `ProjectNotFoundError`;
+   *   - `sign_in` → `VisitorSignInRequiredError`;
+   *   - `enter` → `VisitorEntersProjectError` — a member reads the same list in
+   *     their own inbox, `/requested-features`, with its acts;
+   *   - `consent` → `VisitorConsentRequiredError`.
+   * `cursor` is the opaque `nextCursor` of a previous page; a malformed one is
+   * `InvalidRoadmapCursorError`.
+   */
+  async listPendingForVisitor(
+    identifier: string,
+    session: { user: { id: string } } | null,
+    cursor?: string,
+  ): Promise<VisitorPendingRequestPageDto> {
+    const verdict = await projectAccessService.resolveVisitor(identifier, session);
+    switch (verdict.kind) {
+      case 'not_found':
+        throw new ProjectNotFoundError(identifier);
+      case 'sign_in':
+        throw new VisitorSignInRequiredError(verdict.identifier);
+      case 'enter':
+        throw new VisitorEntersProjectError(verdict.project.identifier);
+      case 'consent':
+        throw new VisitorConsentRequiredError(verdict.subject.identifier);
+      case 'visitor':
+        return this.listPendingForVisitorContext(verdict.ctx, cursor);
+    }
+  },
+
+  /**
+   * {@link listPendingForVisitor} for a reader ALREADY settled as the project's
+   * Visitor — the page's server render (`settleVisitor`) and the "Load more"
+   * door (`resolveVisitor`) both hold the context, so neither resolves twice.
+   *
+   * The read is the retired motir.co board's "Submitted" column, unchanged —
+   * `findPublicRoadmapSubmitted` / `countPublicRoadmapSubmitted`: in triage,
+   * attributed, not archived, not in a done-category status, not snoozed;
+   * ordered by votes, then the most recently triaged, then id. `voted` is the
+   * READING Visitor's own vote. A triage item is parentless, so it can never
+   * descend from a private epic and no epic-privacy exclusion applies (the same
+   * reasoning `publicProjectsService` records for that column).
+   */
+  async listPendingForVisitorContext(
+    ctx: VisitorReadContext,
+    cursor?: string,
+  ): Promise<VisitorPendingRequestPageDto> {
+    const { project } = ctx;
+    // The public-read gate every public read asserts (the retired board's own
+    // routes included). The Visitor verdict already proved the project public;
+    // this re-asserts it at the read, so a project made private between the
+    // verdict and the query answers not-found rather than its queue.
+    await projectAccessService.assertCanBrowsePublic(project.id, ctx.actorUserId);
+    const seekAfter = cursor ? decodePendingRequestCursor(cursor) : undefined;
+    const [rows, total] = await Promise.all([
+      workItemRepository.findPublicRoadmapSubmitted(project.id, project.workspaceId, {
+        limit: PUBLIC_ROADMAP_PAGE_SIZE + 1,
+        cursor: seekAfter,
+        voterUserId: ctx.actorUserId,
+      }),
+      workItemRepository.countPublicRoadmapSubmitted(project.id, project.workspaceId),
+    ]);
+
+    const hasMore = rows.length > PUBLIC_ROADMAP_PAGE_SIZE;
+    const page = hasMore ? rows.slice(0, PUBLIC_ROADMAP_PAGE_SIZE) : rows;
+    // Name only (MOTIR-6646): the submitter row is read for its display name and
+    // nothing else leaves this function. A submitter is usually NOT a member of
+    // the project's workspace — that is who files a public request.
+    const submitterIds = [
+      ...new Set(page.map((r) => r.submittedByUserId).filter((id): id is string => id !== null)),
+    ];
+    const submitters = await userRepository.findByIds(submitterIds);
+    const names = new Map(submitters.map((u) => [u.id, personName(u.name)]));
+
+    const last = page[page.length - 1];
+    return {
+      items: page.map((row) =>
+        toVisitorPendingRequestDto(
+          row,
+          names.get(row.submittedByUserId ?? '') ?? PERSON_FALLBACK_LABEL,
+        ),
+      ),
+      total,
+      nextCursor:
+        hasMore && last
+          ? encodeRoadmapCursor({
+              voteCount: last.voteCount,
+              // Non-null by the read's own predicate (`triagedAt IS NOT NULL`).
+              recency: (last.triagedAt as Date).toISOString(),
+              id: last.id,
+            })
+          : null,
+    };
+  },
 };
+
+/**
+ * The pending-requests cursor: the public roadmap's `(voteCount, recency, id)`
+ * encoding (`lib/publicProjects/roadmapCursor.ts`), reused rather than
+ * re-derived, with `recency` the row's `triagedAt` — the Submitted column's
+ * tiebreak. A recency that is not an instant is as malformed as a bad token.
+ */
+function decodePendingRequestCursor(raw: string): PublicRoadmapCursor {
+  const token = decodeRoadmapCursor(raw);
+  const recency = new Date(token.recency);
+  if (Number.isNaN(recency.getTime())) throw new InvalidRoadmapCursorError();
+  return { voteCount: token.voteCount, recency, id: token.id };
+}
