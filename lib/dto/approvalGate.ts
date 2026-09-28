@@ -1178,6 +1178,10 @@ export interface PullRequestApprovalMemberDTO {
     refusedAt: string;
     /** `app_permission_missing` only — the permission the host said it needed. */
     permission: string | null;
+    /** The host's OWN message, verbatim, or null when it gave none (Bug MOTIR-6735).
+     *  For a `branch_protected` refusal it is what names the setting that refused the
+     *  merge, which the refusal's code alone cannot. */
+    reason: string | null;
   } | null;
   /** WHICH GATE the row's press DECIDES (MOTIR-5802; §4 FOURTH AMENDMENT, point 4) — the
    *  re-asked `awaiting` gate, so pressing *Queue again* / *Retry merge* IS the new

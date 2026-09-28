@@ -34,7 +34,11 @@ import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { resolveExecutor } from '@/lib/issues/executorDefaults';
 import type { PlanRevision, Prisma } from '@/generated/prisma/client';
 import { planRepository } from '@/lib/repositories/planRepository';
-import { PLAN_ITEM_SETTABLE_RAIL_FIELDS } from '@/lib/dto/planReview';
+import {
+  isMarkChangeField,
+  OBSOLESCENCE_CURRENT,
+  PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+} from '@/lib/dto/planReview';
 import type {
   PlanBlockerStubDto,
   PlanCommittedBlockerDto,
@@ -45,6 +49,7 @@ import type {
   PlanItemChangeField,
   PlanParentCrumbDto,
   PlanPlacementSideDto,
+  PlanRefChipDto,
   PlanReviewDto,
   PlanConversationDto,
   PlanReviewGateDto,
@@ -57,7 +62,8 @@ import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { folderRepository } from '@/lib/repositories/folderRepository';
-import { folderRefId, isFolderRef } from '@/lib/plans/refs';
+import { folderRefId, isFolderRef, isTempRef, SUPERSEDES_PATCH_SITES } from '@/lib/plans/refs';
+import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
 
 // The plan-detail READ assembly (Story 7.21 · Subtask 7.4.5 / MOTIR-847). A pure
 // READ orchestrator: it composes the substrate's own reads — `getPlan`
@@ -258,6 +264,7 @@ function buildChanges(
   nameParent: (id: string | null) => string | null,
   statusByKey: ReadonlyMap<string, WorkflowStatusDto>,
   placementSides: PlacementSides,
+  refChipOf: (ref: string) => PlanRefChipDto,
 ): PlanItemChangeDto[] {
   if (!patch) return [];
   // Typed to the CLOSED wire vocabulary, so a new `field:` literal here is a
@@ -465,6 +472,60 @@ function buildChanges(
       to: `${parts.join(' / ')} blocker${added + removed === 1 ? '' : 's'}`,
     });
   }
+  // THE OBSOLESCENCE MARK, its NOTE and the SUPERSEDES edges (Story MOTIR-6577 ·
+  // MOTIR-6632, design Part XXIV §24.3 / §24.6 / §24.7) — the mark group, emitted
+  // after `links`. A mark `modify` is mark-only (a finished card accepts nothing
+  // else), so these rows lead its list in practice.
+  //
+  // The MARK's both sides are wire words and never null: "no mark" is a value
+  // (`current`), so a set reads `Current → Outdated` and a clear `Deprecated →
+  // Current`. The FROM side is the LIVE target's mark — on a `done` card, which is
+  // the only card a plan may mark, that is the value approve replaces. Presence-
+  // triggered and compared, like `difficulty`: a patch re-stating the current mark
+  // moves nothing and draws nothing.
+  if (patch.obsolescence !== undefined && patch.obsolescence !== (target?.obsolescence ?? null)) {
+    changes.push({
+      field: 'obsolescence',
+      from: target?.obsolescence ?? OBSOLESCENCE_CURRENT,
+      to: patch.obsolescence ?? OBSOLESCENCE_CURRENT,
+    });
+  }
+  // The NOTE — the WHOLE text on `to` (each surface takes the first line or
+  // clamps), never a preview, and never the old note (§24.6: no FROM side). A
+  // blank note is a clear, which reads `—`.
+  if (
+    patch.obsolescenceNoteMd !== undefined &&
+    patch.obsolescenceNoteMd !== (target?.obsolescenceNoteMd ?? null)
+  ) {
+    const note = patch.obsolescenceNoteMd;
+    changes.push({
+      field: 'obsolescenceNote',
+      from: null,
+      to: note !== null && note.trim().length > 0 ? note : null,
+    });
+  }
+  // The two EDGE rows, one per DIRECTION — unlike `blockedBy` they are not folded
+  // into one count, because no canvas edge draws them (§24.7): the chips are the
+  // whole of what the reviewer sees. Each ref is resolved to a chip on the server,
+  // and `to` repeats the set as words (`+PROD-52 · −PROD-9`) for an older client.
+  const edgeRow = (
+    field: 'supersedes' | 'supersededBy',
+    added: readonly string[] | null | undefined,
+    removed: readonly string[] | null | undefined,
+  ) => {
+    const add = (added ?? []).map(refChipOf);
+    const remove = (removed ?? []).map(refChipOf);
+    if (add.length === 0 && remove.length === 0) return;
+    const word = (chip: PlanRefChipDto) => chip.identifier ?? chip.title;
+    changes.push({
+      field,
+      from: null,
+      to: [...add.map((c) => `+${word(c)}`), ...remove.map((c) => `−${word(c)}`)].join(' · '),
+      refs: { added: add, removed: remove },
+    });
+  };
+  edgeRow('supersedes', patch.supersedesAdd, patch.supersedesRemove);
+  edgeRow('supersededBy', patch.supersededByAdd, patch.supersededByRemove);
   // THE RESTING STATUS (bug MOTIR-5640 · MOTIR-5646, superseding MOTIR-5359's
   // re-scope reset) — the one row no patch key produces, because the approve
   // DERIVES it. A target its plan has PARKED comes back when the plan is
@@ -565,6 +626,29 @@ function revisedSince(
 }
 
 /**
+ * Every work-item id a plan's MARK carriers name (Story MOTIR-6577 · MOTIR-6631,
+ * shared with MOTIR-6632): each real ref on the five `supersedes` carriers, and
+ * each `modify` target that touches `obsolescence` (whose CURRENT mark is the old
+ * side of the change). A `planItem:` ref is a proposal, not an id; a `folder:` ref
+ * names no work item. ONE collection rule, read by `resolveProposalMarkRefs`
+ * (`get_plan`'s line) and by `getPlanReview`'s batched row read (the review's chips)
+ * — so the two surfaces cannot disagree about which cards a mark names.
+ */
+function markRefIdsOf(plan: PlanWithItemsDto): Set<string> {
+  const ids = new Set<string>();
+  const take = (ref: string) => {
+    if (!isTempRef(ref) && !isFolderRef(ref)) ids.add(ref);
+  };
+  for (const item of plan.items) {
+    for (const ref of item.supersedesRefs ?? []) take(ref);
+    if (item.op !== 'modify' || !item.patch) continue;
+    for (const site of SUPERSEDES_PATCH_SITES) for (const ref of item.patch[site] ?? []) take(ref);
+    if (item.workItemId && item.patch.obsolescence !== undefined) ids.add(item.workItemId);
+  }
+  return ids;
+}
+
+/**
  * The Visitor's gate for ONE plan (Story MOTIR-6170 · MOTIR-6645): the plan must
  * be in the Visitor's project and must not be withheld — a proposal naming a
  * hidden id, or a withheld session. Every refusal is {@link PlanNotFoundError},
@@ -628,6 +712,38 @@ export const planReviewService = {
         { folderId, folderPath: pathById.get(folderId) ?? null },
       ]),
     );
+  },
+
+  /**
+   * What `get_plan`'s one-line render needs to print a proposed MARK (Story
+   * MOTIR-6577 · MOTIR-6631): each real work-item ref on the five `supersedes`
+   * carriers — and each `modify` target that touches `obsolescence` — resolved to
+   * its KEY, and those targets' CURRENT mark, so a line reads
+   * `mark: none → outdated · supersedes +ACME-3`. ONE workspace-scoped read for
+   * the whole plan, and none at all when no proposal carries a mark key.
+   *
+   * A row outside the plan's own project is left out of both maps (the render
+   * then prints the ref verbatim), the same reach `resolveProposalFolders` keeps
+   * — a plan reader was admitted to this project and no other. A `planItem:` ref
+   * is not an id and is never read.
+   */
+  async resolveProposalMarkRefs(
+    plan: PlanWithItemsDto,
+    ctx: ServiceContext,
+  ): Promise<{
+    keyById: Map<string, string>;
+    markById: Map<string, WorkItemObsolescenceDto | null>;
+  }> {
+    const ids = markRefIdsOf(plan);
+    if (ids.size === 0) return { keyById: new Map(), markById: new Map() };
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdsInWorkspace([...ids], ctx.workspaceId, tx),
+    );
+    const own = rows.filter((row) => row.projectId === plan.projectId);
+    return {
+      keyById: new Map(own.map((row) => [row.id, row.identifier])),
+      markById: new Map(own.map((row) => [row.id, row.obsolescence ?? null])),
+    };
   },
 
   async getPlanReview(
@@ -755,8 +871,19 @@ export const planReviewService = {
       ...committedEdgeRows.map((r) => r.blockerId),
       ...plan.items.flatMap((i) => [...i.blockedByRefs, ...(i.patch?.blockedByAdd ?? [])]),
     ].filter((ref) => !ref.startsWith(TEMP_REF_PREFIX));
+    // …AND every card a MARK carrier names (Story MOTIR-6577 · MOTIR-6632) — the
+    // `supersedes` refs on an `add` and on a `modify`'s patch — so each chip can
+    // carry its key, title and kind. The SAME collection `get_plan` reads
+    // (`markRefIdsOf`), joined to the SAME batched read: one more id list, not one
+    // more query. A marked target's CURRENT mark is on its own row, already here.
     const lookupIds = Array.from(
-      new Set([...targetIds, ...committedParentIds, ...reparentIds, ...blockerIds]),
+      new Set([
+        ...targetIds,
+        ...committedParentIds,
+        ...reparentIds,
+        ...blockerIds,
+        ...markRefIdsOf(plan),
+      ]),
     );
     const targets = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemRepository.findByIdsInWorkspace(lookupIds, ctx.workspaceId, tx),
@@ -882,6 +1009,43 @@ export const planReviewService = {
       }
       const row = targetById.get(id) ?? ancestorById.get(id);
       return row?.identifier ?? id;
+    };
+
+    /**
+     * One `supersedes` ref as the CHIP that draws it (Story MOTIR-6577 ·
+     * MOTIR-6632, design Part XXIV §24.7). A `planItem:` ref names an `add` of this
+     * plan: until approve it has no key, so the chip is PROPOSED and carries the
+     * title the add asks for and its PlanItem id (which opens its peek); once
+     * materialized it names the key approve CREATED. A real id names its row from
+     * the batched read. Never the temp-ref, and never a placeholder key; a ref
+     * neither read resolves degrades to the ref itself, as `nameParent` does.
+     */
+    const refChipOf = (ref: string): PlanRefChipDto => {
+      if (ref.startsWith(TEMP_REF_PREFIX)) {
+        const add = addById.get(resolveRef(ref));
+        if (!add) return { identifier: ref, title: '', kind: 'task', proposed: false };
+        const created = add.workItemId ? targetById.get(add.workItemId) : undefined;
+        if (created) {
+          return {
+            identifier: created.identifier,
+            title: created.title,
+            kind: created.kind,
+            proposed: false,
+            planItemId: add.id,
+          };
+        }
+        return {
+          identifier: null,
+          title: proposedTitleOf(add),
+          kind: add.proposedFields?.kind ?? 'task',
+          proposed: true,
+          planItemId: add.id,
+        };
+      }
+      const row = targetById.get(ref);
+      return row
+        ? { identifier: row.identifier, title: row.title, kind: row.kind, proposed: false }
+        : { identifier: ref, title: '', kind: 'task', proposed: false };
     };
 
     // ── FOLDER PLACEMENTS (MOTIR-5415) ────────────────────────────────────────
@@ -1180,8 +1344,15 @@ export const planReviewService = {
       // them separately is the drift this card exists to make impossible.
       const changes =
         item.op === 'modify'
-          ? buildChanges(item.patch, target, nameParent, statusByKey, placementSides)
+          ? buildChanges(item.patch, target, nameParent, statusByKey, placementSides, refChipOf)
           : [];
+      // An `add`'s SUPERSEDES chips (MOTIR-6632, Part XXIV §24.8) — ONE local, two
+      // carriers (the item and the envelope), as `resolvedTodos` below.
+      const supersedesChips: PlanRefChipDto[] =
+        item.op === 'add' ? (item.supersedesRefs ?? []).map(refChipOf) : [];
+      // A `modify`'s MARK-GROUP rows (§24.12) — the SAME objects as `changes`,
+      // filtered, never a second diff.
+      const markChanges = changes.filter((c) => isMarkChangeField(c.field));
 
       // THE PROPOSED STEPS, resolved for READING (MOTIR-4622 · AMENDMENT 14 D5,
       // D6; `design/ai-planning/design-notes.md` Part XV).
@@ -1450,8 +1621,11 @@ export const planReviewService = {
           settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
           todos: item.op === 'add' ? resolvedTodos : null,
           removeReason,
+          markChanges,
+          supersedesRefs: supersedesChips,
         },
         removeReason,
+        supersedesRefs: supersedesChips,
       };
     });
 

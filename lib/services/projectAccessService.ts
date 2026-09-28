@@ -41,6 +41,7 @@ import { isCloud } from '@/lib/billing/availability';
 import { VISITOR_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import {
+  VISITOR_ACTOR_ID,
   VISITOR_NOT_FOUND,
   type VisitorReadContext,
   type VisitorVerdict,
@@ -175,6 +176,13 @@ async function resolveInputs(
     accessScope: workspaceMembership?.accessScope ?? null,
     customRolePermissions: customRolePermissionsOf(workspaceRole, workspaceMembership),
     addedToProject: projectMembership != null,
+    // WHICH DOOR (MOTIR-6733). This is the MEMBER door, where a non-entrant holds
+    // nothing — with ONE exception: a Visitor's narrowed context
+    // (`visitorServiceContext`), whose reads run the rooms' member services but
+    // apply the private-epic hidden set themselves and are only ever built from a
+    // `visitor` verdict. Its actor id names no user row, so no session can
+    // present it.
+    readPath: ctx.userId === VISITOR_ACTOR_ID ? 'public' : 'member',
     // A CLOSING organization is read-only for every actor (MOTIR-6396). Read at
     // request time and never stored on a membership, so a cancel reopens every
     // write on the next request with nothing to restore.
@@ -229,6 +237,7 @@ async function resolvePublicInputs(
       accessScope: null,
       addedToProject: false,
       organizationClosing: await isWorkspaceOrgClosing(project.workspaceId, tx),
+      readPath: 'public',
     };
   }
   // Every read here runs under the PROJECT'S OWN workspace binding. MOTIR-2684:
@@ -273,6 +282,10 @@ async function resolvePublicInputs(
     customRolePermissions: customRolePermissionsOf(workspaceRole, workspaceMembership),
     addedToProject: added,
     organizationClosing: await isWorkspaceOrgClosing(project.workspaceId, tx),
+    // The public door (MOTIR-6733): a non-entrant holds the public set HERE, and
+    // only here — every caller of this function applies the private-epic hidden
+    // set itself. `resolveInputs` above leaves it absent, i.e. the member door.
+    readPath: 'public',
   };
 }
 

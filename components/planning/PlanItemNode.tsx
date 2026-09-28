@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, ArchiveX, ChevronRight, Pencil, Plus } from 'lucide-react';
+import { AlertTriangle, ArchiveX, ChevronRight, Pencil, Plus, Replace } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   CrossBlockedFlag,
@@ -9,7 +9,15 @@ import {
   WorkItemStatusPill,
 } from '@/components/planning/WorkItemNode';
 import type { IssueType } from '@/lib/issues/parentRules';
-import type { PlanItemChangeDto, PlanReviewItemDto } from '@/lib/dto/planReview';
+import {
+  isMarkChangeField,
+  OBSOLESCENCE_CURRENT,
+  type PlanItemChangeDto,
+  type PlanReviewItemDto,
+} from '@/lib/dto/planReview';
+import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
+import { ObsolescencePill } from '@/components/issues/ObsolescencePill';
+import { supersedesWords } from '@/components/planning/SupersedesChip';
 import {
   changeToText,
   isFolderPlacementChange,
@@ -87,14 +95,52 @@ export const LOCK_HATCH =
   'repeating-linear-gradient(135deg, transparent, transparent 13px, color-mix(in srgb, var(--el-muted) 60%, transparent) 13px, color-mix(in srgb, var(--el-muted) 60%, transparent) 15px)';
 
 /**
- * Is this proposal LOCKED — a `modify` or `remove` aimed at a card that is
- * already finished? (Part XXIII §23.4: the ONE place `locked` appears.) Read off
- * the target's lifecycle CATEGORY from the wire, never a hand-copied status set
- * (bug MOTIR-3170): the status set is project-defined rows, and `cancelled` is as
- * terminal as `done` because the workflow files it under the same category.
+ * Is this proposal LOCKED — one approve will REFUSE? (Part XXIII §23.4: the ONE
+ * place `locked` appears; Part XXIV §24.4 narrows it to exactly that meaning.)
+ *
+ *   · a `remove` of a finished target → locked;
+ *   · a `modify` of a finished target → locked, UNLESS it is a MARK `modify` —
+ *     every change row in the mark group (mark · note · supersedes edges), the one
+ *     `modify` a finished card accepts (MOTIR-6629's mark-only carve-out). That is
+ *     every mark a plan can propose, so it is drawn as a mark, never as a refusal;
+ *   · a `modify` that SETS `outdated` / `deprecated` on an UNFINISHED target →
+ *     locked. It reaches the review one way only — the target was finished when
+ *     the plan was written and has been reopened since — and MOTIR-6663 refuses it
+ *     at approve.
+ *
+ * Read off the target's lifecycle CATEGORY from the wire, never a hand-copied
+ * status set (bug MOTIR-3170), and off the CHANGE LIST — the projection MOTIR-6629
+ * and MOTIR-6663 key their checks on — never a flag. `changes` is optional so a
+ * caller holding only `op` × category keeps the pre-mark answer.
  */
-export function isLockedProposal(item: Pick<PlanReviewItemDto, 'op' | 'statusCategory'>): boolean {
-  return (item.op === 'modify' || item.op === 'remove') && item.statusCategory === 'done';
+export function isLockedProposal(
+  item: Pick<PlanReviewItemDto, 'op' | 'statusCategory'> & {
+    changes?: readonly Pick<PlanItemChangeDto, 'field' | 'to'>[];
+  },
+): boolean {
+  const changes = item.changes ?? [];
+  if (item.statusCategory === 'done') {
+    if (item.op === 'remove') return true;
+    if (item.op !== 'modify') return false;
+    const markOnly = changes.length > 0 && changes.every((c) => isMarkChangeField(c.field));
+    return !markOnly;
+  }
+  return (
+    item.op === 'modify' &&
+    item.statusCategory != null &&
+    changes.some((c) => c.field === 'obsolescence' && c.to !== OBSOLESCENCE_CURRENT)
+  );
+}
+
+/** The mark approve will WRITE, when this `modify` sets or changes one — `null`
+ *  for a clear, for a `modify` that does not touch the mark, and for any other op
+ *  (Part XXIV §24.5: a clear draws no pill; an `add` never carries a mark). */
+export function proposedMarkOf(
+  item: Pick<PlanReviewItemDto, 'op' | 'changes'>,
+): WorkItemObsolescenceDto | null {
+  if (item.op !== 'modify') return null;
+  const row = item.changes.find((c) => c.field === 'obsolescence');
+  return row && (row.to === 'outdated' || row.to === 'deprecated') ? row.to : null;
 }
 
 function staleReasonLabel(r: StaleReason, t: ReturnType<typeof useTranslations>): string {
@@ -161,6 +207,13 @@ export function PlanItemNode({
     item.op === 'add' && item.difficulty != null && kind !== 'epic' && kind !== 'story';
 
   const locked = isLockedProposal(item);
+  // The mark approve will WRITE (Part XXIV §24.5) — directly before the status
+  // pill; a clear draws none, since the card will carry none.
+  const proposedMark = proposedMarkOf(item);
+  // An `add` that SUPERSEDES cards (§24.8) — a compact count before the
+  // difficulty indicator (and before the drill chevron on a container); no refs ⇒
+  // nothing, byte-identical to before.
+  const supersedes = item.op === 'add' ? (item.supersedesRefs ?? []) : [];
 
   // Op-specific frame — what the op MEANS, layered on the shell (which owns the
   // border weight, radius and padding). None reuses the cross-story red
@@ -224,12 +277,36 @@ export function PlanItemNode({
             {/* The target's status in the COMMITTED card's vocabulary — the same
                 chip, fed the same wire identity (`statusLabel` / `statusCategory`),
                 so a custom status reads as itself, never as a default. */}
+            {proposedMark ? (
+              <ObsolescencePill
+                mark={proposedMark}
+                size="node"
+                srPrefix={t('nodeProposedMark')}
+                testId="plan-item-obsolescence"
+              />
+            ) : null}
             {item.status ? (
               <WorkItemStatusPill
                 status={item.status}
                 label={item.statusLabel}
                 category={item.statusCategory}
               />
+            ) : null}
+            {supersedes.length > 0 ? (
+              <span
+                className="inline-flex shrink-0 items-center gap-1 text-xs text-(--el-text-secondary)"
+                data-testid="plan-item-supersedes"
+                title={t('nodeSupersedesTitle', {
+                  keys: supersedes
+                    .map((c) =>
+                      c.proposed ? `${t('proposedCrumb')} · ${c.title}` : (c.identifier ?? c.title),
+                    )
+                    .join(' · '),
+                })}
+              >
+                <Replace className="h-3 w-3 shrink-0 text-(--el-text-faint)" aria-hidden />
+                {t('nodeSupersedes', { n: supersedes.length })}
+              </span>
             ) : null}
             {crossBlocked ? (
               <CrossBlockedFlag />
@@ -434,8 +511,14 @@ export function PlanItemDiffLine({ changes }: { changes: PlanItemChangeDto[] }) 
   // A move under a PROPOSED parent names it `New · <title>` (Part XIX §19.3); on
   // the 280px node it may ellipsize, so the full string rides `title`.
   const tl = useTranslations('labels');
-  const from = changeCellText(first.field, first.from, tl);
-  const to = changeCellText(first.field, changeToText(first, t('proposedCrumb')), tl);
+  const current = t('obsolescenceCurrent');
+  const from = changeCellText(first.field, first.from, tl, current);
+  // A SUPERSEDES row that leads the line renders its chips as words —
+  // `+PROD-52 · +New · <title>` (Part XXIV §24.7); no canvas edge is drawn.
+  const to =
+    first.field === 'supersedes' || first.field === 'supersededBy'
+      ? supersedesWords(first, t('proposedCrumb'))
+      : changeCellText(first.field, changeToText(first, t('proposedCrumb')), tl, current);
   return (
     <div
       data-testid="diff-line"

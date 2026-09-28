@@ -706,7 +706,21 @@
  *   and then `1.44.0`, which MOTIR-6501/6502 and MOTIR-6581/6547 took first). If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
  *
- * - `1.47.0` — MOTIR-6558 adds `getDispatchRun` (`GET /api/v1/dispatch-runs/{id}`):
+ * - `1.47.0` — MOTIR-6735 adds `mergeRefusal` to `WorkItemDetail.deliveries[]`: a
+ *   delivering pull request whose merge Motir pressed and the HOST refused carries
+ *   the refusal's `code`, the host's own message as `reason` (nullable), the head it
+ *   refused and when — while it stands (not superseded, still at the current head,
+ *   the pull request still open). The message is the only record of WHICH setting
+ *   refused a `branch_protected` merge.
+ *
+ *   Additive: one new nullable field on an existing shape (§8's allowed list); no
+ *   declared field changes meaning. Read-only, on the same `project:browse` read.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: `V1_CONTRACT_VERSION` was `1.46.0` at
+ *   `520148f5c`, so this claims `1.47.0`. If a sibling has taken it since, RENUMBER
+ *   this entry — it names the FIELD.
+ *
+ * - `1.48.0` — MOTIR-6558 adds `getDispatchRun` (`GET /api/v1/dispatch-runs/{id}`):
  *   one run with its SET, the same `DispatchRun` component the ingest operations
  *   already answer with. A hosted run is opened by the SERVER, and the `motir`
  *   CLI in its container ADOPTS it (`hosted-run-runs-the-cli-as-the-app.md` §3) —
@@ -717,12 +731,12 @@
  *   list); nothing existing changes.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.46.0` on `origin/main` when this was merged (MOTIR-6528, MOTIR-6530,
- *   MOTIR-6532, MOTIR-6531 and MOTIR-6535/6537 took `1.46.0` together), so this
- *   claims `1.47.0`. If a sibling has taken it since, RENUMBER this entry — it
- *   names the OPERATION.
+ *   was `1.47.0` on `origin/main` when this was merged (MOTIR-6735 took it after
+ *   MOTIR-6528, MOTIR-6530, MOTIR-6532, MOTIR-6531 and MOTIR-6535/6537 took
+ *   `1.46.0` together), so this claims `1.48.0`. If a sibling has taken it since,
+ *   RENUMBER this entry — it names the OPERATION.
  *
- * - `1.48.0` — MOTIR-6538 adds `issueDispatchRunGitCredentials`:
+ * - `1.49.0` — MOTIR-6538 adds `issueDispatchRunGitCredentials`:
  *   `POST /api/v1/dispatch-runs/{id}/git-credential`, a running HOSTED run's git
  *   credentials — one entry per repository of the run, each an installation token
  *   of the Motir GitHub App that writes it, with the App's bot as author and the
@@ -735,10 +749,10 @@
  *   included), so no person's grant is widened by it.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.47.0` after MOTIR-6558, so this claims `1.48.0`. If a sibling has taken
+ *   was `1.48.0` after MOTIR-6558, so this claims `1.49.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
  *
- * - `1.49.0` — MOTIR-6539 adds `workBranch` (nullable) to the `DispatchPrompt`
+ * - `1.50.0` — MOTIR-6539 adds `workBranch` (nullable) to the `DispatchPrompt`
  *   component `getWorkItemDispatchPrompt` answers: the branch the prompt tells the
  *   agent to CREATE for its work — the same name in every repository the item
  *   ships in — or `null` for a manual item. A runner names it on `checkout_ready`
@@ -749,7 +763,7 @@
  *   nothing existing changes meaning, and `sessionBranch` still names the lineage.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.48.0` after MOTIR-6538, so this claims `1.49.0`. If a sibling has taken
+ *   was `1.49.0` after MOTIR-6538, so this claims `1.50.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.49.0';
+export const V1_CONTRACT_VERSION = '1.50.0';

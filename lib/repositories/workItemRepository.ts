@@ -8,6 +8,7 @@ import {
   type Executor,
   type WorkItem,
   type WorkItemImplementationSource,
+  type WorkItemFixReason,
   type WorkItemKind,
   type WorkItemObsolescence,
   type WorkItemPlanningSource,
@@ -26,6 +27,7 @@ import {
 } from '@/lib/filters/registry';
 import { UnknownFilterOperatorError } from '@/lib/filters/errors';
 import type { DistributionGroupBy } from '@/lib/reports/statisticTypes';
+import type { FixDetailDto } from '@/lib/dto/fixReason';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
 // The ONE declaration of the ready order. The Workbench reads it rather than
@@ -189,6 +191,11 @@ export interface HomeWorkItemRow {
    *  a column omitted from one arrives `undefined` at the mapper while the type
    *  claims `string | null`. */
   ciState: string | null;
+  /** Why the card is stuck until something is repaired, and what the row names for it
+   *  (`WorkItem.fixReason` / `fixDetail`, MOTIR-6600) — the To fix tab's reason line.
+   *  In the shared projection for the reason `ciState` is. */
+  fixReason: WorkItemFixReason | null;
+  fixDetail: Prisma.JsonValue | null;
   priority: WorkItemPriority;
   assigneeId: string | null;
   reporterId: string;
@@ -220,6 +227,10 @@ export const HOME_WORK_ITEM_SELECT = {
   // every tab reads through this constant, so adding it here is what keeps the
   // tabs from drifting into different columns.
   ciState: true,
+  // The card's to-fix answer (MOTIR-6600) — the To fix tab's reason line, carried on
+  // every tab's rows through this ONE projection for the reason `ciState` is.
+  fixReason: true,
+  fixDetail: true,
   priority: true,
   assigneeId: true,
   reporterId: true,
@@ -365,9 +376,19 @@ export interface HomeProjectScope {
  * exactly where the shipped `/home` list put such a row (MOTIR-2758's
  * done-EXCLUSION), so nothing a reader can see today disappears.
  */
-export type HomeCategorySlice =
+export type HomeCategorySlice = (
   | { in: readonly StatusCategoryDto[] }
-  | { notIn: readonly StatusCategoryDto[] };
+  | { notIn: readonly StatusCategoryDto[] }
+) & {
+  /**
+   * The TO FIX axis (Story MOTIR-6588 · MOTIR-6604) — `set` keeps only the cards
+   * whose `fixReason` is not null, `unset` only those whose is; absent means the
+   * slice does not care. It is how To fix is carved OUT of In progress rather than
+   * read beside it: the two slices name the same category and opposite values of
+   * this, so a card is on exactly one of them by construction.
+   */
+  fixReason?: 'set' | 'unset';
+};
 
 /**
  * The `WHERE` half of a Workbench read's project scope — "in one of these
@@ -400,12 +421,18 @@ export function homeProjectScopeWhere(
       const named = ('in' in slice ? slice.in : slice.notIn).flatMap((c) => [
         ...statusKeysByCategory[c],
       ]);
+      const fix =
+        slice.fixReason === 'set'
+          ? { fixReason: { not: null } }
+          : slice.fixReason === 'unset'
+            ? { fixReason: null }
+            : {};
       return 'in' in slice
-        ? { projectId, status: { in: named } }
+        ? { projectId, status: { in: named }, ...fix }
         : // An empty exclusion is an unfiltered clause, NOT a never-matching
           // one: `notIn: []` and "no constraint" are the same predicate, and
           // Prisma renders the former as a tautology anyway.
-          { projectId, ...(named.length > 0 ? { status: { notIn: named } } : {}) };
+          { projectId, ...(named.length > 0 ? { status: { notIn: named } } : {}), ...fix };
     }),
   };
 }
@@ -468,8 +495,22 @@ export function homeMembershipWhere(
  */
 export const HOME_SLICE_TODO: HomeCategorySlice = { notIn: ['in_progress', 'done'] };
 
-/** IN PROGRESS — what is moving, including an agent's output awaiting a person. */
-export const HOME_SLICE_IN_PROGRESS: HomeCategorySlice = { in: ['in_progress'] };
+/**
+ * IN PROGRESS — what is moving, including an agent's output awaiting a person.
+ *
+ * ⚠️ MINUS TO FIX (MOTIR-6604): a card stuck until something is repaired is in the
+ * same category and is listed on To fix instead, never on both.
+ */
+export const HOME_SLICE_IN_PROGRESS: HomeCategorySlice = {
+  in: ['in_progress'],
+  fixReason: 'unset',
+};
+
+/**
+ * TO FIX — the in-progress cards stuck until something is repaired (Story MOTIR-6588
+ * · MOTIR-6604): `fixReason IS NOT NULL`, the other half of {@link HOME_SLICE_IN_PROGRESS}.
+ */
+export const HOME_SLICE_TO_FIX: HomeCategorySlice = { in: ['in_progress'], fixReason: 'set' };
 
 /** RECENTLY FINISHED — the terminal slice; the caller adds the window. */
 export const HOME_SLICE_DONE: HomeCategorySlice = { in: ['done'] };
@@ -1250,7 +1291,14 @@ export const workItemRepository = {
       // written, shared with the count and the watermark beside it.
       where: homeMembershipWhere(userId, workspaceId, projectScopes, { slice, since, sortField }),
       select: HOME_WORK_ITEM_SELECT,
-      orderBy: homeOrderBy(sortField),
+      // TO FIX orders by REASON first (design § 30, _Order_): the enum's declaration
+      // order IS the priority (`FIX_REASON_PRIORITY`), and Postgres sorts an enum by
+      // it — then the work tabs' kind order within a reason. In the read, never on
+      // the client, so the page boundary stays exact.
+      orderBy:
+        slice.fixReason === 'set'
+          ? [{ fixReason: 'asc' }, ...homeOrderBy(sortField)]
+          : homeOrderBy(sortField),
       skip,
       take,
     });
@@ -1499,6 +1547,34 @@ export const workItemRepository = {
       select: { id: true },
       orderBy: { id: 'asc' },
     });
+    return rows.map((r) => r.id);
+  },
+
+  /**
+   * The `fixReason` BACKFILL's candidates in one workspace (Story MOTIR-6588 ·
+   * MOTIR-6603), ordered by id: every card whose status is in the `in_progress`
+   * CATEGORY (archived ones INCLUDED, so the sweep can count its abstention), plus
+   * every card still carrying a non-null `fixReason` whatever its status, so a
+   * stale reason on a card that has since left the category is cleared too.
+   *
+   * The category is joined from `workflow_status` on the card's own project and
+   * status key — statuses are per-project vocabulary, so a hardcoded key list would
+   * miss a customer's own in-progress statuses. Raw because Prisma has no relation
+   * between `work_item.status` and `workflow_status`. `work_item` has no system arm:
+   * the caller binds `workspaceId` first, or this returns nothing.
+   */
+  async listFixReasonBackfillCandidateIds(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT w."id"
+        FROM "work_item" w
+        LEFT JOIN "workflow_status" s
+          ON s."project_id" = w."projectId" AND s."key" = w."status"
+       WHERE w."workspaceId" = ${workspaceId}
+         AND (s."category" = 'in_progress' OR w."fixReason" IS NOT NULL)
+       ORDER BY w."id" ASC`);
     return rows.map((r) => r.id);
   },
 
@@ -4627,6 +4703,27 @@ export const workItemRepository = {
     } catch (err) {
       throw translateWriteError(err, { id });
     }
+  },
+
+  /**
+   * Write a card's to-fix answer (Story MOTIR-6588 · MOTIR-6600) — `fixReason` and
+   * `fixDetail` together, the only writer `fixReasonService.recomputeWorkItemFixReason`
+   * uses. A cleared detail writes SQL NULL through `Prisma.DbNull`, never the JSON value
+   * `null`, so `fixDetail IS NULL` holds exactly when `fixReason` does.
+   */
+  async updateFixReason(
+    id: string,
+    value: { fixReason: WorkItemFixReason | null; fixDetail: FixDetailDto | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.workItem.update({
+      where: { id },
+      data: {
+        fixReason: value.fixReason,
+        // A plain data record — every field a string, number or null.
+        fixDetail: value.fixDetail === null ? Prisma.DbNull : { ...value.fixDetail },
+      },
+    });
   },
 
   /**

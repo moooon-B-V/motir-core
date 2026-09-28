@@ -18,6 +18,7 @@ import {
 } from '@/lib/workspaces/context';
 import { resolveDeliveredWorkItems } from './changeRequestWorkItems';
 import { recomputeWorkItemCiState } from './deliveryVerdict';
+import { recomputeWorkItemFixReason } from './fixReasonService';
 import { workItemsService } from './workItemsService';
 import { reconcileGatesFor } from './gateSetFor';
 import { readPlanHoldWithin } from './planTargetLockService';
@@ -428,6 +429,8 @@ async function recomputeDeliveredCiState(
   for (const ref of await resolveDeliveredWorkItems(pullRequestId, tx)) {
     await lockCard(ref.id, tx);
     await recomputeWorkItemCiState(ref.id, tx);
+    // A standing queue failure is also a to-fix reason (MOTIR-6602).
+    await recomputeWorkItemFixReason(ref.id, tx);
   }
 }
 

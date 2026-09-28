@@ -196,6 +196,13 @@ function RefusedMemberLine({
     <span className="block">
       <b>{t(requeue ? 'requeue.refusedTitle' : 'refused.title', { pr: name })}</b> {headline}{' '}
       <span className="text-(--el-text-secondary)">{nextAction}</span>
+      {/* The host's own words, when it gave any (Bug MOTIR-6735) — the only thing that
+          says WHICH setting refused the merge. */}
+      {refusal.tag === 'MERGE_BRANCH_PROTECTED' && refusal.reason ? (
+        <span className="block break-words text-(--el-text-secondary)" data-merge-refusal-reason>
+          {t('setting.hostReason', { reason: refusal.reason })}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -966,6 +973,16 @@ export function DevelopmentGateFrame({
                   })}
             </span>
           </span>
+          {/* The HOST's own words (Bug MOTIR-6735): the line above can only say that a
+              setting refused the merge, and this is what names which one. */}
+          {fact.refusal.reason ? (
+            <span
+              className="ml-5.5 break-words text-(--el-text-secondary)"
+              data-merge-refusal-reason
+            >
+              {t('setting.hostReason', { reason: fact.refusal.reason })}
+            </span>
+          ) : null}
           <span className="ml-5.5 text-(--el-text-secondary)">{unlandedSub(kind, false)}</span>
         </span>,
       ];

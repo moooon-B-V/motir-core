@@ -1524,6 +1524,12 @@ export interface components {
                     failingCheckName: string | null;
                     failingCheckUrl: string | null;
                 } | null;
+                mergeRefusal: {
+                    code: string;
+                    reason: string | null;
+                    headSha: string;
+                    refusedAt: string;
+                } | null;
             }[];
         };
         WorkItemLinkGroups: {

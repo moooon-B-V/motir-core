@@ -9,7 +9,13 @@ import {
   type LiveWorkItemState,
   type ProposalNode,
 } from '@/lib/plans/validateProposals';
-import { PlanGrammarError, PlanRefGraphError, PlanTargetImmutableError } from '@/lib/plans/errors';
+import {
+  InvalidProposalError,
+  PlanGrammarError,
+  PlanRefGraphError,
+  PlanTargetImmutableError,
+} from '@/lib/plans/errors';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
@@ -91,20 +97,41 @@ function validate(
      *  Absent means the plan is the whole graph, which is the right default for
      *  every case that proposes no edge. */
     existingBlockedByEdges?: Array<{ blockedId: string; blockerId: string }>;
+    /** The committed `supersedes` links the plan joins onto (MOTIR-6630). */
+    existingSupersedesEdges?: Array<{ fromId: string; toId: string }>;
     /** The folders a `folder:` placement names (MOTIR-5414). */
     folderById?: Map<string, { id: string; projectId: string; name: string }>;
     /** Committed ancestor chains the same-level check places live ends with
      *  (MOTIR-6411). Absent means no live end is placed, so it is skipped. */
     edgeAncestorsById?: Map<string, readonly string[]>;
+    /** The mark targets' status CATEGORIES (MOTIR-6663). Absent derives them the
+     *  way the service's per-project read would for the default workflow: a
+     *  terminal key is `done`, `in_progress` is itself, anything else `todo`. */
+    markTargetStatusCategoryById?: Map<string, StatusCategoryDto>;
   } = {},
 ): void {
+  const liveById = opts.liveById ?? liveMap(live({ id: REAL_PARENT }), live({ id: REAL_TARGET }));
+  const terminalStatusKeys = opts.terminalStatusKeys ?? new Set(['done', 'cancelled']);
   validatePlanProposals({
     items,
-    liveById: opts.liveById ?? liveMap(live({ id: REAL_PARENT }), live({ id: REAL_TARGET })),
-    terminalStatusKeys: opts.terminalStatusKeys ?? new Set(['done', 'cancelled']),
+    liveById,
+    terminalStatusKeys,
     planProjectId: opts.planProjectId ?? PLAN_PROJECT,
     ancestorIdsById: opts.ancestorIdsById ?? new Map(),
     existingBlockedByEdges: opts.existingBlockedByEdges ?? [],
+    existingSupersedesEdges: opts.existingSupersedesEdges ?? [],
+    markTargetStatusCategoryById:
+      opts.markTargetStatusCategoryById ??
+      new Map(
+        [...liveById.values()].map((l): [string, StatusCategoryDto] => [
+          l.id,
+          terminalStatusKeys.has(l.status)
+            ? 'done'
+            : l.status === 'in_progress'
+              ? 'in_progress'
+              : 'todo',
+        ]),
+      ),
     folderById: opts.folderById ?? new Map(),
     edgeAncestorsById: opts.edgeAncestorsById ?? new Map(),
   });
@@ -603,6 +630,148 @@ describe('validatePlanProposals — done-work immutability', () => {
   it('does not gate an `add` on immutability (it targets nothing)', () => {
     expect(() =>
       validate([add('p1')], { terminalStatusKeys: new Set(['done', 'cancelled', 'todo']) }),
+    ).not.toThrow();
+  });
+});
+
+describe('validatePlanProposals — a MARK-ONLY `modify` may reach a terminal target (MOTIR-6629)', () => {
+  const MARK_ONLY_PATCHES: ProposalNode['patch'][] = [
+    { obsolescence: 'outdated' },
+    { obsolescence: 'deprecated', obsolescenceNoteMd: 'Replaced by the new flow.' },
+    { obsolescenceNoteMd: 'Why it is marked.' },
+    { obsolescence: null, obsolescenceNoteMd: null },
+  ];
+
+  it.each(['done', 'cancelled'])(
+    'ADMITS a modify carrying only mark keys on a `%s` target',
+    (status) => {
+      for (const patch of MARK_ONLY_PATCHES) {
+        expect(() =>
+          validate([modify('m1', { patch })], {
+            liveById: liveMap(live({ id: REAL_TARGET, status })),
+          }),
+        ).not.toThrow();
+      }
+    },
+  );
+
+  it('still REFUSES a modify of a terminal target carrying ANY key beside the mark', () => {
+    for (const patch of [
+      { title: 'Rewritten', obsolescence: 'outdated' },
+      { obsolescence: 'deprecated', parentRef: null },
+      { obsolescenceNoteMd: 'n', blockedByAdd: [REAL_PARENT] },
+    ] as ProposalNode['patch'][]) {
+      expect(() =>
+        validate([modify('m1', { patch })], {
+          liveById: liveMap(live({ id: REAL_TARGET, status: 'done' }), live({ id: REAL_PARENT })),
+        }),
+      ).toThrow(PlanTargetImmutableError);
+    }
+  });
+
+  it('counts a key the gate does not TYPE against the carve-out — the whole key set is read', () => {
+    const patch = { obsolescence: 'outdated', storyPoints: 3 } as unknown as ProposalNode['patch'];
+    expect(() =>
+      validate([modify('m1', { patch })], {
+        liveById: liveMap(live({ id: REAL_TARGET, status: 'done' })),
+      }),
+    ).toThrow(PlanTargetImmutableError);
+  });
+
+  it('still REFUSES an empty patch on a terminal target — it marks nothing', () => {
+    expect(() =>
+      validate([modify('m1', { patch: {} })], {
+        liveById: liveMap(live({ id: REAL_TARGET, status: 'done' })),
+      }),
+    ).toThrow(PlanTargetImmutableError);
+  });
+
+  it('still REFUSES a `remove` of a terminal target, whatever its row carries', () => {
+    expect(() =>
+      validate([modify('r1', { op: 'remove', patch: { obsolescence: 'deprecated' } })], {
+        liveById: liveMap(live({ id: REAL_TARGET, status: 'done' })),
+      }),
+    ).toThrow(PlanTargetImmutableError);
+  });
+});
+
+describe('validatePlanProposals — a MARK lands only on a FINISHED target (MOTIR-6663)', () => {
+  it.each([
+    ['outdated', 'todo'],
+    ['deprecated', 'todo'],
+    ['outdated', 'in_progress'],
+    ['deprecated', 'in_progress'],
+  ])(
+    'REFUSES `%s` on a target at `%s`, naming the target and pointing at `remove`',
+    (mark, status) => {
+      let caught: unknown;
+      try {
+        validate([modify('m1', { patch: { obsolescence: mark } })], {
+          liveById: liveMap(live({ id: REAL_TARGET, status })),
+        });
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(InvalidProposalError);
+      const err = caught as InvalidProposalError;
+      expect(err.code).toBe('INVALID_PROPOSAL');
+      expect(err.planItemId).toBe('m1');
+      expect(err.message).toBe(
+        `the \`modify\` of work item ${REAL_TARGET}: a plan may mark only a finished work item; ` +
+          `MOTIR-${REAL_TARGET} is at ${status}. A work item nobody will finish is removed — ` +
+          "send `{ op: 'remove', workItemId, reason }` instead.",
+      );
+    },
+  );
+
+  it('ADMITS clearing the mark (`null`) and a patch that leaves it alone on a to-do target', () => {
+    for (const patch of [
+      { obsolescence: null },
+      { obsolescence: null, obsolescenceNoteMd: null },
+      { obsolescenceNoteMd: 'Only the note.' },
+      { title: 'Rewritten' },
+    ] as ProposalNode['patch'][]) {
+      expect(() =>
+        validate([modify('m1', { patch })], {
+          liveById: liveMap(live({ id: REAL_TARGET, status: 'todo' })),
+        }),
+      ).not.toThrow();
+    }
+  });
+
+  it('reads the CATEGORY, never the key — a custom done-category `shipped` is finished', () => {
+    const shipped = liveMap(live({ id: REAL_TARGET, status: 'shipped' }));
+    expect(() =>
+      validate([modify('m1', { patch: { obsolescence: 'deprecated' } })], {
+        liveById: shipped,
+        terminalStatusKeys: new Set(['shipped']),
+        markTargetStatusCategoryById: new Map([[REAL_TARGET, 'done']]),
+      }),
+    ).not.toThrow();
+    // ...and a status literally keyed `done` whose category is NOT done is not.
+    expect(() =>
+      validate([modify('m1', { patch: { obsolescence: 'deprecated' } })], {
+        liveById: liveMap(live({ id: REAL_TARGET, status: 'done' })),
+        terminalStatusKeys: new Set(['shipped']),
+        markTargetStatusCategoryById: new Map([[REAL_TARGET, 'in_progress']]),
+      }),
+    ).toThrow(InvalidProposalError);
+  });
+
+  it('fails SAFE — a mark target with no resolved category reads as not finished', () => {
+    expect(() =>
+      validate([modify('m1', { patch: { obsolescence: 'outdated' } })], {
+        liveById: liveMap(live({ id: REAL_TARGET, status: 'done' })),
+        markTargetStatusCategoryById: new Map(),
+      }),
+    ).toThrow(InvalidProposalError);
+  });
+
+  it('leaves a target that resolves to nothing to materialize', () => {
+    expect(() =>
+      validate([modify('m1', { patch: { obsolescence: 'outdated' } })], {
+        liveById: new Map(),
+      }),
     ).not.toThrow();
   });
 });
@@ -1549,5 +1718,254 @@ describe('assertBlockedByLevels — the APPEND narrows to the batch (MOTIR-6367)
         chains,
       ),
     ).not.toThrow();
+  });
+});
+
+// Story MOTIR-6577 · MOTIR-6630 — the five `supersedes` carriers. Each goes
+// through the same passes the blocker carriers do (self-consistency,
+// resolvability) plus a SEPARATE cycle walk — the database never refuses a
+// supersedes ring — and NO level rule.
+describe('validatePlanProposals — the `supersedes` carriers (MOTIR-6630)', () => {
+  const OLD = 'wi_old';
+  const NEW = 'wi_new';
+  const EPIC = 'wi_epic';
+  const lives = liveMap(
+    live({ id: OLD, kind: 'task', status: 'done' }),
+    live({ id: NEW, kind: 'task' }),
+    live({ id: EPIC, kind: 'epic' }),
+    live({ id: REAL_TARGET }),
+  );
+
+  const refusal = (fn: () => void): PlanRefGraphError => {
+    let thrown: unknown;
+    try {
+      fn();
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(PlanRefGraphError);
+    return thrown as PlanRefGraphError;
+  };
+
+  const PATCH_CARRIERS = [
+    'supersedesAdd',
+    'supersedesRemove',
+    'supersededByAdd',
+    'supersededByRemove',
+  ] as const;
+
+  it('accepts a real id and a `planItem:` ref on every carrier', () => {
+    expect(() =>
+      validate(
+        [
+          add('a1', { supersedesRefs: [OLD] }),
+          add('a2', { supersedesRefs: [`${TEMP_REF_PREFIX}a1`] }),
+          modify('m1', {
+            workItemId: NEW,
+            patch: { supersedesAdd: [OLD, `${TEMP_REF_PREFIX}a2`] },
+          }),
+        ],
+        { liveById: lives },
+      ),
+    ).not.toThrow();
+    for (const key of PATCH_CARRIERS) {
+      expect(() =>
+        validate(
+          [
+            add('a1'),
+            modify('m1', { workItemId: NEW, patch: { [key]: [OLD, `${TEMP_REF_PREFIX}a1`] } }),
+          ],
+          { liveById: lives },
+        ),
+      ).not.toThrow();
+    }
+  });
+
+  it('refuses an unknown id and an unknown temp-ref as `dangling`, naming the carrier', () => {
+    const unknownAdd = refusal(() => validate([add('a1', { supersedesRefs: ['wi_ghost'] })]));
+    expect(unknownAdd.reason).toBe('dangling');
+    expect(unknownAdd.message).toMatch(/supersedesRefs "wi_ghost"/);
+    for (const key of PATCH_CARRIERS) {
+      const err = refusal(() =>
+        validate(
+          [modify('m1', { workItemId: NEW, patch: { [key]: [`${TEMP_REF_PREFIX}nope`] } })],
+          {
+            liveById: lives,
+          },
+        ),
+      );
+      expect(err.reason).toBe('dangling');
+      expect(err.message).toContain(`patch.${key}`);
+    }
+  });
+
+  it('refuses a FOLDER ref, a DUPLICATE and a SELF ref on every carrier at the pure pass', () => {
+    const folder = refusal(() =>
+      assertProposalSetSelfConsistent([add('a1', { supersedesRefs: ['folder:f1'] })]),
+    );
+    expect(folder.reason).toBe('dangling');
+    expect(folder.message).toMatch(/names a folder/);
+    const dup = refusal(() =>
+      assertProposalSetSelfConsistent([add('a1', { supersedesRefs: [OLD, OLD] })]),
+    );
+    expect(dup.reason).toBe('duplicate');
+    expect(dup.message).toMatch(/a supersedes edge can only be created once/);
+    const selfAdd = refusal(() =>
+      assertProposalSetSelfConsistent([add('a1', { supersedesRefs: [`${TEMP_REF_PREFIX}a1`] })]),
+    );
+    expect(selfAdd.reason).toBe('cycle');
+    for (const key of PATCH_CARRIERS) {
+      expect(
+        refusal(() =>
+          assertProposalSetSelfConsistent([
+            modify('m1', { workItemId: NEW, patch: { [key]: ['folder:f1'] } }),
+          ]),
+        ).reason,
+      ).toBe('dangling');
+      expect(
+        refusal(() =>
+          assertProposalSetSelfConsistent([
+            modify('m1', { workItemId: NEW, patch: { [key]: [OLD, OLD] } }),
+          ]),
+        ).reason,
+      ).toBe('duplicate');
+      // A `modify` naming its own target: a card cannot replace itself.
+      const self = refusal(() =>
+        assertProposalSetSelfConsistent([
+          modify('m1', { workItemId: NEW, patch: { [key]: [NEW] } }),
+        ]),
+      );
+      expect(self.reason).toBe('cycle');
+      expect(self.message).toMatch(/cannot supersede itself/);
+    }
+  });
+
+  it('a duplicate is judged within ONE carrier — the two spellings of one row are not a duplicate', () => {
+    // `modify OLD supersededByAdd [NEW]` and `modify NEW supersedesAdd [OLD]` both
+    // describe the row NEW → OLD. Approve writes it once; the gate admits both.
+    expect(() =>
+      validate(
+        [
+          modify('m1', { workItemId: OLD, patch: { supersededByAdd: [NEW] } }),
+          modify('m2', { workItemId: NEW, patch: { supersedesAdd: [OLD] } }),
+        ],
+        { liveById: lives },
+      ),
+    ).not.toThrow();
+  });
+
+  it('refuses a TWO-PROPOSAL cycle as `cycle`, naming both cards', () => {
+    const err = refusal(() =>
+      validate(
+        [
+          modify('m1', { workItemId: NEW, patch: { supersedesAdd: [OLD] } }),
+          modify('m2', { workItemId: OLD, patch: { supersedesAdd: [NEW] } }),
+        ],
+        { liveById: lives },
+      ),
+    );
+    expect(err.reason).toBe('cycle');
+    expect(err.message).toMatch(/SUPERSEDES cycle/);
+    expect(err.message).toMatch(/MOTIR-wi_new[\s\S]*MOTIR-wi_old|MOTIR-wi_old[\s\S]*MOTIR-wi_new/);
+  });
+
+  it('refuses a cycle through ONE LIVE link and ONE proposal — either spelling', () => {
+    // Committed: NEW supersedes OLD. Proposing OLD supersedes NEW closes a ring.
+    const committed = [{ fromId: NEW, toId: OLD }];
+    expect(
+      refusal(() =>
+        validate([modify('m1', { workItemId: OLD, patch: { supersedesAdd: [NEW] } })], {
+          liveById: lives,
+          existingSupersedesEdges: committed,
+        }),
+      ).reason,
+    ).toBe('cycle');
+    // The same ring spelled from the other end: NEW is superseded by OLD.
+    expect(
+      refusal(() =>
+        validate([modify('m1', { workItemId: NEW, patch: { supersededByAdd: [OLD] } })], {
+          liveById: lives,
+          existingSupersedesEdges: committed,
+        }),
+      ).reason,
+    ).toBe('cycle');
+  });
+
+  it('refuses a cycle among the plan’s own `add`s and a `modify`', () => {
+    // a1 supersedes OLD, and a `modify` has OLD supersede a1 — a ring whose
+    // every edge this plan writes, through a temp-ref.
+    expect(
+      refusal(() =>
+        validate(
+          [
+            add('a1', { supersedesRefs: [OLD] }),
+            modify('m1', { workItemId: OLD, patch: { supersedesAdd: [`${TEMP_REF_PREFIX}a1`] } }),
+          ],
+          { liveById: lives },
+        ),
+      ).reason,
+    ).toBe('cycle');
+  });
+
+  it('accepts the reversing edge when the plan REMOVES the committed row it would close a ring with', () => {
+    expect(() =>
+      validate(
+        [
+          modify('m1', {
+            workItemId: OLD,
+            patch: { supersedesAdd: [NEW], supersededByRemove: [NEW] },
+          }),
+        ],
+        { liveById: lives, existingSupersedesEdges: [{ fromId: NEW, toId: OLD }] },
+      ),
+    ).not.toThrow();
+  });
+
+  it('has NO level rule — a task may supersede an epic', () => {
+    expect(() =>
+      validate([modify('m1', { workItemId: NEW, patch: { supersedesAdd: [EPIC] } })], {
+        liveById: lives,
+        edgeAncestorsById: new Map([
+          [NEW, ['wi_story', EPIC]],
+          [EPIC, []],
+        ]),
+      }),
+    ).not.toThrow();
+  });
+
+  it('a supersedes-only `modify` of a DONE card is mark-only, and passes step 4', () => {
+    expect(() =>
+      validate(
+        [
+          add('a1'),
+          modify('m1', { workItemId: OLD, patch: { supersededByAdd: [`${TEMP_REF_PREFIX}a1`] } }),
+        ],
+        { liveById: lives },
+      ),
+    ).not.toThrow();
+    // Beside a non-mark key it is still refused.
+    expect(() =>
+      validate(
+        [modify('m1', { workItemId: OLD, patch: { supersededByAdd: [NEW], title: 'x' } as never })],
+        { liveById: lives },
+      ),
+    ).toThrow(PlanTargetImmutableError);
+  });
+
+  it('collectReferencedWorkItemIds reads all five carriers', () => {
+    expect(
+      collectReferencedWorkItemIds([
+        add('a1', { supersedesRefs: ['wi_1', `${TEMP_REF_PREFIX}x`] }),
+        modify('m1', {
+          workItemId: 'wi_t',
+          patch: {
+            supersedesAdd: ['wi_2'],
+            supersedesRemove: ['wi_3'],
+            supersededByAdd: ['wi_4'],
+            supersededByRemove: ['wi_5'],
+          },
+        }),
+      ]).sort(),
+    ).toEqual(['wi_1', 'wi_2', 'wi_3', 'wi_4', 'wi_5', 'wi_t']);
   });
 });

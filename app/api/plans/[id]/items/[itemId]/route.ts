@@ -3,9 +3,13 @@ import { NextResponse } from 'next/server';
 import { plansService } from '@/lib/services/plansService';
 import {
   InvalidProposalError,
+  PlanGrammarError,
   PlanItemNotFoundError,
+  PlanNotEditableError,
   PlanNotFoundError,
   PlanNotInExpectedStatusError,
+  PlanRefGraphError,
+  UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import type { UpdateProposalInput } from '@/lib/dto/plans';
@@ -99,8 +103,29 @@ export async function PATCH(
       : {}),
   };
 
+  // An `add`'s SUPERSEDES set (Story MOTIR-6577 · MOTIR-6631) — the older cards
+  // the created card replaces. Read by PRESENCE like every key above: absent
+  // leaves the set alone; an array REPLACES it (`[]` clears); a non-array is
+  // ignored, as `correctionFrom` ignores one, rather than coerced into a clear
+  // nobody asked for. It is STRUCTURAL, which the deepen substrate behind
+  // `updateProposal` may not touch (AMENDMENT 3 D3), so a request carrying it
+  // goes to `correctProposal` — the method that owns the ref passes and the
+  // supersedes-cycle walk — flagged `byReviewer` so the status gate stays
+  // `planned` and the trail records the person. Still ONE service call.
+  //
+  // This route edits `add`s only, so it takes no mark key: a `modify`'s mark
+  // rides its patch, which the agent doors correct.
+  const supersedesRefs = Array.isArray(b.supersedesRefs)
+    ? b.supersedesRefs.filter((r): r is string => typeof r === 'string')
+    : undefined;
+
   try {
-    const plan = await plansService.updateProposal(id, itemId, input, ctx);
+    const plan =
+      supersedesRefs !== undefined
+        ? await plansService.correctProposal(id, itemId, { ...input, supersedesRefs }, ctx, {
+            byReviewer: true,
+          })
+        : await plansService.updateProposal(id, itemId, input, ctx);
     return NextResponse.json(plan);
   } catch (err) {
     // MOTIR-2291 — the shared project gate's two refusals (404 for a non-browser,
@@ -110,11 +135,20 @@ export async function PATCH(
     if (err instanceof PlanNotFoundError || err instanceof PlanItemNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }
-    if (err instanceof PlanNotInExpectedStatusError) {
+    if (err instanceof PlanNotInExpectedStatusError || err instanceof PlanNotEditableError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
     }
-    if (err instanceof InvalidProposalError) {
+    if (err instanceof InvalidProposalError || err instanceof UnresolvedPlanRefError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+    }
+    // A `supersedesRefs` the ref passes refuse (MOTIR-6631) — dangling, a
+    // duplicate, a folder, a cycle — with the same code and `reason` the agent
+    // doors answer.
+    if (err instanceof PlanRefGraphError || err instanceof PlanGrammarError) {
+      return NextResponse.json(
+        { code: err.code, reason: err.reason, error: err.message },
+        { status: 422 },
+      );
     }
     if (err instanceof ProjectAccessDeniedError) {
       return NextResponse.json(

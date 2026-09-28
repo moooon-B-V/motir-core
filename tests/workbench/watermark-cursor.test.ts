@@ -27,6 +27,8 @@ const reading = (
 ): Record<(typeof WORKBENCH_TAB_KEYS)[number], WorkbenchTabWatermarkDto> => ({
   toDo: pair(3, '2026-09-17T10:00:00.000Z'),
   inProgress: pair(1, '2026-09-17T09:00:00.000Z'),
+  // To fix (MOTIR-6604) — its own reading, the other half of In progress's category.
+  toFix: pair(1, '2026-09-17T09:30:00.000Z'),
   recentlyFinished: pair(0, null),
   approvals: pair(2, '2026-09-17T11:30:00.000Z'),
   watching: pair(5, '2026-09-16T08:15:00.000Z'),
@@ -118,5 +120,14 @@ describe('movedTabs names exactly the tabs whose pair differs', () => {
 
   it('names nothing for a null cursor — an unread reader has had nothing move', () => {
     expect(movedTabs(null, reading())).toEqual([]);
+  });
+});
+
+describe('a cursor minted before To fix joined the watermark (MOTIR-6605)', () => {
+  it('is unreadable — so the stream names every tab and the client re-reads To fix too', () => {
+    // Five packed tabs, the shape every open Workbench held before the deploy.
+    const five = Array.from({ length: 5 }, () => [1, Date.parse('2026-09-17T09:00:00.000Z')]);
+    const cursor = `w1.${Buffer.from(JSON.stringify(five), 'utf8').toString('base64url')}`;
+    expect(decodeWatermarkCursor(cursor)).toBeNull();
   });
 });

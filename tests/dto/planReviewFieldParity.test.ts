@@ -546,9 +546,9 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
    * sees for it. That is the whole ratchet: the answer may legitimately be
    * "nothing", but it has to be written down rather than defaulted into.
    *
-   * `noRow` has no members today — every key a `modify` can carry is now visible
-   * to the approver — and the arm is kept because the next key is the one this
-   * guard exists for.
+   * `noRow` is EMPTY: every key a `modify` can carry is visible to the approver.
+   * The obsolescence pair (MOTIR-6629) and the four supersedes edge lists
+   * (MOTIR-6630) were recorded here as owed until MOTIR-6632 drew their rows.
    */
   type ChangeRowDisposition = { row: PlanItemChangeField } | { noRow: string };
   const DISPOSITION: Record<PlanItemPatchKey, ChangeRowDisposition> = {
@@ -577,6 +577,19 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
     // `+2 / −1 blockers` rather than naming each edge (MOTIR-3366's carriers).
     blockedByAdd: { row: 'links' },
     blockedByRemove: { row: 'links' },
+    // The OBSOLESCENCE mark and its note — carried by MOTIR-6629, drawn by
+    // MOTIR-6632 (design Part XXIV §24.3 / §24.6): `Mark  Current → Outdated`
+    // and the note's first line.
+    obsolescence: { row: 'obsolescence' },
+    obsolescenceNoteMd: { row: 'obsolescenceNote' },
+    // The four `supersedes` edge lists — carried by MOTIR-6630, drawn by
+    // MOTIR-6632 as TWO rows, one per direction, each carrying resolved chips
+    // (§24.7). Unlike the blocker carriers they are NOT folded into `links`: no
+    // canvas edge draws them, so the chips are the whole of what the approver sees.
+    supersedesAdd: { row: 'supersedes' },
+    supersedesRemove: { row: 'supersedes' },
+    supersededByAdd: { row: 'supersededBy' },
+    supersededByRemove: { row: 'supersededBy' },
   };
 
   /**

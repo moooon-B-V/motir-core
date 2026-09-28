@@ -2672,6 +2672,29 @@ model WorkItem {
   // contained change, and the roll-up filters on the literal `'passing'`, which
   // `running` deliberately does not match).
   ciState               String?
+  // WHY this card is STUCK UNTIL SOMETHING IS REPAIRED (Story MOTIR-6588 ·
+  // MOTIR-6600) — the Workbench's To fix tab reads it, and so will the To fix
+  // tag (MOTIR-6589). `null` means there is nothing to repair.
+  //
+  // ⚠️ IT IS `motir fix`'s ANSWER, STORED — never a second rule. The three
+  // pull-request reasons are read THROUGH `workItemRepairService`'s own
+  // predicate (`evaluateRepair`), so the tab never lists a card the command
+  // would refuse and never misses one it would claim; `changes_requested` is a
+  // reviewer's standing refusal on the card's approve-to-merge gate at the
+  // members' CURRENT heads, which moves nothing and so needs a column to be seen.
+  // Several can hold at once: the enum's ORDER is the priority, and the one to
+  // repair first is stored.
+  //
+  // RECOMPUTED, never stamped, by `fixReasonService.recomputeWorkItemFixReason`
+  // under the card's row lock — the `ciState` pattern — and backfilled once.
+  // `null` off the `in_progress` status CATEGORY and on an archived card.
+  fixReason             WorkItemFixReason?
+  // What the row NAMES for that reason (`FixDetail`, `lib/dto/fixReason.ts`):
+  // the failing check or queue reason, the base branch, the reviewer and the
+  // first line of their note, which repair command applies, and how many of the
+  // card's open pull requests are affected. Written with `fixReason`, `null`
+  // exactly when it is.
+  fixDetail             Json?
   // WHEN this item finished (Story MOTIR-4777 · MOTIR-4780) — the moment it
   // ENTERED a `done`-CATEGORY status, cleared the moment it leaves one. The
   // Workbench's "Recently finished" tab is the first reader; it is also the
@@ -2890,6 +2913,13 @@ model WorkItem {
   // other composite on this table. `completedAt` is NULL on the overwhelming
   // majority of rows, which keeps the index small.
   @@index([projectId, completedAt])
+  // The TO FIX read (Story MOTIR-6588 · MOTIR-6600) — the Workbench tab asks the
+  // ACTIVE project for its `fixReason IS NOT NULL` rows, and the tab count asks the
+  // same. Leading with `projectId` for the reason the finished-window composite
+  // above does (the surface is project-scoped, `docs/decisions/home-scope.md`);
+  // `fixReason` is NULL on nearly every row, so the non-null range is a handful of
+  // entries and the membership predicate filters those rather than the project.
+  @@index([projectId, fixReason])
   // pg_trgm GIN over the free-text contains-match columns (Story 6.1 · 6.1.1,
   // finding #57): the filter builder's `text contains` compiles to ILIKE over
   // title + description, which must not table-scan at 10k issues. A multicolumn
@@ -3372,6 +3402,19 @@ enum WorkItemObsolescence {
   deprecated
 
   @@map("work_item_obsolescence")
+}
+
+/// WHY a card is stuck until something is repaired (Story MOTIR-6588 · MOTIR-6600)
+/// — `WorkItem.fixReason`. DECLARATION ORDER IS PRIORITY: when several hold, the
+/// first is the one to repair first and the one stored (`FIX_REASON_PRIORITY`,
+/// `lib/workItems/fixReason.ts`, is asserted equal to this list).
+enum WorkItemFixReason {
+  queue_failed
+  conflicted
+  ci_failed
+  changes_requested
+
+  @@map("work_item_fix_reason")
 }
 
 /// A per-project, customizable issue status (Story 2.2). Every project owns an
@@ -6646,6 +6689,12 @@ model PlanItem {
   /// `add` / edge changes: blocked-by refs, each a real workItemId or an
   /// intra-plan temp-ref, resolved at materialize.
   blockedByRefs  String[]   @map("blocked_by_refs")
+  /// `add` only: the OLDER work items the created card SUPERSEDES (Story
+  /// MOTIR-6577 · MOTIR-6630), each a real workItemId or an intra-plan temp-ref,
+  /// resolved at materialize and written as one `supersedes` link each (from =
+  /// the created card, to = the ref). Structural like `blockedByRefs`, so a
+  /// column and never a `proposedFields` key.
+  supersedesRefs String[]   @default([]) @map("supersedes_refs")
   /// `modify`/`remove`: the target's revision the change was computed against
   /// (the optimistic-concurrency anchor for the conflict check, 7.21.3).
   baseRevision   String?    @map("base_revision")
@@ -7461,6 +7510,10 @@ model GithubPullRequestMergeRefusal {
   approvalGateId String?   @map("approval_gate_id")
   /// `app_permission_missing` only — the permission the host said it needed.
   permission     String?
+  /// The host's OWN message for the refusal, verbatim (Bug MOTIR-6735) — for a
+  /// `branch_protected` refusal the only record of WHICH setting refused it. Null when
+  /// the host gave none, and on every row recorded before the column existed.
+  reason         String?
   refusedAt      DateTime  @map("refused_at")
   /// Stamped when a later press at the same head SUCCEEDED, or the pull request merged.
   /// Null while the refusal still stands. A PUSH needs no stamp: the head moves and the

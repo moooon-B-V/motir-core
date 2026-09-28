@@ -18,6 +18,8 @@ export interface MergeRefusalCreateInput {
   approvalGateId?: string | null;
   /** `app_permission_missing` only. */
   permission?: string | null;
+  /** The host's own message, verbatim (MOTIR-6735); null when it gave none. */
+  reason?: string | null;
   refusedAt: Date;
 }
 
@@ -34,6 +36,7 @@ export const githubPullRequestMergeRefusalRepository = {
         headSha: data.headSha,
         approvalGateId: data.approvalGateId ?? null,
         permission: data.permission ?? null,
+        reason: data.reason ?? null,
         refusedAt: data.refusedAt,
       },
     });

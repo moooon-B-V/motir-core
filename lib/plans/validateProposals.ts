@@ -34,6 +34,12 @@ import {
 import { isWorkItemType, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
 import { isDifficultyRefusedOnKind } from '@/lib/plans/validateProposedDifficulty';
+import { isMarkOnlyPatch } from '@/lib/plans/markOnlyPatch';
+import {
+  assertMarkTargetIsFinished,
+  patchSetsObsolescence,
+} from '@/lib/plans/validateProposedObsolescence';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
 import { crossLevelReason, isCrossLevelEdge } from '@/lib/workItems/edgeLevel';
 import {
@@ -42,6 +48,7 @@ import {
   isFolderRef,
   isTempRef,
   isWorkItemRef,
+  SUPERSEDES_PATCH_SITES,
   tempRefId,
   TEMP_REF_PREFIX,
 } from '@/lib/plans/refs';
@@ -66,6 +73,12 @@ export interface ProposalNode {
    */
   parentRef: string | null;
   blockedByRefs: string[];
+  /**
+   * `add` only — the OLDER cards the created card SUPERSEDES (MOTIR-6630), each
+   * a real work-item id or a `planItem:` temp-ref. Optional so a node built
+   * before the column reads as none; the service projects it from the row.
+   */
+  supersedesRefs?: readonly string[];
   /**
    * `add` only — the gate reads the two CLOSED-SET columns it can reject before
    * a write: the proposed `kind` and the proposed `type` (MOTIR-3654) — plus the
@@ -97,6 +110,22 @@ export interface ProposalNode {
     difficulty?: string | null;
     blockedByAdd?: string[] | null;
     blockedByRemove?: string[] | null;
+    /** The obsolescence MARK and its note (MOTIR-6629) — membership is the
+     *  proposal doors'; step 4 reads whether the patch carries mark keys ALONE
+     *  (`isMarkOnlyPatch`), which admits it to a terminal target, and step 4b
+     *  (MOTIR-6663) refuses a patch SETTING a mark on an unfinished target. The gate reads the patch's whole KEY SET for that, so every other
+     *  key the row holds counts against the carve-out even though it is not
+     *  typed here. */
+    obsolescence?: string | null;
+    obsolescenceNoteMd?: string | null;
+    /** The four `supersedes` edge lists (MOTIR-6630): the target is the NEWER
+     *  end of `supersedesAdd` / `supersedesRemove` and the OLDER end of
+     *  `supersededByAdd` / `supersededByRemove`. Checked like the blocker lists
+     *  and walked by `assertSupersedesGraphAcyclic`; no level rule. */
+    supersedesAdd?: string[] | null;
+    supersedesRemove?: string[] | null;
+    supersededByAdd?: string[] | null;
+    supersededByRemove?: string[] | null;
   } | null;
 }
 
@@ -193,6 +222,30 @@ export interface ValidatePlanProposalsInput {
    */
   existingBlockedByEdges: readonly BlockedByEdge[];
   /**
+   * The COMMITTED `supersedes` links the plan's own supersedes edges join onto
+   * (MOTIR-6630) — `{ fromId, toId }` (from = the NEWER card), the transitive
+   * closure downstream of every endpoint the plan writes, resolved by
+   * `plansService.runPersistGate`.
+   *
+   * The database does NOT refuse a supersedes cycle (the no-cycle trigger judges
+   * `is_blocked_by` only), so this walk is the ONLY guard on the plan path.
+   * REQUIRED for the reason `existingBlockedByEdges` is: an optional list
+   * defaulting to empty would let a caller that forgot it pass a cycle silently.
+   */
+  existingSupersedesEdges: readonly SupersedesEdge[];
+  /**
+   * The workflow-status CATEGORY of every `modify` target whose patch SETS an
+   * obsolescence mark (MOTIR-6663), by work-item id — read against the target's
+   * OWN project's workflow by `plansService.runPersistGate`, so a custom
+   * done-category status (`shipped`) counts as finished and a status key is
+   * never judged.
+   *
+   * REQUIRED, and its absence fails in the SAFE direction: a mark target missing
+   * from the map reads as not finished, so a caller that forgot to resolve it
+   * refuses a mark rather than writing one onto an unfinished card.
+   */
+  markTargetStatusCategoryById: ReadonlyMap<string, StatusCategoryDto>;
+  /**
    * The live FOLDERS every `folder:<id>` ref names, by id (MOTIR-5414) — resolved
    * by the service in one batched, workspace-scoped read with the project
    * narrowing lifted, so a folder in ANOTHER project is visible to be refused
@@ -217,6 +270,12 @@ export interface ValidatePlanProposalsInput {
 export interface BlockedByEdge {
   blockedId: string;
   blockerId: string;
+}
+
+/** One committed `supersedes` link: `fromId` (the NEWER card) supersedes `toId`. */
+export interface SupersedesEdge {
+  fromId: string;
+  toId: string;
 }
 
 /** The proposed kind of an `add`, defaulted the way `materialize` defaults it. */
@@ -368,6 +427,13 @@ export function collectReferencedWorkItemIds(items: readonly ProposalNode[]): st
     if (item.op === 'modify' && item.patch?.parentRef) addReal(item.patch.parentRef);
     for (const ref of item.patch?.blockedByAdd ?? []) addReal(ref);
     for (const ref of item.patch?.blockedByRemove ?? []) addReal(ref);
+    // The `supersedes` carriers (MOTIR-6630) — resolved like the blocker lists.
+    for (const ref of item.supersedesRefs ?? []) addReal(ref);
+    if (item.op === 'modify') {
+      for (const key of SUPERSEDES_PATCH_SITES) {
+        for (const ref of item.patch?.[key] ?? []) addReal(ref);
+      }
+    }
   }
   return [...ids];
 }
@@ -394,7 +460,17 @@ type RefSite =
   | 'blockedByRefs'
   | 'patch.parentRef'
   | 'patch.blockedByAdd'
-  | 'patch.blockedByRemove';
+  | 'patch.blockedByRemove'
+  | 'supersedesRefs'
+  | 'patch.supersedesAdd'
+  | 'patch.supersedesRemove'
+  | 'patch.supersededByAdd'
+  | 'patch.supersededByRemove';
+
+/** True for the five `supersedes` carriers (MOTIR-6630). */
+function isSupersedesSite(where: RefSite): boolean {
+  return where.startsWith('supersedes') || where.startsWith('patch.supersede');
+}
 
 /**
  * Every (site, refs) pair one proposal carries, so the two passes below walk the
@@ -411,7 +487,13 @@ function refSitesOf(item: ProposalNode): Array<[RefSite, readonly string[]]> {
     if (item.patch?.parentRef) sites.push(['patch.parentRef', [item.patch.parentRef]]);
     sites.push(['patch.blockedByAdd', item.patch?.blockedByAdd ?? []]);
     sites.push(['patch.blockedByRemove', item.patch?.blockedByRemove ?? []]);
+    for (const key of SUPERSEDES_PATCH_SITES) {
+      sites.push([`patch.${key}`, item.patch?.[key] ?? []]);
+    }
   }
+  // An `add`'s supersedes set (MOTIR-6630). Read off an `add` only — the column
+  // means nothing on another op, and the append refuses it there.
+  if (item.op === 'add') sites.push(['supersedesRefs', item.supersedesRefs ?? []]);
   return sites;
 }
 
@@ -432,7 +514,7 @@ function assertRefsSelfConsistent(
       throw new PlanRefGraphError(
         'duplicate',
         item.id,
-        `Proposal ${item.id} lists "${ref}" twice in ${where}; a blocked-by edge can only be created once.`,
+        `Proposal ${item.id} lists "${ref}" twice in ${where}; a ${isSupersedesSite(where) ? 'supersedes' : 'blocked-by'} edge can only be created once.`,
       );
     }
     seen.add(ref);
@@ -455,6 +537,18 @@ function assertRefsSelfConsistent(
         'cycle',
         item.id,
         `Proposal ${item.id} references ITSELF in ${where}.`,
+      );
+    }
+
+    // A `modify` naming its OWN target on a supersedes carrier (MOTIR-6630) — a
+    // card cannot replace itself. A fact about the proposal alone, like the
+    // temp-ref case above; the blocker carriers leave the same shape to the
+    // link trigger's WI_LINK_SELF, which the database does raise for them.
+    if (isSupersedesSite(where) && item.op === 'modify' && ref === item.workItemId) {
+      throw new PlanRefGraphError(
+        'cycle',
+        item.id,
+        `Proposal ${item.id}'s ${where} names its own target "${ref}"; a card cannot supersede itself.`,
       );
     }
   }
@@ -1215,6 +1309,135 @@ function assertBlockedByGraphAcyclic(
   }
 }
 
+// ── THE `supersedes` EDGE GRAPH (Story MOTIR-6577 · MOTIR-6630) ──────────────
+//
+// The sibling of the blocker walk above, deliberately a SEPARATE function: the
+// blocker passes carry level and readiness semantics this kind must not inherit.
+// `supersedes` is directed NEWER → OLDER, and a ring (A replaces B replaces A)
+// is nonsense a reader cannot resolve. Unlike `is_blocked_by`, the database
+// does NOT refuse one — `enforce_work_item_link_no_cycle` returns early for any
+// other kind — so this walk is the only guard on the plan path.
+//
+// The plan's contribution, over the committed links:
+//   * an `add`'s `supersedesRefs`         — created card → each ref;
+//   * a `modify`'s `patch.supersedesAdd`   — target → each ref;
+//   * a `modify`'s `patch.supersededByAdd` — each ref → target (the SAME row the
+//     newer card's `supersedesAdd` would write, spelled from the other end);
+//   * the two `…Remove` lists take the matching committed row away first.
+
+/**
+ * Build the `supersedes` adjacency the plan would leave behind, keyed newer →
+ * older, each proposed edge remembering the proposal that wrote it.
+ */
+function buildSupersedesGraph(
+  items: readonly ProposalNode[],
+  existing: readonly SupersedesEdge[],
+): { adjacency: Map<string, string[]>; authorOf: Map<string, ProposalNode> } {
+  const adjacency = new Map<string, string[]>();
+  const authorOf = new Map<string, ProposalNode>();
+  const edgeKey = (from: string, to: string): string => `${from}\u0000${to}`;
+  const add = (from: string, to: string, author: ProposalNode | null): void => {
+    // A self-edge is refused by `assertRefsSelfConsistent`; the walk is about rings.
+    if (from === to) return;
+    const olders = adjacency.get(from);
+    if (olders) {
+      if (!olders.includes(to)) olders.push(to);
+    } else {
+      adjacency.set(from, [to]);
+    }
+    if (author && !authorOf.has(edgeKey(from, to))) authorOf.set(edgeKey(from, to), author);
+  };
+
+  const removed = new Set<string>();
+  for (const item of items) {
+    if (item.op !== 'modify' || !item.workItemId) continue;
+    for (const ref of item.patch?.supersedesRemove ?? []) {
+      removed.add(edgeKey(item.workItemId, edgeNodeOf(ref)));
+    }
+    for (const ref of item.patch?.supersededByRemove ?? []) {
+      removed.add(edgeKey(edgeNodeOf(ref), item.workItemId));
+    }
+  }
+
+  for (const edge of existing) {
+    if (removed.has(edgeKey(edge.fromId, edge.toId))) continue;
+    add(edge.fromId, edge.toId, null);
+  }
+
+  for (const item of items) {
+    if (item.op === 'add') {
+      const from = addNodeId(item.id);
+      for (const ref of item.supersedesRefs ?? []) add(from, edgeNodeOf(ref), item);
+      continue;
+    }
+    if (item.op !== 'modify' || !item.workItemId) continue;
+    for (const ref of item.patch?.supersedesAdd ?? []) {
+      add(item.workItemId, edgeNodeOf(ref), item);
+    }
+    for (const ref of item.patch?.supersededByAdd ?? []) {
+      add(edgeNodeOf(ref), item.workItemId, item);
+    }
+  }
+  return { adjacency, authorOf };
+}
+
+/**
+ * Assert the `supersedes` graph the plan would leave is ACYCLIC (MOTIR-6630),
+ * refused as `INVALID_PLAN_REF_GRAPH` / `cycle` against the proposal whose edge
+ * closes the ring. There is NO level rule: a story may supersede a task or an
+ * epic. Exported for the APPEND, which runs it where the edge is written.
+ */
+export function assertSupersedesGraphAcyclic(
+  items: readonly ProposalNode[],
+  liveById: ValidatePlanProposalsInput['liveById'],
+  existingSupersedesEdges: readonly SupersedesEdge[],
+): void {
+  const { adjacency, authorOf } = buildSupersedesGraph(items, existingSupersedesEdges);
+  if (adjacency.size === 0) return;
+
+  const GREY = 1;
+  const BLACK = 2;
+  const colour = new Map<string, number>();
+  const stack: string[] = [];
+
+  const report = (ring: readonly string[]): never => {
+    let author: ProposalNode | null = null;
+    for (let i = 0; i < ring.length; i += 1) {
+      const found = authorOf.get(`${ring[i]}\u0000${ring[(i + 1) % ring.length]}`);
+      if (found) {
+        author = found;
+        break;
+      }
+    }
+    /* istanbul ignore next -- defensive: a ring of committed links only is not this plan's to refuse, and the walk only enters it through a proposed edge */
+    const subject = author ? describeSubject(author, liveById) : 'This plan';
+    const path = ring.map((n) => describeNode(n, items, liveById)).join(' supersedes ');
+    throw new PlanRefGraphError(
+      'cycle',
+      /* istanbul ignore next -- defensive: see above */
+      author ? author.id : (items[0]?.id ?? 'unknown'),
+      `${subject} closes a SUPERSEDES cycle: ${path} supersedes ${describeNode(ring[0]!, items, liveById)}. ` +
+        `A card cannot be replaced, however indirectly, by a card it replaces. Drop one of the edges.`,
+    );
+  };
+
+  const visit = (node: string): void => {
+    colour.set(node, GREY);
+    stack.push(node);
+    for (const older of adjacency.get(node) ?? []) {
+      const seen = colour.get(older);
+      if (seen === GREY) report(stack.slice(stack.indexOf(older)));
+      if (seen === undefined) visit(older);
+    }
+    stack.pop();
+    colour.set(node, BLACK);
+  };
+
+  for (const node of adjacency.keys()) {
+    if (!colour.has(node)) visit(node);
+  }
+}
+
 // ── THE LEVEL OF A `blocked_by` EDGE (Story MOTIR-6015 · MOTIR-6367 / 6411) ───
 //
 // A `blocked_by` joins two work items on the SAME LEVEL — the same depth below
@@ -1340,7 +1563,8 @@ export function assertBlockedByLevels(
 /**
  * THE GATE. Re-validate an approved proposal set independently, before it
  * becomes rows. Throws the first violation as a typed error — `PlanRefGraphError`
- * / `PlanGrammarError` (→ 400) or `PlanTargetImmutableError` (→ 409) — and
+ * / `PlanGrammarError` (→ 400), `PlanTargetImmutableError` (→ 409), or
+ * `InvalidProposalError` (→ 422) for a mark on an unfinished target — and
  * writes nothing, ever (it is pure). An empty / all-declined plan is a valid
  * no-op and passes.
  *
@@ -1361,6 +1585,8 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
     planProjectId,
     ancestorIdsById,
     existingBlockedByEdges,
+    existingSupersedesEdges,
+    markTargetStatusCategoryById,
   } = input;
   const folderById = input.folderById ?? new Map<string, LiveFolderState>();
 
@@ -1393,6 +1619,10 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   assertBlockedByLevels(items, liveById, input.edgeAncestorsById ?? new Map());
 
   assertBlockedByGraphAcyclic(items, liveById, existingBlockedByEdges);
+
+  // 2c. The `supersedes` EDGE graph (MOTIR-6630) — same tier, same reason, and
+  //     no level rule before it: `supersedes` orders nothing.
+  assertSupersedesGraphAcyclic(items, liveById, existingSupersedesEdges);
 
   // 3. The kind-parent grammar — asked of `lib/issues/parentRules.ts`, the same
   //    matrix every human create/move is gated on. Independent of whatever the
@@ -1511,9 +1741,17 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   // 4. Done-work immutability. A `modify`/`remove` never rewrites completed work.
   //    A target that resolves to nothing is left to `materialize`, which raises
   //    `PlanItemTargetMissingError` and rolls the whole approve back.
+  //
+  //    ONE CARVE-OUT (Story MOTIR-6577 · MOTIR-6629): a `modify` whose patch
+  //    carries ONLY `PLAN_ITEM_MARK_PATCH_KEYS` — the obsolescence mark and its
+  //    note — may reach a terminal target, because marking finished work is what
+  //    the mark is for, and it changes the card's standing, never its work. It is
+  //    keyed on the patch's KEYS (`isMarkOnlyPatch`), so any other key beside a
+  //    mark is still refused, and a `remove` of a terminal card always is.
   for (const item of items) {
     if (item.op !== 'modify' && item.op !== 'remove') continue;
     if (!item.workItemId) continue;
+    if (item.op === 'modify' && isMarkOnlyPatch(item.patch)) continue;
     const target = liveById.get(item.workItemId);
     if (target && terminalStatusKeys.has(target.status)) {
       throw new PlanTargetImmutableError(
@@ -1524,5 +1762,28 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
         target.title,
       );
     }
+  }
+  // 4b. A MARK lands only on a FINISHED card (MOTIR-6663) — the direct doors'
+  //     rule (MOTIR-6575), carried onto the plan path through the same shared
+  //     predicate. Re-asked HERE, against the LIVE row, because a target that was
+  //     finished at the append can be reopened (after its mark is cleared) while
+  //     the plan waits. Clearing (`null`) and a patch that leaves the mark alone
+  //     pass; a target that resolves to nothing is left to `materialize`.
+  for (const item of items) {
+    if (item.op !== 'modify' || !item.workItemId) continue;
+    if (!patchSetsObsolescence(item.patch)) continue;
+    const target = liveById.get(item.workItemId);
+    if (!target) continue;
+    assertMarkTargetIsFinished(
+      item.patch,
+      {
+        key: target.key,
+        status: target.status,
+        statusCategory: markTargetStatusCategoryById.get(target.id) ?? null,
+      },
+      // The doors' own `proposalLabel` wording, so every moment reads alike.
+      `the \`modify\` of work item ${item.workItemId}`,
+      item.id,
+    );
   }
 }

@@ -22,18 +22,49 @@ import type { PlanningTarget } from '@/lib/planning/planningTargets';
 // relevance (the design says so explicitly).
 
 export interface PlanningTargetChipProps {
-  target: PlanningTarget;
+  target: Pick<PlanningTarget, 'identifier' | 'title' | 'kind'>;
   /** Wired in the TRAY — renders the ⨉ that drops this target from the set. */
   onRemove?: (identifier: string) => void;
   disabled?: boolean;
+  /**
+   * The chip names a PROPOSAL of the plan under review, which has no key yet
+   * (Story MOTIR-6577 · MOTIR-6632, design Part XXIV §24.7): the key slot reads
+   * this word (`planReview.proposedCrumb` — *New*) and the chip wears the `add`
+   * card's frame, a dashed accent border on the lavender tint. The WORD is the
+   * signal; the frame is the second channel.
+   */
+  proposedWord?: string;
+  /** Strike the title — a supersedes edge the plan REMOVES (§24.7). */
+  struck?: boolean;
 }
 
 export function PlanningTargetChip({
   target,
   onRemove,
   disabled = false,
+  proposedWord,
+  struck = false,
 }: PlanningTargetChipProps) {
   const t = useTranslations('planningWorkspace.targets');
+
+  if (proposedWord !== undefined) {
+    return (
+      <span
+        data-proposed="true"
+        className="inline-flex max-w-full items-center gap-1.5 rounded-(--radius-control) border border-dashed border-(--el-accent) bg-(--el-tint-lavender) px-(--spacing-kbd-x) py-(--spacing-kbd-y) text-xs text-(--el-text)"
+      >
+        <IssueTypeIcon type={target.kind as IssueType} className="size-3.5 shrink-0" />
+        <span className="shrink-0 font-mono text-[0.9em] font-semibold text-(--el-accent-on-surface)">
+          {proposedWord}
+        </span>
+        <span
+          className={`min-w-0 truncate${struck ? ' text-(--el-text-secondary) line-through' : ''}`}
+        >
+          {target.title}
+        </span>
+      </span>
+    );
+  }
 
   return (
     <span
@@ -45,7 +76,11 @@ export function PlanningTargetChip({
       <span className="shrink-0 font-mono text-[0.9em] font-medium text-(--el-link)">
         {target.identifier}
       </span>
-      <span className="min-w-0 truncate">{target.title}</span>
+      <span
+        className={`min-w-0 truncate${struck ? ' text-(--el-text-secondary) line-through' : ''}`}
+      >
+        {target.title}
+      </span>
       {onRemove ? (
         <button
           type="button"

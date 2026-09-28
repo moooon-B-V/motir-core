@@ -47,11 +47,12 @@ export type ProjectAccessInputs = ProjectPermissionInputs;
 
 /**
  * Whether the actor may BROWSE (view) the project — its read paths (the project
- * read, the board projection, the issue list/detail). `public` admits ANYONE,
- * including an unauthenticated / cross-org actor — the single cross-org read
- * exception (Story 6.12); otherwise it admits exactly the actors who can ENTER
+ * read, the board projection, the issue list/detail). On the PUBLIC read path
+ * `public` admits ANYONE, including an unauthenticated / cross-org actor — the
+ * single cross-org read exception (Story 6.12); otherwise (the member path
+ * included, MOTIR-6733) it admits exactly the actors who can ENTER
  * ({@link canEnter}) — a Manager always, anyone added, and a Full-scope member on
- * a `workspace` project.
+ * a `workspace` or `public` project.
  */
 export function canBrowse(i: ProjectAccessInputs): boolean {
   return hasPermission(i, 'project:browse');

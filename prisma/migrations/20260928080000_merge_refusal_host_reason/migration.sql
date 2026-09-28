@@ -1,0 +1,11 @@
+-- Bug MOTIR-6735: the HOST's own words for a refused merge, kept on the refusal row.
+--
+-- `github_pull_request_merge_refusal` (20260919230000) recorded the code, the head and
+-- the time, and dropped GitHub's message. For `branch_protected` — the code an
+-- unrecognised enqueue error is classed under — that message is the ONLY thing that
+-- says which setting refused the merge, and it lived only on the press's response.
+-- The card then told a person to "change the setting" and named none.
+--
+-- Expand-only: one nullable column, no backfill. Every existing row reads NULL, which
+-- is the honest record — the message for those presses was never kept anywhere.
+ALTER TABLE "github_pull_request_merge_refusal" ADD COLUMN "reason" TEXT;

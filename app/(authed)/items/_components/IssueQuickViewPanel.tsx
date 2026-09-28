@@ -70,6 +70,10 @@ import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import { cn } from '@/lib/utils/cn';
 import { ChangedMark, ProposalRailFoot } from '@/components/workItems/ProposalPeekMarks';
 import {
+  ProposalMarkRows,
+  ProposalSupersedesRows,
+} from '@/components/planning/ProposalMarkRailRows';
+import {
   QuickViewBody,
   QuickViewHeader,
   QuickViewMain,
@@ -146,6 +150,13 @@ type IssueQuickViewPanelProps = {
        * committed hosts pass neither.
        */
       proposalOutcome?: PlanItemOutcome | null;
+      /**
+       * Opens the peek of ANOTHER proposal of the same plan — what a proposed
+       * supersedes chip on the rail does (Story MOTIR-6577 · MOTIR-6632, design
+       * Part XXIV §24.7). Supplied by the plan-review hosts; ignored without
+       * `proposal`.
+       */
+      onOpenProposal?: (planItemId: string) => void;
     }
 );
 
@@ -1027,6 +1038,17 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               />
             </div>
           ) : null}
+          {/* The proposed MARK and its NOTE, directly under Status — the mark
+              beside the finished status it holds (MOTIR-6632, Part XXIV §24.10).
+              Only the rows this plan moves; none on a committed host. */}
+          {proposal ? (
+            <ProposalMarkRows
+              proposal={proposal}
+              statusCategory={view.statusCategory}
+              statusLabel={view.statusLabel}
+              outcome={proposalOutcome}
+            />
+          ) : null}
 
           {/* Repositories (Story MOTIR-2725 · MOTIR-2416) — SECOND in the rail,
               immediately after Status, per design/work-items/
@@ -1520,6 +1542,17 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               <span className="text-(--el-text-secondary)">{t('noEstimate')}</span>
             )}
           </EditableRailField>
+
+          {/* The SUPERSEDES rows, LAST (MOTIR-6632, Part XXIV §24.10): a
+              `modify`'s signed deltas, an `add`'s unsigned refs. */}
+          {proposal ? (
+            <ProposalSupersedesRows
+              proposal={proposal}
+              {...(props.state === 'ready' && props.onOpenProposal
+                ? { onOpenProposal: props.onOpenProposal }
+                : {})}
+            />
+          ) : null}
 
           {/* Custom fields (5.3.7 · editable MOTIR-2599) — valued rows, then the
               empty ones behind a disclosure. That disclosure was built READ-ONLY

@@ -10,11 +10,19 @@
 // which the compiler erases — it exists here for the totality check alone.
 //
 // NO kind predicate lives here, deliberately (the ONE difference from
-// `difficulty`): the mark is kind- and status-agnostic, so every card may carry it.
+// `difficulty`): the mark is kind-agnostic, so every KIND of card may carry it.
+//
+// ONE STATUS predicate does (`canCarryObsolescence`, MOTIR-6575 · MOTIR-6663):
+// both marks are a FINISHED card's state, so either is settable only on a card
+// whose workflow-status CATEGORY is `done`. It is defined HERE, once, and every
+// door that sets a mark — the direct work-item doors (MOTIR-6575) and the plan
+// path (`lib/plans/validateProposedObsolescence.ts`) — asks it, so the doors can
+// never disagree about what counts as finished.
 
 import type { WorkItemObsolescence } from '@/generated/prisma/client';
 
 import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 
 /**
  * Every `WorkItemObsolescence` member, mildest first — the order every picker and
@@ -42,4 +50,19 @@ export function isWorkItemObsolescence(value: unknown): value is WorkItemObsoles
   return (
     typeof value === 'string' && (WORK_ITEM_OBSOLESCENCES as readonly string[]).includes(value)
   );
+}
+
+/**
+ * True when a card whose status sits in `statusCategory` may CARRY an
+ * obsolescence mark — only the `done` category (so `done` and `cancelled` out of
+ * the box, and any custom done-category status such as `shipped`). It reads the
+ * CATEGORY, never a status key, because every project defines its own workflow.
+ *
+ * `null` / `undefined` — a status the project's workflow does not define — is
+ * NOT finished: a card nobody can prove finished does not get a mark.
+ */
+export function canCarryObsolescence(
+  statusCategory: StatusCategoryDto | null | undefined,
+): boolean {
+  return statusCategory === 'done';
 }

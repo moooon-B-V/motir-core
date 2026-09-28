@@ -777,9 +777,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // different question it answers: this line already says the tool returns what
     // the planner actually proposed rather than how much, and the steps are part
     // of what was proposed.
+    //
+    // MOTIR-6631 REWROTE the summary, by the opposite verdict: the description
+    // now renders a proposed OBSOLESCENCE MARK — `mark: <current> → <proposed>`,
+    // the note's first line, and the supersedes edges by KEY on both a `modify`
+    // and an `add`. A reader deciding whether this tool shows a plan that retires
+    // finished cards needs to know it does, and that the refs come back as keys.
     summary:
-      'A plan with the proposals it bundles: what the planner actually proposed, not just how much.',
-    descriptionFingerprint: 'ec35160c0f7b',
+      'A plan with the proposals it bundles: what the planner actually proposed, not just how much — including a proposed obsolescence mark (current → proposed, with its note) and its supersedes edges, named by key.',
+    descriptionFingerprint: '978802db7b0b',
   },
   get_approved_shape_verdict: {
     // The line has to carry the one thing a reader choosing between this and
@@ -823,10 +829,16 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // MOTIR-3194's test: a second `modify` now MERGES rather than refusing, which
     // a caller meets after choosing this tool; and "ids come back in order" is
     // still true — a merged proposal's slot carries the surviving id.
+    //
+    // MOTIR-6631 REWROTE the summary: a `modify` can now MARK a card (the
+    // obsolescence mark, its note, the four supersedes lists) and an `add` can
+    // carry `supersedesRefs`. That is a new thing this tool DOES, and its one hard
+    // rule — only a FINISHED card may be marked; unfinished work is removed — is a
+    // refusal that decides how a caller spells the proposal, so the line says it.
     summary:
-      'Append proposals to a plan — close it with an empty final batch, or add to one you already closed with `revision: true`; ids come back in order, so the next batch can hang children off them.',
+      'Append proposals to a plan — close it with an empty final batch, or add to one you already closed with `revision: true`; ids come back in order, so the next batch can hang children off them. A `modify` may also mark a FINISHED card outdated or deprecated, with a note and supersedes edges (an `add` names the cards it replaces in `supersedesRefs`), refs as a key, an id or a `planItem:` ref; marking an unfinished card is refused — remove it instead.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: 'f28a07a152ac',
+    descriptionFingerprint: '71733ed8eccf',
   },
   update_plan_item: {
     summary:
@@ -836,10 +848,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   update_plan_proposal: {
     // The line has to carry what SEPARATES it from the deepen above, because a
     // reader picking between two adjacent tools is choosing on exactly that.
+    //
+    // MOTIR-6631 REWROTE the summary: an `add`'s `supersedesRefs` is now a
+    // correctable set (replaced wholesale, keys resolved), and a `modify`'s mark
+    // and supersedes edges are corrected by replacing its patch, re-checked with
+    // the same finished-card-only rule as the append.
     summary:
-      'Correct a proposal — including its parent, its dependency edges and its whole repository axis (a repo, a row, a set, or a role) — even after the plan is in review.',
+      'Correct a proposal — including its parent, its dependency and supersedes edges, its obsolescence mark and note, and its whole repository axis (a repo, a row, a set, or a role) — even after the plan is in review; a corrected mark is re-checked, so setting one on an unfinished card is refused.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: 'f706ba54a37d',
+    descriptionFingerprint: '9225d81c855e',
   },
   withdraw_plan_proposal: {
     // The SUMMARY stands as written and MOTIR-4146 only re-pinned the

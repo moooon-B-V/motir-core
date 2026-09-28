@@ -1,5 +1,6 @@
 import type { HomeWorkItemRow } from '@/lib/repositories/workItemRepository';
 import type { HomeWorkItemRowDto } from '@/lib/dto/home';
+import { toFixDetailDto } from '@/lib/mappers/fixReasonMappers';
 
 // Prisma → DTO converters for the Home domain (Story MOTIR-2649 · Subtask
 // MOTIR-2651). `homeService` calls these just before returning, so no Prisma row
@@ -29,6 +30,8 @@ export function toHomeWorkItemRowDto(row: HomeWorkItemRow, viewerId: string): Ho
     title: row.title,
     status: row.status,
     ciState: row.ciState,
+    fixReason: row.fixReason,
+    fixDetail: toFixDetailDto(row.fixReason, row.fixDetail),
     priority: row.priority,
     assigneeId: row.assigneeId,
     reporterId: row.reporterId,

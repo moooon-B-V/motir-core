@@ -6,51 +6,68 @@ import {
 } from '@/lib/workbench/landing';
 
 // THE LANDING CASCADE (Story MOTIR-5213 · MOTIR-5221) — `design/workbench/
-// design-notes.md` § 21. Pure, so the whole rule is a truth table here rather
-// than a browser walk: every combination of the three counts being zero or not.
+// design-notes.md` § 21, amended by § 30 (To fix, MOTIR-6604). Pure, so the whole
+// rule is a truth table here rather than a browser walk.
 
 describe('resolveWorkbenchLanding — the truth table', () => {
-  const cases: Array<[LandingCounts, string]> = [
-    // approvals, inProgress, toDo
-    [{ approvals: 0, inProgress: 0, toDo: 0 }, 'todo'],
-    [{ approvals: 0, inProgress: 0, toDo: 4 }, 'todo'],
-    [{ approvals: 0, inProgress: 3, toDo: 0 }, 'in-progress'],
-    [{ approvals: 0, inProgress: 3, toDo: 4 }, 'in-progress'],
-    [{ approvals: 2, inProgress: 0, toDo: 0 }, 'approvals'],
-    [{ approvals: 2, inProgress: 0, toDo: 4 }, 'approvals'],
-    [{ approvals: 2, inProgress: 3, toDo: 0 }, 'approvals'],
-    [{ approvals: 2, inProgress: 3, toDo: 4 }, 'approvals'],
-  ];
+  // Every combination of the FOUR counts being zero or not (To fix joined as the
+  // second rung — MOTIR-6604, design § 30). The expected tab is the first non-zero
+  // rung in cascade order, To do when none is.
+  const RUNGS = [
+    ['approvals', 'approvals'],
+    ['toFix', 'to-fix'],
+    ['inProgress', 'in-progress'],
+  ] as const;
+  const cases: Array<[LandingCounts, string]> = [];
+  for (const approvals of [0, 2])
+    for (const toFix of [0, 5])
+      for (const inProgress of [0, 3])
+        for (const toDo of [0, 4]) {
+          const counts = { approvals, toFix, inProgress, toDo };
+          cases.push([counts, RUNGS.find(([key]) => counts[key] > 0)?.[1] ?? 'todo']);
+        }
 
   it.each(cases)('%o lands on %s', (counts, expected) => {
     expect(resolveWorkbenchLanding(counts)).toBe(expected);
   });
 
-  it('covers all eight combinations — the table is total, not a sample', () => {
-    const seen = new Set(cases.map(([c]) => `${c.approvals > 0}${c.inProgress > 0}${c.toDo > 0}`));
-    expect(seen.size).toBe(8);
+  it('covers all sixteen combinations — the table is total, not a sample', () => {
+    const seen = new Set(
+      cases.map(([c]) => `${c.approvals > 0}${c.toFix > 0}${c.inProgress > 0}${c.toDo > 0}`),
+    );
+    expect(seen.size).toBe(16);
+  });
+
+  it('pins the rows the rule is about', () => {
+    expect(resolveWorkbenchLanding({ approvals: 0, toFix: 1, inProgress: 3, toDo: 4 })).toBe(
+      'to-fix',
+    );
+    expect(resolveWorkbenchLanding({ approvals: 1, toFix: 1, inProgress: 0, toDo: 0 })).toBe(
+      'approvals',
+    );
+    expect(resolveWorkbenchLanding({ approvals: 0, toFix: 0, inProgress: 3, toDo: 0 })).toBe(
+      'in-progress',
+    );
   });
 
   it('To do is TERMINAL — landed on even when it is empty too, so the cascade always resolves', () => {
-    // A brand-new member: nothing awaiting, nothing moving, nothing to start.
-    // They land on the one empty state that carries a way forward.
-    expect(resolveWorkbenchLanding({ approvals: 0, inProgress: 0, toDo: 0 })).toBe('todo');
+    // A brand-new member: nothing awaiting, nothing stuck, nothing moving, nothing
+    // to start. They land on the one empty state that carries a way forward.
+    expect(resolveWorkbenchLanding({ approvals: 0, toFix: 0, inProgress: 0, toDo: 0 })).toBe(
+      'todo',
+    );
   });
 
   it('a single item is enough to take a rung — the test is non-zero, not "many"', () => {
-    expect(resolveWorkbenchLanding({ approvals: 1, inProgress: 0, toDo: 0 })).toBe('approvals');
-    expect(resolveWorkbenchLanding({ approvals: 0, inProgress: 1, toDo: 0 })).toBe('in-progress');
+    const none = { approvals: 0, toFix: 0, inProgress: 0, toDo: 0 };
+    expect(resolveWorkbenchLanding({ ...none, approvals: 1 })).toBe('approvals');
+    expect(resolveWorkbenchLanding({ ...none, toFix: 1 })).toBe('to-fix');
+    expect(resolveWorkbenchLanding({ ...none, inProgress: 1 })).toBe('in-progress');
   });
 
   it('never lands on Recently finished or Watching — they are not rungs', () => {
-    const landed = new Set(
-      [0, 1].flatMap((a) =>
-        [0, 1].flatMap((i) =>
-          [0, 1].map((t) => resolveWorkbenchLanding({ approvals: a, inProgress: i, toDo: t })),
-        ),
-      ),
-    );
-    expect([...landed].sort()).toEqual(['approvals', 'in-progress', 'todo']);
+    const landed = new Set(cases.map(([c]) => resolveWorkbenchLanding(c)));
+    expect([...landed].sort()).toEqual(['approvals', 'in-progress', 'to-fix', 'todo']);
   });
 });
 

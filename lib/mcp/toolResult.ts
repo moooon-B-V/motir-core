@@ -74,6 +74,7 @@ import {
   PlanPersistenceError,
   PlanGrammarError,
   PlanRefGraphError,
+  PlanTargetImmutableError,
   PlanRevisionClassificationInvalidError,
   InvalidPlanHistoryCursorError,
   ApprovedShapeVerdictTooManyIdsError,
@@ -520,6 +521,12 @@ export function toToolError(err: unknown): CallToolResult {
     // reads the same code approve's route returns for the same verdict.
     err instanceof PlanRefGraphError ||
     err instanceof PlanGrammarError ||
+    // PLAN_TARGET_IMMUTABLE AT A CORRECTION (Story MOTIR-6577 · MOTIR-6633). A
+    // mark-only `modify` of a `done` / `cancelled` card is legal, so the proposal
+    // exists; `update_plan_proposal` giving it a non-mark key re-runs the persist
+    // gate and is refused here — with its code, as `validate_plan` names it,
+    // rather than as a JSON-RPC internal error.
+    err instanceof PlanTargetImmutableError ||
     // PLAN_REVISION_CLASSIFICATION_INVALID (MOTIR-5543). Every refusal this one
     // raises names the caller's next move — file the bug first and pass its key,
     // drop the key on a no-bug branch, supply evidence, pass ONE of id/key — and

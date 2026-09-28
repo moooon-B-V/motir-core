@@ -74,6 +74,7 @@ import {
   folderRefId,
   isFolderRef,
   isTempRef,
+  SUPERSEDES_PATCH_SITES,
   tempRefsOf,
   type ProposalRefCarrier,
 } from '@/lib/plans/refs';
@@ -82,6 +83,7 @@ import {
   assertFolderPlacementsLegal,
   assertProposalSetSelfConsistent,
   assertReparentLegal,
+  assertSupersedesGraphAcyclic,
   collectReferencedFolderIds,
   collectReferencedWorkItemIds,
   DEFAULT_PROPOSED_KIND,
@@ -90,10 +92,18 @@ import {
   type LiveFolderState,
   type LiveWorkItemState,
   type ProposalNode,
+  type SupersedesEdge,
 } from '@/lib/plans/validateProposals';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { validateProposedDifficulty } from '@/lib/plans/validateProposedDifficulty';
+import {
+  assertMarkTargetIsFinished,
+  patchSetsObsolescence,
+  validateProposedObsolescence,
+} from '@/lib/plans/validateProposedObsolescence';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import { isMarkOnlyPatch } from '@/lib/plans/markOnlyPatch';
 import { validateProposedBodyRefs } from '@/lib/plans/validateProposedBodyRefs';
 import { patchRescopes } from '@/lib/plans/rescopeReset';
 import { committedPlanTargets } from '@/lib/plans/planTargets';
@@ -153,6 +163,7 @@ import {
 } from '@/lib/workItems/errors';
 import { readWorkItem } from '@/lib/workspaces/tenantRead';
 import { assertSingleTargetRepoInput, primaryTargetRepo } from '@/lib/workItems/targetRepo';
+import { writeDerivedRepoSet } from '@/lib/workItems/repoSetWrites';
 import { PROJECT_REPO_ROLES, isProjectRepoRole } from '@/lib/projectRepos/vocabulary';
 
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
@@ -658,6 +669,16 @@ function assertReasonLegal(p: ProposalInput): void {
 
 function validateProposal(p: ProposalInput): void {
   assertReasonLegal(p);
+  // `supersedesRefs` is an `add`'s column (MOTIR-6630); a `modify` spells its
+  // edges on the patch (`supersedesAdd` / `supersededByAdd` / the removes), and a
+  // `remove` has none. Refused by name rather than stored and never applied.
+  if (p.op !== 'add' && (p.supersedesRefs?.length ?? 0) > 0) {
+    throw new InvalidProposalError(
+      `${proposalLabel({ op: p.op, workItemId: p.workItemId })}: \`supersedesRefs\` is an \`add\`'s field. ` +
+        'A `modify` carries its supersedes edges on the patch — `supersedesAdd` / `supersedesRemove` ' +
+        '(the target replaces each ref) and `supersededByAdd` / `supersededByRemove` (each ref replaces the target).',
+    );
+  }
   assertFolderRefNotBlank(
     p.parentRef,
     'parentRef',
@@ -748,6 +769,9 @@ function validateProposal(p: ProposalInput): void {
       null,
       proposalLabel({ op: p.op, workItemId: p.workItemId }),
     );
+    // A `modify` may MARK the target (MOTIR-6629) — membership of the mark and a
+    // string-or-null note, and nothing else: the mark is kind- and status-agnostic.
+    validateProposedObsolescence(p.patch, proposalLabel({ op: p.op, workItemId: p.workItemId }));
     // A `modify`'s rewritten bodies are rewritten at approve too (MOTIR-3804), so
     // they are held to the same link check as an `add`'s (bug MOTIR-6494).
     validateProposedBodyRefs(p.patch, proposalLabel({ op: p.op, workItemId: p.workItemId }));
@@ -1020,6 +1044,7 @@ function toIncomingProposalNode(p: ProposalInput, index: number): ProposalNode {
     workItemId: p.op === 'add' ? null : (p.workItemId ?? null),
     parentRef: p.parentRef ?? null,
     blockedByRefs: p.blockedByRefs ?? [],
+    supersedesRefs: p.supersedesRefs ?? [],
     proposedFields: (p.proposedFields ?? null) as ProposalNode['proposedFields'],
     patch: (p.patch ?? null) as ProposalNode['patch'],
   };
@@ -1033,6 +1058,7 @@ function toProposalNode(item: PlanItem): ProposalNode {
     workItemId: item.workItemId,
     parentRef: item.parentRef,
     blockedByRefs: item.blockedByRefs,
+    supersedesRefs: item.supersedesRefs ?? [],
     proposedFields: (item.proposedFields ?? null) as ProposalNode['proposedFields'],
     patch: (item.patch ?? null) as ProposalNode['patch'],
   };
@@ -1093,12 +1119,28 @@ async function runPersistGate(
   // (MOTIR-3936) — skipped entirely when the plan writes no edge, so a plan that
   // wires nothing costs exactly what it cost before.
   const existingBlockedByEdges = await resolveBlockedByClosure(nodes, ctx, tx);
+  // The COMMITTED `supersedes` links the plan's supersedes edges join onto
+  // (MOTIR-6630) — skipped entirely when the plan draws none.
+  const existingSupersedesEdges = await resolveSupersedesClosure(nodes, ctx, tx);
   // The FOLDERS its `folder:` placements name (MOTIR-5414) — skipped entirely
   // when the plan files nothing. Bound the same way the row read above is.
   const folderById = await resolveFolderById(nodes, ctx, tx);
   // The COMMITTED ancestor chains the same-level check places live ends with
   // (MOTIR-6411) — one batched read, skipped when the plan writes no edge.
   const edgeAncestorsById = await resolveEdgeAncestors(nodes, ctx, tx);
+  // The live status CATEGORY of every target a `modify` MARKS (MOTIR-6663), in
+  // the target's own project's workflow — skipped entirely when no proposal sets
+  // a mark, so a plan that marks nothing costs exactly what it cost before.
+  const markTargetIds = new Set(
+    nodes
+      .filter((n) => n.op === 'modify' && n.workItemId && patchSetsObsolescence(n.patch))
+      .map((n) => n.workItemId!),
+  );
+  const markTargetStatusCategoryById = await resolveStatusCategories(
+    rows.filter((r) => markTargetIds.has(r.id)),
+    ctx,
+    tx,
+  );
   validatePlanProposals({
     items: nodes,
     liveById,
@@ -1106,9 +1148,49 @@ async function runPersistGate(
     planProjectId,
     ancestorIdsById,
     existingBlockedByEdges,
+    existingSupersedesEdges,
+    markTargetStatusCategoryById,
     folderById,
     edgeAncestorsById,
   });
+}
+
+/**
+ * The workflow-status CATEGORY of each row's status, by row id, read against the
+ * row's OWN project's workflow (MOTIR-6663) — the question the finished-target
+ * rule asks, answered per project because every project defines its own
+ * statuses. One batched read over the rows' projects; none when `rows` is empty.
+ * A row whose status key its workflow does not define is absent from the map,
+ * which the rule reads as not finished.
+ *
+ * With a `tx`, the read runs on it (the caller holds the workspace GUC, and
+ * lifts the project narrowing where the targets may sit in another project);
+ * without one it opens its own workspace context, as `runPersistGate`'s
+ * pre-transaction pass does.
+ */
+async function resolveStatusCategories(
+  rows: ReadonlyArray<{ id: string; projectId: string; status: string }>,
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<Map<string, StatusCategoryDto>> {
+  const out = new Map<string, StatusCategoryDto>();
+  if (rows.length === 0) return out;
+  const byProject = await workflowsService.getStatusKeysByCategoryByProjects(
+    rows.map((r) => r.projectId),
+    ctx.workspaceId,
+    tx,
+  );
+  for (const r of rows) {
+    const groups = byProject.get(r.projectId);
+    if (!groups) continue;
+    for (const category of Object.keys(groups) as StatusCategoryDto[]) {
+      if (groups[category].includes(r.status)) {
+        out.set(r.id, category);
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -1232,6 +1314,103 @@ async function resolveBlockedByClosure(
   return collected;
 }
 
+/**
+ * The transitive `supersedes` closure DOWNSTREAM (newer → older) of every
+ * endpoint the plan's supersedes edges touch (Story MOTIR-6577 · MOTIR-6630) —
+ * what `assertSupersedesGraphAcyclic` walks the plan's own edges over. The
+ * twin of {@link resolveBlockedByClosure}, one batched read per level and the
+ * same level bound; no read at all for a plan that draws no supersedes edge.
+ *
+ * ⚠️ A `tx`, when given, must already have the project narrowing lifted, for the
+ * reason the row read in `runPersistGate` states: an edge may cross projects.
+ */
+async function resolveSupersedesClosure(
+  nodes: readonly ProposalNode[],
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<SupersedesEdge[]> {
+  const seeds = new Set<string>();
+  const addSeed = (ref: string | null | undefined): void => {
+    if (ref && !isTempRef(ref)) seeds.add(ref);
+  };
+  for (const node of nodes) {
+    if (node.op === 'add') {
+      for (const ref of node.supersedesRefs ?? []) addSeed(ref);
+      continue;
+    }
+    if (node.op !== 'modify' || !node.workItemId) continue;
+    const edges = SUPERSEDES_PATCH_SITES.flatMap((key) => node.patch?.[key] ?? []);
+    if (edges.length === 0) continue;
+    addSeed(node.workItemId);
+    for (const ref of edges) addSeed(ref);
+  }
+  if (seeds.size === 0) return [];
+
+  const read = (ids: string[]): Promise<SupersedesEdge[]> =>
+    tx
+      ? workItemLinkRepository.findSupersedesEdges(ids, tx)
+      : withWorkspaceServiceContext(ctx.workspaceId, (t) =>
+          workItemLinkRepository.findSupersedesEdges(ids, t),
+        );
+
+  const collected: SupersedesEdge[] = [];
+  const walked = new Set<string>();
+  let frontier = [...seeds];
+  for (let level = 0; level < BLOCKED_BY_CLOSURE_MAX_LEVELS && frontier.length > 0; level += 1) {
+    for (const id of frontier) walked.add(id);
+    const edges = await read(frontier);
+    collected.push(...edges);
+    frontier = [...new Set(edges.map((e) => e.toId))].filter((id) => !walked.has(id));
+  }
+  return collected;
+}
+
+/**
+ * Refuse a `supersedes` CYCLE at the APPEND (MOTIR-6630), where the edge is
+ * written — the database never will, and nothing a later call does can make a
+ * ring legal. One closure read, skipped when the batch draws no supersedes edge;
+ * judged over the plan's whole effective node set, because a ring can be closed
+ * by the proposal being added against one appended earlier.
+ *
+ * Suspended project narrowing, for the reason `resolveSupersedesClosure` states.
+ */
+async function assertSupersedesAcyclicAtAppend(
+  nodes: readonly ProposalNode[],
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const drawsEdge = nodes.some(
+    (n) =>
+      (n.op === 'add' && (n.supersedesRefs?.length ?? 0) > 0) ||
+      (n.op === 'modify' &&
+        ((n.patch?.supersedesAdd?.length ?? 0) > 0 || (n.patch?.supersededByAdd?.length ?? 0) > 0)),
+  );
+  if (!drawsEdge) return;
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const existing = await resolveSupersedesClosure(nodes, ctx, tx);
+    const ids = collectReferencedWorkItemIds(nodes);
+    const rows =
+      ids.length === 0
+        ? []
+        : await workItemRepository.findByIdsInWorkspace(ids, ctx.workspaceId, tx);
+    const liveById = new Map<string, LiveWorkItemState>(
+      rows.map((r) => [
+        r.id,
+        {
+          id: r.id,
+          key: r.identifier,
+          title: r.title,
+          kind: r.kind,
+          status: r.status,
+          projectId: r.projectId,
+        },
+      ]),
+    );
+    assertSupersedesGraphAcyclic(nodes, liveById, existing);
+  });
+}
+
 // ── THE CORRECTION DOORS MAY NOT BREAK A PLAN (MOTIR-3936) ───────────────────
 //
 // `markPlanned` gates the CLOSE, which is what makes `planned` mean approvable.
@@ -1266,7 +1445,10 @@ async function persistGateVerdict(
     if (
       err instanceof PlanRefGraphError ||
       err instanceof PlanGrammarError ||
-      err instanceof PlanTargetImmutableError
+      err instanceof PlanTargetImmutableError ||
+      // The gate's mark-on-an-unfinished-target refusal (MOTIR-6663) — a verdict
+      // about the plan, like the three above, never a fault.
+      err instanceof InvalidProposalError
     ) {
       return err;
     }
@@ -1899,6 +2081,7 @@ function refCarrier(p: ProposalInput): ProposalRefCarrier {
     label: proposalLabel({ op: p.op, workItemId: p.workItemId, title: p.proposedFields?.title }),
     parentRef: p.parentRef,
     blockedByRefs: p.blockedByRefs,
+    supersedesRefs: p.supersedesRefs,
     patch: p.patch ?? null,
   };
 }
@@ -1914,6 +2097,7 @@ function refCarrierOfRow(item: PlanItem): ProposalRefCarrier {
     label: item.id,
     parentRef: item.parentRef,
     blockedByRefs: item.blockedByRefs,
+    supersedesRefs: item.supersedesRefs ?? [],
     patch: item.patch as ProposalRefCarrier['patch'],
   };
 }
@@ -2416,7 +2600,29 @@ async function materialize(
       createdById: ctx.userId,
     }));
   });
-  await workItemLinkRepository.createManyIfAbsent(blockedByRows, tx);
+
+  // Pass 2-bis — each `add`'s `supersedes` edges (Story MOTIR-6577 · MOTIR-6630):
+  // one row per ref, from = the created card (the NEWER one), to = the ref.
+  //
+  // ⚠️ THEY RIDE THE SAME ONE STATEMENT AS THE BLOCKERS, not a second batch.
+  // MOTIR-3396's budget is one round trip for the add pass's WHOLE link graph,
+  // whatever the kinds (`approveTransactionBudget.test.ts` pins the call count),
+  // so a plan's supersedes carriers add rows, never a round trip. The per-row
+  // triggers and `skipDuplicates` treat each row alone, so mixing kinds changes
+  // nothing — and the created card superseding a card a `modify` ALSO marks
+  // `supersededByAdd` it (the same row, spelled from the other end) still lands
+  // once, whichever writes first.
+  const supersedesRows = adds.flatMap((item) => {
+    const fromId = planItemToWorkItem.get(item.id)!;
+    return (item.supersedesRefs ?? []).map((ref) => ({
+      workspaceId: ctx.workspaceId,
+      fromId,
+      toId: resolveRef(ref),
+      kind: 'supersedes' as const,
+      createdById: ctx.userId,
+    }));
+  });
+  await workItemLinkRepository.createManyIfAbsent([...blockedByRows, ...supersedesRows], tx);
 
   // Pass 2b — DERIVE THE BIRTH STATUS from the edges Pass 2 just wired
   // (MOTIR-3050). Pass 1 gives every created row the workflow's INITIAL status,
@@ -2862,16 +3068,13 @@ async function recomputeContainersForTouched(
       workspaceId,
       tx,
     );
-    await workItemRepoRepository.deleteByWorkItem(containerId, tx);
-    await workItemRepoRepository.createMany(
-      refs.map((projectRepoId, position) => ({
-        workspaceId,
-        workItemId: containerId,
-        projectRepoId,
-        position,
-      })),
-      tx,
-    );
+    // BOTH halves — the references AND the stored name projection
+    // (`targetRepos` / `targetRepo`) — through the one writer the service-path
+    // rollup uses. Writing the references alone here (bug MOTIR-6751) left every
+    // container an approve re-derived reading back the names it had before: the
+    // empty set a planned story is created with, or the repositories a re-plan
+    // had just moved its work out of.
+    await writeDerivedRepoSet(containerId, workspaceId, refs, tx);
   }
 }
 
@@ -3050,6 +3253,23 @@ async function applyModify(
     update.difficulty = patch.difficulty;
     diff.difficulty = { from: current.difficulty, to: patch.difficulty };
   }
+  // The OBSOLESCENCE mark and its note (MOTIR-6629) — the columns MOTIR-6574
+  // shipped, written with the SAME `obsolescence` / `obsolescenceNoteMd` diff
+  // cells `workItemsService` records, so the activity feed renders them through
+  // the dispositions already registered. Sparse: absent leaves, `null` clears.
+  // Membership was refused at the append / correction; no kind or status check,
+  // by design — marking finished work is what the mark is for.
+  if (patch.obsolescence !== undefined && patch.obsolescence !== current.obsolescence) {
+    update.obsolescence = patch.obsolescence;
+    diff.obsolescence = { from: current.obsolescence, to: patch.obsolescence };
+  }
+  if (
+    patch.obsolescenceNoteMd !== undefined &&
+    patch.obsolescenceNoteMd !== current.obsolescenceNoteMd
+  ) {
+    update.obsolescenceNoteMd = patch.obsolescenceNoteMd;
+    diff.obsolescenceNoteMd = { from: current.obsolescenceNoteMd, to: patch.obsolescenceNoteMd };
+  }
   // RE-PIN the repo (MOTIR-1884) — present in `repoPins` ONLY when the patch
   // carried a `targetRepo` key, which is what keeps "leave it alone" distinct
   // from "unpin it" (an explicit null resolves to null and clears the column).
@@ -3220,7 +3440,14 @@ async function applyModify(
   // exactly as `applyStatusTransition` clears it on a `done` write. Bookkeeping
   // rather than a content edit, so it stays out of the diff — the same
   // convention as before.
-  if (patchRescopes(patch, current)) {
+  //
+  // ⚠️ A MARK-ONLY `modify` never clears it (MOTIR-6629). That is the only
+  // `modify` step 4 lets reach a `done` / `cancelled` target, and marking a
+  // finished card changes its standing, not the work its branch delivered — so
+  // the branch, like the status (never parked, so `restPlanTargets` never rests
+  // it), is left exactly as it was. Asked through the SAME predicate the gate
+  // admitted it by, so the two cannot disagree.
+  if (!isMarkOnlyPatch(patch) && patchRescopes(patch, current)) {
     update.sessionBranch = null;
   }
 
@@ -3286,6 +3513,51 @@ async function applyModify(
     if (link) {
       await workItemLinkRepository.delete(link.id, tx);
       linkRemoved.push({ toId, kind: 'is_blocked_by' });
+    }
+  }
+  // The `supersedes` edges (Story MOTIR-6577 · MOTIR-6630). ONE storage row per
+  // edge, directed NEWER → OLDER, so the two spellings write in opposite
+  // directions: `supersedesAdd` puts the target at `from`, `supersededByAdd` at
+  // `to`. `createIfAbsent` makes a row that already exists — wired by hand, or
+  // by this plan's own `add` carrying `supersedesRefs` — a no-op rather than a
+  // 409, and a remove of a row that does not exist is a no-op too. Recorded in
+  // the same `links` cell, as the relationship READ FROM THE TARGET
+  // (`supersedes` / `superseded_by`) with `toId` the other end, so the feed
+  // names the card on the far side either way.
+  const supersedesEdges: Array<{
+    refs: readonly string[];
+    relationship: 'supersedes' | 'superseded_by';
+    add: boolean;
+  }> = [
+    { refs: patch.supersedesAdd ?? [], relationship: 'supersedes', add: true },
+    { refs: patch.supersededByAdd ?? [], relationship: 'superseded_by', add: true },
+    { refs: patch.supersedesRemove ?? [], relationship: 'supersedes', add: false },
+    { refs: patch.supersededByRemove ?? [], relationship: 'superseded_by', add: false },
+  ];
+  for (const { refs, relationship, add } of supersedesEdges) {
+    for (const ref of refs) {
+      const other = resolveRef(ref);
+      const [fromId, toId] =
+        relationship === 'supersedes' ? [item.workItemId, other] : [other, item.workItemId];
+      if (add) {
+        const created = await workItemLinkRepository.createIfAbsent(
+          {
+            workspaceId: ctx.workspaceId,
+            fromId,
+            toId,
+            kind: 'supersedes',
+            createdById: ctx.userId,
+          },
+          tx,
+        );
+        if (created) linkAdded.push({ toId: other, kind: relationship });
+      } else {
+        const link = await workItemLinkRepository.findReciprocal(fromId, toId, 'supersedes', tx);
+        if (link) {
+          await workItemLinkRepository.delete(link.id, tx);
+          linkRemoved.push({ toId: other, kind: relationship });
+        }
+      }
     }
   }
   if (linkAdded.length > 0 || linkRemoved.length > 0) {
@@ -3456,6 +3728,51 @@ async function assertModifyDifficultiesLegalAtAppend(
       validateProposedDifficulty(
         p.patch!.difficulty,
         kind,
+        proposalLabel({ op: p.op, workItemId: p.workItemId }),
+      );
+    }
+  });
+}
+
+/**
+ * The FINISHED-TARGET rule for a `modify` that sets an obsolescence mark, at the
+ * APPEND (MOTIR-6663) — the half `validateProposal` cannot judge, because it
+ * needs the target's live status CATEGORY. Either mark lands only on a card in
+ * the `done` category; an unfinished card nobody will build is removed instead.
+ *
+ * Only the INCOMING batch is judged: rows already on the plan were judged when
+ * they were appended, and a target reopened since is the approve gate's case. A
+ * target that resolves to nothing is left to the close. Skipped with no read
+ * when no incoming `modify` sets a mark.
+ */
+async function assertMarkTargetsFinishedAtAppend(
+  proposals: readonly ProposalInput[],
+  ctx: ServiceContext,
+  planProjectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const judged = proposals.filter(
+    (p) => p.op === 'modify' && p.workItemId && patchSetsObsolescence(p.patch),
+  );
+  if (judged.length === 0) return;
+  await withProjectNarrowingSuspended(tx, planProjectId, async () => {
+    const rows = await workItemRepository.findByIdsInWorkspace(
+      [...new Set(judged.map((p) => p.workItemId!))],
+      ctx.workspaceId,
+      tx,
+    );
+    const rowById = new Map(rows.map((r) => [r.id, r]));
+    const categoryById = await resolveStatusCategories(rows, ctx, tx);
+    for (const p of judged) {
+      const row = rowById.get(p.workItemId!);
+      if (!row) continue;
+      assertMarkTargetIsFinished(
+        p.patch,
+        {
+          key: row.identifier,
+          status: row.status,
+          statusCategory: categoryById.get(row.id) ?? null,
+        },
         proposalLabel({ op: p.op, workItemId: p.workItemId }),
       );
     }
@@ -4357,10 +4674,20 @@ export const plansService = {
             tx,
           );
 
+          // A `supersedes` CYCLE (MOTIR-6630) — refused here, where the edge is
+          // written: the database never refuses one, and a ring cannot become
+          // legal later. One closure read, only when the plan draws such an edge.
+          await assertSupersedesAcyclicAtAppend(effectiveNodes, ctx, fresh.projectId, tx);
+
           // The container half of a `modify`'s DIFFICULTY (MOTIR-6133), which
           // `validateProposal` could not judge without the target's kind. Costs
           // one batched read, and only when the batch sets a non-null one.
           await assertModifyDifficultiesLegalAtAppend(proposals, ctx, fresh.projectId, tx);
+
+          // The FINISHED-TARGET rule for a `modify` that sets a mark (MOTIR-6663),
+          // which `validateProposal` could not judge without the target's live
+          // status category. One batched read, only when the batch sets a mark.
+          await assertMarkTargetsFinishedAtAppend(proposals, ctx, fresh.projectId, tx);
 
           // ⚠️ REFUSE AN UNRESOLVABLE `planItem:` REF HERE, WHERE IT IS WRITTEN
           // (MOTIR-3539) — before the first row of the batch is inserted, so a
@@ -4468,6 +4795,7 @@ export const plansService = {
               workItemId: p.op === 'add' ? null : (p.workItemId ?? null),
               parentRef: p.parentRef ?? null,
               blockedByRefs: p.blockedByRefs ?? [],
+              supersedesRefs: p.op === 'add' ? (p.supersedesRefs ?? []) : [],
               baseRevision: p.baseRevision ?? null,
               reason: p.op === 'remove' && p.reason ? p.reason.trim() : null,
               ...(p.op === 'add' && p.proposedFields
@@ -4624,6 +4952,19 @@ export const plansService = {
           {
             code: err.code,
             reason: err instanceof PlanTargetImmutableError ? null : err.reason,
+            item: `${TEMP_REF_PREFIX}${err.planItemId}`,
+            message: err.message,
+          },
+        ];
+      }
+      // A mark on a target that is no longer finished (MOTIR-6663) — the gate
+      // names the persisted proposal on the error, so it is reported like the
+      // three above rather than surfacing as a fault.
+      if (err instanceof InvalidProposalError && err.planItemId) {
+        return [
+          {
+            code: err.code,
+            reason: null,
             item: `${TEMP_REF_PREFIX}${err.planItemId}`,
             message: err.message,
           },
@@ -5218,12 +5559,21 @@ export const plansService = {
    *
    * Legal on `generating` AND `planned`; `approved` / `declined` are FROZEN and
    * the refusal names the status (`PlanNotEditableError`).
+   *
+   * `opts.byReviewer` (MOTIR-6631) is the HUMAN proposal-edit route
+   * (`PATCH /api/plans/[id]/items/[itemId]`) reaching this method for the one
+   * structural key it carries, an `add`'s `supersedesRefs`. That route edits a
+   * `planned` plan on a person's behalf, so the flag narrows the legal status to
+   * `planned` (the same `PlanNotInExpectedStatusError` `updateProposal` answers)
+   * and records the PERSON on the trail with no agent triple — `editAddProposal`'s
+   * `planned` attribution — instead of the plan's generation actor.
    */
   async correctProposal(
     planId: string,
     planItemId: string,
     input: CorrectProposalInput,
     ctx: ServiceContext,
+    opts: { byReviewer?: boolean } = {},
   ): Promise<PlanWithItemsDto> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
@@ -5304,6 +5654,9 @@ export const plansService = {
         const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
         if (!fresh) throw new PlanNotFoundError(planId);
         assertPlanProposalsEditable(fresh);
+        if (opts.byReviewer && fresh.status !== 'planned') {
+          throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
+        }
 
         const all = await planItemRepository.findByPlan(planId, tx);
         const item = all.find((i) => i.id === planItemId);
@@ -5428,14 +5781,17 @@ export const plansService = {
           );
           data.proposedFields = next as unknown as Prisma.InputJsonValue;
           touched.push(
-            ...Object.keys(input).filter((k) => k !== 'parentRef' && k !== 'blockedByRefs'),
+            ...Object.keys(input).filter(
+              (k) => k !== 'parentRef' && k !== 'blockedByRefs' && k !== 'supersedesRefs',
+            ),
           );
         } else {
           // A `modify` / `remove` targets an EXISTING work item, so it carries no
           // proposed body and no pin of its own — the content keys and
           // `targetRepo` are meaningless on it rather than merely unsupported.
           const contentKeys = Object.keys(input).filter(
-            (k) => k !== 'patch' && k !== 'blockedByRefs' && k !== 'parentRef',
+            (k) =>
+              k !== 'patch' && k !== 'blockedByRefs' && k !== 'parentRef' && k !== 'supersedesRefs',
           );
           if (contentKeys.length > 0) {
             throw new InvalidProposalError(
@@ -5455,6 +5811,37 @@ export const plansService = {
             );
             validateStoryPoints(input.patch?.storyPoints ?? null);
             validateEstimateMinutes(input.patch?.estimateMinutes ?? null);
+            // The replacement patch's MARK (MOTIR-6629), held to the append's check.
+            validateProposedObsolescence(
+              input.patch,
+              proposalLabel({ op: item.op, workItemId: item.workItemId }),
+            );
+            // ...and to the append's FINISHED-TARGET rule (MOTIR-6663), against
+            // the target's live status category. Asked HERE rather than left to
+            // the before/after gate below, which admits a correction to a plan
+            // that was already unapprovable — and a mark on an unfinished card is
+            // a mistake this write introduces, not a repair of one it inherits.
+            if (item.workItemId && patchSetsObsolescence(input.patch)) {
+              const targetId = item.workItemId;
+              await withProjectNarrowingSuspended(tx, plan.projectId, async () => {
+                const [target] = await workItemRepository.findByIdsInWorkspace(
+                  [targetId],
+                  ctx.workspaceId,
+                  tx,
+                );
+                if (!target) return;
+                const categoryById = await resolveStatusCategories([target], ctx, tx);
+                assertMarkTargetIsFinished(
+                  input.patch,
+                  {
+                    key: target.identifier,
+                    status: target.status,
+                    statusCategory: categoryById.get(target.id) ?? null,
+                  },
+                  proposalLabel({ op: item.op, workItemId: item.workItemId }),
+                );
+              });
+            }
             // The replacement patch's bodies, held to the append's link check (bug MOTIR-6494).
             validateProposedBodyRefs(
               input.patch ?? {},
@@ -5504,6 +5891,17 @@ export const plansService = {
           data.blockedByRefs = input.blockedByRefs;
           touched.push('blockedByRefs');
         }
+        // REPLACES the `add`'s supersedes set (MOTIR-6630), as `blockedByRefs`
+        // does; a `modify` corrects its edges through its `patch`.
+        if (input.supersedesRefs !== undefined) {
+          if (item.op !== 'add') {
+            throw new InvalidProposalError(
+              "Only an `add` proposal carries `supersedesRefs`; correct a `modify`'s supersedes edges through its `patch`.",
+            );
+          }
+          data.supersedesRefs = input.supersedesRefs;
+          touched.push('supersedesRefs');
+        }
 
         if (touched.length === 0)
           throw new InvalidProposalError('A correction must change something.');
@@ -5520,6 +5918,8 @@ export const plansService = {
           }),
           parentRef: (data.parentRef as string | null | undefined) ?? item.parentRef,
           blockedByRefs: (data.blockedByRefs as string[] | undefined) ?? item.blockedByRefs,
+          supersedesRefs:
+            (data.supersedesRefs as string[] | undefined) ?? item.supersedesRefs ?? [],
           patch: (input.patch !== undefined
             ? input.patch
             : (item.patch as ProposalRefCarrier['patch'])) as ProposalRefCarrier['patch'],
@@ -5539,6 +5939,7 @@ export const plansService = {
           ...toProposalNode(item),
           parentRef: corrected.parentRef ?? null,
           blockedByRefs: [...(corrected.blockedByRefs ?? [])],
+          supersedesRefs: [...(corrected.supersedesRefs ?? [])],
           patch: (corrected.patch ?? null) as ProposalNode['patch'],
         };
         assertProposalSetSelfConsistent([correctedNode]);
@@ -5589,7 +5990,9 @@ export const plansService = {
             planId,
             planItemId,
             changeKind: 'edited',
-            ...generationActor(fresh, ctx),
+            ...(opts.byReviewer
+              ? { changedById: ctx.userId, actor: null }
+              : generationActor(fresh, ctx)),
             diff: { fields: touched, proposalCount: 1, correction: true },
           },
           tx,

@@ -13,6 +13,7 @@ import { usePeekRowClick } from '../../items/_components/IssueQuickView';
 import { IssueListPager } from '../../items/_components/IssueListPager';
 import { workbenchTabHref, type WorkbenchTab } from '@/lib/workbench/tab';
 import { useLiveRows } from './useLiveRows';
+import { WorkbenchFixLine } from './WorkbenchFixLine';
 import type { WorkbenchRowView } from './workbenchRows';
 import type { ReactNode } from 'react';
 
@@ -135,25 +136,23 @@ function WorkbenchRow({
   row,
   showFinished,
   arrived = false,
+  withFixLine = false,
+  held = false,
 }: {
   row: WorkbenchRowView;
   showFinished: boolean;
   /** It arrived while the reader was looking — design-notes § 26, Panel 1. */
   arrived?: boolean;
+  /** The To fix tab: a second line, the FIX LINE, under line 1 (§ 30 Panel 2). */
+  withFixLine?: boolean;
+  /** It left the tab's set while the reader looked, and is HELD (§ 30 Panel 3). */
+  held?: boolean;
 }) {
   const t = useTranslations('workbench');
   const finishedLabel = useFinishedLabel();
-  return (
-    <div
-      role="row"
-      data-testid={`workbench-row-${row.identifier}`}
-      className={cn(
-        'group relative flex flex-col gap-1 border-b border-(--el-border) px-4 py-2.5 last:border-b-0',
-        'hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2',
-        'md:grid md:h-11 md:items-center md:gap-x-4 md:gap-y-0 md:py-0 md:pr-7 md:pl-4',
-      )}
-      style={{ gridTemplateColumns: showFinished ? GRID_TEMPLATE_FINISHED : GRID_TEMPLATE }}
-    >
+  const gridTemplateColumns = showFinished ? GRID_TEMPLATE_FINISHED : GRID_TEMPLATE;
+  const cells = (
+    <>
       <div role="cell" className="flex min-w-0 items-center">
         <RowLink row={row} label={`${row.identifier} ${row.title}`} />
         <span className="flex min-w-0 items-center gap-2">
@@ -168,7 +167,14 @@ function WorkbenchRow({
           <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
             {row.identifier}
           </span>
-          <span className="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline">
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate group-hover:underline',
+              // A HELD row's title goes secondary (§ 30 Panel 3) — still AA on the
+              // `--el-surface` hover fill.
+              held ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
+            )}
+          >
             {row.title}
           </span>
           {/* THE CI BADGE (MOTIR-5475), in the TITLE cell and in its GLYPH form —
@@ -224,6 +230,57 @@ function WorkbenchRow({
           </div>
         ) : null}
       </div>
+    </>
+  );
+
+  const rowClass = cn(
+    'group relative border-b border-(--el-border) last:border-b-0',
+    'hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2',
+  );
+
+  // THE TO FIX ROW (§ 30 Panel 2): line 1 is this row BYTE FOR BYTE, as a grid of its
+  // own, and the fix line spans every column beneath it. The stretched link is
+  // positioned against the OUTER row, so the whole two-line row still opens the card.
+  if (withFixLine && row.fix) {
+    return (
+      <div
+        role="row"
+        data-testid={`workbench-row-${row.identifier}`}
+        data-held={held ? 'true' : undefined}
+        className={cn(
+          rowClass,
+          'flex flex-col gap-1 px-4 py-2.5 md:pt-0 md:pr-7 md:pb-2.5 md:pl-4',
+        )}
+      >
+        <div
+          role="presentation"
+          className="flex flex-col gap-1 md:grid md:h-11 md:items-center md:gap-x-4 md:gap-y-0"
+          style={{ gridTemplateColumns }}
+        >
+          {cells}
+        </div>
+        <WorkbenchFixLine
+          itemKey={row.identifier}
+          reason={row.fix.reason}
+          detail={row.fix.detail}
+          held={held}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="row"
+      data-testid={`workbench-row-${row.identifier}`}
+      className={cn(
+        rowClass,
+        'flex flex-col gap-1 px-4 py-2.5',
+        'md:grid md:h-11 md:items-center md:gap-x-4 md:gap-y-0 md:py-0 md:pr-7 md:pl-4',
+      )}
+      style={{ gridTemplateColumns }}
+    >
+      {cells}
     </div>
   );
 }
@@ -303,6 +360,11 @@ export function WorkbenchList({
   const t = useTranslations('workbench');
   const router = useRouter();
   const showFinished = tab === 'finished';
+  // TO FIX (§ 30) draws the fix line, and it is the one work tab that marks a HELD
+  // row: it names something the READER must do, like To approve, so it takes To
+  // approve's live rule — a row that left the set stays, marked *Cleared*, until the
+  // next load, while the strip count has already dropped.
+  const isToFix = tab === 'to-fix';
   const columns = [
     t('columns.title'),
     t('columns.role'),
@@ -393,6 +455,8 @@ export function WorkbenchList({
                 row={row}
                 showFinished={showFinished}
                 arrived={live.arrivedIds.has(row.id)}
+                withFixLine={isToFix}
+                held={isToFix && live.heldIds.has(row.id)}
               />
             ))}
           </div>

@@ -109,10 +109,11 @@ export type GateRefusal =
   | {
       tag: 'MERGE_BRANCH_PROTECTED';
       /**
-       * The host's own account of WHICH rule, when it gave one. Carried for the
-       * record and deliberately NOT drawn: it is a host sentence, and a server
-       * string on a decision surface is what this union exists to prevent. The
-       * drawn copy names the next action without it.
+       * The host's own account of WHICH rule, when it gave one. The headline and
+       * next action stay the union's own copy; the host sentence is drawn BENEATH
+       * them, quoted and attributed (`setting.hostReason`, Bug MOTIR-6735), because
+       * an unrecognised host error is classed here and its message is then the only
+       * thing that names the setting a person is told to change.
        */
       reason?: string;
     }

@@ -207,6 +207,22 @@ export interface WorkItemDeliveryDto {
    *  holds no head logic: `ci` stays the pull request's own checks, and a member
    *  with `ci: 'passing'` and a set `queueExit` is failing in the queue. */
   queueExit: DeliveryQueueExitDto | null;
+  /** The STANDING refusal the HOST gave when Motir pressed merge on this pull request
+   *  — not superseded, at its current head, while it is open — or null (Bug
+   *  MOTIR-6735). `reason` is the host's own message, which for a `branch_protected`
+   *  refusal is the only thing naming the setting that refused it. */
+  mergeRefusal: DeliveryMergeRefusalDto | null;
+}
+
+/** Why the host refused a merge Motir pressed on a delivering pull request. */
+export interface DeliveryMergeRefusalDto {
+  /** The seam's refusal code, verbatim — `branch_protected`, `conflict`, … */
+  code: string;
+  /** The host's own message, verbatim; null when it gave none. */
+  reason: string | null;
+  /** The head the press was made against, which is still the pull request's head. */
+  headSha: string;
+  refusedAt: string;
 }
 
 /** Why the merge queue threw a delivering pull request out. */

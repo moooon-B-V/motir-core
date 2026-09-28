@@ -253,6 +253,15 @@ export function PlanReviewCanvas({
     [byNodeId],
   );
   const closePeek = useCallback(() => setPeeked({ proposal: null, key: null }), []);
+  // A proposed supersedes chip on the peek's rail opens THAT proposal's peek
+  // (MOTIR-6632, Part XXIV §24.7).
+  const openProposalById = useCallback(
+    (planItemId: string) => {
+      const next = items.find((i) => i.planItemId === planItemId);
+      if (next) setPeeked({ proposal: next, key: null });
+    },
+    [items],
+  );
 
   // ── The plan's node ids CHANGE at approve, and the canvas is holding them ────
   //
@@ -635,7 +644,12 @@ export function PlanReviewCanvas({
       {/* Every PROPOSAL — `add`, `modify` and `remove` — opens the shipped peek in
           proposal mode (MOTIR-4185). A COMMITTED sibling node still opens the
           ordinary work-item peek below, unchanged. */}
-      <ProposalPeek item={peeked.proposal} outcome={outcome} onClose={closePeek} />
+      <ProposalPeek
+        item={peeked.proposal}
+        outcome={outcome}
+        onClose={closePeek}
+        onOpenProposal={openProposalById}
+      />
       <WorkItemQuickView peekKey={peeked.key} onClose={closePeek} />
     </>
   );
