@@ -177,6 +177,8 @@ export type WorkItemContinueViewDto =
       state: 'continuing';
       holder: ClaimActorDto | null;
       byViewer: boolean;
+      /** Where the continue runs — a HOSTED one says so on the card (MOTIR-6796). */
+      origin: 'local' | 'hosted';
       startedAt: string;
       branch: string | null;
       /** Every repository's branch the continue took over (MOTIR-6791). */

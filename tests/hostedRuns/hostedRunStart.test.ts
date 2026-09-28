@@ -23,6 +23,7 @@ import {
   makeWorkItemFixture,
   type WorkItemFixture,
 } from '../fixtures/workItemFixtures';
+import { workItemContinueService } from '@/lib/services/workItemContinueService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -674,6 +675,13 @@ describe('continue hosted — a leaf whose run died', () => {
       branch: `subtask/${card.identifier}-work`,
       origin: 'hosted',
       model: MODEL,
+    });
+
+    // The part reads it as HOSTED, so it says so and points at Run above (MOTIR-6796).
+    expect(await workItemContinueService.getContinueView(card.id, fx.ctx)).toMatchObject({
+      state: 'continuing',
+      origin: 'hosted',
+      byViewer: true,
     });
   });
 

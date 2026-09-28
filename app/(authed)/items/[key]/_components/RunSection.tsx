@@ -101,6 +101,9 @@ export function RunSection({
 
   const current = runs[0] ?? null;
   const door = useHostedRun();
+  const tContinue = useTranslations('github.development.continue.hosted');
+  // R1 names BOTH ways forward only while the part below offers Continue hosted (C7).
+  const tDied = door?.continueTarget ? tContinue : t;
   const leg = useMemo(
     () => current?.cards.find((c) => c.key === itemKey) ?? null,
     [current, itemKey],
@@ -371,7 +374,7 @@ export function RunSection({
             aria-hidden="true"
           />
           <span>
-            {t.rich('runDied', {
+            {tDied.rich('runDied', {
               b: (chunks) => <b className="font-semibold text-(--el-text)">{chunks}</b>,
               when: () => {
                 const iso = (

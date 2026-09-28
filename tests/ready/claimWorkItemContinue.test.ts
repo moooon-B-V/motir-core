@@ -356,6 +356,8 @@ describe('getContinueView — the four states the marker renders', () => {
       state: 'continuing',
       holder: { id: other.user.id },
       byViewer: false,
+      // A terminal claim: the part says nothing about a hosted container (MOTIR-6796).
+      origin: 'local',
       branch: died.branch,
       tookOverFrom: { runId: died.runId, dispatcher: { id: fx.ownerId } },
     });

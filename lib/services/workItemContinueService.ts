@@ -847,6 +847,7 @@ export const workItemContinueService = {
             state: 'continuing',
             holder: actor(verdict.run.createdBy),
             byViewer: verdict.run.createdById === ctx.userId,
+            origin: verdict.run.origin === 'hosted' ? 'hosted' : 'local',
             startedAt: verdict.run.startedAt.toISOString(),
             branch: typeof data?.branch === 'string' ? data.branch : null,
             branches: openedBranches(data).map((b) => ({ ...b, pullRequest: null })),
