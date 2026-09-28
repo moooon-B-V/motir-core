@@ -244,6 +244,9 @@ model User {
   // run is a record of what happened to the PROJECT's work, so deleting the
   // operator must not destroy it — only the attribution.
   dispatchRuns                     DispatchRun[]
+  // The agent instances this user OWNS (MOTIR-6870). Cascade — an instance is
+  // one developer's machine, and nobody else may open it.
+  agentInstances                   AgentInstance[]
   // Upvotes the user cast on public requests (Story 6.12 · Subtask 6.12.3) —
   // the demand signal the triage queue sorts by (6.12.6). Cascade: a vote is
   // personal substrate, it dies with the user (the apiTokens pattern). Modelled
@@ -1029,17 +1032,20 @@ model Organization {
   /// resolver asks on every request (MOTIR-6396), which is why it lives on the
   /// org row rather than being joined from the request: a join on the hot path
   /// for a state almost no org is ever in. Non-null ⇔ an OPEN request exists.
-  closingSince     DateTime?                     @map("closing_since")
+  closingSince           DateTime?                     @map("closing_since")
   /// When the erasure sweep scrubbed this org to a TOMBSTONE (DECISION §6 step
   /// 4, §7): name and slug replaced, memberships gone, only `CiPeriodCharge`
   /// kept. Non-null marks a tombstone; the seven-year purge (MOTIR-6401) keys on
   /// it. Null for every live org.
-  erasedAt         DateTime?                     @map("erased_at")
+  erasedAt               DateTime?                     @map("erased_at")
   // Deletion requests against this org — a LIST: at most one OPEN at a time
   // (the partial unique index), but a cancelled one stays on record and a new
   // one may follow it. `Restrict` on the request's side: an org row may not
   // vanish under its own deletion record (the purge deletes the requests first).
-  deletionRequests OrganizationDeletionRequest[]
+  deletionRequests       OrganizationDeletionRequest[]
+  /// Agent instances billed to this organisation (MOTIR-6870). Cascade.
+  agentInstances         AgentInstance[]
+  agentInstanceIntervals AgentInstanceInterval[]
 
   @@map("organization")
 }
@@ -1260,6 +1266,9 @@ model Workspace {
   dispatchRunGitCredentials   DispatchRunGitCredential[]
   /// Folders in this workspace's projects (Story MOTIR-5308). Cascade.
   folders                     Folder[]
+  /// Users' agent instances in this workspace's projects (MOTIR-6870). Cascade.
+  agentInstances              AgentInstance[]
+  agentInstanceIntervals      AgentInstanceInterval[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -1701,6 +1710,8 @@ model Project {
   /// Every CLI run reported against this project (Story MOTIR-1789). Cascade —
   /// a run's whole meaning is the cards it worked, which go with the project.
   dispatchRuns                DispatchRun[]
+  /// Developers' agent instances on this project (MOTIR-6870). Cascade.
+  agentInstances              AgentInstance[]
   /// How-to-test records for this project's cards (MOTIR-5328). Cascade.
   testInstructions            TestInstructions[]
   testInstructionsRepos       TestInstructionsRepo[]
@@ -11427,4 +11438,141 @@ model MonitorIssue {
   /// The assignee refresh's oldest-first scan over one connection's links.
   @@index([connectionId, assigneeCheckedAt])
   @@map("monitor_issue")
+}
+
+// ── USER AGENT INSTANCES (Story MOTIR-6860 · MOTIR-6870) ─────────────────────
+// `docs/decisions/agent-instances.md` §4: a long-lived, per-developer machine
+// booted from a sandbox image, with a persistent home volume, that hibernates
+// and wakes, and is charged per RUNNING INTERVAL. One row per instance and one
+// per running stretch. Workspace-scoped tenant data under RLS (the migration).
+
+/// §4's lifecycle. Every transition is a guarded compare-and-set on this column
+/// (`agentInstanceRepository.transition`); the legal pairs are
+/// `lib/agentInstances/stateMachine.ts`.
+enum AgentInstanceState {
+  starting
+  running
+  hibernating
+  hibernated
+  waking
+  failed
+  deleting
+
+  @@map("agent_instance_state")
+}
+
+/// Why a running interval ended (§4).
+enum AgentInstanceIntervalEndReason {
+  hibernated
+  idle
+  backstop
+  credits
+  deleted
+  lost
+
+  @@map("agent_instance_interval_end_reason")
+}
+
+/// Where a closed interval's charge stands (§5). `pending` until the charge
+/// pass reaches it; a transport failure leaves it `pending` for the retry.
+enum AgentInstanceChargeOutcome {
+  pending
+  charged
+  not_charged
+  refused
+
+  @@map("agent_instance_charge_outcome")
+}
+
+model AgentInstance {
+  id             String @id @default(cuid())
+  /// Tenant of record — carried on the row because RLS does not traverse FKs.
+  workspaceId    String @map("workspace_id")
+  /// The organisation the machine time is billed to, resolved at create.
+  organizationId String @map("organization_id")
+  projectId      String @map("project_id")
+  /// The ONE developer who may open, wake, hibernate or delete it (§8).
+  ownerId        String @map("owner_id")
+
+  /// Unique per (owner, project) among LIVE instances — a partial unique index
+  /// in the migration, so a deleted instance's name can be reused.
+  name        String
+  /// The sandbox profile id (`claude`, `codex`, … — `profiles.json`).
+  profileId   String @map("profile_id")
+  /// The moving tag the digest was resolved from, for display.
+  imageTag    String @map("image_tag")
+  /// The image DIGEST the instance boots, pinned at create (§1).
+  imageDigest String @map("image_digest")
+
+  /// The persistent handle `provisionPersistent` returns (§1, §7). Null until
+  /// the provision call answers; the region is fixed at create.
+  flyApp    String? @map("fly_app")
+  machineId String? @map("machine_id")
+  volumeId  String? @map("volume_id")
+  region    String
+
+  state          AgentInstanceState @default(starting)
+  /// Set on `failed`, in words a person can read; cleared on a later wake.
+  failureReason  String?            @map("failure_reason")
+  stateChangedAt DateTime           @default(now()) @map("state_changed_at")
+  /// The idle signal (§2): bumped by create, wake, and later stories' relay
+  /// and runs. The idle sweep compares it with the 30-minute window.
+  lastActivityAt DateTime           @default(now()) @map("last_activity_at")
+  /// A deleted instance keeps its row so its intervals keep their parent (§4);
+  /// every list excludes it.
+  deletedAt      DateTime?          @map("deleted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace    Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner        User                    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  intervals    AgentInstanceInterval[]
+
+  /// The owner's list: newest first per project.
+  @@index([ownerId, projectId, createdAt(sort: Desc)])
+  /// The caps and the sweep: running instances fleet-wide and per organisation.
+  @@index([state, organizationId])
+  @@index([workspaceId])
+  @@map("agent_instance")
+}
+
+model AgentInstanceInterval {
+  id              String @id @default(cuid())
+  workspaceId     String @map("workspace_id")
+  organizationId  String @map("organization_id")
+  agentInstanceId String @map("agent_instance_id")
+
+  startedAt DateTime                        @map("started_at")
+  /// Null while the interval is OPEN. At most one open interval per instance —
+  /// a partial unique index in the migration.
+  endedAt   DateTime?                       @map("ended_at")
+  endReason AgentInstanceIntervalEndReason? @map("end_reason")
+
+  /// ⌈endedAt − startedAt⌉ in seconds, written with the close (§5).
+  billableSeconds Int?                        @map("billable_seconds")
+  /// ⌈billableSeconds ÷ 60⌉ at the machine-minute rate, written by the charge.
+  credits         Int?
+  /// The debit's idempotency key: `agent-instance-interval:<id>` (§5).
+  chargeReference String                      @unique @map("charge_reference")
+  chargeOutcome   AgentInstanceChargeOutcome? @map("charge_outcome")
+  chargeDetail    String?                     @map("charge_detail")
+  chargeAttempts  Int                         @default(0) @map("charge_attempts")
+  chargedAt       DateTime?                   @map("charged_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  agentInstance AgentInstance @relation(fields: [agentInstanceId], references: [id], onDelete: Cascade)
+
+  /// An instance's own history, and the machine-time-this-period sum.
+  @@index([agentInstanceId, startedAt(sort: Desc)])
+  /// The charge backstop's discovery read: closed intervals still `pending`.
+  @@index([chargeOutcome, endedAt])
+  @@index([workspaceId])
+  @@map("agent_instance_interval")
 }

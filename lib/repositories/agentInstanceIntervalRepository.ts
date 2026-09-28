@@ -1,0 +1,140 @@
+import type {
+  AgentInstanceChargeOutcome,
+  AgentInstanceInterval,
+  AgentInstanceIntervalEndReason,
+  Prisma,
+} from '@/generated/prisma/client';
+
+// Single Prisma operations on `agent_instance_interval` — one RUNNING stretch
+// of an agent instance, the unit it is charged in (Story MOTIR-6860 ·
+// MOTIR-6870, `docs/decisions/agent-instances.md` §4–§5).
+//
+// Every method takes `tx`, reads included, for `agentInstanceRepository`'s
+// reason (RLS on `app.workspace_id`; a bare read returns an empty list).
+//
+// ⚠️ TWO WRITES HERE ARE GUARDED, AND THE GUARDS ARE THE BILLING INVARIANTS:
+//   * an interval OPENS only if the instance has no open one — the partial
+//     unique index `agent_instance_interval_one_open_key` refuses the second;
+//   * an interval CLOSES once — `close` updates only while `endedAt IS NULL`,
+//     so a second close (a retried hibernate, the sweep racing a click)
+//     changes nothing and reports `0`.
+
+/** The open payload, named here so callers above never spell a Prisma input type. */
+export interface AgentInstanceIntervalOpenInput {
+  /** Supplied by the caller so the charge reference can be derived from it. */
+  id: string;
+  workspaceId: string;
+  organizationId: string;
+  agentInstanceId: string;
+  startedAt: Date;
+  chargeReference: string;
+}
+
+/** What a close writes. */
+export interface AgentInstanceIntervalCloseInput {
+  endedAt: Date;
+  endReason: AgentInstanceIntervalEndReason;
+  billableSeconds: number;
+}
+
+/** What a charge attempt writes back (§5). */
+export interface AgentInstanceIntervalChargeInput {
+  outcome: AgentInstanceChargeOutcome;
+  credits?: number | null;
+  detail?: string | null;
+  chargedAt?: Date | null;
+}
+
+export const agentInstanceIntervalRepository = {
+  /** Open a running interval. `tx` required — a write. */
+  async open(
+    data: AgentInstanceIntervalOpenInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstanceInterval> {
+    return tx.agentInstanceInterval.create({ data });
+  },
+
+  /** The instance's open interval, if any. */
+  async findOpen(
+    agentInstanceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstanceInterval | null> {
+    return tx.agentInstanceInterval.findFirst({ where: { agentInstanceId, endedAt: null } });
+  },
+
+  /** An interval by id. */
+  async findById(id: string, tx: Prisma.TransactionClient): Promise<AgentInstanceInterval | null> {
+    return tx.agentInstanceInterval.findUnique({ where: { id } });
+  },
+
+  /**
+   * Close an OPEN interval, once. The close also marks the charge `pending`, so
+   * the charge pass and its backstop find every closed interval by one column.
+   * Returns `1` for the close that won and `0` for any later one.
+   */
+  async close(
+    id: string,
+    data: AgentInstanceIntervalCloseInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.agentInstanceInterval.updateMany({
+      where: { id, endedAt: null },
+      data: { ...data, chargeOutcome: 'pending' },
+    });
+    return result.count;
+  },
+
+  /**
+   * Write a charge attempt's outcome — only onto a CLOSED interval still
+   * `pending`, so a replayed charge cannot overwrite a recorded one. Counts the
+   * attempt either way it lands.
+   */
+  async recordCharge(
+    id: string,
+    data: AgentInstanceIntervalChargeInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.agentInstanceInterval.updateMany({
+      where: { id, endedAt: { not: null }, chargeOutcome: 'pending' },
+      data: {
+        chargeOutcome: data.outcome,
+        chargeAttempts: { increment: 1 },
+        ...(data.credits !== undefined ? { credits: data.credits } : {}),
+        ...(data.detail !== undefined ? { chargeDetail: data.detail } : {}),
+        ...(data.chargedAt !== undefined ? { chargedAt: data.chargedAt } : {}),
+      },
+    });
+    return result.count;
+  },
+
+  /** Closed intervals whose charge is still `pending`, oldest first — the backstop's discovery. */
+  async listPendingCharges(
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstanceInterval[]> {
+    return tx.agentInstanceInterval.findMany({
+      where: { chargeOutcome: 'pending', endedAt: { not: null } },
+      orderBy: [{ endedAt: 'asc' }, { id: 'asc' }],
+      take,
+    });
+  },
+
+  /**
+   * Every interval of the given instances that overlaps `[since, ∞)` — the
+   * page's "machine time this period", summed by the service.
+   */
+  async listForInstancesSince(
+    agentInstanceIds: readonly string[],
+    since: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstanceInterval[]> {
+    if (agentInstanceIds.length === 0) return [];
+    return tx.agentInstanceInterval.findMany({
+      where: {
+        agentInstanceId: { in: [...agentInstanceIds] },
+        OR: [{ endedAt: null }, { endedAt: { gte: since } }],
+      },
+      orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+};
