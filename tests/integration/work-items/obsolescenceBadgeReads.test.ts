@@ -167,3 +167,39 @@ describe('the reads behind the obsolescence badge (MOTIR-6677)', () => {
     },
   );
 });
+
+// MOTIR-6678 — the builder's Obsolescence row on a BOARD narrows the board's own
+// cards (the list's result sets are `tests/filters/obsolescenceFilter.test.ts`).
+describe('the Obsolescence condition narrows the board (MOTIR-6678)', () => {
+  it.each([
+    ['is_any_of', ['outdated'], ['story']],
+    ['is_none_of', ['outdated'], ['child', 'sibling', 'third']],
+    ['is_empty', null, ['child', 'third']],
+    ['is_not_empty', null, ['story', 'sibling']],
+  ] as const)(
+    '%s returns exactly its cards',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async (operator, value, expected) => {
+      const seeded = await seed();
+      await mark(seeded.ids, {
+        [seeded.story.id]: 'outdated',
+        [seeded.sibling.id]: 'deprecated',
+      });
+      const board = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, {
+        ast: {
+          combinator: 'and',
+          conditions: [
+            {
+              field: 'obsolescence',
+              operator,
+              value: value ? [...value] : null,
+            },
+          ],
+        },
+      });
+      const got = board.columns.flatMap((c) => c.cards.map((card) => card.id)).sort();
+      const want = expected.map((k) => seeded[k].id).sort();
+      expect(got).toEqual(want);
+    },
+  );
+});

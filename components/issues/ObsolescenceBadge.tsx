@@ -17,7 +17,8 @@ import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
 // that can share the header never share a fill. The glyph carries the difference
 // too (`History` vs `Ban`), and is decorative: the word carries the meaning.
 
-const GLYPH: Record<WorkItemObsolescenceDto, typeof History> = {
+/** Each mark's glyph — the badge's, and the filter builder's value chips'. */
+export const OBSOLESCENCE_GLYPH: Record<WorkItemObsolescenceDto, typeof History> = {
   outdated: History,
   deprecated: Ban,
 };
@@ -51,7 +52,7 @@ export function ObsolescenceBadge({
   form?: 'pill' | 'glyph';
 }) {
   const t = useTranslations('workItems.obsolescence');
-  const Glyph = GLYPH[mark];
+  const Glyph = OBSOLESCENCE_GLYPH[mark];
   if (form === 'glyph') {
     const label = t(`value.${mark}`);
     // ⚠️ `shrink-0` is load-bearing: the status cell is `flex min-w-0`, and a

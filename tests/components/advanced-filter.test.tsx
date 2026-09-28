@@ -1038,3 +1038,77 @@ describe('the Difficulty condition row', () => {
     }
   });
 });
+
+// Story MOTIR-6575 · MOTIR-6678 — the Obsolescence condition row, per
+// `design/boards/filter-builder--obsolescence.mock.html`: a two-value picker,
+// mildest first, each with the badge's glyph; the nullable-enum operators; and a
+// chip that names the field and its values, in en and zh. The board mounts the
+// same builder, so this is its row too.
+describe('the Obsolescence condition row', () => {
+  it('offers Outdated · Deprecated, mildest first, and live-applies a pick', () => {
+    renderBuilder({
+      ast: {
+        combinator: 'and',
+        conditions: [{ field: 'obsolescence', operator: 'is_any_of', value: ['outdated'] }],
+      },
+    });
+    openBuilder();
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    fireEvent.focus(within(row).getByRole('combobox', { name: 'Obsolescence values' }));
+    const options = screen.getAllByRole('option').map((o) => o.textContent?.trim());
+    expect(options).toEqual(['Outdated', 'Deprecated']);
+    for (const o of screen.getAllByRole('option')) expect(o.querySelector('svg')).toBeTruthy();
+    fireEvent.click(screen.getByRole('option', { name: /Deprecated/ }));
+    expect(lastPushedAst()).toEqual({
+      combinator: 'and',
+      conditions: [
+        { field: 'obsolescence', operator: 'is_any_of', value: ['outdated', 'deprecated'] },
+      ],
+    });
+  });
+
+  it('names the field Obsolescence and offers the four nullable-enum operators', () => {
+    renderBuilder({
+      ast: {
+        combinator: 'and',
+        conditions: [{ field: 'obsolescence', operator: 'is_any_of', value: ['outdated'] }],
+      },
+    });
+    openBuilder();
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    expect(row.textContent).toContain('Obsolescence');
+    const operator = within(row).getAllByRole('combobox')[1]!;
+    fireEvent.click(operator);
+    for (const name of ['is any of', 'is none of', 'is empty', 'is not empty'])
+      expect(screen.getByRole('option', { name })).toBeTruthy();
+  });
+
+  it.each([
+    ['en', 'Obsolescence', 'is any of Outdated, Deprecated'],
+    ['zh', '失效状态', null],
+  ] as const)('the applied chip names the field and its values (%s)', (locale, field, text) => {
+    renderWithIntl(
+      <AdvancedFilterSummary
+        ast={{
+          combinator: 'and',
+          conditions: [
+            { field: 'obsolescence', operator: 'is_any_of', value: ['outdated', 'deprecated'] },
+          ],
+        }}
+        statuses={STATUSES}
+        members={MEMBERS}
+        sprints={SPRINTS}
+        customFields={CUSTOM_FIELDS}
+        components={COMPONENTS}
+        referencedLabels={REFERENCED_LABELS}
+      />,
+      locale === 'zh' ? { locale, messages: zhMessages } : {},
+    );
+    expect(screen.getByText(field)).toBeTruthy();
+    if (text) expect(screen.getByText(text)).toBeTruthy();
+    else {
+      expect(document.body.textContent).toContain('已过时');
+      expect(document.body.textContent).toContain('已弃用');
+    }
+  });
+});

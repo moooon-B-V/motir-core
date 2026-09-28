@@ -1470,6 +1470,7 @@
     "advancedFieldPriority": "Priority",
     "advancedFieldType": "Type",
     "advancedFieldDifficulty": "Difficulty",
+    "advancedFieldObsolescence": "Obsolescence",
     "difficulty": "Difficulty",
     "setDifficulty": "Set difficulty",
     "advancedFieldReporter": "Reporter",

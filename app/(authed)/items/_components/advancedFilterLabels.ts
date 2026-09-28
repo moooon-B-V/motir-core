@@ -27,6 +27,7 @@ const FIELD_LABEL_KEYS: Partial<Record<FilterFieldId, string>> = {
   priority: 'advancedFieldPriority',
   type: 'advancedFieldType',
   difficulty: 'advancedFieldDifficulty',
+  obsolescence: 'advancedFieldObsolescence',
   assignee: 'assignee',
   reporter: 'advancedFieldReporter',
   sprint: 'advancedFieldSprint',
