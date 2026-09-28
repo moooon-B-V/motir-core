@@ -222,7 +222,13 @@ function expiryFor(holder: PlanTargetHolder, now: Date): Date {
  * already held by the caller, so what this reads cannot move underneath it.
  */
 async function acquireOne(
-  item: { id: string; identifier: string; projectId: string; status: string },
+  item: {
+    id: string;
+    identifier: string;
+    projectId: string;
+    status: string;
+    obsolescence: string | null;
+  },
   holder: PlanTargetHolder,
   pctx: PlanTargetLockContext,
   now: Date,
@@ -295,7 +301,15 @@ async function acquireOne(
   // too (`releaseOne` → `restAdoptedTarget`). Leaving it parked, as D8 first
   // said, stranded it: the lock row is gone after release, so nothing ever moved
   // it again.
-  const statusHeld = shouldHoldStatus(item.status, planningIsLegal);
+  //
+  // ⚠️ A MARKED card is never PARKED (MOTIR-6672 · MOTIR-6681). `planning` is outside
+  // the done category, so the move would be refused, failing the plan's append —
+  // and a plan may target a marked card precisely to CHANGE its mark. The lock is
+  // still taken (the plan holds the card); only the status is left where it is,
+  // exactly as for a card whose workflow has no edge into `planning`. That also
+  // makes the restore below unreachable for a marked card: it runs only on a lock
+  // that parked.
+  const statusHeld = item.obsolescence == null && shouldHoldStatus(item.status, planningIsLegal);
 
   try {
     await planTargetLockRepository.create(
@@ -432,10 +446,22 @@ async function hasOpenBlockerWithin(
  * because a status the workflow does not offer is never written.
  */
 async function restAdoptedTarget(
-  item: { id: string; projectId: string; archivedAt: Date | null; status: string },
+  item: {
+    id: string;
+    projectId: string;
+    archivedAt: Date | null;
+    status: string;
+    obsolescence: string | null;
+  },
   actor: ServiceContext,
   tx: Prisma.TransactionClient,
 ): Promise<PlanTargetReleaseOutcome> {
+  // A MARKED card stays finished (MOTIR-6681): both resting statuses are outside the
+  // done category, so the mark refuses them even for a system write, and a throw
+  // here would fail the plan's decision. Only a LEGACY card marked while it sat at
+  // `planning` can reach this; it is left as it is — the same answer as a workflow
+  // that offers no resting status.
+  if (item.obsolescence != null) return 'left_as_is';
   const decision = restingStatusFor({
     archived: item.archivedAt !== null,
     currentStatus: item.status,

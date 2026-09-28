@@ -191,6 +191,8 @@ export const acceptanceResultGateHandler: GateHandler<AcceptanceEvidence> = {
     if (args.resolvedStatusKey === null) {
       return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
     }
+    // Never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): the target is the done
+    // category, and the obsolescence mark refuses only a move OUT of it.
     await workItemsService.applyStatusTransition(
       requireGateCard(args.gate, 'acceptanceResultHandler'),
       args.resolvedStatusKey,

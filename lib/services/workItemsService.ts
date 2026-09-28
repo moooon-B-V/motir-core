@@ -1589,6 +1589,10 @@ async function reconcileChoiceGate(
 ): Promise<WorkItem> {
   const result = await choiceGateService.reconcile(item, tx);
   if (result.hopsToReview.length === 0) return item;
+  // MARKED_CARD_CANNOT_REOPEN (MOTIR-6681) PROPAGATES to the write that raised the
+  // gate: the hops walk toward `in_review`, outside the done category, and a card
+  // marked under the rule is `done` and holds no open question. Only a LEGACY card
+  // marked while open can meet it, and the person writing is told to clear it.
   for (const key of result.hopsToReview) {
     await workItemsService.applyStatusTransition(item.id, key, ctx, tx);
   }
@@ -1607,6 +1611,10 @@ async function reconcileDecisionGate(
 ): Promise<WorkItem> {
   const result = await decisionConfirmationGateService.reconcile(item, tx);
   if (result.hopsToReview.length === 0) return item;
+  // MARKED_CARD_CANNOT_REOPEN (MOTIR-6681) PROPAGATES to the write that raised the
+  // gate: the hops walk toward `in_review`, outside the done category, and a card
+  // marked under the rule is `done` and holds no open question. Only a LEGACY card
+  // marked while open can meet it, and the person writing is told to clear it.
   for (const key of result.hopsToReview) {
     await workItemsService.applyStatusTransition(item.id, key, ctx, tx);
   }
@@ -3961,6 +3969,9 @@ export const workItemsService = {
     implementation?: { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null },
   ): Promise<WorkItemDto> {
     const { dto, transition } = await withWorkspaceContext(ctx, async (tx) => {
+      // MARKED_CARD_CANNOT_REOPEN (MOTIR-6681) PROPAGATES: `mark_integrated` is an
+      // agent's door, typed by MOTIR-6673; only a LEGACY card marked while open can
+      // meet it, since a card marked under the rule is `done`.
       const res = await workItemsService.applyStatusTransition(
         workItemId,
         IMPLEMENTED_STATUS_KEY,
@@ -4036,6 +4047,8 @@ export const workItemsService = {
       }> = [];
       for (const item of items) {
         try {
+          // Never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): `done` is the done
+          // category, and the mark refuses only a move out of it.
           const { dto, transition } = await workItemsService.applyStatusTransition(
             item.id,
             DONE_STATUS_KEY,
@@ -7194,7 +7207,13 @@ export const workItemsService = {
     // Kanban) — claim across the WHOLE project, since a missing sprint is not an
     // error.
     const ready = await collectReadyLeaves(projectId, project.workspaceId, ctx, {});
-    const candidates = sprintId ? ready.filter((r) => r.sprintId === sprintId) : ready;
+    // A MARKED card is never claimed (MOTIR-6672 · MOTIR-6681): the flip to
+    // `in_progress` below leaves the done category, which the mark refuses. A card
+    // marked under the rule is `done` and never ready; a LEGACY card marked while
+    // open still is, and left in the candidate list it would fail every claim that
+    // ranked it first instead of the claim moving on to the next ready card.
+    const claimable = ready.filter((r) => r.obsolescence == null);
+    const candidates = sprintId ? claimable.filter((r) => r.sprintId === sprintId) : claimable;
     if (candidates.length === 0) return null;
     const orderedIds = candidates.map((r) => r.id);
     // ⚠️ THE DISPATCH REPOSITORY IS RESOLVED BEFORE THE CLAIM COMMITS (MOTIR-6243).
@@ -7401,6 +7420,10 @@ export const workItemsService = {
       // revision and re-locks the row under this same tx (a no-op re-lock — we
       // already hold it). Mirrors `claimNextReady` rather than inventing a
       // second flip.
+      // MARKED_CARD_CANNOT_REOPEN (MOTIR-6681) PROPAGATES: the KEYED claim names one
+      // card, so the caller is told it cannot be claimed, typed on every door. A
+      // marked card is `done` and refused `not_claimable` first; only a LEGACY card
+      // marked while open reaches this flip.
       const moved = await workItemsService.applyStatusTransition(
         item.id,
         IN_PROGRESS_STATUS_KEY,

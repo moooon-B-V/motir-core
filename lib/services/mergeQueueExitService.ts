@@ -22,7 +22,11 @@ import { workItemsService } from './workItemsService';
 import { reconcileGatesFor } from './gateSetFor';
 import { readPlanHoldWithin } from './planTargetLockService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/errors';
+import {
+  IllegalTransitionError,
+  MarkedCardCannotReopenError,
+  UnknownStatusError,
+} from '@/lib/workItems/errors';
 
 // A MERGE QUEUE REMOVED A PULL REQUEST (Story MOTIR-5461 · MOTIR-5632).
 //
@@ -99,7 +103,11 @@ export interface MergeQueueExitResult {
   /** Keys of the cards a manual failure RE-ASKED — ONE fresh approve-to-merge gate raised. */
   reasked?: string[];
   /** Cards the pull request delivers that were NOT moved, and why. */
-  skipped?: { key: string; status: string; reason: 'not_enqueued_status' | 'no_actor' }[];
+  skipped?: {
+    key: string;
+    status: string;
+    reason: 'not_enqueued_status' | 'no_actor' | 'held_by_mark';
+  }[];
   /** Whether a queued merge record was cleared. */
   clearedQueuedOutcome?: boolean;
 }
@@ -250,6 +258,20 @@ export const mergeQueueExitService = {
           });
           continue;
         }
+        // A MARKED card stays finished (MOTIR-6672 · MOTIR-6681). Every move below
+        // leaves the done category (`in_review` / `implemented`), which the mark
+        // refuses even for a system write — and a throw here would roll back every
+        // card this exit settles. A card marked under the rule is `done`, so it is
+        // never enqueued; only a LEGACY card marked while open before the rule can
+        // reach this line, and it is recorded and left where it is.
+        if (item.obsolescence != null) {
+          result.skipped!.push({
+            key: item.identifier,
+            status: item.status,
+            reason: 'held_by_mark',
+          });
+          continue;
+        }
         if (mode === 'manual') {
           // §4 FOURTH AMENDMENT, points 1–2 (MOTIR-5805): settled by the reason's
           // CLASS — back to review with one fresh question, or held at `implemented`
@@ -372,6 +394,11 @@ export async function settleUnlandedOutcome(
   // its OLD pull request. Declined here, for every caller at once: nothing moves
   // and nothing is re-asked until the plan is decided.
   if (await readPlanHoldWithin(item, tx)) return { transition: null, raised: false };
+  // A MARKED card stays finished (MOTIR-6672 · MOTIR-6681): both targets are
+  // outside the done category, which the mark refuses even for a system write. Only
+  // a LEGACY card marked while open can reach here; it is left where it is, for
+  // every caller at once, exactly as the plan hold is.
+  if (item.obsolescence != null) return { transition: null, raised: false };
   const target = landingClass === 'cant_land' ? UNLANDED_STATUS.cantLand : UNLANDED_STATUS.reask;
   let transition: AppliedMove = null;
   if (item.status !== target) {
@@ -451,7 +478,14 @@ async function returnCard(
     const { transition } = await workItemsService.applyStatusTransition(item.id, to, ctx, tx, opts);
     return transition;
   } catch (err) {
-    if (err instanceof IllegalTransitionError || err instanceof UnknownStatusError) {
+    // …and a card someone has since MARKED (MOTIR-6681): `in_review` is outside the
+    // done category, so the mark refuses the return. The re-enqueue has happened;
+    // the card stays where it is, as for a workflow that refuses the move.
+    if (
+      err instanceof IllegalTransitionError ||
+      err instanceof UnknownStatusError ||
+      err instanceof MarkedCardCannotReopenError
+    ) {
       console.warn('[mergeQueueExitService] Queue again could not return the card', {
         workItemId: item.id,
         to,

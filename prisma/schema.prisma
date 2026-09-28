@@ -6044,13 +6044,17 @@ enum AutomationTriggerType {
 /// `planning` (`PLAN_TARGET_HELD`, recorded in `error`) — the card is not the
 /// rule's to move while a plan rewrites it, so this is neither a success nor a
 /// failure and never counts toward auto-disable (MOTIR-6340;
-/// `agent-authored-plans.md` AMENDMENT 21 §5(b)).
+/// `agent-authored-plans.md` AMENDMENT 21 §5(b)). `held_by_mark` = a `transition`
+/// action met a card carrying an obsolescence mark (`MARKED_CARD_CANNOT_REOPEN`,
+/// recorded in `error`) — a marked card stays finished, so the rule declined, and like
+/// `plan_held` it is neither a success nor a failure (MOTIR-6681).
 enum AutomationExecutionStatus {
   success
   failure
   no_actions
   plan_held
   org_closing
+  held_by_mark
 
   @@map("automation_execution_status")
 }

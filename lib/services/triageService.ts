@@ -366,6 +366,8 @@ export const triageService = {
   ): Promise<WorkItemDto> {
     const { dto, transition } = await withWorkspaceContext(ctx, async (tx) => {
       const item = await lockTriageItem(workItemId, ctx, tx);
+      // Never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): `cancelled` is in the done
+      // category, and the mark refuses only a move out of it.
       const result = await workItemsService.applyStatusTransition(
         workItemId,
         CANCELLED_STATUS_KEY,
@@ -426,6 +428,8 @@ export const triageService = {
         tx,
       );
 
+      // Never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): `cancelled` is in the done
+      // category, and the mark refuses only a move out of it.
       const result = await workItemsService.applyStatusTransition(
         workItemId,
         CANCELLED_STATUS_KEY,

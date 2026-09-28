@@ -196,6 +196,8 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
     // decision AFTER the effect — so without it the approval-gate guard would
     // refuse the very move this approval exists to make (ADR §6d AMENDMENT,
     // rule 5). It exempts THIS gate only.
+    // Never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): the target is the done
+    // category, and the obsolescence mark refuses only a move OUT of it.
     await workItemsService.applyStatusTransition(
       requireGateCard(gate, 'designResultHandler'),
       resolvedStatusKey,

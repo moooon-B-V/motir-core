@@ -484,6 +484,9 @@ async function moveToReviewWhenUndelivered(
 
   const { hopsToReview } = await import('@/lib/services/choiceGateService');
   const { workItemsService } = await import('@/lib/services/workItemsService');
+  // MARKED_CARD_CANNOT_REOPEN (MOTIR-6681) PROPAGATES to the publisher: a DONE design
+  // card is already refused (`DESIGN_CARD_CLOSED`), so only a LEGACY card marked while
+  // open reaches this walk, and the publisher is told to clear the mark.
   for (const key of await hopsToReview(current, tx)) {
     await workItemsService.applyStatusTransition(current.id, key, ctx, tx);
   }
