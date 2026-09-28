@@ -53,7 +53,10 @@ import zh from '@/messages/zh.json';
 
 test.describe.configure({ timeout: 240_000 });
 
-const TAB_IDS = ['approvals', 'in-progress', 'todo', 'finished', 'watching'] as const;
+// To fix joined second in the strip with Story MOTIR-6588 (design § 30). This
+// receipt's own claim — the strip reads in the order the landing decides — is
+// unchanged; the strip it reads has one more tab.
+const TAB_IDS = ['approvals', 'to-fix', 'in-progress', 'todo', 'finished', 'watching'] as const;
 
 async function countsFor(seed: ApprovalsTabSeed) {
   return homeService.tabCounts({
