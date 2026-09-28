@@ -31,7 +31,7 @@ export default async function VisitorRequestedFeaturesPage({
       getTranslations('visitor.requestedFeatures'),
     ]);
     return (
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-[56rem]">
         <header className="mb-4 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>

@@ -326,6 +326,13 @@ function assertsRefusalAgainstSharedStore(file: string): boolean {
  */
 const DEADLINE_IRRELEVANT: ReadonlyMap<string, string> = new Map([
   [
+    'tests/e2e/acceptance-visitor-requested-features.spec.ts',
+    'Its one 429 is a refusal the SPEC hands back: `page.route` fulfils the upvote POST ' +
+      'with a 429 so the Requested features row’s restore-and-say-so arm is walked ' +
+      '(MOTIR-6770). The lane runs with `E2E_DISABLE_RATE_LIMIT`, so no budget is spent ' +
+      'and no store is resolved.',
+  ],
+  [
     'tests/ai/askRoutes.test.ts',
     'Its one 429 is a refusal the SPEC hands back: `enforceAiRateLimit` is mocked to ' +
       'return a prepared Response so the ask route’s early return is exercised ' +

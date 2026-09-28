@@ -59,7 +59,8 @@ async function consentAndLand(page: Page, key: string): Promise<void> {
   await page.waitForURL((u) => u.pathname === viewPath(key));
 }
 
-const rowOf = (page: Page, key: string) => page.getByTestId(`requested-feature-${key}`);
+const rowOf = (page: Page, key: string) =>
+  page.getByRole('main').getByTestId(`requested-feature-${key}`);
 const toggleOf = (page: Page, key: string) => rowOf(page, key).getByRole('button');
 
 const votesOf = (workItemId: string) =>
@@ -212,7 +213,7 @@ test('the view’s edges — no Manager act, a 429, the empty state, a member, a
   // ── The empty state, on a public project nothing is pending in ─────────────
   await page.goto(viewPath(s.quiet.key));
   await consentAndLand(page, s.quiet.key);
-  await expect(page.getByTestId('requested-features-empty')).toContainText(
+  await expect(page.getByRole('main').getByTestId('requested-features-empty')).toContainText(
     'Nothing is waiting for a vote',
   );
 
