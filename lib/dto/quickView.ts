@@ -5,6 +5,7 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
   ExecutorDto,
   WorkItemDifficultyDto,
+  WorkItemObsolescenceDto,
   WorkItemKindDto,
   WorkItemPriorityDto,
   WorkItemTypeDto,
@@ -122,6 +123,11 @@ export interface QuickViewData {
   executor: ExecutorDto | null;
   /** How hard the work is to reason about (Story MOTIR-6016) — null when unset. */
   difficulty: WorkItemDifficultyDto | null;
+  /** The OBSOLESCENCE mark (Story MOTIR-6575 · MOTIR-6674) — null while the card is
+   *  still current. Any kind may carry it; only a finished card may be marked. */
+  obsolescence: WorkItemObsolescenceDto | null;
+  /** Why it is marked — independent of the mark (clearing the mark keeps it). */
+  obsolescenceNoteMd: string | null;
   assigneeName: string | null;
   reporterName: string;
   priority: WorkItemPriorityDto;

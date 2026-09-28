@@ -14,6 +14,7 @@ import type { ApprovalGatePendingPayloadDTO } from '@/lib/dto/approvalGate';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
 import {
   ApprovalGatePendingError,
+  ObsolescenceRequiresFinishedError,
   PlanTargetHeldError,
   IllegalParentTypeError,
   IllegalTransitionError,
@@ -24,6 +25,7 @@ import {
 import type {
   ExecutorDto,
   WorkItemDifficultyDto,
+  WorkItemObsolescenceDto,
   WorkItemKindDto,
   WorkItemPriorityDto,
   WorkItemTypeDto,
@@ -84,6 +86,11 @@ export interface UpdateIssueInput {
   // DIFFICULTY (Story MOTIR-6016) — set / change / clear from the rail. Leaf-only
   // is the service's rule (DIFFICULTY_NOT_ALLOWED_ON_KIND), surfaced below.
   difficulty?: WorkItemDifficultyDto | null;
+  // OBSOLESCENCE (Story MOTIR-6575 · MOTIR-6674) — the mark and its note, from the
+  // rail and the peek. A MARK needs a finished card (MOTIR-6672); the service's
+  // OBSOLESCENCE_REQUIRES_FINISHED comes back typed below, for the field to show.
+  obsolescence?: WorkItemObsolescenceDto | null;
+  obsolescenceNoteMd?: string | null;
 }
 
 export type IssueActionResult =
@@ -97,7 +104,7 @@ export type IssueActionResult =
        *  status control renders in place with a door into the approval from
        *  `gate`; or a plan hold (MOTIR-6265), rendered with a Review plan door
        *  from `plan`. */
-      code?: 'APPROVAL_GATE_PENDING' | 'PLAN_TARGET_HELD';
+      code?: 'APPROVAL_GATE_PENDING' | 'PLAN_TARGET_HELD' | 'OBSOLESCENCE_REQUIRES_FINISHED';
       gate?: ApprovalGatePendingPayloadDTO;
       plan?: PlanHoldDTO;
     };
@@ -132,6 +139,8 @@ export async function updateIssueAction(input: UpdateIssueInput): Promise<IssueA
         type: input.type,
         executor: input.executor,
         difficulty: input.difficulty,
+        obsolescence: input.obsolescence,
+        obsolescenceNoteMd: input.obsolescenceNoteMd,
       },
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       { expectedUpdatedAt: input.expectedUpdatedAt },
@@ -143,6 +152,18 @@ export async function updateIssueAction(input: UpdateIssueInput): Promise<IssueA
       return { ok: false, error: workItemErrorMessage(err, t), stale: true };
     if (err instanceof IllegalParentTypeError)
       return { ok: false, error: workItemErrorMessage(err, t), field: 'parent' };
+    // A mark on a card that is no longer finished (reopened in another tab): the
+    // field reverts and says so in place, from the code (MOTIR-6674).
+    if (err instanceof ObsolescenceRequiresFinishedError) {
+      const tw = await getServerTranslator('workItems');
+      return {
+        ok: false,
+        // The design's in-place sentence (MOTIR-6670's string table): the field
+        // the reader pressed is where the card turned out to be unfinished.
+        error: tw('obsolescence.refused.requiresFinished'),
+        code: 'OBSOLESCENCE_REQUIRES_FINISHED',
+      };
+    }
     if (err instanceof WorkItemError) return { ok: false, error: workItemErrorMessage(err, t) };
     const refused = await unmappedActionRefusalMessage(err, 'updateIssueAction');
     if (refused) return { ok: false, error: refused };

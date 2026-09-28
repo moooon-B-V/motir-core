@@ -49,6 +49,7 @@ import {
 import { IssueExplanation } from './_components/IssueExplanation';
 import { PlacementBreadcrumb } from './_components/PlacementBreadcrumb';
 import { DecisionWaitingHeaderLink } from './_components/DecisionWaitingHeaderLink';
+import { ObsolescenceHeaderLink } from '@/components/issues/ObsolescenceBadge';
 import { PlacementProvider } from './_components/PlacementProvider';
 import { ChildList } from './_components/ChildList';
 import { ChildPanel } from './_components/ChildPanel';
@@ -469,6 +470,10 @@ export default async function IssueDetailPage({
                         routedToName={routedToName}
                       />
                     ) : null}
+                    {/* THE OBSOLESCENCE BADGE (MOTIR-6674): the cell's LAST member,
+                a pointer that scrolls to the rail's Obsolescence field. Nothing at
+                all on an unmarked item. */}
+                    {item.obsolescence ? <ObsolescenceHeaderLink mark={item.obsolescence} /> : null}
                   </div>
                   <div className="ml-auto flex items-center gap-3">
                     {/* Epic/parent subtree roll-up (4.3.5) — labelled so it never reads

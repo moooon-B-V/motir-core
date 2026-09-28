@@ -55,6 +55,7 @@ export type RailEditKey =
   | 'workItemType'
   | 'executor'
   | 'difficulty'
+  | 'obsolescence'
   | 'dueDate'
   | 'estimate'
   | 'storyPoints'

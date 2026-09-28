@@ -113,6 +113,10 @@ function proposedPayload(item: PlanReviewItemDto, projectIdentifier: string): Qu
     // The proposal's own DIFFICULTY (story MOTIR-6095 · MOTIR-6137) — the value
     // approve will write; `null` renders the quick view's own `None`.
     difficulty: item.difficulty,
+    // A proposal's own MARK is the plan review's to draw (MOTIR-6577), not the
+    // peek's rail; the rail reads a proposal as current.
+    obsolescence: null,
+    obsolescenceNoteMd: null,
     priority: (item.priority ?? 'medium') as QuickViewData['priority'],
     storyPoints: item.storyPoints,
     estimateMinutes: item.estimateMinutes,

@@ -690,7 +690,9 @@
       "CONTAINER_HAS_OPEN_CHILDREN": "This item can't reach that status while children of its own have not been implemented. A parent there claims everything under it is built, and its pull request is opened on that claim. Land the children, re-parent them out if they are no longer in scope, or move the item to Done — which completes them deliberately rather than as a side effect.",
       "APPROVAL_GATE_PENDING": "This status can't be set directly — an approval on this item is waiting, and approving it is what makes this move. Every other move is still open.",
       "APPROVAL_GATE_PENDING_MERGE": "This status can't be set directly — the item has an open pull request, and merging it is what makes this move. Every other move is still open.",
-      "PLAN_TARGET_HELD": "Status can't be changed while a plan is open — a plan is rewriting this item. Approve or decline the plan, or withdraw the proposal that names this item."
+      "PLAN_TARGET_HELD": "Status can't be changed while a plan is open — a plan is rewriting this item. Approve or decline the plan, or withdraw the proposal that names this item.",
+      "OBSOLESCENCE_REQUIRES_FINISHED": "Only a finished item can be marked — archive it instead.",
+      "MARKED_CARD_CANNOT_REOPEN": "This item is marked outdated or deprecated. Clear the mark to reopen this item."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Only a project admin can edit the workflow.",
@@ -9885,5 +9887,40 @@
   "roomView": {
     "mine": "Mine",
     "project": "Project"
+  },
+  "workItems": {
+    "obsolescence": {
+      "label": "Obsolescence",
+      "value": {
+        "current": "Current",
+        "outdated": "Outdated",
+        "deprecated": "Deprecated"
+      },
+      "note": {
+        "label": "Why is it marked?",
+        "placeholder": "What changed, and what to read instead",
+        "showMore": "Show more",
+        "showLess": "Show less"
+      },
+      "editor": {
+        "save": "Save",
+        "cancel": "Cancel",
+        "saving": "Saving…"
+      },
+      "lockedHint": "Only a finished item can be marked — archive it instead",
+      "refused": {
+        "requiresFinished": "This item is no longer finished, so it can’t be marked. Reload to see its status."
+      },
+      "badge": {
+        "jump": "Go to the Obsolescence field"
+      },
+      "held": {
+        "option": "held by mark",
+        "text": "Status can’t be reopened while this item is marked {mark}.",
+        "sub": "Clear the mark to reopen this item.",
+        "door": "Clear the mark",
+        "refusalArrived": "Marked {mark} elsewhere — this move was not made."
+      }
+    }
   }
 }
