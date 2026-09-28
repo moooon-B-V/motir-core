@@ -140,8 +140,9 @@ test('/ready groups a story into one expandable row, never lists an epic, and ke
   // The container copies the PARENT run.
   await rowOf(page, t.S.identifier).first().hover();
   await page.getByRole('button', { name: `Copy parent-run command for ${t.S.identifier}` }).click();
+  // The toast is client-only (never SSR'd, never in a streamed copy): one node.
   await expect(
-    page.getByText(`Paste motir run ${t.S.identifier} into your terminal.`),
+    page.getByText(`Paste motir run ${t.S.identifier} into your terminal.`).first(),
   ).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
     `motir run ${t.S.identifier}`,
@@ -174,7 +175,7 @@ test('each lane says so when it empties, and the page falls back to its EmptySta
     expect((await transition(owner.ctx, leaf.id, 'in_progress')).status()).toBe(200);
   }
   await openReady(page);
-  await expect(page.getByText('Nothing ready to run.')).toBeVisible();
+  await expect(page.getByRole('main').getByText('Nothing ready to run.')).toBeVisible();
   await expect(page.getByRole('button', { name: /^Bugs/ })).toContainText('2');
 
   // …then the bug work too → the page's EmptyState.
@@ -183,7 +184,9 @@ test('each lane says so when it empties, and the page falls back to its EmptySta
   }
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Ready to start', level: 1 })).toBeVisible();
-  await expect(page.getByText("Nothing's ready right now")).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: "Nothing's ready right now", level: 2 }),
+  ).toBeVisible();
 });
 
 test('a container whose leaves straddle a page boundary stays ONE expanded row after load-more', async ({
