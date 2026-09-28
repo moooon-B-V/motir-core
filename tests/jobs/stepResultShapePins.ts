@@ -385,10 +385,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   // branches on the summary; it is surfaced on `job_run.output` only.
   // MOTIR-6396 added the OPTIONAL `orgClosing` member the same way and for the same
   // reason: absent reads as 0, and no earlier run skipped for a closing org.
+  // MOTIR-6681 added the OPTIONAL `heldByMark` member the same way: absent reads as 0,
+  // and no earlier run met a marked card (the rule did not exist).
   'run-rules': {
     file: 'lib/jobs/definitions/automationEngine.ts',
     shape:
-      '{ deduped: number; failed: number; matched: number; noActions: number; orgClosing?: number | undefined; planHeld?: number | undefined; skipped: boolean; succeeded: number }',
+      '{ deduped: number; failed: number; heldByMark?: number | undefined; matched: number; noActions: number; orgClosing?: number | undefined; planHeld?: number | undefined; skipped: boolean; succeeded: number }',
   },
   'schedule-health': {
     file: 'lib/jobs/definitions/dailyHealthCheck.ts',
@@ -462,20 +464,20 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/watcherNotify.ts',
     shape: '{ notifiedUserIds: Array<string> }',
   },
-  '`recompute-parent-v3-${i}`': {
+  '`recompute-parent-v4-${i}`': {
     file: 'lib/jobs/definitions/statusDerivation.ts',
     shape:
-      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "held_by_mark"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
   },
-  'recompute-parent-v3': {
+  'recompute-parent-v4': {
     file: 'lib/jobs/definitions/statusDerivation.ts',
     shape:
-      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "held_by_mark"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
   },
-  'roll-up-parent-v3': {
+  'roll-up-parent-v4': {
     file: 'lib/jobs/definitions/statusDerivation.ts',
     shape:
-      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "held_by_mark"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
   },
 };
 
@@ -494,6 +496,27 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  '`recompute-parent-v3-${i}`': {
+    shape:
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+    supersededBy: '`recompute-parent-v4-${i}`',
+    reason:
+      'MOTIR-6681 added `held_by_mark` to the parent rollup’s outcome union (a MARKED parent stays finished: the backward derivation from a reopened child is refused, and recorded rather than failing the job — MOTIR-6672). A memo written under the old id carries the narrower shape; the step is an idempotent derivation, so re-executing it under the new id on a resumed run is safe.',
+  },
+  'recompute-parent-v3': {
+    shape:
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+    supersededBy: 'recompute-parent-v4',
+    reason:
+      'MOTIR-6681 added `held_by_mark` to the parent rollup’s outcome union (a MARKED parent stays finished: the backward derivation from a reopened child is refused, and recorded rather than failing the job — MOTIR-6672). A memo written under the old id carries the narrower shape; the step is an idempotent derivation, so re-executing it under the new id on a resumed run is safe.',
+  },
+  'roll-up-parent-v3': {
+    shape:
+      '{ outcome: "access_denied"; parentId: string } | { outcome: "already_there"; parentId: string; toStatus: string } | { outcome: "approval_pending"; parentId: string; toStatus: string } | { outcome: "illegal_transition"; parentId: string; toStatus: string } | { outcome: "no_matching_status"; parentId: string } | { outcome: "no_parent" } | { outcome: "no_rung"; parentId: string } | { outcome: "plan_held"; parentId: string; toStatus: string } | { outcome: "rolled_back"; parentId: string; toStatus: string } | { outcome: "rolled_up"; parentId: string; toStatus: string; via?: Array<string> | undefined } | { outcome: "same_rung"; parentId: string; toStatus: string } | { outcome: "stale_backward"; parentId: string; toStatus: string } | { outcome: "toggle_off"; parentId: string } | { outcome: "unresolvable" }',
+    supersededBy: 'roll-up-parent-v4',
+    reason:
+      'MOTIR-6681 added `held_by_mark` to the parent rollup’s outcome union (a MARKED parent stays finished: the backward derivation from a reopened child is refused, and recorded rather than failing the job — MOTIR-6672). A memo written under the old id carries the narrower shape; the step is an idempotent derivation, so re-executing it under the new id on a resumed run is safe.',
+  },
   '`index-admit:${projectId}`': {
     shape:
       '{ admission: { admittedAt: string; detail: string; slotRef: string }; admittedAt: string; census: { byWorkload: { ci_runner: number; code_graph_index: number; hosted_agent: number }; total: number }; outcome: "admitted"; requestedAt: string } | { admission: { admittedAt: string; detail: string; slotRef: string }; admittedAt: string; outcome: "already_held"; requestedAt: string } | { admittedAt: string; detail: string; outcome: "deferred"; reason: "fleet_ceiling" | "gate_unavailable" | "index_cap" | "repo_index_in_flight" | "workspace_index_cap"; requestedAt: string }',

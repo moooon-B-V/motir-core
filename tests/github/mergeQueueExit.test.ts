@@ -42,7 +42,8 @@ import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
 import { derivePrCiState } from '@/lib/github/prCiState';
 import { workItemCiStateBackfillService } from '@/lib/services/workItemCiStateBackfillService';
-import { mergeQueueExitService } from '@/lib/services/mergeQueueExitService';
+import { mergeQueueExitService, queueExitCardMoves } from '@/lib/services/mergeQueueExitService';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import type { NormalizedMergeQueueExit } from '@/lib/git/types';
 
 // THE EJECTION ARM (Story MOTIR-5461 · MOTIR-5632; `docs/decisions/approval-gates.md`
@@ -415,6 +416,49 @@ describe('a FAILURE removal', () => {
       skipped: [{ key: other.identifier, status: 'in_progress', reason: 'not_enqueued_status' }],
     });
     expect(await statusOf(other.id)).toBe('in_progress');
+  });
+
+  it('a MARKED card (a legacy mark on an open card) is skipped `held_by_mark` and moves nowhere — MOTIR-6681', async () => {
+    // A card marked under MOTIR-6672 is `done` and never queued; one marked while
+    // open before that rule can be, and every move this exit makes leaves the done
+    // category. It is recorded and left, and the exit still records normally.
+    const { item } = await approvedAndQueued('marked-exit@example.com');
+    await adminDb.workItem.update({ where: { id: item.id }, data: { obsolescence: 'outdated' } });
+
+    const result = await eject(
+      dequeued('dequeued-ci-failure', { number: 11, headSha: 'sha-a' }),
+      'guid-marked',
+    );
+
+    expect(result).toMatchObject({
+      outcome: 'recorded',
+      moved: [],
+      skipped: [{ key: item.identifier, status: 'approved', reason: 'held_by_mark' }],
+    });
+    expect(await statusOf(item.id)).toBe('approved');
+    expect(await exits(11)).toHaveLength(1);
+  });
+
+  it('Queue again leaves a MARKED card at Implemented rather than failing — MOTIR-6681', async () => {
+    const s = await makeScenario('marked-return@example.com');
+    const item = await card(s, 'Marked while open', []);
+    await adminDb.workItem.update({
+      where: { id: item.id },
+      data: { status: 'implemented', obsolescence: 'deprecated' },
+    });
+
+    const moved = await withWorkspaceContext(s.ctx, (tx) =>
+      queueExitCardMoves.returnCard(
+        { id: item.id, status: 'implemented' },
+        'in_review',
+        s.ctx,
+        tx,
+        {},
+      ),
+    );
+
+    expect(moved).toBeNull();
+    expect(await statusOf(item.id)).toBe('implemented');
   });
 
   it('a pull request that delivers no card records the exit and moves nothing, without error', async () => {
