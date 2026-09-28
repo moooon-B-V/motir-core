@@ -421,6 +421,106 @@ describe('IssueAdvancedFilter — the builder', () => {
   });
 });
 
+// MOTIR-6752: live-apply pushes each discrete edit at once, so two quick picks
+// put TWO navigations in flight, and their echoes can land after the person has
+// already added the next (pending) row. A pending row lives only in the working
+// copy, so any echo misread as an EXTERNAL change rebuilds it away. These drive
+// the echoes by hand — `rerender` with the URL each push wrote — in the order a
+// loaded runner delivers them.
+describe('IssueAdvancedFilter — late navigation echoes (MOTIR-6752)', () => {
+  function builderFor(filter: IssueFilter, ast: FilterAst | null) {
+    return (
+      <IssueAdvancedFilter
+        filter={filter}
+        ast={ast}
+        view="tree"
+        sort={DEFAULT_SORT}
+        statuses={STATUSES}
+        members={MEMBERS}
+        sprints={SPRINTS}
+        customFields={CUSTOM_FIELDS}
+        components={COMPONENTS}
+        folders={FOLDERS}
+        referencedLabels={REFERENCED_LABELS}
+        projectKey="PROD"
+      />
+    );
+  }
+
+  /** The props the page re-renders with once push #`n` (0-based) lands. */
+  function echoOf(n: number) {
+    const href = push.mock.calls[n]?.[0] as string;
+    const raw = new URLSearchParams(href.split('?')[1] ?? '').get('filter');
+    const decoded = raw === null ? null : decodeFilterParam(raw);
+    const ast = decoded?.ok ? decoded.ast : null;
+    return builderFor(setAdvancedParam(EMPTY_FILTER, ast), ast);
+  }
+
+  function pickKind(name: RegExp) {
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    fireEvent.focus(within(row).getByRole('combobox', { name: 'Kind values' }));
+    fireEvent.click(screen.getByRole('option', { name }));
+  }
+
+  /** Two quick picks (two pushes, no echo yet), then Add condition. */
+  function twoPicksThenAdd() {
+    const view = renderWithIntl(builderFor(EMPTY_FILTER, null));
+    openBuilder();
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    pickKind(/Bug/);
+    pickKind(/Task/);
+    expect(push).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    expect(screen.getByRole('group', { name: 'Condition 2' })).toBeTruthy();
+    return view;
+  }
+
+  it('keeps a just-added pending row when BOTH earlier pushes echo late, in order', () => {
+    const { rerender } = twoPicksThenAdd();
+    rerender(echoOf(0));
+    rerender(echoOf(1));
+    expect(screen.getByRole('group', { name: 'Condition 2' })).toBeTruthy();
+    expect(screen.getByText('2 of 20 conditions · applied live')).toBeTruthy();
+    expect(push).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps it when only the LATEST echo arrives (the router coalesced the first)', () => {
+    const { rerender } = twoPicksThenAdd();
+    rerender(echoOf(1));
+    expect(screen.getByRole('group', { name: 'Condition 2' })).toBeTruthy();
+  });
+
+  it('still rebuilds from the URL on a change it never pushed (Back to an earlier push)', () => {
+    const { rerender } = twoPicksThenAdd();
+    rerender(echoOf(1));
+    // Back: the URL returns to push #0's value AFTER push #1's echo settled — an
+    // external change now, so the working copy is rebuilt and the pending row goes.
+    rerender(echoOf(0));
+    expect(screen.queryByRole('group', { name: 'Condition 2' })).toBeNull();
+    expect(screen.getByText('1 of 20 conditions · applied live')).toBeTruthy();
+  });
+
+  it('still rebuilds from the URL on an external change while its own pushes are in flight', () => {
+    const { rerender } = twoPicksThenAdd();
+    const external: FilterAst = {
+      combinator: 'and',
+      conditions: [{ field: 'status', operator: 'is_any_of', value: ['todo'] }],
+    };
+    rerender(builderFor(setAdvancedParam(EMPTY_FILTER, external), external));
+    expect(screen.queryByRole('group', { name: 'Condition 2' })).toBeNull();
+    expect(
+      within(screen.getByRole('group', { name: 'Condition 1' })).getByRole('combobox', {
+        name: 'Status values',
+      }),
+    ).toBeTruthy();
+    // …and a push made BEFORE that change, landing after it, is read as the URL
+    // it now is: the external change forgot the in-flight set.
+    rerender(echoOf(1));
+    expect(screen.queryByRole('group', { name: 'Condition 2' })).toBeNull();
+    expect(screen.getByText('1 of 20 conditions · applied live')).toBeTruthy();
+  });
+});
+
 describe('IssueFilterBar — superseded state + the one-way upgrade (6.1.4)', () => {
   function renderBar(filter: IssueFilter = EMPTY_FILTER, ast: FilterAst | null = null) {
     return renderWithIntl(

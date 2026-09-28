@@ -38,9 +38,10 @@ import {
 // in the URL, the badge count, or the result set). Free-typing editors debounce
 // the push; discrete edits apply at once. The working copy resyncs from the URL
 // exactly when the param changes under us (back/forward, the facet upgrade,
-// Clear elsewhere) — recognised by comparing against the param this component
-// last pushed — so an in-flight pending row never gets stomped by its own
-// navigation echo (finding #58's optimistic-mirror lesson).
+// Clear elsewhere) — recognised by comparing against every param this component
+// pushed whose echo has not landed yet — so an in-flight pending row never gets
+// stomped by its own navigation echo, however late it lands (finding #58's
+// optimistic-mirror lesson; MOTIR-6752).
 
 export interface IssueAdvancedFilterProps {
   filter: IssueFilter;
@@ -113,13 +114,27 @@ export function IssueAdvancedFilter({
   const { resolveDef } = model;
 
   // The working copy (incl. pending rows) lives here; the builder mutates it via
-  // `apply`. Resync from the URL only when the param changed EXTERNALLY — i.e.
-  // it differs from what we last pushed (so an in-flight pending row survives
-  // its own navigation echo; a back/forward / facet upgrade / Clear rebuilds).
+  // `apply`. Resync from the URL only when the param changed EXTERNALLY (a
+  // back/forward / facet upgrade / Clear rebuilds). Every push this component
+  // makes is queued in `inFlightRef` until its echo lands, and ANY queued value
+  // is recognised as our own — not only the latest: two quick picks put two
+  // navigations in flight, and the first echo arriving after the second push
+  // used to read as external and rebuild a just-added pending row away
+  // (MOTIR-6752). An echo also retires every push queued before it, since the
+  // router may never render a superseded navigation.
   const [working, setWorking] = useState<WorkingState>(() => workingFromAst(ast));
   const lastPushedRef = useRef<string | null>(filter.advanced);
+  const inFlightRef = useRef<(string | null)[]>([]);
+  const seenAdvancedRef = useRef<string | null>(filter.advanced);
   useEffect(() => {
-    if (filter.advanced === lastPushedRef.current) return;
+    if (filter.advanced === seenAdvancedRef.current) return;
+    seenAdvancedRef.current = filter.advanced;
+    const echo = inFlightRef.current.indexOf(filter.advanced);
+    if (echo !== -1) {
+      inFlightRef.current = inFlightRef.current.slice(echo + 1);
+      return;
+    }
+    inFlightRef.current = [];
     lastPushedRef.current = filter.advanced;
     setWorking(workingFromAst(ast));
   }, [filter.advanced, ast]);
@@ -143,6 +158,7 @@ export function IssueAdvancedFilter({
     if (nextFilter.advanced === lastPushedRef.current) return;
     const push = () => {
       lastPushedRef.current = nextFilter.advanced;
+      inFlightRef.current = [...inFlightRef.current, nextFilter.advanced];
       router.push(hrefFor(nextFilter));
     };
     if (opts?.debounce) {
