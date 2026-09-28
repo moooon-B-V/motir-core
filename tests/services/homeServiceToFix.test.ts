@@ -10,6 +10,7 @@ import {
   makeWorkItemFixture,
   type WorkItemFixture,
 } from '../fixtures';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // The Workbench's TO FIX read (Story MOTIR-6588 · MOTIR-6604), over real Postgres.
 //
@@ -190,7 +191,7 @@ describe('To fix reads only what the reader may browse', () => {
     // Positive control: while the project is open, the outsider sees their card.
     expect((await homeService.listToFix(ctx)).total).toBe(1);
 
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, fx.projectId, 'members');
 
     expect((await homeService.listToFix(ctx)).total).toBe(0);
     expect((await homeService.tabCounts(ctx)).toFix).toBe(0);
