@@ -143,9 +143,9 @@ describe('MCP tool branch coverage', () => {
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);
 
-    // No items yet → the "No ready work items match." header branch.
+    // No items yet → the "No ready work in the leaf lane." header branch.
     const empty = await call(client, 'list_ready', { projectKey: 'PROD' });
-    expect(JSON.stringify(empty.content)).toContain('No ready work items');
+    expect(JSON.stringify(empty.content)).toContain('No ready work in the leaf lane');
 
     // Two ready items, page size 1 → a nextCursor + the "More available" footer.
     await workItemsService.createWorkItem(

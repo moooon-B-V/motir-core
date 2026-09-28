@@ -527,6 +527,10 @@ export const PLANNING_COMPONENTS: Readonly<Record<string, ZodType>> = {
   ProjectRepository: projectRepositorySchema,
   Sprint: sprintSchema,
   ReadyItem: readyItemSchema,
+  // The ready LANES (MOTIR-6832), named so the document `$ref`s them and the
+  // MCP `list_ready` / `next_ready` payloads can be probed against them.
+  ReadyLaneItem: readyLaneItemSchema,
+  ReadyContainer: readyContainerSchema,
   MembershipMoveResult: membershipMoveResultSchema,
   WorkItemRef: workItemRefSchema,
 };

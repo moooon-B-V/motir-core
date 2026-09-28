@@ -28,6 +28,7 @@ import {
   mcpWorkItemSchema,
   nextReadyPayload,
   presentMcpComment,
+  presentMcpReadyContainer,
   presentMcpReadyDispatch,
   presentMcpReadyRow,
   presentMcpWorkItem,
@@ -655,18 +656,48 @@ describe('presentMcpReadyRow / presentMcpReadyDispatch', () => {
     expect(sharedResourceSchema('ReadyItem').safeParse(dispatch).success).toBe(true);
   });
 
-  it('the list/next/claim payloads probe their rows against ReadyItem', () => {
-    const row = presentMcpReadyRow(readyDto, undefined, 0);
-    const page = derived(listReadyPayload, { items: [row], nextCursor: null });
-    for (const probe of listReadyPayload.probes) {
-      for (const part of probe.select(page as never)) {
-        expect(sharedResourceSchema(probe.resource).safeParse(part).success).toBe(true);
-      }
+  it('the list/next/claim payloads probe their rows against their v1 resources', () => {
+    // `list_ready` reads a LANE (MOTIR-6833): a leaf/bug page carries lane rows
+    // (the ready row + `container`), probed against `ReadyLaneItem`…
+    const row = presentMcpReadyRow({ ...readyDto, container: null }, undefined, 0);
+    const page = derived(listReadyPayload, { lane: 'leaf', items: [row], nextCursor: null });
+    const leafParts = listReadyPayload.probes.flatMap((probe) =>
+      probe.select(page as never).map((part) => ({ probe, part })),
+    );
+    expect(leafParts.map((p) => p.probe.resource)).toEqual(['ReadyLaneItem']);
+    for (const { probe, part } of leafParts) {
+      expect(sharedResourceSchema(probe.resource).safeParse(part).success).toBe(true);
     }
-    // A PRESENT item probes to that item, and it satisfies ReadyItem…
+    // …and a container page carries container rows, probed against `ReadyContainer`.
+    const container = presentMcpReadyContainer({
+      id: 'c1',
+      key: 'PROD-2',
+      kind: 'story',
+      title: 'S',
+      priority: 'high',
+      assignee: null,
+      readyLeafCount: 2,
+      childCount: 3,
+    });
+    expect(container.runCommand).toBe('motir run PROD-2');
+    const cPage = derived(listReadyPayload, {
+      lane: 'container',
+      items: [container],
+      nextCursor: null,
+    });
+    const cParts = listReadyPayload.probes.flatMap((probe) =>
+      probe.select(cPage as never).map((part) => ({ probe, part })),
+    );
+    expect(cParts.map((p) => p.probe.resource)).toEqual(['ReadyContainer']);
+    for (const { probe, part } of cParts) {
+      expect(sharedResourceSchema(probe.resource).safeParse(part).success).toBe(true);
+    }
+
+    // A PRESENT dispatch item probes to that item, and it satisfies its resource…
     const dispatch = presentMcpReadyDispatch(
       {
         ...readyDto,
+        container: null,
         contextRefs: [],
         blockerKeys: [],
         parentKey: null,
@@ -678,15 +709,17 @@ describe('presentMcpReadyRow / presentMcpReadyDispatch', () => {
       },
       0,
     );
-    for (const payload of [nextReadyPayload, claimNextReadyPayload]) {
-      const built = derived(payload, { item: dispatch });
-      const parts = payload.probes[0]!.select(built as never);
-      expect(parts).toEqual([dispatch]);
-      expect(sharedResourceSchema('ReadyItem').safeParse(parts[0]).success).toBe(true);
-    }
+    const next = derived(nextReadyPayload, { lane: 'leaf', item: dispatch, container: null });
+    expect(nextReadyPayload.probes[0]!.select(next as never)).toEqual([dispatch]);
+    expect(sharedResourceSchema('ReadyLaneItem').safeParse(dispatch).success).toBe(true);
+    const nextC = derived(nextReadyPayload, { lane: 'container', item: null, container });
+    expect(nextReadyPayload.probes[1]!.select(nextC as never)).toEqual([container]);
+    const claimed = derived(claimNextReadyPayload, { item: dispatch });
+    expect(claimNextReadyPayload.probes[0]!.select(claimed as never)).toEqual([dispatch]);
+    expect(sharedResourceSchema('ReadyItem').safeParse(dispatch).success).toBe(true);
     // …and a null item probes to NOTHING rather than crashing.
-    const empty = derived(nextReadyPayload, { item: null });
-    expect(nextReadyPayload.probes[0]!.select(empty as never)).toEqual([]);
+    const empty = derived(nextReadyPayload, { lane: 'bug', item: null, container: null });
+    for (const probe of nextReadyPayload.probes) expect(probe.select(empty as never)).toEqual([]);
     const emptyClaim = derived(claimNextReadyPayload, {
       item: null,
       reason: 'none_ready',

@@ -314,21 +314,40 @@ Shared input conventions:
 
 #### `list_ready`
 
-Browse the ready-to-start set: a cursor-paginated page of work items in a
-project whose every dependency is satisfied — the same set the project's Ready
-view shows.
+Browse ONE **ready lane**: a cursor-paginated page of a project's ready work —
+work whose every dependency is satisfied — partitioned the way work is run
+(Story MOTIR-6829). The lanes are the ones the project's Ready view shows and the
+`/api/v1/projects/{key}/ready/{leaves,containers,bugs}` operations serve:
 
-| Input        | Type                     | Required | Notes                                                          |
-| ------------ | ------------------------ | -------- | -------------------------------------------------------------- |
-| `projectKey` | string                   | yes      | Project key, e.g. `"ACME"`.                                    |
-| `kinds`      | array of work-item kinds | no       | Restrict to these kinds; omit for any.                         |
-| `priority`   | array of priorities      | no       | Restrict to these priorities; omit for any.                    |
-| `assigneeId` | string \| null           | no       | A user id; `null` or `"unassigned"` for the unassigned bucket. |
-| `cursor`     | string                   | no       | Opaque page cursor from a previous call's `nextCursor`.        |
-| `limit`      | integer (1–200)          | no       | Page size; default 50.                                         |
+- **`leaf`** (the default) — the ready leaves that are NOT bug work (a `bug`, or a
+  leaf whose parent is a `bug`), each naming its runnable `container`: a `story`,
+  `task` or `bug` whose every child is childless — the shape `motir run <parent>`
+  accepts — or `null`.
+- **`container`** — those runnable containers (bugs excluded) holding at least one
+  leaf-lane row: what a parent run takes. An `epic` is never one.
+- **`bug`** — a ready bug, or a ready subtask of one.
 
-**Output** — `structuredContent`: `{ items: ReadyItemDto[], nextCursor: string | null }`.
-Each `ReadyItemDto` has `id`, `key` (the `<KEY>-<n>` identifier), `kind`, `title`,
+Rows come GROUPED by `container ?? self`: a group ranks by its best member's
+`(kind, priority, key)`, members keep that rank inside it. The `leaf` and `bug`
+lanes together hold exactly the unlaned ready set (`claim_next_ready` still reads
+that set).
+
+| Input        | Type                         | Required | Notes                                                                   |
+| ------------ | ---------------------------- | -------- | ----------------------------------------------------------------------- |
+| `projectKey` | string                       | yes      | Project key, e.g. `"ACME"`.                                             |
+| `lane`       | `leaf` · `container` · `bug` | no       | Which lane; default `leaf`. Anything else is refused, naming the three. |
+| `kinds`      | array of work-item kinds     | no       | Restrict to these kinds; omit for any. Not on `container`.              |
+| `priority`   | array of priorities          | no       | Restrict to these priorities; omit for any.                             |
+| `assigneeId` | string \| null               | no       | A user id; `null` or `"unassigned"` for the unassigned bucket.          |
+| `cursor`     | string                       | no       | Opaque page cursor from a previous call's `nextCursor`.                 |
+| `limit`      | integer (1–200)              | no       | Page size; default 50.                                                  |
+
+**Output** — `structuredContent`: `{ lane, items, nextCursor: string | null }`. On the
+`container` lane each item is a runnable container: `id`, `key`, `kind`, `title`,
+`priority`, `assigneeId`, `assignee`, `readyLeafCount` (its leaf-lane rows),
+`childCount` (every live child) and `runCommand` (`motir run <KEY>`); `priority` and
+`assigneeId` filter on the container. On `leaf` / `bug`, each item is a `ReadyItemDto`
+carrying its `container` (`{ key, kind, title, priority }` or `null`). Each `ReadyItemDto` has `id`, `key` (the `<KEY>-<n>` identifier), `kind`, `title`,
 `priority`, `status: { key, category }`, `assignee` (or null), and
 `descriptionExcerpt` — **plus the `dependencies` block** and the
 **[`commentCount`](#the-commentcount-field)** below — and the
@@ -649,20 +668,26 @@ The human-readable text block carries it in the same compact form the
 
 #### `next_ready`
 
-Dispatch ONE item: the highest-ranked ready item not in `excludeIds`, as the
-full dispatch payload an agent runs. Walk the set by appending each handled id
-to `excludeIds`.
+Dispatch the next item of ONE ready lane (see [`list_ready`](#list_ready) for the
+lanes and their order), not in `excludeIds`. On `leaf` (the default — it **never
+hands out a bug**) and `bug` it is the full dispatch payload an agent runs; on
+`container` it is the next runnable container — the unit a parent run takes. Walk
+the lane by appending each handled id to `excludeIds`.
 
-| Input        | Type                     | Required | Notes                                              |
-| ------------ | ------------------------ | -------- | -------------------------------------------------- |
-| `projectKey` | string                   | yes      | Project key.                                       |
-| `kinds`      | array of work-item kinds | no       | Restrict to these kinds.                           |
-| `priority`   | array of priorities      | no       | Restrict to these priorities.                      |
-| `assigneeId` | string \| null           | no       | User id; `null`/`"unassigned"` for unassigned.     |
-| `excludeIds` | array of strings         | no       | Work item ids already dispatched this loop — skip. |
+| Input        | Type                         | Required | Notes                                                 |
+| ------------ | ---------------------------- | -------- | ----------------------------------------------------- |
+| `projectKey` | string                       | yes      | Project key.                                          |
+| `lane`       | `leaf` · `container` · `bug` | no       | Which lane; default `leaf`. Anything else is refused. |
+| `kinds`      | array of work-item kinds     | no       | Restrict to these kinds.                              |
+| `priority`   | array of priorities          | no       | Restrict to these priorities.                         |
+| `assigneeId` | string \| null               | no       | User id; `null`/`"unassigned"` for unassigned.        |
+| `excludeIds` | array of strings             | no       | Work item ids already dispatched this loop — skip.    |
 
-**Output** — `structuredContent`: `{ item: ReadyItemDispatchDto | null }`
-(`null` when nothing is ready). `ReadyItemDispatchDto` extends `ReadyItemDto`
+**Output** — `structuredContent`: `{ lane, item: ReadyItemDispatchDto | null, container }`.
+On `leaf` / `bug`, `item` is the dispatch payload (`null` when the lane is exhausted)
+and `container` is `null`; on `container`, `item` is `null` and `container` is the next
+runnable container (the `list_ready` container row, with `readyLeafCount` and
+`runCommand: "motir run <KEY>"`) or `null`. `ReadyItemDispatchDto` extends `ReadyItemDto`
 with `descriptionMd`, `contextRefs`, `blockerKeys`, `parentKey`, `runCommand`
 (`motir run <key>`), `sessionBranch`, `targetRepo`, `targetRepoCloneUrl`, and
 `targetRepoDefaultBranch` — plus the

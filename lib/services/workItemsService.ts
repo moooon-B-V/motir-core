@@ -7826,20 +7826,7 @@ export const workItemsService = {
     const { workspaceId, hidden } = await openReadyRead(projectId, ctx);
     const limit = clampReadyLimit(filter.limit);
     const cursor = filter.cursor ? decodeReadyLaneCursor(filter.cursor, 'container') : undefined;
-    const sprintId = await resolveSprintFacet(projectId, workspaceId, filter.sprintRef);
-    const { leaves } = await partitionReadyLanes(projectId, workspaceId, hidden, {}, false);
-
-    let groups = groupLaneRows(leaves).filter((g) => g.container !== null);
-    if (filter.priority && filter.priority.length > 0) {
-      const set = new Set<string>(filter.priority);
-      groups = groups.filter((g) => set.has(g.container!.priority));
-    }
-    if (filter.assigneeId === null) groups = groups.filter((g) => g.container!.assigneeId === null);
-    else if (filter.assigneeId !== undefined) {
-      groups = groups.filter((g) => g.container!.assigneeId === filter.assigneeId);
-    }
-    if (sprintId !== null) groups = groups.filter((g) => g.container!.sprintId === sprintId);
-
+    const groups = await readyContainerGroups(projectId, workspaceId, hidden, filter);
     const start = cursor ? groups.findIndex((g) => groupRank(g.position, cursor.group) > 0) : 0;
     const begin = start === -1 ? groups.length : start;
     const window = groups.slice(begin, begin + limit);
@@ -7849,18 +7836,7 @@ export const workItemsService = {
         ? encodeReadyLaneCursor({ lane: 'container', group: last.position, member: null })
         : null;
     return {
-      items: window.map((g) => {
-        const shape = g.container!;
-        const assignee = shape.assigneeId
-          ? {
-              id: shape.assigneeId,
-              name: hidden ? personName(shape.assigneeName) : (shape.assigneeName ?? ''),
-              email: hidden ? '' : (shape.assigneeEmail ?? ''),
-              image: storedAssetUrl(shape.assigneeImage),
-            }
-          : null;
-        return toReadyContainerDto(shape, { assignee, readyLeafCount: g.members.length });
-      }),
+      items: window.map((g) => presentContainerGroup(g, hidden)),
       nextCursor,
     };
   },
@@ -7883,6 +7859,56 @@ export const workItemsService = {
       bugs: bugs.length,
       hasMore: false,
     };
+  },
+
+  /**
+   * DISPATCH one row of a LANE (MOTIR-6833) — the first `leaf`- or `bug`-lane
+   * row, in lane order, not in `excludeIds`, as the full dispatch payload
+   * `getNextReady` returns (plus its `container`), or `null` when the lane is
+   * exhausted. The lane-aware twin of {@link workItemsService.getNextReady},
+   * behind the same CI-credit gate; `next_ready` routes its `lane` here so an
+   * agent and `/ready` never disagree about what comes next.
+   */
+  async getNextReadyInLane(
+    projectId: string,
+    lane: 'leaf' | 'bug',
+    filter: Omit<ReadyListFilter, 'limit' | 'cursor' | 'allowSoftBlock'> & {
+      excludeIds?: string[];
+    },
+    ctx: ServiceContext,
+  ): Promise<ReadyItemDispatchDto | null> {
+    const { workspaceId } = await openReadyRead(projectId, ctx);
+    await ciAllowanceService.assertDispatchAllowed(ctx);
+    const { excludeIds, ...facets } = filter;
+    const exclude = new Set(excludeIds ?? []);
+    const partition = await partitionReadyLanes(projectId, workspaceId, null, facets, false);
+    const rows = groupLaneRows(lane === 'leaf' ? partition.leaves : partition.bugs).flatMap(
+      (g) => g.members,
+    );
+    const chosen = rows.find((r) => !exclude.has(r.row.id));
+    if (!chosen) return null;
+    return {
+      ...(await buildReadyDispatchDto(chosen.row, ctx)),
+      container: chosen.container ? toReadyContainerRefDto(chosen.container) : null,
+    };
+  },
+
+  /**
+   * The next runnable CONTAINER (MOTIR-6833) — the first containers-lane row not
+   * in `excludeIds`, or `null`. What `next_ready { lane: 'container' }` and
+   * `motir next --parent` hand out: the unit a parent run takes.
+   */
+  async getNextReadyContainer(
+    projectId: string,
+    filter: Omit<ReadyContainersFilter, 'limit' | 'cursor'> & { excludeIds?: string[] },
+    ctx: ServiceContext | VisitorReadContext,
+  ): Promise<ReadyContainerDto | null> {
+    const { workspaceId, hidden } = await openReadyRead(projectId, ctx);
+    const { excludeIds, ...facets } = filter;
+    const exclude = new Set(excludeIds ?? []);
+    const groups = await readyContainerGroups(projectId, workspaceId, hidden, facets);
+    const chosen = groups.find((g) => !exclude.has(g.container!.id));
+    return chosen ? presentContainerGroup(chosen, hidden) : null;
   },
 
   /**
@@ -8259,6 +8285,50 @@ function groupLaneRows(rows: ReadyLaneRow[]): ReadyLaneGroup[] {
   }
   groups.sort((a, b) => groupRank(a.position, b.position));
   return groups;
+}
+
+/**
+ * The CONTAINERS lane's groups, in order and faceted (MOTIR-6830): the leaves
+ * lane read UNFACETED — so a container's `readyLeafCount` never depends on the
+ * caller's facet — grouped, standalone groups dropped, then narrowed by the
+ * facets on the CONTAINER itself.
+ */
+async function readyContainerGroups(
+  projectId: string,
+  workspaceId: string,
+  hidden: ReadonlySet<string> | null,
+  filter: Omit<ReadyContainersFilter, 'cursor' | 'limit'>,
+): Promise<ReadyLaneGroup[]> {
+  const sprintId = await resolveSprintFacet(projectId, workspaceId, filter.sprintRef);
+  const { leaves } = await partitionReadyLanes(projectId, workspaceId, hidden, {}, false);
+  let groups = groupLaneRows(leaves).filter((g) => g.container !== null);
+  if (filter.priority && filter.priority.length > 0) {
+    const set = new Set<string>(filter.priority);
+    groups = groups.filter((g) => set.has(g.container!.priority));
+  }
+  if (filter.assigneeId === null) groups = groups.filter((g) => g.container!.assigneeId === null);
+  else if (filter.assigneeId !== undefined) {
+    groups = groups.filter((g) => g.container!.assigneeId === filter.assigneeId);
+  }
+  if (sprintId !== null) groups = groups.filter((g) => g.container!.sprintId === sprintId);
+  return groups;
+}
+
+/** One container group as its lane row, the Visitor's display-name rule applied. */
+function presentContainerGroup(
+  g: ReadyLaneGroup,
+  hidden: ReadonlySet<string> | null,
+): ReadyContainerDto {
+  const shape = g.container!;
+  const assignee = shape.assigneeId
+    ? {
+        id: shape.assigneeId,
+        name: hidden ? personName(shape.assigneeName) : (shape.assigneeName ?? ''),
+        email: hidden ? '' : (shape.assigneeEmail ?? ''),
+        image: storedAssetUrl(shape.assigneeImage),
+      }
+    : null;
+  return toReadyContainerDto(shape, { assignee, readyLeafCount: g.members.length });
 }
 
 /** A lane row's full position: its group's, then its own. */
