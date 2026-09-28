@@ -2767,8 +2767,9 @@ it, in the one place a `manual` card is authored.
   it. The caps, the executor seed rule and _"a to-do is one operation"_ are quoted here, never
   re-decided.
 - **No migration, no new table, no new column.** D1 is a JSON field on a row that already exists.
-- **Nothing about DISPATCHING a step.** Handing one row to a hosted agent is MOTIR-3809 (Epic 9), and
-  the `executor` a proposed row carries is the same declarative promise §2 of the store's ADR already
+- **Nothing about DISPATCHING a step.** A step is never dispatched to the hosted agent; its later
+  runner is Motir AI, once Motir has a secret store (`work-item-todo-list.md` AMENDMENT 1). The
+  `executor` a proposed row carries is the same declarative promise §2 of the store's ADR already
   defines — it says who the step is FOR, and nothing schedules it.
 - **Nothing about the assistant that rewrites a list.** MOTIR-1344, `blocked_by` this story.
 - **No committed-card list in the quick view.** D6.
