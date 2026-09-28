@@ -393,6 +393,35 @@ describe('the branch is read from EITHER checkout_ready shape', () => {
     });
     expect((await claim(fx, card.identifier)).branch).toBe('subtask/per-repo');
   });
+  it('an event carrying BOTH shapes keeps every repository, the scalar naming the primary’s (MOTIR-6793)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, runId } = await deadCard(fx, { branch: null });
+    const leg = await adminDb.dispatchRunCard.findFirstOrThrow({ where: { dispatchRunId: runId } });
+    await adminDb.dispatchRunEvent.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        dispatchRunId: runId,
+        dispatchRunCardId: leg.id,
+        seq: 99,
+        kind: 'checkout_ready',
+        data: {
+          // What a continue's leg wrote before MOTIR-6793: the dead branch in the
+          // scalar, the card's fresh branch in `branches[0]`.
+          branch: 'subtask/the-dead-one',
+          branches: [
+            { repository: 'motir-core', branch: 'subtask/fresh', workBranch: 'subtask/fresh' },
+            { repository: 'motir-ai', branch: 'subtask/ai', workBranch: 'subtask/ai' },
+          ],
+        },
+      },
+    });
+    const result = await claim(fx, card.identifier);
+    expect(result.branch).toBe('subtask/the-dead-one');
+    expect(result.branches.map((b) => [b.repository, b.branch])).toEqual([
+      ['motir-core', 'subtask/the-dead-one'],
+      ['motir-ai', 'subtask/ai'],
+    ]);
+  });
 });
 
 describe('claimContinue — a PARENT whose scope run died (MOTIR-6535)', () => {

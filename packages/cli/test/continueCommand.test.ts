@@ -73,8 +73,12 @@ function fakeGit(onPath: Record<string, string> = {}): CommandRunner {
     h.git.push({ args, cwd });
     if (args[0] === 'rev-parse' && args[1] === '--verify')
       return { exitCode: 1, stdout: '', stderr: '' };
+    if (args[0] === 'clone') {
+      mkdirSync(args[2]!, { recursive: true });
+      return ok();
+    }
     if (args[0] === 'worktree' && args[1] === 'add') {
-      const path = args[2] === '--track' ? args[5]! : args[2]!;
+      const path = args[2] === '--track' ? args[5]! : args[2] === '-b' ? args[4]! : args[2]!;
       const branch = args[2] === '--track' ? args[4]! : args[3]!;
       worktrees.set(path, branch);
       return ok();
@@ -88,7 +92,7 @@ function fakeGit(onPath: Record<string, string> = {}): CommandRunner {
   };
 }
 
-function setup(claims: WorkItemContinueClaim) {
+function setup(claims: WorkItemContinueClaim, promptOver: Partial<DispatchPrompt> = {}) {
   const root = mkdtempSync(join(tmpdir(), 'motir-continue-'));
   mkdirSync(join(root, 'motir-core'));
   const calls: Harness['calls'] = [];
@@ -99,6 +103,7 @@ function setup(claims: WorkItemContinueClaim) {
     targetRepo: 'motir-core',
     workflowMode: 'per_item_pr',
     sessionBranch: null,
+    ...promptOver,
   };
   const client = {
     claimWorkItemContinue: async (key: string) => {
@@ -488,5 +493,142 @@ describe('prepareContinueCheckout — reuse as found, add otherwise, never reset
     expect(result).toEqual({ ok: true, path: join(h.root, 'motir-core-prod-7') });
     const add = h.git.find((g) => g.args[0] === 'worktree' && g.args[1] === 'add');
     expect(add?.cwd).toBe(repo);
+  });
+});
+
+// MOTIR-6793 — a card across repositories resumes EVERY one of them.
+describe('motir continue — a card across repositories', () => {
+  const AI_BRANCH = 'subtask/PROD-7-add-the-thing-ai';
+  const twoRepos: Partial<DispatchPrompt> = {
+    targetRepos: [
+      { name: 'motir-core', cloneUrl: 'https://github.com/acme/motir-core.git' },
+      { name: 'motir-ai', cloneUrl: 'https://github.com/acme/motir-ai.git' },
+    ] as DispatchPrompt['targetRepos'],
+    workBranch: 'subtask/PROD-7-add-the-thing',
+  };
+  const branches = [
+    { repository: 'motir-core', branch: BRANCH, pullRequest: null },
+    { repository: 'motir-ai', branch: AI_BRANCH, pullRequest: null },
+  ];
+  const adds = () =>
+    h.git.filter((g) => g.args[0] === 'worktree' && g.args[1] === 'add').map((g) => g.args);
+  const checkoutEvents = () =>
+    h.calls
+      .filter((c) => c.tool === 'append')
+      .flatMap(
+        (c) => (c.args as { events: { kind: string; data?: Record<string, unknown> }[] }).events,
+      )
+      .filter((e) => e.kind === 'checkout_ready');
+
+  it('checks both repositories out on their dead branches, starts the agent once, and delivers', async () => {
+    setup(claim({ branches }), twoRepos);
+    mkdirSync(join(h.root, 'motir-ai'));
+    await continueCommand(
+      'PROD-7',
+      { agent: 'fake-agent' },
+      { run: fakeGit(), maxCiPolls: 1, wait: async () => {} },
+    );
+
+    expect(adds()).toEqual([
+      [
+        'worktree',
+        'add',
+        '--track',
+        '-b',
+        BRANCH,
+        join(h.root, 'motir-core-prod-7'),
+        `origin/${BRANCH}`,
+      ],
+      [
+        'worktree',
+        'add',
+        '--track',
+        '-b',
+        AI_BRANCH,
+        join(h.root, 'motir-ai-prod-7'),
+        `origin/${AI_BRANCH}`,
+      ],
+    ]);
+    expect(h.git.some((g) => g.args[0] === 'clone')).toBe(false);
+    expect(runAgentMock).toHaveBeenCalledTimes(1);
+    // Every checkout_ready — the continue's own and the leg's — names BOTH
+    // repositories' dead branches, never the card's fresh one for the second.
+    const events = checkoutEvents();
+    expect(events.length).toBeGreaterThanOrEqual(2);
+    for (const e of events) {
+      expect(e.data?.['branches']).toEqual([
+        expect.objectContaining({ repository: 'motir-core', branch: BRANCH }),
+        expect.objectContaining({ repository: 'motir-ai', branch: AI_BRANCH }),
+      ]);
+    }
+    expect(h.calls).toContainEqual({
+      tool: 'transition_status',
+      args: { key: 'PROD-7', status: 'implemented' },
+    });
+    expect(h.stderr).toContain(`motir-ai: ${AI_BRANCH} at ${join(h.root, 'motir-ai-prod-7')}`);
+  });
+
+  it('clones a repository with no local checkout beside the first, then checks its dead branch out', async () => {
+    setup(claim({ branches }), twoRepos);
+    await continueCommand(
+      'PROD-7',
+      { agent: 'fake-agent' },
+      { run: fakeGit(), maxCiPolls: 1, wait: async () => {} },
+    );
+
+    const clone = h.git.find((g) => g.args[0] === 'clone');
+    expect(clone?.args).toEqual([
+      'clone',
+      'https://github.com/acme/motir-ai.git',
+      join(h.root, 'motir-ai'),
+    ]);
+    const aiAdd = h.git.find((g) => g.args[0] === 'worktree' && g.args.includes(AI_BRANCH));
+    expect(aiAdd?.cwd).toBe(join(h.root, 'motir-ai'));
+    expect(runAgentMock).toHaveBeenCalledTimes(1);
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('a repository the dead run never pushed to is started on the card’s fresh branch', async () => {
+    setup(claim({ branches: [branches[0]!] }), twoRepos);
+    mkdirSync(join(h.root, 'motir-ai'));
+    await continueCommand(
+      'PROD-7',
+      { agent: 'fake-agent' },
+      { run: fakeGit(), maxCiPolls: 1, wait: async () => {} },
+    );
+
+    const fresh = 'subtask/PROD-7-add-the-thing';
+    expect(adds()[1]).toEqual([
+      'worktree',
+      'add',
+      '-b',
+      fresh,
+      join(h.root, 'motir-ai-prod-7'),
+      'origin/HEAD',
+    ]);
+    expect(checkoutEvents()[0]!.data?.['branches']).toEqual([
+      expect.objectContaining({ repository: 'motir-core', branch: BRANCH }),
+      expect.objectContaining({ repository: 'motir-ai', branch: fresh }),
+    ]);
+  });
+
+  it('a clone that fails refuses before any agent, closing the run halted', async () => {
+    setup(claim({ branches }), twoRepos);
+    const git = fakeGit();
+    const failingClone: CommandRunner = (bin, args, cwd) =>
+      args[0] === 'clone'
+        ? (h.git.push({ args, cwd }), { exitCode: 128, stdout: '', stderr: 'denied' })
+        : git(bin, args, cwd);
+    await continueCommand('PROD-7', { agent: 'fake-agent' }, { run: failingClone });
+
+    expect(process.exitCode).toBe(1);
+    expect(runAgentMock).not.toHaveBeenCalled();
+    expect(h.stderr).toContain('a repository could not be cloned');
+    expect(h.calls).toContainEqual(
+      expect.objectContaining({
+        tool: 'close_run',
+        args: expect.objectContaining({ stopReason: 'halted' }),
+      }),
+    );
   });
 });

@@ -1,7 +1,20 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { DispatchItem, MotirClient, WorkItemContinueClaim } from '../client.js';
-import { resolveDispatchTarget } from '../dispatch.js';
+import type { LegBranch } from '../checkpoint.js';
+import {
+  continueBranchesOf,
+  type ContinueClaimBranch,
+  type DispatchItem,
+  type DispatchPrompt,
+  type MotirClient,
+  type WorkItemContinueClaim,
+} from '../client.js';
+import {
+  materializeDispatchCheckouts,
+  renderMaterialization,
+  resolveDispatchTarget,
+  resolveDispatchTargets,
+} from '../dispatch.js';
 import { createDispatchRunReporter } from '../dispatchRunReporter.js';
 import { CliError } from '../errors.js';
 import { execCommand, type CommandRunner } from '../git.js';
@@ -135,6 +148,12 @@ export function prepareContinueCheckout(input: {
   config: LinkConfig;
   run: CommandRunner;
   exists: (path: string) => boolean;
+  /**
+   * The branch is NEW (MOTIR-6793): a repository of the card the dead run never
+   * pushed to. It is cut from `origin/HEAD` the way `motir run` starts one —
+   * unless origin turns out to have it after all, which is then tracked.
+   */
+  fresh?: boolean;
 }): Prepared {
   const target = resolveDispatchTarget(input.rootDir, input.config, input.targetRepo, {
     exists: input.exists,
@@ -167,11 +186,9 @@ export function prepareContinueCheckout(input: {
     message: `${input.key}: ${what}${detail ? ` — ${detail}` : ''}. Nothing was changed.`,
   });
 
-  const fetched = git([
-    'fetch',
-    'origin',
-    `+refs/heads/${input.branch}:refs/remotes/origin/${input.branch}`,
-  ]);
+  const fetched = input.fresh
+    ? git(['fetch', 'origin'])
+    : git(['fetch', 'origin', `+refs/heads/${input.branch}:refs/remotes/origin/${input.branch}`]);
   if (fetched.exitCode !== 0) {
     return fail(`could not fetch its branch \`${input.branch}\``, fetched.stderr);
   }
@@ -187,14 +204,104 @@ export function prepareContinueCheckout(input: {
     return { ok: true, path };
   }
   const local = git(['rev-parse', '--verify', '--quiet', `refs/heads/${input.branch}`]);
+  const onOrigin =
+    !input.fresh ||
+    git(['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${input.branch}`]).exitCode === 0;
   const added =
     local.exitCode === 0
       ? git(['worktree', 'add', path, input.branch])
-      : git(['worktree', 'add', '--track', '-b', input.branch, path, `origin/${input.branch}`]);
+      : onOrigin
+        ? git(['worktree', 'add', '--track', '-b', input.branch, path, `origin/${input.branch}`])
+        : git(['worktree', 'add', '-b', input.branch, path, 'origin/HEAD']);
   if (added.exitCode !== 0) {
     return fail(`could not check out \`${input.branch}\` at ${path}`, added.stderr);
   }
   return { ok: true, path };
+}
+
+/** One repository's resumed checkout. */
+export interface ContinueCheckout {
+  repository: string | null;
+  branch: string;
+  path: string;
+}
+
+type PreparedAll =
+  | { ok: true; checkouts: ContinueCheckout[]; materialized: string[] }
+  | { ok: false; message: string };
+
+/**
+ * CHECK OUT EVERY REPOSITORY of the card (MOTIR-6793) — each on the branch its
+ * dead run left there (the claim's `branches`), and a repository the dead run
+ * never pushed to on the card's fresh branch, the way `motir run` starts it.
+ *
+ * ⚠️ A MISSING CHECKOUT IS CLONED, NOT REFUSED. It goes through `motir run`'s
+ * own materializer (`materializeDispatchCheckouts`), so a laptop continuing a
+ * teammate's card — and a hosted container, which has nothing checked out — gets
+ * every repository exactly where `motir run` would have put it. Only a clone
+ * that fails refuses, before any agent starts.
+ */
+export function prepareContinueCheckouts(input: {
+  key: string;
+  branches: readonly ContinueClaimBranch[];
+  dispatch: Pick<
+    DispatchPrompt,
+    'targetRepo' | 'targetRepos' | 'targetRepoCloneUrl' | 'workBranch'
+  >;
+  rootDir: string;
+  config: LinkConfig;
+  run: CommandRunner;
+  exists: (path: string) => boolean;
+}): PreparedAll {
+  const { dispatch } = input;
+  const repos: { name: string | null; cloneUrl: string | null }[] =
+    dispatch.targetRepos && dispatch.targetRepos.length > 0
+      ? dispatch.targetRepos.map((r) => ({ name: r.name, cloneUrl: r.cloneUrl }))
+      : [{ name: dispatch.targetRepo, cloneUrl: dispatch.targetRepoCloneUrl ?? null }];
+  const pinned = repos.filter((r): r is { name: string; cloneUrl: string | null } => !!r.name);
+  const targets = resolveDispatchTargets(input.rootDir, input.config, pinned, {
+    exists: input.exists,
+  });
+  const materialized = materializeDispatchCheckouts(input.rootDir, targets, { run: input.run });
+  const lines = renderMaterialization(materialized);
+  if (materialized.failures.length > 0) {
+    return {
+      ok: false,
+      message: [`${input.key}: a repository could not be cloned.`, ...lines].join('\n'),
+    };
+  }
+
+  const same = (a: string | null, b: string | null) =>
+    a !== null && b !== null && a.toLowerCase() === b.toLowerCase();
+  const checkouts: ContinueCheckout[] = [];
+  for (const [index, repo] of repos.entries()) {
+    const found =
+      input.branches.find((b) => same(b.repository, repo.name)) ??
+      // A branch recorded without its repository (an older run) is the primary's.
+      (index === 0
+        ? (input.branches.find((b) => b.repository === null) ?? input.branches[0])
+        : undefined);
+    const branch = found?.branch ?? dispatch.workBranch ?? null;
+    if (branch === null) {
+      return {
+        ok: false,
+        message: `${input.key}: no branch to continue ${repo.name ?? 'its repository'} on. Nothing was changed.`,
+      };
+    }
+    const prepared = prepareContinueCheckout({
+      key: input.key,
+      branch,
+      targetRepo: repo.name,
+      rootDir: input.rootDir,
+      config: input.config,
+      run: input.run,
+      exists: input.exists,
+      fresh: found === undefined,
+    });
+    if (!prepared.ok) return prepared;
+    checkouts.push({ repository: repo.name, branch, path: prepared.path });
+  }
+  return { ok: true, checkouts, materialized: lines };
 }
 
 export async function continueCommand(
@@ -235,10 +342,10 @@ export async function continueCommand(
       ...(claim.deadRun ? { continueFrom: claim.deadRun.id } : {}),
     });
 
-    const prepared = prepareContinueCheckout({
+    const prepared = prepareContinueCheckouts({
       key: claim.key,
-      branch: claim.branch as string,
-      targetRepo: dispatch.targetRepo,
+      branches: continueBranchesOf(claim),
+      dispatch,
       rootDir: link.dir,
       config: link.config,
       run: deps.run ?? execCommand,
@@ -251,12 +358,28 @@ export async function continueCommand(
       process.exitCode = 1;
       return;
     }
-    info(`  ${claim.branch} at ${prepared.path}`);
+    for (const line of prepared.materialized) info(line);
+    const [primary] = prepared.checkouts as [ContinueCheckout, ...ContinueCheckout[]];
+    const several = prepared.checkouts.length > 1;
+    for (const c of prepared.checkouts) {
+      info(`  ${several && c.repository ? `${c.repository}: ` : ''}${c.branch} at ${c.path}`);
+    }
+    // EVERY repository's branch (MOTIR-6793), so a continue that dies again is
+    // continuable again on all of them — the `branches[]` shape MOTIR-6539 writes.
+    const legBranches: LegBranch[] = prepared.checkouts.map((c) => ({
+      repository: c.repository,
+      branch: c.branch,
+      workBranch: c.branch,
+    }));
     reporter.event({
       kind: 'checkout_ready',
       workItemKey: claim.key,
       disposition: 'running',
-      data: { branch: claim.branch, path: prepared.path },
+      data: {
+        branch: primary.branch,
+        path: primary.path,
+        branches: prepared.checkouts.map((c) => ({ ...c, workBranch: c.branch })),
+      },
     });
 
     // `motir run`'s own delivery — the agent, the push check, Implemented, the CI
@@ -270,6 +393,7 @@ export async function continueCommand(
       opts,
       deps,
       reporter,
+      continueBranches: legBranches,
     });
   });
 }

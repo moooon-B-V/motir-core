@@ -204,11 +204,10 @@ export const dispatchRunEventRepository = {
     });
     for (const row of rows) {
       const data = row.data as { branch?: unknown; branches?: unknown } | null;
-      if (typeof data?.branch === 'string' && data.branch.length > 0) {
-        return [{ repository: null, branch: data.branch }];
-      }
+      const scalar =
+        typeof data?.branch === 'string' && data.branch.length > 0 ? data.branch : null;
+      const out: Array<{ repository: string | null; branch: string }> = [];
       if (Array.isArray(data?.branches)) {
-        const out: Array<{ repository: string | null; branch: string }> = [];
         for (const entry of data.branches as Array<{ repository?: unknown; branch?: unknown }>) {
           if (typeof entry?.branch !== 'string' || entry.branch.length === 0) continue;
           const repository =
@@ -218,8 +217,15 @@ export const dispatchRunEventRepository = {
           if (out.some((e) => e.repository === repository)) continue;
           out.push({ repository, branch: entry.branch });
         }
-        if (out.length > 0) return out;
       }
+      // The scalar names the PRIMARY's branch, and it is the authoritative one: a
+      // continue's leg wrote the dead run's branch there while its `branches[]`
+      // still named the card's fresh branch (fixed in the CLI by MOTIR-6793).
+      if (out.length > 0) {
+        if (scalar !== null) out[0] = { repository: out[0]!.repository, branch: scalar };
+        return out;
+      }
+      if (scalar !== null) return [{ repository: null, branch: scalar }];
     }
     return [];
   },

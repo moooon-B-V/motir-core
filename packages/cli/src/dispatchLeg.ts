@@ -13,7 +13,7 @@ import type { ParsedAgentCommand } from './agentProfiles.js';
 import { createLegLogTee } from './agentLogTee.js';
 import { fetchPresignedAsset, materializeDesignsFor } from './designFiles.js';
 import { nullDispatchRunReporter, type DispatchRunReporter } from './dispatchRunReporter.js';
-import { legBranches, startCheckpoints } from './checkpoint.js';
+import { legBranches, startCheckpoints, type LegBranch } from './checkpoint.js';
 
 // THE DISPATCH LEG (Story MOTIR-3655 · MOTIR-3695) — the one implementation of
 // "materialize, spawn the agent, and decide what actually happened."
@@ -134,6 +134,14 @@ export interface DispatchLegInput {
    * cloned them. Absent for a local run, whose checkouts are the operator's.
    */
   prepareCheckouts?: (cwds: string[]) => void;
+  /**
+   * Every repository's branch, when the caller already knows them (MOTIR-6793) —
+   * `motir continue` resumes each repository on the branch its dead run left,
+   * which is not the card's fresh `workBranch`. Recorded on `checkout_ready` and
+   * checkpointed per repository, so a continue that dies again is continuable
+   * again on the same branches. Absent: derived from the payload, as before.
+   */
+  branches?: LegBranch[];
   /** The checkpoint interval (MOTIR-6539) — the tests' seam; one minute otherwise. */
   checkpointIntervalMs?: number;
 }
@@ -174,7 +182,7 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
       branch: input.sessionBranch ?? dispatch.branch ?? null,
       // Every repository's branch, named before the agent exists (MOTIR-6539) —
       // the CHECKPOINT push target, per repository (`checkpoint.ts`).
-      branches: legBranches(dispatch, over),
+      branches: input.branches ?? legBranches(dispatch, over),
     },
   });
   if (materialized.failures.length > 0) return settle({ kind: 'checkout_unavailable' });
@@ -200,6 +208,7 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
     key,
     targets: over,
     workBranch: dispatch.workBranch ?? null,
+    ...(input.branches ? { branches: input.branches } : {}),
     reporter,
     ...(input.run ? { run: input.run } : {}),
     ...(input.checkpointIntervalMs ? { intervalMs: input.checkpointIntervalMs } : {}),

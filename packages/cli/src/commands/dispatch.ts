@@ -17,6 +17,7 @@ import {
 import { runAgent } from '../agentRun.js';
 import { hostedOpenCodeAgent } from '../hostedAgent.js';
 import { prepareHostedCheckouts } from '../hostedCodegraph.js';
+import type { LegBranch } from '../checkpoint.js';
 import { runDispatchLeg } from '../dispatchLeg.js';
 import { createDispatchRunReporter, type DispatchRunReporter } from '../dispatchRunReporter.js';
 import { bindInterruptSignals, closeRunAndExit, type InterruptSignal } from '../interrupt.js';
@@ -322,6 +323,11 @@ export interface DeliverInput {
    * opens its own exactly as before.
    */
   adoptedRunId?: string | null;
+  /**
+   * Every repository's branch, for a `continue` (MOTIR-6793): the leg records and
+   * checkpoints THESE rather than the card's fresh branch. Absent otherwise.
+   */
+  continueBranches?: LegBranch[];
 }
 
 /**
@@ -495,6 +501,7 @@ export async function deliver(input: DeliverInput): Promise<void> {
         echoPromptIfAsked(opts, key, dispatch);
       },
       ...(deps.run ? { run: deps.run } : {}),
+      ...(input.continueBranches ? { branches: input.continueBranches } : {}),
       // A hosted container's checkouts are fresh clones: index them before the
       // agent starts, as the image's entrypoint used to (MOTIR-6560).
       ...(input.adoptedRunId ? { prepareCheckouts: hostedCheckoutPreparer } : {}),
