@@ -501,6 +501,8 @@ describe('the members read — what a reload still knows (MOTIR-5484)', () => {
           code: 'conflict',
           landingClass: 'cant_land',
           permission: null,
+          // The host gave no words for this refusal (MOTIR-6735).
+          reason: null,
           refusedAt: expect.any(String),
         },
         retryDecidesGateId: null,
@@ -677,6 +679,8 @@ describe('the QUICK VIEW reads the same member facts (Bug MOTIR-5650)', () => {
           code: 'conflict',
           landingClass: 'cant_land',
           permission: null,
+          // The host gave no words for this refusal (MOTIR-6735).
+          reason: null,
           refusedAt: expect.any(String),
         },
         retryDecidesGateId: null,
