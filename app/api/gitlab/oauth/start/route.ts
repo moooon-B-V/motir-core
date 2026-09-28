@@ -5,6 +5,7 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { gitlabConnectionService } from '@/lib/services/gitlabConnectionService';
 import { encodeOAuthState } from '@/lib/gitlab/oauthState';
 import { GitlabOAuthNotConfiguredError } from '@/lib/gitlab/errors';
+import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 
@@ -34,6 +35,22 @@ export async function GET(_req: NextRequest): Promise<Response> {
   const ctx = await getWorkspaceContext();
   if (!ctx) {
     return NextResponse.redirect(`${resolveBaseUrlTrimmed()}${SETTINGS_PATH}&gitlab=no_workspace`);
+  }
+
+  // Only an org Owner or Admin may establish the connection (MOTIR-6765), so a
+  // member is answered here rather than sent to GitLab to authorize a grant the
+  // callback will refuse. The callback asserts the same rule itself — this is the
+  // early answer, not the gate.
+  try {
+    await gitlabConnectionService.assertMayConnect({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+  } catch (err) {
+    if (err instanceof OrgForbiddenError || err instanceof OrganizationNotFoundError) {
+      return NextResponse.redirect(`${resolveBaseUrlTrimmed()}${SETTINGS_PATH}&gitlab=forbidden`);
+    }
+    throw err;
   }
 
   const nonce = randomBytes(32).toString('base64url');

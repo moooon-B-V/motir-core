@@ -122,11 +122,24 @@ export const gitlabConnectionService = {
   },
 
   /**
+   * Refuse, before the member is sent to GitLab, anyone who may not establish the
+   * workspace's GitLab connection (MOTIR-6765) — the start route's early answer.
+   * It is a courtesy, not the gate: `completeOAuthCallback` asserts the same
+   * predicate itself, because the callback is reachable without passing through
+   * here. Throws what `assertMayManageGitlab` throws.
+   */
+  async assertMayConnect(ctx: { userId: string; workspaceId: string }): Promise<void> {
+    await withWorkspaceContext(ctx, (tx) => assertMayManageGitlab(ctx, tx));
+  },
+
+  /**
    * Complete the connect grant: exchange `code` for the access + refresh token
    * set, read the GitLab user, encrypt both tokens, and upsert the workspace's
    * GitLab connection (under `withWorkspaceContext`, so RLS binds it to the
    * workspace). Returns the token-free DTO. Throws GitlabOAuthNotConfiguredError
-   * (unwired) or GitlabOAuthExchangeError (exchange / user read failed).
+   * (unwired) or GitlabOAuthExchangeError (exchange / user read failed), and —
+   * before any GitLab call — OrgForbiddenError / OrganizationNotFoundError for an
+   * actor who may not manage the connection (MOTIR-6765).
    */
   async completeOAuthCallback(args: {
     code: string;
@@ -135,8 +148,19 @@ export const gitlabConnectionService = {
   }): Promise<GithubInstallationDTO> {
     // Refused before the code is spent (MOTIR-6396): no new connection in an org
     // scheduled for deletion.
-    await withWorkspaceContext({ userId: args.userId, workspaceId: args.workspaceId }, (tx) =>
-      assertWorkspaceOrgNotClosing(args.workspaceId, tx),
+    //
+    // ⚠️ AND NONE FROM ANYONE BUT AN ORG OWNER OR ADMIN (MOTIR-6765). The upsert
+    // below is keyed on the WORKSPACE, not the actor, so a member's grant does not
+    // add a second connection — it OVERWRITES the existing one, handing every sync,
+    // webhook and index run the member's own GitLab account and token. Asserted
+    // here rather than only in the start route, because the callback is reachable
+    // by URL without passing through it.
+    await withWorkspaceContext(
+      { userId: args.userId, workspaceId: args.workspaceId },
+      async (tx) => {
+        await assertMayManageGitlab(args, tx);
+        await assertWorkspaceOrgNotClosing(args.workspaceId, tx);
+      },
     );
     const tokens = await exchangeCodeForToken(args.code);
     const gitlabUser = await fetchGitlabUser(tokens.accessToken);
