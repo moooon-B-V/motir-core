@@ -4,8 +4,9 @@
   decision-subtask ladder). This is the rung-1/rung-2 contract the rest of
   MOTIR-3808 implements — no to-do code ships until these five points are
   pinned. **No application behaviour ships in this subtask** (the ADR only).
-  **Amended 2026-09-28** (MOTIR-6856): a to-do is never dispatched to a hosted
-  agent — see _AMENDMENT 1_ at the end of this record.
+  **Amended 2026-09-28** (MOTIR-6856): an agent to-do is never run by the
+  hosted agent; its later runner is Motir AI — see _AMENDMENT 1_ at the end of
+  this record.
 - **Story / Subtask:** MOTIR-3808 (A work item's TO-DO LIST — the ordered steps
   of a manual card, each ONE operation, ticked off, carrying its own executor and
   a command you copy) · Subtask MOTIR-3811.
@@ -14,8 +15,8 @@
   service), MOTIR-3814 (the write path — Server Actions + the read DTO),
   MOTIR-3815 (the section on the work item page), MOTIR-3816 / MOTIR-3817 (the
   two test gates). Downstream, MOTIR-1344 (Help with a task) rewrites this list
-  mid-session, and MOTIR-3810 teaches the planner to propose one. No hosted run
-  ever takes a row (AMENDMENT 1).
+  mid-session, and MOTIR-3810 teaches the planner to propose one. The hosted
+  agent never takes a row; a later Motir AI runner may (AMENDMENT 1).
 - **Builds on:** the shipped `Executor` enum and its seeded-and-overridable
   default map (MOTIR-2629 / `work-item-type-taxonomy.md`), the fractional index
   (`lib/workItems/positioning.ts`), the item page's single permission read
@@ -260,7 +261,8 @@ the state _and_ the stamp.
 restrict who may tick it, edit it, reorder it or delete it.**
 
 That is the whole promise, and it is deliberately a small one, because the row
-carries `coding_agent` and no hosted run will ever be handed one (AMENDMENT 1).
+carries `coding_agent` before anything can run one. The hosted agent never
+will, and Motir AI cannot until Motir has a secret store (AMENDMENT 1).
 
 | Question                                                           | Answer                                                                                                                                                                           |
 | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -285,11 +287,11 @@ every row makes you fill in.
 agent's row). It is a rule with no upside and one guaranteed failure mode: the
 person who did the work by hand cannot record that they did.
 
-**Rejected: rendering an agent row DISABLED.** A disabled
-control with no explanation is a promise the product cannot keep, presented as a
-malfunction. The row is not disabled; it simply has no run control, and none is
-coming: that is permanent (AMENDMENT 1), and the field already means the right
-thing without one.
+**Rejected: rendering an agent row DISABLED until something can run it.** A
+disabled control with no explanation is a promise the product cannot keep,
+presented as a malfunction. The row is not disabled; it simply has no run control
+yet. When one comes it is Motir AI's, not the hosted agent's (AMENDMENT 1), and it
+lands beside a field that already means the right thing.
 
 ### §3 — Ticking the LAST to-do does NOT move the card's status. Neither automatically nor as a gate.
 
@@ -410,7 +412,8 @@ and renders its command with a copy button; null ⇒ it is a plain step.
   in their shell.
 - It makes _"is this row copyable?"_ a **rendering accident** instead of a data
   fact. Every consumer — the section, the DTO, MOTIR-1344's assistant rewriting
-  the list — would have to re-run the same heuristic and agree with it.
+  the list, a later Motir AI runner — would have to re-run the same heuristic
+  and agree with it.
 - The codebase models this kind of thing as typed columns throughout
   (`AcceptanceEvidence`, `DesignAsset`, `GithubPullRequest`), and the shipped
   copy affordance is already a **flag**: `CodeBlock`'s `copyable` prop, whose own
@@ -484,11 +487,12 @@ Inherits, as the states it must draw:
 - **Nothing in either card touches `work_item.status`** (§3). A card whose to-do
   list is complete is a card with a complete to-do list.
 
-### Hosted dispatch and MOTIR-1344
+### Who runs an agent row, and MOTIR-1344
 
-- **No run control is ever added beside `executor`** (AMENDMENT 1). §2 keeps the
-  field honest permanently: an agent row says _this operation is the agent's_,
-  and nothing runs it.
+- **Never the hosted agent** (AMENDMENT 1). When Motir AI can run a step, its run
+  control goes **beside** `executor`, which by then already means _this
+  operation is the agent's_ — it does not re-interpret a field that meant
+  something else. §2 is what keeps the field honest in the interval.
 - **MOTIR-1344** rewrites this list mid-session. §1's shape is what makes that
   cheap — a short line, an optional command, an executor, a position — and §3 is
   what makes it safe: an assistant editing a provisional list cannot move a
@@ -496,7 +500,9 @@ Inherits, as the states it must draw:
 
 ### What this record does NOT decide
 
-- ~~**How a to-do is DISPATCHED**~~ — **Decided: never.** See AMENDMENT 1.
+- **How an agent to-do is RUN** — partly decided by AMENDMENT 1: never by the
+  hosted agent; later by Motir AI, once Motir has a secret store. Neither the
+  store nor that runner is planned yet.
 - **Whether the PLANNER proposes a manual card's to-dos at plan time** —
   MOTIR-3810.
 - **Whether to-dos appear on any surface other than the item page** (the board,
@@ -505,36 +511,45 @@ Inherits, as the states it must draw:
 
 ---
 
-## AMENDMENT 1 — a to-do is never dispatched to a hosted agent (MOTIR-6856, 2026-09-28)
+## AMENDMENT 1 — an agent to-do is never run by the hosted agent; its later runner is Motir AI (MOTIR-6856, 2026-09-28)
 
 - **Status:** Accepted on the pull request that carries it. It changes no
-  application behaviour. It records a direction and corrects the lines above
-  that named dispatch as coming work.
+  application behaviour. It records who may run an agent to-do and corrects the
+  lines above that named the hosted agent as that runner.
 - **Supersedes:** MOTIR-3809, _Dispatch ONE to-do to a hosted agent_.
 
 ### Decision
 
-A work item's to-do row is **never dispatched to a hosted agent.**
+**A to-do can still be an agent step.** `executor: coding_agent` on a row keeps
+meaning _this operation is the agent's_, exactly as §2 decides.
 
-- **On a project whose repository Motir hosts, there are no manual cards.**
-  Motir does that work itself, so there is no to-do list to hand to an agent.
-- **On an imported project, a to-do list is manual work.** Motir's help there is
-  to **guide** the person through it, telling them which command to run, step
-  by step. That is the `motir guide` protocol and skill (MOTIR-6708). Motir
-  never executes the step.
+**The hosted agent is not the one to run it.** The hosted agent (Epic 9,
+MOTIR-673) runs CARDS: a leaf across its repositories, or a parent through its
+children. It never runs a single to-do step, so there is no Run control on a
+to-do row that dispatches to it.
 
-The row's `executor` stays **descriptive**, exactly as §2 decides: it records
-who an operation is _for_ and authorizes nothing. A `coding_agent` row keeps
-rendering with **no run control**. That is now permanent. It used to be the
-state the row was in _until dispatch ships_.
+**Later, Motir AI runs an agent to-do, once Motir has a secret store.** A to-do
+is one operation, and the operations a list holds (_create a restricted Stripe
+key_, _set the DNS record_, _run the migration on staging_) act on outside
+systems with credentials. Motir holds none of those credentials today, so there
+is nothing an agent could run a step with. When Motir has a place to keep them,
+Motir AI is the runner, and its run control goes beside `executor` as §2 always
+intended.
+
+**Until then**, an agent row renders as the agent's with **no run control**, and
+the person works the list. For a project Motir does not host, the `motir guide`
+protocol and skill (MOTIR-6708) walk them through it one step at a time, telling
+them which command to run.
 
 ### What changed
 
-**Change: less requirement.** The approved plan held MOTIR-3809, _Dispatch ONE
-to-do to a hosted agent_. It owned a Run control on the to-do row and wrote the
-run's outcome back onto the row. Yue cancelled it on 2026-09-28, and the
-cancellation is quoted in MOTIR-3809's comment. Nothing replaces it inside the
-hosted-agent epic.
+**Change: a different runner.** The approved plan held MOTIR-3809, _Dispatch ONE
+to-do to a hosted agent_. It owned a Run control on the to-do row that handed
+the step to a hosted run, and wrote the run's outcome back onto the row. Yue
+cancelled it on 2026-09-28, and the cancellation is quoted in MOTIR-3809's
+comment. Nothing replaces it inside the hosted-agent epic. The agent to-do
+itself survives. Only its runner changes, from the hosted agent to Motir AI, and
+that runner waits on a secret store that is not planned yet.
 
 ### Supersedes
 
@@ -552,35 +567,37 @@ The hosted-agent epic runs a **card** from the browser:
 - new repositories started from real starters (9.3);
 - proven by dogfood (9.4).
 
-It never runs a single to-do step. A to-do list belongs only on manual work in
-a project Motir does not host, and the product's answer there is guidance, not
-execution.
+It never runs a single to-do step. An agent to-do waits for Motir AI and a
+secret store. Everything else on a to-do list is a person's to do, with Motir
+guiding them.
 
 ### Lines of this record corrected in place
 
-Each of these used to name MOTIR-3809 as pending work:
+Each of these used to name MOTIR-3809, the hosted agent, as the thing that would
+run a to-do:
 
-| Where                                   | Was                                                         | Now                                   |
-| --------------------------------------- | ----------------------------------------------------------- | ------------------------------------- |
-| header, _Consumed by_                   | MOTIR-3809 _hands ONE row to a hosted run_                  | no hosted run ever takes a row        |
-| header, _Supersedes_                    | none                                                        | MOTIR-3809, cancelled                 |
-| §2, the promise                         | `coding_agent` _months before_ MOTIR-3809 can hand one over | no hosted run will ever be handed one |
-| §2, _Rejected: rendering … DISABLED_    | _no run control yet, and MOTIR-3809 adds one_               | no run control, permanently           |
-| §5, the consumers of a parsed command   | listed _MOTIR-3809's dispatch_                              | dropped                               |
-| _Consequences_, the 3809 / 1344 heading | MOTIR-3809 _adds a run control beside `executor`_           | no run control is ever added          |
-| _What this record does NOT decide_      | _How a to-do is DISPATCHED — MOTIR-3809_                    | **Decided: never**                    |
+| Where                                 | Was                                                         | Now                                                       |
+| ------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------- |
+| header, _Consumed by_                 | MOTIR-3809 _hands ONE row to a hosted run_                  | the hosted agent never takes a row; a later Motir AI may  |
+| header, _Supersedes_                  | none                                                        | MOTIR-3809, cancelled                                     |
+| §2, the promise                       | `coding_agent` _months before_ MOTIR-3809 can hand one over | before anything can run one: not the hosted agent, ever   |
+| §2, _Rejected: rendering … DISABLED_  | _no run control yet, and MOTIR-3809 adds one_               | no run control yet; when one comes it is Motir AI's       |
+| §5, the consumers of a parsed command | _MOTIR-3809's dispatch_                                     | a later Motir AI runner                                   |
+| _Consequences_, the 3809 heading      | MOTIR-3809 _adds a run control beside `executor`_           | never the hosted agent; Motir AI's control goes beside it |
+| _What this record does NOT decide_    | _How a to-do is DISPATCHED — MOTIR-3809_                    | partly decided: not the hosted agent; Motir AI, later     |
 
-§2's decision is otherwise unchanged, word for word.
+§2's decision is otherwise unchanged: `executor` describes and authorizes
+nothing, and an agent row renders with no run control while nothing can run it.
 
 ### What this amendment does NOT decide
 
-- **Whether `executor` on a to-do row stays at all.** It stays, as a
-  description. Nothing here removes the column, its default, or the agent
-  glyph a row renders.
-- **How `motir guide` walks a list.** That is MOTIR-6708's protocol, and this
-  record only names it as the product's answer.
-- **Whether Motir-hosted projects are prevented from holding manual cards.**
-  This records the direction; it adds no check that refuses one.
+- **The secret store.** What it is, where it lives, and when it ships. No card
+  plans it today.
+- **How Motir AI runs a step.** Its run control, what it writes back onto the
+  row, and whether a person confirms a step before it runs. That is for the card
+  that plans the runner, once the store exists.
+- **How `motir guide` walks a list.** That is MOTIR-6708's protocol. This
+  record only names it as the help a person gets today.
 - **The other documents that still name MOTIR-3809** (`agent-authored-plans.md`,
   the to-do design notes, three test comments). They are corrected by
   MOTIR-6857, not here.
