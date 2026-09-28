@@ -631,6 +631,46 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  claim_work_item_repair: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+    },
+    required: ['key'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  close_work_item_repair: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      runId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The repair run’s id — the `runId` `claim_work_item_repair` answered. Only your own run on this work item is accepted.',
+      },
+      outcome: {
+        type: 'string',
+        enum: ['green', 'gave_up', 'halted', 'interrupted'],
+        description:
+          'How the repair ended: "green" (the checks pass), "gave_up" (you spent your attempts), "halted" (you stopped on something you could not get past) or "interrupted" (the person stopped you).',
+      },
+    },
+    required: ['key', 'runId', 'outcome'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   complete_session: {
     type: 'object',
     properties: {
@@ -2192,6 +2232,26 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['projectKey'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  touch_work_item_repair: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      runId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The repair run’s id — the `runId` `claim_work_item_repair` answered. Only your own run on this work item is accepted.',
+      },
+    },
+    required: ['key', 'runId'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },

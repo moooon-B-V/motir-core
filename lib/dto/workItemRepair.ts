@@ -200,3 +200,51 @@ export type WorkItemRepairViewDto =
       startedAt: string;
     }
   | { state: 'pointer'; failing: RepairPullRequestRefDto[]; runTargetKey: string };
+
+/**
+ * How an agent says its repair ENDED (Story MOTIR-6804 · MOTIR-6807) — the
+ * `outcome` of `close_work_item_repair`. A closed vocabulary mapped onto the run's
+ * own stop reasons exactly as the CLI's `CI_WATCH_STOP_REASON` maps a watch
+ * result (`packages/cli/src/commands/dispatch.ts`), so a repair closed over the
+ * MCP reads on the item page exactly as a `motir fix` one does.
+ *
+ * - `green` — the checks passed; the run succeeded (`completed`).
+ * - `gave_up` — the agent spent its attempts; the page reads *gave up* (`halted`).
+ * - `halted` — it stopped for any other reason it could not get past (`halted`).
+ * - `interrupted` — the person stopped it (`interrupted`, a cancelled run).
+ */
+export const REPAIR_CLOSE_OUTCOMES = ['green', 'gave_up', 'halted', 'interrupted'] as const;
+export type RepairCloseOutcome = (typeof REPAIR_CLOSE_OUTCOMES)[number];
+
+/**
+ * A repair run's LIVENESS as the agent holding it reads it — what
+ * `touch_work_item_repair` and `close_work_item_repair` answer (MOTIR-6807).
+ *
+ * `open: false` is the signal to STOP: the run was closed — by the agent itself,
+ * by the lapsed-heartbeat reap, or by anyone else — and the card no longer reads
+ * *being fixed*, so a second fixer may already be on it.
+ */
+export interface WorkItemRepairRunDto {
+  key: string;
+  runId: string;
+  open: boolean;
+  /** The run's status — `running` while open. */
+  status: 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out';
+  /** Why it ended; null while open. `abandoned` is the reap's. */
+  stopReason:
+    | 'drained'
+    | 'completed'
+    | 'max'
+    | 'halted'
+    | 'interrupted'
+    | 'replanned'
+    | 'gated'
+    | 'abandoned'
+    | null;
+  /** ISO-8601. */
+  startedAt: string;
+  /** ISO-8601; null while open. */
+  endedAt: string | null;
+  /** ISO-8601; the last `touch_work_item_repair` (or the claim's own first beat). */
+  lastHeartbeatAt: string | null;
+}

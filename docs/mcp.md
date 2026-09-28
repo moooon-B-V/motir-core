@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **75 tools**.
+`initialize` handshake and registers **78 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1515,6 +1515,109 @@ steps:
 it now stands and the list's progress, read in the same transaction as the tick.
 A `todoId` that is not a step of **that** card — another card's step, or no step
 at all — is `WORK_ITEM_TODO_NOT_FOUND`, and nothing changes.
+
+#### Repairing a red card — `claim_work_item_repair` · `touch_work_item_repair` · `close_work_item_repair`
+
+A card whose run has ended can be left with a **red pull request** — failing
+checks, a merge-queue ejection, a conflict — and the agent that opened it has
+gone. `motir fix <key>` hands that pull request to ONE fixing agent through the
+**repair claim** (`POST /api/v1/work-items/{key}/repair`, Story MOTIR-5460).
+These three tools are the same claim for an agent working from its own chat
+(Story MOTIR-6804): it takes the lock, keeps it while it works, and hands it back
+with how the repair ended.
+
+**The REST route and `motir fix` share ONE lock with these tools.** The lock is
+an open dispatch run of command `fix` on the card; whichever door claims first
+holds it, and a claim through the other door is answered `taken`, naming the
+holder. The card's status and assignee are never written — the item page reads
+it as _being fixed_ by the token's owner, and green checks move it on their own.
+
+| Tool                     | Permission       | What it does                                                  |
+| ------------------------ | ---------------- | ------------------------------------------------------------- |
+| `claim_work_item_repair` | `work_item:edit` | Take the repair lock, and be handed the pull requests to fix. |
+| `touch_work_item_repair` | `work_item:edit` | Keep your repair alive; learn if it was closed under you.     |
+| `close_work_item_repair` | `work_item:edit` | End your repair with its outcome, releasing the lock.         |
+
+**The order is claim → touch → close.** Call `touch_work_item_repair` **at least
+every two minutes** while you work. A repair run is recorded as `origin: local` —
+a person's own agent on their own machine — so the run-liveness rule applies to
+it exactly as to the CLI's (`lib/runs/runLiveness.ts`): **a run silent for five
+minutes is dead**, the card stops reading _being fixed_, and the liveness sweep
+closes it (`stopReason: abandoned`). The claim itself counts as the first beat.
+When a touch answers **`open: false`**, the lock is gone — by your own close, the
+sweep, or anyone else — so **stop pushing**: a second fixer may already be on the
+card. Claim again if you still need to work on it.
+
+All three need permission to **edit the card**, the key the REST repair route
+asserts; the claim also runs the CI-credit gate before it opens anything. Without
+`work_item:edit` the claim is refused by name and no run opens. A card the token
+cannot see, including one in another workspace, is `WORK_ITEM_NOT_FOUND`.
+
+**Deliberately absent:** the run's per-attempt events (`ci_watch_*`,
+`card_settled`) the CLI appends. An agent holding a repair needs the lock, its
+liveness and its outcome.
+
+##### `claim_work_item_repair`
+
+| Input | Type   | Required | Notes                 |
+| ----- | ------ | -------- | --------------------- |
+| `key` | string | yes      | Work item identifier. |
+
+**Output** — `structuredContent`: **exactly** what the REST route answers — the
+`WorkItemRepairClaim` resource, through the same presenter: `{ key, title,
+outcome, reason, runTargetKey, runId, holder, startedAt, repairClass,
+acceptanceRefusal, pullRequests }`. Each pull request is `{ repo, number, url,
+headRef, baseRef, ci, failingChecks, queueExit }`; fix it on **its own** branch
+(`headRef`).
+
+| `outcome`        | Meaning                                                                                   |
+| ---------------- | ----------------------------------------------------------------------------------------- |
+| `claimed`        | The repair is yours: `runId` is your run, `pullRequests` what to fix.                     |
+| `mine`           | You already hold it (the same `runId`) — a resume, not a lost race.                       |
+| `taken`          | Somebody else is fixing it: `holder` and `startedAt` name them. Do not push.              |
+| `not_repairable` | Nothing to repair; `reason` says why. With `repair_on_run_target`, repair `runTargetKey`. |
+
+`reason` is one of `not_implemented`, `repair_on_run_target`, `no_pull_requests`,
+`ci_running`, `not_failing`, `repair_not_code` — the REST route's refusals, in its
+order. **A refusal is a result, not an error**, and changes nothing on the card.
+`repairClass` is `ci`, or `acceptance_rerun` when the story's acceptance video was
+sent back with **Re-run** (then `acceptanceRefusal` carries the reviewer's reason).
+
+##### `touch_work_item_repair`
+
+| Input   | Type   | Required | Notes                                          |
+| ------- | ------ | -------- | ---------------------------------------------- |
+| `key`   | string | yes      | Work item identifier.                          |
+| `runId` | string | yes      | The `runId` `claim_work_item_repair` answered. |
+
+**Output** — `structuredContent`: `{ key, runId, open, status, stopReason,
+startedAt, endedAt, lastHeartbeatAt }`. `open: true` means the run is alive and
+`lastHeartbeatAt` has moved to now; `open: false` carries how it ended
+(`status`, `stopReason`) and was written by nothing — a touch never re-opens a
+run. It writes no status and no event.
+
+##### `close_work_item_repair`
+
+| Input     | Type   | Required | Notes                                          |
+| --------- | ------ | -------- | ---------------------------------------------- |
+| `key`     | string | yes      | Work item identifier.                          |
+| `runId`   | string | yes      | The `runId` `claim_work_item_repair` answered. |
+| `outcome` | enum   | yes      | `green`, `gave_up`, `halted` or `interrupted`. |
+
+`outcome` maps onto the run's stop reason as the CLI maps its own watch results:
+`green` → `completed` (the run succeeded), `gave_up` and `halted` → `halted` (a
+failed run, which the item page shows as _gave up_), `interrupted` →
+`interrupted` (cancelled). **Output** — the same shape as the touch, now
+`open: false`. **Idempotent:** closing a run that is already closed returns it
+as it stands and changes nothing, so a retry after a timeout is safe. A new claim
+is admitted once it is closed.
+
+Touch and close accept only **your own** repair run of **that** card:
+
+| Code                   | Meaning                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| `REPAIR_RUN_NOT_FOUND` | `runId` is not a repair run of this card (or not in your workspace). Claim it. |
+| `REPAIR_RUN_NOT_YOURS` | The card's repair run, opened by somebody else. Nothing was written.           |
 
 #### `add_lesson`
 

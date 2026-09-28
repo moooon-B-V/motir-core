@@ -311,6 +311,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         list_work_item_todos: { key: item1 },
         add_work_item_todo: { key: item1, text: 'leak?' },
         set_work_item_todo_done: { key: item1, todoId: 'tdo_whatever', done: true },
+        // MOTIR-6807 — the repair tools are item-keyed too: a non-member reads
+        // A's card as not-found, so no run opens, beats or closes.
+        claim_work_item_repair: { key: item1 },
+        touch_work_item_repair: { key: item1, runId: 'run_whatever' },
+        close_work_item_repair: { key: item1, runId: 'run_whatever', outcome: 'gave_up' },
         // MOTIR-3361 — aimed at tenant A's PROJECT: a non-member must read the
         // key as not-found rather than write a standing planner instruction
         // into somebody else's project.
@@ -843,6 +848,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         list_work_item_todos: { key: item1 },
         add_work_item_todo: { key: item1, text: 'scoped step' },
         set_work_item_todo_done: { key: item1, todoId: 'tdo_scoped', done: true },
+        // MOTIR-6807 — the caller's OWN card; all three are `work_item:edit`, so
+        // the read-only-token loop asserts each is REFUSED at the gate.
+        claim_work_item_repair: { key: item1 },
+        touch_work_item_repair: { key: item1, runId: 'run_scoped' },
+        close_work_item_repair: { key: item1, runId: 'run_scoped', outcome: 'gave_up' },
         // MOTIR-3361 — the caller's OWN project. A write-scoped tool, so the
         // read-only-token loop asserts it is REFUSED at the scope gate rather
         // than reaching motir-ai.

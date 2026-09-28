@@ -115,6 +115,13 @@ const WORK_LOOP_MIRRORS = {
   // service method rather than a second implementation — so this pairing is the
   // strongest kind: not two things kept in step, but one thing seen twice.
   claimWorkItem: 'claim_work_item',
+  // MOTIR-6807 — the REPAIR claim and its run's liveness and close, given an
+  // agent door so a published skill can repair a red card without the CLI. Each
+  // tool is a second CALLER of the one service method the route calls
+  // (`claimRepair`, `heartbeat`, `close`), exactly as `claim_work_item` is.
+  claimWorkItemRepair: 'claim_work_item_repair',
+  heartbeatDispatchRun: 'touch_work_item_repair',
+  closeDispatchRun: 'close_work_item_repair',
 } as const;
 
 /**
@@ -130,11 +137,6 @@ const WORK_LOOP_MIRRORS = {
  * `TOOL_PERMISSIONS` all the same.
  */
 const WORK_LOOP_UNMIRRORED: Record<string, string> = {
-  claimWorkItemRepair:
-    'MOTIR-5464 — the REPAIR claim serves `motir fix <key>`, a CLI command, and `packages/cli` ' +
-    'speaks /api/v1 only since 11.5.6, so a mirrored tool would be a second implementation with ' +
-    'no caller. The card that specifies it says it adds no MCP tool. It takes `claim_work_item`’s ' +
-    'permission (`work_item:edit`) — it opens a dispatch run, a write — and writes no status.',
   claimScope:
     'MOTIR-3049 — the SCOPE claim serves `motir run <story-id>` / `motir run sprint`, and ' +
     '`packages/cli` retired its MCP transport in 11.5.6, so a mirrored tool would be a second ' +
@@ -209,19 +211,11 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     'record through `publish_test_instructions` and gets its receipt back from that tool; it has ' +
     'no use for reading it again. `project:browse`, the key `howToTestService` asserts.',
   claimWorkItemContinue:
-    'MOTIR-6532 — the CONTINUE claim serves `motir continue <key>`, a CLI command, exactly as the ' +
-    'repair claim serves `motir fix`; a mirrored tool would be a second implementation with no ' +
-    'caller, and the card adds no MCP tool. `work_item:edit` — it opens a dispatch run and ' +
+    'MOTIR-6532 — the CONTINUE claim serves `motir continue <key>`, a CLI command; a mirrored ' +
+    'tool would be a second implementation with no caller, and the card adds no MCP tool (the ' +
+    'repair claim got its agent door from MOTIR-6807, for a published skill; nothing asks that ' +
+    'of a continue). `work_item:edit` — it opens a dispatch run and ' +
     're-assigns the card, a write — and it writes no status.',
-  heartbeatDispatchRun:
-    'MOTIR-6528 — the HEARTBEAT is the CLI reporter’s own liveness signal, sent by the process ' +
-    'that holds the run; an agent never beats for a run, so a tool would have no caller. ' +
-    '`work_item:edit`, mirroring the rest of the ingest.',
-  closeDispatchRun:
-    'MOTIR-1789 · MOTIR-1792 — the same argument again, plus a mechanical one: the close is ' +
-    'guarded by a row lock it shares with the server’s own abandoned-run reap, and a second ' +
-    'transport into that guard is a second place for the lock discipline to drift. ' +
-    '`work_item:edit`, mirroring the rest of the ingest.',
 };
 
 /**
@@ -271,7 +265,9 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // three newest are deliberately out of the AGENT's reach because the agent
     // is the subject of a run rather than its reporter. Each still argues its
     // case in `WORK_LOOP_UNMIRRORED` and each still mirrors a real permission.
-    expect(Object.keys(MIRRORS)).toHaveLength(11);
+    // 14 since MOTIR-6807 paired the repair claim, the heartbeat and the close
+    // with the agent-facing repair tools.
+    expect(Object.keys(MIRRORS)).toHaveLength(14);
     // 18 since MOTIR-4085 added the plan READ beside the approval — the SEVENTH
     // operation with no MCP counterpart, and the first whose reason is that an
     // agent has no USE for it rather than that it must be kept away from one.

@@ -263,3 +263,41 @@ export class ContinueFromInvalidError extends Error {
     this.name = 'ContinueFromInvalidError';
   }
 }
+
+/**
+ * The REPAIR RUN an MCP caller named is not one it may keep alive or close
+ * (Story MOTIR-6804 · MOTIR-6807): `touch_work_item_repair` and
+ * `close_work_item_repair` act only on an open-or-closed `fix` run of THAT card,
+ * opened by the CALLER. MCP only — the tools are the one door that addresses a
+ * run by card as well as by id — so, like `RunFoundReportReasonInvalidError`,
+ * it has no row in `DOMAIN_ERROR_STATUS`.
+ *
+ * Two reasons, told apart because the caller's next move differs:
+ *
+ * - `not_found` — no such run, a run in another workspace, or a run that is not
+ *   a `fix` run holding this card. Nothing to act on: claim the repair first.
+ * - `not_yours` — the card's repair run, opened by somebody else. The claim is
+ *   what names them; this refusal writes nothing and keeps nothing alive.
+ *
+ * Naming the second is no existence leak: a caller who can reach these tools
+ * holds `work_item:edit` on the project, and `claim_work_item_repair` already
+ * answers `taken` with the holder and the run id.
+ */
+export class RepairRunRefusedError extends Error {
+  readonly code: 'REPAIR_RUN_NOT_FOUND' | 'REPAIR_RUN_NOT_YOURS';
+  constructor(
+    runId: string,
+    workItemKey: string,
+    readonly why: 'not_found' | 'not_yours',
+  ) {
+    super(
+      why === 'not_yours'
+        ? `Run ${runId} is the repair of ${workItemKey}, but somebody else opened it. Only the ` +
+            'person who claimed a repair may keep it alive or close it; nothing was written.'
+        : `Run ${runId} is not a repair run of ${workItemKey}. Claim the repair with ` +
+            '`claim_work_item_repair` and use the `runId` it answers; nothing was written.',
+    );
+    this.code = why === 'not_yours' ? 'REPAIR_RUN_NOT_YOURS' : 'REPAIR_RUN_NOT_FOUND';
+    this.name = 'RepairRunRefusedError';
+  }
+}
