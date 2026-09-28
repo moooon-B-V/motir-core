@@ -1097,7 +1097,7 @@ export const approvalGatesService = {
           kind,
           gateId: move.gateId,
           canDecide,
-          routedToLabel: routedToDisplayName(routedTo),
+          routedToLabel: routedLabelFor(ctx, routedTo),
         });
       }
       return out;
@@ -1240,7 +1240,7 @@ export const approvalGatesService = {
         // not while the merge is what the move waits for, and not while the pull
         // request is open but no gate has been raised yet.
         canDecide: err.waitingOn === 'decision' && err.gateId !== null && canDecide,
-        routedToLabel: routedToDisplayName(routedTo),
+        routedToLabel: routedLabelFor(ctx, routedTo),
       };
     });
   },
