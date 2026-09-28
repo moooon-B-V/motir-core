@@ -63,6 +63,28 @@ function propertyName(node: ts.Node): string | null {
   return null;
 }
 
+/**
+ * An HTTP call whose options also take a `data` key — Playwright's
+ * `page.request.patch(url, { data })`. That `data` is a REQUEST BODY sent to the
+ * product (the legacy `{ accessLevel }` arm is a legitimate thing to send it), not
+ * a row written to the database, so it is never this guard's business.
+ */
+const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'fetch']);
+
+function isHttpCallArgument(object: ts.Node): boolean {
+  const call = object.parent;
+  if (!call || !ts.isCallExpression(call) || !call.arguments.includes(object as ts.Expression)) {
+    return false;
+  }
+  const callee = call.expression;
+  const name = ts.isPropertyAccessExpression(callee)
+    ? callee.name.text
+    : ts.isIdentifier(callee)
+      ? callee.text
+      : null;
+  return name !== null && HTTP_METHODS.has(name);
+}
+
 /** True when `node` sits inside a `data` / `create` / `update` payload of the same expression. */
 function insideWritePayload(node: ts.Node): boolean {
   for (let p = node.parent; p; p = p.parent) {
@@ -70,7 +92,7 @@ function insideWritePayload(node: ts.Node): boolean {
     // not, by construction, the payload of a write outside it.
     if (ts.isFunctionLike(p) || ts.isBlock(p) || ts.isSourceFile(p)) return false;
     const name = propertyName(p);
-    if (name !== null && WRITE_KEYS.has(name)) return true;
+    if (name !== null && WRITE_KEYS.has(name)) return !isHttpCallArgument(p.parent);
   }
   return false;
 }
@@ -183,6 +205,10 @@ describe('the access fixture guard — no test writes `accessLevel` directly', (
       ['a type annotation', `async function seed(accessLevel: 'public' | 'open') {}`],
       ['a read', `expect(row.accessLevel).toBe('open');`],
       ['a raw SELECT', 'await tx.$queryRaw`SELECT "accessLevel" FROM "project"`;'],
+      [
+        'an HTTP request body (the legacy arm, sent to the product)',
+        "await page.request.patch(`/api/projects/${KEY}/access`, { data: { accessLevel: 'limited' } });",
+      ],
       [
         'a raw INSERT writing the mode beside the level',
         'await tx.$executeRaw`INSERT INTO "project" ("id", "access_mode", "accessLevel") VALUES (1, \'public\', \'public\')`;',

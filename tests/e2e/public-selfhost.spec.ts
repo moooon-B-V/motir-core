@@ -3,7 +3,6 @@ import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import { adminDb } from '../helpers/adminDb';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // Story MOTIR-3908 · Subtask MOTIR-4038 — the SELF-HOST arm of the
 // public-projects gate, in a real browser.
@@ -90,7 +89,7 @@ test('@smoke self-host: the public-projects capability is absent, not hidden', a
   // Defence in depth is the card's own framing, so the bypass is the assertion:
   // a stale client, a script, or a request replayed from a cloud build.
   const refused = await page.request.patch(`/api/projects/${PROJECT_KEY}/access`, {
-    data: projectAccessData('public'),
+    data: { accessMode: 'public' },
   });
   expect(refused.status(), 'a refusal, not a 500 and not a success').toBe(400);
   expect((await refused.json()).code).toBe('PUBLIC_ACCESS_UNAVAILABLE');
@@ -98,13 +97,13 @@ test('@smoke self-host: the public-projects capability is absent, not hidden', a
   // …and the project did not move. Read back through the product, not the DB:
   // what matters is what the next reader sees.
   const stillNotPublic = await adminDb.project.findFirst({ where: { identifier: PROJECT_KEY } });
-  expect(stillNotPublic?.accessLevel).not.toBe('public');
+  expect(stillNotPublic?.accessMode).not.toBe('public');
   expect(stillNotPublic?.madePublicAt).toBeNull();
 
   // The levels a self-hosted team DOES use are untouched — the gate is one level
   // wide, and a walled single-tenant product would be the wrong fix.
   const allowed = await page.request.patch(`/api/projects/${PROJECT_KEY}/access`, {
-    data: projectAccessData('members'),
+    data: { accessMode: 'members' },
   });
   expect(allowed.status(), 'open / limited / private are unaffected').toBe(200);
 
