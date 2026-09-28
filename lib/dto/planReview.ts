@@ -67,6 +67,23 @@ export const PLAN_ITEM_CHANGE_FIELDS = [
   'description',
   'explanation',
   'links',
+  /** The OBSOLESCENCE mark a `modify` sets, changes or clears (Story MOTIR-6577 ·
+   *  MOTIR-6632, design Part XXIV §24.3) — emitted directly after `links`. Both
+   *  sides are the WIRE words `current` · `outdated` · `deprecated`, never null:
+   *  "no mark" IS a value, so a set reads `Current → Outdated` and a clear
+   *  `Deprecated → Current`. The FROM side is read off the live target. */
+  'obsolescence',
+  /** The mark's NOTE — `to` carries the WHOLE note (or null for a clear); each
+   *  surface takes the first line or clamps it. The old note is never quoted, so
+   *  `from` is always null (§24.6). */
+  'obsolescenceNote',
+  /** The `supersedes` edges a `modify` adds / removes with its target as the NEWER
+   *  card (`patch.supersedesAdd` / `supersedesRemove`, MOTIR-6630) — the chips ride
+   *  {@link PlanItemChangeDto.refs}; `to` is the same set as plain words. */
+  'supersedes',
+  /** …and with its target as the OLDER card (`patch.supersededByAdd` /
+   *  `supersededByRemove`). */
+  'supersededBy',
   /** Where the target SITS — a `modify`'s `patch.parentRef` (MOTIR-3859). The
    *  approver has to SEE a re-parent: it is the most structural thing a plan can
    *  say about a card, and the whole reason the move was routed through the
@@ -94,6 +111,33 @@ export const PLAN_ITEM_CHANGE_FIELDS = [
 export type PlanItemChangeField = (typeof PLAN_ITEM_CHANGE_FIELDS)[number];
 
 /**
+ * The MARK GROUP of change rows (Story MOTIR-6577 · MOTIR-6632, design Part XXIV
+ * §24.4 / §24.12) — the rows the six `PLAN_ITEM_MARK_PATCH_KEYS` produce. A `modify`
+ * whose every row is in this group is the one `modify` a FINISHED card accepts
+ * (MOTIR-6629's mark-only carve-out), so the canvas does not draw it locked; and
+ * the peek's rail reads exactly these rows off {@link PlanProposalPeekDto.markChanges}.
+ */
+export const PLAN_ITEM_MARK_CHANGE_FIELDS = [
+  'obsolescence',
+  'obsolescenceNote',
+  'supersedes',
+  'supersededBy',
+] as const satisfies readonly PlanItemChangeField[];
+
+export type PlanItemMarkChangeField = (typeof PLAN_ITEM_MARK_CHANGE_FIELDS)[number];
+
+/** Is `field` one of the {@link PLAN_ITEM_MARK_CHANGE_FIELDS}? */
+export function isMarkChangeField(field: string): field is PlanItemMarkChangeField {
+  return (PLAN_ITEM_MARK_CHANGE_FIELDS as readonly string[]).includes(field);
+}
+
+/**
+ * The wire word for "this card carries no mark" on an `obsolescence` change row
+ * (Part XXIV §24.3). Rendered as `planReview.obsolescenceCurrent`.
+ */
+export const OBSOLESCENCE_CURRENT = 'current' as const;
+
+/**
  * EVERY `PlanItemPatch` key, mapped to the rail row it moves — or `null` when it
  * moves something that is not a rail row (MOTIR-4183, design Part XIV §3).
  *
@@ -112,8 +156,19 @@ export type PlanItemChangeField = (typeof PLAN_ITEM_CHANGE_FIELDS)[number];
  * COLUMN. A line at the foot of the RAIL that counted them would answer about
  * fields the reader cannot see from where it sits (Part XIV §3).
  * `blockedByAdd` / `blockedByRemove` are edges: the canvas draws them (Part IX).
+ *
+ * **The mark keys ARE rail rows** (Story MOTIR-6577 · MOTIR-6632, Part XXIV
+ * §24.10): the mark and its note sit under Status, the two supersedes rows last.
+ * Unlike `blockedByAdd`, the supersedes edges are NOT drawn on the canvas (no
+ * canvas edge, §24.7), so they are shown as rows of their own — the four lists
+ * collapse onto two rows, which is why the row set de-duplicates to ELEVEN.
+ *
+ * Exported for the story gate's CONTRACT GUARD (Story MOTIR-6577 · MOTIR-6633,
+ * `tests/integration/plans/planMarkStoryGate.test.ts`), which holds its keys to
+ * `PLAN_ITEM_PATCH_KEYS` and the MCP `patchSchema` at runtime, and its mark keys'
+ * rows to {@link PLAN_ITEM_MARK_CHANGE_FIELDS}. Read it; never write it.
  */
-const PATCH_KEY_RAIL_ROW = {
+export const PATCH_KEY_RAIL_ROW = {
   title: null,
   descriptionMd: null,
   explanationMd: null,
@@ -139,6 +194,17 @@ const PATCH_KEY_RAIL_ROW = {
   // mutually exclusive with the four above at the append.
   targetRepositoryRef: 'targetRepo',
   parentRef: 'parent',
+  // The OBSOLESCENCE mark and its note (MOTIR-6629 carries them onto a `modify`,
+  // MOTIR-6632 renders them — Part XXIV §24.10): the Mark and Note rail rows,
+  // directly under Status.
+  obsolescence: 'obsolescence',
+  obsolescenceNoteMd: 'obsolescenceNote',
+  // The four `supersedes` edge lists (MOTIR-6630) — two rows, one per DIRECTION:
+  // an Add and its Remove move the same row (§24.10).
+  supersedesAdd: 'supersedes',
+  supersedesRemove: 'supersedes',
+  supersededByAdd: 'supersededBy',
+  supersededByRemove: 'supersededBy',
 } satisfies Record<keyof PlanItemPatch, PlanItemChangeField | null>;
 
 /**
@@ -246,6 +312,44 @@ export interface PlanProposalPeekDto {
    * before this field existed means.
    */
   removeReason?: string | null;
+  /**
+   * A `modify`'s MARK-GROUP change rows (Story MOTIR-6577 · MOTIR-6632, Part XXIV
+   * §24.10 / §24.12) — the SAME objects as the item's `changes` rows whose field is
+   * in {@link PLAN_ITEM_MARK_CHANGE_FIELDS}, filtered from the one array, never a
+   * second derivation. The peek's rail draws a Mark / Note / Supersedes /
+   * Superseded-by row for each. Absent or empty ⇒ no rows (an `add`, a `remove`, a
+   * `modify` that touches no mark key, an envelope from an older server).
+   */
+  markChanges?: PlanItemChangeDto[];
+  /**
+   * An `add`'s `supersedesRefs`, resolved to chips (MOTIR-6632, §24.8) — the SAME
+   * array as {@link PlanReviewItemDto.supersedesRefs}. The rail's last row. Absent
+   * or empty ⇒ no row.
+   */
+  supersedesRefs?: PlanRefChipDto[];
+}
+
+/**
+ * ONE card a supersedes edge names, resolved ON THE SERVER for the chip that draws
+ * it (Story MOTIR-6577 · MOTIR-6632, design Part XXIV §24.7 / §24.12) — so the
+ * client renders what it is handed and never re-derives which refs are proposals.
+ */
+export interface PlanRefChipDto {
+  /** The card's key — `null` for an un-materialized `add` of this plan, which has
+   *  none (its chip reads `New` in the key slot). After approve it is the CREATED
+   *  key. For a ref no read could resolve, the raw ref, so the chip degrades to
+   *  something checkable rather than to nothing. */
+  identifier: string | null;
+  /** The card's title — for a proposal, the title the proposal asks for. */
+  title: string;
+  /** The work-item kind, for the type icon. */
+  kind: string;
+  /** A proposal of THIS plan that approve has not created yet — drawn in the
+   *  proposed treatment (dashed accent frame, `New`). */
+  proposed: boolean;
+  /** The PlanItem id when the ref names a proposal of this plan — what opens that
+   *  proposal's peek. Absent for a committed card. */
+  planItemId?: string;
 }
 
 /** One field's OLD → NEW change in a `modify` proposal (the diff overlay). */
@@ -270,6 +374,13 @@ export interface PlanItemChangeDto {
    * (`design/ai-planning/design-notes.md` Part XVII §17.8).
    */
   placement?: { from: PlanPlacementSideDto; to: PlanPlacementSideDto };
+  /**
+   * The cards a `supersedes` / `supersededBy` row adds and removes, as resolved
+   * chips (Story MOTIR-6577 · MOTIR-6632, Part XXIV §24.7) — present on those two
+   * rows only. `to` stays the same set as plain words, so an older client keeps
+   * rendering.
+   */
+  refs?: { added: PlanRefChipDto[]; removed: PlanRefChipDto[] };
 }
 
 /**
@@ -785,6 +896,15 @@ export interface PlanReviewItemDto {
    * empty row, no dash, no band.
    */
   removeReason: string | null;
+  /**
+   * The older cards an `add` SUPERSEDES — its `supersedesRefs` (MOTIR-6630),
+   * resolved to chips (Story MOTIR-6577 · MOTIR-6632, Part XXIV §24.8). `[]` on a
+   * `modify` / `remove` (a `modify` carries its edges on the patch, drawn as
+   * change rows) and on an `add` with none, and `[]` draws NOTHING — no row, no
+   * `Supersedes 0`. OPTIONAL on the type only so hand-built review fixtures stay
+   * valid; `getPlanReview` always sets it.
+   */
+  supersedesRefs?: PlanRefChipDto[];
 }
 
 /**

@@ -6677,6 +6677,12 @@ model PlanItem {
   /// `add` / edge changes: blocked-by refs, each a real workItemId or an
   /// intra-plan temp-ref, resolved at materialize.
   blockedByRefs  String[]   @map("blocked_by_refs")
+  /// `add` only: the OLDER work items the created card SUPERSEDES (Story
+  /// MOTIR-6577 · MOTIR-6630), each a real workItemId or an intra-plan temp-ref,
+  /// resolved at materialize and written as one `supersedes` link each (from =
+  /// the created card, to = the ref). Structural like `blockedByRefs`, so a
+  /// column and never a `proposedFields` key.
+  supersedesRefs String[]   @default([]) @map("supersedes_refs")
   /// `modify`/`remove`: the target's revision the change was computed against
   /// (the optimistic-concurrency anchor for the conflict check, 7.21.3).
   baseRevision   String?    @map("base_revision")

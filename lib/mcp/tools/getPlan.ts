@@ -10,6 +10,7 @@ import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { derived } from '../payloads/define';
 import { planPayload, presentMcpPlan } from '../payloads/workLoop';
+import { firstLine } from '../obsolescence';
 import { GET_PLAN_STATUS_TOOL_NAME } from './expandItem';
 
 // `get_plan` (Story 7.9 · MOTIR-1837) — the plan read that returns WHAT was
@@ -130,8 +131,65 @@ export interface ProposalPlacement {
 
 export type PlacementByPlanItemId = ReadonlyMap<string, ProposalPlacement>;
 
+/**
+ * The KEYS and current marks a proposed MARK is rendered with (Story MOTIR-6577 ·
+ * MOTIR-6631) — `planReviewService.resolveProposalMarkRefs`, keyed by work-item
+ * id. Absent for a caller that could not read them; a ref it does not name is
+ * then printed verbatim, exactly as `blocked_by` prints its refs.
+ */
+export interface ProposalMarkRefs {
+  keyById: ReadonlyMap<string, string>;
+  markById: ReadonlyMap<string, string | null>;
+}
+
+/** A ref as the reader's word for it: its KEY when one resolved, else verbatim. */
+function refLabel(ref: string, marks?: ProposalMarkRefs): string {
+  return marks?.keyById.get(ref) ?? ref;
+}
+
+/** ` · supersedes K1, K2` — the older cards an `add` replaces. */
+function addSupersedes(refs: readonly string[] | undefined, marks?: ProposalMarkRefs): string {
+  return refs && refs.length > 0
+    ? ` · supersedes ${refs.map((r) => refLabel(r, marks)).join(', ')}`
+    : '';
+}
+
+/**
+ * A `modify`'s MARK, as the reviewer reads it: `mark: none → outdated` (the old
+ * side from the target's live row, `?` when it could not be read), the note's
+ * first line, and the supersedes deltas by key — `supersedes +K1 −K2` for the
+ * edges the target gains or loses as the NEWER card, `superseded by +K3` for the
+ * ones where it is the OLD card. Empty when the patch carries none of the six.
+ */
+function modifyMark(item: PlanItemDto, marks?: ProposalMarkRefs): string {
+  const patch = item.patch ?? {};
+  const parts: string[] = [];
+  if (patch.obsolescence !== undefined) {
+    const known = item.workItemId != null && marks?.markById.has(item.workItemId);
+    const from = known ? (marks!.markById.get(item.workItemId!) ?? 'none') : '?';
+    parts.push(`mark: ${from} → ${patch.obsolescence ?? 'none'}`);
+  }
+  if (patch.obsolescenceNoteMd !== undefined) {
+    parts.push(`note: ${firstLine(patch.obsolescenceNoteMd) ?? '(cleared)'}`);
+  }
+  const delta = (added?: string[], removed?: string[]) =>
+    [
+      ...(added ?? []).map((r) => `+${refLabel(r, marks)}`),
+      ...(removed ?? []).map((r) => `−${refLabel(r, marks)}`),
+    ].join(' ');
+  const supersedes = delta(patch.supersedesAdd, patch.supersedesRemove);
+  if (supersedes) parts.push(`supersedes ${supersedes}`);
+  const supersededBy = delta(patch.supersededByAdd, patch.supersededByRemove);
+  if (supersededBy) parts.push(`superseded by ${supersededBy}`);
+  return parts.length > 0 ? ` · ${parts.join(' · ')}` : '';
+}
+
 /** One proposal as a single line — the op, what it targets, and its sizing. */
-function describeItem(item: PlanItemDto, placement?: ProposalPlacement): string {
+function describeItem(
+  item: PlanItemDto,
+  placement?: ProposalPlacement,
+  marks?: ProposalMarkRefs,
+): string {
   const marker = OP_MARKER[item.op];
   if (item.op === 'add') {
     const fields = item.proposedFields;
@@ -143,7 +201,8 @@ function describeItem(item: PlanItemDto, placement?: ProposalPlacement): string 
       sizing(fields?.storyPoints, fields?.estimateMinutes, fields?.difficulty) +
       repoPin(fields?.targetRepo) +
       steps(fields?.todos) +
-      blockers(item.blockedByRefs)
+      blockers(item.blockedByRefs) +
+      addSupersedes(item.supersedesRefs, marks)
     );
   }
   // The target by its KEY when the tree could be read (MOTIR-3191). `MOTIR-3181`
@@ -158,6 +217,7 @@ function describeItem(item: PlanItemDto, placement?: ProposalPlacement): string 
   return (
     `${marker} modify ${target}` +
     (changed.length > 0 ? ` — ${changed.join(', ')}` : '') +
+    modifyMark(item, marks) +
     blockers(item.blockedByRefs)
   );
 }
@@ -199,7 +259,11 @@ function groupHeading(trail: { identifier: string; title: string }[]): string {
  * to exactly the flat rendering it had — the same contract every other
  * tree-resolution failure on this surface takes.
  */
-function renderProposals(items: PlanItemDto[], placements?: PlacementByPlanItemId): string[] {
+function renderProposals(
+  items: PlanItemDto[],
+  placements?: PlacementByPlanItemId,
+  marks?: ProposalMarkRefs,
+): string[] {
   const byId = new Map(items.map((item) => [item.id, item]));
   const childrenOf = new Map<string, PlanItemDto[]>();
   const roots: PlanItemDto[] = [];
@@ -223,7 +287,7 @@ function renderProposals(items: PlanItemDto[], placements?: PlacementByPlanItemI
     // path.
     if (rendered.has(item.id)) return;
     rendered.add(item.id);
-    lines.push(`${'  '.repeat(depth + 1)}${describeItem(item, placements?.get(item.id))}`);
+    lines.push(`${'  '.repeat(depth + 1)}${describeItem(item, placements?.get(item.id), marks)}`);
     for (const child of childrenOf.get(item.id) ?? []) walk(child, depth + 1);
   };
 
@@ -266,7 +330,11 @@ function renderProposals(items: PlanItemDto[], placements?: PlacementByPlanItemI
 /** The human-readable block: the plan's own line, then its proposal tree.
  *  `placements` (MOTIR-3191) is what lets a proposal about an EXISTING card be
  *  drawn where that card lives; without it the tree renders flat, as it did. */
-export function summarizePlan(plan: PlanWithItemsDto, placements?: PlacementByPlanItemId): string {
+export function summarizePlan(
+  plan: PlanWithItemsDto,
+  placements?: PlacementByPlanItemId,
+  marks?: ProposalMarkRefs,
+): string {
   const lines = [
     `Plan ${plan.id} — ${plan.status}, ${plan.itemCount} proposal(s).`,
     `Project ${plan.projectId} · origin ${plan.origin}` +
@@ -285,7 +353,7 @@ export function summarizePlan(plan: PlanWithItemsDto, placements?: PlacementByPl
   } else {
     lines.push(
       'Proposals (indented under their proposed parent):',
-      ...renderProposals(plan.items, placements),
+      ...renderProposals(plan.items, placements, marks),
     );
   }
 
@@ -352,6 +420,23 @@ async function resolvePlacements(
   }
 }
 
+/**
+ * The keys and live marks a proposed MARK renders with (MOTIR-6631) —
+ * BEST-EFFORT for the reason {@link resolvePlacements} is: it enriches a line
+ * that already renders without it, so a failed read degrades to verbatim refs
+ * and a `?` old mark rather than failing the tool.
+ */
+async function resolveMarks(
+  plan: PlanWithItemsDto,
+  ctx: ServiceContext,
+): Promise<ProposalMarkRefs | undefined> {
+  try {
+    return await planReviewService.resolveProposalMarkRefs(plan, ctx);
+  } catch {
+    return undefined;
+  }
+}
+
 /** The adapter: read the plan through the service, summarize, return. */
 export async function runGetPlan(
   args: { planId: string },
@@ -364,8 +449,9 @@ export async function runGetPlan(
   // The folders the proposals NAME (MOTIR-5415), for the structured payload —
   // the same reading `/api/v1` presents beside `parentRef`.
   const folders = await planReviewService.resolveProposalFolders(plan, ctx);
+  const marks = await resolveMarks(plan, ctx);
   return toolOk(
-    summarizePlan(plan, placements),
+    summarizePlan(plan, placements, marks),
     derived(planPayload, presentMcpPlan(plan, folders)),
   );
 }
@@ -385,7 +471,13 @@ export function registerGetPlan(server: McpServer, resolveContext: McpContextRes
         'card’s ORDERED STEPS, which the one-line render summarises as `· N steps` and ' +
         '`structuredContent` carries in full), the ' +
         '`patch` of a `modify`, and the `parentRef` / `blockedByRefs` that let you rebuild the ' +
-        `proposed tree and its dependency edges. Reach for \`${GET_PLAN_STATUS_TOOL_NAME}\` ` +
+        'proposed tree and its dependency edges. A proposed OBSOLESCENCE MARK is shown too: a ' +
+        '`modify` line prints `mark: <current> → <proposed>`, the note’s first line, and its ' +
+        'supersedes edges by key — `supersedes +K1 −K2` (the target replaces / stops replacing ' +
+        'them) and `superseded by +K3` (K3 replaces the target) — and an `add` line prints ' +
+        '`supersedes K1, K2` from its `supersedesRefs`; `structuredContent` carries the patch ' +
+        'keys and `supersedesRefs` in full. ' +
+        `Reach for \`${GET_PLAN_STATUS_TOOL_NAME}\` ` +
         'instead when you only need the status of a submitted job (and whether that job died); ' +
         'reach for this one to SHOW or judge the content. A plan still generating returns the ' +
         'proposals that have arrived so far. ' +

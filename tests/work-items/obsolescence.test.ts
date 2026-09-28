@@ -5,7 +5,11 @@ import {
   isRegisteredDiffKey,
   type DisplayResolvers,
 } from '@/lib/activity/renderers';
-import { WORK_ITEM_OBSOLESCENCES, isWorkItemObsolescence } from '@/lib/issues/obsolescence';
+import {
+  WORK_ITEM_OBSOLESCENCES,
+  canCarryObsolescence,
+  isWorkItemObsolescence,
+} from '@/lib/issues/obsolescence';
 import { InvalidObsolescenceError, WorkItemError } from '@/lib/workItems/errors';
 import enMessages from '@/messages/en.json';
 import zhMessages from '@/messages/zh.json';
@@ -15,6 +19,19 @@ import zhMessages from '@/messages/zh.json';
 // The totality of `WORK_ITEM_OBSOLESCENCES` against the Prisma enum is a
 // COMPILE-time check in `lib/issues/obsolescence.ts`; this file pins the runtime
 // behaviour around it.
+
+describe('canCarryObsolescence — the ONE finished-card predicate (MOTIR-6575 · MOTIR-6663)', () => {
+  it('is true only for the `done` category', () => {
+    expect(canCarryObsolescence('done')).toBe(true);
+    expect(canCarryObsolescence('todo')).toBe(false);
+    expect(canCarryObsolescence('in_progress')).toBe(false);
+  });
+
+  it('reads an unknown category (a status the workflow does not define) as not finished', () => {
+    expect(canCarryObsolescence(null)).toBe(false);
+    expect(canCarryObsolescence(undefined)).toBe(false);
+  });
+});
 
 describe('WORK_ITEM_OBSOLESCENCES', () => {
   it('lists the scale mildest first', () => {

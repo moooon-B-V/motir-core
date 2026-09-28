@@ -3881,3 +3881,136 @@ fixtures for a card that decided a rule, not a symbol.
   MOTIR-6266.
 - **It ships no code.** §2, §4, §5 and §6 are implemented by MOTIR-6265, and this record is what
   that card builds to.
+
+---
+
+## AMENDMENT 22 — a plan MARKS a finished card: the obsolescence mark, its note and its `supersedes` edges ride the plan wire (story MOTIR-6577 · MOTIR-6629 / 6630 / 6663 / 6631, 2026-09-27)
+
+**The gap.** MOTIR-6574 gave a work item an OBSOLESCENCE mark — `outdated` (the text no longer
+describes what shipped) or `deprecated` (retired or overturned on purpose) — with a Markdown note,
+and a `supersedes` link to the card that replaced it. The plan wire carried none of it. A re-plan is
+exactly the pass that notices a card has stopped being true, and its only way to say so was a direct
+write outside the plan, which a planning pass may not make. And approve does not go through
+`workItemsService`: `applyModify` builds the update itself, so the direct door's checks never run on
+the plan path. This amendment records what the plan path decided.
+
+### §1 — the mark and its note are two `modify` patch keys
+
+`PlanItemPatch.obsolescence` and `PlanItemPatch.obsolescenceNoteMd` join `PLAN_ITEM_PATCH_KEYS`.
+Sparse like every patch key: absent leaves the value alone, an explicit `null` clears it. The note
+is independent of the mark, as on the direct door — clearing the mark keeps the note. `applyModify`
+writes both and records the same `obsolescence` / `obsolescenceNoteMd` revision cells
+`workItemsService` records, so the card's history reads the same whichever door marked it. In
+AMENDMENT 18 §2's merge both are SCALAR keys: the later value wins.
+
+A mark outside the enum is refused `INVALID_PROPOSAL` naming the field
+(`validateProposedObsolescence`), at the append and at a correction — the plan family, for the
+reason AMENDMENT 19 §3 gives for `difficulty`, not the work-item family's `INVALID_OBSOLESCENCE`.
+
+**An `add` carries no mark.** A card the plan creates is true of the code by construction; a plan
+that wants a new card marked is describing a card it should not create.
+
+### §2 — the `supersedes` edges: four patch lists and one `add` field
+
+| carrier                                | the target is the | approve writes                     |
+| -------------------------------------- | ----------------- | ---------------------------------- |
+| `patch.supersedesAdd`                  | NEWER card        | one link target → each ref         |
+| `patch.supersedesRemove`               | NEWER card        | deletes the link target → each ref |
+| `patch.supersededByAdd`                | OLDER card        | one link each ref → target         |
+| `patch.supersededByRemove`             | OLDER card        | deletes the link each ref → target |
+| `supersedesRefs` (an `add`, top level) | NEWER card        | one link created card → each ref   |
+
+`supersedesAdd` on the newer card and `supersededByAdd` on the older one are **one storage row
+spelled from its two ends**, so both in one plan land one link, and an existing row is a no-op.
+`supersedesRefs` is an `add`'s column: on a `modify` or a `remove` it is refused by name, pointing at
+the patch lists.
+
+**The refs.** Each carrier is a ref site exactly like the blocker lists (`lib/plans/refs.ts`), so the
+service stores a real work-item id or a `planItem:<id>` naming an `add` persisted by an earlier call;
+at approve, `resolveRef` turns a `planItem:` ref into the id of the card that `add` just created,
+which is how a `done` card is marked superseded by a card the same plan creates. A work-item KEY is
+resolved to its id by the DOOR that received it — the MCP tools, on all five carriers, through the
+same batched lookup the blocker carriers use — so the column never holds a key. The internal routes
+motir-ai writes through resolve no keys, for these carriers as for the blocker ones.
+
+**What is refused**, `INVALID_PLAN_REF_GRAPH`: a ref that names nothing (`dangling`), a ref listed
+twice in one carrier, a `folder:` ref, a `modify` naming its own target, and a supersedes CYCLE — A
+replaces B replaces A. **The cycle is refused in the plan path because the database will not refuse
+it:** the no-cycle trigger judges `is_blocked_by` only. So `assertSupersedesGraphAcyclic` walks the
+live supersedes links plus the plan's own, at the append and again at the close and approve.
+
+**There is no level rule.** A story may supersede a task: `supersedes` orders nothing and readiness
+never reads it. In the merge the four lists union like `blockedByAdd` / `blockedByRemove`, and a ref
+in an `…Add` list and its `…Remove` list cancels.
+
+### §3 — a plan may mark only a FINISHED card; an unfinished one is REMOVED
+
+A patch that SETS `obsolescence` (to `outdated` or `deprecated`) is legal only on a target whose
+status is in the **`done` category** — `done`, `cancelled`, or a project's own done status. The
+predicate is `canCarryObsolescence` (`lib/issues/obsolescence.ts`), defined once so that the direct
+work-item doors reuse it when MOTIR-6575 brings them under the same rule, and no two doors can then
+disagree about what counts as finished. On a to-do or in-progress target the patch
+is refused `INVALID_PROPOSAL` (422 on an HTTP door):
+
+> `<label>: a plan may mark only a finished work item; <KEY> is at <status>. A work item nobody will
+finish is removed — send { op: 'remove', workItemId, reason } instead.`
+
+It runs at the append, at a correction and again at approve (`validatePlanProposals` step 4b, against
+the live row), because a target finished at the append can be reopened before the button; there
+`validate_plan` reports it as a rejection naming the proposal.
+
+**Why.** Both marks describe finished work: text that described what SHIPPED, or a decision that was
+MADE and later retired. A card nobody has built yet and nobody will build is not outdated — it is
+work the plan is abandoning, and the plan already has an op for that, with a reason the reviewer
+reads. Marking it instead would leave a live card in the ready set carrying a note that says not to
+build it.
+
+**Clearing a mark (`null`) is legal on any card**, and the supersedes lists alone are not judged by
+this rule — an edge saying which card replaced this one is not a claim that this one is finished.
+
+### §4 — the MARK-ONLY carve-out on a terminal target
+
+Step 4 of the approve gate refuses every `modify` of a `done` / `cancelled` target with
+`PLAN_TARGET_IMMUTABLE`. It now exempts a **mark-only** `modify`: a patch carrying at least one key,
+every one of them a member of **`PLAN_ITEM_MARK_PATCH_KEYS`** (`lib/dto/plans.ts`) — the mark, the
+note and the four supersedes lists. The exemption is keyed on the PATCH'S KEYS alone, through one
+predicate (`isMarkOnlyPatch`, `lib/plans/markOnlyPatch.ts`) that the gate and `applyModify` share, so
+it cannot be talked around with a flag, and a patch carrying `title` beside `obsolescence` is refused
+as before.
+
+`applyModify` then writes the mark, the note and the links and leaves the target's status,
+`sessionBranch` and rollup alone: a terminal target is never parked (AMENDMENT 16) and never rested.
+A key belongs in `PLAN_ITEM_MARK_PATCH_KEYS` only when writing it changes a card's STANDING and never
+the work it describes, so a plan still cannot reopen finished work by the back door.
+
+### §5 — marking is a `modify`, and a `remove` never implies one
+
+Marking is never archiving: a marked card stays in the tree, readable, with its note. And the two
+ops do not leak into each other — **a `remove` never writes a mark**, and approving one leaves no
+`obsolescence` on the archived card. §3 is the other half of the same line: unfinished work leaves
+through `remove`; finished work that stopped being true is marked through `modify`.
+
+### §6 — every plan door carries them
+
+The MCP `add_plan_items` and `update_plan_proposal` declare the six patch keys and `supersedesRefs`,
+describe the direction of each list in words a model cannot misread, and resolve keys (§2);
+`get_plan` renders a `modify`'s `mark: <old> → <new>`, the note's first line and the supersedes
+deltas by key, and an `add`'s `supersedesRefs`. The internal append route passes `ProposalInput`
+whole and the correct route reads `supersedesRefs` beside `blockedByRefs` and the mark keys on
+`modifyPatch`. The human proposal-edit route edits `add`s only, so it takes `supersedesRefs` and no
+mark key. `update_plan_item` is NOT widened: it deepens an `add`, which carries no mark, and
+`supersedesRefs` is structural, which the deepen turn may not touch (AMENDMENT 3 D3).
+
+### What this amendment does NOT decide
+
+- **It does not decide WHEN a pass marks.** Which situations call for a mark — an overturned
+  decision, a replaced contract, a retired direction — is the planning rules' question, recorded in
+  motir-ai's rule text and mirrored into the runbook by their own cards.
+- **It does not decide how the review draws a mark.** The plan review's rows and chips are
+  MOTIR-6632's.
+- **It does not change the direct work-item doors.** `update_work_item`, `create_work_item` and REST
+  v1 keep their own contract (MOTIR-6574); bringing them under the finished-card rule is MOTIR-6575,
+  which reuses the predicate §3 defines.
+- **It does not make a mark hide anything.** The mark stays informational on every read: no list,
+  ready set or search excludes, dims or re-orders a marked card.
+- **It does not add a level rule or readiness meaning to `supersedes`.** It orders nothing.

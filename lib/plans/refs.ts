@@ -40,6 +40,14 @@ export function tempRefId(ref: string): string {
 //   blockedByRefs (add)     | yes          | yes         | REFUSED
 //   patch.blockedByAdd      | yes          | yes         | REFUSED
 //   patch.blockedByRemove   | yes          | yes         | REFUSED
+//   supersedesRefs (add)    | yes          | yes         | REFUSED
+//   patch.supersedesAdd /   |              |             |
+//     supersedesRemove /    | yes          | yes         | REFUSED
+//     supersededByAdd /     |              |             |
+//     supersededByRemove    |              |             |
+//
+// (The five `supersedes` carriers — MOTIR-6630 — are EDGE sites exactly as the
+// blocker ones are: a folder supersedes nothing.)
 //
 // A folder ref is decidable with one read (does the folder exist, and in which
 // project), and nothing a later call does can make an unknown folder known, so it
@@ -87,6 +95,10 @@ export function isWorkItemRef(ref: string): boolean {
 // proposal's ref carriers: a later card that admits a temp-ref there must not
 // also have to remember this file.
 //
+// ⚠️ AND THE FIVE `supersedes` CARRIERS (MOTIR-6630) — `supersedesRefs` on an
+// `add`, and `patch.supersedesAdd` / `supersedesRemove` / `supersededByAdd` /
+// `supersededByRemove` on a `modify`. Ten sites in all; the function stays total.
+//
 // PURE — no Prisma, no DB — so the service resolves the existing-id set and this
 // decides. That is what makes it unit-testable without a database and what lets
 // the correction path (MOTIR-3540) reuse it verbatim rather than growing a
@@ -98,7 +110,20 @@ export type PlanRefSite =
   | 'blockedByRefs'
   | 'patch.parentRef'
   | 'patch.blockedByAdd'
-  | 'patch.blockedByRemove';
+  | 'patch.blockedByRemove'
+  | 'supersedesRefs'
+  | 'patch.supersedesAdd'
+  | 'patch.supersedesRemove'
+  | 'patch.supersededByAdd'
+  | 'patch.supersededByRemove';
+
+/** The four `supersedes` edge lists a `modify`'s patch may carry (MOTIR-6630). */
+export const SUPERSEDES_PATCH_SITES = [
+  'supersedesAdd',
+  'supersedesRemove',
+  'supersededByAdd',
+  'supersededByRemove',
+] as const;
 
 /** One proposal, in the minimal shape the append-time ref check reads. */
 export interface ProposalRefCarrier {
@@ -106,10 +131,16 @@ export interface ProposalRefCarrier {
   label: string;
   parentRef?: string | null;
   blockedByRefs?: readonly string[] | null;
+  /** `add` only — the older cards the created card supersedes (MOTIR-6630). */
+  supersedesRefs?: readonly string[] | null;
   patch?: {
     parentRef?: string | null;
     blockedByAdd?: string[] | null;
     blockedByRemove?: string[] | null;
+    supersedesAdd?: string[] | null;
+    supersedesRemove?: string[] | null;
+    supersededByAdd?: string[] | null;
+    supersededByRemove?: string[] | null;
   } | null;
 }
 
@@ -139,6 +170,10 @@ export function tempRefsOf(p: ProposalRefCarrier): Array<{ ref: string; where: P
   take(p.patch?.parentRef, 'patch.parentRef');
   for (const ref of p.patch?.blockedByAdd ?? []) take(ref, 'patch.blockedByAdd');
   for (const ref of p.patch?.blockedByRemove ?? []) take(ref, 'patch.blockedByRemove');
+  for (const ref of p.supersedesRefs ?? []) take(ref, 'supersedesRefs');
+  for (const key of SUPERSEDES_PATCH_SITES) {
+    for (const ref of p.patch?.[key] ?? []) take(ref, `patch.${key}`);
+  }
   return out;
 }
 

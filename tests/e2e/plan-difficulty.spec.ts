@@ -1,5 +1,5 @@
 import type { Locator, Page, Response } from '@playwright/test';
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { adminDb, resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
@@ -14,9 +14,29 @@ import {
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 
-// THE PLAN REVIEW SHOWS A LEAF'S DIFFICULTY — THE ACCEPTANCE RECEIPT (Story
-// MOTIR-6095 · Subtask MOTIR-6142). The story's verification, in a real browser
-// against a production build and a real database.
+// THE PLAN REVIEW SHOWS A LEAF'S DIFFICULTY (Story MOTIR-6095 · Subtask
+// MOTIR-6142). The story's verification, in a real browser against a production
+// build and a real database.
+//
+// ── PROMOTED FROM THE ACCEPTANCE LANE (Bug MOTIR-6697 · Story MOTIR-6577) ───
+//
+// This was `acceptance-plan-difficulty.spec.ts`, the receipt for MOTIR-6095.
+// That story is `done`, so the spec has discharged its purpose and, per
+// docs/decisions/acceptance-receipt-lifecycle.md §3, leaves the lane rather than
+// being edited in place. It would have gone RED on MOTIR-6577's merge: MOTIR-6632
+// gives the six obsolescence / supersedes patch keys real peek rail rows, so the
+// peek's "fields it can set" went 7 → 11. It left the lane by the import swap to
+// `_helpers/promoted-regression` (every `chapter()` / `beat()` /
+// `acceptanceStory()` call is now inert, none hand-edited), and the ONE assertion
+// that recorded the field count is restated on top of the promotion as what
+// MOTIR-6095 was about: the re-judge changes exactly ONE field, and exactly one
+// rail row — Difficulty — carries the changed mark. The population of settable
+// fields is not this story's to pin; `plan-review-difficulty.test.tsx` and the
+// peek-projection tests own that number. Main lane, not cloud: the MCP transport
+// with a seeded PAT, the plan review, approve and the item page read no cloud
+// flag, and the same seed already runs there (`agent-authored-plan.spec.ts`,
+// `agent-folder-placement.spec.ts`). Disposition recorded in
+// docs/acceptance-lane-triage.md.
 //
 // ── WHAT A REVIEWER IS WATCHING FOR ─────────────────────────────────────────
 //
@@ -239,7 +259,10 @@ test('a plan’s leaves carry a difficulty — read on the review, re-judged on 
     const rail = peekDifficulty(peek);
     await expect(rail).toContainText('High');
     await expect(rail.getByTestId('quick-view-changed-mark')).toBeVisible();
-    await expect(peek).toContainText('This plan changes 1 of the 7 fields it can set.');
+    // Restated by MOTIR-6697 (was `…1 of the 7 fields it can set.`): the count of
+    // CHANGED fields is this story's claim; the count of SETTABLE fields is not.
+    await expect(peek).toContainText(/This plan changes 1 of the \d+ fields it can set\./);
+    await expect(peek.getByTestId('quick-view-changed-mark')).toHaveCount(1);
     await beat();
     await closePeek(page);
   });
