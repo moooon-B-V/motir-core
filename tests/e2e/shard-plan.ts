@@ -796,6 +796,12 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'roadmap-scope-toggle.spec.ts': 7.2,
   'roles-permissions.spec.ts': 15.9,
   'saved-filters.spec.ts': 17.0,
+  // MOTIR-6855 — ESTIMATED, not measured: the UI sign-up this spec's beforeEach
+  // runs fails in the sandbox it was written in (so did `not-found-theme`'s), so
+  // no local reading exists. Two tests, each one sign-up + first project and one
+  // or two navigations; priced from `not-found-theme.spec.ts`'s sign-up cost and
+  // rounded UP. Replace with its measured CI time.
+  'server-error-boundary.spec.ts': 10.0,
   'settings-area.spec.ts': 13.0,
   'shell-a11y-detail.spec.ts': 0,
   'shell-a11y-tokens.spec.ts': 0,
