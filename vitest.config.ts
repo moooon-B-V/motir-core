@@ -183,6 +183,15 @@ export default defineConfig({
         'lib/people/personLabel.ts',
         'lib/pages/projectPageContext.ts',
         'components/issues/EpicNotPublicPill.tsx',
+        // Story MOTIR-6171 · MOTIR-6748 — the Visitor's pending-requests read (the
+        // service it grew, its "Load more" door) and the Requested features list.
+        // MEASURED on this branch against the story's specs, then pinned at the
+        // floor: the service 100 / 93.1 / 100 / 100, the door 95.83 / 93.75 /
+        // 100 / 100, the list 96.96 / 94.44 / 100 / 100. Dynamic segments escaped,
+        // route group spanned by `app/**` — the rules the block below records.
+        'lib/services/publicRequestsService.ts',
+        'app/api/p/\\[identifier\\]/requests/route.ts',
+        'app/**/p/\\[identifier\\]/requested-features/_components/RequestedFeaturesList.tsx',
         // Story MOTIR-6739 · MOTIR-6726 — the to-do tools' MCP adapter. Pinned at
         // the project floor in `thresholds` below after being MEASURED on this
         // branch against the story's own specs (`workItemTodosTool.test.ts` +
@@ -2839,6 +2848,24 @@ export default defineConfig({
         'lib/visitor/readActor.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/visitor/readScope.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/visitor/routes.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/services/publicRequestsService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/api/p/\\[identifier\\]/requests/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/p/\\[identifier\\]/requested-features/_components/RequestedFeaturesList.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         'lib/services/visitorRecordsService.ts': {
           lines: 90,
           functions: 90,
