@@ -43,7 +43,7 @@
 // assertion has run — an authoritative gate, never a timeout.
 
 import { test, expect, FIRST_PAINT_MS } from './_helpers/promoted-regression';
-import type { Page, Route } from '@playwright/test';
+import type { Page, Request, Route } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { persistAskTurn, readNamedSession } from './_helpers/plan-session-turn';
@@ -388,6 +388,17 @@ test('plan change is a conversation — open, describe, refine, approve', async 
       (r) =>
         r.url().includes(`/api/plans/${refinedPlanId}/approve`) && r.request().method() === 'POST',
     );
+    // ⚠️ NO FULL DOCUMENT LOAD (bug MOTIR-6640). The approve's own refresh and
+    // the live nudge for the same write used to overlap, and two overlapping
+    // refreshes can make Next fall back to a full document load, which wipes the
+    // decided plan asserted below. Counted from the click to the outcome, so the
+    // spec pins the MECHANISM as well as the symptom: a reload stays a failure
+    // even if a later change made the decided plan survive one.
+    const documentLoads: string[] = [];
+    const countDocumentLoads = (request: Request) => {
+      if (request.resourceType() === 'document') documentLoads.push(request.url());
+    };
+    page.on('request', countDocumentLoads);
     await confirmBar(page).getByRole('button', { name: 'Approve', exact: true }).click();
     expect((await approved).status()).toBe(200);
 
@@ -413,6 +424,8 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     // The outcome is read as the WORD, so a colour-only treatment cannot pass.
     await expect(workspace(page).getByTestId('plan-item-outcome').first()).toHaveText('accepted');
     await expect(canvas(page).getByText(REFINED_TITLE, { exact: true })).toBeVisible();
+    page.off('request', countDocumentLoads);
+    expect(documentLoads, 'Approve must not reload the page').toEqual([]);
 
     // The real substrate: the tree reflects the change.
     const added = await db.workItem.findMany({
