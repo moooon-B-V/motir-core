@@ -9,7 +9,6 @@ import {
   type WorkItemRepairClaimDto,
   type WorkItemRepairRunDto,
 } from '@/lib/dto/workItemRepair';
-import { RUN_HEARTBEAT_LAPSE_MS } from '@/lib/runs/runLiveness';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
@@ -48,8 +47,6 @@ import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemR
 export const CLAIM_WORK_ITEM_REPAIR_TOOL_NAME = 'claim_work_item_repair';
 export const TOUCH_WORK_ITEM_REPAIR_TOOL_NAME = 'touch_work_item_repair';
 export const CLOSE_WORK_ITEM_REPAIR_TOOL_NAME = 'close_work_item_repair';
-
-const LAPSE_MINUTES = RUN_HEARTBEAT_LAPSE_MS / 60_000;
 
 const runIdField = z
   .string()
@@ -98,7 +95,7 @@ function summarizeClaim(claim: WorkItemRepairClaimDto): string {
       : '';
   const keepAlive =
     `Keep it alive with touch_work_item_repair (runId ${claim.runId}) at least every two ` +
-    `minutes — a run silent for ${LAPSE_MINUTES} minutes is closed — and end it with ` +
+    'minutes — a run silent for five minutes is closed — and end it with ' +
     'close_work_item_repair.';
   switch (claim.outcome) {
     case 'claimed':
