@@ -7554,7 +7554,8 @@
       "state_error": "无法验证此次 GitLab 登录，请重新尝试连接。",
       "error": "连接 GitLab 时出错，请重试。",
       "not_configured": "此部署尚未配置 GitLab。",
-      "no_workspace": "请先创建工作区，然后再连接 GitLab。"
+      "no_workspace": "请先创建工作区，然后再连接 GitLab。",
+      "forbidden": "只有组织的所有者或管理员可以连接 GitLab，未做任何更改。"
     },
     "connect": {
       "title": "连接 GitLab",

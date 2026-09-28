@@ -26,7 +26,7 @@ const { gitlabConnectionService } = await import('@/lib/services/gitlabConnectio
 const { githubInstallationRepository } =
   await import('@/lib/repositories/githubInstallationRepository');
 const { githubRepoRepository } = await import('@/lib/repositories/githubRepoRepository');
-const { encryptToken } = await import('@/lib/gitlab/tokenCrypto');
+const { encryptToken, decryptToken } = await import('@/lib/gitlab/tokenCrypto');
 const { withSystemContext } = await import('@/lib/workspaces/context');
 const { OrgForbiddenError } = await import('@/lib/organizations/errors');
 
@@ -243,5 +243,100 @@ describe('the org Owner and an org Admin still perform all three', () => {
 
     await gitlabConnectionService.disconnect(ctx);
     expect((await snapshot(s.workspace.id, s.conn.id)).connections).toBe(0);
+  });
+});
+
+// ESTABLISHING THE CONNECTION (bug MOTIR-6765). The upsert behind
+// `completeOAuthCallback` is keyed on the WORKSPACE, so a member's grant does not
+// add a second connection — it OVERWRITES the existing one with the member's own
+// GitLab account and tokens. It is refused before the code is exchanged, so the
+// row is asserted byte-for-byte and GitLab is asserted never called.
+
+/** GitLab's token exchange and `GET /user`, answering as a DIFFERENT account. */
+function stubGitlabGrant(username: string, accessToken: string) {
+  const fetchMock = vi.fn(async (url: string): Promise<Response> => {
+    if (String(url).includes('/oauth/token')) {
+      return Response.json({
+        access_token: accessToken,
+        refresh_token: `${accessToken}-refresh`,
+        expires_in: 7200,
+      });
+    }
+    return Response.json({ id: 777, username });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+async function readConnection(installationId: string) {
+  return adminDb.githubInstallation.findUniqueOrThrow({
+    where: { installationId },
+    select: {
+      id: true,
+      accountLogin: true,
+      accessTokenEncrypted: true,
+      refreshTokenEncrypted: true,
+      tokenExpiresAt: true,
+    },
+  });
+}
+
+describe('completeOAuthCallback — only an org Owner or Admin may establish the connection (MOTIR-6765)', () => {
+  it.each([
+    ['a plain workspace member', 'member'],
+    ['a workspace MANAGER who is a plain org member', 'wsManager'],
+  ] as const)(
+    '%s is refused before any GitLab call, and the connection is unchanged',
+    async (_label, who) => {
+      const s = await setup();
+      const fetchMock = stubGitlabGrant('member-gl', 'tok-2');
+      const before = await readConnection(s.conn.installationId);
+
+      await expect(
+        gitlabConnectionService.completeOAuthCallback({
+          code: 'member-code',
+          workspaceId: s.workspace.id,
+          userId: s[who].id,
+        }),
+      ).rejects.toBeInstanceOf(OrgForbiddenError);
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      const after = await readConnection(s.conn.installationId);
+      expect(after).toEqual(before);
+      expect(after.accountLogin).toBe('octocat');
+    },
+  );
+
+  it('assertMayConnect — the start route’s early answer refuses the same actors', async () => {
+    const s = await setup();
+    await expect(
+      gitlabConnectionService.assertMayConnect(s.ctxOf(s.member.id)),
+    ).rejects.toBeInstanceOf(OrgForbiddenError);
+    await expect(
+      gitlabConnectionService.assertMayConnect(s.ctxOf(s.wsManager.id)),
+    ).rejects.toBeInstanceOf(OrgForbiddenError);
+  });
+
+  it.each([
+    ['the Owner', 'owner'],
+    ['an Admin', 'orgAdmin'],
+  ] as const)('%s re-connects, replacing the credential on the SAME row', async (_label, who) => {
+    const s = await setup();
+    stubGitlabGrant(`${who}-gl`, `${who}-token`);
+
+    await expect(gitlabConnectionService.assertMayConnect(s.ctxOf(s[who].id))).resolves.toBe(
+      undefined,
+    );
+    const dto = await gitlabConnectionService.completeOAuthCallback({
+      code: 'admin-code',
+      workspaceId: s.workspace.id,
+      userId: s[who].id,
+    });
+
+    expect(dto.accountLogin).toBe(`${who}-gl`);
+    const after = await readConnection(s.conn.installationId);
+    expect(after.id).toBe(s.conn.id);
+    expect(after.accountLogin).toBe(`${who}-gl`);
+    expect(decryptToken(after.accessTokenEncrypted!)).toBe(`${who}-token`);
   });
 });

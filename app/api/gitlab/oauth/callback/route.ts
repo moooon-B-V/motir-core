@@ -3,6 +3,7 @@ import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { gitlabConnectionService } from '@/lib/services/gitlabConnectionService';
 import { GitlabOAuthExchangeError, GitlabOAuthNotConfiguredError } from '@/lib/gitlab/errors';
 import { decodeOAuthState } from '@/lib/gitlab/oauthState';
+import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { GITLAB_OAUTH_NONCE_COOKIE } from '../start/route';
 
@@ -13,7 +14,8 @@ import { GITLAB_OAUTH_NONCE_COOKIE } from '../start/route';
 // that the state's nonce matches the httpOnly cookie (double-submit CSRF). Then it
 // hands the code to the service and redirects to the GitLab settings surface with
 // a status the UI renders as a banner. Actual membership is enforced by the
-// service's `withWorkspaceContext` (RLS) write.
+// service's `withWorkspaceContext` (RLS) write, and the org Owner/Admin role by
+// the service before the code is exchanged (MOTIR-6765).
 //
 // Routes are HTTP-only (CLAUDE.md): the service owns the exchange, encryption, the
 // transaction, and the typed errors this maps to redirect statuses.
@@ -68,6 +70,10 @@ export async function GET(req: NextRequest): Promise<Response> {
   } catch (err) {
     if (err instanceof GitlabOAuthNotConfiguredError) return settingsRedirect('not_configured');
     if (err instanceof GitlabOAuthExchangeError) return settingsRedirect('error');
+    // Not an org Owner or Admin (MOTIR-6765) — refused before the code was spent.
+    if (err instanceof OrgForbiddenError || err instanceof OrganizationNotFoundError) {
+      return settingsRedirect('forbidden');
+    }
     throw err;
   }
 }

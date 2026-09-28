@@ -7558,7 +7558,8 @@
       "state_error": "The GitLab sign-in couldn't be verified. Please try connecting again.",
       "error": "Something went wrong connecting to GitLab. Please try again.",
       "not_configured": "GitLab isn't configured on this deployment yet.",
-      "no_workspace": "Create a workspace first, then connect GitLab."
+      "no_workspace": "Create a workspace first, then connect GitLab.",
+      "forbidden": "Only an organization Owner or Admin can connect GitLab. Nothing was changed."
     },
     "connect": {
       "title": "Connect GitLab",
