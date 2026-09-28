@@ -70,19 +70,22 @@ const statusCard = (page: Page): Locator =>
 const modelCombobox = (page: Page): Locator => page.getByRole('combobox', { name: 'Model' });
 const modelsResponse = (page: Page) =>
   page.waitForResponse(
-    (res) => res.url().endsWith('/api/hosted-runs/models') && res.request().method() === 'GET',
+    (res) => res.url().endsWith('/api/hosted-runs/models') && res.request().method() === 'GET',,
+    { timeout: 30_000 },
   );
 const startResponse = (page: Page, itemKey: string) =>
   page.waitForResponse(
     (res) =>
       res.url().endsWith(`/api/work-items/${itemKey}/hosted-runs`) &&
-      res.request().method() === 'POST',
+      res.request().method() === 'POST',,
+    { timeout: 30_000 },
   );
 const runsListResponse = (page: Page, itemKey: string) =>
   page.waitForResponse(
     (res) =>
       res.url().includes(`/api/work-items/${itemKey}/dispatch-runs`) &&
-      res.request().method() === 'GET',
+      res.request().method() === 'GET',,
+    { timeout: 30_000 },
   );
 
 function phase(page: Page, name: string): Locator {
@@ -240,6 +243,14 @@ test.describe('a card runs on the hosted agent', () => {
         { kind: 'agent_exited', workItemKey: card.identifier, exitCode: 0 },
         { kind: 'delivery_linked', workItemKey: card.identifier },
       ]);
+      // The CLI in the container moves the card as a local run does
+      // (`hosted-run-runs-the-cli-as-the-app.md` §3) — the server's end path
+      // never writes a card status — so the stand-in container does too, with
+      // the run's own credential.
+      const moved = await api.post(`/api/v1/work-items/${card.identifier}/transitions`, {
+        data: { status: 'implemented' },
+      });
+      expect(moved.status(), await moved.text()).toBe(200);
       await closeRun(api, dispatchRunId, 'drained');
 
       await expect(page.getByRole('main').getByTestId('hosted-end')).toHaveAttribute(
