@@ -4,6 +4,8 @@
   decision-subtask ladder). This is the rung-1/rung-2 contract the rest of
   MOTIR-3808 implements — no to-do code ships until these five points are
   pinned. **No application behaviour ships in this subtask** (the ADR only).
+  **Amended 2026-09-28** (MOTIR-6856): a to-do is never dispatched to a hosted
+  agent — see _AMENDMENT 1_ at the end of this record.
 - **Story / Subtask:** MOTIR-3808 (A work item's TO-DO LIST — the ordered steps
   of a manual card, each ONE operation, ticked off, carrying its own executor and
   a command you copy) · Subtask MOTIR-3811.
@@ -12,14 +14,16 @@
   service), MOTIR-3814 (the write path — Server Actions + the read DTO),
   MOTIR-3815 (the section on the work item page), MOTIR-3816 / MOTIR-3817 (the
   two test gates). Downstream, MOTIR-1344 (Help with a task) rewrites this list
-  mid-session, MOTIR-3810 teaches the planner to propose one, and MOTIR-3809
-  (Epic 9) hands ONE row to a hosted run.
+  mid-session, and MOTIR-3810 teaches the planner to propose one. No hosted run
+  ever takes a row (AMENDMENT 1).
 - **Builds on:** the shipped `Executor` enum and its seeded-and-overridable
   default map (MOTIR-2629 / `work-item-type-taxonomy.md`), the fractional index
   (`lib/workItems/positioning.ts`), the item page's single permission read
   (MOTIR-2473), and the two shipped status authorities this record refuses to
   become a third of (`status-derivation.md`, `repo-set-completion-repair.md`).
-- **Supersedes / superseded by:** none.
+- **Supersedes:** MOTIR-3809 (Epic 9, _Dispatch ONE to-do to a hosted agent_) —
+  cancelled 2026-09-28 and marked `deprecated`; AMENDMENT 1 records why.
+- **Superseded by:** none.
 
 > Convention (set by `work-item-type-taxonomy.md`, followed by
 > `billing-tiering.md` / `status-derivation.md` / `design-result.md` /
@@ -256,7 +260,7 @@ the state _and_ the stamp.
 restrict who may tick it, edit it, reorder it or delete it.**
 
 That is the whole promise, and it is deliberately a small one, because the row
-carries `coding_agent` months before MOTIR-3809 can hand one to a hosted run.
+carries `coding_agent` and no hosted run will ever be handed one (AMENDMENT 1).
 
 | Question                                                           | Answer                                                                                                                                                                           |
 | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -281,10 +285,11 @@ every row makes you fill in.
 agent's row). It is a rule with no upside and one guaranteed failure mode: the
 person who did the work by hand cannot record that they did.
 
-**Rejected: rendering an agent row DISABLED until dispatch ships.** A disabled
+**Rejected: rendering an agent row DISABLED.** A disabled
 control with no explanation is a promise the product cannot keep, presented as a
-malfunction. The row is not disabled; it simply has no run control yet, and
-MOTIR-3809 adds one beside a field that already means the right thing.
+malfunction. The row is not disabled; it simply has no run control, and none is
+coming: that is permanent (AMENDMENT 1), and the field already means the right
+thing without one.
 
 ### §3 — Ticking the LAST to-do does NOT move the card's status. Neither automatically nor as a gate.
 
@@ -405,8 +410,7 @@ and renders its command with a copy button; null ⇒ it is a plain step.
   in their shell.
 - It makes _"is this row copyable?"_ a **rendering accident** instead of a data
   fact. Every consumer — the section, the DTO, MOTIR-1344's assistant rewriting
-  the list, MOTIR-3809's dispatch — would have to re-run the same heuristic and
-  agree with it.
+  the list — would have to re-run the same heuristic and agree with it.
 - The codebase models this kind of thing as typed columns throughout
   (`AcceptanceEvidence`, `DesignAsset`, `GithubPullRequest`), and the shipped
   copy affordance is already a **flag**: `CodeBlock`'s `copyable` prop, whose own
@@ -480,12 +484,11 @@ Inherits, as the states it must draw:
 - **Nothing in either card touches `work_item.status`** (§3). A card whose to-do
   list is complete is a card with a complete to-do list.
 
-### MOTIR-3809 (Epic 9) and MOTIR-1344
+### Hosted dispatch and MOTIR-1344
 
-- **MOTIR-3809** adds a run control **beside** `executor`, which by then already
-  means _this operation is the agent's_ — it does not re-interpret a field that
-  meant something else. The seam is the field and the control's placement; §2 is
-  what keeps the field honest in the interval.
+- **No run control is ever added beside `executor`** (AMENDMENT 1). §2 keeps the
+  field honest permanently: an agent row says _this operation is the agent's_,
+  and nothing runs it.
 - **MOTIR-1344** rewrites this list mid-session. §1's shape is what makes that
   cheap — a short line, an optional command, an executor, a position — and §3 is
   what makes it safe: an assistant editing a provisional list cannot move a
@@ -493,9 +496,91 @@ Inherits, as the states it must draw:
 
 ### What this record does NOT decide
 
-- **How a to-do is DISPATCHED** — MOTIR-3809.
+- ~~**How a to-do is DISPATCHED**~~ — **Decided: never.** See AMENDMENT 1.
 - **Whether the PLANNER proposes a manual card's to-dos at plan time** —
   MOTIR-3810.
 - **Whether to-dos appear on any surface other than the item page** (the board,
   the ready list, the API). No card in MOTIR-3808 ships one, and this record
   takes no position on a later one.
+
+---
+
+## AMENDMENT 1 — a to-do is never dispatched to a hosted agent (MOTIR-6856, 2026-09-28)
+
+- **Status:** Accepted on the pull request that carries it. It changes no
+  application behaviour. It records a direction and corrects the lines above
+  that named dispatch as coming work.
+- **Supersedes:** MOTIR-3809, _Dispatch ONE to-do to a hosted agent_.
+
+### Decision
+
+A work item's to-do row is **never dispatched to a hosted agent.**
+
+- **On a project whose repository Motir hosts, there are no manual cards.**
+  Motir does that work itself, so there is no to-do list to hand to an agent.
+- **On an imported project, a to-do list is manual work.** Motir's help there is
+  to **guide** the person through it, telling them which command to run, step
+  by step. That is the `motir guide` protocol and skill (MOTIR-6708). Motir
+  never executes the step.
+
+The row's `executor` stays **descriptive**, exactly as §2 decides: it records
+who an operation is _for_ and authorizes nothing. A `coding_agent` row keeps
+rendering with **no run control**. That is now permanent. It used to be the
+state the row was in _until dispatch ships_.
+
+### What changed
+
+**Change: less requirement.** The approved plan held MOTIR-3809, _Dispatch ONE
+to-do to a hosted agent_. It owned a Run control on the to-do row and wrote the
+run's outcome back onto the row. Yue cancelled it on 2026-09-28, and the
+cancellation is quoted in MOTIR-3809's comment. Nothing replaces it inside the
+hosted-agent epic.
+
+### Supersedes
+
+- **MOTIR-3809.** It is cancelled, and it is marked `deprecated`, superseded by
+  this decision. Finished cards that still point at it read through that mark.
+
+### Resulting direction
+
+The hosted-agent epic runs a **card** from the browser:
+
+- a leaf across its repositories, or a parent through its children (9.1);
+- continued from the browser when a run dies;
+- a design sent back re-run automatically (9.2);
+- a review agent on green pull requests (9.8);
+- new repositories started from real starters (9.3);
+- proven by dogfood (9.4).
+
+It never runs a single to-do step. A to-do list belongs only on manual work in
+a project Motir does not host, and the product's answer there is guidance, not
+execution.
+
+### Lines of this record corrected in place
+
+Each of these used to name MOTIR-3809 as pending work:
+
+| Where                                   | Was                                                         | Now                                   |
+| --------------------------------------- | ----------------------------------------------------------- | ------------------------------------- |
+| header, _Consumed by_                   | MOTIR-3809 _hands ONE row to a hosted run_                  | no hosted run ever takes a row        |
+| header, _Supersedes_                    | none                                                        | MOTIR-3809, cancelled                 |
+| §2, the promise                         | `coding_agent` _months before_ MOTIR-3809 can hand one over | no hosted run will ever be handed one |
+| §2, _Rejected: rendering … DISABLED_    | _no run control yet, and MOTIR-3809 adds one_               | no run control, permanently           |
+| §5, the consumers of a parsed command   | listed _MOTIR-3809's dispatch_                              | dropped                               |
+| _Consequences_, the 3809 / 1344 heading | MOTIR-3809 _adds a run control beside `executor`_           | no run control is ever added          |
+| _What this record does NOT decide_      | _How a to-do is DISPATCHED — MOTIR-3809_                    | **Decided: never**                    |
+
+§2's decision is otherwise unchanged, word for word.
+
+### What this amendment does NOT decide
+
+- **Whether `executor` on a to-do row stays at all.** It stays, as a
+  description. Nothing here removes the column, its default, or the agent
+  glyph a row renders.
+- **How `motir guide` walks a list.** That is MOTIR-6708's protocol, and this
+  record only names it as the product's answer.
+- **Whether Motir-hosted projects are prevented from holding manual cards.**
+  This records the direction; it adds no check that refuses one.
+- **The other documents that still name MOTIR-3809** (`agent-authored-plans.md`,
+  the to-do design notes, three test comments). They are corrected by
+  MOTIR-6857, not here.
