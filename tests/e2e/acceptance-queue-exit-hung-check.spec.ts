@@ -374,8 +374,15 @@ test.describe('a merge-queue exit caused by a hung check re-asks', () => {
     await chapter('Queue again — the queue passes it, and the merge lands', async () => {
       await open(page, cancelled);
       const dev = await openDevelopmentOverlay(page);
-      const action = serverAction(page);
+      // On the RE-ASKED gate the row press is an approval, so it confirms first.
       await queueAgainIn(dev, n).click();
+      const action = serverAction(page);
+      await dev
+        .getByRole('button', {
+          name: en.approvalGate.confirm.proceed.replace('{verb}', pra.outcome.queueAgain),
+          exact: true,
+        })
+        .click();
       expect((await action).status()).toBe(200);
       await closeOverlay(page);
       await page.reload();
