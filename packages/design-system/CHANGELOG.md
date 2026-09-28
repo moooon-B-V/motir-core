@@ -1,5 +1,11 @@
 # @motir/design-system
 
+## 0.7.0
+
+### Minor Changes
+
+- 31a6057: `ErrorState` gains an optional `retryPending` (and `retryPendingLabel`): while true, its retry button takes `Button`'s `loading` state — Spinner, `disabled`, `aria-busy` — and shows the pending label. Additive; every existing call site renders unchanged.
+
 ## 0.6.0
 
 ### Minor Changes
