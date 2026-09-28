@@ -257,14 +257,12 @@ async function approvedIntoTheQueue(page: Page, card: SeededCard, scenario: Scen
   await expect(statusCard(page)).toContainText(en.approvalGate.state.approved);
 }
 
-/** The re-asked row in the approval overlay, and its *Queue again*. */
-async function queueAgainButton(page: Page, number: number): Promise<Locator> {
-  const dev = await openDevelopmentOverlay(page);
-  return dev
+/** The re-asked row's *Queue again*, inside the approval overlay. */
+const queueAgainIn = (dev: Locator, number: number): Locator =>
+  dev
     .locator('li')
     .filter({ hasText: prName(number) })
     .getByRole('button', { name: pra.outcome.queueAgain });
-}
 
 test.describe('a merge-queue exit caused by a hung check re-asks', () => {
   let seed: ApproveAndMergeSeed;
@@ -312,25 +310,24 @@ test.describe('a merge-queue exit caused by a hung check re-asks', () => {
       await expect(statusCard(page)).toContainText('In Review', { timeout: 60_000 });
       const row = prRow(page, n);
       await expect(row.getByText(pra.outcome.removedFromQueue, { exact: true })).toBeVisible();
-      // The check is NAMED, it was cancelled, and nothing says it failed.
-      await expect(developmentCard(page)).toContainText(cancelledLine);
-      await expect(developmentCard(page)).toContainText(plain(pra.exit.hung.reasked));
-      await expect(developmentCard(page)).not.toContainText(
-        plain(pra.exit.failed.checks, { pr: prName(n), check: CHECK }),
-      );
-      await expect(
-        developmentCard(page).getByRole('link', {
-          name: plain(pra.exit.openStoppedCheck, { check: CHECK }),
-        }),
-      ).toBeVisible();
       // No `motir fix`: nothing in the code needs repairing.
       await expect(fixPart(page)).toHaveCount(0);
       await show(row);
     });
     await beat();
 
-    await chapter('Queue again is the approval', async () => {
-      await expect(await queueAgainButton(page, n)).toBeVisible();
+    await chapter('The check is named as CANCELLED, and Queue again is the approval', async () => {
+      const dev = await openDevelopmentOverlay(page);
+      // The check is NAMED, it was cancelled, and nothing says it failed.
+      await expect(dev).toContainText(cancelledLine, { timeout: 60_000 });
+      await expect(dev).toContainText(plain(pra.exit.hung.reasked));
+      await expect(dev).not.toContainText(
+        plain(pra.exit.failed.checks, { pr: prName(n), check: CHECK }),
+      );
+      await expect(
+        dev.getByRole('link', { name: plain(pra.exit.openStoppedCheck, { check: CHECK }) }),
+      ).toBeVisible();
+      await expect(queueAgainIn(dev, n)).toBeVisible();
       await beat();
       await closeOverlay(page);
       await page.goto('/workbench?tab=approvals');
@@ -376,9 +373,9 @@ test.describe('a merge-queue exit caused by a hung check re-asks', () => {
 
     await chapter('Queue again — the queue passes it, and the merge lands', async () => {
       await open(page, cancelled);
-      const again = await queueAgainButton(page, n);
+      const dev = await openDevelopmentOverlay(page);
       const action = serverAction(page);
-      await again.click();
+      await queueAgainIn(dev, n).click();
       expect((await action).status()).toBe(200);
       await closeOverlay(page);
       await page.reload();
@@ -429,10 +426,12 @@ test.describe('a merge-queue exit caused by a hung check re-asks', () => {
 
       await page.reload();
       await expect(statusCard(page)).toContainText('In Review', { timeout: 60_000 });
-      await expect(developmentCard(page)).toContainText(
+      const dev = await openDevelopmentOverlay(page);
+      await expect(dev).toContainText(
         plain(pra.exit.hung.cancelled, { pr: prName(l), check: CHECK }),
+        { timeout: 60_000 },
       );
-      await expect(await queueAgainButton(page, l)).toBeVisible();
+      await expect(queueAgainIn(dev, l)).toBeVisible();
       await beat();
       await closeOverlay(page);
     });
@@ -447,12 +446,20 @@ test.describe('a merge-queue exit caused by a hung check re-asks', () => {
         .addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: new URL('/', page.url()).href }]);
       await open(page, inZh, zh.github.development.title);
       const zpra = zh.approvalGate.pullRequestApproval;
-      const card = developmentCard(page, zh.github.development.title);
-      await expect(card).toContainText(
+      const dev = await openDevelopmentOverlay(page, zh);
+      await expect(dev).toContainText(
         plain(zpra.exit.hung.cancelled, { pr: prName(z), check: CHECK }),
+        { timeout: 60_000 },
       );
-      await expect(card).toContainText(plain(zpra.exit.hung.reasked));
-      await show(prRow(page, z, zh.github.development.title));
+      await expect(dev).toContainText(plain(zpra.exit.hung.reasked));
+      await expect(
+        dev
+          .locator('li')
+          .filter({ hasText: prName(z) })
+          .getByRole('button', { name: zpra.outcome.queueAgain }),
+      ).toBeVisible();
+      await beat();
+      await closeOverlay(page);
     });
     await beat();
   });
