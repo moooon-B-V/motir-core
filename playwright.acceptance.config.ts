@@ -213,7 +213,11 @@ process.env['MOTIR_FAKE_CONTAINER_STATE_PATH'] ??= path.resolve(
 // "stalled" case can run in this lane at all. Read directly by whichever
 // process runs `stallDetail` (the worker, via `supervise`); see
 // `hostedRunSeamEnv` for why it also has to reach that process by hand.
-process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS'] ??= '4000';
+// 25 s, not less: the window is lane-wide, and the paced happy path leaves a
+// few seconds (its video beats) between the boot and its first event — at 4 s
+// the supervisor rightly ended THAT run as stalled. 25 s clears those gaps and
+// still ends the stall case well inside its 90 s wait.
+process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS'] ??= '25000';
 // …and the JOB WORKER installs the same three seams, because the stall/cancel
 // end path's gateway revoke and machine-time charge run inside `supervise`'s
 // durable job — see `hostedRunSeamEnv` in `tests/e2e/_helpers/job-worker-process.ts`.
