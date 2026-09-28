@@ -2,6 +2,7 @@ import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { MCP_SERVER_INFO, registerMcpTools } from '@/lib/mcp/registry';
 import { contextFromAuthInfo, contextFromExtra, grantFromExtra } from '@/lib/mcp/context';
 import { verifyMcpToken } from '@/lib/mcp/auth';
+import { answerClientAbort } from '@/lib/mcp/clientAbort';
 import { enforceMcpRateLimit } from '@/lib/rateLimit/mcpGuard';
 import { stampRateLimitHeaders } from '@/lib/rateLimit/guard';
 
@@ -84,6 +85,11 @@ async function limitedHandler(req: Request): Promise<Response> {
   return stampRateLimitHeaders(await baseHandler(req), headers);
 }
 
-const handler = withMcpAuth(limitedHandler, verifyMcpToken, { required: true });
+// `answerClientAbort` sits INSIDE the auth gate, around the layer that reads the
+// body: a caller that hangs up before `mcp-handler` has read it answers 499
+// rather than surfacing `Error: aborted` as a server fault (MOTIR-6853).
+const handler = withMcpAuth(answerClientAbort(limitedHandler), verifyMcpToken, {
+  required: true,
+});
 
 export { handler as GET, handler as POST, handler as DELETE };
