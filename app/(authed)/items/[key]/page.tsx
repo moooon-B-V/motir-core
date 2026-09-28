@@ -623,6 +623,8 @@ export default async function IssueDetailPage({
                     relatesTo={detail.relatesTo}
                     duplicates={detail.duplicates}
                     clones={detail.clones}
+                    supersedes={detail.supersedes}
+                    supersededBy={detail.supersededBy}
                     readiness={detail.readiness}
                     currentStatus={item.status}
                     // MOTIR-2050: the page already knows the archived state (the banner

@@ -581,7 +581,7 @@
       "duplicates": "重复",
       "clones": "克隆",
       "supersedes": "取代",
-      "superseded_by": "被取代"
+      "superseded_by": "被取代于"
     },
     "role": {
       "owner": "所有者",
