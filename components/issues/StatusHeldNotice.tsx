@@ -11,7 +11,11 @@ import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { planRowDestination } from '@/lib/planning/planDestination';
 import type { ApprovalGateKindDTO } from '@/lib/dto/approvalGate';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
-import { OBSOLESCENCE_FIELD_ANCHOR, goToObsolescenceField } from './ObsolescenceBadge';
+import {
+  OBSOLESCENCE_FIELD_ANCHOR,
+  OBSOLESCENCE_GLYPH,
+  goToObsolescenceField,
+} from './ObsolescenceBadge';
 import type { MarkHold } from './useStatusHeld';
 
 // THE STATUS CONTROL SAYS SO (Story MOTIR-4887 · Subtask MOTIR-5528), built to
@@ -51,6 +55,13 @@ import type { MarkHold } from './useStatusHeld';
 // and clears nothing, because clearing is a deliberate act made in the field. It
 // is an ordinary link to the item page's field, so on the edit page (which draws
 // no field) it navigates there; where the field is on screen it scrolls instead.
+//
+// On the BOARD and the `/items` row (MOTIR-6682, `design/boards/design-notes.md`
+// § _The refusal IN PLACE_, MOTIR-6671) the mark's refusal is the same box in its
+// IN-PLACE form: ONE line — *This item is marked **{mark}**. Clear the mark to
+// reopen this item.* — with the mark's own glyph in the lock's place and an **Open
+// item** door, a secondary link to the item page's Obsolescence field that
+// navigates and clears nothing (a board card has no field to scroll to).
 //
 // Presentational: no fetch, no status write. The surfaces own the read and the
 // refusal that feeds it.
@@ -195,6 +206,31 @@ function ClearTheMarkLink({ itemKey, fieldId }: { itemKey: string; fieldId: stri
   );
 }
 
+/** The in-place form (the board card, the `/items` row): one line, the mark's
+ *  glyph, and Open item — a plain link to the item page's field. */
+function MarkInPlaceLine({ itemKey, mark }: { itemKey: string; mark: MarkHold }) {
+  const t = useTranslations('workItems.obsolescence');
+  const Glyph = OBSOLESCENCE_GLYPH[mark.mark];
+  const strong = (chunks: ReactNode) => <strong className="font-semibold">{chunks}</strong>;
+  return (
+    <div className="flex items-start gap-2" data-waiting-on="mark">
+      <Glyph aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-(--el-text-strong)" />
+      <div className="flex min-w-0 flex-col items-start gap-2">
+        <p className="m-0 text-[13px] leading-snug text-(--el-text-strong)">
+          {t.rich('heldLine', { mark: t(`value.${mark.mark}`), strong })}
+        </p>
+        <Link
+          href={`/items/${itemKey}#${OBSOLESCENCE_FIELD_ANCHOR}`}
+          data-mark-door="open-item"
+          className={buttonVariants({ variant: 'secondary', size: 'sm' })}
+        >
+          {t('openItem')}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 function MarkLine({
   itemKey,
   mark,
@@ -206,6 +242,7 @@ function MarkLine({
 }) {
   const t = useTranslations('workItems.obsolescence');
   const word = t(`value.${mark.mark}`);
+  if (mark.inPlace) return <MarkInPlaceLine itemKey={itemKey} mark={mark} />;
   return (
     <div className="flex items-start gap-2" data-waiting-on="mark">
       <Lock aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-(--el-text-strong)" />

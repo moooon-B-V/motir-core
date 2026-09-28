@@ -53,6 +53,9 @@ export interface HeldTarget {
 export interface MarkHold {
   mark: WorkItemObsolescenceDto;
   refused: boolean;
+  /** The board card / `/items` row's IN-PLACE form (MOTIR-6682): one line and an
+   *  Open item door, instead of the status control's two lines and Clear the mark. */
+  inPlace?: boolean;
 }
 
 function toLines(held: HeldTransitionDTO[]): StatusHeldLine[] {

@@ -9968,7 +9968,9 @@
         "sub": "Clear the mark to reopen this item.",
         "door": "Clear the mark",
         "refusalArrived": "Marked {mark} elsewhere — this move was not made."
-      }
+      },
+      "heldLine": "This item is marked <strong>{mark}</strong>. Clear the mark to reopen this item.",
+      "openItem": "Open item"
     }
   }
 }
