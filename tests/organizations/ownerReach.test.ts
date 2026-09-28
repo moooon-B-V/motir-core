@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminDb } from '../helpers/adminDb';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // MOTIR-6308 — the org OWNER acts with full rights in every workspace and project
 // of the org, member or not. An org ADMIN now does too, as a Manager (MOTIR-6168:
@@ -62,7 +63,7 @@ async function orgWithForeignWorkspace() {
     actorUserId: admin.id,
     identifier: 'SALE',
   });
-  await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'private' } });
+  await setProjectAccess(adminDb, project.id, 'members');
   const item = await createTestWorkItem(
     {
       owner: admin,
@@ -199,7 +200,7 @@ describe('an org Admin reaches every workspace of the org as its Manager (MOTIR-
       actorUserId: owner.id,
       identifier: 'LATE',
     });
-    await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, project.id, 'members');
     expect(await organizationsService.resolveWorkspaceAccess(admin.id, later.id)).toMatchObject({
       effectiveRole: 'manager',
       workspaceRole: null,

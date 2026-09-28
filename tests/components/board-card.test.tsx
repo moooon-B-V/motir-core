@@ -30,6 +30,7 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     pendingDecision: null,
     planHold: null,
     ciState: null,
+    obsolescence: null,
     statusCategory: 'todo',
     ...over,
   };
@@ -486,5 +487,67 @@ describe('BoardCard — a Visitor’s private epic', () => {
       />,
     );
     expect(screen.queryByTestId('epic-not-public-pill')).toBeNull();
+  });
+});
+
+// Story MOTIR-6575 · MOTIR-6677 — the OBSOLESCENCE badge, per
+// `design/boards/board-card--obsolescence.mock.html`: the item header's own Pill,
+// an ADDITIONAL member of the pill row after the exclusive slot and before the CI
+// badge. It takes no slot and hides nothing.
+describe('BoardCard — the obsolescence badge (MOTIR-6677)', () => {
+  it.each([
+    ['outdated', 'Outdated'],
+    ['deprecated', 'Deprecated'],
+  ] as const)('a %s card wears the badge — word AND glyph', (mark, word) => {
+    render(
+      <BoardCard
+        card={card({
+          id: 'c-m',
+          key: 1,
+          status: 'done',
+          statusCategory: 'done',
+          obsolescence: mark,
+        })}
+        assigneeName={null}
+        onOpenQuickView={vi.fn()}
+      />,
+    );
+    const badge = document.querySelector(`[data-obsolescence="${mark}"]`)!;
+    expect(badge.textContent).toBe(word);
+    expect(badge.querySelector('svg')!.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('an unmarked card wears nothing new', () => {
+    render(
+      <BoardCard
+        card={card({ id: 'c-u', key: 2 })}
+        assigneeName={null}
+        onOpenQuickView={vi.fn()}
+      />,
+    );
+    expect(document.querySelector('[data-obsolescence]')).toBeNull();
+  });
+
+  it('sits after the exclusive slot and before the CI badge, hiding neither (a legacy open row)', () => {
+    render(
+      <BoardCard
+        card={card({
+          id: 'c-l',
+          key: 3,
+          ready: false,
+          ciState: 'failing',
+          statusCategory: 'in_progress',
+          obsolescence: 'deprecated',
+        })}
+        assigneeName={null}
+        onOpenQuickView={vi.fn()}
+      />,
+    );
+    const mark = document.querySelector('[data-obsolescence]')!;
+    const ci = document.querySelector('[data-ci-state]')!;
+    const blocked = screen.getByText('Blocked');
+    expect(mark.parentElement).toBe(ci.parentElement);
+    expect(blocked.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(mark.compareDocumentPosition(ci) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

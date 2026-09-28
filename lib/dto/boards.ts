@@ -11,7 +11,11 @@
 // summary for the projection; the move path populates `assigneeId` — the id is
 // what the optimistic-update reconcile needs, the UI already holds the avatar.)
 
-import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
+import type {
+  WorkItemKindDto,
+  WorkItemObsolescenceDto,
+  WorkItemPriorityDto,
+} from '@/lib/dto/workItems';
 import type { StatusCategoryDto, WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { SprintPointsDto } from '@/lib/dto/estimation';
 import type { SprintStateDto } from '@/lib/dto/sprints';
@@ -184,6 +188,13 @@ export interface BoardCardDto {
    * The board already reads whole `WorkItem` rows, so this costs no extra query.
    */
   ciState: string | null;
+  /**
+   * The card's OBSOLESCENCE mark (Story MOTIR-6575 · MOTIR-6677) — `outdated` /
+   * `deprecated`, or `null` while it is still true of the code. The card wears the
+   * shared `ObsolescenceBadge`; nothing on the board hides, dims or re-sorts a
+   * marked card. Off the whole `WorkItem` row the board already reads.
+   */
+  obsolescence: WorkItemObsolescenceDto | null;
   /**
    * The undecided PLAN holding this card at Planning (Story MOTIR-6017 ·
    * MOTIR-6268; AMENDMENT 21 §1), or `null` when none does — a session-held

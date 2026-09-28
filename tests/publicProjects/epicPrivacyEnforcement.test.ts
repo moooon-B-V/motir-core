@@ -12,6 +12,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Story 6.14 · Subtask 6.14.4 — the SERVER-SIDE epic-privacy enforcement. A
 // private epic's children + its aggregate tells must NEVER be transmitted to a
@@ -54,7 +55,7 @@ async function setPrivate(epicId: string, value: boolean): Promise<void> {
  *  the column directly, the shortcut the other public-project tests use). */
 async function makePublicProjectFixture(name = 'Acme'): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   return fx;
 }
 

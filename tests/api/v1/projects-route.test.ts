@@ -9,6 +9,7 @@ import { createTestUser } from '../../fixtures/userFixtures';
 import { createV1Caller, createV1ProjectCaller, withTokenFor } from '../../fixtures/apiV1Fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // GET /api/v1/projects + GET /api/v1/projects/{projectKey} (Story 11.3 ·
 // Subtask 11.3.3 — MOTIR-2060) against real Postgres.
@@ -225,7 +226,7 @@ describe('GET /api/v1/projects', () => {
     });
     // Make it private AND drop the owner's project membership, so the browse
     // gate is the only thing standing between the caller and the row.
-    await adminDb.project.update({ where: { id: secret.id }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, secret.id, 'members');
     const member = await memberCaller(caller.workspace);
 
     const page = await fetchPage(member.headers);
@@ -364,7 +365,7 @@ describe('GET /api/v1/projects/{projectKey}', () => {
       actorUserId: caller.user.id,
       identifier: 'SECRET',
     });
-    await adminDb.project.update({ where: { id: secret.id }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, secret.id, 'members');
     const member = await memberCaller(caller.workspace);
 
     const res = await GET_ONE(oneReq(member.headers, 'SECRET'), params('SECRET'));

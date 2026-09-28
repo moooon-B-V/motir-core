@@ -10,12 +10,10 @@ import type {
 // this. Sits beside `lib/projects/roles.ts`, which still owns the legacy
 // `PROJECT_ACCESS_LEVELS` for as long as `project.accessLevel` exists.
 //
-// The mode is stored in `project.accessMode`, added BESIDE the legacy
-// `accessLevel` (expand → migrate → contract). While a row's `accessMode` is
-// NULL — not migrated yet, or created by the still-serving old build — the mode
-// is DERIVED from `accessLevel`, which is what `accessModeOf` answers. The two
-// columns are written together by `projectRepository.setAccessMode`, using
-// `levelForMode` for the legacy half.
+// The mode is STORED in `project.accessMode`, NOT NULL, and read directly —
+// never derived (MOTIR-6686 retired the NULL-mode fallback). The retired
+// `accessLevel` is still written beside it by `projectRepository.setAccessMode`,
+// using `levelForMode`, until phase 2 (MOTIR-6692) stops the writes.
 
 /** The valid `project.accessMode` values (mirrors the Prisma enum). */
 export const PROJECT_ACCESS_MODES = [
@@ -31,21 +29,8 @@ export const WORKSPACE_ACCESS_SCOPES = [
 ] as const satisfies readonly WorkspaceAccessScope[];
 
 /**
- * The DECISION's mapping from a legacy level to a mode (`role-model.md` Q1):
- * `open` → Open to the workspace; `limited` and `private` → Members only;
- * `public` → Public. A `Record` over the enum, so a new level fails the type
- * check here rather than falling through at run time.
- */
-const LEVEL_TO_MODE: Record<ProjectAccessLevel, ProjectAccessMode> = {
-  open: 'workspace',
-  limited: 'members',
-  private: 'members',
-  public: 'public',
-};
-
-/**
- * The legacy level written BESIDE a mode, so the two columns never disagree —
- * above all for the RLS policies that still key on `"accessLevel" = 'public'`.
+ * The legacy level written BESIDE a mode, so the two columns never disagree
+ * while the previous image — which still reads `accessLevel` — serves.
  * `members` writes `private` (not `limited`): `limited` meant "everyone views,
  * only members edit", which no mode reproduces, so the narrow level is the one
  * that admits exactly the people a Members-only project admits.
@@ -55,17 +40,6 @@ const MODE_TO_LEVEL: Record<ProjectAccessMode, ProjectAccessLevel> = {
   members: 'private',
   public: 'public',
 };
-
-/**
- * A project's access mode: the stored `accessMode`, or — while that is NULL —
- * the mode its legacy `accessLevel` maps to.
- */
-export function accessModeOf(project: {
-  accessMode: ProjectAccessMode | null;
-  accessLevel: ProjectAccessLevel;
-}): ProjectAccessMode {
-  return project.accessMode ?? LEVEL_TO_MODE[project.accessLevel];
-}
 
 /** The legacy `accessLevel` written together with `mode`. */
 export function levelForMode(mode: ProjectAccessMode): ProjectAccessLevel {

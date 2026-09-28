@@ -8,6 +8,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '../helpers/projectAccess';
 
 // Who can be assigned or mentioned on a project (Story MOTIR-6169 · MOTIR-6547):
 // exactly the people who can ENTER it — the entry rule's `canEnter`, reused by
@@ -30,10 +31,7 @@ async function setup(mode: ProjectAccessMode) {
   const fx = await makeWorkItemFixture({ name: `AME ${seq}`, identifier: `AME${seq++}` });
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: {
-      accessMode: mode,
-      accessLevel: mode === 'workspace' ? 'open' : mode === 'members' ? 'private' : 'public',
-    },
+    data: projectAccessData(mode),
   });
   const person = async (
     label: string,

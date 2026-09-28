@@ -471,6 +471,42 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  add_work_item_todo: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      text: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The step — ONE operation, in plain text (not Markdown), at most 200 characters. A longer step is two steps, and is refused rather than truncated.',
+      },
+      notesMd: {
+        type: 'string',
+        description:
+          'Optional instructions for this one step, in Markdown, at most 2000 characters — the how, where `text` is the what.',
+      },
+      commandText: {
+        type: 'string',
+        description:
+          'Optional command this step runs, at most 500 characters. Rendered with a copy button on the work item page.',
+      },
+      executor: {
+        type: 'string',
+        enum: ['coding_agent', 'human'],
+        description:
+          'Who this step is for: "human" or "coding_agent". Declarative — it authorizes nothing. Omitted ⇒ the card’s own executor, or "human" when the card has none.',
+      },
+    },
+    required: ['key', 'text'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   append_plan_turn: {
     type: 'object',
     properties: {
@@ -888,7 +924,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       obsolescence: {
         anyOf: [{ type: 'string', enum: ['outdated', 'deprecated'] }, { type: 'null' }],
         description:
-          'Mark the item as no longer TRUE OF THE CODE: "outdated" (the text no longer describes what shipped; the capability lives on in another shape) or "deprecated" (retired or overturned on purpose — do not build on it). Settable on ANY kind in ANY status, a `done` item included; null clears it. Link the replacing item with link_work_items `supersedes`. A value outside the enum is refused (INVALID_OBSOLESCENCE). Informational: no read hides or re-orders a marked item.',
+          'Mark the item as no longer TRUE OF THE CODE: "outdated" (the text no longer describes what shipped; the capability lives on in another shape) or "deprecated" (retired or overturned on purpose — do not build on it). Settable on ANY kind, but ONLY on a FINISHED item — one whose status is in the done category (`done`, `cancelled`, or a custom done-category status); on any other status it is refused (OBSOLESCENCE_REQUIRES_FINISHED) — archive an item nobody will finish instead. A marked item stays finished: moving it out of the done category, or adding a child under it, is refused (MARKED_CARD_CANNOT_REOPEN) until the mark is cleared. null clears it, always. Link the replacing item with link_work_items `supersedes`. A value outside the enum is refused (INVALID_OBSOLESCENCE). Informational: no read hides or re-orders a marked item.',
       },
       obsolescenceNoteMd: {
         type: ['string', 'null'],
@@ -1400,6 +1436,20 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['projectKey'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  list_work_item_todos: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+    },
+    required: ['key'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -2013,6 +2063,27 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['projectKey', 'query'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  set_work_item_todo_done: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      todoId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The step’s id, as `list_work_item_todos` or `add_work_item_todo` returned it. A step on another work item is refused as not found.',
+      },
+      done: { type: 'boolean', description: 'true ticks the step; false unticks it.' },
+    },
+    required: ['key', 'todoId', 'done'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -2813,7 +2884,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       obsolescence: {
         anyOf: [{ type: 'string', enum: ['outdated', 'deprecated'] }, { type: 'null' }],
         description:
-          'Mark the item as no longer TRUE OF THE CODE: "outdated" (the text no longer describes what shipped; the capability lives on in another shape) or "deprecated" (retired or overturned on purpose — do not build on it). Settable on ANY kind in ANY status, a `done` item included; null clears it. Link the replacing item with link_work_items `supersedes`. A value outside the enum is refused (INVALID_OBSOLESCENCE). Informational: no read hides or re-orders a marked item.',
+          'Mark the item as no longer TRUE OF THE CODE: "outdated" (the text no longer describes what shipped; the capability lives on in another shape) or "deprecated" (retired or overturned on purpose — do not build on it). Settable on ANY kind, but ONLY on a FINISHED item — one whose status is in the done category (`done`, `cancelled`, or a custom done-category status); on any other status it is refused (OBSOLESCENCE_REQUIRES_FINISHED) — archive an item nobody will finish instead. A marked item stays finished: moving it out of the done category, or adding a child under it, is refused (MARKED_CARD_CANNOT_REOPEN) until the mark is cleared. null clears it, always. Link the replacing item with link_work_items `supersedes`. A value outside the enum is refused (INVALID_OBSOLESCENCE). Informational: no read hides or re-orders a marked item.',
       },
       obsolescenceNoteMd: {
         type: ['string', 'null'],

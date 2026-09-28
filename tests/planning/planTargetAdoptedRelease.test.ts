@@ -222,6 +222,31 @@ describe('the other releases of an adopted plan-held lock rest it the same way',
 });
 
 describe('where an adopted target is NOT rested', () => {
+  // MOTIR-6681: both resting statuses are outside the done category, so a MARKED
+  // card would refuse them even as a system write. Only a LEGACY card marked while
+  // it sat at `planning` reaches this; it is left as it is rather than failing the
+  // plan's sweep.
+  it(
+    'a card MARKED while parked is left as it is, and the sweep completes',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const card = await seedCard();
+      await handPark(card);
+      await generatingModify(card);
+      await adminDb.workItem.update({ where: { id: card }, data: { obsolescence: 'outdated' } });
+      await adminDb.planTargetLock.update({
+        where: { workItemId: card },
+        data: { expiresAt: new Date(Date.now() - 60_000) },
+      });
+
+      const out = await planTargetLockService.releaseExpired();
+
+      expect(out.entries).toEqual([{ workItemId: card, outcome: 'left_as_is' }]);
+      expect(await statusOf(card)).toBe(PLANNING_STATUS_KEY);
+      expect(await lockFor(card)).toBeNull();
+    },
+  );
+
   it(
     'an archived target keeps its status — an archived row is claimed by nothing',
     { timeout: DB_TEST_TIMEOUT_MS },

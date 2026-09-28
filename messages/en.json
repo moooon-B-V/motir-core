@@ -660,6 +660,8 @@
       "lastManager": "A workspace needs at least one Manager.",
       "rolesManagerOnly": "Only a workspace Manager can change roles.",
       "orgManagedRole": "An organization Owner or Admin is a Manager in every workspace. Change it on the organization’s Members page.",
+      "removeMemberManagerOnly": "Only a workspace Manager can remove members.",
+      "removeMemberOrgManaged": "An organization Owner or Admin is a Manager in every workspace. Remove them on the organization’s Members page.",
       "roleChangeFailed": "Couldn’t change the role.",
       "scopeManagerOnly": "Only a workspace Manager can change who can enter projects.",
       "scopeNotApplicable": "A Manager enters every project, so their access is always Full.",
@@ -704,7 +706,9 @@
       "CONTAINER_HAS_OPEN_CHILDREN": "This item can't reach that status while children of its own have not been implemented. A parent there claims everything under it is built, and its pull request is opened on that claim. Land the children, re-parent them out if they are no longer in scope, or move the item to Done — which completes them deliberately rather than as a side effect.",
       "APPROVAL_GATE_PENDING": "This status can't be set directly — an approval on this item is waiting, and approving it is what makes this move. Every other move is still open.",
       "APPROVAL_GATE_PENDING_MERGE": "This status can't be set directly — the item has an open pull request, and merging it is what makes this move. Every other move is still open.",
-      "PLAN_TARGET_HELD": "Status can't be changed while a plan is open — a plan is rewriting this item. Approve or decline the plan, or withdraw the proposal that names this item."
+      "PLAN_TARGET_HELD": "Status can't be changed while a plan is open — a plan is rewriting this item. Approve or decline the plan, or withdraw the proposal that names this item.",
+      "OBSOLESCENCE_REQUIRES_FINISHED": "Only a finished item can be marked — archive it instead.",
+      "MARKED_CARD_CANNOT_REOPEN": "This item is marked outdated or deprecated. Clear the mark to reopen this item."
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "Only a project admin can edit the workflow.",
@@ -1481,6 +1485,7 @@
     "advancedFieldPriority": "Priority",
     "advancedFieldType": "Type",
     "advancedFieldDifficulty": "Difficulty",
+    "advancedFieldObsolescence": "Obsolescence",
     "difficulty": "Difficulty",
     "setDifficulty": "Set difficulty",
     "advancedFieldReporter": "Reporter",
@@ -3434,7 +3439,8 @@
         "autoDisabled": "Auto-disabled · {count} failures",
         "actionsAria": "Actions for {name}",
         "reEnable": "Re-enable",
-        "orgClosingAgo": "Paused · {time}"
+        "orgClosingAgo": "Paused · {time}",
+        "heldByMarkAgo": "Held by a mark · {time}"
       },
       "triggerSummary": {
         "created": "When created",
@@ -3541,7 +3547,8 @@
           "failure": "Failure",
           "no_actions": "No actions",
           "plan_held": "Held by a plan",
-          "org_closing": "Paused"
+          "org_closing": "Paused",
+          "held_by_mark": "Held by a mark"
         },
         "conditionNotMet": "Condition not met",
         "planHeldNote": "A plan is rewriting this item",
@@ -3560,7 +3567,8 @@
           "title": "No runs yet",
           "description": "This rule hasn't fired. When an item matches its trigger and conditions, each run appears here with its result, duration and the item that triggered it."
         },
-        "orgClosingNote": "The organization is scheduled for deletion"
+        "orgClosingNote": "The organization is scheduled for deletion",
+        "heldByMarkNote": "This item is marked outdated or deprecated, so it stays finished"
       }
     },
     "aiPlanning": {
@@ -10100,6 +10108,43 @@
       "rateLimitedTitle": "You’re reading a little too fast",
       "rateLimitedBody": "This public project limits how quickly one reader can open it. Try again in {seconds, plural, one {# second} other {# seconds}}.",
       "rateLimitedRetry": "Try again"
+    }
+  },
+  "workItems": {
+    "obsolescence": {
+      "label": "Obsolescence",
+      "value": {
+        "current": "Current",
+        "outdated": "Outdated",
+        "deprecated": "Deprecated"
+      },
+      "note": {
+        "label": "Why is it marked?",
+        "placeholder": "What changed, and what to read instead",
+        "showMore": "Show more",
+        "showLess": "Show less"
+      },
+      "editor": {
+        "save": "Save",
+        "cancel": "Cancel",
+        "saving": "Saving…"
+      },
+      "lockedHint": "Only a finished item can be marked — archive it instead",
+      "refused": {
+        "requiresFinished": "This item is no longer finished, so it can’t be marked. Reload to see its status."
+      },
+      "badge": {
+        "jump": "Go to the Obsolescence field"
+      },
+      "held": {
+        "option": "held by mark",
+        "text": "Status can’t be reopened while this item is marked {mark}.",
+        "sub": "Clear the mark to reopen this item.",
+        "door": "Clear the mark",
+        "refusalArrived": "Marked {mark} elsewhere — this move was not made."
+      },
+      "heldLine": "This item is marked <strong>{mark}</strong>. Clear the mark to reopen this item.",
+      "openItem": "Open item"
     }
   }
 }

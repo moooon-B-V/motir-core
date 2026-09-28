@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
+import zhMessages from '@/messages/zh.json';
 import type {
   ReadinessVerdictDto,
   RelationshipLinkDto,
@@ -105,6 +106,8 @@ const EMPTY: Omit<React.ComponentProps<typeof RelationshipsPanel>, 'readiness' |
   relatesTo: [],
   duplicates: [],
   clones: [],
+  supersedes: [],
+  supersededBy: [],
   // The item itself is in the todo category, so the readiness banner shows —
   // the only gate is the category, not the blocker count (bug-ready-banner-no-deps).
   currentStatus: 'todo',
@@ -217,6 +220,8 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
         relatesTo={[link({ id: 'r', identifier: 'PROD-5', title: 'Related thing' })]}
         duplicates={[link({ id: 'd', identifier: 'PROD-7', title: 'Dup thing' })]}
         clones={[link({ id: 'c', identifier: 'PROD-8', title: 'Clone thing' })]}
+        supersedes={[]}
+        supersededBy={[]}
         readiness={{
           ready: false,
           openBlockers: [summary({ id: 'b', identifier: 'PROD-3' })],
@@ -250,6 +255,66 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
 
     screen.getByText('Blocked');
     screen.getByText(/Waiting on 1 work item/);
+  });
+
+  // MOTIR-6675 — the supersedes pair, per relationships--supersedes.mock.html panel 3.
+  it('lists Supersedes then Superseded by AFTER Clones, several superseders stacking as rows', () => {
+    render(
+      <RelationshipsPanel
+        {...EMPTY}
+        clones={[link({ id: 'c', identifier: 'PROD-8', title: 'Clone thing' })]}
+        supersedes={[
+          link({ id: 'o', identifier: 'PROD-2', title: 'The v1 importer', status: 'done' }),
+        ]}
+        supersededBy={[
+          link({ id: 'n1', identifier: 'PROD-11', title: 'Importer v2' }),
+          link({ id: 'n2', identifier: 'PROD-12', title: 'Importer v3' }),
+        ]}
+        readiness={READY}
+        workflow={workflow}
+      />,
+    );
+    const order = [...document.querySelectorAll('[data-relationship-group]')].map((g) =>
+      g.getAttribute('data-relationship-group'),
+    );
+    expect(order).toEqual(['clones', 'supersedes', 'superseded_by']);
+
+    const older = document.querySelector<HTMLElement>('[data-relationship-group="supersedes"]')!;
+    within(older).getByText('Supersedes');
+    expect(
+      within(older)
+        .getByRole('link', { name: /The v1 importer/ })
+        .getAttribute('href'),
+    ).toBe('/items/PROD-2');
+    const newer = document.querySelector<HTMLElement>('[data-relationship-group="superseded_by"]')!;
+    within(newer).getByText('Superseded by');
+    within(newer).getByText('2');
+    expect(within(newer).getAllByRole('link')).toHaveLength(2);
+  });
+
+  it('draws neither supersedes group on a card with no supersedes links', () => {
+    render(<RelationshipsPanel {...EMPTY} readiness={READY} workflow={workflow} />);
+    expect(document.querySelector('[data-relationship-group="supersedes"]')).toBeNull();
+    expect(document.querySelector('[data-relationship-group="superseded_by"]')).toBeNull();
+  });
+
+  it('labels the pair in zh', () => {
+    render(
+      <RelationshipsPanel
+        {...EMPTY}
+        supersedes={[link({ id: 'o', identifier: 'PROD-2', title: 'Old' })]}
+        supersededBy={[link({ id: 'n', identifier: 'PROD-11', title: 'New' })]}
+        readiness={READY}
+        workflow={workflow}
+      />,
+      { messages: zhMessages, locale: 'zh' },
+    );
+    within(
+      document.querySelector<HTMLElement>('[data-relationship-group="supersedes"]')!,
+    ).getByText('取代');
+    within(
+      document.querySelector<HTMLElement>('[data-relationship-group="superseded_by"]')!,
+    ).getByText('被取代于');
   });
 
   it('shows "Ready to start" above the groups when blockers exist but are all resolved', () => {

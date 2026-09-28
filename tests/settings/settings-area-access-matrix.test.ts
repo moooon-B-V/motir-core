@@ -16,6 +16,7 @@ import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Story 6.5 · Subtask 6.5.4 — the settings-area role-gating matrix proven over
 // the REAL stack (Postgres + the shipped services), the DB-backed half of the
@@ -92,7 +93,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   // toggle is Subtask 6.12.8; `asAccessLevel` still rejects it), so seed it
   // directly at the data layer; the 3 settable levels go through the real setter.
   if (level === 'public') {
-    await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
+    await setProjectAccess(adminDb, project.id, 'public');
   } else {
     await projectMembersService.setAccessLevel({
       key: project.identifier,

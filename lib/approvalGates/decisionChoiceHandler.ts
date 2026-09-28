@@ -101,6 +101,8 @@ export const decisionChoiceGateHandler: GateHandler<ParsedChoice> = {
     // place the service is needed, so it is resolved there — the precedent is
     // `plansService`'s lazy imports.
     const { workItemsService } = await import('@/lib/services/workItemsService');
+    // Never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): the target is the done
+    // category, and the obsolescence mark refuses only a move OUT of it.
     await workItemsService.applyStatusTransition(
       requireGateCard(gate, 'decisionChoiceHandler'),
       resolvedStatusKey,

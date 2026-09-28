@@ -7,7 +7,6 @@ import { composeOwnerReach } from '@/lib/workspaces/membershipGate';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { customRolePermissionsOf } from '@/lib/workspaces/roles';
 import type { Project, ProjectAccessMode } from '@/generated/prisma/client';
-import { accessModeOf } from '@/lib/projects/accessMode';
 import {
   canBrowse,
   canComment,
@@ -167,11 +166,11 @@ async function resolveInputs(
     tx,
   );
   return {
-    // The project's MODE — derived from `accessLevel` while the column is NULL
-    // (Story MOTIR-6169) — and the actor's SCOPE, read off the membership row; an
+    // The project's stored MODE (Story MOTIR-6169; NOT NULL since MOTIR-6686)
+    // and the actor's SCOPE, read off the membership row; an
     // org Owner / Admin composed in as a Manager has no row, and a Manager's
     // scope is never read.
-    accessMode: accessModeOf(project),
+    accessMode: project.accessMode,
     workspaceRole,
     accessScope: workspaceMembership?.accessScope ?? null,
     customRolePermissions: customRolePermissionsOf(workspaceRole, workspaceMembership),
@@ -225,7 +224,7 @@ async function resolvePublicInputs(
   tx?: Prisma.TransactionClient,
 ): Promise<ProjectAccessInputs> {
   const project = await projectRepository.findById(projectId, tx);
-  if (!project || accessModeOf(project) !== 'public') {
+  if (!project || project.accessMode !== 'public') {
     throw new ProjectNotFoundError(projectId);
   }
   if (!actorUserId) {
@@ -416,7 +415,7 @@ export const projectAccessService = {
    * it: a project-bound token was LISTED every project it would then 404 on.
    * A bound actor keeps at most its one project, before any role is read.
    */
-  async filterBrowsable<T extends Pick<Project, 'id' | 'accessLevel' | 'accessMode'>>(
+  async filterBrowsable<T extends Pick<Project, 'id' | 'accessMode'>>(
     projects: T[],
     ctx: AccessActorContext,
     tx?: Prisma.TransactionClient,
@@ -459,7 +458,7 @@ export const projectAccessService = {
     const accessScope = workspaceMembership?.accessScope ?? null;
     return projects.filter((p) =>
       canEnter({
-        accessMode: accessModeOf(p),
+        accessMode: p.accessMode,
         workspaceRole,
         accessScope,
         addedToProject: added.has(p.id),
@@ -539,7 +538,7 @@ export const projectAccessService = {
           result.set(
             userId,
             canEdit({
-              accessMode: accessModeOf(project),
+              accessMode: project.accessMode,
               workspaceRole,
               accessScope: membership?.accessScope ?? null,
               customRolePermissions: customRolePermissionsOf(workspaceRole, membership),
@@ -702,7 +701,7 @@ export const projectAccessService = {
     // The same resolver `publicProjectsService.resolvePublicProject` uses: the one
     // PUBLIC project carrying this key, across workspaces.
     const project = await projectRepository.findPublicByIdentifier(identifier);
-    if (!project || accessModeOf(project) !== 'public') return VISITOR_NOT_FOUND;
+    if (!project || project.accessMode !== 'public') return VISITOR_NOT_FOUND;
 
     if (!session) return { kind: 'sign_in', identifier: project.identifier };
     const actorUserId = session.user.id;

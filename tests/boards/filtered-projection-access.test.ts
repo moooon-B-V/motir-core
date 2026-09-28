@@ -12,6 +12,7 @@ import type { WorkItemKind } from '@/generated/prisma/client';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // boardsService.getBoard — the FILTERED board read's ACCESS + TENANT-SCOPE +
 // typed-error edges (Story 6.15 · Subtask 6.15.4, the story-closing matrix).
@@ -84,7 +85,7 @@ describe('getBoard — filtered read: access, tenant scope, typed error (6.15.4)
     // Make the project private (the strictest gate); a non-member sees nothing.
     await adminDb.project.update({
       where: { id: owner.projectId },
-      data: { accessLevel: 'private' },
+      data: projectAccessData('members'),
     });
 
     // An outsider: a real user who is NOT a member of the project's workspace.

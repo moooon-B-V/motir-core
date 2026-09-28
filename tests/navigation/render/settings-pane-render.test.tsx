@@ -70,12 +70,13 @@ vi.mock('@/lib/services/labelsService', () => ({
 
 import ProjectAutomationPage from '@/app/(authed)/settings/project/automation/page';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 const PROJECT = {
   userId: 'u1',
   workspaceId: 'ws1',
   projectId: 'p1',
-  project: { identifier: 'ACME', name: 'Acme', accessLevel: 'open' },
+  project: { identifier: 'ACME', name: 'Acme', ...projectAccessData('workspace') },
 };
 
 beforeEach(() => {

@@ -7,6 +7,7 @@ import { StatusHeldNotice, type StatusHeldLine } from '@/components/issues/Statu
 import { useDismissOnEscapeOrOutside } from '@/components/issues/heldRefusal';
 import type { BoardPlanHoldSummaryDto } from '@/lib/dto/boards';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
+import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
 
 // The board's HELD refusal, anchored ON the returned card (Story MOTIR-4887 ·
 // Subtask MOTIR-5529; `design/boards/design-notes.md` § panel 2b) — and, since
@@ -22,12 +23,14 @@ import type { PlanHoldDTO } from '@/lib/dto/plans';
 // are outlined right now.
 //
 // ONE refusal component, two slots: a gate refusal (an approval or a merge holds
-// ONE target) draws UNDER the card, as panel 2b drew it; a plan refusal (a plan
+// ONE target) — and a MARK refusal (MOTIR-6682: a marked card dragged out of the
+// done category) — draws UNDER the card, as panel 2b drew it; a plan refusal (a plan
 // holds the WHOLE item) grows inside the item's own plan footer, within its border
 // — never a separate box that reads as one more card in the lane.
 
 export type BoardHeldRefusal =
   | { kind: 'gate'; workItemId: string; itemKey: string; line: StatusHeldLine }
+  | { kind: 'mark'; workItemId: string; itemKey: string; mark: WorkItemObsolescenceDto }
   | {
       kind: 'plan';
       workItemId: string;
@@ -128,10 +131,26 @@ export function BoardCardHeldRefusal({
 }) {
   const { held, close } = useContext(BoardHeldRefusalContext);
   const ref = useRef<HTMLDivElement>(null);
-  const kind = slot === 'footer' ? 'plan' : 'gate';
-  const open = held?.workItemId === workItemId && held.kind === kind;
+  const open =
+    held?.workItemId === workItemId &&
+    (slot === 'footer' ? held.kind === 'plan' : held.kind !== 'plan');
   useDismissOnEscapeOrOutside(ref, open, close);
   if (!open || !held) return null;
+  if (held.kind === 'mark') {
+    return (
+      <div
+        ref={ref}
+        data-board-held=""
+        className="mt-2 rounded-(--radius-control) shadow-(--shadow-elevated)"
+      >
+        <StatusHeldNotice
+          itemKey={held.itemKey}
+          lines={[]}
+          mark={{ mark: held.mark, refused: true, inPlace: true }}
+        />
+      </div>
+    );
+  }
   if (held.kind === 'gate') {
     return (
       <div

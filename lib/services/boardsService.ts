@@ -57,6 +57,7 @@ import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
 import { personName } from '@/lib/people/personLabel';
 import {
   ApprovalGatePendingBoardMoveError,
+  MarkedCardBoardMoveError,
   PlanTargetHeldBoardMoveError,
   BoardColumnNotFoundError,
   BoardNotFoundError,
@@ -78,6 +79,7 @@ import {
   MissingArtifactEvidenceError,
   ContainerHasOpenChildrenError,
   ApprovalGatePendingError,
+  MarkedCardCannotReopenError,
   PlanTargetHeldError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
@@ -745,6 +747,11 @@ export const boardsService = {
       // already complete, so nothing is read here.
       if (err instanceof PlanTargetHeldError) {
         throw new PlanTargetHeldBoardMoveError(err.message, err.payload);
+      }
+      // A drag of a MARKED card out of the done category (MOTIR-6682). The error
+      // already names the card and its mark, so nothing is read here either.
+      if (err instanceof MarkedCardCannotReopenError) {
+        throw new MarkedCardBoardMoveError(err.message, err.key, err.obsolescence);
       }
       throw err;
     }

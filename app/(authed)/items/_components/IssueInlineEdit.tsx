@@ -15,7 +15,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
-import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
+import type { WorkItemObsolescenceDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
 import type { Locale } from '@/lib/i18n/locales';
 import { formatDate } from '@/lib/utils/datetime';
@@ -355,7 +355,10 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
   // other arm: the list reads no plan per row either, so it draws the plan line
   // the refusal carried, with its Review plan door.
   const [held, setHeld] = useState<
-    { kind: 'gate'; line: StatusHeldLine } | { kind: 'plan'; plan: PlanHoldDTO } | null
+    | { kind: 'gate'; line: StatusHeldLine }
+    | { kind: 'plan'; plan: PlanHoldDTO }
+    | { kind: 'mark'; mark: WorkItemObsolescenceDto }
+    | null
   >(null);
   const heldRef = useRef<HTMLSpanElement>(null);
   const closeHeld = useCallback(() => setHeld(null), []);
@@ -401,6 +404,11 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
       } else if (res.code === 'PLAN_TARGET_HELD' && res.plan) {
         status.fail(token);
         setHeld({ kind: 'plan', plan: res.plan });
+      } else if (res.code === 'MARKED_CARD_CANNOT_REOPEN' && res.mark) {
+        // A marked card cannot be reopened (MOTIR-6682): the same anchored box,
+        // the mark's one line and its Open item door — never a toast.
+        status.fail(token);
+        setHeld({ kind: 'mark', mark: res.mark });
       } else {
         status.fail(token);
         toast({ variant: 'error', title: res.error });
@@ -449,6 +457,12 @@ function InlineStatusEditor({ row, workflow }: { row: IssueRowData; workflow: Wo
       >
         {held.kind === 'plan' ? (
           <StatusHeldNotice itemKey={row.identifier} lines={[]} plan={held.plan} />
+        ) : held.kind === 'mark' ? (
+          <StatusHeldNotice
+            itemKey={row.identifier}
+            lines={[]}
+            mark={{ mark: held.mark, refused: true, inPlace: true }}
+          />
         ) : (
           <StatusHeldNotice itemKey={row.identifier} lines={[held.line]} />
         )}

@@ -42,6 +42,7 @@ import type {
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe(
@@ -412,7 +413,7 @@ describe('guard · the public project, below its page', () => {
 
   async function publicFixture() {
     const fx = await makeWorkItemFixture({ name: 'Open source' });
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+    await setProjectAccess(adminDb, fx.projectId, 'public');
     const outer = await folder(fx, SECRET);
     const inner = await folder(fx, `${SECRET} inner`, outer.id);
     return { fx, outer, inner };

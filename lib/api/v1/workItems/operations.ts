@@ -160,7 +160,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     operationId: 'createWorkItem',
     summary: 'Create a work item',
     description:
-      'Create a work item in a project. The parent, if given, is named by its key and must be a kind-legal parent in the same project. Alternatively send `folderId` to file the new item into one of the project’s folders; naming both a parent and a folder is refused with `PLACEMENT_CONFLICT`. `obsolescence` (`outdated` / `deprecated`) and `obsolescenceNoteMd` may be set on any kind and in any status; a value outside the enum is refused with `INVALID_OBSOLESCENCE`.',
+      'Create a work item in a project. The parent, if given, is named by its key and must be a kind-legal parent in the same project. Alternatively send `folderId` to file the new item into one of the project’s folders; naming both a parent and a folder is refused with `PLACEMENT_CONFLICT`. `obsolescence` (`outdated` / `deprecated`) and `obsolescenceNoteMd` may be set on any kind; a value outside the enum is refused with `INVALID_OBSOLESCENCE`. A MARK is a finished card’s state: a new item lands at the workflow’s initial status, so a mark on create is refused with `OBSOLESCENCE_REQUIRES_FINISHED` (422, `item`: the key and status) unless that status is in the done category — set it once the item is finished, and archive an item nobody will finish instead. A parent that carries a mark takes no new children: `MARKED_CARD_CANNOT_REOPEN` (422, `mark`: the parent’s key and mark).',
     permission: 'work_item:edit',
     parameters: [projectKeyParameter],
     requestBody: {
@@ -196,7 +196,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     operationId: 'updateWorkItem',
     summary: 'Update a work item',
     description:
-      'Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field explicitly set to `null` CLEARS it. Send `If-Match` to make the update conditional on the item not having moved. `folderId` files the item into a folder (or `null` takes it out), in the same write as every other field; setting `parentKey` on a filed item takes it out of its folder, and sending both is refused with `PLACEMENT_CONFLICT`. `obsolescence` and `obsolescenceNoteMd` mark the item as no longer true of the code on ANY kind and in ANY status — a `done` item included — and `null` clears either; a value outside the enum is refused with `INVALID_OBSOLESCENCE`.',
+      'Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field explicitly set to `null` CLEARS it. Send `If-Match` to make the update conditional on the item not having moved. `folderId` files the item into a folder (or `null` takes it out), in the same write as every other field; setting `parentKey` on a filed item takes it out of its folder, and sending both is refused with `PLACEMENT_CONFLICT`. `obsolescence` and `obsolescenceNoteMd` mark the item as no longer true of the code on ANY kind, and `null` clears either; a value outside the enum is refused with `INVALID_OBSOLESCENCE`. A MARK is a FINISHED card’s state: setting `outdated` or `deprecated` on an item whose status is outside the done category is refused with `OBSOLESCENCE_REQUIRES_FINISHED` (422, `item`: the key, the status and its category) — archive an item nobody will finish instead. Clearing is always legal, and a patch that omits the mark never meets it. Re-parenting under a marked item (`parentKey`) is refused with `MARKED_CARD_CANNOT_REOPEN` (422, `mark`).',
     permission: 'work_item:edit',
     parameters: [keyParameter, ifMatchParameter],
     requestBody: {
@@ -232,7 +232,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     operationId: 'transitionWorkItem',
     summary: 'Move a work item to a new status',
     description:
-      'Apply a workflow transition. A status the workflow does not define and a status not reachable from here are DIFFERENT errors, because a client can fix only one of them.',
+      'Apply a workflow transition. A status the workflow does not define and a status not reachable from here are DIFFERENT errors, because a client can fix only one of them. A MARKED item (`obsolescence` set) stays finished: a move to any status outside the done category is refused with `MARKED_CARD_CANNOT_REOPEN` (422, `mark`: the key, the mark and the refused target) until the mark is cleared with `updateWorkItem`; a move within the done category (`done` ↔ `cancelled`) is not.',
     permission: 'work_item:edit',
     parameters: [keyParameter],
     requestBody: {

@@ -187,7 +187,8 @@ function toPatch(args: UpdateWorkItemArgs): UpdateWorkItemInput {
     patch.difficulty = args.difficulty as WorkItemDifficultyDto | null;
   }
   // The mark and its note (MOTIR-6582): `null` clears; the service validates the
-  // value (InvalidObsolescenceError → INVALID_OBSOLESCENCE) on ANY kind and status.
+  // value (InvalidObsolescenceError → INVALID_OBSOLESCENCE) on ANY kind, and refuses
+  // SETTING a mark on an unfinished item (MOTIR-6672, OBSOLESCENCE_REQUIRES_FINISHED).
   if (args.obsolescence !== undefined) {
     patch.obsolescence = args.obsolescence as WorkItemObsolescenceDto | null;
   }
@@ -275,9 +276,12 @@ export function registerUpdateWorkItem(
         'description, explanation, priority, type, executor, difficulty, obsolescence mark ' +
         'and its note, estimate, story points, target repo, assignee, or due date. Use ' +
         'transition_status for the workflow status. The obsolescence mark (`outdated` · ' +
-        '`deprecated`) and `obsolescenceNoteMd` may be set on ANY kind in ANY status — a ' +
-        '`done` item included — and `null` clears either; a value outside the enum is ' +
-        'refused with INVALID_OBSOLESCENCE. Honors the same leaf-only type/difficulty rules, ' +
+        '`deprecated`) and `obsolescenceNoteMd` may be set on ANY kind, and `null` clears ' +
+        'either; a value outside the enum is refused with INVALID_OBSOLESCENCE. A MARK is a ' +
+        'FINISHED item’s state: setting one on an item whose status is outside the done ' +
+        'category is refused with OBSOLESCENCE_REQUIRES_FINISHED — archive an item nobody will ' +
+        'finish instead. Clearing is always legal, and after it the item can be reopened. ' +
+        'Re-parenting under a marked item is refused with MARKED_CARD_CANNOT_REOPEN. Honors the same leaf-only type/difficulty rules, ' +
         'project-repository validation, assignee-membership check, and access checks as the UI.',
       inputSchema,
     },

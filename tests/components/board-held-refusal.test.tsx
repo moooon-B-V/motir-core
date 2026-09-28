@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
+import zhMessages from '@/messages/zh.json';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/boards',
@@ -290,5 +291,85 @@ describe('a card outside any board', () => {
     expect(screen.queryByTestId('status-held-notice')).toBeNull();
     expect(NO_BOARD_HELD_REFUSAL.held).toBeNull();
     expect(() => NO_BOARD_HELD_REFUSAL.close()).not.toThrow();
+  });
+});
+
+// Story MOTIR-6575 · MOTIR-6682 — the MARK refusal, per
+// `design/boards/board-card--obsolescence.mock.html` panel 3: a marked card dragged
+// out of the done category returns, and ONE line opens UNDER it (the gate slot)
+// with the mark's own glyph and an Open item door to the item page's field.
+describe('the MARK refusal (MOTIR-6682)', () => {
+  it('reads the mark off a 409 MARKED_CARD_CANNOT_REOPEN; an off-enum mark is not a held refusal', async () => {
+    expect(
+      await readHeldRefusal(
+        json(409, {
+          code: 'MARKED_CARD_CANNOT_REOPEN',
+          error: 'x',
+          key: 'PROD-1',
+          mark: 'outdated',
+        }),
+      ),
+    ).toEqual({ code: 'MARKED_CARD_CANNOT_REOPEN', mark: 'outdated' });
+    expect(
+      await readHeldRefusal(json(409, { code: 'MARKED_CARD_CANNOT_REOPEN', mark: 'stale' })),
+    ).toBeNull();
+    expect(await readHeldRefusal(json(409, { code: 'MARKED_CARD_CANNOT_REOPEN' }))).toBeNull();
+  });
+
+  it('draws the one line and Open item ONLY under the refused card', () => {
+    renderCards({ kind: 'mark', workItemId: 'wi_a', itemKey: 'PROD-1', mark: 'deprecated' });
+    const a = screen.getByTestId('card-a');
+    expect(within(screen.getByTestId('card-b')).queryByTestId('status-held-notice')).toBeNull();
+    const notice = within(a).getByTestId('status-held-notice');
+    expect(notice.textContent).toBe(
+      'This item is marked Deprecated. Clear the mark to reopen this item.Open item',
+    );
+    expect(within(notice).getByText('Deprecated').tagName).toBe('STRONG');
+    const door = within(notice).getByRole('link', { name: 'Open item' });
+    expect(door.getAttribute('href')).toBe('/items/PROD-1#obsolescence-field');
+    expect(door.className).not.toContain('--el-accent');
+  });
+
+  it('never draws in the plan footer slot', () => {
+    render(
+      <BoardHeldRefusalProvider
+        value={{
+          held: { kind: 'mark', workItemId: 'wi_a', itemKey: 'PROD-1', mark: 'outdated' },
+          close: vi.fn(),
+        }}
+      >
+        <BoardCardHeldRefusal workItemId="wi_a" slot="footer" />
+      </BoardHeldRefusalProvider>,
+    );
+    expect(screen.queryByTestId('status-held-notice')).toBeNull();
+  });
+
+  it('closes on Esc', () => {
+    const close = renderCards({
+      kind: 'mark',
+      workItemId: 'wi_a',
+      itemKey: 'PROD-1',
+      mark: 'outdated',
+    });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(close).toHaveBeenCalled();
+  });
+
+  it('renders in zh', () => {
+    render(
+      <BoardHeldRefusalProvider
+        value={{
+          held: { kind: 'mark', workItemId: 'wi_a', itemKey: 'PROD-1', mark: 'outdated' },
+          close: vi.fn(),
+        }}
+      >
+        <BoardCardHeldRefusal workItemId="wi_a" />
+      </BoardHeldRefusalProvider>,
+      { locale: 'zh', messages: zhMessages },
+    );
+    expect(screen.getByTestId('status-held-notice').textContent).toContain(
+      '此事项已标记为已过时。清除标记后才能重新打开此事项。',
+    );
+    screen.getByRole('link', { name: '打开事项' });
   });
 });

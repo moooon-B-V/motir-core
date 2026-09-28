@@ -8,6 +8,7 @@ import {
 import {
   WORK_ITEM_OBSOLESCENCES,
   canCarryObsolescence,
+  isReopenHeldByMark,
   isWorkItemObsolescence,
 } from '@/lib/issues/obsolescence';
 import { InvalidObsolescenceError, WorkItemError } from '@/lib/workItems/errors';
@@ -108,5 +109,23 @@ describe('activity feed — an obsolescence change', () => {
       resolvers,
     );
     expect(parts).toEqual([{ kind: 'fieldEdited', field: 'obsolescenceNoteMd' }]);
+  });
+});
+
+describe('isReopenHeldByMark — a marked card stays finished (MOTIR-6575 · MOTIR-6672)', () => {
+  it('holds every move of a marked card out of the done category', () => {
+    for (const mark of WORK_ITEM_OBSOLESCENCES) {
+      expect(isReopenHeldByMark(mark, 'todo')).toBe(true);
+      expect(isReopenHeldByMark(mark, 'in_progress')).toBe(true);
+      // An unknown target category is not provably finished, so it is held.
+      expect(isReopenHeldByMark(mark, null)).toBe(true);
+    }
+  });
+
+  it('leaves a move within the done category, and any move of an unmarked card, alone', () => {
+    expect(isReopenHeldByMark('outdated', 'done')).toBe(false);
+    expect(isReopenHeldByMark('deprecated', 'done')).toBe(false);
+    expect(isReopenHeldByMark(null, 'todo')).toBe(false);
+    expect(isReopenHeldByMark(undefined, 'in_progress')).toBe(false);
   });
 });

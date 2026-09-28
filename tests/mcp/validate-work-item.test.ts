@@ -24,6 +24,7 @@ import { seedBlockedBy } from '../helpers/seedBlockedBy';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 import { linkProjectRepo } from '../helpers/projectRepoLink';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // `validate_work_item` (Subtask 7.8.23) over real Postgres — the single-item
 // analogue of `validate_sprint`: is a work item's whole SUBTREE finishable? We
@@ -747,7 +748,7 @@ describe('workItemsService.validateWorkItem — the prose-vs-graph advisory', ()
     });
     await adminDb.project.update({
       where: { id: secretProject.id },
-      data: { accessLevel: 'private' },
+      data: projectAccessData('members'),
     });
     const secretItem = await workItemsService.createWorkItem(
       { projectId: secretProject.id, kind: 'task', title: 'Classified' },

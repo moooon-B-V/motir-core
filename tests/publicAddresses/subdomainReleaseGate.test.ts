@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // THE STORY-LEVEL RELEASE GATE — Story MOTIR-4451 · Subtask MOTIR-4456.
 //
@@ -80,7 +81,7 @@ beforeEach(async () => {
       name: 'Roadmap',
       slug: 'roadmap',
       identifier: 'ROADMAP',
-      accessLevel: 'public',
+      ...projectAccessData('public'),
     },
   });
   fx = {

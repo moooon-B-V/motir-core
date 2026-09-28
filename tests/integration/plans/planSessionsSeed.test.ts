@@ -14,6 +14,7 @@ import {
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // MOTIR-6209 — a Plans row NAMES the refused work item its session was seeded
 // from (story MOTIR-6068; design MOTIR-6206 `plans-sessions--seeded.mock.html`).
@@ -134,7 +135,7 @@ async function moveOutOfReach(card: WorkItem): Promise<void> {
     actorUserId: fx.ownerId,
     identifier: 'HIDN',
   });
-  await adminDb.project.update({ where: { id: elsewhere.id }, data: { accessLevel: 'private' } });
+  await setProjectAccess(adminDb, elsewhere.id, 'members');
   await adminDb.workItem.update({ where: { id: card.id }, data: { projectId: elsewhere.id } });
 }
 

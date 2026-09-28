@@ -24,6 +24,7 @@ import {
   setProjectRoleAs,
   setWorkspaceRoleFor,
 } from './helpers/workspaceRoleFixtures';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // THE DECIDE DOOR (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
 // docs/decisions/approval-gates.md), against a REAL Postgres.
@@ -599,7 +600,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
     // project gate rather than re-implemented here.
     await adminDb.project.update({
       where: { id: fx.projectId },
-      data: { accessLevel: 'private' },
+      data: projectAccessData('members'),
     });
     const outsider = await createTestUser();
     await adminDb.workspaceMembership.create({
@@ -622,7 +623,7 @@ describe('approvalGatesService.decide — AUTHORITY is the ASSIGNEE, the REPORTE
   it('a VIEWER on a private project can browse but not edit — refused at the permission FLOOR, before the relationship test', async () => {
     await adminDb.project.update({
       where: { id: fx.projectId },
-      data: { accessLevel: 'private' },
+      data: projectAccessData('members'),
     });
     const viewer = await createTestUser();
     await adminDb.workspaceMembership.create({

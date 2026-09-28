@@ -535,6 +535,23 @@ describe('a card the promotion CANNOT move is skipped, not fatal', () => {
     expect(await revisionCount(refused.id)).toBe(before);
   });
 
+  it('a MARKED card (a legacy mark on an open card) is skipped the same way — MOTIR-6681', async () => {
+    // A card marked under MOTIR-6672 is `done` and never at Implemented, but one
+    // marked while open before that rule is, and `in_review` is outside the done
+    // category the mark holds it to. The promotion records a skip for that card —
+    // it does not fail the webhook, and it does not stop its sibling.
+    const s = await makeScenario('ci-marked@example.com');
+    const marked = await cardWithPr(s, 'Marked while open', 31);
+    await adminDb.workItem.update({ where: { id: marked.id }, data: { obsolescence: 'outdated' } });
+    const before = await revisionCount(marked.id);
+
+    const res = await ci({ conclusion: 'success', headSha: 'sha-m', prNumbers: [31] });
+
+    expect(res).toMatchObject({ outcome: 'verified', ciState: 'passing' });
+    expect(await statusOf(marked.id)).toBe('implemented');
+    expect(await revisionCount(marked.id)).toBe(before);
+  });
+
   it('a workflow with no EDGE to in_review is skipped the same way', async () => {
     // The second tolerated refusal: the status exists, but this project's
     // workflow has no `implemented → in_review` transition. Both refusals are

@@ -720,7 +720,25 @@
  *   `520148f5c`, so this claims `1.47.0`. If a sibling has taken it since, RENUMBER
  *   this entry — it names the FIELD.
  *
- * - `1.48.0` — MOTIR-6558 adds `getDispatchRun` (`GET /api/v1/dispatch-runs/{id}`):
+ * - `1.48.0` — MOTIR-6672 · MOTIR-6673: a mark is a FINISHED card's state. Two new
+ *   codes for two new conditions, both 422 and both with an additive payload:
+ *   `OBSOLESCENCE_REQUIRES_FINISHED` (`item`: the key, status and its category) on
+ *   `createWorkItem` / `updateWorkItem` when a mark is SET on a card whose status is
+ *   outside the done category, and `MARKED_CARD_CANNOT_REOPEN` (`mark`: the key, the
+ *   mark and the refused target) on `transitionWorkItem` for a marked card's move out
+ *   of the done category, and on the two writes for new work under a marked parent.
+ *   Both are named in the three operations' descriptions, and their bodies are
+ *   declared beside the other refusal bodies (`obsolescenceRequiresFinishedSchema`,
+ *   `markedCardCannotReopenSchema`). This narrows what 1.44.0 documented ("any status") —
+ *   the story's decision (MOTIR-6575), recorded here so the number says the rule
+ *   moved. No field changes shape.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.47.0` at the merge of `origin/main` that brought MOTIR-6735 (which took
+ *   `1.47.0` first — this entry was renumbered from it), so this claims `1.48.0`. If a
+ *   sibling has taken it since, RENUMBER this entry — it names the CODES.
+ *
+ * - `1.49.0` — MOTIR-6558 adds `getDispatchRun` (`GET /api/v1/dispatch-runs/{id}`):
  *   one run with its SET, the same `DispatchRun` component the ingest operations
  *   already answer with. A hosted run is opened by the SERVER, and the `motir`
  *   CLI in its container ADOPTS it (`hosted-run-runs-the-cli-as-the-app.md` §3) —
@@ -731,12 +749,13 @@
  *   list); nothing existing changes.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.47.0` on `origin/main` when this was merged (MOTIR-6735 took it after
- *   MOTIR-6528, MOTIR-6530, MOTIR-6532, MOTIR-6531 and MOTIR-6535/6537 took
- *   `1.46.0` together), so this claims `1.48.0`. If a sibling has taken it since,
- *   RENUMBER this entry — it names the OPERATION.
+ *   was `1.48.0` on `origin/main` when this was merged (MOTIR-6735 took `1.47.0`
+ *   and MOTIR-6672/6673 `1.48.0` after MOTIR-6528, MOTIR-6530, MOTIR-6532,
+ *   MOTIR-6531 and MOTIR-6535/6537 took `1.46.0` together), so this claims
+ *   `1.49.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   OPERATION.
  *
- * - `1.49.0` — MOTIR-6538 adds `issueDispatchRunGitCredentials`:
+ * - `1.50.0` — MOTIR-6538 adds `issueDispatchRunGitCredentials`:
  *   `POST /api/v1/dispatch-runs/{id}/git-credential`, a running HOSTED run's git
  *   credentials — one entry per repository of the run, each an installation token
  *   of the Motir GitHub App that writes it, with the App's bot as author and the
@@ -749,10 +768,10 @@
  *   included), so no person's grant is widened by it.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.48.0` after MOTIR-6558, so this claims `1.49.0`. If a sibling has taken
+ *   was `1.49.0` after MOTIR-6558, so this claims `1.50.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
  *
- * - `1.50.0` — MOTIR-6539 adds `workBranch` (nullable) to the `DispatchPrompt`
+ * - `1.51.0` — MOTIR-6539 adds `workBranch` (nullable) to the `DispatchPrompt`
  *   component `getWorkItemDispatchPrompt` answers: the branch the prompt tells the
  *   agent to CREATE for its work — the same name in every repository the item
  *   ships in — or `null` for a manual item. A runner names it on `checkout_ready`
@@ -763,7 +782,7 @@
  *   nothing existing changes meaning, and `sessionBranch` still names the lineage.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.49.0` after MOTIR-6538, so this claims `1.50.0`. If a sibling has taken
+ *   was `1.50.0` after MOTIR-6538, so this claims `1.51.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.50.0';
+export const V1_CONTRACT_VERSION = '1.51.0';

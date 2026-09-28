@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The Visitor's consent screen, end to end through the real resolver and
 // datastore (Story MOTIR-6170 · MOTIR-6669): each verdict's branch on the page,
@@ -56,7 +57,7 @@ async function publicProject(mode: 'public' | 'members' = 'public') {
   const fx = await makeWorkItemFixture({ name: `CS ${identifier}`, identifier });
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { accessMode: mode, accessLevel: mode === 'public' ? 'public' : 'private' },
+    data: projectAccessData(mode),
   });
   return { fx, identifier };
 }

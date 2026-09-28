@@ -31,6 +31,8 @@ export type WorkItemErrorTag =
   | 'TYPE_NOT_ALLOWED_ON_KIND'
   | 'DIFFICULTY_NOT_ALLOWED_ON_KIND'
   | 'INVALID_OBSOLESCENCE'
+  | 'OBSOLESCENCE_REQUIRES_FINISHED'
+  | 'MARKED_CARD_CANNOT_REOPEN'
   | 'NOT_EPIC'
   | 'UNKNOWN_TARGET_REPO'
   | 'UNKNOWN_PROJECT_REPO_REF'
@@ -286,6 +288,74 @@ export class InvalidObsolescenceError extends WorkItemError {
       `${JSON.stringify(value) ?? String(value)} is not an obsolescence (expected "outdated", "deprecated" or null).`,
     );
     this.name = 'InvalidObsolescenceError';
+  }
+}
+
+/**
+ * An `outdated` / `deprecated` mark would be SET on a work item whose status sits
+ * OUTSIDE the project's `done` category — Story MOTIR-6575 · MOTIR-6672. Both
+ * marks are a FINISHED card's state (`canCarryObsolescence`), so a card nobody
+ * will finish is archived, not marked. Clearing a mark (`null`) is never refused,
+ * and neither is a patch that leaves the mark untouched. A client error → 422
+ * (the blanket `WorkItemError` mapping).
+ */
+export class ObsolescenceRequiresFinishedError extends WorkItemError {
+  readonly tag = 'OBSOLESCENCE_REQUIRES_FINISHED' as const;
+  readonly code = 'OBSOLESCENCE_REQUIRES_FINISHED' as const;
+  /** The card's `KEY-n`. */
+  readonly key: string;
+  /** The status the card is at (or is being created at). */
+  readonly statusKey: string;
+  /** That status's category — never `done`, or the mark would be legal. */
+  readonly statusCategory: string | null;
+  constructor(args: { key: string; statusKey: string; statusCategory: string | null }) {
+    super(
+      `${args.key} is at ${args.statusKey}: only a finished work item can be marked outdated or ` +
+        'deprecated. A work item nobody will finish is archived, not marked.',
+    );
+    this.name = 'ObsolescenceRequiresFinishedError';
+    this.key = args.key;
+    this.statusKey = args.statusKey;
+    this.statusCategory = args.statusCategory;
+  }
+}
+
+/**
+ * A MARKED work item would be REOPENED — Story MOTIR-6575 · MOTIR-6672. A card
+ * carrying `outdated` or `deprecated` stays finished: a move to any status
+ * outside the `done` category is refused, for a person and for Motir's own
+ * system movers alike, and so is new work under it (a child created or
+ * re-parented beneath it), which would reopen it through status derivation. A
+ * move WITHIN the done category (`done ↔ cancelled`) is untouched. Cleared by a
+ * person clearing the mark, so a REFUSAL in `STATUS_TRANSITION_REFUSALS`, never
+ * a fault. A client error → 422 (the blanket `WorkItemError` mapping).
+ */
+export class MarkedCardCannotReopenError extends WorkItemError {
+  readonly tag = 'MARKED_CARD_CANNOT_REOPEN' as const;
+  readonly code = 'MARKED_CARD_CANNOT_REOPEN' as const;
+  /** The MARKED card's `KEY-n` — the parent, when the refused write is a child. */
+  readonly key: string;
+  /** Its mark. */
+  readonly obsolescence: 'outdated' | 'deprecated';
+  /** The status the refused move targeted, or null for a refused child write. */
+  readonly toStatusKey: string | null;
+  constructor(args: {
+    key: string;
+    obsolescence: 'outdated' | 'deprecated';
+    toStatusKey: string | null;
+    /** Set when the refused write is a CHILD created or moved under the card. */
+    childKey?: string | null;
+  }) {
+    super(
+      args.toStatusKey === null
+        ? `${args.key} is marked ${args.obsolescence}: a new child${args.childKey ? ` (${args.childKey})` : ''} ` +
+            'would reopen it. Clear the mark to reopen this item.'
+        : `${args.key} is marked ${args.obsolescence}: clear the mark to reopen this item.`,
+    );
+    this.name = 'MarkedCardCannotReopenError';
+    this.key = args.key;
+    this.obsolescence = args.obsolescence;
+    this.toStatusKey = args.toStatusKey;
   }
 }
 

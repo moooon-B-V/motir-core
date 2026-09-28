@@ -67,7 +67,7 @@ export const statusDerivationOnTransitioned = defineJob(
     // (MOTIR-5526) gained `approval_pending`, so a memo
     // written under the old id carries the narrower shape. The derivation is an
     // idempotent read-derived write, so re-executing on a resumed run is safe.
-    const rollup = await ctx.step.run('roll-up-parent-v3', () =>
+    const rollup = await ctx.step.run('roll-up-parent-v4', () =>
       services.parentStatusRollup.rollUpForChild(payload.workItemId, payload.workspaceId),
     );
     // The cascade is decided by the TRANSITION this event carries, not by re-reading
@@ -167,7 +167,7 @@ export const statusDerivationOnCreated = defineJob(
     // (MOTIR-5526) gained `approval_pending`, so a memo
     // written under the old id carries the narrower shape. The derivation is an
     // idempotent read-derived write, so re-executing on a resumed run is safe.
-    return ctx.step.run('recompute-parent-v3', () =>
+    return ctx.step.run('recompute-parent-v4', () =>
       services.parentStatusRollup.rollUpForChild(payload.workItemId, payload.workspaceId),
     );
   },
@@ -203,7 +203,7 @@ export const statusDerivationOnChildSetChanged = defineJob(
     for (const [i, parentId] of payload.parentIds.entries()) {
       outcomes.push(
         // `-v3`: the same result widening as the steps above (MOTIR-5526, MOTIR-6265).
-        await ctx.step.run(`recompute-parent-v3-${i}`, () =>
+        await ctx.step.run(`recompute-parent-v4-${i}`, () =>
           services.parentStatusRollup.recomputeParent(parentId, payload.workspaceId, trigger),
         ),
       );
@@ -277,7 +277,7 @@ export const statusDerivationOnRequested = defineJob(
     // (MOTIR-5526) gained `approval_pending`, so a memo
     // written under the old id carries the narrower shape. The derivation is an
     // idempotent read-derived write, so re-executing on a resumed run is safe.
-    return ctx.step.run('recompute-parent-v3', () =>
+    return ctx.step.run('recompute-parent-v4', () =>
       services.parentStatusRollup.recomputeParent(payload.parentId, payload.workspaceId),
     );
   },

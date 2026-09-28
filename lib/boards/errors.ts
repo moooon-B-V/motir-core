@@ -80,6 +80,27 @@ export class PlanTargetHeldBoardMoveError extends Error {
 }
 
 /**
+ * A cross-column move of a card marked Outdated / Deprecated OUT of the done
+ * category (Story MOTIR-6575 · MOTIR-6682; the guard is MOTIR-6672). Like the two
+ * holds above, the edge is legal, so it is not the snap-back toast's
+ * {@link IllegalBoardMoveError}: the board renders it ON THE CARD with an Open
+ * item door. → 409 carrying `code: 'MARKED_CARD_CANNOT_REOPEN'`, the card's `key`
+ * and its `mark`. Re-raised from `MarkedCardCannotReopenError`, which already
+ * carries both — no read follows.
+ */
+export class MarkedCardBoardMoveError extends Error {
+  readonly code = 'MARKED_CARD_CANNOT_REOPEN' as const;
+  readonly key: string;
+  readonly mark: 'outdated' | 'deprecated';
+  constructor(message: string, key: string, mark: 'outdated' | 'deprecated') {
+    super(message);
+    this.name = 'MarkedCardBoardMoveError';
+    this.key = key;
+    this.mark = mark;
+  }
+}
+
+/**
  * The drop target column maps NO workflow status (or maps only statuses that no
  * longer exist in the project's workflow), so the move has no status to resolve
  * to. Distinct from an illegal transition: there is simply nothing to move the

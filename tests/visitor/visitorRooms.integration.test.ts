@@ -8,6 +8,7 @@ import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFix
 import { adminDb } from '../helpers/adminDb';
 import { consentedVisitor } from './_consentedVisitor';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // Plans, Approvals and Runs as a Visitor reads them (Story MOTIR-6170 ·
 // MOTIR-6645), through the real resolver and datastore. A public project holds a
@@ -43,7 +44,7 @@ async function roomsFixture() {
   const fx = await makeWorkItemFixture({ name: `VR ${identifier}`, identifier });
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { accessMode: 'public', accessLevel: 'public' },
+    data: projectAccessData('public'),
   });
   const epic = await createTestWorkItem(fx, { kind: 'epic', title: 'Private epic E' });
   const hidden = await createTestWorkItem(fx, {

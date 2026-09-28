@@ -902,7 +902,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // fields settable in the one call, and this summary enumerates them.
     summary:
       'Create an epic, story, task, bug or subtask under a parent or in a folder; points, estimate, type, executor, difficulty, repo and obsolescence mark in one call.',
-    descriptionFingerprint: 'cbd9bea08d9d',
+    // Re-pinned for MOTIR-6673, summary UNCHANGED: the description names OBSOLESCENCE_REQUIRES_FINISHED (a mark on create) and MARKED_CARD_CANNOT_REOPEN (a marked parent); the summary states no
+    // status rule.
+    descriptionFingerprint: '8ed6d96eb4b3',
   },
   update_work_item: {
     // Re-pinned for MOTIR-5585: the description now names PROJECT-repository
@@ -915,12 +917,16 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // the patchable fields; "any subset of an item's fields" already covers them.
     summary:
       "Edit any subset of an item's fields, including the explanation body create cannot set.",
-    descriptionFingerprint: '70af156c1527',
+    // Re-pinned for MOTIR-6673, summary UNCHANGED: the description names the finished-card rule (OBSOLESCENCE_REQUIRES_FINISHED) and MARKED_CARD_CANNOT_REOPEN for a re-parent; the summary states no
+    // status rule.
+    descriptionFingerprint: '7321d3e5ba1a',
   },
   transition_status: {
     summary:
       'Move an item to another status. An illegal move comes back naming the ones that are legal.',
-    descriptionFingerprint: '07d05e08c12b',
+    // Re-pinned for MOTIR-6673, summary UNCHANGED: the description names MARKED_CARD_CANNOT_REOPEN for a marked item; the summary states no
+    // status rule.
+    descriptionFingerprint: 'b55dfc136bc7',
   },
   claim_next_ready: {
     summary:
@@ -944,6 +950,19 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     summary:
       'Permanently delete a comment you wrote, with its replies. Only its author can delete it here.',
     descriptionFingerprint: 'e09c5b6edd67',
+  },
+  list_work_item_todos: {
+    summary: 'Read a work item’s to-do list: its steps in order, which are done, and the progress.',
+    descriptionFingerprint: '2ec9edb36848',
+  },
+  add_work_item_todo: {
+    summary: 'Append one step to the end of a work item’s to-do list.',
+    descriptionFingerprint: 'cb50e4038b0a',
+  },
+  set_work_item_todo_done: {
+    summary:
+      'Tick or untick one step of a work item’s to-do list. Ticking the last step does not change the work item’s status.',
+    descriptionFingerprint: 'c69111aa37be',
   },
   add_lesson: {
     summary:
@@ -1022,7 +1041,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-5413: exactly one of `parentKey` / `folderId`.
     summary:
       'Re-place an item — under a new parent, or into or out of a folder — enforcing the kind-parent matrix and refusing a cycle.',
-    descriptionFingerprint: '9d6435ea6cb1',
+    // Re-pinned for MOTIR-6673, summary UNCHANGED: the description names MARKED_CARD_CANNOT_REOPEN for a move under a marked parent; the summary states no
+    // status rule.
+    descriptionFingerprint: 'a89b4b4ac5ca',
   },
   change_kind: {
     // Re-pinned for MOTIR-6098: a leaf-only difficulty, like a type, must be

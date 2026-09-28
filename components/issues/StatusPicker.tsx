@@ -55,8 +55,11 @@ export interface StatusPickerProps {
    *
    * A PLAN hold (MOTIR-6267; `agent-authored-plans.md` AMENDMENT 21) locks every
    * target but the current one, each tagged *held by plan*.
+   *
+   * A MARK (MOTIR-6676) locks every status outside the done category, each tagged
+   * *held by mark*.
    */
-  held?: ReadonlyArray<{ statusKey: string; waitingOn: 'decision' | 'merge' | 'plan' }>;
+  held?: ReadonlyArray<{ statusKey: string; waitingOn: 'decision' | 'merge' | 'plan' | 'mark' }>;
 }
 
 export function StatusPicker({
@@ -74,6 +77,7 @@ export function StatusPicker({
 }: StatusPickerProps) {
   const t = useTranslations('ui');
   const tHeld = useTranslations('approvalGate.statusHeld');
+  const tMark = useTranslations('workItems.obsolescence.held');
   const options = useMemo<ComboboxOption<string>[]>(() => {
     const byKey = new Map(statuses.map((s) => [s.key, s]));
     const current = byKey.get(value);
@@ -102,18 +106,20 @@ export function StatusPicker({
             className="inline-flex items-center gap-1 text-xs text-(--el-text-secondary)"
           >
             <Glyph aria-hidden className="h-3 w-3" />
-            {tHeld(
-              hold.waitingOn === 'merge'
-                ? 'movesOnMerge'
-                : hold.waitingOn === 'plan'
-                  ? 'planHeldOption'
-                  : 'needsApproval',
-            )}
+            {hold.waitingOn === 'mark'
+              ? tMark('option')
+              : tHeld(
+                  hold.waitingOn === 'merge'
+                    ? 'movesOnMerge'
+                    : hold.waitingOn === 'plan'
+                      ? 'planHeldOption'
+                      : 'needsApproval',
+                )}
           </span>
         ),
       };
     });
-  }, [statuses, transitions, policyMode, value, held, tHeld]);
+  }, [statuses, transitions, policyMode, value, held, tHeld, tMark]);
 
   return (
     <div className="flex flex-col gap-1">

@@ -1,5 +1,4 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { accessModeOf } from '@/lib/projects/accessMode';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -40,13 +39,7 @@ async function makeScenario(email: string) {
 }
 
 function peek(s: Awaited<ReturnType<typeof makeScenario>>, identifier: string) {
-  return workItemsService.getQuickView(
-    s.project.id,
-    identifier,
-    accessModeOf(s.project),
-    s.ctx,
-    'en',
-  );
+  return workItemsService.getQuickView(s.project.id, identifier, s.project.accessMode, s.ctx, 'en');
 }
 
 beforeEach(async () => {
@@ -210,7 +203,7 @@ describe('getQuickView() — the editor inputs the editable rail needs (MOTIR-25
       workItemsService.getQuickView(
         owner.project.id,
         item.identifier,
-        accessModeOf(owner.project),
+        owner.project.accessMode,
         outsider.ctx,
         'en',
       ),

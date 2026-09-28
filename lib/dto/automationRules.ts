@@ -47,7 +47,9 @@ export type AutomationExecutionStatusDto =
   | 'failure'
   | 'no_actions'
   | 'plan_held'
-  | 'org_closing';
+  | 'org_closing'
+  /** A `transition` met a MARKED card (MOTIR-6681) — a no-op, never a failure. */
+  | 'held_by_mark';
 
 /** The last (most-recent) run of a rule — the glyph + relative-time the list row
  * renders (6.6.6). Only the terminal status and the time are surfaced; the full

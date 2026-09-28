@@ -28,7 +28,7 @@ import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 // ── Posture ───────────────────────────────────────────────────────────────
 //
 // NO SESSION IS READ, and none could change the answer: every row is
-// `accessLevel = 'public'` by the repository's own filter. Cross-workspace by
+// `accessMode = 'public'` by the repository's own filter. Cross-workspace by
 // design — this is the directory of every public project, regardless of tenant.
 //
 // `cursor` is opaque and echoes a previous page's `nextCursor`, exactly as the

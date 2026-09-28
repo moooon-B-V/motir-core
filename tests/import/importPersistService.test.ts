@@ -415,6 +415,42 @@ describe('workItemsService.setImportedStatus (system-context)', () => {
     expect(moved.status).toBe('done');
   });
 
+  it('a re-sync that would REOPEN a card a person has since MARKED leaves its status and says why (MOTIR-6681)', async () => {
+    const fx = await makeWorkItemFixture();
+    const importId = await makeDraftImport(fx);
+    const ctx = await resolveCtx(fx);
+    const runWith = async (issues: SourceIssue[]) =>
+      drain(
+        importPersistService.runImport({
+          importId,
+          connector: fakeConnector('jira', issues),
+          mapping: MAPPING,
+          ctx,
+        }),
+      );
+
+    // Imported CLOSED, then marked by a person in Motir.
+    await runWith([makeSourceIssue({ externalId: 'ACME-9', title: 'Old flow', status: 'done' })]);
+    const mapped = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-9', tx),
+    );
+    await workItemsService.updateWorkItem(mapped!.workItemId, { obsolescence: 'outdated' }, fx.ctx);
+
+    // The source REOPENED it (and edited it): the edit is applied, the reopen is not.
+    const events = await runWith([
+      makeSourceIssue({ externalId: 'ACME-9', title: 'Old flow (edited)', status: 'todo' }),
+    ]);
+    expect(summaryOf(events).counts).toMatchObject({ updated: 1, failed: 0 });
+    const item = events.find((e) => e.type === 'item');
+    expect(item && item.type === 'item' ? item.warnings.join(' ') : '').toContain('not applied');
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: mapped!.workItemId } });
+    expect(row).toMatchObject({
+      status: 'done',
+      obsolescence: 'outdated',
+      title: 'Old flow (edited)',
+    });
+  });
+
   it('still validates the target is a REAL project status', async () => {
     const fx = await makeWorkItemFixture();
     const item = await createTestWorkItem(fx, { kind: 'task', title: 'y' });

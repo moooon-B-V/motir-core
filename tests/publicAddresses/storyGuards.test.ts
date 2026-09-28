@@ -5,6 +5,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // THE GUARANTEES COVERAGE CANNOT SEE (Story MOTIR-3878 · MOTIR-4223).
 //
@@ -122,7 +123,7 @@ describe('CROSS-TENANT ISOLATION — a 404, never a 403, and never a leak', () =
           name,
           slug: identifier.toLowerCase(),
           identifier,
-          accessLevel: 'public',
+          ...projectAccessData('public'),
         },
       });
       return { workspaceId: workspace.id, ownerId: owner.id, projectId: project.id };

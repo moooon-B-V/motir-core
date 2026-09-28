@@ -78,6 +78,9 @@ export function toQuickViewData(
     type: item.type,
     executor: item.executor,
     difficulty: item.difficulty,
+    // The mark and its note (MOTIR-6674) — the peek draws the same field the page does.
+    obsolescence: item.obsolescence,
+    obsolescenceNoteMd: item.obsolescenceNoteMd,
     assigneeName: item.assigneeId ? (nameById.get(item.assigneeId) ?? null) : null,
     reporterName: nameById.get(item.reporterId) ?? item.reporterId,
     priority: item.priority,

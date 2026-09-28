@@ -11,7 +11,11 @@ import {
 } from '@/lib/repositories/workItemTodoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
-import { toWorkItemTodoDto, toWorkItemTodoListDto } from '@/lib/mappers/workItemTodoMappers';
+import {
+  toTodoProgressDto,
+  toWorkItemTodoDto,
+  toWorkItemTodoListDto,
+} from '@/lib/mappers/workItemTodoMappers';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
@@ -424,10 +428,39 @@ export const workItemTodosService = {
    * half-ticked. Nothing about the row's `executor` is consulted: a person may
    * tick an agent's step, because they may simply have done it themselves
    * (ADR §2).
+   *
+   * `opts.workItemId` SCOPES the tick to one card (MOTIR-6725): a caller that
+   * addresses the step through its card — the MCP tool, which takes a card key
+   * AND a to-do id — must not be able to tick a step on a different card by
+   * passing that card's to-do id. A mismatch is the same not-found as a to-do
+   * that does not exist, checked inside this transaction, so there is no window
+   * between the check and the write.
    */
-  async setTodoDone(todoId: string, done: boolean, ctx: ServiceContext): Promise<TodoWriteResult> {
+  async setTodoDone(
+    todoId: string,
+    done: boolean,
+    ctx: ServiceContext,
+    opts: { workItemId?: string } = {},
+  ): Promise<TodoWriteResult> {
     return withWorkspaceContext(ctx, async (tx) => {
+      // The scope is checked BEFORE the card's edit gate, so a step on another
+      // card answers not-found rather than an edit refusal that confirms it exists.
+      if (opts.workItemId !== undefined) {
+        const row = await workItemTodoRepository.findById(todoId, tx);
+        if (!row || row.workItemId !== opts.workItemId) throw new WorkItemTodoNotFoundError(todoId);
+      }
       const { todo } = await resolveEditableTodo(todoId, ctx, tx);
+      // Already in the asked-for state ⇒ write nothing. A second tick must not
+      // move `doneAt` / `doneById` off the person who actually completed the
+      // step — an agent retrying a call, or ticking a step a person already
+      // ticked, would otherwise re-attribute it (MOTIR-6725).
+      // Answered from the LIST read, not the gate's row: `findById` does not carry
+      // `doneBy`, and the reply must name who ticked it.
+      if ((todo.doneAt !== null) === done) {
+        const rows = await workItemTodoRepository.listByWorkItem(todo.workItemId, tx);
+        const row = rows.find((r) => r.id === todo.id) ?? todo;
+        return { todo: toWorkItemTodoDto(row), progress: toTodoProgressDto(rows) };
+      }
       const updated = await workItemTodoRepository.update(
         todo.id,
         done ? { doneAt: new Date(), doneById: ctx.userId } : { doneAt: null, doneById: null },

@@ -12,6 +12,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Story 8.9 · Subtask 8.9.5 — the follow loop. Real Postgres, no DB mocks; the
 // ONE mock is the job dispatcher, for the reason spelled out below it.
@@ -55,7 +56,7 @@ afterAll(async () => {
 
 async function publicFixture(name = 'Acme', identifier = 'ACME'): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name, identifier });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   return fx;
 }
 

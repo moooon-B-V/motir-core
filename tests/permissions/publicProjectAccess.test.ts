@@ -1,4 +1,4 @@
-import { Prisma } from '@/generated/prisma/client';
+import { Prisma, type ProjectAccessMode } from '@/generated/prisma/client';
 import { RLS_DENIAL, isRlsDenial } from '../helpers/sqlstate';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
@@ -10,6 +10,7 @@ import { publicRequestsService } from '@/lib/services/publicRequestsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData, setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // The PUBLIC-project read path under the non-bypass role (MOTIR-2684 ·
 // `docs/rls-runtime-role-inventory.md` Finding 4's one un-bindable branch).
@@ -67,7 +68,7 @@ let outsiderId: string;
 beforeEach(async () => {
   await truncateAuthTables();
   host = await seedTenant('host', 'HOST', 'public');
-  neighbour = await seedTenant('nbr', 'NBR', 'limited');
+  neighbour = await seedTenant('nbr', 'NBR', 'members');
   const outsider = await adminDb.user.create({
     data: { email: 'outsider@example.com', name: 'Outsider' },
   });
@@ -91,11 +92,11 @@ describe('the policies', () => {
   it('admits NOTHING ELSE unbound — open, limited and private stay invisible', async () => {
     // The other direction, and the one that proves the arm is a public arm
     // rather than a hole. Each of the three non-public levels in turn, on the
-    // SAME row, so the only variable is `accessLevel`.
-    for (const level of ['open', 'limited', 'private'] as const) {
-      await adminDb.project.update({ where: { id: host.projectId }, data: { accessLevel: level } });
+    // SAME row, so the only variable is the project's access.
+    for (const mode of ['workspace', 'members'] as const) {
+      await setProjectAccess(adminDb, host.projectId, mode);
       const rows = await asAppRole({}, (tx) => selectProject(tx, host.projectId));
-      expect(rows, `accessLevel=${level} must stay invisible unbound`).toHaveLength(0);
+      expect(rows, `accessMode=${mode} must stay invisible unbound`).toHaveLength(0);
     }
   });
 
@@ -117,8 +118,8 @@ describe('the policies', () => {
         { workspaceId: host.workspaceId },
         (tx) =>
           tx.$executeRaw`
-          INSERT INTO "project" ("id", "workspaceId", "name", "slug", "identifier", "accessLevel", "createdAt", "updatedAt")
-          VALUES (${'ins-' + neighbour.projectId}, ${neighbour.workspaceId}, 'Smuggled', 'smuggled', 'SMG', 'public', now(), now())
+          INSERT INTO "project" ("id", "workspaceId", "name", "slug", "identifier", "access_mode", "accessLevel", "createdAt", "updatedAt")
+          VALUES (${'ins-' + neighbour.projectId}, ${neighbour.workspaceId}, 'Smuggled', 'smuggled', 'SMG', 'public', 'public', now(), now())
         `,
       ),
     ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);
@@ -197,13 +198,13 @@ describe('the vote arm (MOTIR-2811)', () => {
     const rows = await asAppRole({}, (tx) => selectVotes(tx, neighbour.workItemId));
     expect(rows).toHaveLength(0);
 
-    // And on the SAME row, so the only variable is the project's accessLevel:
+    // And on the SAME row, so the only variable is the project's access:
     // flipping the host project off `public` must take its votes back out of view.
     await seedVote(host);
-    for (const level of ['open', 'limited', 'private'] as const) {
-      await adminDb.project.update({ where: { id: host.projectId }, data: { accessLevel: level } });
+    for (const mode of ['workspace', 'members'] as const) {
+      await setProjectAccess(adminDb, host.projectId, mode);
       const hidden = await asAppRole({}, (tx) => selectVotes(tx, host.workItemId));
-      expect(hidden, `accessLevel=${level} must hide its votes unbound`).toHaveLength(0);
+      expect(hidden, `accessMode=${mode} must hide its votes unbound`).toHaveLength(0);
     }
   });
 
@@ -363,14 +364,14 @@ describe('the JOINED-table arms (MOTIR-2856)', () => {
       const rows = await asAppRole({}, (tx) => selectWorkflowStatuses(tx, neighbour.projectId));
       expect(rows).toHaveLength(0);
 
-      // And on the SAME row, so `accessLevel` is the only variable.
-      for (const level of ['open', 'limited', 'private'] as const) {
+      // And on the SAME row, so the project's access is the only variable.
+      for (const mode of ['workspace', 'members'] as const) {
         await adminDb.project.update({
           where: { id: host.projectId },
-          data: { accessLevel: level },
+          data: projectAccessData(mode),
         });
         const hidden = await asAppRole({}, (tx) => selectWorkflowStatuses(tx, host.projectId));
-        expect(hidden, `accessLevel=${level} must hide its statuses unbound`).toHaveLength(0);
+        expect(hidden, `accessMode=${mode} must hide its statuses unbound`).toHaveLength(0);
       }
     });
 
@@ -438,13 +439,13 @@ describe('the JOINED-table arms (MOTIR-2856)', () => {
       const rows = await asAppRole({}, (tx) => selectWorkspace(tx, neighbour.workspaceId));
       expect(rows).toHaveLength(0);
 
-      for (const level of ['open', 'limited', 'private'] as const) {
+      for (const mode of ['workspace', 'members'] as const) {
         await adminDb.project.update({
           where: { id: host.projectId },
-          data: { accessLevel: level },
+          data: projectAccessData(mode),
         });
         const hidden = await asAppRole({}, (tx) => selectWorkspace(tx, host.workspaceId));
-        expect(hidden, `accessLevel=${level} must hide the workspace unbound`).toHaveLength(0);
+        expect(hidden, `accessMode=${mode} must hide the workspace unbound`).toHaveLength(0);
       }
     });
 
@@ -454,7 +455,7 @@ describe('the JOINED-table arms (MOTIR-2856)', () => {
       // is public, and the workspace stays visible on the strength of that one.
       await adminDb.project.update({
         where: { id: host.projectId },
-        data: { accessLevel: 'private' },
+        data: projectAccessData('members'),
       });
       expect(await asAppRole({}, (tx) => selectWorkspace(tx, host.workspaceId))).toHaveLength(0);
 
@@ -464,7 +465,7 @@ describe('the JOINED-table arms (MOTIR-2856)', () => {
           name: 'Second',
           slug: 'host-second',
           identifier: 'HOST2',
-          accessLevel: 'public',
+          ...projectAccessData('public'),
         },
       });
       expect(await asAppRole({}, (tx) => selectWorkspace(tx, host.workspaceId))).toHaveLength(1);
@@ -507,13 +508,13 @@ describe('the JOINED-table arms (MOTIR-2856)', () => {
       const rows = await asAppRole({}, (tx) => selectOrganization(tx, neighbour.organizationId));
       expect(rows).toHaveLength(0);
 
-      for (const level of ['open', 'limited', 'private'] as const) {
+      for (const mode of ['workspace', 'members'] as const) {
         await adminDb.project.update({
           where: { id: host.projectId },
-          data: { accessLevel: level },
+          data: projectAccessData(mode),
         });
         const hidden = await asAppRole({}, (tx) => selectOrganization(tx, host.organizationId));
-        expect(hidden, `accessLevel=${level} must hide the org unbound`).toHaveLength(0);
+        expect(hidden, `accessMode=${mode} must hide the org unbound`).toHaveLength(0);
       }
     });
 
@@ -772,7 +773,7 @@ async function seedVote(tenant: Tenant): Promise<void> {
 async function seedTenant(
   tag: string,
   identifier: string,
-  accessLevel: 'public' | 'open' | 'limited' | 'private',
+  mode: ProjectAccessMode,
 ): Promise<Tenant> {
   const owner = await adminDb.user.create({
     data: { email: `${tag}-owner@example.com`, name: `${tag} owner` },
@@ -795,7 +796,7 @@ async function seedTenant(
       name: `Project ${identifier}`,
       slug: identifier.toLowerCase(),
       identifier,
-      accessLevel,
+      ...projectAccessData(mode),
     },
   });
   const workItem = await adminDb.workItem.create({

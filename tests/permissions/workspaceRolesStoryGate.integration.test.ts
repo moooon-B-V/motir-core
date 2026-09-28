@@ -4,6 +4,7 @@ import type { WorkspaceRole } from '@/generated/prisma/client';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { adminDb } from '../helpers/adminDb';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE STORY GATE — roles move to the workspace (Story MOTIR-6168 · MOTIR-6467)
@@ -193,7 +194,7 @@ async function build(tag = String(seq++)): Promise<Fixture> {
 
   const open = await project(workspace.id, manager.id, 'Open', `OP${tag}`.slice(0, 8));
   const priv = await project(workspace.id, manager.id, 'Private', `PV${tag}`.slice(0, 8));
-  await adminDb.project.update({ where: { id: priv.id }, data: { accessLevel: 'private' } });
+  await setProjectAccess(adminDb, priv.id, 'members');
   await projectMembersService.addMember({
     key: priv.key,
     actorUserId: manager.id,

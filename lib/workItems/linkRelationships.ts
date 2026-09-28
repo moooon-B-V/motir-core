@@ -30,17 +30,16 @@ export const RELATIONSHIP_KINDS: ReadonlyArray<{ kind: RelationshipKind; label: 
 ];
 
 /**
- * The relationships the web add-link control OFFERS today. The supersedes pair is
- * writable over REST v1 and MCP (MOTIR-6580), but the relationships panel does
- * not render those two groups yet — that is the person's story — so offering
- * them in the form would write a link the panel then drops from view. Widen this
- * to {@link RELATIONSHIP_KINDS} when the panel renders `supersedes` /
- * `supersededBy`.
+ * The relationships the web add-link control OFFERS — all seven. The supersedes
+ * pair was held back (writable over REST v1 and MCP since MOTIR-6580) until the
+ * relationships panel rendered `supersedes` / `supersededBy`, so the form could
+ * not write a link the panel then dropped from view; MOTIR-6675 renders both
+ * groups, so the subset now equals {@link RELATIONSHIP_KINDS}.
  */
 export const LINK_FORM_RELATIONSHIP_KINDS: ReadonlyArray<{
   kind: RelationshipKind;
   label: string;
-}> = RELATIONSHIP_KINDS.filter((r) => r.kind !== 'supersedes' && r.kind !== 'superseded_by');
+}> = RELATIONSHIP_KINDS;
 
 const RELATIONSHIP_LABELS = new Map(RELATIONSHIP_KINDS.map((r) => [r.kind, r.label]));
 

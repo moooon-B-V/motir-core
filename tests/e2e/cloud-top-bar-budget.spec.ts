@@ -56,6 +56,7 @@ import { pinContextCookies } from './_helpers/billing';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // ⚠️ MOVED TO THE CLOUD LANE (Story MOTIR-3908 · MOTIR-4038). The CROWDED bar this file exists to measure is only producible on a cloud
 // build: the "Building in public" indicator is the widest control in it (117px
@@ -101,7 +102,7 @@ async function seedCrowdedShell(): Promise<void> {
     actorUserId: owner.id,
   });
   // Public → the "Building in public" indicator arm of the stateful slot.
-  await db.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
+  await setProjectAccess(db, project.id, 'public');
   await db.workspaceMembership.update({
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },
@@ -335,7 +336,7 @@ async function seedLongContextPath(page: Page): Promise<void> {
     workspaceId: workspace.id,
     actorUserId: owner.id,
   });
-  await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, project.id, 'public');
   await adminDb.workspaceMembership.update({
     where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
     data: { activeProjectId: project.id },

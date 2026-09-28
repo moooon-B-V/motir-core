@@ -161,13 +161,13 @@ describe('workspacesService — findMembership / getWorkspaceSummary / addMember
     expect(orgRow?.role).toBe('member');
   });
 
-  it('removeMember DELETES a real member rather than silently no-opping', async () => {
+  it('leaveWorkspace DELETES a real member rather than silently no-opping', async () => {
     // The read guarding this delete used to run on the `db` singleton INSIDE an
     // already-bound transaction, so it failed SILENTLY: a null reads as "not a
     // member", which is the idempotent no-op — Leave/Remove returned success having
     // deleted nothing.
     await workspacesService.addMember({ userId: outsiderId, workspaceId: home.workspaceId });
-    const removed = await workspacesService.removeMember({
+    const removed = await workspacesService.leaveWorkspace({
       userId: outsiderId,
       workspaceId: home.workspaceId,
     });
@@ -198,7 +198,7 @@ describe('projectAccessService — resolveInputs + filterBrowsable', () => {
 
   it('filterBrowsable KEEPS the project for a member', async () => {
     const kept = await projectAccessService.filterBrowsable(
-      [{ id: home.projectId, accessLevel: 'limited' as const, accessMode: null }],
+      [{ id: home.projectId, accessLevel: 'private' as const, accessMode: 'members' as const }],
       { userId: home.ownerId, workspaceId: home.workspaceId },
     );
     expect(kept).toHaveLength(1);
@@ -206,7 +206,7 @@ describe('projectAccessService — resolveInputs + filterBrowsable', () => {
 
   it('filterBrowsable drops everything for a non-member', async () => {
     const kept = await projectAccessService.filterBrowsable(
-      [{ id: home.projectId, accessLevel: 'limited' as const, accessMode: null }],
+      [{ id: home.projectId, accessLevel: 'private' as const, accessMode: 'members' as const }],
       { userId: outsiderId, workspaceId: home.workspaceId },
     );
     expect(kept).toHaveLength(0);

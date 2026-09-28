@@ -183,6 +183,11 @@ export default defineConfig({
         'lib/people/personLabel.ts',
         'lib/pages/projectPageContext.ts',
         'components/issues/EpicNotPublicPill.tsx',
+        // Story MOTIR-6739 · MOTIR-6726 — the to-do tools' MCP adapter. Pinned at
+        // the project floor in `thresholds` below after being MEASURED on this
+        // branch against the story's own specs (`workItemTodosTool.test.ts` +
+        // `workItemTodos-transport.test.ts`): 100 / 100 / 100 / 100.
+        'lib/mcp/tools/workItemTodos.ts',
         // Story MOTIR-6574 · MOTIR-6584 — the OBSOLESCENCE story's two NEW modules
         // (the scale's one list, and the MCP write fields + text-block lines) and
         // the relationship model it widened with the `supersedes` pair, which had
@@ -2969,6 +2974,15 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
+        // ── Story MOTIR-6739 · TO-DO TOOLS (Subtask MOTIR-6726) ──────────────
+        // Pinned at the floor, not at what was measured, so the gate stays about
+        // regressions rather than ratcheting on the next unrelated line.
+        'lib/mcp/tools/workItemTodos.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // ── Story MOTIR-6574 · OBSOLESCENCE (Subtask MOTIR-6584) ─────────────
         // Pinned at the floor, not at the 100 measured, so the gate stays about
         // regressions rather than ratcheting on the next unrelated line.
@@ -5260,7 +5274,7 @@ export default defineConfig({
         // `ProjectAccessDeniedError` / `ProjectNotFoundError`. The move is
         // attributed to the WORKSPACE OWNER (there is no change-request author on
         // this path), and a workspace owner passes `canEdit` on every
-        // `accessLevel` — `private` included, where `lib/projects/access.ts`
+        // access mode — Members only included, where `lib/projects/access.ts`
         // admits them explicitly — so NO VALID FIXTURE produces that error. The
         // arm is still correct to keep: `reevaluateItems` loops, and an uncaught
         // throw there would abort a whole sweep's remaining repairs. Lines and

@@ -40,6 +40,7 @@ import { workItemDetailSchema } from '@/lib/api/v1/workItems/schema';
 import { plansService } from '@/lib/services/plansService';
 import { runCredentialService } from '@/lib/services/runCredentialService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { adminDb } from '../../helpers/adminDb';
 import { LEGACY_SCOPE_PERMISSIONS } from '@/lib/mcp/scopes';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { connectAndLinkRepo } from '../../fixtures/codeContextFixtures';
@@ -340,19 +341,23 @@ describe('every operation’s REAL response validates against its declared schem
     const created = await drive(
       'createWorkItem',
       () => import('@/app/api/v1/projects/[projectKey]/work-items/route'),
-      // MARKED at birth (MOTIR-6581), so every read of this item below — the
-      // collection row, the detail, the update answer — validates a NON-null
-      // obsolescence against the `$ref`'d `WorkItemObsolescence` component,
-      // rather than only the `null` branch every unmarked item exercises.
       send(`/api/v1/projects/${pk}/work-items`, 'POST', {
         kind: 'story',
         title: 'A story',
-        obsolescence: 'outdated',
         obsolescenceNoteMd: 'Kept for the drift guard.',
       }),
       { projectKey: pk },
     );
     const key = (created.body as { key: string }).key;
+    // MARKED (MOTIR-6581), so the reads below — the collection row, the detail and
+    // the dispatch prompt — validate a NON-null obsolescence against the `$ref`'d
+    // `WorkItemObsolescence` component, not only the `null` branch. Seeded as a
+    // LEGACY row: no door marks an unfinished card since MOTIR-6672, and this one
+    // must stay open for the transition below, which clears the mark first.
+    await adminDb.workItem.updateMany({
+      where: { identifier: key },
+      data: { obsolescence: 'outdated' },
+    });
     // A second item, so the link endpoints have both endpoints to name.
     const otherKey = await createItem('Another');
 
@@ -387,7 +392,9 @@ describe('every operation’s REAL response validates against its declared schem
     await drive(
       'updateWorkItem',
       () => import('@/app/api/v1/work-items/[key]/route'),
-      send(`/api/v1/work-items/${key}`, 'PATCH', { title: 'A story, renamed' }),
+      // Clears the legacy mark too: a marked card cannot be reopened (MOTIR-6672),
+      // and the transition below moves this one to in_progress.
+      send(`/api/v1/work-items/${key}`, 'PATCH', { title: 'A story, renamed', obsolescence: null }),
       { key },
     );
     await drive(

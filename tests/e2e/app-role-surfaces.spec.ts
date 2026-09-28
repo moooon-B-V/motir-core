@@ -7,6 +7,7 @@ import { adminDb } from '../helpers/adminDb';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { encodeFilterParam } from '@/lib/filters/ast';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // THE `motir_app` SURFACE SPEC (MOTIR-2796 · MOTIR-2816) — the rehearsal for the
 // deployed cutover (MOTIR-2515), and the only test in the repo that drives the
@@ -233,7 +234,7 @@ test('7 · the PUBLIC page works signed OUT — the arms are still open', async 
   // `tests/integration/publicSurfaceCloudGate.test.ts`'s.
   await adminDb.project.update({
     where: { id: seed.projectId },
-    data: { accessLevel: 'public' },
+    data: projectAccessData('public'),
   });
 
   // A fresh context: no cookies, no session, nothing bound anywhere.

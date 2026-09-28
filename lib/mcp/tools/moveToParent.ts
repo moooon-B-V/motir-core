@@ -157,7 +157,9 @@ export function registerMoveToParent(server: McpServer, resolveContext: McpConte
         'takes the item out of its folder. The item keeps its identifier, history, comments, and ' +
         'links, and the result carries a `placement` field saying where it now sits. Honors the ' +
         'same kind-parent rules, same-project / no-cycle / depth limits, and access checks as the ' +
-        "UI. Use create_work_item to place an item at creation, and update_work_item for a card's fields.",
+        'UI. A parent that carries an obsolescence mark takes no new children — a move under one ' +
+        'is refused with MARKED_CARD_CANNOT_REOPEN (a new child would reopen it); filing into a ' +
+        "folder is unaffected. Use create_work_item to place an item at creation, and update_work_item for a card's fields.",
       inputSchema,
     },
     async (args, extra) => runMoveToParent(args, resolveContext(extra)),

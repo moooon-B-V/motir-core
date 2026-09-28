@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminDb } from '../../helpers/adminDb';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // THE SEAMS THE UNIT SUITES MOCK (Story MOTIR-6167 · MOTIR-6315). Each code card
 // of the story tested its own half of these; none could test the join, because
@@ -103,7 +104,7 @@ describe('seam 1 — a transfer, read straight back through the reach resolver',
       actorUserId: org.owner.id,
       identifier: 'VLT',
     });
-    await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, project.id, 'members');
     await adminDb.workspaceMembership.deleteMany({ where: { workspaceId: vault.id } });
 
     // Before: the Owner reaches it as the Owner, and the Admin as an Admin —

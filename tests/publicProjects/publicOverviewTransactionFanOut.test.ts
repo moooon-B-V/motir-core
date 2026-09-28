@@ -5,6 +5,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { adminDb } from '../helpers/adminDb';
 import { trackRequestedTransactions } from '../helpers/requestedTransactions';
 import { truncateAuthTables } from '../helpers/db';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // MOTIR-6627 — Sentry `PrismaClientKnownRequestError: Transaction API error: Unable
 // to start a transaction in the given time.` on `GET /api/public/p/[identifier]`,
@@ -37,7 +38,7 @@ afterAll(async () => {
 
 async function makePublicProjectFixture(): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name: 'Acme' });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   return fx;
 }
 

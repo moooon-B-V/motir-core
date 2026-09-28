@@ -311,7 +311,9 @@ export async function runCreateWorkItem(
         ? { difficulty: args.difficulty as WorkItemDifficultyDto | null }
         : {}),
       // The obsolescence mark + note (MOTIR-6582): forwarded only when supplied;
-      // the service validates the value (InvalidObsolescenceError) on any kind.
+      // the service validates the value (InvalidObsolescenceError) on any kind, and
+      // refuses a MARK on the unfinished initial status (MOTIR-6672,
+      // OBSOLESCENCE_REQUIRES_FINISHED) — `toToolError` answers it typed.
       ...(args.obsolescence !== undefined
         ? { obsolescence: args.obsolescence as WorkItemObsolescenceDto | null }
         : {}),
@@ -369,7 +371,11 @@ export function registerCreateWorkItem(
         '(minutes), work type, executor and difficulty — so a subtask can be created ' +
         'fully-specified in one call. `obsolescence` (`outdated` · `deprecated`) and ' +
         '`obsolescenceNoteMd` may be set on any kind; a value outside the enum is refused ' +
-        'with INVALID_OBSOLESCENCE. ' +
+        'with INVALID_OBSOLESCENCE. A MARK is a finished item’s state and a new item lands ' +
+        'at the workflow’s initial status, so a mark on create is refused with ' +
+        'OBSOLESCENCE_REQUIRES_FINISHED unless that status is in the done category — set it ' +
+        'with update_work_item once the item is finished. A parent that carries a mark takes ' +
+        'no new children (MARKED_CARD_CANNOT_REOPEN). ' +
         'Honors the same kind-parent rules (an epic is root-only — ' +
         'a parented epic is rejected), leaf-only type/executor/difficulty rule, and access ' +
         'checks as the UI.',

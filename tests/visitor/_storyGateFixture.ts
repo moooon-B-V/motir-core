@@ -1,6 +1,7 @@
 import { visitorRecordsService } from '@/lib/services/visitorRecordsService';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // THE STORY GATE'S ONE FIXTURE (Story MOTIR-6170 · MOTIR-6650). A Public project
 // in which what a Visitor may see and what is true genuinely differ, and a reader
@@ -34,7 +35,7 @@ export async function storyGateFixture() {
   const fx = await makeWorkItemFixture({ name: `Northwind ${identifier}`, identifier });
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { accessMode: 'public', accessLevel: 'public' },
+    data: projectAccessData('public'),
   });
 
   // M1 — the Manager. The fixture's owner, given a real-looking address.

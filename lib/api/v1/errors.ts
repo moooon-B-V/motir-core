@@ -21,6 +21,12 @@ import type { V1ErrorStatus } from '@/lib/api/v1/openapi/statuses';
 export interface ApiV1ErrorBody {
   code: string;
   error: string;
+  /** `OBSOLESCENCE_REQUIRES_FINISHED` (MOTIR-6673): the card and the unfinished
+   *  status it is at — `obsolescenceRequiresFinishedSchema`. */
+  item?: { key: string; statusKey: string; statusCategory: string | null };
+  /** `MARKED_CARD_CANNOT_REOPEN` (MOTIR-6673): the marked card, its mark and the
+   *  refused target (null for a refused child write) — `markedCardCannotReopenSchema`. */
+  mark?: { key: string; obsolescence: string; toStatusKey: string | null };
 }
 
 /**
@@ -233,6 +239,10 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // the service's own `InvalidObsolescenceError` backstop maps here rather than
   // falling through to a 500.
   INVALID_OBSOLESCENCE: 422,
+  // MOTIR-6672 · MOTIR-6673 — a mark SET on a card whose status is outside the
+  // done category. The value is valid; the card is not finished, and the remedy is
+  // to archive it instead (or finish it first). Its payload rides as `item`.
+  OBSOLESCENCE_REQUIRES_FINISHED: 422,
   ASSIGNEE_NOT_IN_WORKSPACE: 422,
   REPORTER_NOT_IN_WORKSPACE: 422,
   UNKNOWN_TARGET_REPO: 422,
@@ -309,6 +319,11 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // AMENDMENT 21). The same status as the gate's refusal, for the same reason: the
   // edge is legal and the fix is a person deciding the plan.
   PLAN_TARGET_HELD: 422,
+  // MOTIR-6672 · MOTIR-6673 — a MARKED card stays finished: a move out of the done
+  // category, or new work under it, is refused until a person clears the mark. The
+  // same status as the plan hold, for the same reason: the edge is legal and the
+  // fix is a person's (clear the mark). Its payload rides as `mark`.
+  MARKED_CARD_CANNOT_REOPEN: 422,
 
   // 11.2.9 (MOTIR-2051) — the link edges.
   SELF_LINK: 422,
@@ -572,6 +587,35 @@ export const INTERNAL_ERROR_BODY: Readonly<{ error: string }> = Object.freeze({
 });
 
 /** Anything carrying a string `code` — the shape every typed domain error has. */
+/**
+ * The additive payload the two finished-card refusals carry (MOTIR-6673), read off
+ * the error's own fields by CODE — this module maps domain errors by their code and
+ * imports none of them, so it stays importable from the request path. Every other
+ * code carries nothing extra.
+ */
+function obsolescencePayload(err: { code: string }): Pick<ApiV1ErrorBody, 'item' | 'mark'> {
+  const e = err as Record<string, unknown>;
+  if (err.code === 'OBSOLESCENCE_REQUIRES_FINISHED') {
+    return {
+      item: {
+        key: String(e['key']),
+        statusKey: String(e['statusKey']),
+        statusCategory: typeof e['statusCategory'] === 'string' ? e['statusCategory'] : null,
+      },
+    };
+  }
+  if (err.code === 'MARKED_CARD_CANNOT_REOPEN') {
+    return {
+      mark: {
+        key: String(e['key']),
+        obsolescence: String(e['obsolescence']),
+        toStatusKey: typeof e['toStatusKey'] === 'string' ? e['toStatusKey'] : null,
+      },
+    };
+  }
+  return {};
+}
+
 function hasStringCode(err: unknown): err is { code: string; message: string } {
   return (
     typeof err === 'object' && err !== null && typeof (err as { code?: unknown }).code === 'string'
@@ -595,7 +639,7 @@ export function classifyApiV1Error(
   if (hasStringCode(err)) {
     const status = DOMAIN_ERROR_STATUS[err.code];
     if (status !== undefined) {
-      return { status, body: { code: err.code, error: err.message } };
+      return { status, body: { code: err.code, error: err.message, ...obsolescencePayload(err) } };
     }
   }
   return undefined;
