@@ -314,7 +314,8 @@ describe('the room decides nothing about access, and its door is browse-only', (
   it('the page hands the read the page number and the REQUESTED view — nothing else reaches the scope', () => {
     // MOTIR-6333: the reader may now ASK for a view (`?view=`); the read still
     // decides what that request may show. No other parameter reaches it.
-    const src = readFileSync(join(ROOT, 'app/(authed)/approvals/page.tsx'), 'utf8');
+    // The page's body is `_view.tsx` since MOTIR-6643.
+    const src = readFileSync(join(ROOT, 'app/(authed)/approvals/_view.tsx'), 'utf8');
     const readParams = [...src.matchAll(/params\[([^\]]+)\]/g)].map((m) => m[1]);
     expect(readParams.sort()).toEqual(["'page'", 'ROOM_VIEW_PARAM'].sort());
     expect(src).toMatch(

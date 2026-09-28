@@ -4,6 +4,10 @@ import { zipSync, strToU8 } from 'fflate';
 import { getPrivateBlobBytes } from '@/lib/blob/uploader';
 import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import {
+  projectVisitorRepository,
+  type ProjectVisitorOwnRow,
+} from '@/lib/repositories/projectVisitorRepository';
+import {
   PERSONAL_DATA_SECTIONS,
   readSection,
   sectionsForTier,
@@ -97,6 +101,38 @@ export interface BuiltArchive {
   files: { packaged: number; missing: number };
 }
 
+/** The archive file holding the person's VISITOR RECORDS (MOTIR-6668). */
+export const PROJECT_VISITS_FILE = 'project-visits.json';
+
+/** Who a visitor record's consent shared the person's name and email with. */
+export const PROJECT_VISIT_SHARED_WITH = "the project's workspace Managers";
+
+/**
+ * One entry of `project-visits.json` — a public project the person consented to
+ * share their name and email with, and when (Story MOTIR-6170 · MOTIR-6668;
+ * `docs/decisions/visitor-sign-in-and-records.md`). It names ONLY the person's own
+ * record: never a Manager, never another visitor.
+ */
+export interface ProjectVisitEntry {
+  /** The project, by name and key — both null once the project has stopped being
+   *  public and is no longer readable to the person. `id` always stands. */
+  project: { id: string; name: string | null; identifier: string | null };
+  consentedAt: string;
+  firstVisitAt: string;
+  lastVisitAt: string;
+  sharedWith: typeof PROJECT_VISIT_SHARED_WITH;
+}
+
+export function toProjectVisitEntry(row: ProjectVisitorOwnRow): ProjectVisitEntry {
+  return {
+    project: { id: row.projectId, name: row.projectName, identifier: row.projectIdentifier },
+    consentedAt: row.consentedAt.toISOString(),
+    firstVisitAt: row.firstVisitAt.toISOString(),
+    lastVisitAt: row.lastVisitAt.toISOString(),
+    sharedWith: PROJECT_VISIT_SHARED_WITH,
+  };
+}
+
 /**
  * Collect every section for one user, in that user's own database context.
  *
@@ -152,6 +188,15 @@ export async function buildPersonalDataArchive(
   builtAt: Date,
 ): Promise<BuiltArchive> {
   const { sections, workspaceIds } = await collectPersonalData(userId);
+  // The person's visitor records (MOTIR-6668), read in their OWN context like the
+  // identity tier. `project_visitor` carries no RLS, and a public project's name
+  // is readable to anyone; a project that has since left `public` comes back with
+  // its name and key null rather than being dropped — the record is still theirs.
+  // ERASURE needs nothing here: the records cascade with the user
+  // (`ProjectVisitor.user`, `onDelete: Cascade`, MOTIR-6665).
+  const projectVisits = (
+    await withUserContext(userId, (tx) => projectVisitorRepository.listByUser(userId, tx))
+  ).map(toProjectVisitEntry);
 
   const files: Record<string, Uint8Array> = {};
   const counts: Record<string, number> = {};
@@ -171,6 +216,10 @@ export async function buildPersonalDataArchive(
       strToU8(JSON.stringify({ table: section.table, basis: section.basis, rows }, null, 2)),
     );
   }
+
+  // Always present, `[]` included, so a reader can tell "none" from "not exported".
+  counts.projectVisits = projectVisits.length;
+  add(PROJECT_VISITS_FILE, strToU8(JSON.stringify(projectVisits, null, 2)));
 
   // The files half. Only attachments the reader UPLOADED, and only those whose
   // row survived their own RLS read above — the row IS the authorization.
@@ -208,6 +257,7 @@ export async function buildPersonalDataArchive(
             redacted: s.redact ?? [],
           })),
           files: { packaged, missing },
+          projectVisits: { file: PROJECT_VISITS_FILE, records: projectVisits.length },
         },
         null,
         2,
@@ -236,6 +286,9 @@ function readme(): string {
     '',
     'Files you uploaded are under `files/`. The rows in `attachment.json`',
     'reference them by exactly that path.',
+    '',
+    '`project-visits.json` lists the public projects you chose to share your name',
+    'and email with when you opened them as a visitor, and when.',
     '',
     'Some columns are deliberately absent: password hashes, session tokens,',
     'two-factor secrets and API-token hashes. Those protect your account rather',

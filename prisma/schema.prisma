@@ -172,6 +172,10 @@ model User {
   // membership in many projects (Cascade on the FK: deleting a user removes
   // their project-membership rows, mirroring workspaceMemberships).
   projectMemberships               ProjectMembership[]
+  // Back-relation for ProjectVisitor (Story MOTIR-6170 · MOTIR-6665): the public
+  // projects this person consented to be recorded on. Cascade: deleting the person
+  // removes every record of them.
+  projectVisits                    ProjectVisitor[]
   // Back-relations for Comment + CommentMention (Subtask 5.1.1). A user
   // authors many comments (author — Restrict on the FK: a user with comments
   // on record cannot be hard-deleted silently, mirroring the reporter
@@ -1609,6 +1613,9 @@ model Project {
   // Explicit project membership (Story 6.4). Cascades: deleting a project
   // removes its membership rows.
   memberships                 ProjectMembership[]
+  // Its VISITOR RECORDS (Story MOTIR-6170 · MOTIR-6665). Cascades: nothing is
+  // kept about the readers of a project that no longer exists.
+  visitors                    ProjectVisitor[]
   // The project's OWN roles (Story MOTIR-2257 · MOTIR-2467). Cascades with the
   // project — a project's roles are its own and go with it. Deleting a role
   // that a membership points at is REFUSED (the Restrict FK on
@@ -1917,6 +1924,32 @@ model RoleMigrationReport {
 /// honest by the FK chain: the project and its memberships share one workspace.
 /// All three FKs cascade — deleting the user, project, or workspace removes the
 /// row (a membership is meaningless without all three).
+/// A VISITOR RECORD (Story MOTIR-6170 · MOTIR-6665; `docs/decisions/visitor-sign-in-and-records.md`)
+/// — one per (person, public project), written when a signed-in person who cannot
+/// enter the project presses Continue on its consent screen. The project's Managers
+/// read it (name + email); the person reads their own in their data export. It
+/// belongs to both, so it cascades with either. The workspace is reached THROUGH
+/// the project; nothing reads visitor records by workspace.
+model ProjectVisitor {
+  id           String   @id @default(cuid())
+  projectId    String   @map("project_id")
+  userId       String   @map("user_id")
+  /// When the person pressed Continue — the consent the record exists under.
+  consentedAt  DateTime @map("consented_at") @db.Timestamptz(3)
+  /// Their first read as a Visitor; set to `consentedAt` on create and never moved.
+  firstVisitAt DateTime @map("first_visit_at") @db.Timestamptz(3)
+  /// Touched by each Visitor read; only ever moves forward.
+  lastVisitAt  DateTime @map("last_visit_at") @db.Timestamptz(3)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId, lastVisitAt])
+  @@index([userId])
+  @@map("project_visitor")
+}
+
 model ProjectMembership {
   id               String     @id @default(cuid())
   workspaceId      String     @map("workspace_id")

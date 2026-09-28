@@ -1,5 +1,6 @@
 'use client';
 
+import { personDisplayName } from '@/lib/people/personLabel';
 import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
@@ -1175,7 +1176,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                   const m = view.members.find((x) => x.userId === assigneeId);
                   void edit.commit(
                     'assignee',
-                    { assigneeId, assigneeName: m ? m.name || m.email : null },
+                    { assigneeId, assigneeName: m ? personDisplayName(m) : null },
                     { assigneeId },
                   );
                 }}

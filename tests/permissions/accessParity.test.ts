@@ -131,8 +131,11 @@ const CUSTOM: readonly PermissionKey[] = [
 
 /** What a `public` project grants every actor, anonymous included. */
 const PUBLIC: readonly PermissionKey[] = [
+  // MOTIR-6642 — the Visitor holds the Viewer's view keys.
+  'approval:view_any',
   'plan:view_any',
   'project:browse',
+  'report:view',
   'public_request:comment',
   'public_request:submit',
   'public_request:upvote',
@@ -288,9 +291,13 @@ describe('the truth table — 3 modes × 6 actors × added or not', () => {
         expect(predicate(inputs), `${name}`).toBe(row.expected.includes(key));
       }
       // …and the actor ENTERS exactly when they hold something beyond the public
-      // read set — the listing rule and the resolver agree on every row.
+      // read set — the listing rule and the resolver agree on every row. The one
+      // exception is a VIEWER: since MOTIR-6642 the public set IS the Viewer's
+      // plus the request grants, so an entering Viewer holds nothing beyond it in
+      // ANY mode, and for them entry is exactly holding anything at all.
       const beyondPublic = row.expected.some((k) => !PUBLIC.includes(k));
-      expect(canEnter(inputs), 'canEnter').toBe(beyondPublic);
+      const enteringViewer = row.actor === 'viewer' && row.expected.length > 0;
+      expect(canEnter(inputs), 'canEnter').toBe(beyondPublic || enteringViewer);
     },
   );
 });

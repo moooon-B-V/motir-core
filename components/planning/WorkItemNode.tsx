@@ -1,5 +1,6 @@
 'use client';
 
+import { EpicNotPublicPill } from '@/components/issues/EpicNotPublicPill';
 import {
   ArrowUpRight,
   Check,
@@ -162,6 +163,7 @@ export function WorkItemNode({
   here = false,
   ready = false,
   runLeg = null,
+  notPublic = false,
 }: {
   item: WorkItemNodeData;
   /** Has children — clicking DRILLS in; show the affordance. */
@@ -210,6 +212,9 @@ export function WorkItemNode({
    * the roadmap and onboarding canvases render exactly as before.
    */
   runLeg?: RunLegBadge | null;
+  /** A Visitor's PRIVATE epic (MOTIR-6170 · MOTIR-6648; design MOTIR-6641): the
+   *  node wears the "Not public" pill. Its level is withheld, so it never drills. */
+  notPublic?: boolean;
 }) {
   const t = useTranslations('roadmap.canvas');
   // MANUAL / HUMAN work-type chip (MOTIR-1642 / 8.8.36): a human-gated node — the
@@ -322,6 +327,7 @@ export function WorkItemNode({
             </RunTonePill>
           ) : null}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {notPublic ? <EpicNotPublicPill /> : null}
             {/* The "not in sprint" tag (MOTIR-1379 follow-up) — a QUIET neutral chip,
                 NOT the red cross-blocked flag: this node is simply outside the
                 committed sprint, not a broken dependency. Suppressed when the card is

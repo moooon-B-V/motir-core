@@ -23,6 +23,12 @@
 export const STRUCTURAL_GUARD_SPECS = [
   // ── tests/rls/ — the binding, transaction and singleton guards ─────────────
   'tests/rls/call-site-guard.test.ts',
+  // ── tests/visitor/ — the Visitor write-door guard (MOTIR-6650) ────────────
+  // Parses every mutating route handler under `app/api/` and every
+  // `'use server'` file under `app/` + `lib/` + `components/` through the
+  // compiler API and asserts none reaches a Visitor entrance. Its own
+  // `readdirSync`, no database, nothing imported from `lib/` or `app/`.
+  'tests/visitor/visitorWriteDoorGuard.test.ts',
   'tests/rls/bare-transaction-guard.test.ts',
   'tests/rls/ratchet-staleness-guard.test.ts',
   'tests/rls/singleton-read-guard.test.ts',

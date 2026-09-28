@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { visitorThenMember } from '@/lib/visitor/readActor';
+import { visitorServiceContext } from '@/lib/visitor/context';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { boardsService } from '@/lib/services/boardsService';
@@ -20,7 +22,7 @@ import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 // GET /api/boards — the active project's boards as switcher rows
 // (BoardSummaryDto[], ordered by position). Any member may read (the switcher
 // is not a config write); the workspace gate is the active-project context.
-export async function GET(): Promise<Response> {
+async function memberGET(): Promise<Response> {
   const gate = await requireCompliantSession();
   if (!gate.ok) return gate.response;
 
@@ -37,6 +39,20 @@ export async function GET(): Promise<Response> {
     workspaceId: ctx.workspaceId,
   });
   return NextResponse.json({ boards });
+}
+
+/**
+ * The project's boards — for a VISITOR (MOTIR-6647), the boards of the public
+ * project the Visitor cookie names, read on the Visitor's narrowed service
+ * context (a board's name and type are not private); for everyone else exactly
+ * as before.
+ */
+export async function GET(req?: Request): Promise<Response> {
+  if (!req) return memberGET();
+  return visitorThenMember(req, memberGET, async (ctx) => {
+    const boards = await boardsService.listBoards(ctx.project.id, visitorServiceContext(ctx));
+    return NextResponse.json({ boards });
+  });
 }
 
 // POST /api/boards — create a board on the active project (seeds default

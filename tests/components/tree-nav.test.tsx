@@ -133,9 +133,11 @@ describe('ChildList (2.4.3)', () => {
     expect(within(second).queryByTitle(/.+/)).toBeNull(); // unassigned → no avatar
   });
 
-  it('falls back to the member’s email when they have no name set', () => {
-    // The avatar + its tooltip both read `name || email`, so a member who never
-    // set a display name still gets an identifiable initial rather than a blank.
+  it('falls back to the neutral label, never the email, when a member has no name set', () => {
+    // The avatar + its tooltip read the NAME only (Story MOTIR-6170 · MOTIR-6646):
+    // the same panel serves a Visitor, so a blank name draws the neutral
+    // "Project member", never an address. A member's list never reaches here
+    // blank — the workspace mapper fills the name from the email's local part.
     const items = [
       summary({
         id: 'c9',
@@ -155,7 +157,8 @@ describe('ChildList (2.4.3)', () => {
       />,
     );
     const row = screen.getByRole('link', { name: /PROD-60/ });
-    expect(within(row).getByTitle('zoe@example.com').textContent).toBe('Z');
+    expect(within(row).getByTitle('Project member').textContent).toBe('P');
+    expect(within(row).queryByTitle('zoe@example.com')).toBeNull();
   });
 
   it('falls back to the raw status key when it is not in the workflow', () => {

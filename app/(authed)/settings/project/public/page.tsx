@@ -7,6 +7,9 @@ import { projectsService } from '@/lib/services/projectsService';
 import { guardSettingsPage } from '../_guard';
 import { publicProjectUrl } from '@/lib/publicProjects/urls';
 import { PublicPageEditor } from './_components/PublicPageEditor';
+import { VisitorLinkCard } from './_components/VisitorLinkCard';
+import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
+import { visitorViewPath } from '@/lib/visitor/routes';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // THE PUBLIC PAGE ROOM (Story MOTIR-3875 · MOTIR-4243) — where a project admin
@@ -63,6 +66,16 @@ export default async function ProjectPublicPagePage() {
     ctx,
   });
 
+  // THE VISITOR LINK (MOTIR-6649) — the app's own address for the board, on
+  // the APP origin (`resolveBaseUrlTrimmed()`), never a hard-coded host. It
+  // exists only while the project is Public: a non-public project has no
+  // address to copy, and the card says where access is set instead. The
+  // cloud gate above already covers the capability.
+  const visitorUrl =
+    ctx.project.accessMode === 'public'
+      ? `${resolveBaseUrlTrimmed()}${visitorViewPath(ctx.project.identifier, 'board')}`
+      : null;
+
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
@@ -76,6 +89,8 @@ export default async function ProjectPublicPagePage() {
           })}
         </p>
       </header>
+
+      <VisitorLinkCard visitorUrl={visitorUrl} projectName={ctx.project.name} />
 
       <PublicPageEditor
         projectKey={ctx.project.identifier}

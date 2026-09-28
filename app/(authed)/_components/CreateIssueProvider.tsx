@@ -42,6 +42,7 @@ const CreateIssueContext = createContext<CreateIssueContextValue | null>(null);
 
 export function CreateIssueProvider({
   canEdit = true,
+  canCreate = true,
   aiConfigured = false,
   children,
 }: {
@@ -61,6 +62,14 @@ export function CreateIssueProvider({
    * gate its "Draft with AI" affordance. Defaults to false (safe disabled state).
    */
   aiConfigured?: boolean;
+  /**
+   * Whether a create door is drawn at all (MOTIR-6648). `false` on the Visitor
+   * route tree, where the design REMOVES Create rather than disabling it: every
+   * door that reads `canCreate` (`NewIssueButton`, the empty states) renders
+   * nothing. Defaults `true` — the member shell's doors are gated by `canEdit`
+   * and the permission set, as before.
+   */
+  canCreate?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -88,11 +97,11 @@ export function CreateIssueProvider({
       // the palette read it, and whether a create is OFFERED is a question that
       // may acquire a new answer; what it may no longer mean is "is there a
       // project".
-      canCreate: true,
+      canCreate,
       issuesChangedAt,
       notifyIssuesChanged: notifyIssueCreated,
     }),
-    [open, issuesChangedAt, notifyIssueCreated],
+    [open, canCreate, issuesChangedAt, notifyIssueCreated],
   );
 
   return (

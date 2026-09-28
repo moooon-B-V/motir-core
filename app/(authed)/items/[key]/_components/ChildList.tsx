@@ -1,3 +1,4 @@
+import { personDisplayName } from '@/lib/people/personLabel';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
@@ -97,11 +98,8 @@ export function ChildList({ items, workflow, members }: ChildListProps) {
                 <Pill tone="neutral">{child.status}</Pill>
               )}
               {assignee ? (
-                <span
-                  className="flex shrink-0 items-center"
-                  title={assignee.name || assignee.email}
-                >
-                  <Avatar name={assignee.name || assignee.email} />
+                <span className="flex shrink-0 items-center" title={personDisplayName(assignee)}>
+                  <Avatar name={personDisplayName(assignee)} />
                 </span>
               ) : null}
             </RelationshipPeekLink>

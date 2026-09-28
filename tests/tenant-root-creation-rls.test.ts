@@ -266,6 +266,14 @@ describe('RLS coverage across the public schema', () => {
       canvas_node_position: 'reached only via project, which is workspace-guarded',
       project_tag: 'reached only via project, which is workspace-guarded',
       project_tag_assignment: 'reached only via project, which is workspace-guarded',
+      // The visitor record (Story MOTIR-6170 · MOTIR-6665). It carries no
+      // workspace discriminator, and a workspace policy would hide it from both
+      // of its legitimate writers and readers: it is WRITTEN by a person who is,
+      // by definition, in none of the project's workspace (the consent screen),
+      // and READ by that person across every workspace in their own data export.
+      // The Managers' list is reached through the project, which is guarded, and
+      // behind `project:manage_access`. `docs/decisions/visitor-sign-in-and-records.md`.
+      project_visitor: 'written by a non-member on consent, read cross-workspace by its person',
     };
 
     const rows = await adminDb.$queryRawUnsafe<{ relname: string }[]>(
