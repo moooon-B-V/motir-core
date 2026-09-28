@@ -203,4 +203,27 @@ export const agentInstanceRepository = {
       take,
     });
   },
+
+  /**
+   * Every live record in one instance app — the reconcile's "who owns this
+   * machine / volume" read. Deleted rows are excluded, so a machine or volume
+   * that only a deleted record names is an orphan.
+   */
+  async listLiveInApp(app: string, tx: Prisma.TransactionClient): Promise<AgentInstance[]> {
+    return tx.agentInstance.findMany({ where: { flyApp: app, ...LIVE } });
+  },
+
+  /**
+   * Every instance app any record (live or deleted) has ever named — the
+   * reconcile walks each one. Distinct, sorted for a stable pass.
+   */
+  async listDistinctApps(tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.agentInstance.findMany({
+      where: { flyApp: { not: null } },
+      distinct: ['flyApp'],
+      select: { flyApp: true },
+      orderBy: { flyApp: 'asc' },
+    });
+    return rows.flatMap((r) => (r.flyApp ? [r.flyApp] : []));
+  },
 };

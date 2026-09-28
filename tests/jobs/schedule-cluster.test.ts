@@ -184,7 +184,10 @@ describe('the `system.*` schedule is CLUSTERED — the quiet gap the compute sle
     // a clustered minute, costing NO NEW WAKE. Derived by the grep above.
     // 30 since `system.run-liveness-sweep` (MOTIR-6528), at `0,30 * * * *` — the
     // cluster's own minutes, costing NO NEW WAKE. Derived by the grep above.
-    expect(jobSchedules().length).toBe(30);
+    // 31 since `system.agent-instance-sweep` (MOTIR-6873), at `0,30 * * * *` — the
+    // cluster's own minutes, costing NO NEW WAKE; its idle window moved onto a
+    // per-instance debounced timer rather than asking for a finer cadence.
+    expect(jobSchedules().length).toBe(31);
     expect(wakeMinutes()).toEqual([...SCHEDULE_CLUSTER_MINUTES].sort((a, b) => a - b));
     expect(wakeMinutes()).toEqual([0, 30]);
     expect(longestQuietGapMinutes()).toBe(30);

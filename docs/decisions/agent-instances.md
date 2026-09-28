@@ -380,3 +380,27 @@ dialog says so beside those profiles.
 - **Running a card in an instance** — MOTIR-6864's.
 - **Offering Cursor.** Cursor stays off until Cursor confirms it in writing; this record does not
   decide that confirmation.
+
+## AMENDMENT 1 — the sweep's cadence (MOTIR-6873, 2026-09-28)
+
+**§2's "every 5 minutes" could not be built as written.** The job substrate refuses a cron off the
+clustered minutes `0` and `30` (`SCHEDULE_CLUSTER_MINUTES`, pinned by
+`tests/jobs/schedule-cluster.test.ts`): the database suspends when idle, every scheduled tick is a
+guaranteed wake, and a finer cadence is a decision for `application-hosting.md` §21, not a minute to
+pick. So the sweep is split by what each part needs:
+
+- **The idle window rides a per-instance timer**, not the sweep. `agent-instance/idle-check` is a
+  debounced job keyed on the instance, armed when it starts running and re-armed on every activity
+  bump, with `period: 30m` and `timeout: 12h`. It fires once the instance has been quiet for the
+  window, so an idle instance hibernates at 30 minutes rather than at up to 35. It wakes nothing
+  while no instance exists.
+- **`system.agent-instance-sweep` runs at `0,30 * * * *`** for everything else: settling a
+  transition left in motion, the reconcile, the 12-hour backstop, the credit refusal, orphans, the
+  charge backstop, and an idle instance whose timer was lost.
+- **The fleet slot's TTL grows to 12 h + 45 minutes**, the backstop plus one 30-minute sweep and a
+  quarter hour, in place of §6's 12 h + 15 minutes.
+- **The orphan cleanup** destroys a volume only once its machine is gone from the inventory it
+  read, so an orphan volume is removed one pass after its machine.
+
+The 12-hour backstop is unchanged. Worst case it now lands at 12 h + 30 minutes, since both the
+timer's debounce cap and the sweep enforce it.

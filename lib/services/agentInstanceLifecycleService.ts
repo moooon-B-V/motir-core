@@ -51,6 +51,8 @@ import { toAgentInstanceDto } from '@/lib/mappers/agentInstanceMappers';
 import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
 import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
+import { agentInstanceChargeService } from '@/lib/services/agentInstanceChargeService';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -273,8 +275,31 @@ async function closeOpenInterval(
     );
     return moved === 1 ? open : null;
   });
-  if (closed) await releaseSlot(row.id, closed.id);
+  if (closed) {
+    await releaseSlot(row.id, closed.id);
+    // Charge it now (§5); a transport failure leaves it `pending` for the sweep.
+    try {
+      await agentInstanceChargeService.chargeInterval(closed.id);
+    } catch (err) {
+      console.error(
+        '[agentInstanceLifecycle] the interval charge failed; the sweep will retry it',
+        {
+          instanceId: row.id,
+          intervalId: closed.id,
+          detail: describeError(err),
+        },
+      );
+    }
+  }
   return closed;
+}
+
+/** (Re)arm the instance's idle timer (§2) — the debounced `agent-instance/idle-check`. */
+async function armIdleTimer(row: AgentInstance): Promise<void> {
+  await sendEvent('agent-instance/idle-check', {
+    workspaceId: row.workspaceId,
+    instanceId: row.id,
+  });
 }
 
 /** A guarded move made by the system (the settle paths): read, check, move. */
@@ -695,7 +720,9 @@ export const agentInstanceLifecycleService = {
     const moved = await systemTransition(row, [row.state], 'running', {
       lastActivityAt: agentInstanceClock.now(),
     });
-    return moved ? 'running' : 'noop';
+    if (!moved) return 'noop';
+    await armIdleTimer(row);
+    return 'running';
   },
 
   /**
@@ -763,9 +790,42 @@ export const agentInstanceLifecycleService = {
   async touchActivity(instanceId: string): Promise<void> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
     if (!row) return;
-    await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+    const moved = await withWorkspaceServiceContext(row.workspaceId, (tx) =>
       agentInstanceRepository.touchActivity(row.id, agentInstanceClock.now(), tx),
     );
+    if (moved === 1 && row.state === 'running') await armIdleTimer(row);
+  },
+
+  /**
+   * RECONCILE ONE RUNNING INSTANCE against the machine (§5) — the sweep's read.
+   * A machine found `stopped` (a crash with no restart, an operator) closes the
+   * interval at Fly's stop instant and rests at `hibernated`; one found `gone`
+   * fails the instance and closes the interval `lost` — charged either way.
+   */
+  async reconcileRunning(instanceId: string): Promise<'ok' | 'hibernated' | 'failed' | 'noop'> {
+    const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
+    if (!row || row.deletedAt || row.state !== 'running') return 'noop';
+    const handle = handleOf(row);
+    if (!handle) return 'noop';
+    let status;
+    try {
+      status = await getPersistentOrchestrator().describePersistent(handle);
+    } catch {
+      return 'noop';
+    }
+    if (status.state === 'gone' || status.state === 'failed') {
+      await failInstance(
+        row,
+        'The machine was lost. Its home may be gone; wake it to try again, or delete it.',
+      );
+      return 'failed';
+    }
+    if (status.state === 'stopped') {
+      if (!(await systemTransition(row, ['running'], 'hibernated'))) return 'noop';
+      await closeOpenInterval(row, status.stoppedAt ?? agentInstanceClock.now(), 'hibernated');
+      return 'hibernated';
+    }
+    return 'ok';
   },
 };
 

@@ -17,8 +17,13 @@ export const INSTANCE_IDLE_WINDOW_MS = 30 * 60 * 1000;
 /** §2: no running interval lasts longer than this; the sweep hibernates at it. */
 export const INSTANCE_INTERVAL_BACKSTOP_MS = 12 * 60 * 60 * 1000;
 
-/** §6: a slot's safety net — the backstop plus one sweep's margin. */
-export const INSTANCE_SLOT_TTL_SECONDS = 12 * 60 * 60 + 15 * 60;
+/**
+ * §6: a slot's safety net — the backstop plus one sweep's margin. The decision
+ * sized it for a 5-minute sweep (12 h 15 min); the sweep runs on the job
+ * substrate's clustered 30-minute cadence (`agentInstanceSweepService`'s header),
+ * so the margin is one 30-minute sweep plus a quarter hour: 12 h 45 min.
+ */
+export const INSTANCE_SLOT_TTL_SECONDS = 12 * 60 * 60 + 45 * 60;
 
 /** §6: live (not deleted) instances one user may hold, across projects. */
 export const INSTANCE_MAX_PER_USER = 10;
