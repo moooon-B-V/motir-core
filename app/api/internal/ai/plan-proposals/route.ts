@@ -15,6 +15,7 @@ import {
   PlanPersistenceError,
   PlanGrammarError,
   PlanRefGraphError,
+  UnresolvedPlanRefError,
 } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { ConflictingTargetRepoInputError } from '@/lib/workItems/errors';
@@ -210,6 +211,13 @@ export async function POST(req: Request): Promise<Response> {
     }
     if (
       err instanceof InvalidProposalError ||
+      // A `planItem:` ref naming no EARLIER `add` of this plan — most often one
+      // appended in the SAME batch (MOTIR-3539). The service refuses it at the
+      // append; this door answered it as a 500 motir-ai reads as a server fault
+      // and retries, where the correction route beside it and the MCP door answer
+      // the typed 422. Found by the mark story's gate (MOTIR-6633), whose
+      // `supersedes` carriers take `planItem:` refs like the blocker lists.
+      err instanceof UnresolvedPlanRefError ||
       // More than one of `targetRepo` / `targetRepos` / `targetRepositories` on
       // one `add` (MOTIR-6215) — the service refuses rather than picking a
       // winner, and the refusal names the fields.

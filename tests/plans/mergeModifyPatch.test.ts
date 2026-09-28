@@ -43,12 +43,52 @@ describe('mergeModifyPatch — per key class', () => {
   });
 
   it('is TOTAL over PLAN_ITEM_PATCH_KEYS — every key survives a merge from either side', () => {
-    const edge = new Set(['blockedByAdd', 'blockedByRemove']);
+    const edge = new Set([
+      'blockedByAdd',
+      'blockedByRemove',
+      'supersedesAdd',
+      'supersedesRemove',
+      'supersededByAdd',
+      'supersededByRemove',
+    ]);
     for (const key of PLAN_ITEM_PATCH_KEYS) {
       const value = edge.has(key) ? ['r'] : `v-${key}`;
       expect(mergeModifyPatch({ [key]: value }, {}), key).toEqual({ [key]: value });
       expect(mergeModifyPatch({}, { [key]: value }), key).toEqual({ [key]: value });
     }
+  });
+
+  it('the SUPERSEDES lists (MOTIR-6630) are unioned, each add list cancelled only by its own remove list', () => {
+    expect(
+      mergeModifyPatch(
+        { supersedesAdd: ['a', 'b'], supersededByAdd: ['n'] },
+        { supersedesAdd: ['b', 'c'], supersededByRemove: ['m'], title: 'T' },
+      ),
+    ).toEqual({
+      supersedesAdd: ['a', 'b', 'c'],
+      supersededByAdd: ['n'],
+      supersededByRemove: ['m'],
+      title: 'T',
+    });
+    // A ref in `supersedesAdd` and `supersedesRemove` cancels to neither.
+    expect(mergeModifyPatch({ supersedesAdd: ['a', 'k'] }, { supersedesRemove: ['a'] })).toEqual({
+      supersedesAdd: ['k'],
+    });
+    expect(mergeModifyPatch({ supersededByRemove: ['a'] }, { supersededByAdd: ['a'] })).toEqual({});
+    // The two SPELLINGS are different lists: `supersedesAdd: [a]` is not
+    // cancelled by `supersededByRemove: [a]` (they name different rows), nor
+    // a blocker edge by a supersedes one.
+    expect(
+      mergeModifyPatch(
+        { supersedesAdd: ['a'], blockedByAdd: ['a'] },
+        { supersededByRemove: ['a'], supersedesRemove: ['z'] },
+      ),
+    ).toEqual({
+      supersedesAdd: ['a'],
+      blockedByAdd: ['a'],
+      supersededByRemove: ['a'],
+      supersedesRemove: ['z'],
+    });
   });
 
   it('DIFFICULTY (MOTIR-6133) merges as a scalar, exactly like storyPoints — later wins, `null` clears', () => {
@@ -62,6 +102,25 @@ describe('mergeModifyPatch — per key class', () => {
     expect(mergeModifyPatch({ difficulty: 'medium' }, { difficulty: null })).toEqual({
       difficulty: null,
     });
+  });
+
+  it('the OBSOLESCENCE mark and its note (MOTIR-6629) merge as scalars — later wins, `null` clears', () => {
+    expect(
+      mergeModifyPatch(
+        { obsolescence: 'outdated', obsolescenceNoteMd: 'first' },
+        { obsolescence: 'deprecated' },
+      ),
+    ).toEqual({ obsolescence: 'deprecated', obsolescenceNoteMd: 'first' });
+    expect(mergeModifyPatch({ obsolescence: 'outdated' }, { obsolescenceNoteMd: 'why' })).toEqual({
+      obsolescence: 'outdated',
+      obsolescenceNoteMd: 'why',
+    });
+    expect(
+      mergeModifyPatch(
+        { obsolescence: 'outdated', obsolescenceNoteMd: 'why' },
+        { obsolescence: null, obsolescenceNoteMd: null },
+      ),
+    ).toEqual({ obsolescence: null, obsolescenceNoteMd: null });
   });
 
   it('treats a missing patch on either side as empty', () => {

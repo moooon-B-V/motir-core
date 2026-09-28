@@ -354,6 +354,25 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * The `supersedes` links running FROM any of `itemIds` (Story MOTIR-6577 ·
+   * MOTIR-6630) — `fromId` is the NEWER card, `toId` the older one it replaces.
+   * The plan gate's supersedes-cycle walk expands its closure from these, one
+   * level per call, exactly as it does `findBlockedByEdges` for blockers.
+   * Archived ends are NOT filtered: the database does not refuse a supersedes
+   * ring, so the walk sees every committed row a ring could run through.
+   */
+  async findSupersedesEdges(
+    itemIds: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ fromId: string; toId: string }>> {
+    if (itemIds.length === 0) return [];
+    return (tx ?? dbRead).workItemLink.findMany({
+      where: { fromId: { in: itemIds }, kind: 'supersedes' },
+      select: { fromId: true, toId: true },
+    });
+  },
+
+  /**
    * The `is_blocked_by` edges running FROM any of `fromIds` TO any of `toIds` —
    * the cross-parent coverage check's parent-level lookup (MOTIR-6370): given the
    * parents of every cross-parent edge's two ends, which parent pairs already

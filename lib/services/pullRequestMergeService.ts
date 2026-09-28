@@ -63,6 +63,7 @@ import {
 } from './approvalGatesService';
 import { settleAfterPrimaryApproval } from './ciPromotion';
 import { requireGateCard } from '@/lib/approvalGates/gateCard';
+import { recomputeWorkItemFixReason } from './fixReasonService';
 
 // THE MERGE ENTRY POINT (Story MOTIR-4882 · MOTIR-5517 · MOTIR-5613; `approval-gates.md`
 // §8's SECOND AMENDMENT, decisions 4 and 6) — the one path by which an approved card's
@@ -1235,13 +1236,17 @@ async function recordMergeRefusal(
         tx,
       );
       const landingClass = classOfMergeRefusal(refusal.code);
-      if (landingClass === null) return;
-      const item = await workItemRepository.findById(target.workItemId, tx);
-      if (!item) return;
-      const mode = (await projectRepository.findPrMergeMode(item.projectId, tx))?.prMergeMode;
-      // `auto` has no approval to spend and no person to ask, so it records nothing.
-      if (mode !== 'manual') return;
-      await settleUnlandedOutcome(item, landingClass, ctx, tx);
+      if (landingClass !== null) {
+        const item = await workItemRepository.findById(target.workItemId, tx);
+        const mode = item
+          ? (await projectRepository.findPrMergeMode(item.projectId, tx))?.prMergeMode
+          : null;
+        // `auto` has no approval to spend and no person to ask, so it records nothing.
+        if (item && mode === 'manual') await settleUnlandedOutcome(item, landingClass, ctx, tx);
+      }
+      // The refusal may have held the card at Implemented — re-decide what it is waiting
+      // on (MOTIR-6602), under the lock taken above.
+      await recomputeWorkItemFixReason(target.workItemId, tx);
     });
   } catch (err) {
     console.error('[pullRequestMergeService] the refusal could not be recorded', {

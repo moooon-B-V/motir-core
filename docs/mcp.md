@@ -3031,7 +3031,14 @@ plus `items[]`, one entry per proposal:
   `priority`, `executor`, `storyPoints`, `estimateMinutes`, `difficulty`,
   `descriptionMd`, `explanationMd`. The one-line render shows a leaf's size and
   difficulty together, e.g. `(3 pts · 40m · high)`.
-- **`patch`** (`modify`) — only the CHANGED fields.
+- **`patch`** (`modify`) — only the CHANGED fields. A proposed MARK rides here
+  (`obsolescence`, `obsolescenceNoteMd`, `supersedesAdd` / `supersedesRemove` /
+  `supersededByAdd` / `supersededByRemove`), and the one-line render prints it as
+  `mark: none → outdated · note: <first line> · supersedes +ACME-3 −ACME-4 ·
+superseded by +ACME-9` — the old mark read from the target's live row, each ref
+  by its key.
+- **`supersedesRefs`** (`add`) — the older cards the new card replaces; rendered
+  as `· supersedes ACME-3, ACME-4`. `[]` on every other op.
 - **`workItemId`** — the target of a `modify` / `remove`; **`null` for an
   un-materialized `add`**.
 - **`decisionReason`** — on a `declined` plan, WHY it ended: `reviewed` (a
@@ -3236,7 +3243,7 @@ Append a batch of proposals, and optionally close the plan.
 | `proposals` | array   | yes      | The batch to append; see the shape below. **May be empty — but only with `final: true`.** |
 | `final`     | boolean | no       | `true` on the LAST batch — closes the plan (`generating` → `planned`).                    |
 
-Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blockedByRefs?, baseRevision? }`
+Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blockedByRefs?, supersedesRefs?, baseRevision?, reason? }`
 — the same shape `get_plan` returns, minus the fields the server owns:
 
 - **`op`** — `add` · `modify` · `remove`.
@@ -3325,6 +3332,76 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
   is refused too), in `validate_plan`'s `rejections` and at approve.
   `patch.blockedByRemove` is never refused, so a bad committed edge can always be
   taken away.
+
+###### Marking a card — the obsolescence mark and its `supersedes` edges
+
+A plan can say that a FINISHED card is no longer true of the code (Story MOTIR-6577,
+`agent-authored-plans.md` AMENDMENT 22). Six `modify` patch keys and one `add` field
+carry it:
+
+| Where             | Key                  | Meaning                                                                                                                                                                                                       |
+| ----------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modify` `patch`  | `obsolescence`       | `"outdated"` (the text no longer describes what shipped) · `"deprecated"` (retired or overturned on purpose) · `null` clears. Anything else: `INVALID_PROPOSAL`.                                              |
+| `modify` `patch`  | `obsolescenceNoteMd` | Markdown WHY — what changed, what to read instead. `null` clears. Independent of the mark: clearing the mark keeps the note.                                                                                  |
+| `modify` `patch`  | `supersedesAdd`      | **On the NEWER card**: the target REPLACES each listed (older) card. Approve writes one `supersedes` link target → ref.                                                                                       |
+| `modify` `patch`  | `supersedesRemove`   | On the NEWER card: delete the link target → ref. A link that is not there is a no-op.                                                                                                                         |
+| `modify` `patch`  | `supersededByAdd`    | **On the OLD card**: each listed (newer) card REPLACES the target. Approve writes one `supersedes` link ref → target — the row the newer card's `supersedesAdd` would write, so both spellings land one link. |
+| `modify` `patch`  | `supersededByRemove` | On the OLD card: delete the link ref → target.                                                                                                                                                                |
+| `add` (top level) | `supersedesRefs`     | The OLDER cards the created card replaces; approve writes one link new card → ref. Refused on a `modify` (use the patch lists) and on a `remove`.                                                             |
+
+Every one of the five edge carriers takes the same three ref forms as
+`blockedByRefs`: a work-item **key** (`ACME-7`, resolved to its id at the call — an
+unknown key is refused `INVALID_PLAN_REF_GRAPH` / `dangling` there), a real id, or a
+`planItem:<id>` naming an `add` from an **earlier** call. A `folder:` ref, a ref listed
+twice in one list, a `modify` naming its own target, and an edge that closes a
+**supersedes cycle** (A replaces B replaces A — the database does not refuse one, so the
+plan path does) are refused `INVALID_PLAN_REF_GRAPH`. There is **no level rule**: any
+kind may supersede any kind, and a supersedes edge orders nothing. On a merge (a second
+`modify` of the same card) the four lists union like the blocker lists, and a ref in an
+`…Add` and its `…Remove` cancels.
+
+**A plan may mark only a FINISHED card.** A patch that SETS `obsolescence` on a target
+whose status is not in the `done` category is refused `INVALID_PROPOSAL`, at the append,
+at `update_plan_proposal` and again at approve (where `validate_plan` reports it as a
+rejection):
+
+> `<proposal>: a plan may mark only a finished work item; ACME-7 is at in_progress. A
+work item nobody will finish is removed — send { op: 'remove', workItemId, reason }
+instead.`
+
+Unfinished work nobody will do is **removed**, not marked. Clearing a mark (`null`) is
+legal on any card.
+
+**The mark-only carve-out.** A `modify` whose patch carries NOTHING but these six keys
+is the ONE change a plan may make to a `done` or `cancelled` card: approve writes the
+mark, the note and the links and leaves the card's status, branch and parent alone. Add
+any other key and the target is refused `PLAN_TARGET_IMMUTABLE`, as before. Marking is
+never archiving — the card stays in the tree — and **a `remove` never marks anything**.
+
+A worked example — mark a `done` story outdated, superseded by the story this plan adds,
+in two calls (the second needs the first's `planItemIds`):
+
+```jsonc
+// 1 — the replacement story, naming the old one it replaces
+add_plan_items({ planId, proposals: [
+  { op: "add", proposedFields: { title: "Checkout, v2", kind: "story" },
+    parentRef: "ACME-40", supersedesRefs: ["ACME-12"] },
+]})
+// → planItemIds: ["ck_v2"]
+
+// 2 — a MARK-ONLY modify of the done story
+add_plan_items({ planId, final: true, proposals: [
+  { op: "modify", workItemId: "<ACME-12's id>",
+    patch: { obsolescence: "outdated",
+             obsolescenceNoteMd: "The flow moved to Checkout, v2.",
+             supersededByAdd: ["planItem:ck_v2"] } },
+]})
+```
+
+`supersedesRefs` on the `add` and `supersededByAdd` on the `modify` name the same link;
+either alone draws it, both together draw it once. `get_plan` renders the pair as
+`+ [story] Checkout, v2 · supersedes ACME-12` and
+`~ modify ACME-12 — … · mark: none → outdated · note: The flow moved to Checkout, v2. · superseded by +planItem:ck_v2`.
 
 **Output** — `structuredContent`: the plan and its `items[]`, plus
 **`planItemIds`** — the ids of the proposals **this call** created, **in the order
@@ -3517,18 +3594,19 @@ returns a proposal's id only when its own call returns, so an intra-plan ref wri
 in the same batch as its target names nothing — and until this tool existed the only
 remedy was to author a whole second plan and ask a person to decline the first.
 
-| Input                                | Type           | Required | Notes                                                                                                                                                                |
-| ------------------------------------ | -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `planId`                             | string         | yes      | The id `create_plan` returned.                                                                                                                                       |
-| `planItemId`                         | string         | yes      | The proposal to correct.                                                                                                                                             |
-| every field `update_plan_item` takes | —              | no       | Same sparse semantics — `difficulty` included, leaf-only on the merged kind (`INVALID_PROPOSAL` on a container).                                                     |
-| `parentRef`                          | string \| null | no       | `add` only. Re-parent it — a key, an id, `planItem:<id>`, or `folder:<folderId>` to file it into a folder; `null` makes it top-level. Re-validated as at the append. |
-| `blockedByRefs`                      | string[]       | no       | **REPLACES** the set — a list has no sparse edit. `[]` clears it.                                                                                                    |
-| `targetRepo`                         | string \| null | no       | `add` only. Re-pin the repo; `null` unpins.                                                                                                                          |
-| `targetRepos`                        | string[]       | no       | `add` only. **REPLACES** the repository SET by NAME; `[]` unpins.                                                                                                    |
-| `targetRepositories`                 | string[]       | no       | `add` only. The same set as repository ROW IDS.                                                                                                                      |
-| `targetRepoRole`                     | string \| null | no       | `add` only. Re-pin the ROLE — the portable half; `null` unpins.                                                                                                      |
-| `patch`                              | object \| null | no       | `modify` only. **REPLACES** that proposal's patch — `patch.difficulty` included, judged against the target's kind.                                                   |
+| Input                                | Type           | Required | Notes                                                                                                                                                                                                             |
+| ------------------------------------ | -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `planId`                             | string         | yes      | The id `create_plan` returned.                                                                                                                                                                                    |
+| `planItemId`                         | string         | yes      | The proposal to correct.                                                                                                                                                                                          |
+| every field `update_plan_item` takes | —              | no       | Same sparse semantics — `difficulty` included, leaf-only on the merged kind (`INVALID_PROPOSAL` on a container).                                                                                                  |
+| `parentRef`                          | string \| null | no       | `add` only. Re-parent it — a key, an id, `planItem:<id>`, or `folder:<folderId>` to file it into a folder; `null` makes it top-level. Re-validated as at the append.                                              |
+| `blockedByRefs`                      | string[]       | no       | **REPLACES** the set — a list has no sparse edit. `[]` clears it.                                                                                                                                                 |
+| `supersedesRefs`                     | string[]       | no       | `add` only. **REPLACES** the older cards the `add` supersedes (key, id or `planItem:<id>`); `[]` clears it. Re-checked as at the append, cycle included.                                                          |
+| `targetRepo`                         | string \| null | no       | `add` only. Re-pin the repo; `null` unpins.                                                                                                                                                                       |
+| `targetRepos`                        | string[]       | no       | `add` only. **REPLACES** the repository SET by NAME; `[]` unpins.                                                                                                                                                 |
+| `targetRepositories`                 | string[]       | no       | `add` only. The same set as repository ROW IDS.                                                                                                                                                                   |
+| `targetRepoRole`                     | string \| null | no       | `add` only. Re-pin the ROLE — the portable half; `null` unpins.                                                                                                                                                   |
+| `patch`                              | object \| null | no       | `modify` only. **REPLACES** that proposal's patch — `patch.difficulty` included, judged against the target's kind; the six mark keys included, a SET mark refused on an unfinished target (see _Marking a card_). |
 
 **It reaches the five things the deepen cannot, and that is the whole point.** The
 field that is wrong is very often `patch.blockedByAdd` on a `modify` — the op no

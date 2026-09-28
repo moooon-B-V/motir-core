@@ -7,9 +7,9 @@
 // those reads, and this payload can never leak a row a reader may not see.
 
 /**
- * The five tabs the Workbench strip renders, in strip order.
+ * The six tabs the Workbench strip renders.
  *
- * The four WORK tabs are `homeService`'s (the assignee-OR-reporter union); the
+ * The five WORK tabs are `homeService`'s (the assignee-OR-reporter union); the
  * fifth is the approvals queue's, which routes to exactly one recipient
  * (`assigneeId ?? reporterId`, `docs/decisions/approval-gates.md` §2). Two tabs
  * in one strip meaning two different things by *me* is a divergence that ADR
@@ -19,6 +19,9 @@
 export const WORKBENCH_TAB_KEYS = [
   'toDo',
   'inProgress',
+  // TO FIX (MOTIR-6604) — another slice of the SAME membership read, carved out of
+  // In progress, so it takes the work tabs' predicate rather than a new one.
+  'toFix',
   'recentlyFinished',
   'approvals',
   'watching',

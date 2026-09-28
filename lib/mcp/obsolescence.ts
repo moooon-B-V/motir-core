@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { WorkItemObsolescence } from '@/generated/prisma/client';
 import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
+import { firstLine } from '@/lib/workItems/obsolescenceNote';
 
 // The OBSOLESCENCE mark on the MCP work-item doors (Story MOTIR-6574 ·
 // MOTIR-6582) — the transport half of the columns MOTIR-6579 added: the two
@@ -56,15 +57,9 @@ export const obsolescenceNoteWriteField = z
       'null clears it. Independent of `obsolescence`: clearing the mark keeps the note.',
   );
 
-/** The note's first non-blank line, trimmed — what a text block prints. */
-function firstLine(noteMd: string | null): string | null {
-  if (noteMd === null) return null;
-  const line = noteMd
-    .split('\n')
-    .map((l) => l.trim())
-    .find((l) => l.length > 0);
-  return line ?? null;
-}
+/** The note's first non-blank line — one definition, shared with the plan review's
+ *  client surfaces (MOTIR-6632), so it lives in a module with no server imports. */
+export { firstLine };
 
 /**
  * The text-block lines for a card's mark: `obsolescence: outdated — superseded by

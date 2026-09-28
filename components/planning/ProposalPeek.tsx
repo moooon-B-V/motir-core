@@ -159,6 +159,7 @@ export function ProposalPeek({
   item,
   outcome = null,
   onClose,
+  onOpenProposal,
 }: {
   /** The proposal to read, or null when the peek is closed. */
   item: PlanReviewItemDto | null;
@@ -175,6 +176,9 @@ export function ProposalPeek({
    */
   outcome?: PlanItemOutcome | null;
   onClose: () => void;
+  /** Opens the peek of another proposal of this plan — a proposed supersedes
+   *  chip on the rail (MOTIR-6632, Part XXIV §24.7). */
+  onOpenProposal?: (planItemId: string) => void;
 }) {
   // THREE states, not two (MOTIR-4185). `pending` renders the shipped skeleton;
   // `ready` renders the peek; `notfound` renders the shipped not-found panel.
@@ -346,6 +350,7 @@ export function ProposalPeek({
           proposal={item.proposal}
           proposalOutcome={outcome}
           onClose={onClose}
+          {...(onOpenProposal ? { onOpenProposal } : {})}
         />
       </div>
     </Modal>

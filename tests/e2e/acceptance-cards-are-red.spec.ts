@@ -411,7 +411,9 @@ test('a person scanning sees which cards are RED, lists them, and watches one go
   );
 
   await chapter('And on the Workbench, where the day starts', async () => {
-    await page.goto('/workbench?tab=in-progress');
+    // A red card is stuck until it is repaired, so since Story MOTIR-6588 the
+    // Workbench lists it on To fix rather than In progress — with the same badge.
+    await page.goto('/workbench?tab=to-fix');
     await expect(itemRow(page, red).locator('[data-ci-state="failing"]')).toHaveAttribute(
       'aria-label',
       'Checks failing',

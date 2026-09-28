@@ -28,7 +28,13 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 // somebody pastes; a label is what they read on the strip; neither owes the
 // other a transliteration (`design-notes.md` § The tab strip).
 
-export type WorkbenchTab = 'todo' | 'in-progress' | 'finished' | 'watching' | 'approvals';
+export type WorkbenchTab =
+  | 'todo'
+  | 'in-progress'
+  | 'to-fix'
+  | 'finished'
+  | 'watching'
+  | 'approvals';
 
 /**
  * Every tab, in strip order — the DESIGN's order (`design-notes.md` § 21,
@@ -43,6 +49,9 @@ export type WorkbenchTab = 'todo' | 'in-progress' | 'finished' | 'watching' | 'a
  */
 export const WORKBENCH_TABS: readonly WorkbenchTab[] = [
   'approvals',
+  // TO FIX (MOTIR-6604; design § 30) — second, amending § 21's strip: what is
+  // waiting on you to DECIDE, then what is waiting on you to REPAIR.
+  'to-fix',
   'in-progress',
   'todo',
   'finished',
@@ -57,6 +66,7 @@ export const WORKBENCH_TABS: readonly WorkbenchTab[] = [
 const TAB_PARAM: Readonly<Record<WorkbenchTab, string>> = {
   approvals: 'approvals',
   'in-progress': 'in-progress',
+  'to-fix': 'to-fix',
   todo: 'todo',
   finished: 'finished',
   watching: 'watching',

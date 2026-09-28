@@ -245,6 +245,7 @@ describe('THE FRAMES', () => {
     expect(frames[0]!.data.moved).toEqual([
       'toDo',
       'inProgress',
+      'toFix',
       'recentlyFinished',
       'approvals',
       'watching',

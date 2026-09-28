@@ -5,6 +5,7 @@ import {
   workItemRepository,
   HOME_SLICE_DONE,
   HOME_SLICE_IN_PROGRESS,
+  HOME_SLICE_TO_FIX,
   HOME_SLICE_TODO,
   HOME_SLICE_UNFINISHED,
   type HomeCategorySlice,
@@ -274,6 +275,20 @@ export const homeService = {
   },
 
   /**
+   * TO FIX — the reader's in-progress cards that are stuck until something is
+   * repaired (Story MOTIR-6588 · MOTIR-6604): a merge-queue failure, a conflict, red
+   * CI, or a reviewer's standing Request changes, as `WorkItem.fixReason` records it.
+   *
+   * ⚠️ THE SAME READ, ONE MORE SLICE — never a second membership query. It is In
+   * progress's category with `fixReason` set, and In progress is that category with it
+   * unset, so the partition promise (no card on two tabs, none dropped) holds by the
+   * predicate rather than by two queries agreeing.
+   */
+  async listToFix(ctx: HomeActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
+    return homeService.listSlice(ctx, HOME_SLICE_TO_FIX, options);
+  },
+
+  /**
    * RECENTLY FINISHED — the week's work, which this surface has never shown.
    *
    * ⚠️ TWO THINGS DIFFER FROM ITS SIBLINGS AND THEY ARE ONE DECISION: it orders
@@ -359,12 +374,19 @@ export const homeService = {
   async tabCounts(ctx: HomeActorContext): Promise<HomeTabCountsDto> {
     return withWorkspaceContext(ctx, async (tx) => {
       const projectScopes = await resolveActiveProjectScope(ctx, tx);
-      const [toDo, inProgress, recentlyFinished, watching, approvals] = await Promise.all([
+      const [toDo, toFix, inProgress, recentlyFinished, watching, approvals] = await Promise.all([
         workItemRepository.countByAssigneeOrReporterInWorkspace(
           ctx.userId,
           ctx.workspaceId,
           projectScopes,
           { slice: HOME_SLICE_TODO },
+          tx,
+        ),
+        workItemRepository.countByAssigneeOrReporterInWorkspace(
+          ctx.userId,
+          ctx.workspaceId,
+          projectScopes,
+          { slice: HOME_SLICE_TO_FIX },
           tx,
         ),
         workItemRepository.countByAssigneeOrReporterInWorkspace(
@@ -405,13 +427,16 @@ export const homeService = {
       return {
         toDo,
         inProgress,
+        toFix,
         recentlyFinished,
         approvals,
         watching,
         // Transitional — `/home`'s two-tab strip, until MOTIR-4782 replaces it.
         // Derived from the two above rather than counted again, so the old
         // badge and the new ones cannot disagree.
-        myWork: toDo + inProgress,
+        // To fix is carved out of In progress (MOTIR-6604), so it is added back
+        // here: the old badge still means everything not finished.
+        myWork: toDo + inProgress + toFix,
       };
     });
   },

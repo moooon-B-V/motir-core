@@ -36,8 +36,9 @@ import {
 } from '../payloads/workLoop';
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
+import { WORK_ITEM_OBSOLESCENCES } from '@/lib/issues/obsolescence';
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
-import { isFolderRef, isTempRef } from '@/lib/plans/refs';
+import { isFolderRef, isTempRef, SUPERSEDES_PATCH_SITES } from '@/lib/plans/refs';
 import {
   REASON_CLASSIFIED_KIND,
   REVISION_REASON_BRANCHES,
@@ -288,6 +289,92 @@ const DIFFICULTY_DESCRIPTION =
   ', easiest first. Leaf kinds only (task / bug / subtask): a non-null value on an epic or ' +
   'story is refused with INVALID_PROPOSAL naming `difficulty`, never silently dropped.';
 
+// ── The OBSOLESCENCE mark and its `supersedes` edges (Story MOTIR-6577 · MOTIR-6631) ──
+// Described ONCE here for every plan door that carries them. The service is the
+// only validator (`validateProposedObsolescence`, `assertMarkTargetIsFinished`,
+// the ref passes and `assertSupersedesGraphAcyclic`); these sentences only have
+// to make the rules and — above all — the DIRECTION of each edge list
+// unmisreadable, because `supersedesAdd` and `supersededByAdd` are one storage
+// row spelled from its two ends, and a model that swaps them marks the wrong card
+// as replaced.
+
+/** The rule every mark sentence repeats: finished work only, never a remove. */
+const MARK_RULE =
+  'A plan may SET a mark only on a FINISHED target — one whose status is in the `done` ' +
+  'category (`done`, `cancelled`, or a custom done status). On a to-do or in-progress target ' +
+  'it is refused with INVALID_PROPOSAL: "a plan may mark only a finished work item; <KEY> is ' +
+  "at <status>. A work item nobody will finish is removed — send `{ op: 'remove', " +
+  'workItemId, reason }` instead." (at the append, at `update_plan_proposal`, and again at ' +
+  'approve, where `validate_plan` reports it). Clearing a mark (`null`) is legal on any target.';
+
+/** Where the mark-only carve-out and "marking is not archiving" are said. */
+const MARK_ONLY_CARVE_OUT =
+  'A MARK-ONLY `modify` — a patch carrying nothing but `obsolescence`, `obsolescenceNoteMd` ' +
+  'and the four supersedes lists — is the ONE change a plan may make to a `done` or ' +
+  '`cancelled` card; approve writes it and leaves the card’s status alone. Add any other key ' +
+  'and the target is refused PLAN_TARGET_IMMUTABLE. Marking is never archiving: the card stays ' +
+  'in the tree, and a `remove` never marks anything.';
+
+const OBSOLESCENCE_PATCH_DESCRIPTION =
+  'MARK the target as no longer TRUE OF THE CODE: ' +
+  WORK_ITEM_OBSOLESCENCES.map((m) => `"${m}"`).join(' or ') +
+  ' — "outdated" when the text no longer describes what shipped (the capability lives on in ' +
+  'another shape), "deprecated" when it was retired or overturned on purpose. An explicit ' +
+  '`null` clears it; omit it to leave the mark alone. A value outside the enum is refused ' +
+  'INVALID_PROPOSAL. ' +
+  MARK_RULE +
+  ' ' +
+  MARK_ONLY_CARVE_OUT;
+
+const OBSOLESCENCE_NOTE_PATCH_DESCRIPTION =
+  'The Markdown note saying WHY the target is marked — what changed and what to read instead. ' +
+  'Independent of `obsolescence` (clearing the mark keeps the note); an explicit `null` clears ' +
+  'it. A mark key: legal in a mark-only `modify` of a `done` / `cancelled` card.';
+
+/** The ref forms every supersedes list takes — the same three the blocker lists take. */
+const SUPERSEDES_REF_FORMS =
+  'Each entry is a work-item KEY ("ACME-7"), a real work-item id, or a `planItem:<id>` ref ' +
+  'naming an `add` ALREADY on this plan (returned by an EARLIER call) — so a done card can be ' +
+  'marked superseded by a card this plan creates. A key is resolved to its id here, and one ' +
+  'that names nothing is refused `dangling` at this call. A `folder:<id>` ref, a ref listed ' +
+  'twice, or the target itself is refused INVALID_PLAN_REF_GRAPH; so is an edge that closes a ' +
+  'supersedes CYCLE (A replaces B replaces A). No level rule: any kind may supersede any kind.';
+
+const SUPERSEDES_ADD_DESCRIPTION =
+  'On the NEWER card: the target REPLACES each listed card. Each entry names an OLDER card; ' +
+  'approve writes one `supersedes` link from the target to it. ' +
+  SUPERSEDES_REF_FORMS +
+  ' Unioned with an earlier `modify` of the same card; the same ref in `supersedesRemove` ' +
+  'cancels it. A mark key.';
+
+const SUPERSEDES_REMOVE_DESCRIPTION =
+  'On the NEWER card: DELETE the `supersedes` link from the target to each listed (older) card ' +
+  'at approve; a link that does not exist is a no-op. Same ref forms as `supersedesAdd`. ' +
+  'A mark key.';
+
+const SUPERSEDED_BY_ADD_DESCRIPTION =
+  'On the OLD card: `supersededByAdd` names the card that REPLACES it. Each entry names a ' +
+  'NEWER card; approve writes one `supersedes` link from it to the target — the same row the ' +
+  'newer card’s `supersedesAdd` would write, so spelling one edge from both ends lands one ' +
+  'link. This is the list a mark on a done card usually needs beside `obsolescence`. ' +
+  SUPERSEDES_REF_FORMS +
+  ' A mark key.';
+
+const SUPERSEDED_BY_REMOVE_DESCRIPTION =
+  'On the OLD card: DELETE the `supersedes` link from each listed (newer) card to the target at ' +
+  'approve; a link that does not exist is a no-op. Same ref forms as `supersededByAdd`. ' +
+  'A mark key.';
+
+/** An `add`'s supersedes set — the created card is always the NEWER end. */
+const SUPERSEDES_REFS_DESCRIPTION =
+  '`add` only: the OLDER cards the created card REPLACES. Approve writes one `supersedes` link ' +
+  'from the new card to each. ' +
+  SUPERSEDES_REF_FORMS +
+  ' Refused on a `modify` (it spells its edges on the patch: `supersedesAdd` / ' +
+  '`supersededByAdd`) and on a `remove`. This does NOT mark the older card — to mark it ' +
+  '`outdated`, send a mark-only `modify` of it with `supersededByAdd: ["planItem:<this add>"]` ' +
+  'in a LATER call.';
+
 /**
  * One proposed operation.
  *
@@ -517,6 +604,26 @@ const patchSchema = z
         'Dependency edges to REMOVE — work-item keys ("ACME-7"), real work-item ids, or ' +
           '`planItem:<id>` refs.',
       ),
+    // The OBSOLESCENCE mark, its note and the four `supersedes` edge lists
+    // (Story MOTIR-6577 · MOTIR-6631) — the six `PLAN_ITEM_MARK_PATCH_KEYS`.
+    obsolescence: z
+      .enum(WORK_ITEM_OBSOLESCENCES, {
+        errorMap: () => ({
+          message: `INVALID_PROPOSAL: obsolescence must be ${WORK_ITEM_OBSOLESCENCES.map((m) => `"${m}"`).join(' or ')}, or null to clear it.`,
+        }),
+      })
+      .nullable()
+      .optional()
+      .describe(OBSOLESCENCE_PATCH_DESCRIPTION),
+    obsolescenceNoteMd: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(OBSOLESCENCE_NOTE_PATCH_DESCRIPTION),
+    supersedesAdd: z.array(z.string()).optional().describe(SUPERSEDES_ADD_DESCRIPTION),
+    supersedesRemove: z.array(z.string()).optional().describe(SUPERSEDES_REMOVE_DESCRIPTION),
+    supersededByAdd: z.array(z.string()).optional().describe(SUPERSEDED_BY_ADD_DESCRIPTION),
+    supersededByRemove: z.array(z.string()).optional().describe(SUPERSEDED_BY_REMOVE_DESCRIPTION),
   })
   .passthrough()
   .describe(
@@ -560,6 +667,7 @@ const proposalSchema = z.object({
         '`cross_level`. An epic is blocked only by another epic — an edge with an epic at ' +
         'either end is cross-level unless both ends are epics.',
     ),
+  supersedesRefs: z.array(z.string()).optional().describe(SUPERSEDES_REFS_DESCRIPTION),
   baseRevision: z
     .string()
     .optional()
@@ -806,6 +914,14 @@ const updatePlanProposalInputSchema = {
       'REPLACES the dependency edges wholesale — a list has no sparse edit, so send the set you ' +
         'want and `[]` to clear it. Same ref rules and same re-validation as `parentRef`.',
     ),
+  supersedesRefs: z
+    .array(correctionRefField)
+    .optional()
+    .describe(
+      'REPLACES an `add`’s supersedes set wholesale — send the set you want, `[]` to clear it. ' +
+        SUPERSEDES_REFS_DESCRIPTION +
+        ' To change a `modify`’s supersedes edges, replace its `patch` instead.',
+    ),
   targetRepo: z
     .string()
     .nullable()
@@ -869,7 +985,9 @@ const updatePlanProposalInputSchema = {
     .describe(
       '`modify` only: REPLACES that proposal’s patch. This is the op no door could touch at ' +
         'all before — and the one that carries a dependency edit, so it is usually what a ' +
-        'mistyped `planItem:` ref is sitting on.',
+        'mistyped `planItem:` ref is sitting on. It is also how a `modify`’s MARK is corrected: ' +
+        'the replacement patch’s `obsolescence`, `obsolescenceNoteMd` and four supersedes lists ' +
+        'are re-checked exactly as the append checks them, including the finished-target rule.',
     ),
 };
 
@@ -1009,6 +1127,7 @@ interface RecordPlanRevisionReasonArgs {
 interface UpdatePlanProposalArgs extends UpdatePlanItemArgs {
   parentRef?: string | null;
   blockedByRefs?: string[];
+  supersedesRefs?: string[];
   targetRepo?: string | null;
   targetRepos?: string[];
   targetRepositories?: string[];
@@ -1346,12 +1465,12 @@ function isWorkItemKey(ref: string): boolean {
 }
 
 /**
- * The FIVE sites a ref can travel on — shared by BOTH authoring doors, because
+ * The TEN sites a ref can travel on — shared by BOTH authoring doors, because
  * they write the same columns (MOTIR-3934).
  *
  * ⚠️ IT IS A SHAPE, NOT A UNION OF THE TWO INPUT TYPES, and that is the point.
  * `ProposalInput` (the append) and `CorrectProposalInput` (the correction)
- * declare these three members identically; naming the shape once is what makes
+ * declare these four members identically; naming the shape once is what makes
  * "resolve the key" a property of the FIELD rather than of the door somebody
  * happened to reach for. The defect this closes was exactly that asymmetry: one
  * door honoured all three documented ref forms and the other honoured two.
@@ -1359,10 +1478,12 @@ function isWorkItemKey(ref: string): boolean {
 interface RefCarrierInput {
   parentRef?: string | null;
   blockedByRefs?: string[];
+  /** `add` only — the older cards the created card supersedes (MOTIR-6631). */
+  supersedesRefs?: string[];
   patch?: PlanItemPatch | null;
 }
 
-/** Every ref one proposal (or one correction) carries, across all five sites. */
+/** Every ref one proposal (or one correction) carries, across all ten sites. */
 function refsOfCarrier(p: RefCarrierInput): string[] {
   return [
     ...(p.parentRef ? [p.parentRef] : []),
@@ -1374,6 +1495,13 @@ function refsOfCarrier(p: RefCarrierInput): string[] {
     ...(p.patch?.parentRef ? [p.patch.parentRef] : []),
     ...(p.patch?.blockedByAdd ?? []),
     ...(p.patch?.blockedByRemove ?? []),
+    // The FIVE `supersedes` carriers (Story MOTIR-6577 · MOTIR-6631). The service
+    // accepts only ids and `planItem:` refs on them, so a key left here would reach
+    // the validator as a string that is no id and be refused `dangling` — the
+    // MOTIR-3576 defect on a new column. `SUPERSEDES_PATCH_SITES` is the list the
+    // service's own ref passes walk, so a sixth list cannot be missed here alone.
+    ...(p.supersedesRefs ?? []),
+    ...SUPERSEDES_PATCH_SITES.flatMap((site) => p.patch?.[site] ?? []),
   ];
 }
 
@@ -1429,6 +1557,14 @@ function swapPatchRefs(
     ...(patch.parentRef ? { parentRef: swap(patch.parentRef) } : {}),
     ...(patch.blockedByAdd ? { blockedByAdd: patch.blockedByAdd.map(swap) } : {}),
     ...(patch.blockedByRemove ? { blockedByRemove: patch.blockedByRemove.map(swap) } : {}),
+    // The four `supersedes` lists (MOTIR-6631), each swapped only when PRESENT so
+    // an absent list stays absent — the patch is sparse.
+    ...Object.fromEntries(
+      SUPERSEDES_PATCH_SITES.filter((site) => patch[site]).map((site) => [
+        site,
+        patch[site]!.map(swap),
+      ]),
+    ),
   };
 }
 
@@ -1464,6 +1600,7 @@ async function resolveKeyRefs(
     ...p,
     parentRef: p.parentRef ? swap(p.parentRef) : p.parentRef,
     blockedByRefs: (p.blockedByRefs ?? []).map(swap),
+    ...(p.supersedesRefs !== undefined ? { supersedesRefs: p.supersedesRefs.map(swap) } : {}),
     patch: swapPatchRefs(p.patch, swap),
   }));
 }
@@ -1493,6 +1630,10 @@ async function resolveCorrectionKeyRefs(
   const resolved: CorrectProposalInput = { ...input };
   if (input.parentRef) resolved.parentRef = swap(input.parentRef);
   if (input.blockedByRefs !== undefined) resolved.blockedByRefs = input.blockedByRefs.map(swap);
+  // SPARSE like `blockedByRefs`: absent leaves the set alone, `[]` clears it.
+  if (input.supersedesRefs !== undefined) {
+    resolved.supersedesRefs = input.supersedesRefs.map(swap);
+  }
   if (input.patch) resolved.patch = swapPatchRefs(input.patch, swap) as PlanItemPatch;
   return resolved;
 }
@@ -1568,6 +1709,7 @@ export async function runAddPlanItems(
     patch: (p.patch ?? null) as ProposalInput['patch'],
     parentRef: p.parentRef ?? null,
     blockedByRefs: p.blockedByRefs ?? [],
+    ...(p.supersedesRefs !== undefined ? { supersedesRefs: p.supersedesRefs } : {}),
     baseRevision: p.baseRevision ?? null,
     ...(p.reason !== undefined ? { reason: p.reason } : {}),
   }));
@@ -1701,6 +1843,7 @@ export async function runUpdatePlanProposal(
     'todos',
     'parentRef',
     'blockedByRefs',
+    'supersedesRefs',
     'targetRepo',
     'targetRepos',
     'targetRepositories',
@@ -1930,7 +2073,19 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         '(`withdraw_plan_proposal`) to change your mind. And when what you are ' +
         'recording is a dependency edge between two work items that ALREADY exist, ' +
         'use `link_work_items` instead — an edge between committed items needs no ' +
-        'proposal at all.',
+        'proposal at all. ' +
+        'MARKING A CARD: a `modify` patch may carry the OBSOLESCENCE mark (`obsolescence`: ' +
+        '"outdated" / "deprecated", `obsolescenceNoteMd`) and `supersedes` edges ' +
+        '(`supersedesAdd` / `supersedesRemove` on the NEWER card, `supersededByAdd` / ' +
+        '`supersededByRemove` on the OLD card); an `add` may carry `supersedesRefs`, the older ' +
+        'cards it replaces. A key, an id or an earlier call’s `planItem:` ref works on all five; ' +
+        'the four patch lists union on a merge like the blocker lists. A plan may set a mark ' +
+        'only on a FINISHED (done-category) card — on a to-do or in-progress card it is refused ' +
+        'INVALID_PROPOSAL ("a plan may mark only a finished work item; <KEY> is at <status>. A ' +
+        "work item nobody will finish is removed — send `{ op: 'remove', workItemId, reason " +
+        '}` instead."), because unfinished work nobody will do is REMOVED, not marked. A ' +
+        'MARK-ONLY `modify` (only those six keys) is the one change legal on a `done` / ' +
+        '`cancelled` card. A `remove` never marks anything.',
       inputSchema: addPlanItemsInputSchema,
     },
     async (args, extra) => {
@@ -1989,8 +2144,13 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         'and waiting for a reviewer. It is REFUSED once the plan is `approved` (its proposals ' +
         'have become work items, so `update_work_item` is the door — the refusal says so) or ' +
         '`declined` (a closed decision). The patch is SPARSE: a field you omit is left exactly ' +
-        'as it was and an explicit `null` clears it — EXCEPT `blockedByRefs`, which is a list ' +
-        'and REPLACES the set, so send the edges you want and `[]` to clear them. Every ' +
+        'as it was and an explicit `null` clears it — EXCEPT `blockedByRefs` and an `add`’s ' +
+        '`supersedesRefs`, which are lists and REPLACE the set, so send the edges you want and ' +
+        '`[]` to clear them. A `modify`’s obsolescence mark, its note and its four supersedes ' +
+        'lists are corrected by replacing its `patch`; a replacement that SETS a mark on a card ' +
+        'that is not finished is refused INVALID_PROPOSAL ("a plan may mark only a finished ' +
+        'work item; <KEY> is at <status>. A work item nobody will finish is removed — send ' +
+        "`{ op: 'remove', workItemId, reason }` instead.\"). Every " +
         'structural correction re-runs the append’s own ref check, so you cannot correct your ' +
         'way into a `planItem:` ref that names nothing, and a ref to the proposal itself is ' +
         'refused rather than stored. The correction appears on the plan’s timeline with the ' +

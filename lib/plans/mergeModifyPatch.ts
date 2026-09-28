@@ -6,8 +6,17 @@ import { DuplicatePlanTargetError, type PlanTargetOp } from '@/lib/plans/errors'
 // (`plansService.addProposals`) calls it under the plan's row lock, which is
 // what makes the read-then-write safe; nothing here reads or writes.
 
-/** The two edge lists — unioned, never overwritten. Every other key is scalar. */
-const EDGE_KEYS = ['blockedByAdd', 'blockedByRemove'] as const;
+/**
+ * The edge lists — unioned, never overwritten. Every other key is scalar. Each
+ * ADD list is paired with the REMOVE list that cancels it: the blocker pair, and
+ * (MOTIR-6630) the two `supersedes` spellings.
+ */
+const EDGE_PAIRS = [
+  ['blockedByAdd', 'blockedByRemove'],
+  ['supersedesAdd', 'supersedesRemove'],
+  ['supersededByAdd', 'supersededByRemove'],
+] as const;
+const EDGE_KEYS: readonly string[] = EDGE_PAIRS.flat();
 
 /**
  * Merge an incoming `modify` patch INTO the one the plan already holds for the
@@ -16,9 +25,12 @@ const EDGE_KEYS = ['blockedByAdd', 'blockedByRemove'] as const;
  *  - every SCALAR key of {@link PLAN_ITEM_PATCH_KEYS} (`parentRef` included):
  *    the incoming value wins when the key is PRESENT — an explicit `null` still
  *    clears — and an absent key leaves the existing value;
- *  - `blockedByAdd` / `blockedByRemove`: each is the de-duplicated UNION of the
- *    two, and a ref that ends up in BOTH cancels to neither (add-then-remove of
- *    one edge in one plan is no change to it). An empty list is omitted.
+ *  - `blockedByAdd` / `blockedByRemove`, and the `supersedes` pairs
+ *    `supersedesAdd` / `supersedesRemove` and `supersededByAdd` /
+ *    `supersededByRemove` (MOTIR-6630): each list is the de-duplicated UNION of
+ *    the two, and a ref that ends up in BOTH lists of a pair cancels to neither
+ *    (add-then-remove of one edge in one plan is no change to it). An empty list
+ *    is omitted.
  *
  * `baseRevision` is not a patch key: the caller keeps the EARLIER row's anchor.
  */
@@ -31,24 +43,26 @@ export function mergeModifyPatch(
   const merged: Record<string, unknown> = {};
 
   for (const key of PLAN_ITEM_PATCH_KEYS) {
-    if ((EDGE_KEYS as readonly string[]).includes(key)) continue;
+    if (EDGE_KEYS.includes(key)) continue;
     if (Object.prototype.hasOwnProperty.call(b, key)) merged[key] = b[key];
     else if (Object.prototype.hasOwnProperty.call(a, key)) merged[key] = a[key];
   }
 
-  const union = (key: (typeof EDGE_KEYS)[number]): string[] => [
+  const union = (key: string): string[] => [
     ...new Set([
       ...((a[key] as string[] | undefined) ?? []),
       ...((b[key] as string[] | undefined) ?? []),
     ]),
   ];
-  const adds = union('blockedByAdd');
-  const removes = union('blockedByRemove');
-  const both = new Set(adds.filter((ref) => removes.includes(ref)));
-  const keptAdds = adds.filter((ref) => !both.has(ref));
-  const keptRemoves = removes.filter((ref) => !both.has(ref));
-  if (keptAdds.length > 0) merged.blockedByAdd = keptAdds;
-  if (keptRemoves.length > 0) merged.blockedByRemove = keptRemoves;
+  for (const [addKey, removeKey] of EDGE_PAIRS) {
+    const adds = union(addKey);
+    const removes = union(removeKey);
+    const both = new Set(adds.filter((ref) => removes.includes(ref)));
+    const keptAdds = adds.filter((ref) => !both.has(ref));
+    const keptRemoves = removes.filter((ref) => !both.has(ref));
+    if (keptAdds.length > 0) merged[addKey] = keptAdds;
+    if (keptRemoves.length > 0) merged[removeKey] = keptRemoves;
+  }
 
   return merged as PlanItemPatch;
 }
