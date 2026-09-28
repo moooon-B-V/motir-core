@@ -419,7 +419,7 @@ export const publicProjectsService = {
   /**
    * Every public project's `{ identifier, updatedAt }` (Subtask 6.12.4). No
    * gate: these are public by definition (the repo read constrains to
-   * `accessLevel = 'public'`). Cross-workspace, by design.
+   * `accessMode = 'public'`). Cross-workspace, by design.
    *
    * ⚠️ Named for `app/sitemap.ts`, which is DELETED — MOTIR-3951 moved the
    * crawlable pages to `motir.co`, and MOTIR-4583 removed the route because an
@@ -448,7 +448,7 @@ export const publicProjectsService = {
    * caller, exactly as the public work-items list already does it; null on the
    * last page.
    *
-   * NO GATE, and none is possible or needed: every row is `accessLevel = 'public'`
+   * NO GATE, and none is possible or needed: every row is `accessMode = 'public'`
    * by the repository's own filter, which is the same reason
    * {@link listPublicForSitemap} has no gate. Cross-workspace by design — the
    * public directory lists every public project regardless of tenant.
@@ -1260,7 +1260,7 @@ export const publicProjectsService = {
     // exists and is public). The intake reporter is the workspace OWNER — a
     // guaranteed member who passes `createWorkItem`'s `assertReporterMember`.
     // The project read needs no context: MOTIR-2684's `project_public_read` arm admits
-    // `accessLevel = 'public'`, which is exactly this path.
+    // `access_mode = 'public'`, which is exactly this path.
     const project = await projectRepository.findById(projectId);
     if (!project) throw new PublicProjectIntakeUnavailableError(projectId);
     // The OWNER read does (MOTIR-2789). `workspace_membership` got NO public arm from

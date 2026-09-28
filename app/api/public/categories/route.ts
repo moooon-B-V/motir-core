@@ -10,7 +10,7 @@ import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 //
 // NOT session-gated: like the /explore directory (6.13.2), the square is fully
 // public (a logged-out visitor / crawler reads it), so there is deliberately no
-// `getSession()` call. The `accessLevel = 'public'` filter lives in the service /
+// `getSession()` call. The `accessMode = 'public'` filter lives in the service /
 // repository aggregate, so this handler is pure transport: one service call.
 
 export async function GET(): Promise<NextResponse> {

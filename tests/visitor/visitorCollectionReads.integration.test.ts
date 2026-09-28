@@ -8,6 +8,7 @@ import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFix
 import { adminDb } from '../helpers/adminDb';
 import { consentedVisitor } from './_consentedVisitor';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The in-app COLLECTION reads, as a Visitor reads them (Story MOTIR-6170 ·
 // MOTIR-6644; `epic-privacy.md` §3–§5), through the real resolver and datastore.
@@ -44,7 +45,7 @@ async function publicFixture() {
   const fx = await makeWorkItemFixture({ name: `VC ${identifier}`, identifier });
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { accessMode: 'public', accessLevel: 'public' },
+    data: projectAccessData('public'),
   });
   const privateEpic = await createTestWorkItem(fx, { kind: 'epic', title: 'Private epic' });
   const hiddenA = await createTestWorkItem(fx, {

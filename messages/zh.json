@@ -660,6 +660,8 @@
       "lastManager": "工作区至少需要一名管理者。",
       "rolesManagerOnly": "只有工作区管理者可以更改角色。",
       "orgManagedRole": "组织所有者或管理员是所有工作区的管理者。请在组织的成员页面更改。",
+      "removeMemberManagerOnly": "只有工作区管理者可以移除成员。",
+      "removeMemberOrgManaged": "组织所有者或管理员是所有工作区的管理者。请在组织的成员页面移除。",
       "roleChangeFailed": "无法更改角色。",
       "scopeManagerOnly": "只有工作区管理者可以更改谁能进入项目。",
       "scopeNotApplicable": "管理者可以进入每个项目，因此其访问范围始终为“完整”。",
@@ -9274,6 +9276,7 @@
       "setting": {
         "line": "<b>{pr}</b> 未合并：仓库上的某项设置阻止了它。",
         "linePermission": "<b>{pr}</b> 未合并：Motir 的 GitHub App 在那里缺少 <b>{permission}</b> 权限。",
+        "hostReason": "GitHub 的原话：“{reason}”",
         "reasked": "改好设置后再按一次 — 这次按下是一次新的批准，并合并相同的提交。这里不提供 <b>motir fix</b>：没有可让代理修改的代码。"
       },
       "row": {

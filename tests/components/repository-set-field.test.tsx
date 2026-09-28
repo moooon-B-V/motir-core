@@ -60,6 +60,7 @@ function delivery(
     baseRef,
     defaultBranch,
     queueExit: null,
+    mergeRefusal: null,
   };
 }
 

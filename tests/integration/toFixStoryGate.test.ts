@@ -23,6 +23,7 @@ import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
 import { connectRepairRepo, deliveredPr, setStatus } from '../helpers/repairFixtures';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // THE STORY GATE for To fix on the Workbench (Story MOTIR-6588 · MOTIR-6606), on a
 // real Postgres, through the real services.
@@ -545,7 +546,7 @@ describe('isolation', () => {
     // Positive control: while the project is open, the outsider sees their card.
     expect((await homeService.listToFix(hctx(s, outsider.id))).total).toBe(1);
 
-    await adminDb.project.update({ where: { id: s.project.id }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, s.project.id, 'members');
 
     expect((await homeService.listToFix(hctx(s, outsider.id))).total).toBe(0);
     expect((await homeService.tabCounts(hctx(s, outsider.id))).toFix).toBe(0);

@@ -2,7 +2,6 @@ import { Prisma, type Component, type Project, type WorkItem } from '@/generated
 import type { VisitorReadContext } from '@/lib/visitor/context';
 import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
 import { toPersonLabel } from '@/lib/people/personLabel';
-import { accessModeOf } from '@/lib/projects/accessMode';
 import {
   componentRepository,
   type ComponentUpdateInput,
@@ -169,7 +168,7 @@ async function assertDefaultAssigneeEligible(
 ): Promise<void> {
   const members = await assignableMembersService.list({
     projectId: project.id,
-    accessMode: accessModeOf(project),
+    accessMode: project.accessMode,
     ctx,
   });
   if (!members.some((m) => m.userId === userId)) {

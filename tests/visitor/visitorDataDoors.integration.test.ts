@@ -10,6 +10,7 @@ import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFix
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { consentedVisitor } from './_consentedVisitor';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The client DATA DOORS a Visitor view calls (Story MOTIR-6170 · MOTIR-6647),
 // driven as the browser drives them: a `motir_visitor` cookie naming the public
@@ -94,7 +95,7 @@ async function publicProject() {
   const fx = await makeWorkItemFixture({ name: `VD ${identifier}`, identifier });
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { accessMode: 'public', accessLevel: 'public' },
+    data: projectAccessData('public'),
   });
   const E = await createTestWorkItem(fx, { kind: 'epic', title: 'Private epic E' });
   const C = await createTestWorkItem(fx, { kind: 'story', title: 'Hidden C', parentId: E.id });
@@ -268,7 +269,7 @@ describe('everyone else is answered exactly as today', () => {
     await asVisitor(t);
     await adminDb.project.update({
       where: { id: t.fx.projectId },
-      data: { accessMode: 'members', accessLevel: 'private' },
+      data: projectAccessData('members'),
     });
     const gone = await commentsGET(
       req('/x', `motir_visitor=${t.identifier}`),

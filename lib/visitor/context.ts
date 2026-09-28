@@ -90,7 +90,9 @@ export const VISITOR_ACTOR_ID = 'visitor:anonymous';
  * - `userId` is {@link VISITOR_ACTOR_ID}, which holds no membership anywhere, so
  *   the workspace-bound resolver answers the public read set on this public
  *   project and nothing more — never the signed-in reader's own standing in
- *   some other project of this workspace;
+ *   some other project of this workspace. It is the one id that resolver treats
+ *   as the PUBLIC read path (MOTIR-6733); every other non-entrant holds nothing
+ *   on it, because the member doors apply no private-epic hidden set;
  * - `tokenProjectId` binds it to THIS project, so any read of another project
  *   through it is the same not-found a stranger gets;
  * - `tokenGrant` is the Visitor key set, so a record-view key is held only if

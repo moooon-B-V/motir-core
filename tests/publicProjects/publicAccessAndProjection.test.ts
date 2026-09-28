@@ -10,6 +10,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData, setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Story 6.12 · Subtask 6.12.9 — the STORY-level integration guarantees that the
 // per-subtask suites don't yet lock end-to-end, against a real Postgres (the
@@ -45,7 +46,7 @@ afterAll(async () => {
  *  shortcut the sibling public-project suites use). */
 async function makePublicProjectFixture(name = 'Acme'): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   return fx;
 }
 
@@ -146,13 +147,13 @@ describe('public READ access (6.12.9) — anonymous + cross-org, non-public 404'
     const b = await makeWorkItemFixture({ name: 'Sitemap Org B', identifier: 'SMB' });
     await adminDb.project.update({
       where: { id: b.projectId },
-      data: { accessLevel: 'public' },
+      data: projectAccessData('public'),
     });
     // A third public project, ARCHIVED — the read filters `archivedAt: null`.
     const archived = await makeWorkItemFixture({ name: 'Sitemap Org C', identifier: 'SMC' });
     await adminDb.project.update({
       where: { id: archived.projectId },
-      data: { accessLevel: 'public', archivedAt: new Date() },
+      data: { ...projectAccessData('public'), archivedAt: new Date() },
     });
     // And a NON-public one, which must never be crawlable.
     const priv = await makeWorkItemFixture({ name: 'Sitemap Private', identifier: 'SMP' });
@@ -189,7 +190,7 @@ describe('public READ access (6.12.9) — anonymous + cross-org, non-public 404'
     const b = await makeWorkItemFixture({ name: 'Index Org B', identifier: 'IXB' });
     await adminDb.project.update({
       where: { id: b.projectId },
-      data: { accessLevel: 'public' },
+      data: projectAccessData('public'),
     });
     const priv = await makeWorkItemFixture({ name: 'Index Private', identifier: 'IXP' });
 
@@ -307,25 +308,31 @@ describe('public PROJECTION payload (6.12.9) — internal fields never cross the
 // ---------------------------------------------------------------------------
 
 describe('public WRITE matrix (6.12.9) — normal writes blocked, the three grants open', () => {
-  it('the shared edit gate rejects an external actor (read-only 403) while browse stays open', async () => {
+  it('the shared edit gate rejects an external actor, who browses only through the public path', async () => {
     const fx = await makePublicProjectFixture();
     const crossOrg = await createTestUser();
     // The actor presents the project's workspace as context (the closest an
     // external actor can get): they are not a member, so workspaceRole is null.
     const crossOrgCtx = { userId: crossOrg.id, workspaceId: fx.workspaceId };
 
-    // canBrowse true (the public exception), canEdit false (the null-deny rail).
+    // The PUBLIC read path is the one that serves them: browse true (the public
+    // exception), and it is the path that applies the private-epic hidden set.
+    expect(
+      (await projectAccessService.getPublicCapabilities(fx.projectId, crossOrg.id)).canBrowse,
+    ).toBe(true);
+    // The MEMBER path applies no hidden set, so a non-entrant holds nothing on it
+    // (MOTIR-6733): neither browse nor edit.
     expect(await projectAccessService.getCapabilities(fx.projectId, crossOrgCtx)).toEqual({
-      canBrowse: true,
+      canBrowse: false,
       canEdit: false,
     });
 
     // EVERY normal write funnels through this one gate — so a single rejection
-    // here is the matrix's load-bearing assertion (kind 'edit' → HTTP 403,
-    // read-only; NOT 'browse'/404 — the public project is visible).
+    // here is the matrix's load-bearing assertion. It refuses as 'browse' (→ 404):
+    // on the member path the project is not theirs to see, let alone to write.
     const err = await projectAccessService.assertCanEdit(fx.projectId, crossOrgCtx).catch((e) => e);
     expect(err).toBeInstanceOf(ProjectAccessDeniedError);
-    expect((err as ProjectAccessDeniedError).kind).toBe('edit');
+    expect((err as ProjectAccessDeniedError).kind).toBe('browse');
   });
 
   it('concrete write SERVICES (field-edit / status / assign / move) each reject the external actor', async () => {

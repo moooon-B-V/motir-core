@@ -19,6 +19,7 @@ import type { ProjectAccessLevel, ProjectAccessMode } from '@/generated/prisma/c
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Service-layer tests for the Story 6.4 · Subtask 6.4.3 access gate — the
 // projectAccess browse/edit policy + its enforcement. Real Postgres, no DB
@@ -112,7 +113,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   // 6.12.8, and `asAccessLevel` deliberately still rejects it), so seed it
   // directly at the data layer; the 3 settable levels go through the real setter.
   if (level === 'public') {
-    await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
+    await setProjectAccess(adminDb, project.id, 'public');
   } else {
     await projectMembersService.setAccessLevel({
       key: project.identifier,
@@ -192,8 +193,8 @@ const EXPECTED: Record<
     nonMember: { browse: false, edit: false },
   },
   // `plainMember` is a workspace Member NEVER ADDED to the project. The projects
-  // here are built with a legacy LEVEL and a NULL mode, so they resolve through
-  // `accessModeOf` (Story MOTIR-6169): `limited` is Members only now, so the
+  // here are set through the legacy LEVEL setter, which stores the mapped mode
+  // (Story MOTIR-6169): `limited` is Members only now, so the
   // plain member no longer enters it — the one row the access model moved
   // (`role-model.md` Q1, and the migration reports every such person).
   limited: {
@@ -214,13 +215,14 @@ const EXPECTED: Record<
     admin: { browse: true, edit: true },
     nonMember: { browse: false, edit: false },
   },
-  // `public` (Story 6.12) — EVERYONE browses (incl. the non-member: the cross-org
-  // read exception). Normal EDIT is unchanged: a non-member never edits (the
-  // null-deny rail); internal members edit like `open`; a viewer is read-only.
-  // (The cross-org / ANONYMOUS read path proper — `resolvePublicInputs` /
-  // `getPublicCapabilities` with a null or out-of-workspace actor — is exercised
-  // by Subtask 6.12.9; here every actor resolves through the workspace-scoped
-  // `getCapabilities`, which still proves a workspace non-member browses public.)
+  // `public` (Story 6.12) — every ENTRANT browses. Normal EDIT is unchanged: a
+  // non-member never edits (the null-deny rail); internal members edit like
+  // `open`; a viewer is read-only. The NON-MEMBER does not browse here: every
+  // actor resolves through the workspace-scoped MEMBER path (`getCapabilities`),
+  // which applies no private-epic hidden set, so a non-entrant holds nothing on
+  // it (MOTIR-6733). Everyone's read — anonymous and cross-org included — is the
+  // PUBLIC path (`resolvePublicInputs` / `getPublicCapabilities`), below and in
+  // Subtask 6.12.9.
   public: {
     owner: { browse: true, edit: true },
     wsAdmin: { browse: true, edit: true },
@@ -228,7 +230,7 @@ const EXPECTED: Record<
     viewer: { browse: true, edit: false },
     member: { browse: true, edit: true },
     admin: { browse: true, edit: true },
-    nonMember: { browse: true, edit: false },
+    nonMember: { browse: false, edit: false },
   },
 };
 
@@ -356,11 +358,14 @@ describe('canBrowse / canEdit — pure policy', () => {
 // Story 6.12 — the `public` access mode: the cross-org READ exception + the
 // three public-viewer WRITE grants, and `canEdit` staying closed to non-members.
 describe('public access mode (Story 6.12)', () => {
+  // An anonymous / cross-org reader, on the PUBLIC read path — the only door
+  // that serves them (MOTIR-6733).
   const anon = {
     accessMode: 'public' as const,
     workspaceRole: null,
     accessScope: null,
     addedToProject: false,
+    readPath: 'public' as const,
   };
   const pub = (
     workspaceRole: 'manager' | 'member' | 'viewer',
@@ -373,6 +378,8 @@ describe('public access mode (Story 6.12)', () => {
     // cross-org viewer (no workspace role) reads a public project.
     expect(canBrowse(anon)).toBe(true);
     expect(canBrowse(pub('viewer', false))).toBe(true);
+    // …and on the MEMBER path the same non-entrant holds nothing (MOTIR-6733).
+    expect(canBrowse({ ...anon, readPath: 'member' })).toBe(false);
   });
 
   it('canEdit stays CLOSED to a public non-member, OPEN to an internal member', () => {
@@ -397,7 +404,7 @@ describe('public access mode (Story 6.12)', () => {
     }
   });
 
-  it('getCapabilities matrix on a public project (a workspace non-member STILL browses)', async () => {
+  it('getCapabilities matrix on a public project (a workspace non-member does NOT browse the member path)', async () => {
     for (const role of ROLES) {
       const want = EXPECTED.public[role];
       const s = await buildScenario('public', `public-${role}`);

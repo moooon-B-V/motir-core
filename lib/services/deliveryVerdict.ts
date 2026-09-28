@@ -1,5 +1,11 @@
-import type { GithubCheckRun, GithubPullRequestQueueExit, Prisma } from '@/generated/prisma/client';
+import type {
+  GithubCheckRun,
+  GithubPullRequestMergeRefusal,
+  GithubPullRequestQueueExit,
+  Prisma,
+} from '@/generated/prisma/client';
 import { derivePrCiState, liveRowsAtLatestSha, type PrCiState } from '@/lib/github/prCiState';
+import { githubPullRequestMergeRefusalRepository } from '@/lib/repositories/githubPullRequestMergeRefusalRepository';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
@@ -120,6 +126,39 @@ export async function standingQueueFailures(
     if (queueExitHoldsAtHead(exit, head)) held.set(pullRequestId, exit);
   }
   return held;
+}
+
+/**
+ * WHICH members of a delivery set carry a STANDING host merge refusal (Bug MOTIR-6735)
+ * — each such member's pull-request id mapped to its latest refusal row, over ONE read.
+ *
+ * The standing rule is the one the approval members' read applies
+ * (`pullRequestApprovalMembersService`, MOTIR-5833): nothing superseded the refusal, the
+ * head it names is still the pull request's, and the pull request is open and unmerged.
+ * A push or a later successful press therefore retires it here exactly as it retires
+ * the row on the card.
+ */
+export async function standingMergeRefusals(
+  byId: ReadonlyMap<
+    string,
+    { state: string; merged: boolean; checkRuns: readonly GithubCheckRun[] }
+  >,
+  tx: Prisma.TransactionClient,
+): Promise<Map<string, GithubPullRequestMergeRefusal>> {
+  const refusals = await githubPullRequestMergeRefusalRepository.findLatestByPullRequests(
+    [...byId.keys()],
+    tx,
+  );
+  const standing = new Map<string, GithubPullRequestMergeRefusal>();
+  for (const [pullRequestId, refusal] of refusals) {
+    const pr = byId.get(pullRequestId)!;
+    const head = liveRowsAtLatestSha([...pr.checkRuns])[0]?.commitSha;
+    const open = pr.state === 'open' && !pr.merged;
+    if (open && refusal.supersededAt === null && head !== undefined && refusal.headSha === head) {
+      standing.set(pullRequestId, refusal);
+    }
+  }
+  return standing;
 }
 
 /** One classified member of a card's delivery set: the verdict its own check rows

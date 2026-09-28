@@ -6,9 +6,10 @@ import { canvasLayoutService } from '@/lib/services/canvasLayoutService';
 import { canvasNodePositionRepository } from '@/lib/repositories/canvasNodePositionRepository';
 import { InvalidCanvasPositionError } from '@/lib/canvasLayout/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import type { ProjectAccessLevel } from '@/generated/prisma/client';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import type { ProjectAccessMode } from '@/generated/prisma/client';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // Real-Postgres tests for the canvas-layout persistence (MOTIR-1237) — the
 // per-user-per-project node arrangement. truncateAuthTables truncates `user` /
@@ -29,7 +30,7 @@ interface Tenant {
 }
 
 let seq = 0;
-async function makeTenant(label: string, accessLevel?: ProjectAccessLevel): Promise<Tenant> {
+async function makeTenant(label: string, mode?: ProjectAccessMode): Promise<Tenant> {
   seq += 1;
   const user = await usersService.createUser({
     email: `canvas-${label}-${seq}@example.com`,
@@ -46,7 +47,7 @@ async function makeTenant(label: string, accessLevel?: ProjectAccessLevel): Prom
       name: `Canvas P ${label}`,
       slug: 'canvas',
       identifier: 'CNV',
-      ...(accessLevel ? { accessLevel } : {}),
+      ...(mode ? projectAccessData(mode) : {}),
     },
   });
   return { userId: user.id, workspaceId: ws.workspace.id, projectId: project.id };
@@ -152,7 +153,7 @@ describe('canvasLayoutService — the project gate', () => {
   }
 
   it('refuses a READ by an actor who cannot browse the project — as a 404-shaped refusal', async () => {
-    const owner = await makeTenant('gate-read', 'private');
+    const owner = await makeTenant('gate-read', 'members');
     const outsider = await nonBrowser(owner, 'read');
     await expect(canvasLayoutService.getLayout(outsider)).rejects.toBeInstanceOf(
       ProjectNotFoundError,
@@ -160,7 +161,7 @@ describe('canvasLayoutService — the project gate', () => {
   });
 
   it('refuses a SAVE by the same actor, and writes nothing', async () => {
-    const owner = await makeTenant('gate-save', 'private');
+    const owner = await makeTenant('gate-save', 'members');
     const outsider = await nonBrowser(owner, 'save');
     await expect(
       canvasLayoutService.savePositions(outsider, [{ nodeKey: 'discovery', x: 1, y: 2 }]),
@@ -172,7 +173,7 @@ describe('canvasLayoutService — the project gate', () => {
   });
 
   it('still admits an actor who CAN browse it (the gate is not "deny everyone")', async () => {
-    const owner = await makeTenant('gate-allow', 'private');
+    const owner = await makeTenant('gate-allow', 'members');
     const saved = await canvasLayoutService.savePositions(owner, [
       { nodeKey: 'discovery', x: 4, y: 5 },
     ]);

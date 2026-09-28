@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The certificate sweep — Story MOTIR-3878 · Subtask MOTIR-4219.
 //
@@ -31,7 +32,13 @@ beforeEach(async () => {
   const { workspace } = await createTestWorkspace({ name: 'Acme' });
   workspaceId = workspace.id;
   const project = await adminDb.project.create({
-    data: { workspaceId, name: 'Acme', slug: 'acme', identifier: 'ACME', accessLevel: 'public' },
+    data: {
+      workspaceId,
+      name: 'Acme',
+      slug: 'acme',
+      identifier: 'ACME',
+      ...projectAccessData('public'),
+    },
   });
   projectId = project.id;
 

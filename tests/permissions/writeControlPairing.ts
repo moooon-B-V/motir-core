@@ -244,9 +244,8 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
     reason: 'the actor’s own membership',
   },
   'settings/workspace/actions.ts#removeMemberAction': {
-    kind: 'known-gap',
-    card: 'MOTIR-6317',
-    reason: 'the service takes no actor, so no role is checked',
+    kind: 'role',
+    role: 'workspace:manager',
   },
   'settings/workspace/actions.ts#renameWorkspaceAction': {
     kind: 'known-gap',

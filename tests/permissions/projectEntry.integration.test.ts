@@ -1,16 +1,13 @@
 import type { ProjectAccessMode } from '@/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import {
-  PUBLIC_PROJECT_PERMISSIONS,
-  ROLE_GATED_PERMISSIONS,
-  WORKSPACE_ROLE_PERMISSIONS,
-} from '@/lib/permissions/builtinRoles';
+import { ROLE_GATED_PERMISSIONS, WORKSPACE_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The ONE entry rule, resolved through the database (Story MOTIR-6169 ·
 // MOTIR-6543): the access MODE on the project, the SCOPE on the membership,
@@ -47,25 +44,20 @@ async function tenant() {
   const ws = await adminDb.workspace.create({
     data: { name: `WS pe${n}`, slug: `pe-ws-${n}`, organizationId: org.id },
   });
-  const project = (
-    label: string,
-    accessMode: ProjectAccessMode | null,
-    accessLevel: 'open' | 'limited' | 'private' | 'public' = 'open',
-  ) =>
+  const project = (label: string, mode: ProjectAccessMode) =>
     adminDb.project.create({
       data: {
         name: label,
         slug: `pe-${label.toLowerCase()}-${n}`,
         identifier: `PE${label}${n}`,
         workspaceId: ws.id,
-        accessLevel,
-        accessMode,
+        ...projectAccessData(mode),
       },
     });
-  const A = await project('A', 'members', 'private');
-  const B = await project('B', 'members', 'private');
-  const C = await project('C', 'workspace', 'open');
-  const D = await project('D', 'public', 'public');
+  const A = await project('A', 'members');
+  const B = await project('B', 'members');
+  const C = await project('C', 'workspace');
+  const D = await project('D', 'public');
 
   const manager = await user('manager');
   const contractor = await user('contractor');
@@ -104,14 +96,21 @@ describe('the Limited contractor, added to A only', () => {
     expect(sorted(held)).toEqual(sorted(WORKSPACE_ROLE_PERMISSIONS.member));
   });
 
-  it('holds nothing in a members or workspace project, and only the public read set in a public one', async () => {
+  it('holds nothing on the member path in any project it cannot enter, a public one included', async () => {
     const t = await tenant();
-    for (const p of [t.B, t.C]) {
+    for (const p of [t.B, t.C, t.D]) {
       const held = await projectAccessService.getPermissions(p.id, t.ctx(t.contractor.id));
       expect(sorted(held), p.identifier).toEqual([]);
     }
-    const onPublic = await projectAccessService.getPermissions(t.D.id, t.ctx(t.contractor.id));
-    expect(sorted(onPublic)).toEqual(sorted(PUBLIC_PROJECT_PERMISSIONS));
+  });
+
+  it('reads the public one only through the PUBLIC read path, as its Visitor (MOTIR-6733)', async () => {
+    const t = await tenant();
+    const caps = await projectAccessService.getPublicCapabilities(t.D.id, t.contractor.id);
+    expect(caps.canBrowse).toBe(true);
+    await expect(
+      projectAccessService.assertCanBrowse(t.D.id, t.ctx(t.contractor.id)),
+    ).rejects.toThrow();
   });
 
   it('is refused as NOT-FOUND on a non-public project it was not added to', async () => {
@@ -165,34 +164,5 @@ describe('the Manager rail', () => {
     }
     const listed = await projectsService.listProjects(t.wsId, t.manager.id);
     expect(listed).toHaveLength(4);
-  });
-});
-
-describe('a project the migration has not reached', () => {
-  it('resolves exactly as its mapped mode while access_mode is NULL', async () => {
-    const t = await tenant();
-    // A NULL-mode `limited` project behaves as Members only: the Full member,
-    // not added, holds nothing; mapped to `members` explicitly, the same.
-    const legacy = await adminDb.project.create({
-      data: {
-        name: 'Legacy',
-        slug: `pe-legacy-${seq++}`,
-        identifier: `PELEG${seq++}`,
-        workspaceId: t.wsId,
-        accessLevel: 'limited',
-      },
-    });
-    expect(legacy.accessMode).toBeNull();
-    expect(sorted(await projectAccessService.getPermissions(legacy.id, t.ctx(t.full.id)))).toEqual(
-      [],
-    );
-    const openLegacy = await adminDb.project.update({
-      where: { id: legacy.id },
-      data: { accessLevel: 'open' },
-    });
-    expect(openLegacy.accessMode).toBeNull();
-    expect(sorted(await projectAccessService.getPermissions(legacy.id, t.ctx(t.full.id)))).toEqual(
-      sorted(WORKSPACE_ROLE_PERMISSIONS.member),
-    );
   });
 });

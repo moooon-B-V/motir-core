@@ -315,7 +315,7 @@ describe('previewAccountErasure — a sole WORKSPACE membership is a choice, not
   it('lists the workspace by name in the DELETED group and leaves the verdict unblocked', async () => {
     // The reader is an org ADMIN, not its Owner, so the org-tier guard cannot
     // fire — which isolates the workspace tier. This is the case the card says the original framing got
-    // wrong: `removeMemberInTx` refuses the last member LEAVING, but
+    // wrong: `leaveWorkspace` refuses the last member LEAVING, but
     // `deleteWorkspaceForErasure` asks only for sole membership, not a role, so a
     // sole-membership workspace has two futures rather than none.
     const coOwner = await createTestUser();

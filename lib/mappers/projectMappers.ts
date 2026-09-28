@@ -1,5 +1,5 @@
 import type { Project, ProjectKeyAlias } from '@/generated/prisma/client';
-import { accessModeOf, levelForMode } from '@/lib/projects/accessMode';
+import { levelForMode } from '@/lib/projects/accessMode';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
@@ -27,8 +27,8 @@ export function toProjectDTO(project: Project, aliases?: ProjectKeyAlias[]): Pro
     // The MODE is authoritative (Story MOTIR-6169); the deprecated level is
     // derived from it at the mapper, never read back from the column, so the two
     // cannot drift.
-    accessMode: accessModeOf(project),
-    accessLevel: levelForMode(accessModeOf(project)),
+    accessMode: project.accessMode,
+    accessLevel: levelForMode(project.accessMode),
     // The column holds an object KEY; the DTO carries an absolute URL. Resolving
     // HERE — at the DTO boundary, like every user-image mapper — is what lets the
     // stored value stay origin-free (MOTIR-2404's reason, applied to the project

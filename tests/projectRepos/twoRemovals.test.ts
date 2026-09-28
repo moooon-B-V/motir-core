@@ -2,6 +2,8 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { readFileSync } from 'node:fs';
 import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
+import { setProjectAccess } from '../helpers/projectAccess';
+import type { ProjectAccessMode } from '@/generated/prisma/client';
 import { truncateAuthTables, truncateCodeGraphOffboarding } from '../helpers/db';
 import {
   createTestWorkItem,
@@ -129,7 +131,7 @@ function seedRepo(
 
 /** A SECOND workspace in the SAME organisation — the org-level arm is about what
  *  crosses a workspace boundary, so a one-workspace fixture cannot see it. */
-async function secondWorkspaceInSameOrg(opts: { accessLevel?: 'open' | 'private' } = {}) {
+async function secondWorkspaceInSameOrg(opts: { accessMode?: ProjectAccessMode } = {}) {
   const ws = await adminDb.workspace.create({
     data: {
       organizationId: orgId,
@@ -145,12 +147,7 @@ async function secondWorkspaceInSameOrg(opts: { accessLevel?: 'open' | 'private'
     actorUserId: fx.ownerId,
     identifier: `SEC${Math.floor(Math.random() * 10_000)}`,
   });
-  if (opts.accessLevel) {
-    await adminDb.project.update({
-      where: { id: project.id },
-      data: { accessLevel: opts.accessLevel },
-    });
-  }
+  if (opts.accessMode) await setProjectAccess(adminDb, project.id, opts.accessMode);
   const ctx: ServiceContext = { userId: fx.ownerId, workspaceId: ws.id };
   return {
     workspaceId: ws.id,
@@ -249,7 +246,7 @@ describe('`Used by N projects` — ONE read, two consumers', () => {
     // (organization-tier.md §6), and an organisation contains projects a given
     // member may not browse; naming one — or counting it — announces its
     // existence to someone with no access to it.
-    const second = await secondWorkspaceInSameOrg({ accessLevel: 'private' });
+    const second = await secondWorkspaceInSameOrg({ accessMode: 'members' });
     await link(fx.projectId, repoGitlab, fx.ctx);
     await link(second.projectId, repoGitlab, second.ctx);
 
@@ -285,7 +282,7 @@ describe('`Used by N projects` — ONE read, two consumers', () => {
   });
 
   it('the OWNER sees both — so the filter above is the ACCESS, not the fixture', async () => {
-    const second = await secondWorkspaceInSameOrg({ accessLevel: 'private' });
+    const second = await secondWorkspaceInSameOrg({ accessMode: 'members' });
     await link(fx.projectId, repoGitlab, fx.ctx);
     await link(second.projectId, repoGitlab, second.ctx);
 

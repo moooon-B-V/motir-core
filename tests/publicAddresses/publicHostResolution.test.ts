@@ -2,6 +2,8 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
+import type { ProjectAccessMode } from '@/generated/prisma/client';
 
 // Host resolution — Story MOTIR-3878 · Subtask MOTIR-4217.
 //
@@ -166,7 +168,7 @@ describe('everything else refuses IDENTICALLY', () => {
   it('a subdomain whose workspace holds NO public project', async () => {
     // The RLS public arm is what refuses this, not a check in the service —
     // the row is simply not visible to an unbound read.
-    const priv = await seedTenant('priv', 'PRIV', 'limited');
+    const priv = await seedTenant('priv', 'PRIV', 'members');
     await seedSubdomain(priv, `priv.${BASE}`);
     await expect(publicAddressesService.resolveHost(`priv.${BASE}`)).rejects.toBeInstanceOf(
       PublicHostNotFoundError,
@@ -174,7 +176,7 @@ describe('everything else refuses IDENTICALLY', () => {
   });
 
   it('a customer domain whose project is not public', async () => {
-    const priv = await seedTenant('priv2', 'PRIV2', 'private');
+    const priv = await seedTenant('priv2', 'PRIV2', 'members');
     await seedCustomDomain(priv, 'secret.acme.test', 'issued');
     await expect(publicAddressesService.resolveHost('secret.acme.test')).rejects.toBeInstanceOf(
       PublicHostNotFoundError,
@@ -270,7 +272,7 @@ describe('addressesForProject — the ADR §7 default rule', () => {
         name: 'Other',
         slug: 'other',
         identifier: 'OTHER',
-        accessLevel: 'public',
+        ...projectAccessData('public'),
       },
     });
     await adminDb.publicAddress.create({
@@ -352,7 +354,7 @@ function seedCustomDomain(
 async function seedTenant(
   tag: string,
   identifier: string,
-  accessLevel: 'public' | 'limited' | 'private',
+  mode: ProjectAccessMode,
 ): Promise<Tenant> {
   const { workspace, owner } = await createTestWorkspace({ name: tag === 'acme' ? 'Acme' : tag });
   const project = await adminDb.project.create({
@@ -361,7 +363,7 @@ async function seedTenant(
       name: `Project ${identifier}`,
       slug: identifier.toLowerCase(),
       identifier,
-      accessLevel,
+      ...projectAccessData(mode),
     },
   });
   return {

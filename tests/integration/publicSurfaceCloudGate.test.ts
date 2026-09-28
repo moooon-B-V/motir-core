@@ -7,6 +7,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { GET as publicProject } from '@/app/api/public/p/[identifier]/route';
 import { GET as publicExplore } from '@/app/api/public/explore/route';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // ⚠️ THE ONE SANCTIONED MOCK, and nothing else (CLAUDE.md: *"the single
 // `vi.mock` allowed is for `getSession()` from `@/lib/auth`, since the test
@@ -69,7 +70,7 @@ function selfHostedBuild(): void {
 /** A project that really is `public`, with real rows behind it. */
 async function makePublicProjectFixture(name = 'Gatecheck'): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   return fx;
 }
 

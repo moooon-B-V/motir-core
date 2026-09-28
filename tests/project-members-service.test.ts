@@ -526,7 +526,7 @@ describe('setAccessMode (Story MOTIR-6169 · MOTIR-6544)', () => {
       }),
     ).rejects.toBeInstanceOf(InvalidAccessModeError);
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: project.id } });
-    expect(row.accessMode).toBeNull();
+    expect(row.accessMode).toBe('workspace');
     const mapped = projectMemberErrorResponse(new InvalidAccessModeError('x'));
     expect(mapped?.status).toBe(400);
   });
@@ -558,7 +558,7 @@ describe('setAccessMode (Story MOTIR-6169 · MOTIR-6544)', () => {
     expect((err as PermissionDeniedError).permission).toBe('project:manage_access');
     expect(projectMemberErrorResponse(err)?.status).toBe(403);
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: project.id } });
-    expect(row.accessMode).toBeNull();
+    expect(row.accessMode).toBe('workspace');
   });
 });
 

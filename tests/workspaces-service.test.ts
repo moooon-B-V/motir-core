@@ -18,7 +18,7 @@ const {
   findMembership,
   listMembers,
   listUserWorkspaces,
-  removeMember,
+  leaveWorkspace,
   renameWorkspace,
 } = workspacesService;
 // Old name preserved so the test bodies don't need to change.
@@ -146,7 +146,7 @@ describe('addMember', () => {
   });
 });
 
-describe('removeMember', () => {
+describe('leaveWorkspace', () => {
   it('deletes a non-last membership row and returns it', async () => {
     const owner = await makeUser('owner@example.com');
     const invitee = await makeUser('invitee@example.com');
@@ -156,7 +156,7 @@ describe('removeMember', () => {
     });
     await addMember({ userId: invitee.id, workspaceId: workspace.id });
 
-    const removed = await removeMember({
+    const removed = await leaveWorkspace({
       userId: invitee.id,
       workspaceId: workspace.id,
     });
@@ -175,7 +175,7 @@ describe('removeMember', () => {
       ownerUserId: owner.id,
     });
 
-    const result = await removeMember({
+    const result = await leaveWorkspace({
       userId: stranger.id,
       workspaceId: workspace.id,
     });
@@ -190,7 +190,7 @@ describe('removeMember', () => {
     });
 
     await expect(
-      removeMember({ userId: owner.id, workspaceId: workspace.id }),
+      leaveWorkspace({ userId: owner.id, workspaceId: workspace.id }),
     ).rejects.toBeInstanceOf(LastMemberError);
 
     // The membership is preserved — the guard fires before the delete.
@@ -204,10 +204,10 @@ describe('removeMember', () => {
     await addMember({ userId: invitee.id, workspaceId: workspace.id });
 
     // invitee leaves — fine, owner remains.
-    await removeMember({ userId: invitee.id, workspaceId: workspace.id });
+    await leaveWorkspace({ userId: invitee.id, workspaceId: workspace.id });
     // owner is now last — blocked.
     await expect(
-      removeMember({ userId: owner.id, workspaceId: workspace.id }),
+      leaveWorkspace({ userId: owner.id, workspaceId: workspace.id }),
     ).rejects.toBeInstanceOf(LastMemberError);
   });
 
@@ -223,8 +223,8 @@ describe('removeMember', () => {
 
     await warmPool();
     const results = await Promise.allSettled([
-      removeMember({ userId: owner.id, workspaceId: workspace.id }),
-      removeMember({ userId: invitee.id, workspaceId: workspace.id }),
+      leaveWorkspace({ userId: owner.id, workspaceId: workspace.id }),
+      leaveWorkspace({ userId: invitee.id, workspaceId: workspace.id }),
     ]);
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
     const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];

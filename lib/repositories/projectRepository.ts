@@ -213,7 +213,7 @@ export const projectRepository = {
    *  MOTIR-4669 · MOTIR-4679). The rows a repository's `project_repository` links
    *  name span the ORGANISATION's workspaces, so this is deliberately NOT
    *  workspace-narrowed: the caller supplies the ids it already resolved and the
-   *  RLS context it reads them under. `accessLevel` is included because the
+   *  RLS context it reads them under. `accessMode` is included because the
    *  answer must then be access-FILTERED per workspace — a count that reveals a
    *  project the viewer may not name is the leak this read exists to avoid. */
   async findManyByIds(ids: readonly string[], tx: Prisma.TransactionClient): Promise<Project[]> {
@@ -269,10 +269,10 @@ export const projectRepository = {
   async findAccessRowsByWorkspace(
     workspaceId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<Array<Pick<Project, 'id' | 'accessLevel' | 'accessMode'>>> {
+  ): Promise<Array<Pick<Project, 'id' | 'accessMode'>>> {
     return tx.project.findMany({
       where: { workspaceId },
-      select: { id: true, accessLevel: true, accessMode: true },
+      select: { id: true, accessMode: true },
     });
   },
 
@@ -375,7 +375,7 @@ export const projectRepository = {
    * a workspace scope — the lookup behind the anonymous public view
    * (`/p/[identifier]`, Story 6.12 · Subtask 6.12.4). The public surface knows
    * only the key, not the workspace, so this is one of the few deliberately
-   * cross-workspace reads; it is constrained to `accessLevel = 'public'` and
+   * cross-workspace reads; it is constrained to `accessMode = 'public'` and
    * non-archived rows so it can never resolve a private/internal project (the
    * no-existence-leak posture is preserved — a non-public key resolves to null,
    * and the projectAccessService gate re-confirms `public` regardless).
@@ -387,13 +387,13 @@ export const projectRepository = {
    */
   async findPublicByIdentifier(identifier: string): Promise<Project | null> {
     return db.project.findFirst({
-      where: { identifier, accessLevel: 'public', archivedAt: null },
+      where: { identifier, accessMode: 'public', archivedAt: null },
       orderBy: { updatedAt: 'desc' },
     });
   },
 
   /**
-   * Every PUBLIC (accessLevel = 'public'), non-archived project across ALL
+   * Every PUBLIC (accessMode = 'public'), non-archived project across ALL
    * workspaces (Story 6.12 · Subtask 6.12.4). This is the ONE project read that
    * is deliberately NOT workspace-scoped: a public project is crawlable
    * cross-org, so every one is listed regardless of tenant. Read-only path →
@@ -423,7 +423,7 @@ export const projectRepository = {
    * see it — host resolution (MOTIR-4217), which got here by resolving a
    * `public_address` row that RLS admitted only because the project is public.
    *
-   * ⚠️ It carries no `accessLevel` filter of its own, and that is why the name
+   * ⚠️ It carries no `accessMode` filter of its own, and that is why the name
    * says `Internal`. It is not a public-by-key lookup: the gate ran one step
    * earlier, on the address. Do not reach for this from a path that has not
    * already passed one — `findPublicByIdentifier` is the gated read.
@@ -469,7 +469,7 @@ export const projectRepository = {
     workspaceId: string,
   ): Promise<Array<Pick<Project, 'identifier' | 'name'>>> {
     return db.project.findMany({
-      where: { workspaceId, accessLevel: 'public', archivedAt: null },
+      where: { workspaceId, accessMode: 'public', archivedAt: null },
       select: { identifier: true, name: true },
       orderBy: { updatedAt: 'desc' },
     });
@@ -477,7 +477,7 @@ export const projectRepository = {
 
   async listPublic(): Promise<Array<Pick<Project, 'identifier' | 'updatedAt'>>> {
     return db.project.findMany({
-      where: { accessLevel: 'public', archivedAt: null },
+      where: { accessMode: 'public', archivedAt: null },
       select: { identifier: true, updatedAt: true },
       orderBy: { updatedAt: 'desc' },
     });
@@ -498,7 +498,7 @@ export const projectRepository = {
    * `<lastmod>` the sitemap writes — it just does not order the walk.
    *
    * Read-only cross-org path → the `db` singleton with the in-SQL
-   * `accessLevel = 'public'` filter, the same RLS-secondary posture the other
+   * `access_mode = 'public'` filter, the same RLS-secondary posture the other
    * anonymous public reads use (finding #26).
    */
   async listPublicIndexPage(options: {
@@ -507,7 +507,7 @@ export const projectRepository = {
   }): Promise<Array<Pick<Project, 'id' | 'identifier' | 'updatedAt' | 'workspaceId'>>> {
     const { take, cursor } = options;
     return db.project.findMany({
-      where: { accessLevel: 'public', archivedAt: null },
+      where: { accessMode: 'public', archivedAt: null },
       // `workspaceId` rides along for MOTIR-4217's per-row canonical HOST: a
       // subdomain belongs to the workspace, so the host cannot be derived from
       // the project alone.
@@ -548,7 +548,7 @@ export const projectRepository = {
    * bounded MATERIALIZED read (still deterministic + cursored), not a
    * load-all-then-sort-in-memory shortcut. Scalar subqueries (not joins) keep the
    * per-project aggregates from fanning out the row set. Read-only cross-org path
-   * → `db` singleton + the in-SQL `accessLevel = 'public'` filter (the
+   * → `db` singleton + the in-SQL `access_mode = 'public'` filter (the
    * RLS-secondary posture the other anonymous public reads use; finding #26).
    */
   async listPublicDirectoryRanked(options: {
@@ -575,7 +575,7 @@ export const projectRepository = {
     const { rank, take, cursor, cutoff, search, categorySlug } = options;
 
     // The shared card projection + the cross-org join + the single public filter
-    // (the `accessLevel = 'public'` predicate lives HERE so no non-public project
+    // (the `access_mode = 'public'` predicate lives HERE so no non-public project
     // leaks through any rank). `public_overview_md` is `@map`-ed; the rest of the
     // project/org columns are camelCase, so they are quoted as-is.
     const cardCols = Prisma.sql`
@@ -614,7 +614,7 @@ export const projectRepository = {
       FROM "project" p
       JOIN "workspace" w ON w."id" = p."workspaceId"
       JOIN "organization" o ON o."id" = w."organizationId"
-      WHERE p."accessLevel" = 'public'::"project_access_level" AND p."archivedAt" IS NULL${searchPredicate}${categoryPredicate}`;
+      WHERE p."access_mode" = 'public'::"project_access_mode" AND p."archivedAt" IS NULL${searchPredicate}${categoryPredicate}`;
 
     if (rank === 'recent') {
       // Timestamp rank: COALESCE(madePublicAt, createdAt) DESC, id DESC.
@@ -773,10 +773,10 @@ export const projectRepository = {
   /**
    * Set the project's ACCESS MODE (Story MOTIR-6169 · MOTIR-6541) — `access_mode`
    * AND the legacy `accessLevel` (`levelForMode`), in ONE update. THE ONLY
-   * WRITER of `access_mode`: the two columns move together until the follow-up
-   * contract story drops `accessLevel`, so the RLS policies that still key on
-   * `"accessLevel" = 'public'` never disagree with the mode the application
-   * reads. `stampMadePublicAt` stamps `madePublicAt` (the project square's
+   * WRITER of `access_mode`. Nothing reads `accessLevel` any more (MOTIR-6687:
+   * the RLS policies and every public query key on the mode); it is still
+   * written here only because the previous image, serving during this release's
+   * deploy window, reads it. Phase 2 (MOTIR-6692) stops the write. `stampMadePublicAt` stamps `madePublicAt` (the project square's
    * "newest" axis, Subtask 6.13.4); the service passes it only on the
    * not-public → public edge, so a re-save keeps the original go-public moment.
    */

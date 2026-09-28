@@ -1354,30 +1354,23 @@ model Project {
   /// floor `manual` and a chosen `manual` are the same bytes, and a default
   /// would overwrite a person's choice (§7's 2026-09-13 amendment).
   prMergeModeDecidedAt             DateTime?             @map("pr_merge_mode_decided_at")
-  /// Browse-access level (Story 6.4), mirroring Jira team-managed projects:
-  /// `open` = any workspace member views + edits; `limited` = any member views
-  /// + comments (no edit); `private` = only explicit project members (+ the
-  /// workspace owner/admin, who always pass) can see it. Defaults to `open` so
-  /// existing projects backfill to it on migration — a `private` default would
-  /// lock every current member out. The browse/edit policy that reads this is
-  /// computed at the service layer in Subtask 6.4.3.
+  /// The RETIRED browse-access level (Story 6.4) — superseded by `accessMode`.
+  /// Still WRITTEN beside the mode by `projectRepository.setAccessMode` (through
+  /// `levelForMode`), because the previous image, serving during this release's
+  /// deploy window, still reads it. Nothing reads it once MOTIR-6687 lands; the
+  /// writes stop in phase 2 (MOTIR-6692) and the column is dropped in phase 3.
   accessLevel                      ProjectAccessLevel    @default(open)
   /// The project's ACCESS MODE (Story MOTIR-6169 · MOTIR-6541) — who may ENTER
   /// it: `workspace` (every Full-scope workspace member, plus the people added),
   /// `members` (only the people added) or `public` (as `workspace`, plus anyone
-  /// with the link) — `docs/decisions/role-model.md` Q1. Added BESIDE the legacy
-  /// `accessLevel`: NULL means "not migrated yet — derive it from
-  /// `accessLevel`" (`accessModeOf`, `lib/projects/accessMode.ts`), which is what
-  /// keeps a project the still-serving old build creates correct during the
-  /// deploy window. It has NO default on purpose: a default would hand
-  /// `workspace` to a project the old build creates `private`.
+  /// with the link) — `docs/decisions/role-model.md` Q1. The ONE column a
+  /// project's access is read from: stored, never derived (MOTIR-6686 filled
+  /// every NULL and made it NOT NULL). A project created without choosing one is
+  /// Open to the workspace.
   ///
-  /// ⚠️ This column and `accessLevel` MOVE TOGETHER, and
-  /// `projectRepository.setAccessMode` is their only writer, so the RLS
-  /// policies that still key on `accessLevel = 'public'` never disagree with
-  /// the application. The follow-up contract story drops `accessLevel` and
-  /// makes this column NOT NULL.
-  accessMode                       ProjectAccessMode?    @map("access_mode")
+  /// ⚠️ `projectRepository.setAccessMode` is its only writer, and still writes
+  /// `accessLevel` beside it until phase 2 (MOTIR-6692).
+  accessMode                       ProjectAccessMode     @default(workspace) @map("access_mode")
   /// Public Overview / README (Story 6.12 · Subtask 6.12.3) — the authored
   /// Markdown body shown on the DEFAULT public Overview tab (6.12.4), edited by
   /// the project admin via the shipped `MarkdownEditor` in settings (6.12.8).
@@ -7498,6 +7491,10 @@ model GithubPullRequestMergeRefusal {
   approvalGateId String?   @map("approval_gate_id")
   /// `app_permission_missing` only — the permission the host said it needed.
   permission     String?
+  /// The host's OWN message for the refusal, verbatim (Bug MOTIR-6735) — for a
+  /// `branch_protected` refusal the only record of WHICH setting refused it. Null when
+  /// the host gave none, and on every row recorded before the column existed.
+  reason         String?
   refusedAt      DateTime  @map("refused_at")
   /// Stamped when a later press at the same head SUCCEEDED, or the pull request merged.
   /// Null while the refusal still stands. A PUSH needs no stamp: the head moves and the

@@ -312,6 +312,77 @@ describe('a refused press RECORDS the refusal and settles the card by its class'
   });
 });
 
+// Bug MOTIR-6735: an enqueue error the classifier does not recognise is filed under
+// `branch_protected`, and GitHub's message was the only thing naming the setting — yet
+// the row had no column for it, so a reload told a person to "change the setting" and
+// named none. The message is now kept on the row and returned by both reads.
+describe('the HOST’s own message is kept with the refusal', () => {
+  const MESSAGE =
+    'Repository rule violations found: required status check "CI complete" is expected.';
+
+  it('an unrecognised host error keeps GitHub’s words on the row, the member read and the delivery set', async () => {
+    const { s, item, gate } = await approvedCard('refuse-reason@example.com');
+    stubHost({ outcome: 'refused', refusal: { code: 'branch_protected', reason: MESSAGE } });
+
+    await press(s, gate!.id);
+
+    expect((await refusalsOf(41))[0]).toMatchObject({ code: 'branch_protected', reason: MESSAGE });
+    const [member] = await pullRequestMergeService.listApprovalMembers(
+      { workItemId: item.id, approvalGateId: gate!.id },
+      s.ctx,
+    );
+    expect(member!.refusal).toMatchObject({ code: 'branch_protected', reason: MESSAGE });
+    const [delivery] = await workItemsService.listDeliverySet(item.id, s.ctx);
+    expect(delivery!.mergeRefusal).toEqual({
+      code: 'branch_protected',
+      reason: MESSAGE,
+      headSha: 'sha-41',
+      refusedAt: expect.any(String),
+    });
+  });
+
+  it('a refusal the host gave NO words for records null — never an empty string', async () => {
+    const { s, item, gate } = await approvedCard('refuse-no-reason@example.com');
+    stubHost({ outcome: 'refused', refusal: { code: 'branch_protected', reason: '   ' } });
+
+    await press(s, gate!.id);
+
+    expect((await refusalsOf(41))[0]!.reason).toBeNull();
+    const [delivery] = await workItemsService.listDeliverySet(item.id, s.ctx);
+    expect(delivery!.mergeRefusal).toMatchObject({ code: 'branch_protected', reason: null });
+  });
+
+  it('a pathological message is bounded rather than carried whole into every read', async () => {
+    const { s, gate } = await approvedCard('refuse-long-reason@example.com');
+    stubHost({
+      outcome: 'refused',
+      refusal: { code: 'branch_protected', reason: 'x'.repeat(5000) },
+    });
+
+    await press(s, gate!.id);
+
+    expect((await refusalsOf(41))[0]!.reason).toHaveLength(2000);
+  });
+
+  it('the delivery set drops the refusal once a push moves the head — it no longer describes the code', async () => {
+    const { s, item, gate } = await approvedCard('refuse-reason-push@example.com');
+    stubHost({ outcome: 'refused', refusal: { code: 'branch_protected', reason: MESSAGE } });
+    await press(s, gate!.id);
+
+    await ci(41, 'sha-41d');
+
+    const [delivery] = await workItemsService.listDeliverySet(item.id, s.ctx);
+    expect(delivery!.mergeRefusal).toBeNull();
+  });
+
+  it('a pull request nothing refused carries no refusal in the delivery set', async () => {
+    const { s, item } = await approvedCard('refuse-none@example.com');
+
+    const [delivery] = await workItemsService.listDeliverySet(item.id, s.ctx);
+    expect(delivery!.mergeRefusal).toBeNull();
+  });
+});
+
 describe('auto mode records nothing', () => {
   it('an auto project has no approval to spend, so a refused press writes no row', async () => {
     const { s, item } = await approvedCard('refuse-auto@example.com', 'auto');

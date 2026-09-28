@@ -14,6 +14,7 @@ import { adminDb } from '../helpers/adminDb';
 import { ensureWorkWaitsOn } from '@/tests/helpers/designWaits';
 import { truncateAuthTables } from '../helpers/db';
 import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
+import { projectAccessData, setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // MOTIR-5223 — `GET /api/work-items/approval-gate?key=&kind=`, the read the
 // approval OVERLAY (MOTIR-5214) makes from the browser.
@@ -72,13 +73,13 @@ afterAll(async () => {
 type Actor = { id: string; email: string };
 
 /** Sign `actor` in with `on`'s project active — the fixture's own by default. */
-function signIn(actor: Actor, on: WorkItemFixture = fx, accessLevel?: 'private') {
+function signIn(actor: Actor, on: WorkItemFixture = fx, access?: 'members') {
   session.current = { user: { id: actor.id, email: actor.email, name: 'Ada Lovelace' } };
   activeCtx.current = {
     userId: actor.id,
     workspaceId: on.workspaceId,
     projectId: on.projectId,
-    project: { ...on.project, ...(accessLevel ? { accessLevel } : {}) },
+    project: { ...on.project, ...(access ? projectAccessData(access) : {}) },
   } as ProjectContext;
 }
 
@@ -936,8 +937,8 @@ describe('GET /api/work-items/approval-gate · the refusals', () => {
     const card = await designCard();
     await publish(card);
     const outsider = await plainMember();
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
-    signIn(outsider, fx, 'private');
+    await setProjectAccess(adminDb, fx.projectId, 'members');
+    signIn(outsider, fx, 'members');
 
     const res = await gateViaRoute({ key: card.identifier, kind: 'design_result' });
     expect(res.status).toBe(404);

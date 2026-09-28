@@ -22,6 +22,7 @@ import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // THE STORY GATE'S COVERAGE TOP-UP (Story MOTIR-4929 · Subtask MOTIR-5583) —
 // the arms of the ingestion surface that each card's own suite left at zero,
@@ -150,7 +151,7 @@ describe('reconcile — the refusals and failures that are not the binder’s wo
       },
     });
     await setWorkspaceRoleFor(viewer.id, fx.workspaceId, 'viewer');
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'limited' } });
+    await setProjectAccess(adminDb, fx.projectId, 'members');
 
     const err = await monitorIngestionService
       .reconcileIssue({ ...target(fx, connectionId), boundByUserId: viewer.id }, issue('viewer'))

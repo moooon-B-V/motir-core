@@ -6,6 +6,7 @@ import { VISITORS_PAGE_SIZE, visitorRecordsService } from '@/lib/services/visito
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The project's Visitors, for its Managers (Story MOTIR-6170 · MOTIR-6667), through
 // the real service, the real route and the real database. The one read that hands
@@ -48,7 +49,7 @@ async function publicProject(n: number, { nameless = -1 } = {}) {
   const fx = await makeWorkItemFixture({ name: `VM ${identifier}`, identifier });
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { accessMode: 'public', accessLevel: 'public' },
+    data: projectAccessData('public'),
   });
   const member = await adminDb.user.create({
     data: { email: `vm-member-${seq++}@example.com`, name: 'Plain Member', emailVerified: true },
@@ -147,7 +148,7 @@ describe('everyone else is refused on the server', () => {
     const t = await publicProject(1);
     await adminDb.project.update({
       where: { id: t.fx.projectId },
-      data: { accessMode: 'workspace', accessLevel: 'open' },
+      data: projectAccessData('workspace'),
     });
     await expect(
       visitorRecordsService.listForManagers({ key: t.identifier, ctx: t.managerCtx }),

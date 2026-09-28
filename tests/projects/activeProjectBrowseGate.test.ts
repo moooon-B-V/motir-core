@@ -8,6 +8,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // MOTIR-6319 — three reads trusted the WORKSPACE tier where the PROJECT tier is
 // the gate: `setActiveProject` let a workspace member pin a project they cannot
@@ -41,7 +42,7 @@ async function setup() {
   await adminDb.workItem.update({ where: { id: task.id }, data: { status: 'todo' } });
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { accessLevel: 'private', accessMode: 'members' },
+    data: projectAccessData('members'),
   });
   const outsider = await usersService.createUser({
     email: `apb-outsider-${seq++}@example.com`,
@@ -101,7 +102,7 @@ describe('getActiveProject', () => {
     });
     await adminDb.project.update({
       where: { id: open.id },
-      data: { accessLevel: 'open', accessMode: 'workspace' },
+      data: projectAccessData('workspace'),
     });
     // The pointer as a forged call (or a revoked access) would have left it.
     await pinFor(s.outsider.id, s.fx.workspaceId, s.fx.projectId);

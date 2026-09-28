@@ -43,10 +43,12 @@ import {
 //
 // The layers, in the order they apply:
 //
-//   1. MODE-GATED grants — decided by `accessMode` alone, for EVERY actor
-//      including an anonymous, cross-org one. A `public` project grants
-//      `project:browse` plus the three `public_request:*` keys (Story 6.12).
-//      These are not in any role set: a role can neither hold nor withhold them.
+//   1. MODE-GATED grants — decided by `accessMode`, for an entrant and for
+//      every actor on the PUBLIC read path (`readPath: 'public'`), an anonymous,
+//      cross-org one included. A `public` project grants the Visitor set plus
+//      the three `public_request:*` keys (Story 6.12). These are not in any role
+//      set: a role can neither hold nor withhold them. A NON-ENTRANT on the
+//      MEMBER path does not hold them (MOTIR-6733) — see {@link resolveOpen}.
 //   2. ENTRY — an actor who cannot enter (no workspace membership; or a
 //      Members-only project they were not added to; or a Limited scope and not
 //      added) holds nothing beyond layer 1. The project gate sits BENEATH the
@@ -65,9 +67,8 @@ import {
 /** The resolved facts the policy decides over (no IO — see projectAccessService). */
 export interface ProjectPermissionInputs {
   /**
-   * The project's ACCESS MODE (workspace / members / public) — read through
-   * `accessModeOf` (`lib/projects/accessMode.ts`), so a project the migration has
-   * not reached resolves exactly as its mapped legacy level.
+   * The project's ACCESS MODE (workspace / members / public) — the stored
+   * `project.accessMode`, NOT NULL since MOTIR-6686 and never derived.
    */
   accessMode: ProjectAccessMode;
   /**
@@ -113,6 +114,19 @@ export interface ProjectPermissionInputs {
    * sets it.
    */
   organizationClosing?: boolean;
+  /**
+   * WHICH DOOR the actor came through (MOTIR-6733). `'public'` is the cross-org
+   * public read path — `projectAccessService`'s `resolvePublicInputs`, behind
+   * motir.co's reads and act features and the Visitor's own resolution — where a
+   * non-entrant holds the public set and the caller applies the private-epic
+   * hidden set itself. Absent (or `'member'`) is every other door: the in-app
+   * member routes, server actions, MCP and bearer tokens, none of which applies
+   * that hidden set, so a non-entrant holds NOTHING there.
+   *
+   * Absent means MEMBER on purpose: a caller that forgets to say which door it is
+   * gets the narrower answer, never the wider one.
+   */
+  readPath?: 'member' | 'public';
 }
 
 /**
@@ -168,10 +182,11 @@ function customRoleBase(
  * | Limited scope, not added                 | —         | —           | —        |
  * | no workspace membership                  | —         | —           | —        |
  *
- * A non-entrant on a `public` project still holds the public read set (layer 1
- * of {@link resolvePermissions}) — which is why LISTINGS ask `canEnter` and not
- * `canBrowse`: a Limited person never sees a Public project they were not added
- * to in their own lists, while its link still behaves as a Visitor's.
+ * A non-entrant on a `public` project holds the public read set (layer 1 of
+ * {@link resolvePermissions}) on the PUBLIC read path only — on the member path
+ * they hold nothing (MOTIR-6733). LISTINGS ask `canEnter`: a Limited person never
+ * sees a Public project they were not added to in their own lists, while its
+ * link still behaves as a Visitor's.
  */
 export function canEnter(
   i: Pick<
@@ -188,8 +203,10 @@ export function canEnter(
 
 /**
  * The actor's effective permission set for the project: the public read set on
- * a `public` project, plus — for an actor who can ENTER ({@link canEnter}) — the
- * Manager rail or their workspace role's set, with nothing subtracted.
+ * a `public` project (for an entrant, or anyone on the public read path —
+ * {@link ProjectPermissionInputs.readPath}), plus — for an actor who can ENTER
+ * ({@link canEnter}) — the Manager rail or their workspace role's set, with
+ * nothing subtracted.
  */
 export function resolvePermissions(i: ProjectPermissionInputs): ReadonlySet<PermissionKey> {
   const held = resolveOpen(i);
@@ -208,13 +225,25 @@ export function resolvePermissions(i: ProjectPermissionInputs): ReadonlySet<Perm
 function resolveOpen(i: ProjectPermissionInputs): ReadonlySet<PermissionKey> {
   const held = new Set<PermissionKey>();
 
-  // 1 · Mode-gated grants — every actor, anonymous included.
-  if (i.accessMode === 'public') {
+  // 1 · Mode-gated grants — an entrant, and every actor on the PUBLIC read path,
+  // anonymous included.
+  //
+  // ⚠️ NOT A NON-ENTRANT ON THE MEMBER PATH (MOTIR-6733). A Limited member of the
+  // workspace who was not added cannot enter a Public project; under
+  // `visitor-sign-in-and-records.md` they are its VISITOR, admitted through
+  // `/p/<identifier>` after consent, with a visitor record and the private-epic
+  // hidden set applied (`epic-privacy.md` §3). The member doors apply neither, so
+  // holding `project:browse` there served them every private epic's descendants
+  // and let them write `watcher` rows, with no consent and no record. On the
+  // member path they now hold nothing, which reads as not-found, and
+  // `memberThenVisitor` then serves the Visitor read.
+  if (i.accessMode === 'public' && (i.readPath === 'public' || canEnter(i))) {
     for (const key of PUBLIC_PROJECT_PERMISSIONS) held.add(key);
   }
 
-  // 2 · Entry — an actor who cannot enter holds nothing beyond layer 1. This
-  // covers the null-deny rail (no workspace membership) as its first case.
+  // 2 · Entry — an actor who cannot enter holds nothing beyond layer 1 (which, on
+  // the member path, is nothing at all). This covers the null-deny rail (no
+  // workspace membership) as its first case.
   const role = i.workspaceRole;
   if (role == null || !canEnter(i)) return withImpliedPermissions(held);
 

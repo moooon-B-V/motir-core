@@ -106,14 +106,22 @@ describe('the literal sets', () => {
 /** The fixture tenant with a limited and a private project beside the two open ones. */
 async function tenantWithLevels(): Promise<Tenant & { p3: { id: string; identifier: string } }> {
   const t = await makeTenant();
-  await adminDb.project.update({ where: { id: t.p2.id }, data: { accessLevel: 'limited' } });
+  await adminDb.project.update({
+    where: { id: t.p2.id },
+    // The mode beside the level is the one the mapping migration gives it (MOTIR-6686).
+    // legacy-access-level: the role migration under test reads `limited` and `private` apart.
+    data: { accessLevel: 'limited', accessMode: 'members' },
+  });
   const p3 = await adminDb.project.create({
     data: {
       name: 'P3',
       slug: `wrm-p3-${t.p1.identifier}`,
       identifier: `${t.p1.identifier}P`,
       workspaceId: t.wsId,
+      // The mode beside the level is the one the mapping migration gives it (MOTIR-6686).
+      // legacy-access-level: the role migration under test reads `limited` and `private` apart.
       accessLevel: 'private',
+      accessMode: 'members',
     },
   });
   // Only the plain member is added to the private project.

@@ -105,11 +105,11 @@ async function switchToRemainingOrClear(userId: string): Promise<void> {
 }
 
 /**
- * Remove another member from the active workspace. The actor must be a
- * member (requireContext guarantees a resolved active workspace). Refuses
- * to remove yourself — that's the Leave flow, which has the last-member
- * guard. The last-member guard in the service also applies here, but a
- * self-removal is blocked earlier for a clearer contract.
+ * Remove another member from the active workspace — a Manager's act
+ * (MOTIR-6317). The service asserts the actor's role in the actor's own RLS
+ * context; this action only translates its refusals. Refuses to remove yourself
+ * here — that's the Leave flow — so the contract stays clear even though the
+ * service would treat it as a leave.
  */
 export async function removeMemberAction(targetUserId: string): Promise<ActionResult> {
   const { userId, workspaceId } = await requireContext();
@@ -118,10 +118,19 @@ export async function removeMemberAction(targetUserId: string): Promise<ActionRe
     return { ok: false, error: t('actions.useLeaveToRemoveSelf') };
   }
   try {
-    await workspacesService.removeMember({ userId: targetUserId, workspaceId });
+    await workspacesService.removeMember({ actorUserId: userId, targetUserId, workspaceId });
   } catch (err) {
     if (err instanceof LastMemberError) {
       return { ok: false, error: t('actions.cannotRemoveLastMember') };
+    }
+    if (err instanceof WorkspaceRoleForbiddenError || err instanceof NotAMemberError) {
+      return { ok: false, error: t('actions.removeMemberManagerOnly') };
+    }
+    if (err instanceof OrgManagedWorkspaceRoleError) {
+      return { ok: false, error: t('actions.removeMemberOrgManaged') };
+    }
+    if (err instanceof LastManagerError) {
+      return { ok: false, error: t('actions.lastManager') };
     }
     throw err;
   }
@@ -291,7 +300,7 @@ export async function loadRoleMigrationPageAction(
 export async function leaveWorkspaceAction(): Promise<ActionResult> {
   const { userId, workspaceId } = await requireContext();
   try {
-    await workspacesService.removeMember({ userId, workspaceId });
+    await workspacesService.leaveWorkspace({ userId, workspaceId });
   } catch (err) {
     if (err instanceof LastMemberError) {
       return {

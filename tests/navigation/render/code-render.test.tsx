@@ -59,12 +59,13 @@ import { CodeHealthClient } from '@/app/(authed)/code/_components/CodeHealthClie
 import { EmptyState } from '@/components/ui/EmptyState';
 import { MotirAiUnavailableError } from '@/lib/ai/errors';
 import { NotProjectAdminError } from '@/lib/projects/errors';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 const PROJECT = {
   userId: 'u1',
   workspaceId: 'ws1',
   projectId: 'p1',
-  project: { identifier: 'ACME', name: 'Acme', accessLevel: 'open' },
+  project: { identifier: 'ACME', name: 'Acme', ...projectAccessData('workspace') },
 };
 
 /**

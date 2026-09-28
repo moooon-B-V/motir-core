@@ -30,15 +30,16 @@
 // board-at-scale uses for its active-project pin). The GATE itself is never
 // seeded — it's what the browser then exercises.
 //
-// One subtlety the setup encodes: `setAccessLevel('private')` SEEDS every current
-// workspace member as a project member (the no-lockout shape), so to keep a
-// genuine NON-member we set `project.accessLevel` directly and grant project
-// memberships explicitly — never through go-private.
+// One subtlety the setup encodes: going Members only through the product SEEDS
+// every current workspace member as a project member (the no-lockout shape), so
+// to keep a genuine NON-member we set the project's access directly and grant
+// project memberships explicitly — never through go-private.
 
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
+import { setProjectAccess } from '../helpers/projectAccess';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -98,13 +99,11 @@ async function pinActiveProject(userId: string, tenant: Tenant): Promise<void> {
   });
 }
 
-// Set the project's access level directly (NO go-private seeding — see the file
-// header). `open` is the create-time default; we flip to `private` for the gate.
-async function setAccessLevel(
-  tenant: Tenant,
-  level: 'open' | 'limited' | 'private',
-): Promise<void> {
-  await db.project.update({ where: { id: tenant.projectId }, data: { accessLevel: level } });
+// Set the project's access directly (NO go-private seeding — see the file
+// header). Open to the workspace is the create-time default; we flip to Members
+// only for the gate.
+async function setAccessMode(tenant: Tenant, mode: 'workspace' | 'members'): Promise<void> {
+  await setProjectAccess(db, tenant.projectId, mode);
 }
 
 // Stand up an owner + workspace + one open project. Personas are layered on per
@@ -183,7 +182,7 @@ test.describe('project-access — gating end-to-end', () => {
     await addToWorkspace(outsider.id, tenant.workspaceId);
     await pinActiveProject(outsider.id, tenant);
     // Set private DIRECTLY (not go-private) so the outsider stays a non-member.
-    await setAccessLevel(tenant, 'private');
+    await setAccessMode(tenant, 'members');
 
     await signIn(page, outsider.email, PWD, { landing: 'no-project' });
 
@@ -229,7 +228,7 @@ test.describe('project-access — gating end-to-end', () => {
     }
     await grantProjectRole(viewer.id, tenant, 'viewer');
     await grantProjectRole(member.id, tenant, 'member');
-    await setAccessLevel(tenant, 'private');
+    await setAccessMode(tenant, 'members');
 
     // ── Viewer: browses the board, but the create affordance is disabled ──────
     const viewerCtx: BrowserContext = await browser.newContext();

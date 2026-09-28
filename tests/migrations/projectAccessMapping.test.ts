@@ -1,8 +1,13 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { runMigrationFile, user } from './_workspaceRoleTenant';
+import {
+  nullAccessMode,
+  relaxProjectAccessModeNotNull,
+  restoreProjectAccessModeNotNull,
+} from './_projectAccessModeNotNull';
 
 // The access migration (Story MOTIR-6169 · Subtask MOTIR-6542), run over a
 // fixture tenant exactly as `prisma migrate deploy` runs it: one script, one
@@ -26,6 +31,16 @@ const MIGRATION = '20260927000100_project_access_mapping';
 
 beforeEach(async () => {
   await truncateAuthTables();
+  // The mapping ran over NULL-mode projects; since MOTIR-6686 that state has to be
+  // rebuilt by dropping the constraint (`_projectAccessModeNotNull.ts`).
+  await relaxProjectAccessModeNotNull();
+});
+
+afterEach(async () => {
+  // Truncate first: the never-wider case leaves a deliberately disagreeing row,
+  // which the contract migration's agreement check would refuse.
+  await truncateAuthTables();
+  await restoreProjectAccessModeNotNull();
 });
 
 afterAll(async () => {
@@ -43,16 +58,21 @@ async function tenant() {
   const ws = await adminDb.workspace.create({
     data: { name: `WS pam${n}`, slug: `pam-ws-${n}`, organizationId: org.id },
   });
-  const project = (level: 'open' | 'limited' | 'private' | 'public') =>
-    adminDb.project.create({
+  const project = async (level: 'open' | 'limited' | 'private' | 'public') => {
+    const p = await adminDb.project.create({
       data: {
         name: level,
         slug: `pam-${level}-${n}`,
         identifier: `PAM${level.slice(0, 2).toUpperCase()}${n}`,
         workspaceId: ws.id,
+        // legacy-access-level: the mapping migration of each legacy level is what this file tests.
         accessLevel: level,
       },
     });
+    // The mapping ran over NULL-mode rows (`_projectAccessModeNotNull.ts`).
+    await nullAccessMode(p.id);
+    return p;
+  };
   const projects = {
     open: await project('open'),
     limited: await project('limited'),

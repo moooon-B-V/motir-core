@@ -1,4 +1,4 @@
-import { Prisma } from '@/generated/prisma/client';
+import { Prisma, type ProjectAccessMode } from '@/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { db } from '@/lib/db';
@@ -6,6 +6,7 @@ import { HostnameTakenError } from '@/lib/publicAddresses/errors';
 import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData, setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // The public-address store — Story MOTIR-3878 · Subtask MOTIR-4209.
 //
@@ -39,7 +40,7 @@ let neighbour: Tenant;
 beforeEach(async () => {
   await truncateAuthTables();
   host = await seedTenant('host', 'HOST', 'public');
-  neighbour = await seedTenant('nbr', 'NBR', 'limited');
+  neighbour = await seedTenant('nbr', 'NBR', 'members');
 });
 
 afterAll(async () => {
@@ -147,14 +148,14 @@ describe('the public read arm', () => {
     // takes its address out of the public set with no write to this table. Both
     // directions on the SAME row, so the only variable is the access level.
     await seedCustomDomain(host, 'roadmap.acme.example');
-    for (const level of ['open', 'limited', 'private'] as const) {
-      await adminDb.project.update({ where: { id: host.projectId }, data: { accessLevel: level } });
+    for (const mode of ['workspace', 'members'] as const) {
+      await setProjectAccess(adminDb, host.projectId, mode);
       const hidden = await asAppRole({}, (tx) => selectAddress(tx, 'roadmap.acme.example'));
-      expect(hidden, `accessLevel=${level} must hide the address`).toHaveLength(0);
+      expect(hidden, `accessMode=${mode} must hide the address`).toHaveLength(0);
     }
     await adminDb.project.update({
       where: { id: host.projectId },
-      data: { accessLevel: 'public' },
+      data: projectAccessData('public'),
     });
     const shown = await asAppRole({}, (tx) => selectAddress(tx, 'roadmap.acme.example'));
     expect(shown).toHaveLength(1);
@@ -374,7 +375,7 @@ function seedCustomDomain(
 async function seedTenant(
   tag: string,
   identifier: string,
-  accessLevel: 'public' | 'open' | 'limited' | 'private',
+  mode: ProjectAccessMode,
 ): Promise<Tenant> {
   const owner = await adminDb.user.create({
     data: { email: `${tag}-owner@example.com`, name: `${tag} owner` },
@@ -397,7 +398,7 @@ async function seedTenant(
       name: `Project ${identifier}`,
       slug: identifier.toLowerCase(),
       identifier,
-      accessLevel,
+      ...projectAccessData(mode),
     },
   });
   return {

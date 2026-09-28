@@ -10,6 +10,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { TWO_FACTOR_REQUIRED_PATH } from '@/lib/auth/twoFactorGate';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // MOTIR-4727 — `GET /api/work-items/planning-anchor?key=`, the anchor read the
 // planning-workspace OVERLAY (MOTIR-4725) makes from the browser.
@@ -262,7 +263,7 @@ describe('GET /api/work-items/planning-anchor · the refusals', () => {
     });
     await adminDb.project.update({
       where: { id: owner.project.id },
-      data: { accessLevel: 'private' },
+      data: projectAccessData('members'),
     });
     await adminDb.workspaceMembership.create({
       data: {
@@ -279,7 +280,7 @@ describe('GET /api/work-items/planning-anchor · the refusals', () => {
       userId: outsider.id,
       workspaceId: owner.workspace.id,
       projectId: owner.project.id,
-      project: { ...owner.project, accessLevel: 'private' },
+      project: { ...owner.project, ...projectAccessData('members') },
     };
 
     const res = await anchorViaRoute(leaf.identifier);

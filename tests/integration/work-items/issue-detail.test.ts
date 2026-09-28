@@ -1,5 +1,4 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { accessModeOf } from '@/lib/projects/accessMode';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -343,7 +342,7 @@ describe('workItemsService.getQuickView (8.8.2 — the peek payload)', () => {
     const peek = await workItemsService.getQuickView(
       fx.projectId,
       story.identifier,
-      accessModeOf(fx.project),
+      fx.project.accessMode,
       fx.ctx,
       'en',
     );
@@ -372,13 +371,7 @@ describe('workItemsService.getQuickView (8.8.2 — the peek payload)', () => {
     // A missing / cross-workspace key throws WorkItemNotFoundError — which the
     // route maps to the no-leak 404 → the controller's not-found panel.
     await expect(
-      workItemsService.getQuickView(
-        fx.projectId,
-        'PROD-9999',
-        accessModeOf(fx.project),
-        fx.ctx,
-        'en',
-      ),
+      workItemsService.getQuickView(fx.projectId, 'PROD-9999', fx.project.accessMode, fx.ctx, 'en'),
     ).rejects.toThrow(WorkItemNotFoundError);
   });
 
@@ -408,7 +401,7 @@ describe('workItemsService.getQuickView (8.8.2 — the peek payload)', () => {
     const peek = await workItemsService.getQuickView(
       fx.projectId,
       subtask.identifier,
-      accessModeOf(fx.project),
+      fx.project.accessMode,
       fx.ctx,
       'en',
     );
@@ -439,14 +432,14 @@ describe('workItemsService.getQuickView (8.8.2 — the peek payload)', () => {
     const epicPeek = await workItemsService.getQuickView(
       fx.projectId,
       epic.identifier,
-      accessModeOf(fx.project),
+      fx.project.accessMode,
       fx.ctx,
       'en',
     );
     const storyPeek = await workItemsService.getQuickView(
       fx.projectId,
       backlogStory.identifier,
-      accessModeOf(fx.project),
+      fx.project.accessMode,
       fx.ctx,
       'en',
     );

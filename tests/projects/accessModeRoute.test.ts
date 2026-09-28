@@ -118,7 +118,7 @@ describe('PATCH /api/projects/[key]/access', () => {
     expect(both.status).toBe(400);
     expect((await patch(f.key, {})).status).toBe(400);
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: f.project.id } });
-    expect(row.accessMode).toBeNull();
+    expect(row.accessMode).toBe('workspace');
   });
 
   it('a workspace Member gets 403 and changes nothing', async () => {
@@ -127,7 +127,7 @@ describe('PATCH /api/projects/[key]/access', () => {
     const res = await patch(f.key, { accessMode: 'members' });
     expect(res.status).toBe(403);
     const row = await adminDb.project.findUniqueOrThrow({ where: { id: f.project.id } });
-    expect(row.accessMode).toBeNull();
+    expect(row.accessMode).toBe('workspace');
   });
 
   it('refuses `public` on a self-hosted build with the cloud-only 400', async () => {

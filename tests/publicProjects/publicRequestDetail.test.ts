@@ -10,6 +10,7 @@ import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Public request DETAIL read (Story 6.12 · Subtask 6.12.12) — the read behind the
 // public `/p/<project>/requests/<request>` page. Real Postgres (the standing
@@ -36,7 +37,7 @@ async function publicRequestFixture(): Promise<{
   requestIdentifier: string;
 }> {
   const fx = await makeWorkItemFixture({ name: 'Acme' });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   const item = await workItemsService.createWorkItem(
     {
       projectId: fx.projectId,

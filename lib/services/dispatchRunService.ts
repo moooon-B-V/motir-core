@@ -41,7 +41,7 @@ import {
 } from '@/lib/mappers/dispatchRunMappers';
 import { assembleRunCloseOutPrompt } from '@/lib/dispatch/runCloseOutPrompt';
 import { toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
-import { standingQueueFailures } from './deliveryVerdict';
+import { standingMergeRefusals, standingQueueFailures } from './deliveryVerdict';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
@@ -963,14 +963,20 @@ export const dispatchRunService = {
           tx,
         );
         // Each member's standing queue failure (MOTIR-5720), one read for the run.
-        const held = await standingQueueFailures(
-          new Map(deliveries.map((row) => [row.githubPullRequestId, row.pullRequest])),
-          tx,
-        );
+        const byId = new Map(deliveries.map((row) => [row.githubPullRequestId, row.pullRequest]));
+        const held = await standingQueueFailures(byId, tx);
+        // …and its standing host merge refusal (MOTIR-6735), the same one read.
+        const refused = await standingMergeRefusals(byId, tx);
         const byWorkItem = new Map<string, ReturnType<typeof toWorkItemDeliveryDto>[]>();
         for (const row of deliveries) {
           const list = byWorkItem.get(row.workItemId) ?? [];
-          list.push(toWorkItemDeliveryDto(row, held.get(row.githubPullRequestId) ?? null));
+          list.push(
+            toWorkItemDeliveryDto(
+              row,
+              held.get(row.githubPullRequestId) ?? null,
+              refused.get(row.githubPullRequestId) ?? null,
+            ),
+          );
           byWorkItem.set(row.workItemId, list);
         }
 
