@@ -93,6 +93,22 @@ export const githubPullRequestQueueExitRepository = {
     return result.count;
   },
 
+  /** Record the RAW conclusion of the check already named on this exit — only while it
+   *  is that check and no conclusion is known (MOTIR-6848: the reconcile tick reads it
+   *  from the host for an exit whose `check_run` delivery never came). Returns the
+   *  count. Write path → `tx`. */
+  async setConclusionIfUnset(
+    exitId: string,
+    check: { name: string; conclusion: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubPullRequestQueueExit.updateMany({
+      where: { id: exitId, failingCheckName: check.name, failingCheckConclusion: null },
+      data: { failingCheckConclusion: check.conclusion },
+    });
+    return result.count;
+  },
+
   /** RE-JUDGE a standing exit's disposition (§4 SIXTH AMENDMENT, MOTIR-6847) — only
    *  while nobody has re-queued it, so a requeue that raced the re-judge wins. Returns
    *  the count. Write path → `tx`. */

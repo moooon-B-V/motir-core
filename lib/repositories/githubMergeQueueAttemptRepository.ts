@@ -67,6 +67,22 @@ export const githubMergeQueueAttemptRepository = {
     return result.count;
   },
 
+  /** Record the RAW conclusion of the check already named on this attempt — only while
+   *  it is that check and no conclusion is known (a row named before MOTIR-6846, or one
+   *  whose conclusion the reconcile tick read from the host). Returns the count. Write
+   *  path → `tx`. */
+  async setConclusionIfUnset(
+    attemptId: string,
+    check: { name: string; conclusion: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubMergeQueueAttempt.updateMany({
+      where: { id: attemptId, failingCheckName: check.name, failingCheckConclusion: null },
+      data: { failingCheckConclusion: check.conclusion },
+    });
+    return result.count;
+  },
+
   /** The pull request's LATEST attempt, if the queue ever tested it. */
   async findLatestByPullRequest(
     pullRequestId: string,
