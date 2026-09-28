@@ -321,6 +321,7 @@ describe('zero and one delivery — the cases nearly every card is', () => {
         baseRef: 'main',
         defaultBranch: 'main',
         queueExit: null,
+        mergeRefusal: null,
       },
     ]);
   });

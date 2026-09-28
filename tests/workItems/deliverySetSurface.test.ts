@@ -55,6 +55,7 @@ function delivery(
     baseRef: 'main',
     defaultBranch: 'main',
     queueExit: null,
+    mergeRefusal: null,
     ...rest,
   };
 }

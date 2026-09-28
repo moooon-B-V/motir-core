@@ -1230,6 +1230,7 @@ async function recordMergeRefusal(
           headSha: target.expectedHeadSha,
           approvalGateId,
           permission: refusal.permission ?? null,
+          reason: hostReasonOf(refusal.reason),
           refusedAt: new Date(),
         },
         tx,
@@ -1251,6 +1252,21 @@ async function recordMergeRefusal(
       error: err instanceof Error ? err.message : String(err),
     });
   }
+}
+
+/** The longest host message kept on a refusal row — GitHub's run to a sentence or
+ *  two; the bound only keeps a pathological body from riding into every read. */
+const HOST_REASON_MAX_LENGTH = 2000;
+
+/**
+ * The host's own message, as the refusal row keeps it (Bug MOTIR-6735). For a
+ * `branch_protected` refusal it is the ONLY record of which setting refused the
+ * merge — the classifier puts every error it does not recognise under that code — so
+ * it is kept verbatim, trimmed, and bounded. Blank is no message at all.
+ */
+function hostReasonOf(reason: string | undefined): string | null {
+  const trimmed = reason?.trim() ?? '';
+  return trimmed === '' ? null : trimmed.slice(0, HOST_REASON_MAX_LENGTH);
 }
 
 /** A member's refusal in the frame's own vocabulary — the mapping the decide action uses. */

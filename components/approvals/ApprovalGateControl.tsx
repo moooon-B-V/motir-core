@@ -765,7 +765,8 @@ export function useRefusalCopy(
       headline = t('mergeConflict.title');
       break;
     case 'MERGE_BRANCH_PROTECTED':
-      // `refusal.reason` is the host's sentence and is NOT drawn — see the union.
+      // `refusal.reason` is the host's sentence: not part of this copy — the
+      // Development frame quotes it beneath the line (MOTIR-6735; see the union).
       headline = t('mergeBranchProtected.title');
       break;
     case 'MERGE_ALREADY_MERGED':

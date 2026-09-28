@@ -162,7 +162,7 @@ import {
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toQuickViewData } from '@/lib/mappers/quickViewMappers';
 import { toLinkedPullRequestDto, toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
-import { standingQueueFailures } from './deliveryVerdict';
+import { standingMergeRefusals, standingQueueFailures } from './deliveryVerdict';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { amendRepoDeliveryWithSet } from '@/lib/workItems/deliverySet';
@@ -6468,12 +6468,16 @@ export const workItemsService = {
       // Each member's STANDING queue failure (MOTIR-5720), over ONE read for the set
       // — the rule is `queueExitHoldsAtHead`, the same one the card's badge, the
       // promotion hold and the repair claim read.
-      const held = await standingQueueFailures(
-        new Map(rows.map((row) => [row.githubPullRequestId, row.pullRequest])),
-        tx,
-      );
+      const byId = new Map(rows.map((row) => [row.githubPullRequestId, row.pullRequest]));
+      const held = await standingQueueFailures(byId, tx);
+      // …and its STANDING host merge refusal, with the host's own words (MOTIR-6735).
+      const refused = await standingMergeRefusals(byId, tx);
       return rows.map((row) =>
-        toWorkItemDeliveryDto(row, held.get(row.githubPullRequestId) ?? null),
+        toWorkItemDeliveryDto(
+          row,
+          held.get(row.githubPullRequestId) ?? null,
+          refused.get(row.githubPullRequestId) ?? null,
+        ),
       );
     });
   },

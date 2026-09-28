@@ -272,6 +272,7 @@ describe('the row draws the class, and offers only what that class allows', () =
           landingClass: 'cant_land',
           refusedAt: '2026-09-19T15:10:00.000Z',
           permission: null,
+          reason: null,
         },
       }),
     });
@@ -294,6 +295,7 @@ describe('the row draws the class, and offers only what that class allows', () =
           landingClass: 'setting',
           refusedAt: '2026-09-19T15:10:00.000Z',
           permission: 'contents: write',
+          reason: null,
         },
       }),
     });
@@ -327,6 +329,7 @@ describe('the row draws the class, and offers only what that class allows', () =
           landingClass: 'setting',
           refusedAt: '2026-09-19T15:10:00.000Z',
           permission: null,
+          reason: null,
         },
       }),
     });
@@ -336,6 +339,50 @@ describe('the row draws the class, and offers only what that class allows', () =
       screen.getByText(whole(plain(fill(pra.setting.line, { pr: GATEWAY_NAME })))),
     ).toBeTruthy();
     expect(rowButton(pra.outcome.retry)).toBeTruthy();
+  });
+
+  // Bug MOTIR-6735: the classifier files every host error it does not recognise under
+  // `branch_protected`, so the general sentence cannot say WHICH setting — and the host's
+  // own message, kept on the refusal, is drawn beneath it as the host's words.
+  it('BLOCKED BY A SETTING the host NAMED: GitHub’s own message is quoted under the line', () => {
+    const message = 'Repository rule violations found: 2 of 2 required status checks are expected.';
+    renderBlock({
+      members: members({
+        requeueable: true,
+        refusal: {
+          code: 'branch_protected',
+          landingClass: 'setting',
+          refusedAt: '2026-09-19T15:10:00.000Z',
+          permission: null,
+          reason: message,
+        },
+      }),
+    });
+
+    expect(
+      screen.getByText(whole(plain(fill(pra.setting.line, { pr: GATEWAY_NAME })))),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(whole(plain(fill(pra.setting.hostReason, { reason: message })))),
+    ).toBeTruthy();
+  });
+
+  it('BLOCKED BY A SETTING the host did NOT name: no quoted line at all, never an empty one', () => {
+    const { container } = renderBlock({
+      members: members({
+        requeueable: true,
+        refusal: {
+          code: 'branch_protected',
+          landingClass: 'setting',
+          refusedAt: '2026-09-19T15:10:00.000Z',
+          permission: null,
+          reason: null,
+        },
+      }),
+    });
+
+    expect(container.querySelector('[data-merge-refusal]')).not.toBeNull();
+    expect(container.querySelector('[data-merge-refusal-reason]')).toBeNull();
   });
 
   // Bug MOTIR-6116: a conflict FIXED BY A PUSH. The fresh gate names the new head, and the
