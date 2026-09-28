@@ -23,6 +23,7 @@ import {
   clientSentryDsn,
   MONITORING_TRACES_SAMPLE_RATE,
 } from '@/lib/monitoring/config';
+import { dropOrphanedStreamingInstructions } from '@/lib/monitoring/orphanedStreamingInstruction';
 
 const dsn = clientSentryDsn();
 
@@ -39,6 +40,9 @@ if (dsn) {
     // consequence, so it is a deliberate `false` rather than an unset default.
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0,
+    // A React streaming script (`$RS`, `$RC`, …) throwing is the echo of a
+    // hydration failure Next already reports on its own (MOTIR-6773).
+    beforeSend: dropOrphanedStreamingInstructions,
   });
 }
 

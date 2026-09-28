@@ -115,6 +115,15 @@ describe('the CLIENT cannot read a runtime environment, and says so', () => {
     expect(options['environment']).toBe('staging');
   });
 
+  it('drops React streaming-instruction echoes before they are sent (MOTIR-6773)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', 'https://key@o1.ingest.us.sentry.io/2');
+    await import('@/instrumentation-client');
+    const options = init.mock.calls[0]![0] as Record<string, unknown>;
+    const { dropOrphanedStreamingInstructions } =
+      await import('@/lib/monitoring/orphanedStreamingInstruction');
+    expect(options['beforeSend']).toBe(dropOrphanedStreamingInstructions);
+  });
+
   it('records no session replay, at any sample rate', async () => {
     // Replay records the DOM, which here means work-item titles, comment bodies
     // and customer names — a different category of data from a stack trace, and
