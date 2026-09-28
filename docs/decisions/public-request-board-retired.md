@@ -1,8 +1,9 @@
 # ADR: motir.co's public feature-request board is retired, and a public project's pending requests move into the app as Requested features
 
 - **Status:** Proposed (2026-09-28). The direction was set by the owner (Yue) on 2026-09-28 while
-  MOTIR-6171 was being planned. Approving this record confirms that the direction below is what the
-  owner asked for.
+  MOTIR-6171 was being planned. Revised the same day after the owner requested changes at this
+  record's decision gate: the name "triage" retires everywhere, not only where a Visitor looks
+  (Decision 4). Approving this record confirms that the direction below is what the owner asked for.
 - **Work item:** MOTIR-6744 (`type: decision`), epic MOTIR-6164
 - **Supersedes:**
   - **MOTIR-4116** (done), which shipped motir.co's Roadmap tab as the feature-request board. The tab
@@ -31,14 +32,16 @@ The approved MOTIR-6171 moved motir.co's read pages into the app. It redirected 
 and said motir.co keeps "the feature requests" and "voting" exactly as before. It did not say that
 motir.co's roadmap **is** the voting board, so the plan both kept the board and redirected it away.
 
-The owner settled it in four turns on 2026-09-28:
+The owner settled it in four turns on 2026-09-28, and a fifth at this record's decision gate:
 
 1. about the board: _"drop the feature, it's useless"_;
 2. asked how far: _"only the request board"_;
 3. after the plan was approved: _"triage needs to be open for the visitors, the visitors can upvote
    there"_;
 4. on the name: _"it should be called requested feature not triage, a common user won't understand
-   what the triage is"_.
+   what the triage is"_;
+5. at the gate, on the first version of this record, which kept "Triage" as the Managers' own name:
+   _"We can call it requested feature everywhere, so triage as a name retires."_
 
 ## Decision
 
@@ -48,22 +51,30 @@ The owner settled it in four turns on 2026-09-28:
 2. **A public project's pending requests move into the app, as Requested features.** A signed-in,
    consented Visitor (`visitor-sign-in-and-records.md`) reads them at
    `app.motir.co/p/<identifier>/requested-features`, ordered by votes.
-   - **The set** is the one the board's Submitted column showed: requests in triage, attributed to a
+   - **The set** is the one the board's Submitted column showed: pending requests, attributed to a
      submitter, not in a done status, and not snoozed. (As read on `origin/main` `a08dc1762`:
      `workItemRepository.findPublicRoadmapSubmitted`, which requires `triagedAt` and
      `submittedByUserId` to be set, the status category not to be `done`, and no active snooze.)
    - **Submitters are shown by name only**, never by email.
-   - **The Visitor gets no triage action.** They cannot accept, decline, snooze or edit a request.
-   - **A member** who follows the same address lands in their own Triage.
+   - **The Visitor gets no Manager action.** They cannot accept, decline, promote, merge, snooze or
+     edit a request.
+   - **A member** who follows the same address lands in their own Requested features: the inbox
+     that is called Triage today, with its actions, renamed by Decision 4.
 3. **The Visitor can upvote there.** The upvote is the existing public-request act
    (`public_request:upvote`). Every actor already holds it on a public project, decided by the
    project's access level and not by a role (`lib/permissions/builtinRoles.ts`,
    `PUBLIC_PROJECT_PERMISSIONS`). Its route (`POST /api/public-requests/[id]/upvote`) needs a
    signed-in session and no workspace membership. So it is **not** a Visitor-entrance write, and the
    Visitor's role stays read-only: it holds the same view keys and gains no new key.
-4. **The name is "Requested features", everywhere a Visitor looks**: the navigation label, the
-   heading and the address. A reader outside the team will not understand "triage", so that word
-   stays internal to the Managers' own inbox.
+4. **The name is "Requested features", everywhere, and "triage" retires as a name.** A reader
+   outside the team will not understand "triage", and one thing gets one name. So the Visitor's view
+   and the members' inbox are both **Requested features**, in every place a person reads the name:
+   - the navigation entry, the page heading and the address, for the Visitor's view and for the
+     members' inbox (today `/triage`, labelled "Triage");
+   - the permission's label in the role editor (today "Triage requests") and its description;
+   - the copy that tells a submitter or a member where a request went (today "the team's triage
+     queue", "No items to triage", "Select a submission to triage" and their siblings);
+   - every locale's translation of those strings.
 5. **What stays on motir.co, unchanged:**
    - the "Request a feature" doorway, `/p/<identifier>/requests/new`;
    - each request's own page, `/p/<identifier>/requests/<KEY>`, with its upvote and comment
@@ -78,9 +89,10 @@ The owner settled it in four turns on 2026-09-28:
 - **Keep the board on motir.co.** The owner called it useless and asked to drop it.
 - **Drop the pending requests altogether.** The owner asked for them to stay visible, and votable,
   to the people watching the project.
-- **Open the Managers' Triage inbox to Visitors.** It carries acts a Visitor must not have, and its
-  name is one an outside reader does not understand. The Visitor gets its own read-only view with a
-  single act.
+- **Open the members' inbox to Visitors as it is.** It carries acts a Visitor must not have. The
+  Visitor gets its own read-only view, with the same name and a single act.
+- **Keep "Triage" as the members' own name** (the first version of this record). The owner rejected
+  it at the gate: the name retires everywhere.
 - **Keep a vote hand-off on motir.co's project page in place of the in-app view.** That would be the
   same board in a smaller form, which is the thing being retired.
 
@@ -97,6 +109,12 @@ The owner settled it in four turns on 2026-09-28:
   admitted by the Visitor routing (MOTIR-6769). It is drawn first (MOTIR-6767).
 - No permission key is added and no role set changes. The upvote reaches the Visitor through the
   public-level grant they already hold.
+- **The members' inbox is renamed** (Decision 4): its navigation entry, heading and address, the
+  permission's label and description, and the copy that names it, in every locale. As of
+  2026-09-28, on `origin/main` `a08dc1762`, the name lives in `app/(authed)/_components/SidebarNav.tsx`
+  (`nav.triage`, `href: '/triage'`), the `app/(authed)/triage/` route and its components, and
+  `messages/en.json` / `messages/zh.json` (16 strings in `en.json`). **No card owns this rename yet.**
+  It is new scope for MOTIR-6171, and it is proposed as a plan change there rather than decided here.
 
 ### The clauses this record makes false
 
@@ -112,6 +130,9 @@ amendment of record for the clauses below.
   upvote in Requested features.
 - `visitor-sign-in-and-records.md` **Decision 5**: _"nothing that writes"_ carries the same
   exception. **Decision 6**: motir.co is unchanged **except** that its request board is retired.
+- `triage-model.md` names the members' surface the _"Triage inbox"_. Its model stands: a
+  submission is still a work item in a `triage` state. The surface a person reads is now
+  **Requested features** (Decision 4).
 - `public-surface-hosts.md` **§2** as amended by AMENDMENT 7: `/p/<identifier>/roadmap` joins the
   paths motir.co redirects, and the request pages stay on motir.co.
 
@@ -126,4 +147,10 @@ amendment of record for the clauses below.
   cards that build the view decide anything more (MOTIR-6768, MOTIR-6769).
 - **When the deprecated roadmap operation is removed.** It goes at the public contract's next major,
   which nobody has decided to cut.
-- **Anything about the Managers' Triage inbox.** It is unchanged.
+- **The members' inbox's behaviour.** Only its name changes. What it lists, and the acts it offers,
+  stay as they are.
+- **Internal identifiers.** Names no person reads, such as the `triagedAt` column, the
+  `work_item_triage` permission key, the `/api/**/triage` routes and component names, are the
+  implementing card's choice. This record renames what people read.
+- **What the old `/triage` address does** once the inbox has moved: redirect or retire. That is the
+  implementing card's choice.
