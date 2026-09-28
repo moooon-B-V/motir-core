@@ -278,6 +278,13 @@ export const V1_COLLECTIONS = [
   // card's newest result forward in time, so a time-ordered cursor would walk
   // that card across page boundaries and show it twice or not at all.
   'projectDesigns',
+  // Story MOTIR-6829's ready LANES — ONE NAME PER LANE, for the reason the
+  // activity views above give: the three lanes page over different partitions,
+  // so a leaves cursor replayed at the bugs lane must be refused rather than
+  // decoded into a position that means nothing there.
+  'ready.leaves',
+  'ready.containers',
+  'ready.bugs',
 ] as const;
 
 /** The name a cursor carries so it can only be replayed at its own collection. */

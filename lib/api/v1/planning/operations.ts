@@ -13,7 +13,9 @@ import { projectRepositorySchema } from '@/lib/api/v1/projects/repositories';
 import { projectSchema } from '@/lib/api/v1/projects/schema';
 import {
   ALLOW_SOFT_BLOCK_VALUES,
+  readyContainerSchema,
   readyItemSchema,
+  readyLaneItemSchema,
   SPRINT_ACTIVE,
   UNASSIGNED,
 } from '@/lib/api/v1/ready/schema';
@@ -95,6 +97,100 @@ const projectKeyParameter = pathParameter(
   'The project’s key — the prefix of its work items’ keys, e.g. `MOTIR`.',
   z.string().min(1),
 );
+
+function readyRowFacetParameters(): V1Parameter[] {
+  return [
+    projectKeyParameter,
+    ...pageParameters(),
+    {
+      name: 'kind',
+      in: 'query',
+      required: false,
+      description:
+        'Narrow to one or more work-item kinds, as `?kind=epic&kind=story`. An unknown kind is a 422.',
+      // An ARRAY, matching `parseReadyFilters`' `params.getAll('kind')`. It
+      // was declared as a scalar until MOTIR-2317 while the description said
+      // "Repeatable" — a document that under-described its own route, which
+      // went unnoticed until a client was GENERATED from it and inherited a
+      // type that cannot express two kinds.
+      schema: z.array(z.string().min(1)),
+      explode: true,
+    },
+    {
+      name: 'priority',
+      in: 'query',
+      required: false,
+      description:
+        'Narrow to one or more priorities, as `?priority=high&priority=urgent`. An unknown priority is a 422.',
+      schema: z.array(z.string().min(1)),
+      explode: true,
+    },
+    {
+      name: 'assigneeId',
+      in: 'query',
+      required: false,
+      description: `TRI-STATE, and all three are reachable: OMIT for any assignee, the literal \`${UNASSIGNED}\` for the unassigned bucket, or a user id for that user's items. An empty value is treated as omitted.`,
+      schema: z.string().min(1),
+    },
+    {
+      name: 'ancestor',
+      in: 'query',
+      required: false,
+      description:
+        'SCOPE the read to the ready leaves STRICTLY BENEATH one or more containers, at ANY depth, as `?ancestor=MOTIR-42&ancestor=MOTIR-43` — an any-of set, like `kind`. The named container is NOT in its own result, so a childless one returns an empty page rather than itself: that is the honest answer to “what is ready under this story” for a story nobody has decomposed. ⚠️ It NARROWS the same answer the unfaceted read gives and can never widen it — a leaf whose ancestor chain reaches the named container but is not itself all-ready stays absent, because the parent-ready cascade is computed first and this filters its result (with `allowSoftBlock=true` it narrows that widened answer in the same way). An unknown key, or one belonging to another project, is a 422 — indistinguishable from each other.',
+      // An ARRAY for the same reason `kind` is one: a generated client that
+      // typed it as a scalar could not express two containers, which is a
+      // legitimate ask (one run over two stories) the shape must not forbid.
+      schema: z.array(z.string().min(1)),
+      explode: true,
+    },
+    {
+      name: 'sprintId',
+      in: 'query',
+      required: false,
+      description: `SCOPE the read to the items whose OWN \`sprintId\` matches — a sprint id, or the reserved literal \`${SPRINT_ACTIVE}\` for the project's active sprint. SINGLE-VALUED: membership is a scalar column, so there is no any-of question to ask. Membership is DIRECT and never inherited — an item under an in-sprint parent but not itself in the sprint is out of scope. A sprint that is not this project's, and \`${SPRINT_ACTIVE}\` on a project between sprints, are both a 422 rather than a silently unfiltered page. An empty value is treated as omitted.`,
+      schema: z.string().min(1),
+    },
+    {
+      name: 'allowSoftBlock',
+      in: 'query',
+      required: false,
+      description:
+        'WIDEN the read past a SOFT block. `true` keeps the requirement that every listed leaf’s OWN `blocked_by` dependencies are done, but no longer drops a leaf because an ANCESTOR is not ready — so a leaf held only by its epic’s or story’s block is listed, while a leaf with its own open blocker (a HARD block) never is. A container whose own blockers are open counts toward its children only as an ancestor. Composes with every other parameter, `ancestor` included. Absent, empty or `false` returns exactly the parent-ready cascade described above. Any other value is a 422.',
+      schema: z.enum(ALLOW_SOFT_BLOCK_VALUES),
+    },
+  ];
+}
+
+function readyContainerFacetParameters(): V1Parameter[] {
+  return [
+    projectKeyParameter,
+    ...pageParameters(),
+    {
+      name: 'priority',
+      in: 'query',
+      required: false,
+      description:
+        'Narrow to containers of one or more priorities — the CONTAINER’s own priority, as `?priority=high&priority=highest`. An unknown priority is a 422.',
+      schema: z.array(z.string().min(1)),
+      explode: true,
+    },
+    {
+      name: 'assigneeId',
+      in: 'query',
+      required: false,
+      description: `TRI-STATE, and all three are reachable: OMIT for any assignee, the literal \`${UNASSIGNED}\` for the unassigned bucket, or a user id for that user's items. An empty value is treated as omitted.`,
+      schema: z.string().min(1),
+    },
+    {
+      name: 'sprintId',
+      in: 'query',
+      required: false,
+      description: `SCOPE the read to the items whose OWN \`sprintId\` matches — a sprint id, or the reserved literal \`${SPRINT_ACTIVE}\` for the project's active sprint. SINGLE-VALUED: membership is a scalar column, so there is no any-of question to ask. Membership is DIRECT and never inherited — an item under an in-sprint parent but not itself in the sprint is out of scope. A sprint that is not this project's, and \`${SPRINT_ACTIVE}\` on a project between sprints, are both a 422 rather than a silently unfiltered page. An empty value is treated as omitted.`,
+      schema: z.string().min(1),
+    },
+  ];
+}
 
 const sprintIdParameter = pathParameter(
   'sprintId',
@@ -259,71 +355,59 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     description:
       'The work items whose every `blocked_by` dependency is done — what an agent loop claims from. Each row carries its dependency edges. Reports no total: unlike the backlog, this read has no cheap bounded count.',
     permission: 'project:browse',
-    parameters: [
-      projectKeyParameter,
-      ...pageParameters(),
-      {
-        name: 'kind',
-        in: 'query',
-        required: false,
-        description:
-          'Narrow to one or more work-item kinds, as `?kind=epic&kind=story`. An unknown kind is a 422.',
-        // An ARRAY, matching `parseReadyFilters`' `params.getAll('kind')`. It
-        // was declared as a scalar until MOTIR-2317 while the description said
-        // "Repeatable" — a document that under-described its own route, which
-        // went unnoticed until a client was GENERATED from it and inherited a
-        // type that cannot express two kinds.
-        schema: z.array(z.string().min(1)),
-        explode: true,
-      },
-      {
-        name: 'priority',
-        in: 'query',
-        required: false,
-        description:
-          'Narrow to one or more priorities, as `?priority=high&priority=urgent`. An unknown priority is a 422.',
-        schema: z.array(z.string().min(1)),
-        explode: true,
-      },
-      {
-        name: 'assigneeId',
-        in: 'query',
-        required: false,
-        description: `TRI-STATE, and all three are reachable: OMIT for any assignee, the literal \`${UNASSIGNED}\` for the unassigned bucket, or a user id for that user's items. An empty value is treated as omitted.`,
-        schema: z.string().min(1),
-      },
-      {
-        name: 'ancestor',
-        in: 'query',
-        required: false,
-        description:
-          'SCOPE the read to the ready leaves STRICTLY BENEATH one or more containers, at ANY depth, as `?ancestor=MOTIR-42&ancestor=MOTIR-43` — an any-of set, like `kind`. The named container is NOT in its own result, so a childless one returns an empty page rather than itself: that is the honest answer to “what is ready under this story” for a story nobody has decomposed. ⚠️ It NARROWS the same answer the unfaceted read gives and can never widen it — a leaf whose ancestor chain reaches the named container but is not itself all-ready stays absent, because the parent-ready cascade is computed first and this filters its result (with `allowSoftBlock=true` it narrows that widened answer in the same way). An unknown key, or one belonging to another project, is a 422 — indistinguishable from each other.',
-        // An ARRAY for the same reason `kind` is one: a generated client that
-        // typed it as a scalar could not express two containers, which is a
-        // legitimate ask (one run over two stories) the shape must not forbid.
-        schema: z.array(z.string().min(1)),
-        explode: true,
-      },
-      {
-        name: 'sprintId',
-        in: 'query',
-        required: false,
-        description: `SCOPE the read to the items whose OWN \`sprintId\` matches — a sprint id, or the reserved literal \`${SPRINT_ACTIVE}\` for the project's active sprint. SINGLE-VALUED: membership is a scalar column, so there is no any-of question to ask. Membership is DIRECT and never inherited — an item under an in-sprint parent but not itself in the sprint is out of scope. A sprint that is not this project's, and \`${SPRINT_ACTIVE}\` on a project between sprints, are both a 422 rather than a silently unfiltered page. An empty value is treated as omitted.`,
-        schema: z.string().min(1),
-      },
-      {
-        name: 'allowSoftBlock',
-        in: 'query',
-        required: false,
-        description:
-          'WIDEN the read past a SOFT block. `true` keeps the requirement that every listed leaf’s OWN `blocked_by` dependencies are done, but no longer drops a leaf because an ANCESTOR is not ready — so a leaf held only by its epic’s or story’s block is listed, while a leaf with its own open blocker (a HARD block) never is. A container whose own blockers are open counts toward its children only as an ancestor. Composes with every other parameter, `ancestor` included. Absent, empty or `false` returns exactly the parent-ready cascade described above. Any other value is a 422.',
-        schema: z.enum(ALLOW_SOFT_BLOCK_VALUES),
-      },
-    ],
+    parameters: readyRowFacetParameters(),
     response: {
       status: 200,
       body: { kind: 'page', item: readyItemSchema },
       description: 'A page of ready work items with their dependency edges.',
+    },
+    errorStatuses: [404, 422],
+  }),
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/projects/{projectKey}/ready/leaves',
+    operationId: 'getProjectReadyLeaves',
+    summary: 'Read a project’s ready LEAVES lane',
+    description:
+      'The ready set minus BUG WORK (a `bug`, or a leaf whose parent is a `bug`), each row naming the RUNNABLE CONTAINER it groups under — a `story`, `task` or `bug` whose every child is childless, the shape a parent run accepts — or `null`. ORDER is part of the contract: rows are grouped by `container ?? self`, a group ranks by its best member’s `(kind, priority, key)`, and members keep that rank inside it, so `items[0]` is the next leaf to run. Readiness is the same parent-ready cascade `getProjectReadySet` reads; this lane and `getProjectReadyBugs` together hold exactly its rows. Accepts every facet that read accepts.',
+    permission: 'project:browse',
+    parameters: readyRowFacetParameters(),
+    response: {
+      status: 200,
+      body: { kind: 'page', item: readyLaneItemSchema },
+      description: 'A page of ready leaves, grouped by runnable container, with their edges.',
+    },
+    errorStatuses: [404, 422],
+  }),
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/projects/{projectKey}/ready/containers',
+    operationId: 'getProjectReadyContainers',
+    summary: 'Read a project’s ready CONTAINERS lane',
+    description:
+      'The RUNNABLE CONTAINERS — a `story`, `task` or `bug` whose every child is childless — that hold at least one row of the leaves lane, bugs excluded: the units a parent run takes. An `epic` is never one, nor is a container holding a grandchild. In the leaves lane’s group order, so `items[0]` is the next parent run. `readyLeafCount` counts its leaves-lane rows; `childCount` every live child. The facets apply to the CONTAINER; `kind`, `ancestor` and `allowSoftBlock` do not apply here and are a 422.',
+    permission: 'project:browse',
+    parameters: readyContainerFacetParameters(),
+    response: {
+      status: 200,
+      body: { kind: 'page', item: readyContainerSchema },
+      description: 'A page of runnable containers holding ready leaves.',
+    },
+    errorStatuses: [404, 422],
+  }),
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/projects/{projectKey}/ready/bugs',
+    operationId: 'getProjectReadyBugs',
+    summary: 'Read a project’s ready BUGS lane',
+    description:
+      'The ready BUG WORK: a ready `bug` (its own group, `container: null`), and the ready subtasks of a bug (grouped under it, `container` = the bug). The same order, facets and cascade as `getProjectReadyLeaves`; the two lanes are disjoint and together hold exactly the rows of `getProjectReadySet`.',
+    permission: 'project:browse',
+    parameters: readyRowFacetParameters(),
+    response: {
+      status: 200,
+      body: { kind: 'page', item: readyLaneItemSchema },
+      description: 'A page of ready bug work, grouped by bug, with its edges.',
     },
     errorStatuses: [404, 422],
   }),

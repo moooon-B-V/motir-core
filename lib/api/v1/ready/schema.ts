@@ -7,7 +7,7 @@ import {
   presentDependencyEdges,
   workItemKeySchema,
 } from '@/lib/api/v1/workItems/schema';
-import type { ReadyItemDto } from '@/lib/dto/ready';
+import type { ReadyContainerDto, ReadyItemDto } from '@/lib/dto/ready';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import type {
   ExecutorDto,
@@ -16,7 +16,11 @@ import type {
   WorkItemPriorityDto,
   WorkItemTypeDto,
 } from '@/lib/dto/workItems';
-import { SPRINT_ACTIVE, type ReadyListFilter } from '@/lib/workItems/readyFilter';
+import {
+  SPRINT_ACTIVE,
+  type ReadyContainersFilter,
+  type ReadyListFilter,
+} from '@/lib/workItems/readyFilter';
 
 // The v1 READY-SET row (Story 11.3 · Subtask 11.3.9 — MOTIR-2066) — the shape
 // an external agent loop reads to answer "what can I pick up right now, and what
@@ -385,3 +389,116 @@ export function parseReadyFilters(req: Request): ReadyListFilter {
  *  belongs to; this is the same re-export `serverResolve.ts` does for
  *  `DEFAULT_SERVER_URL`. */
 export { SPRINT_ACTIVE };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The ready LANES (Story MOTIR-6829 · MOTIR-6832)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Three reads over the SAME walk the ready set reads, partitioned the way work
+// is run (`lib/workItems/readyFilter.ts` is the one home of the contract):
+//
+//   • leaves     — `getProjectReadyLeaves`: the ready rows minus BUG WORK, each
+//                  naming its runnable CONTAINER (or `null`).
+//   • containers — `getProjectReadyContainers`: the runnable containers holding
+//                  at least one leaves-lane row — what `motir run <KEY>` runs.
+//   • bugs       — `getProjectReadyBugs`: a ready bug, or a ready subtask of one.
+//
+// The ORDER is again part of the contract: rows are GROUPED by `container ??
+// self`, a group ranks by its best member's `(kind, priority, key)`, members keep
+// that rank inside it — so `items[0]` of the leaves lane is the flat set's first
+// pick unless that pick was bug work. Nothing here re-sorts.
+
+/**
+ * The runnable container a lane row is grouped under: a `story`, `task` or `bug`
+ * whose every child is childless. Keyed by its public `key`, never its id (§7).
+ */
+export const readyContainerRefSchema = z.object({
+  key: workItemKeySchema,
+  kind: z.enum(READY_KINDS),
+  title: z.string(),
+  priority: z.enum(READY_PRIORITIES),
+});
+export type V1ReadyContainerRef = z.infer<typeof readyContainerRefSchema>;
+
+/** A LANE row: the ready row plus the container it is grouped under. */
+export const readyLaneItemSchema = readyItemSchema.extend({
+  /** The runnable container this row groups under, or `null` when it stands alone. */
+  container: readyContainerRefSchema.nullable(),
+});
+export type V1ReadyLaneItem = z.infer<typeof readyLaneItemSchema>;
+
+/** A CONTAINERS-lane row: a runnable container and how much of it is ready. */
+export const readyContainerSchema = readyContainerRefSchema.extend({
+  assigneeId: z.string().nullable(),
+  assignee: actorRefSchema.nullable(),
+  /** Its rows in the leaves lane — the leaves a parent run would take now. */
+  readyLeafCount: z.number().int().nonnegative(),
+  /** Every live child, ready or not: "{readyLeafCount} of {childCount} ready". */
+  childCount: z.number().int().nonnegative(),
+});
+export type V1ReadyContainer = z.infer<typeof readyContainerSchema>;
+
+/** A lane row plus its edges — {@link presentReadyItem} and the container ref. */
+export function presentReadyLaneItem(
+  item: ReadyItemDto,
+  edges: WorkItemDependencyEdgesDto | undefined,
+): V1ReadyLaneItem {
+  const container = item.container ?? null;
+  return {
+    ...presentReadyItem(item, edges),
+    container:
+      container === null
+        ? null
+        : {
+            key: container.key,
+            kind: container.kind,
+            title: container.title,
+            priority: container.priority,
+          },
+  };
+}
+
+/** A containers-lane row, field by field. */
+export function presentReadyContainer(row: ReadyContainerDto): V1ReadyContainer {
+  return {
+    key: row.key,
+    kind: row.kind,
+    title: row.title,
+    priority: row.priority,
+    assigneeId: row.assignee?.id ?? null,
+    assignee: row.assignee === null ? null : { id: row.assignee.id, name: row.assignee.name },
+    readyLeafCount: row.readyLeafCount,
+    childCount: row.childCount,
+  };
+}
+
+/**
+ * The leaf-only facets the CONTAINERS lane refuses — a container has no leaf
+ * kind, sits beneath no ancestor filter, and is never soft-blocked into view.
+ * Refused rather than ignored: a filter that silently matched everything is how
+ * a caller dispatches what it meant to exclude.
+ */
+const CONTAINER_LANE_REFUSED = ['kind', 'ancestor', 'allowSoftBlock'] as const;
+
+/**
+ * Read `?priority=&assigneeId=&sprintId=` for the CONTAINERS lane — applied to
+ * the CONTAINER, since a container is what that lane hands out. The vocabulary
+ * is `parseReadyFilters`' own, so an unknown priority is the same 422.
+ */
+export function parseReadyContainerFilters(req: Request): ReadyContainersFilter {
+  const params = new URL(req.url).searchParams;
+  for (const name of CONTAINER_LANE_REFUSED) {
+    if (params.getAll(name).some((v) => v.trim() !== '')) {
+      throw new InvalidRequestError(
+        'INVALID_READY_FILTER',
+        `\`${name}\` does not apply to the containers lane.`,
+      );
+    }
+  }
+  const { priority, assigneeId, sprintRef } = parseReadyFilters(req);
+  return {
+    ...(priority ? { priority } : {}),
+    ...(assigneeId !== undefined ? { assigneeId } : {}),
+    ...(sprintRef ? { sprintRef } : {}),
+  };
+}

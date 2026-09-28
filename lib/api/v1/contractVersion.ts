@@ -784,5 +784,20 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.50.0` after MOTIR-6538, so this claims `1.51.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD.
+ *
+ * - `1.52.0` — MOTIR-6832 adds the three READY LANES (Story MOTIR-6829):
+ *   `getProjectReadyLeaves` (`GET /api/v1/projects/{projectKey}/ready/leaves`),
+ *   `getProjectReadyContainers` (`…/ready/containers`) and `getProjectReadyBugs`
+ *   (`…/ready/bugs`) — the ready set partitioned the way work is run, each lane
+ *   row naming its runnable `container`, with the new `ReadyLaneItem` and
+ *   `ReadyContainer` components.
+ *
+ *   Additive: three new READ operations (§8's allowed list). `getProjectReadySet`
+ *   is unchanged; the user's 2026-09-28 decision deletes it in a later task, once
+ *   the released CLI no longer calls it.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.51.0` after MOTIR-6539, so this claims `1.52.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the OPERATIONS.
  */
-export const V1_CONTRACT_VERSION = '1.51.0';
+export const V1_CONTRACT_VERSION = '1.52.0';
