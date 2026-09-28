@@ -91,13 +91,14 @@ export async function seedHostedRun(email: string, identifier: string): Promise<
 
 let repoSeq = 0;
 
-/** A `created`-state project repository — see the file header for why. */
-async function seedCreatedRepo(
+/** A `created`-state project repository — see the file header for why. Returns
+ *  the project repository's id, so a spec can PIN a card to it. */
+export async function seedCreatedRepo(
   workspaceId: string,
   organizationId: string,
   projectId: string,
   repo: { owner: string; name: string },
-): Promise<void> {
+): Promise<string> {
   repoSeq += 1;
   const inst = await adminDb.githubInstallation.upsert({
     where: { installationId: `inst-${workspaceId}-${repo.owner}` },
@@ -124,7 +125,7 @@ async function seedCreatedRepo(
       provider: 'github',
     },
   });
-  await adminDb.projectRepo.create({
+  const row = await adminDb.projectRepo.create({
     data: {
       workspaceId,
       projectId,
@@ -136,6 +137,7 @@ async function seedCreatedRepo(
       githubRepoId: mirror.id,
     },
   });
+  return row.id;
 }
 
 /**
