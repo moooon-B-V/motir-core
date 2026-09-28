@@ -6093,6 +6093,32 @@ classifies ink by reading the token name off the DECLARATION, the re-pointed
 form hands the guard its answer. If an ink is wrong, change the CLASS on the
 element — never what the class means. → **MOTIR-4812.**
 
+### Amendment 2026-09-28 (MOTIR-6857) — the reserved Run slot is no longer the hosted agent's
+
+`docs/decisions/work-item-todo-list.md` AMENDMENT 1 (MOTIR-6856) decided that an
+agent to-do is never run by the hosted agent. The hosted agent runs cards, not
+single to-do steps. MOTIR-3809, _Dispatch ONE to-do to a hosted agent_, is
+cancelled. An agent to-do's later runner is **Motir AI**, once Motir has a
+secret store.
+
+Two lines above still name MOTIR-3809 as the owner of the row's run control.
+They are left as written, and this amendment is how to read them:
+
+- **_An agent row shows no run control at all_** (§ _Instructions — the row
+  carries the HOW_): _"Panel 3 marks where MOTIR-3809 will place one"_. The slot
+  stays where it is drawn, in the row-actions track left of Edit, and it stays
+  **empty** until Motir AI can run a step. When that runner exists, its control
+  is the one that goes there. The hosted agent never places one.
+- **_Out of scope_**: _"The hosted-run control for an agent step — MOTIR-3809
+  (Epic 9)"_. There will be no hosted-run control. The control this asset
+  reserves room for is Motir AI's, and no card plans it yet.
+
+`todo-list.mock.html` is **not edited**. Its reserved-slot annotation (lines 30,
+1493, 1952 and 2051 name MOTIR-3809) is a record of the board as it was
+approved. Read that annotation as marking **Motir AI's** future slot, not the
+hosted agent's. Nothing about the row's current rendering changes: an agent row
+still shows no run control.
+
 ---
 
 ## ⭐ The PENDING-PLAN indicator on the item page (MOTIR-4256 — `pending-plan-indicator.mock.html`)
