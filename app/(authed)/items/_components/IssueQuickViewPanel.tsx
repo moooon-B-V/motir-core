@@ -656,8 +656,8 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         )}
         {/* THE OBSOLESCENCE BADGE (MOTIR-6674) right after the key — a pointer to
             the rail's field (panel 2). Nothing on an unmarked item or a proposal. */}
-        {!proposal && data.obsolescence ? (
-          <ObsolescenceHeaderLink mark={data.obsolescence} targetId={OBSOLESCENCE_PEEK_ANCHOR} />
+        {!proposal && view.obsolescence ? (
+          <ObsolescenceHeaderLink mark={view.obsolescence} targetId={OBSOLESCENCE_PEEK_ANCHOR} />
         ) : null}
         {/* WHAT THE PLAN WILL DO, in the slot `/items` puts the status in — a
             status answers *what state is this work item in*, and on a review

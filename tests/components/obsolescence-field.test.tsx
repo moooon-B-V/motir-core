@@ -53,6 +53,10 @@ import { CoreFieldsPanel } from '@/app/(authed)/items/[key]/_components/CoreFiel
 import { IssueQuickViewPanel } from '@/app/(authed)/items/_components/IssueQuickViewPanel';
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
 import { ObsolescenceHeaderLink } from '@/components/issues/ObsolescenceBadge';
+import {
+  OptimisticMarkProvider,
+  OptimisticObsolescenceHeaderLink,
+} from '@/app/(authed)/items/[key]/_components/OptimisticMarkProvider';
 
 const EN = enMessages as Record<string, unknown>;
 const ZH = zhMessages as Record<string, unknown>;
@@ -584,5 +588,73 @@ describe('quick view — the status control holds a marked card', () => {
     );
     expect(within(row('Status')).queryByText('marked')).toBeNull();
     expect(toast).not.toHaveBeenCalled();
+  });
+});
+
+// Found by MOTIR-6680's recording: the header badge is a DIFFERENT surface from the
+// rail and the rail never refreshes on success, so the page carries the mark to it
+// through `OptimisticMarkProvider`.
+describe('the item page header follows the rail’s write, with no refresh', () => {
+  it('marking shows the header badge; clearing takes it away', async () => {
+    const item = makeItem();
+    renderWithIntl(
+      <OptimisticMarkProvider serverMark={item.obsolescence}>
+        <OptimisticObsolescenceHeaderLink serverMark={item.obsolescence} />
+        <CoreFieldsPanel item={item} members={[]} workflow={workflow} parent={null} />
+      </OptimisticMarkProvider>,
+      { messages: EN, locale: 'en' },
+    );
+    const link = () => document.querySelector('[data-obsolescence-link]');
+    expect(link()).toBeNull();
+
+    const group = openCardEditor();
+    await act(async () => {
+      fireEvent.click(within(group).getByRole('button', { name: 'Outdated' }));
+    });
+    expect(link()?.getAttribute('data-obsolescence-link')).toBe('outdated');
+
+    await act(async () => {
+      fireEvent.click(within(group).getByRole('button', { name: 'Current' }));
+    });
+    expect(link()).toBeNull();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('clearing a mark the SERVER rendered takes the badge away (a null is not "no channel")', async () => {
+    const item = makeItem({ obsolescence: 'deprecated' });
+    renderWithIntl(
+      <OptimisticMarkProvider serverMark="deprecated">
+        <OptimisticObsolescenceHeaderLink serverMark="deprecated" />
+        <CoreFieldsPanel item={item} members={[]} workflow={workflow} parent={null} />
+      </OptimisticMarkProvider>,
+      { messages: EN, locale: 'en' },
+    );
+    expect(document.querySelector('[data-obsolescence-link="deprecated"]')).toBeTruthy();
+    const group = openCardEditor();
+    await act(async () => {
+      fireEvent.click(within(group).getByRole('button', { name: 'Current' }));
+    });
+    expect(document.querySelector('[data-obsolescence-link]')).toBeNull();
+  });
+
+  it('a refused write leaves the header as it was', async () => {
+    updateIssueAction.mockResolvedValueOnce({
+      ok: false,
+      error: REFUSED,
+      code: 'OBSOLESCENCE_REQUIRES_FINISHED',
+    });
+    const item = makeItem();
+    renderWithIntl(
+      <OptimisticMarkProvider serverMark={null}>
+        <OptimisticObsolescenceHeaderLink serverMark={null} />
+        <CoreFieldsPanel item={item} members={[]} workflow={workflow} parent={null} />
+      </OptimisticMarkProvider>,
+      { messages: EN, locale: 'en' },
+    );
+    const group = openCardEditor();
+    await act(async () => {
+      fireEvent.click(within(group).getByRole('button', { name: 'Deprecated' }));
+    });
+    expect(document.querySelector('[data-obsolescence-link]')).toBeNull();
   });
 });

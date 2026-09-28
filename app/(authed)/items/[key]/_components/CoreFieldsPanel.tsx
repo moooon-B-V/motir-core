@@ -44,6 +44,7 @@ import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
 import { DifficultyIndicator, DifficultyPicker } from '@/components/issues/DifficultyPicker';
 import { OBSOLESCENCE_FIELD_ANCHOR } from '@/components/issues/ObsolescenceBadge';
 import { ObsolescenceField } from '@/components/issues/ObsolescenceField';
+import { useApplyOptimisticMark } from './OptimisticMarkProvider';
 import { canCarryObsolescence } from '@/lib/issues/obsolescence';
 import { EstimateBadge } from '@/components/issues/EstimateBadge';
 import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
@@ -386,6 +387,7 @@ export function CoreFieldsPanel({
   // differences: the editor STAYS OPEN after a mark press so the note can follow,
   // and the finished-card refusal is drawn IN the field rather than as a toast.
   const [obsolescenceRefusal, setObsolescenceRefusal] = useState<string | null>(null);
+  const applyOptimisticMark = useApplyOptimisticMark();
   function writeObsolescence(
     input: Pick<UpdateIssueInput, 'obsolescence' | 'obsolescenceNoteMd'>,
     opts: { close?: boolean } = {},
@@ -398,6 +400,9 @@ export function CoreFieldsPanel({
       if (res.ok) {
         setUpdatedAt(res.updatedAt);
         bumpActivity(item.id);
+        // The header badge is another surface: tell it what the 200 confirmed,
+        // never by a refresh (the inline-edit rule above).
+        if ('obsolescence' in input) applyOptimisticMark(input.obsolescence ?? null);
       } else if (res.stale) {
         revert(Object.keys(input));
         toast({ variant: 'error', title: t('changedElsewhereRefreshing') });
