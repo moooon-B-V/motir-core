@@ -14,6 +14,7 @@ import {
   makeWorkItemFixture as makeFixture,
   type WorkItemFixture,
 } from '../../fixtures';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // The Home personal reads (Story MOTIR-2649 · Subtask MOTIR-2651) against a REAL
 // Postgres (the motir-core no-mocks rule). These are the SUBTASK-level tests —
@@ -190,7 +191,7 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
       name: 'Secret',
       identifier: 'SEC',
     });
-    await adminDb.project.update({ where: { id: secret.id }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, secret.id, 'members');
     const fxSecret: WorkItemFixture = {
       ...fx,
       project: secret,
@@ -403,7 +404,7 @@ describe('watcherRepository.listByUserInGroup / homeService.listWatching', () =>
       name: 'Secret',
       identifier: 'WSEK',
     });
-    await adminDb.project.update({ where: { id: secret.id }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, secret.id, 'members');
     const hidden = await createWorkItem(
       { ...fx, project: secret, projectId: secret.id, projectIdentifier: secret.identifier },
       { kind: 'task', title: 'Hidden but watched' },
@@ -511,7 +512,7 @@ describe('homeService.tabCounts — the tab badges', () => {
       name: 'Secret',
       identifier: 'CNS',
     });
-    await adminDb.project.update({ where: { id: secret.id }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, secret.id, 'members');
 
     for (let i = 0; i < 4; i += 1) {
       await createWorkItem(fx, { kind: 'task', title: `Mine ${i}` });

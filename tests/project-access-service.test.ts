@@ -19,6 +19,7 @@ import type { ProjectAccessLevel, ProjectAccessMode } from '@/generated/prisma/c
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Service-layer tests for the Story 6.4 · Subtask 6.4.3 access gate — the
 // projectAccess browse/edit policy + its enforcement. Real Postgres, no DB
@@ -112,7 +113,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   // 6.12.8, and `asAccessLevel` deliberately still rejects it), so seed it
   // directly at the data layer; the 3 settable levels go through the real setter.
   if (level === 'public') {
-    await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
+    await setProjectAccess(adminDb, project.id, 'public');
   } else {
     await projectMembersService.setAccessLevel({
       key: project.identifier,
@@ -192,8 +193,8 @@ const EXPECTED: Record<
     nonMember: { browse: false, edit: false },
   },
   // `plainMember` is a workspace Member NEVER ADDED to the project. The projects
-  // here are built with a legacy LEVEL and a NULL mode, so they resolve through
-  // `accessModeOf` (Story MOTIR-6169): `limited` is Members only now, so the
+  // here are set through the legacy LEVEL setter, which stores the mapped mode
+  // (Story MOTIR-6169): `limited` is Members only now, so the
   // plain member no longer enters it — the one row the access model moved
   // (`role-model.md` Q1, and the migration reports every such person).
   limited: {

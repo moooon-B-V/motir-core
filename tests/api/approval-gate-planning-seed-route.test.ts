@@ -20,6 +20,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData, setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // MOTIR-6208 — `GET /api/approval-gates/[id]/planning-seed`, the REFUSAL SEED
 // read (story MOTIR-6068; `approval-gates.md` §10f), against REAL Postgres and
@@ -82,18 +83,18 @@ let seq = 0;
 
 type Actor = { id: string; email: string };
 
-function pctxFor(actor: Actor, on: WorkItemFixture = fx, accessLevel?: 'private'): ProjectContext {
+function pctxFor(actor: Actor, on: WorkItemFixture = fx, access?: 'members'): ProjectContext {
   return {
     userId: actor.id,
     workspaceId: on.workspaceId,
     projectId: on.projectId,
-    project: { ...on.project, ...(accessLevel ? { accessLevel } : {}) },
+    project: { ...on.project, ...(access ? projectAccessData(access) : {}) },
   } as ProjectContext;
 }
 
-function signIn(actor: Actor, on: WorkItemFixture = fx, accessLevel?: 'private') {
+function signIn(actor: Actor, on: WorkItemFixture = fx, access?: 'members') {
   session.current = { user: { id: actor.id, email: actor.email, name: 'Ada Lovelace' } };
-  activeCtx.current = pctxFor(actor, on, accessLevel);
+  activeCtx.current = pctxFor(actor, on, access);
 }
 
 const owner = (f: WorkItemFixture = fx): Actor => ({ id: f.owner.id, email: f.owner.email });
@@ -759,8 +760,8 @@ describe('GET /api/approval-gates/[id]/planning-seed · the identical 404', () =
     // …and the same 404 as an unknown id for a workspace member outside the
     // private project.
     const outsider = await plainMember();
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
-    signIn(outsider, fx, 'private');
+    await setProjectAccess(adminDb, fx.projectId, 'members');
+    signIn(outsider, fx, 'members');
     const hidden = await expectNotFound(gateId);
     const absent = await expectNotFound('no-such-gate');
     expect(hidden).toBe(absent);
@@ -837,8 +838,8 @@ describe('GET /api/approval-gates/[id]/planning-seed · the identical 404', () =
   it('a PICK on a work item the viewer cannot BROWSE — the same body as an unknown id', async () => {
     const gateId = await gate(card, 'decision_choice', 'approved', null, null, 'ui', STAMP);
     const outsider = await plainMember();
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
-    signIn(outsider, fx, 'private');
+    await setProjectAccess(adminDb, fx.projectId, 'members');
+    signIn(outsider, fx, 'members');
     expect(await expectNotFound(gateId)).toBe(await expectNotFound('no-such-gate'));
   });
 
@@ -879,8 +880,8 @@ describe('GET /api/approval-gates/[id]/planning-seed · the identical 404', () =
     signIn(owner());
     expect((await readSeed(gateId)).status).toBe(200);
     const outsider = await plainMember();
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
-    signIn(outsider, fx, 'private');
+    await setProjectAccess(adminDb, fx.projectId, 'members');
+    signIn(outsider, fx, 'members');
     await expectNotFound(gateId);
   });
 

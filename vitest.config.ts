@@ -5274,7 +5274,7 @@ export default defineConfig({
         // `ProjectAccessDeniedError` / `ProjectNotFoundError`. The move is
         // attributed to the WORKSPACE OWNER (there is no change-request author on
         // this path), and a workspace owner passes `canEdit` on every
-        // `accessLevel` — `private` included, where `lib/projects/access.ts`
+        // access mode — Members only included, where `lib/projects/access.ts`
         // admits them explicitly — so NO VALID FIXTURE produces that error. The
         // arm is still correct to keep: `reevaluateItems` loops, and an uncaught
         // throw there would abort a whole sweep's remaining repairs. Lines and

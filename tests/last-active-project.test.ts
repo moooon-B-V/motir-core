@@ -261,8 +261,8 @@ describe('project_user_membership_read (the user-context arm)', () => {
       asAppRole(
         { userId: member.id, workspaceId: wsA.id },
         (tx) => tx.$executeRaw`
-          INSERT INTO "project" ("id", "workspaceId", "name", "slug", "identifier", "accessLevel", "createdAt", "updatedAt")
-          VALUES (${'smuggled-' + wsB.id}, ${wsB.id}, 'Smuggled', 'smuggled', 'SMG', 'private', now(), now())
+          INSERT INTO "project" ("id", "workspaceId", "name", "slug", "identifier", "access_mode", "accessLevel", "createdAt", "updatedAt")
+          VALUES (${'smuggled-' + wsB.id}, ${wsB.id}, 'Smuggled', 'smuggled', 'SMG', 'members', 'private', now(), now())
         `,
       ),
     ).rejects.toSatisfy(isRlsDenial, RLS_DENIAL);

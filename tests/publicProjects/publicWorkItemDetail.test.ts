@@ -12,6 +12,7 @@ import {
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Public work-item DETAIL read (Story 6.14 · Subtask 6.14.11) — the read behind
 // the public `/p/<project>/items/<key>` page. Real Postgres (the standing rule).
@@ -33,7 +34,7 @@ async function setPrivate(epicId: string, value: boolean): Promise<void> {
 
 async function makePublicProjectFixture(name = 'Acme'): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   return fx;
 }
 

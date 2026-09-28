@@ -25,6 +25,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 import { organizationIdOf } from '../helpers/organizationOf';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // The project REPOSITORY SET over real Postgres (Story MOTIR-1775 · MOTIR-1780) —
 // the substrate every other card in the Story stands on, so what is pinned here is
@@ -1264,7 +1265,7 @@ describe('access gating', () => {
         workspaceRole: 'member',
       },
     });
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, fx.projectId, 'members');
     await expect(
       projectRepoSetService.addRow(
         fx.projectId,

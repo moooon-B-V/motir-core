@@ -9,6 +9,7 @@ import { DashboardWidgetSourceNotFoundError } from '@/lib/dashboards/errors';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // Reads across projects honour ENTRY at read time (Story MOTIR-6169 · MOTIR-6549):
 // the notification feed and its counts drop rows about a project the reader can
@@ -37,7 +38,7 @@ async function setup() {
   });
   const secret = await adminDb.project.update({
     where: { id: created.id },
-    data: { accessLevel: 'private', accessMode: 'members' },
+    data: projectAccessData('members'),
   });
   const reader = await usersService.createUser({
     email: `ne-reader-${seq++}@example.com`,

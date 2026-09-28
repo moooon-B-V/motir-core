@@ -16,6 +16,7 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from '@/tests/fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The SEAM tests for MOTIR-2796 (MOTIR-2815 part 2).
 //
@@ -158,7 +159,7 @@ describe('workItemRepository.findByIds — every consuming service resolves the 
     );
     await adminDb.project.update({
       where: { id: fx.projectId },
-      data: { accessLevel: 'public' },
+      data: projectAccessData('public'),
     });
 
     // ⚠️ The one consumer that must NOT bind: `work_item_public_project_read`

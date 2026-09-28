@@ -7,6 +7,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Story 8.9 · Subtask 8.9.3 — `public_follow`'s two database-level guarantees
 // (`docs/decisions/public-follow-and-changelog.md` §1 AMENDMENT 1 and §7).
@@ -60,7 +61,7 @@ async function makePublicProjectFixture(
   identifier: string,
 ): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name, identifier });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   return fx;
 }
 

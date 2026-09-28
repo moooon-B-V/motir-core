@@ -20,6 +20,7 @@ import {
 } from '../../fixtures';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // The STORY-level seam tests for Home (Story MOTIR-2649 · Subtask MOTIR-2655),
 // against the real Postgres and the shipped services. The subtask suites
@@ -205,7 +206,7 @@ describe('Home story seam — the access matrix', () => {
       name: 'Secret',
       identifier: 'AMS',
     });
-    await adminDb.project.update({ where: { id: secret.id }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, secret.id, 'members');
 
     const open = await createWorkItem(fx, { kind: 'task', title: 'Open' });
     const hidden = await createWorkItem(inProject(fx, secret), { kind: 'task', title: 'Hidden' });
@@ -248,7 +249,7 @@ describe('Home story seam — the access matrix', () => {
       name: 'Secret',
       identifier: 'AMN',
     });
-    await adminDb.project.update({ where: { id: secret.id }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, secret.id, 'members');
     const item = await createWorkItem(inProject(fx, secret), {
       kind: 'task',
       title: 'Now visible',
@@ -319,7 +320,7 @@ describe('Home story seam — the access matrix', () => {
       name: 'Secret',
       identifier: 'ANS',
     });
-    await adminDb.project.update({ where: { id: secret.id }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, secret.id, 'members');
 
     const member = await createTestUser({ email: `an-${Date.now()}@example.com` });
     await workspacesService.addMember({
@@ -372,7 +373,7 @@ describe('Home story seam — the access matrix', () => {
       name: 'Secret',
       identifier: 'AWS',
     });
-    await adminDb.project.update({ where: { id: secret.id }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, secret.id, 'members');
 
     const open = await createWorkItem(fx, { kind: 'task', title: 'Open' });
     const hidden = await createWorkItem(inProject(fx, secret), { kind: 'task', title: 'Hidden' });

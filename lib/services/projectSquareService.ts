@@ -38,7 +38,7 @@ const MAX_SEARCH_LENGTH = 200;
 // access system. It is FULLY PUBLIC: the directory read takes NO `actorUserId`
 // and runs NO session/access gate (the page is open to anonymous visitors +
 // crawlers — model revision 2026-06-14). The load-bearing correctness lives in
-// the repository read, which filters on `accessLevel = 'public'` in ONE place,
+// the repository read, which filters on `accessMode = 'public'` in ONE place,
 // so no non-public project can leak through this or any future caller (the
 // 6.13.3 search/tag predicates narrow WITHIN that public filter, never around
 // it); and in the `ProjectSquareCardDto` projection, which structurally lacks

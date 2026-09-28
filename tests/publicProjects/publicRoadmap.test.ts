@@ -9,6 +9,7 @@ import {
 } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // Repository-layer tests for the Story 6.12 · Subtask 6.12.7 public-roadmap
 // reads on workItemRepository (the per-file coverage-gated file). Real Postgres,
@@ -38,7 +39,7 @@ async function makePublicProjectFixture(): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture();
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { accessLevel: 'public' },
+    data: projectAccessData('public'),
   });
   return fx;
 }

@@ -27,6 +27,7 @@ import { captureEmailEvents, captureJobEvents } from '../../helpers/jobs';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // Story 6.2 · Subtask 6.2.5 — filter subscriptions. Real Postgres (the one
 // allowed seam is the Inngest client's `send()`, captured for assertion).
@@ -415,7 +416,7 @@ describe('deliver — resolves AS the subscriber', () => {
     // Make the project private so a non-member truly can't browse.
     await adminDb.project.update({
       where: { id: t.fx.projectId },
-      data: { accessLevel: 'private' },
+      data: projectAccessData('members'),
     });
 
     const cap = captureEmailEvents();

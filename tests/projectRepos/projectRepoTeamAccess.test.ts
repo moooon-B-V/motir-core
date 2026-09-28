@@ -22,6 +22,7 @@ import {
 import { spyOnJobDispatch } from '../helpers/jobs';
 import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
 import { legacyToWorkspaceRole } from '@/lib/workspaces/roles';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // TEAM CODE ACCESS over real Postgres (Story MOTIR-1775 · MOTIR-1910).
 //
@@ -331,7 +332,7 @@ describe('who is invitable — the shipped canEdit policy, not a membership quer
 
   it('scopes a `private` project to its own members', async () => {
     const fx = await makeWorkItemFixture();
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, fx.projectId, 'members');
     await connectGithub(fx.ownerId, OWNER_LOGIN, '4242');
     // In the workspace but NOT on the project: on `private` they cannot even
     // browse it, so they are not a candidate for its code.

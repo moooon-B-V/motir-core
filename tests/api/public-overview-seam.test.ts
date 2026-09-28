@@ -6,6 +6,7 @@ import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { runAsCloudBuild } from '../helpers/cloudBuild';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // THE SEAM the Public page room is built over (Story MOTIR-3875 · MOTIR-4171):
 // what the room SAVES through `PATCH /api/projects/{key}/public-overview`
@@ -61,7 +62,7 @@ async function readPublic(identifier: string) {
 
 async function makePublicProjectFixture(): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name: 'Acme' });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   return fx;
 }
 

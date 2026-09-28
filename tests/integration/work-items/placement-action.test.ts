@@ -21,6 +21,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe(
@@ -95,7 +96,7 @@ describe('getWorkItemPlacementAction', () => {
       fx.ctx,
     );
     // Private to its members, so a workspace member who is NOT on it cannot browse it.
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, fx.projectId, 'members');
     const outsider = await createTestUser({ email: 'placement-outsider@ex.com', name: 'Outsider' });
     await workspacesService.addMember({ userId: outsider.id, workspaceId: fx.workspaceId });
     actAs(fx, outsider.id);

@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The customer-domain lifecycle — Story MOTIR-3878 · Subtask MOTIR-4216.
 // Real Postgres; the two systems it cannot reach (DNS, Fly) go through their
@@ -68,7 +69,7 @@ beforeEach(async () => {
       name: 'Acme',
       slug: 'acme',
       identifier: 'ACME',
-      accessLevel: 'public',
+      ...projectAccessData('public'),
     },
   });
   projectId = project.id;
