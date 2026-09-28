@@ -1,9 +1,13 @@
 diff --git a/dist/index.js b/dist/index.js
-index 11072f724e74ff9e0b4c3bfec04a6fafa1b0a7bd..c1008da616eae860f84b82cade3f8056873831ab 100644
+index 11072f724e74ff9e0b4c3bfec04a6fafa1b0a7bd..9d058e425caf8ce92f0e463304ffa16d4847e016 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -728,6 +728,10 @@ function createServerResponseAdapter(signal, fn) {
-   return new Promise((resolve) => {
+@@ -725,9 +725,13 @@ function createServerResponseAdapter(signal, fn) {
+   const writeHeadPromise = new Promise((resolve) => {
+     writeHeadResolver = resolve;
+   });
+-  return new Promise((resolve) => {
++  return new Promise((resolve, reject) => {
      let controller;
      let shouldClose = false;
 +    // MOTIR-5857: once the consumer cancels the body (the client went away) or the
@@ -45,7 +49,28 @@ index 11072f724e74ff9e0b4c3bfec04a6fafa1b0a7bd..c1008da616eae860f84b82cade3f8056
          try {
            controller.close();
          } catch (e) {
-@@ -819,8 +835,13 @@ function createServerResponseAdapter(signal, fn) {
+@@ -808,7 +824,19 @@ function createServerResponseAdapter(signal, fn) {
+     signal.addEventListener("abort", () => {
+       eventEmitter.emit("close");
+     });
+-    void fn(fakeServerResponse);
++    // MOTIR-6853: the handler reads the request body before it writes a head, and
++    // that read rejects (`Error: aborted`) when the client hangs up first. Dropped
++    // with `void`, that was an unhandled rejection AND a Response that never
++    // settled. Until a head is written, the Response is still owed: reject it, so
++    // the route decides. After that the Response is in the caller's hands, and the
++    // failure keeps the library's own behaviour.
++    Promise.resolve(fn(fakeServerResponse)).catch((error) => {
++      if (!wroteHead) {
++        reject(error);
++        return;
++      }
++      throw error;
++    });
+     void (() => chunkUILOG6SR_js.__async(this, null, function* () {
+       const head = yield writeHeadPromise;
+       const response = new Response(
+@@ -819,8 +847,13 @@ function createServerResponseAdapter(signal, fn) {
                controller.enqueue(chunk);
              }
              if (shouldClose) {
@@ -59,12 +84,25 @@ index 11072f724e74ff9e0b4c3bfec04a6fafa1b0a7bd..c1008da616eae860f84b82cade3f8056
            }
          }),
          {
+@@ -842,7 +875,7 @@ function createMcpRouteHandler(initializeServer, serverOptions, config) {
+   );
+   return (request) => {
+     return createServerResponseAdapter(request.signal, (res) => {
+-      mcpHandler(request, res);
++      return mcpHandler(request, res);
+     });
+   };
+ }
 diff --git a/dist/index.mjs b/dist/index.mjs
-index c1110409315d81bd1d440dc5910ba720c17f3722..55bf2be8233fe0bb909451023a545dd54fff5a0b 100644
+index c1110409315d81bd1d440dc5910ba720c17f3722..7e549576dd3af5507ad83367d5c58ff0cfa4763c 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -722,6 +722,10 @@ function createServerResponseAdapter(signal, fn) {
-   return new Promise((resolve) => {
+@@ -719,9 +719,13 @@ function createServerResponseAdapter(signal, fn) {
+   const writeHeadPromise = new Promise((resolve) => {
+     writeHeadResolver = resolve;
+   });
+-  return new Promise((resolve) => {
++  return new Promise((resolve, reject) => {
      let controller;
      let shouldClose = false;
 +    // MOTIR-5857: once the consumer cancels the body (the client went away) or the
@@ -106,7 +144,28 @@ index c1110409315d81bd1d440dc5910ba720c17f3722..55bf2be8233fe0bb909451023a545dd5
          try {
            controller.close();
          } catch (e) {
-@@ -813,8 +829,13 @@ function createServerResponseAdapter(signal, fn) {
+@@ -802,7 +818,19 @@ function createServerResponseAdapter(signal, fn) {
+     signal.addEventListener("abort", () => {
+       eventEmitter.emit("close");
+     });
+-    void fn(fakeServerResponse);
++    // MOTIR-6853: the handler reads the request body before it writes a head, and
++    // that read rejects (`Error: aborted`) when the client hangs up first. Dropped
++    // with `void`, that was an unhandled rejection AND a Response that never
++    // settled. Until a head is written, the Response is still owed: reject it, so
++    // the route decides. After that the Response is in the caller's hands, and the
++    // failure keeps the library's own behaviour.
++    Promise.resolve(fn(fakeServerResponse)).catch((error) => {
++      if (!wroteHead) {
++        reject(error);
++        return;
++      }
++      throw error;
++    });
+     void (() => __async(this, null, function* () {
+       const head = yield writeHeadPromise;
+       const response = new Response(
+@@ -813,8 +841,13 @@ function createServerResponseAdapter(signal, fn) {
                controller.enqueue(chunk);
              }
              if (shouldClose) {
@@ -120,3 +179,12 @@ index c1110409315d81bd1d440dc5910ba720c17f3722..55bf2be8233fe0bb909451023a545dd5
            }
          }),
          {
+@@ -836,7 +869,7 @@ function createMcpRouteHandler(initializeServer, serverOptions, config) {
+   );
+   return (request) => {
+     return createServerResponseAdapter(request.signal, (res) => {
+-      mcpHandler(request, res);
++      return mcpHandler(request, res);
+     });
+   };
+ }

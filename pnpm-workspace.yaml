@@ -54,9 +54,13 @@ allowBuilds:
 # its own and enqueues into it unguarded, so a client that disconnects while a
 # tool is still running throws "Invalid state: Controller is already closed" as an
 # unhandled rejection (MOTIR-5857). The patch gives that stream a `cancel` and
-# drops writes after it closes. 1.1.0 is the last 1.x; 2.x moves to
-# `@modelcontextprotocol/server` v2. On a bump, delete the entry only if
-# `tests/mcp/stream-cancel.test.ts` passes on the unpatched install.
+# drops writes after it closes. It also fires the POST handler with `void`, so a
+# body read that rejects because the client hung up first (`Error: aborted`) was
+# an unhandled rejection too (MOTIR-6853): the patch rejects the route's Response
+# instead, while no head has been written, and `lib/mcp/clientAbort.ts` answers
+# it. 1.1.0 is the last 1.x; 2.x moves to `@modelcontextprotocol/server` v2. On
+# a bump, delete the entry only if `tests/mcp/stream-cancel.test.ts` AND
+# `tests/mcp/body-abort.test.ts` pass on the unpatched install.
 patchedDependencies:
   mcp-handler@1.1.0: patches/mcp-handler@1.1.0.patch
   next@16.2.6: patches/next@16.2.6.patch
