@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Circle, CircleCheck, CircleDot, Inbox, Star } from 'lucide-react';
+import { Circle, CircleCheck, CircleDot, Inbox, Star, Wrench } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils/cn';
@@ -8,8 +8,9 @@ import type { HomeTabCountsDto } from '@/lib/dto/home';
 import { workbenchTabHref } from '@/lib/workbench/tab';
 
 // The Workbench tab strip (Story MOTIR-4777 · MOTIR-4782, per
-// `design/workbench/design-notes.md` §"The tab strip") — To approve · In progress ·
-// To do · Recently finished · Watching (re-ordered by MOTIR-5217).
+// `design/workbench/design-notes.md` §"The tab strip") — To approve · To fix ·
+// In progress · To do · Recently finished · Watching (re-ordered by MOTIR-5217; To fix
+// inserted second by § 30, MOTIR-6605).
 //
 // ⚠️ LINK-BASED, not the client `Segmented`, and that is the design's decision
 // rather than a shortcut. The selection has to live in the URL: a tab held only
@@ -60,8 +61,8 @@ export async function WorkbenchTabs({
   // the order a person's attention should run in when agents do the work: what
   // is waiting on YOUR decision first — an unmade decision holds up somebody
   // else's card — then what is moving, then what to start, then what just
-  // landed and what you follow. The first three are also the landing cascade's
-  // three rungs, so the strip explains where a reader was just landed.
+  // landed and what you follow. The first four are also the landing cascade's
+  // four rungs, so the strip explains where a reader was just landed.
   const tabs: TabSpec[] = [
     {
       // ⚠️ The LABEL is an action and the SLUG is a set. The other four name a
@@ -72,6 +73,15 @@ export async function WorkbenchTabs({
       label: t('tabs.toApprove'),
       icon: <Inbox className="h-3.5 w-3.5" />,
       count: counts.approvals,
+    },
+    {
+      // TO FIX (§ 30 Panel 1) — second: what is waiting on you to DECIDE, then what
+      // is waiting on you to REPAIR. Also an action rather than a state, and the
+      // landing cascade's second rung. Its count is the shipped chip, like every tab's.
+      key: 'to-fix',
+      label: t('tabs.toFix'),
+      icon: <Wrench className="h-3.5 w-3.5" />,
+      count: counts.toFix,
     },
     {
       key: 'in-progress',
@@ -103,7 +113,7 @@ export async function WorkbenchTabs({
   // panel): a row of five "0"s is five numbers a brand-new user has to read and
   // then discard. A zero beside a NON-zero sibling still shows — that one is
   // information ("nothing over there either"). The rule is the shipped one; it
-  // now suppresses five instead of two.
+  // now suppresses six.
   const showCounts = tabs.some((tab) => tab.count > 0);
 
   return (

@@ -90,6 +90,9 @@ function dto(over: Partial<HomeWorkItemRowDto> & { identifier: string }): HomeWo
     // Null unless a test says otherwise: `completedAt` (MOTIR-4780) is stamped
     // only on entry to a done-category status, and this strip's rows are live.
     completedAt: null,
+    // Nothing to fix unless a test says so (MOTIR-6600) — the pair is null together.
+    fixReason: null,
+    fixDetail: null,
     project: { id: 'p1', identifier: 'MOTIR', name: 'Motir' },
     viewerIsAssignee: true,
     viewerIsReporter: true,
@@ -294,12 +297,13 @@ describe('the Workbench tab strip', () => {
     myWork: 12,
     toDo: 5,
     inProgress: 7,
+    toFix: 3,
     recentlyFinished: 2,
     approvals: 0,
     watching: 4,
   };
 
-  it('spells each of the five tabs as a real href, with the active one marked', async () => {
+  it('spells each of the six tabs as a real href, with the active one marked', async () => {
     renderRaw(await WorkbenchTabs({ active: 'todo', counts }));
 
     // The selection is a URL, not component state — which is what makes it
@@ -311,6 +315,7 @@ describe('the Workbench tab strip', () => {
     expect(href('finished')).toBe('/workbench?tab=finished');
     expect(href('watching')).toBe('/workbench?tab=watching');
     expect(href('approvals')).toBe('/workbench?tab=approvals');
+    expect(href('to-fix')).toBe('/workbench?tab=to-fix');
 
     expect(screen.getByTestId('workbench-tab-todo').getAttribute('aria-current')).toBe('page');
     expect(screen.getByTestId('workbench-tab-watching').getAttribute('aria-current')).toBeNull();
@@ -325,6 +330,7 @@ describe('the Workbench tab strip', () => {
       // `?tab=approvals` above; the two spellings are checked together so
       // neither can be "fixed" into agreement.
       'To approve',
+      'To fix',
       'In progress',
       'To do',
       'Recently finished',
@@ -340,6 +346,7 @@ describe('the Workbench tab strip', () => {
     const anchors = [...container.querySelectorAll('[data-testid^="workbench-tab-"]')];
     expect(anchors.map((a) => a.getAttribute('data-testid'))).toEqual([
       'workbench-tab-approvals',
+      'workbench-tab-to-fix',
       'workbench-tab-in-progress',
       'workbench-tab-todo',
       'workbench-tab-finished',
@@ -347,6 +354,7 @@ describe('the Workbench tab strip', () => {
     ]);
     expect(anchors.map((a) => a.querySelector('svg')?.getAttribute('class'))).toEqual([
       expect.stringContaining('lucide-inbox'),
+      expect.stringContaining('lucide-wrench'),
       expect.stringContaining('lucide-circle-dot'),
       expect.stringMatching(/lucide-circle(?!-)/),
       expect.stringContaining('lucide-circle-check'),
@@ -365,6 +373,7 @@ describe('the Workbench tab strip', () => {
     const count = (key: string) => screen.getByTestId(`workbench-tab-${key}`).textContent;
     expect(count('todo')).toContain('5');
     expect(count('in-progress')).toContain('7');
+    expect(count('to-fix')).toContain('3');
     expect(count('finished')).toContain('2');
     expect(count('watching')).toContain('4');
     // Zero beside four non-zero siblings is INFORMATION — "nothing over there
@@ -380,6 +389,7 @@ describe('the Workbench tab strip', () => {
           myWork: 0,
           toDo: 0,
           inProgress: 0,
+          toFix: 0,
           recentlyFinished: 0,
           approvals: 0,
           watching: 0,
@@ -388,7 +398,7 @@ describe('the Workbench tab strip', () => {
     );
     // A brand-new user's first screen: five "0"s are five numbers they have to
     // read and then discard. The shipped rule, now suppressing five, not two.
-    for (const key of ['todo', 'in-progress', 'finished', 'watching', 'approvals']) {
+    for (const key of ['todo', 'in-progress', 'to-fix', 'finished', 'watching', 'approvals']) {
       expect(within(screen.getByTestId(`workbench-tab-${key}`)).queryByText('0')).toBeNull();
     }
   });

@@ -7923,6 +7923,7 @@
       "label": "工作台视图",
       "toDo": "待开始",
       "inProgress": "进行中",
+      "toFix": "待修复",
       "recentlyFinished": "最近完成",
       "watching": "关注中",
       "toApprove": "待审批"
@@ -7954,6 +7955,10 @@
         "title": "没有进行中的工作",
         "body": "你名下暂时没有正在推进的工作——无论是你自己还是智能体。",
         "action": "看看待开始的工作"
+      },
+      "toFix": {
+        "title": "没有需要修复的工作",
+        "body": "当合并队列、冲突、未通过的检查或审阅者卡住你的某个工作项时，它会带着修复命令显示在这里。"
       },
       "recentlyFinished": {
         "title": "本周还没有完成的工作",
@@ -8027,7 +8032,34 @@
     "live": {
       "new": "新增",
       "decidedElsewhere": "已由他人决定",
-      "reconnecting": "正在重新连接…"
+      "reconnecting": "正在重新连接…",
+      "cleared": "已解除"
+    },
+    "toFix": {
+      "reason": {
+        "queueFailed": "在合并队列中失败 · <d>{detail}</d>",
+        "queueFailedBare": "在合并队列中失败",
+        "conflicted": "与 <d>{base}</d> 冲突",
+        "conflictedNoBase": "与其目标分支冲突",
+        "ciFailed": "CI 未通过 · <d>{check}</d>",
+        "ciFailedBare": "CI 未通过",
+        "changesRequested": "<b>{name}</b> 要求修改 ——“{note}”",
+        "changesRequestedNoNote": "<b>{name}</b> 要求修改",
+        "changesRequestedAnon": "已要求修改"
+      },
+      "queueReason": {
+        "CI_FAILURE": "检查未通过",
+        "CI_TIMEOUT": "检查超时",
+        "MERGE_CONFLICT": "合并冲突",
+        "INVALID_MERGE_COMMIT": "无法构建合并提交"
+      },
+      "affected": "{total} 个拉取请求中有 {affected} 个受影响",
+      "copyAria": "复制 {key} 的修复命令",
+      "copyTooltip": "复制 <cmd>{command}</cmd>",
+      "toast": {
+        "title": "已复制",
+        "body": "请将 {command} 粘贴到终端。"
+      }
     }
   },
   "approvalRecords": {

@@ -3,6 +3,7 @@ import {
   workItemRepository,
   HOME_SLICE_DONE,
   HOME_SLICE_IN_PROGRESS,
+  HOME_SLICE_TO_FIX,
   HOME_SLICE_TODO,
 } from '@/lib/repositories/workItemRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
@@ -57,14 +58,14 @@ import {
 /**
  * The reading for every tab, taken inside ONE workspace context.
  *
- * ⚠️ FIVE STATEMENTS, NOT TEN. Each work tab's size and freshness come back from
+ * ⚠️ SIX STATEMENTS, NOT TWELVE. Each work tab's size and freshness come back from
  * a single `aggregate` (`_count` + `_max` over one `where`), because a second
  * round trip per tab is a standing per-second cost rather than a tidiness
  * question. Watching is the one exception and the table's shape is why: `watcher`
  * carries no `updatedAt` of its own, so its freshness lives on the work item
  * across a relation Prisma's `_max` cannot reach, and it costs one extra one-row
  * read. Issued together under one context, exactly as `tabCounts` issues its
- * five counts — the project scope is the expensive half and every tab needs the
+ * six counts — the project scope is the expensive half and every tab needs the
  * same one.
  */
 async function readTabs(
@@ -72,7 +73,7 @@ async function readTabs(
 ): Promise<Record<WorkbenchTabKey, WorkbenchTabWatermarkDto>> {
   return withWorkspaceContext(ctx, async (tx) => {
     const projectScopes = await resolveActiveProjectScope(ctx, tx);
-    const [toDo, inProgress, recentlyFinished, approvals, watching] = await Promise.all([
+    const [toDo, inProgress, toFix, recentlyFinished, approvals, watching] = await Promise.all([
       workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
         ctx.userId,
         ctx.workspaceId,
@@ -85,6 +86,15 @@ async function readTabs(
         ctx.workspaceId,
         projectScopes,
         { slice: HOME_SLICE_IN_PROGRESS },
+        tx,
+      ),
+      // TO FIX (MOTIR-6604) — the other half of In progress's category. A card whose
+      // `fixReason` is recomputed moves between the two, and both readings see it.
+      workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
+        ctx.userId,
+        ctx.workspaceId,
+        projectScopes,
+        { slice: HOME_SLICE_TO_FIX },
         tx,
       ),
       // The finished window is part of the PREDICATE here, exactly as it is in
@@ -117,6 +127,7 @@ async function readTabs(
     return {
       toDo: pair(toDo),
       inProgress: pair(inProgress),
+      toFix: pair(toFix),
       recentlyFinished: pair(recentlyFinished),
       approvals: pair(approvals),
       watching: pair(watching),
