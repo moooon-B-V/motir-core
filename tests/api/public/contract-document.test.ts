@@ -166,6 +166,40 @@ describe('the public contract document', () => {
     const ids = PUBLIC_OPERATIONS.map((o) => o.operationId);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  // MOTIR-6746 — motir.co's read pages moved into the app (Story MOTIR-6171),
+  // so five reads have no first-party caller left. They are DEPRECATED, not
+  // removed: AMENDMENT 1 §D keeps every operation served as documented for the
+  // life of this MAJOR. Asserted in both directions — exactly these five, each
+  // naming its replacement, and no other operation touched.
+  const DEPRECATED: Record<string, string> = {
+    getPublicProjectBoard: 'app.motir.co/p/{identifier}/board',
+    listPublicProjectWorkItems: 'app.motir.co/p/{identifier}/items',
+    getPublicProjectTreeLevel: 'app.motir.co/p/{identifier}/tree',
+    getPublicProjectWorkItem: 'app.motir.co/p/{identifier}/items/{key}',
+    getPublicProjectRoadmapColumn: 'app.motir.co/p/{identifier}/roadmap',
+  };
+
+  it('marks exactly the five reads motir.co left deprecated, each naming its replacement', () => {
+    const operations = Object.values(doc['paths'] as Record<string, JsonObject>).flatMap(
+      (item) => Object.values(item) as JsonObject[],
+    );
+    const deprecated = operations.filter((o) => o['deprecated'] === true);
+    expect(deprecated.map((o) => o['operationId']).sort()).toEqual(Object.keys(DEPRECATED).sort());
+    for (const op of deprecated) {
+      const description = String(op['description']);
+      expect(description).toContain("Deprecated: motir.co's read pages moved into the app");
+      expect(description).toContain(DEPRECATED[String(op['operationId'])]);
+    }
+    for (const op of operations.filter((o) => o['deprecated'] !== true)) {
+      expect(op, String(op['operationId'])).not.toHaveProperty('deprecated');
+      expect(String(op['description'])).not.toContain('Deprecated:');
+    }
+  });
+
+  it('bumps the MINOR for the deprecations — the document grew, the wire did not move', () => {
+    expect(PUBLIC_CONTRACT_VERSION).toBe('1.6.0');
+  });
 });
 
 // MOTIR-3885 — the CONSUMER's side of the contract.

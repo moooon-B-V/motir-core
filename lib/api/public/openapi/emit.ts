@@ -168,7 +168,11 @@ function operationObject(operation: PublicOperation, components: Components): Js
   return {
     operationId: operation.operationId,
     summary: operation.summary,
-    description: operation.description,
+    description: operation.deprecated
+      ? `${operation.description}\n\nDeprecated: ${operation.deprecated.reason}. ` +
+        `Use ${operation.deprecated.replacement}.`
+      : operation.description,
+    ...(operation.deprecated ? { deprecated: true } : {}),
     ...(operation.parameters.length > 0
       ? { parameters: operation.parameters.map((p) => parameterObject(p, components)) }
       : {}),

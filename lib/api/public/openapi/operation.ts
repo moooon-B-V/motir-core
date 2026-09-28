@@ -113,6 +113,16 @@ export interface PublicOperation {
    * document can present — and declares the 401 instead.
    */
   sessionRequired?: boolean;
+  /**
+   * A DEPRECATED operation (MOTIR-6746): still served exactly as documented —
+   * its path, method, response fields and statuses all stand for the life of
+   * this MAJOR (`docs/decisions/public-surface-hosts.md` AMENDMENT 1 §D) — and
+   * marked so a consumer is told before it is ever removed. The emitter writes
+   * OpenAPI `deprecated: true` and appends a "Deprecated: <reason>. Use
+   * <replacement>." paragraph to the description, so a generated client
+   * surfaces both. Absent on every live operation.
+   */
+  deprecated?: { reason: string; replacement: string };
   /** Declared failures, in status order. */
   errors: readonly PublicErrorResponse[];
 }

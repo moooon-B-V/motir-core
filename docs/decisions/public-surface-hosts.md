@@ -87,6 +87,9 @@ arrangement rather than a side effect of it.
 > **Amended 2026-09-27 (AMENDMENT 7, MOTIR-6648):** the `/p/*` row splits — the
 > Visitor's signed-in READ views at `/p/<identifier>/<view>` are served by
 > `motir-core` on `app.motir.co`; the landing and act pages stay on `motir.co`.
+>
+> **Amended 2026-09-28 (AMENDMENT 8, MOTIR-6746):** motir.co's read pages now
+> 308 to those views, and its request board is retired.
 
 ### Where the line comes from — measured, not asserted
 
@@ -319,6 +322,9 @@ says _this is the hosted service_, and nothing else is allowed to imply it.
 
 > **Amended 2026-09-27 (AMENDMENT 7 §C, MOTIR-6648):** `app.motir.co` does not
 > index `/p/` — its Visitor views carry `noindex` and are disallowed by view.
+>
+> **Amended 2026-09-28 (AMENDMENT 8 §B, MOTIR-6746):** `motir.co`'s sitemap lists
+> each project's page and changelog only — its read pages are redirects now.
 
 This is the arrangement that needs no cross-repo list, which is the whole reason
 it is stated. A single sitemap describing surfaces served by two applications
@@ -1739,3 +1745,79 @@ existed.
 - **The Visitor's reads and verdicts** — the key set, the hidden set, the
   name-only rule, the consent record — are MOTIR-6642, MOTIR-6645, MOTIR-6646,
   MOTIR-6652, MOTIR-6665 and MOTIR-6666, and `visitor-sign-in-and-records.md`.
+
+---
+
+## AMENDMENT 8 — motir.co's read pages redirect into the app, its request board is retired, and the five reads it no longer makes are DEPRECATED, not removed (MOTIR-6746, 2026-09-28)
+
+- **Status:** Accepted with Story MOTIR-6171. The redirects shipped as MOTIR-6743
+  (`motir-marketing`); the deprecation ships with this amendment.
+- **Cites:** AMENDMENT 1 §D (the deprecation policy); AMENDMENT 7 (the Visitor
+  views this redirects to); `docs/decisions/public-request-board-retired.md`
+  (MOTIR-6744, the request board's retirement).
+
+### §A — motir.co's read pages are permanent redirects
+
+AMENDMENT 7 split the `/p/*` row: the Visitor's signed-in READ views are served
+here, on `app.motir.co`. This completes the split from the other side. On
+`motir.co` — and on every customer-owned address, which the host router rewrites
+onto the same tree — the five read page shapes answer a **permanent redirect
+(308)** to the same path on `app.motir.co`:
+
+| `motir.co` path (and a tenant host's) | redirects to                              |
+| ------------------------------------- | ----------------------------------------- |
+| `/p/<identifier>/board`               | `app.motir.co/p/<identifier>/board`       |
+| `/p/<identifier>/items`               | `app.motir.co/p/<identifier>/items`       |
+| `/p/<identifier>/tree`                | `app.motir.co/p/<identifier>/tree`        |
+| `/p/<identifier>/roadmap`             | `app.motir.co/p/<identifier>/roadmap`     |
+| `/p/<identifier>/items/<KEY>`         | `app.motir.co/p/<identifier>/items/<KEY>` |
+
+The redirect reads nothing first, drops the query string and always names the
+app's origin, never the tenant host. There, AMENDMENT 7's route tree does the
+rest: sign-in, the one-time consent, and a member sent into their own view.
+
+**The Roadmap was the public feature-request board** and is retired, not moved
+(`public-request-board-retired.md` Decision 1). Its pending requests become the
+Visitor's **Requested features** view in the app (Decision 2). What stays on
+`motir.co`, anonymous and unchanged: the project page, follow, subscribe, the
+changelog and its feed, the request doorway and each request's page with its
+upvote and comment hand-offs (AMENDMENT 4 rows 2–6).
+
+### §B — §6: motir.co's sitemap lists no read page
+
+Each project's entry in `motir.co`'s sitemap — and in each tenant host's — is its
+project page and its changelog. A sitemap listing a URL that redirects asks a
+crawler to index an address that is not a page.
+
+### §C — The five reads are DEPRECATED, not removed
+
+`motir.co` no longer calls five of this contract's operations:
+`getPublicProjectBoard`, `listPublicProjectWorkItems`, `getPublicProjectTreeLevel`,
+`getPublicProjectWorkItem` and `getPublicProjectRoadmapColumn` (both arms). No
+page or component in `motir-core` calls their routes either; the in-app Visitor
+views read through their own doors (MOTIR-6647).
+
+That is not a licence to delete them. §D promises that for as long as
+`PUBLIC_CONTRACT_VERSION` reads `1.x.y`, _"every operation in the document keeps
+its path, its method, its declared response fields … and the status it returns"_;
+the document is published at `app.motir.co/api/openapi/public.json`, so a third
+party may call these operations, and `motir.co` ceasing to is evidence about one
+consumer. So each is marked `deprecated: true` in the document, with a
+_"Deprecated: … Use …"_ paragraph naming its replacement — the signed-in Visitor
+view at `app.motir.co/p/{identifier}/<view>` — and keeps answering exactly as
+documented. That is a MINOR (`1.5.0` → `1.6.0`): one optional field per
+operation, and nothing on the wire moved.
+
+### §D — The `/act` route's `vote` intent keeps working, with no motir.co emitter
+
+AMENDMENT 4 row 4's roadmap-card VOTE hand-off left with the board. `app/act`
+still accepts `intent=vote` — an old link keeps landing — but `motir.co` no longer
+emits it. The request page's `upvote` and `comment` hand-offs are unchanged.
+
+### §E — What this amendment does NOT decide
+
+- **When the five operations are removed.** That is a `2.x` of this contract,
+  which arrives ALONGSIDE `1.x` under §D and which nobody has decided to cut.
+- **Retiring `intent=vote`** on `/act`. It costs nothing to keep.
+- **The Requested features view** — its read, page and design are MOTIR-6768,
+  MOTIR-6769 and MOTIR-6767, under `public-request-board-retired.md`.

@@ -84,8 +84,18 @@
  *   moved**, and every request that has a defined answer today keeps exactly
  *   that answer — a project with no claimed address reports its `motir.co`
  *   URL as `primary`, which is the address it already had.
+ * - `1.6.0` — MOTIR-6746 DEPRECATES five reads motir.co no longer calls, because
+ *   its read pages moved into the app (Story MOTIR-6171; AMENDMENT 8):
+ *   `getPublicProjectBoard`, `listPublicProjectWorkItems`,
+ *   `getPublicProjectTreeLevel`, `getPublicProjectWorkItem` and
+ *   `getPublicProjectRoadmapColumn`. Each is marked `deprecated: true` and names
+ *   its replacement, the signed-in Visitor view. A MINOR, not a MAJOR: the
+ *   document gains one optional field per operation and NOTHING on the wire
+ *   moved — every path, method, response field and status is served exactly as
+ *   before, and stays so until a 2.x arrives alongside (§D). Removing them is
+ *   that MAJOR's decision, which nobody has taken.
  */
-export const PUBLIC_CONTRACT_VERSION = '1.5.0';
+export const PUBLIC_CONTRACT_VERSION = '1.6.0';
 
 /** The MAJOR, for the document's own identity. */
 export const PUBLIC_API_MAJOR = 1;
