@@ -38,6 +38,8 @@ import { homeService } from '@/lib/services/homeService';
 import { pullRequestApprovalMembersService } from '@/lib/services/pullRequestApprovalMembersService';
 import { pullRequestMergeService } from '@/lib/services/pullRequestMergeService';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
+import { resettleStandingExit, settleUnlandedOutcome } from '@/lib/services/mergeQueueExitService';
+import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -659,5 +661,114 @@ describe('the seam — writer to the DTO the item page reads', () => {
       failingCheckName: 'TypeScript',
       failingCheckConclusion: 'timed_out',
     });
+  });
+});
+
+// ⚠️ THE RE-JUDGE'S OWN GUARDS, called directly. Every writer above reaches
+// `resettleStandingExit` only after its own filter, so these arms are unreachable
+// through a webhook and were the coverage floor's gap. Each is still a behaviour a
+// second caller would rely on: a re-judge that finds nothing to do must move nothing.
+describe('resettleStandingExit, called directly — each guard moves nothing it should not', () => {
+  /** A held exit whose check has since been recorded `cancelled`, not yet re-judged. */
+  async function heldWithCancelled(email: string) {
+    const out = await approvedIntoTheQueue(email);
+    await checksRequested(out.s, 7);
+    await eject(out.s, 7, 'sha-web', 'CI_FAILURE');
+    expect(await statusOf(out.item.id)).toBe('implemented');
+    const exit = await latestExit(out.s, 7);
+    await adminDb.githubPullRequestQueueExit.update({
+      where: { id: exit.id },
+      data: { failingCheckName: 'TypeScript', failingCheckConclusion: 'cancelled' },
+    });
+    return out;
+  }
+  const resettle = async (s: Scenario, number: number) => {
+    const pullRequestId = (await prRow(s, number)).id;
+    // As the reconcile tick calls it: the system context, bound to the workspace.
+    return withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, s.workspace.id);
+      return resettleStandingExit({ pullRequestId, workspaceId: s.workspace.id, tx });
+    });
+  };
+
+  it('a pull request with no exit is not re-judged', async () => {
+    const { s, item } = await approvedIntoTheQueue('direct-no-exit@example.com');
+    expect(await resettle(s, 7)).toEqual({
+      rejudged: false,
+      moved: [],
+      reasked: [],
+      actorId: null,
+    });
+    expect(await statusOf(item.id)).toBe('approved');
+  });
+
+  it('a second call after the re-judge is a no-op — idempotent', async () => {
+    const { s, item } = await drive('direct-twice@example.com', 'B', 'cancelled');
+    expect(await statusOf(item.id)).toBe('in_review');
+    expect(await resettle(s, 7)).toMatchObject({ rejudged: false, moved: [] });
+    expect(await awaiting(item.id)).toHaveLength(1);
+  });
+
+  it('an exit that no longer stands at the head is left a failure', async () => {
+    const { s, item } = await heldWithCancelled('direct-head@example.com');
+    await green(s, 'web', 7, 'sha-web-2');
+    const status = await statusOf(item.id);
+    expect(await resettle(s, 7)).toMatchObject({ rejudged: false });
+    expect(await latestExit(s, 7)).toMatchObject({ disposition: 'failure' });
+    expect(await statusOf(item.id)).toBe(status);
+  });
+
+  it('a pull request delivering into an auto project is left a failure', async () => {
+    const s = await makeScenario('direct-auto@example.com', 'auto');
+    const item = await card(s, [['web', 7]]);
+    await green(s, 'web', 7, 'sha-auto');
+    await checksRequested(s, 7);
+    await eject(s, 7, 'sha-auto', 'CI_FAILURE');
+    const exit = await latestExit(s, 7);
+    await adminDb.githubPullRequestQueueExit.update({
+      where: { id: exit.id },
+      data: { failingCheckName: 'TypeScript', failingCheckConclusion: 'cancelled' },
+    });
+    expect(await resettle(s, 7)).toMatchObject({ rejudged: false });
+    expect(await latestExit(s, 7)).toMatchObject({ disposition: 'failure' });
+    expect(await gates(item.id)).toEqual([]);
+  });
+
+  it('with no manager to act as, the exit is re-judged but no card is moved', async () => {
+    const { s, item } = await heldWithCancelled('direct-no-owner@example.com');
+    await adminDb.workspaceMembership.updateMany({
+      where: { workspaceId: s.workspace.id },
+      data: { workspaceRole: 'member' },
+    });
+    expect(await resettle(s, 7)).toEqual({ rejudged: true, moved: [], reasked: [], actorId: null });
+    expect(await latestExit(s, 7)).toMatchObject({ disposition: 'neutral' });
+    expect(await statusOf(item.id)).toBe('implemented');
+  });
+
+  it('a card a person has since moved is not moved back', async () => {
+    const { s, item } = await heldWithCancelled('direct-moved@example.com');
+    await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'in_progress' } });
+    expect(await resettle(s, 7)).toMatchObject({ rejudged: true, moved: [], reasked: [] });
+    expect(await statusOf(item.id)).toBe('in_progress');
+    expect(await awaiting(item.id)).toEqual([]);
+  });
+
+  it('a MARKED card stays where it is, and nothing is asked', async () => {
+    const { s, item } = await heldWithCancelled('direct-marked@example.com');
+    await adminDb.workItem.update({ where: { id: item.id }, data: { obsolescence: 'outdated' } });
+    expect(await resettle(s, 7)).toMatchObject({ rejudged: true, moved: [], reasked: [] });
+    expect(await statusOf(item.id)).toBe('implemented');
+    expect(await awaiting(item.id)).toEqual([]);
+  });
+
+  it('settleUnlandedOutcome does nothing for a landed exit', async () => {
+    const { s, item } = await heldWithCancelled('direct-landed@example.com');
+    const row = await itemRow(item.id);
+    const settled = await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, s.workspace.id);
+      return settleUnlandedOutcome(row, 'landed', s.ctx, tx);
+    });
+    expect(settled).toEqual({ transition: null, raised: false });
+    expect(await statusOf(item.id)).toBe('implemented');
   });
 });
