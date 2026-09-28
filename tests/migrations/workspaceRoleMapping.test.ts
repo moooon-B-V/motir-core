@@ -46,6 +46,19 @@ function literalSet(sql: string, role: 'admin' | 'member' | 'viewer'): string[] 
 
 const sorted = (s: Iterable<string>) => [...s].sort();
 
+/**
+ * Keys the built-in roles gained AFTER this migration was written. A migration is
+ * a point in time and is not rewritten, so its literals lack them; the constant
+ * is asserted to be exactly the literal plus these (the same list
+ * `workspaceRoleNeverWider.test.ts` carries).
+ * MOTIR-6872 — `instance:use` (agent instances), granted to member and above.
+ */
+const KEYS_ADDED_AFTER_MIGRATION: Record<'admin' | 'member' | 'viewer', string[]> = {
+  admin: ['instance:use'],
+  member: ['instance:use'],
+  viewer: [],
+};
+
 async function runMigration(): Promise<void> {
   await runMigrationFile('20260926100100_workspace_role_mapping');
 }
@@ -68,7 +81,9 @@ describe('the literal key sets are a snapshot of BUILTIN_ROLE_PERMISSIONS', () =
   it.each(['admin', 'member', 'viewer'] as const)(
     '%s — the literal EQUALS the constant',
     (role) => {
-      expect(literalSet(SQL, role)).toEqual(sorted(BUILTIN_ROLE_PERMISSIONS[role]));
+      expect(sorted([...literalSet(SQL, role), ...KEYS_ADDED_AFTER_MIGRATION[role]])).toEqual(
+        sorted(BUILTIN_ROLE_PERMISSIONS[role]),
+      );
     },
   );
 
