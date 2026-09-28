@@ -18,6 +18,8 @@ export interface FailingCheck {
   name: string;
   url: string;
   at: Date;
+  /** The check's RAW host conclusion (MOTIR-6846), written beside the name. */
+  conclusion: string;
 }
 
 export const githubMergeQueueAttemptRepository = {
@@ -55,7 +57,12 @@ export const githubMergeQueueAttemptRepository = {
   ): Promise<number> {
     const result = await tx.githubMergeQueueAttempt.updateMany({
       where: { id: attemptId, failingCheckName: null },
-      data: { failingCheckName: check.name, failingCheckUrl: check.url, failedAt: check.at },
+      data: {
+        failingCheckName: check.name,
+        failingCheckUrl: check.url,
+        failingCheckConclusion: check.conclusion,
+        failedAt: check.at,
+      },
     });
     return result.count;
   },

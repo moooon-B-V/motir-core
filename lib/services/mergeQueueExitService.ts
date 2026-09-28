@@ -215,6 +215,7 @@ export const mergeQueueExitService = {
           exitedAt: input.now ?? new Date(),
           failingCheckName: attempt?.failingCheckName ?? null,
           failingCheckUrl: attempt?.failingCheckUrl ?? null,
+          failingCheckConclusion: attempt?.failingCheckConclusion ?? null,
         },
         tx,
       );

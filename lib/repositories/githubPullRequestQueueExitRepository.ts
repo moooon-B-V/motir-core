@@ -23,6 +23,8 @@ export interface QueueExitCreateInput {
    *  one (MOTIR-5633). */
   failingCheckName?: string | null;
   failingCheckUrl?: string | null;
+  /** That check's RAW host conclusion (MOTIR-6846). */
+  failingCheckConclusion?: string | null;
 }
 
 export const githubPullRequestQueueExitRepository = {
@@ -72,12 +74,16 @@ export const githubPullRequestQueueExitRepository = {
    *  path → `tx`. */
   async setFailingCheckIfUnset(
     exitId: string,
-    check: { name: string; url: string },
+    check: { name: string; url: string; conclusion: string | null },
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const result = await tx.githubPullRequestQueueExit.updateMany({
       where: { id: exitId, disposition: 'failure', failingCheckName: null },
-      data: { failingCheckName: check.name, failingCheckUrl: check.url },
+      data: {
+        failingCheckName: check.name,
+        failingCheckUrl: check.url,
+        failingCheckConclusion: check.conclusion,
+      },
     });
     return result.count;
   },

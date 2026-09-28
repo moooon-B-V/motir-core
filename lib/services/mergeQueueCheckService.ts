@@ -125,7 +125,12 @@ export const mergeQueueCheckService = {
         tx,
       );
       if (attempts.length === 0) return none;
-      const named = { name: check.name, url: check.url, at: check.completedAt };
+      const named = {
+        name: check.name,
+        url: check.url,
+        at: check.completedAt,
+        conclusion: check.conclusion,
+      };
       const result = { ...none };
       for (const attempt of attempts) {
         result.attempts += await githubMergeQueueAttemptRepository.setFailingCheckIfUnset(
@@ -155,7 +160,11 @@ export const mergeQueueCheckService = {
         );
         result.exits += await githubPullRequestQueueExitRepository.setFailingCheckIfUnset(
           exit.id,
-          { name: current!.failingCheckName!, url: current!.failingCheckUrl! },
+          {
+            name: current!.failingCheckName!,
+            url: current!.failingCheckUrl!,
+            conclusion: current!.failingCheckConclusion,
+          },
           tx,
         );
       }
