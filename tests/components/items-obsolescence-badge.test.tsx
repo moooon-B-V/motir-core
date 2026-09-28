@@ -88,6 +88,7 @@ function listRow(obsolescence: WorkItemObsolescenceDto | null, status = 'done'):
     status,
     statusLabel: status === 'done' ? 'Done' : 'To Do',
     statusCategory: status === 'done' ? 'done' : 'todo',
+    fixReason: null,
     ciState: null,
     obsolescence,
     assigneeId: null,

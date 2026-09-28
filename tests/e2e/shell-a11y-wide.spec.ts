@@ -279,11 +279,11 @@ test.describe('@a11y widened route coverage', () => {
     // this call.
     await sweep(page, '/backlog (populated)', reports);
 
-    // ── /triage — populated queue ────────────────────────────────────────────
-    await page.goto('/triage');
-    await expect(page.getByRole('heading', { name: 'Triage', level: 1 })).toBeVisible();
+    // ── /requested-features — populated queue ───────────────────────────────
+    await page.goto('/requested-features');
+    await expect(page.getByRole('heading', { name: 'Requested features', level: 1 })).toBeVisible();
     await expect(page.getByText('Cannot upload an avatar over 2 MB')).toBeVisible();
-    await sweep(page, '/triage (populated)', reports);
+    await sweep(page, '/requested-features (populated)', reports);
 
     // ── /settings/account — the area root REDIRECTS to its first pane
     //    (Language & region); `goto` follows it, and the anchor is the pane's

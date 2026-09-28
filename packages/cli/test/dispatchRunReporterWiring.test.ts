@@ -156,11 +156,11 @@ describe('BOTH per-card pipelines report, and they report the same thing', () =>
     const legKinds = leg.reporter.events.map((e) => e.kind);
     const oneKinds = one.reporter.events.map((e) => e.kind);
 
-    // Both spawn and both report the spawn, the exit and the settlement. The
-    // LEG additionally reports its own two structural moments (`checkout_ready`
-    // and the typed `leg_verdict`), which `dispatchOne` does not have because it
-    // materializes elsewhere — so the shared core is compared rather than the
-    // full sequence, and the shared core is what a card's timeline is made of.
+    // Both spawn and both report the spawn, the exit and the settlement. Both
+    // also name the leg's checkout and branches (`checkout_ready`, MOTIR-6539);
+    // the LEG additionally reports its typed `leg_verdict`, which `dispatchOne`
+    // settles as `card_settled` instead — so the shared core is compared rather
+    // than the full sequence, and the shared core is what a timeline is made of.
     const shared = ['prompt_issued', 'agent_started', 'agent_exited'];
     expect(legKinds.filter((k) => shared.includes(k))).toEqual(shared);
     expect(oneKinds.filter((k) => shared.includes(k))).toEqual(shared);

@@ -4,6 +4,7 @@ import {
   HostedAgentContainerUnpricedError,
 } from '@/lib/ciFleet/errors';
 import { fleetCeilingService, type FleetSlotVerdict } from '@/lib/services/fleetCeilingService';
+import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
 import {
   OrchestratorImageUnpullableError,
   getOrchestrator,
@@ -30,6 +31,7 @@ import {
 } from '@/lib/jobs/supervision/inProcessSteps';
 import {
   advanceSupervision,
+  deferSettledSupervision,
   inMemorySupervisionStore,
   type SupervisionStore,
   type SupervisionTerminalReason,
@@ -76,9 +78,19 @@ import {
 //   4. A RUN OVER A CARD SET MAY SPAN REPOSITORIES (MOTIR-1790), so the settle can
 //      attribute the handle's seconds across repo SLICES (MOTIR-3255's shape).
 //
-// ⚠️ NO BILLING, NO ENTITLEMENT, NO CREDIT, AND NO `isMeta` BRANCH. Hosting cost is
-// an INPUT to the agent lane's margin, never a billed line; the meter measures
+// ⚠️ THE METER STAYS COGS — NO ENTITLEMENT, NO CREDIT MATH AND NO `isMeta` BRANCH
+// HERE. What this seam writes is what the machine cost MOTIR, and it measures
 // Motir's own org like any tenant (`code-graph-index-fleet.md` §9).
+//
+// The CUSTOMER'S charge for the same machine time (MOTIR-6514,
+// `docs/decisions/hosted-agent-machine-charge.md`) is a SEPARATE READER of the
+// settled seconds, `hostedRunChargeService`: this file only CALLS it, once a settle
+// that names a run has committed, as its own memoized step after the settle step
+// ({@link hostedAgentChargeStepId}). The rate, the rounding and the motir-ai call
+// all live there, so a price never feeds back into the meter and the meter's cost
+// figure never becomes a price. A charge that cannot reach motir-ai never holds
+// the teardown — the container is gone and its slot released before it runs — and
+// is retried on the next pass until it lands.
 
 /** This service boots HOSTED-AGENT containers and nothing else. */
 const HOSTED_AGENT_WORKLOAD = 'hosted_agent' satisfies FleetWorkloadKind;
@@ -96,6 +108,27 @@ export function hostedAgentBootStepId(dispatchId: string): string {
 }
 export function hostedAgentSettleStepId(dispatchId: string): string {
   return `hosted-agent-settle:${dispatchId}`;
+}
+/** The machine-time charge that follows a settle naming a run (MOTIR-6514). A
+ *  step of its own, AFTER the settle step, so a charge that could not land is
+ *  retried without the settle's side effects repeating. */
+export function hostedAgentChargeStepId(dispatchId: string): string {
+  return `hosted-agent-charge:${dispatchId}`;
+}
+
+/**
+ * How long a pass waits before retrying a machine charge that could not reach
+ * motir-ai. A minute, the supervision's own ceiling cadence: the container is
+ * already gone, so waiting costs nothing but the charge's latency.
+ */
+export const HOSTED_AGENT_CHARGE_RETRY_MS = 60_000;
+
+/** Thrown INSIDE the charge step so the engine does not memoize a failure. */
+class HostedAgentChargeNotLandedError extends Error {
+  constructor(readonly detail: string) {
+    super(`the hosted run's machine charge did not land: ${detail}`);
+    this.name = 'HostedAgentChargeNotLandedError';
+  }
 }
 
 /** How long a container has to reach a running state before it is written off as
@@ -186,7 +219,33 @@ export interface HostedAgentSupervisionOptions {
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
   supervisionStore?: SupervisionStore;
+  /**
+   * A session the caller ALREADY booted (MOTIR-690). The hosted start path boots
+   * the container in its own request, because the boot's env carries the run's
+   * two secrets and a job payload or a step memo is a database row: neither may
+   * hold them. Given this, {@link advance}'s boot step memoizes THIS session
+   * instead of booting, so the supervision still replays exactly one boot.
+   */
+  booted?: HostedAgentSession;
+  /**
+   * An extra verdict read before each poll: a failure detail when the run must
+   * end now, `null` while it may go on. The hosted supervisor's STALL read
+   * (MOTIR-690) — no run event inside the stall window. A detail settles the
+   * container through the ordinary settle (`job_timed_out`), so nothing about the
+   * teardown differs from a timeout. A read that throws is treated as alive: an
+   * unanswered question never ends a paying run.
+   *
+   * A verdict may instead name `gate_revoked` (MOTIR-6450): a person cancelled the
+   * run, the end path already closed it and revoked its credentials, and the
+   * supervisor — the one owner of this container — tears it down at this poll
+   * with the cancel's own teardown reason.
+   */
+  liveness?: (session: HostedAgentSession, now: Date) => Promise<HostedAgentLivenessVerdict>;
 }
+
+/** What {@link HostedAgentSupervisionOptions.liveness} answers: `null` while the
+ *  run may go on; a detail (settled `job_timed_out`); or a cancel. */
+export type HostedAgentLivenessVerdict = string | { reason: 'gate_revoked'; detail: string } | null;
 
 /**
  * ONE hosted-agent container — everything the boot needs, already resolved by
@@ -202,6 +261,20 @@ export interface HostedAgentContainerRequest {
   /** The run this container belongs to — the slot's owner, for an
    *  ownership-checked release. */
   readonly runId: string;
+  /**
+   * THE `DispatchRun.id` THIS CONTAINER SERVES (MOTIR-6448) — stamped on every
+   * cost record the container produces, checkpoint and settle alike, so the fleet
+   * meter row names its run and the run's machine time is readable by its id
+   * (`docs/decisions/hosted-agent-run.md` §1: one id, everywhere).
+   *
+   * ⚠️ A REQUIRED KEY WHOSE VALUE MAY BE NULL, and null has exactly one caller:
+   * the meter REHEARSAL (`scripts/rehearseHostedAgentMeter.ts`), which boots a
+   * stand-in that serves no run. The column is a foreign key onto `dispatch_run`,
+   * so a synthetic id would be refused and the whole cost row lost with it; an
+   * honest null writes the row unnamed. Every real hosted run (MOTIR-690's start
+   * path) passes its `DispatchRun.id`, and omitting the key is a compile error.
+   */
+  readonly dispatchRunId: string | null;
   readonly organizationId: string;
   readonly workspaceId: string;
   readonly projectId: string;
@@ -247,6 +320,8 @@ export interface HostedAgentSession {
   readonly bootedAt: string;
   readonly dispatchId: string;
   readonly runId: string;
+  /** As {@link HostedAgentContainerRequest.dispatchRunId}. */
+  readonly dispatchRunId: string | null;
   readonly timeoutSeconds: number;
   readonly size: ContainerSize;
   readonly attribution: {
@@ -354,6 +429,19 @@ function orgScopedWhenSliced<T extends ContainerUsage | ContainerAccrual>(
   session: HostedAgentSession,
 ): T {
   return session.slices ? { ...record, repoFullName: null } : record;
+}
+
+/**
+ * Stamp the dispatch run onto a cost record (MOTIR-6448). Applied identically to the
+ * checkpoint and the settle, so the row's first write already names its run and the
+ * settle keeps it. `?? null` because a session memoized before this field existed is
+ * rebuilt from its memo without it; such a row stays unnamed rather than failing.
+ */
+function forDispatchRun<T extends ContainerUsage | ContainerAccrual>(
+  record: T,
+  session: HostedAgentSession,
+): T {
+  return { ...record, dispatchRunId: session.dispatchRunId ?? null };
 }
 
 function handleOf(session: HostedAgentSession): ContainerHandle {
@@ -485,6 +573,7 @@ export const hostedAgentContainerService = {
         bootedAt: now().toISOString(),
         dispatchId: request.dispatchId,
         runId: request.runId,
+        dispatchRunId: request.dispatchRunId,
         timeoutSeconds: request.timeoutSeconds,
         size: request.size,
         attribution: {
@@ -570,14 +659,17 @@ export const hostedAgentContainerService = {
     // nothing; `recordContainerAccrual` never throws, so this path still cannot.
     if (startedAt) {
       await recordContainerAccrual(
-        orgScopedWhenSliced(
-          buildContainerAccrual({
-            handle: handleOf(session),
-            attribution: hostedAgentUsageAttribution(session),
-            createdAt: new Date(session.handle.createdAt),
-            startedAt: new Date(startedAt),
-            observedAt: now(),
-          }),
+        forDispatchRun(
+          orgScopedWhenSliced(
+            buildContainerAccrual({
+              handle: handleOf(session),
+              attribution: hostedAgentUsageAttribution(session),
+              createdAt: new Date(session.handle.createdAt),
+              startedAt: new Date(startedAt),
+              observedAt: now(),
+            }),
+            session,
+          ),
           session,
         ),
       );
@@ -632,9 +724,10 @@ export const hostedAgentContainerService = {
       };
     }
 
-    const recorded: ContainerUsage = session.slices
-      ? { ...orgScopedWhenSliced(usage, session), slices: session.slices }
-      : usage;
+    const recorded: ContainerUsage = forDispatchRun(
+      session.slices ? { ...orgScopedWhenSliced(usage, session), slices: session.slices } : usage,
+      session,
+    );
     await recordContainerUsage(recorded);
 
     await fleetCeilingService.release(HOSTED_AGENT_WORKLOAD, session.dispatchId, session.runId);
@@ -666,8 +759,11 @@ export const hostedAgentContainerService = {
   ): Promise<HostedAgentContainerOutcome> {
     const steps = options.steps ?? INLINE_STEPS;
 
+    const preBooted = options.booted;
     const booted = await steps.run(hostedAgentBootStepId(request.dispatchId), () =>
-      this.boot(request, options),
+      preBooted
+        ? Promise.resolve<HostedAgentBootResult>({ phase: 'supervising', session: preBooted })
+        : this.boot(request, options),
     );
     if (booted.phase === 'terminal') return booted.outcome;
     const { session } = booted;
@@ -693,6 +789,19 @@ export const hostedAgentContainerService = {
         ...(options.now ? { now: options.now } : {}),
         ...(options.supervisionStore ? { store: options.supervisionStore } : {}),
         poll: async (state) => {
+          const stalled = await livenessVerdict(session, options);
+          if (stalled) {
+            return {
+              done: true,
+              verdict: {
+                done: true,
+                reason: typeof stalled === 'string' ? 'job_timed_out' : stalled.reason,
+                startedAt: state.startedAt ? state.startedAt.toISOString() : null,
+                exitCode: null,
+                failureDetail: typeof stalled === 'string' ? stalled : stalled.detail,
+              },
+            };
+          }
           const polled = await this.poll(
             session,
             {
@@ -724,7 +833,44 @@ export const hostedAgentContainerService = {
           ),
       },
     );
+
+    // THE CHARGE — after the settle step, never inside it. Only a SETTLED
+    // container that served a run is charged: CI and index containers never
+    // reach this seam, and the rehearsal's stand-in names no run.
+    if (result.outcome.outcome === 'settled' && session.dispatchRunId !== null) {
+      await this.chargeSettledRun(session.dispatchId, session.dispatchRunId, steps, options);
+    }
     return result.outcome;
+  },
+
+  /**
+   * Charge a settled run's machine time, as a memoized step. A charge that did
+   * not land throws inside the step — so the failure is NOT memoized — and the
+   * pass is deferred: the next one replays boot and settle from their memos and
+   * re-executes only this step. A charge that landed, or that was decided not to
+   * happen, is memoized, so a replayed pass never calls motir-ai again.
+   */
+  async chargeSettledRun(
+    dispatchId: string,
+    dispatchRunId: string,
+    steps: MemoizingSteps,
+    options: HostedAgentSupervisionOptions,
+  ): Promise<void> {
+    const now = options.now ?? ((): Date => new Date());
+    try {
+      await steps.run(hostedAgentChargeStepId(dispatchId), async () => {
+        const charge = await hostedRunChargeService.chargeMachineTime(dispatchRunId, { now });
+        if (charge.outcome === 'retryable')
+          throw new HostedAgentChargeNotLandedError(charge.detail);
+        return charge;
+      });
+    } catch (err) {
+      if (!(err instanceof HostedAgentChargeNotLandedError)) throw err;
+      deferSettledSupervision(
+        new Date(now().getTime() + HOSTED_AGENT_CHARGE_RETRY_MS),
+        `hosted-agent supervision ${dispatchId}: settled, machine charge pending (${err.detail})`,
+      );
+    }
   },
 
   /**
@@ -747,6 +893,24 @@ export const hostedAgentContainerService = {
     );
   },
 };
+
+/** The caller's liveness verdict, or `null` — never a throw (see the option). */
+async function livenessVerdict(
+  session: HostedAgentSession,
+  options: HostedAgentSupervisionOptions,
+): Promise<HostedAgentLivenessVerdict> {
+  if (!options.liveness) return null;
+  const now = options.now ?? ((): Date => new Date());
+  try {
+    return await options.liveness(session, now());
+  } catch (err) {
+    console.warn('[hostedAgentContainerService] a liveness read failed — treated as alive', {
+      containerId: session.handle.id,
+      detail: detailOf(err),
+    });
+    return null;
+  }
+}
 
 /** The `failureDetail` a supervision writes when it settles for a reason of its
  *  own — `job_timed_out` covers all three, so the detail is where they differ. */

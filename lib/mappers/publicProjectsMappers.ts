@@ -16,6 +16,7 @@ import type {
   PublicWorkItemTreeRowDto,
 } from '@/lib/dto/publicProjects';
 import type { PublicProjectAddressesDto } from '@/lib/dto/publicAddresses';
+import type { VisitorPendingRequestDto } from '@/lib/dto/publicRequests';
 import type {
   PublicChangelogRow,
   PublicRequestMatchRow,
@@ -311,5 +312,29 @@ export function toPublicChangelogEntryDto(row: PublicChangelogRow): PublicChange
     // Only when the read projected it — `undefined` keeps the key off the page's
     // JSON entirely rather than shipping an explicit null nobody reads.
     ...(row.descriptionMd === undefined ? {} : { descriptionMd: row.descriptionMd }),
+  };
+}
+
+/**
+ * Map a pending-request row → what a VISITOR reads in Requested features
+ * (MOTIR-6768). The same public projection as {@link toPublicRoadmapCardDto},
+ * plus the submitter by NAME ONLY (`personName`, MOTIR-6646 — never an email)
+ * and when the request was filed. `submitterName` is resolved by the service,
+ * because the row carries only the submitter's id.
+ */
+export function toVisitorPendingRequestDto(
+  row: PublicRoadmapRow,
+  submitterName: string,
+): VisitorPendingRequestDto {
+  return {
+    id: row.id,
+    identifier: row.identifier,
+    key: row.key,
+    title: row.title,
+    kind: row.kind,
+    submitterName,
+    createdAt: row.createdAt.toISOString(),
+    voteCount: row.voteCount,
+    voted: Boolean(row.voted),
   };
 }

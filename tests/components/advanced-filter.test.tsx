@@ -1212,3 +1212,89 @@ describe('the Obsolescence condition row', () => {
     }
   });
 });
+
+// Story MOTIR-6589 · MOTIR-6609 — the *To fix* condition row, as drawn in
+// `design/work-items/to-fix--tag-and-banner.mock.html` panel 7: the four reasons
+// in PRIORITY order, the empty pair worded *is any* / *is none*, and a chip that
+// names the values in en and zh.
+describe('the To fix condition row (MOTIR-6609)', () => {
+  function pickToFix() {
+    renderBuilder();
+    openBuilder();
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
+    const row = screen.getByRole('group', { name: 'Condition 1' });
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Field' }));
+    fireEvent.click(screen.getByRole('option', { name: 'To fix' }));
+    return row;
+  }
+
+  it('offers the four reasons in priority order and emits the AST', () => {
+    const row = pickToFix();
+    fireEvent.focus(within(row).getByRole('combobox', { name: 'To fix values' }));
+    const options = screen.getAllByRole('option').map((o) => o.textContent?.trim());
+    expect(options).toEqual([
+      'Failed in the merge queue',
+      'Conflicts with its base branch',
+      'CI failed',
+      'Changes requested',
+    ]);
+    fireEvent.click(screen.getByRole('option', { name: 'Conflicts with its base branch' }));
+    expect(lastPushedAst()).toEqual({
+      combinator: 'and',
+      conditions: [{ field: 'fixReason', operator: 'is_any_of', value: ['conflicted'] }],
+    });
+  });
+
+  it('words the empty pair as IS ANY / IS NONE, not "is empty"', () => {
+    const row = pickToFix();
+    fireEvent.click(within(row).getByRole('combobox', { name: 'Operator' }));
+    expect(screen.getByRole('option', { name: 'is any' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'is none' })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: 'is empty' })).toBeNull();
+    expect(screen.queryByRole('option', { name: 'is not empty' })).toBeNull();
+  });
+
+  it.each([
+    ['en', 'To fix', 'is any of Failed in the merge queue, CI failed'],
+    ['zh', '待修复', 'CI 未通过'],
+  ] as const)('the applied chip names the field and its values (%s)', (locale, field, text) => {
+    renderWithIntl(
+      <AdvancedFilterSummary
+        ast={{
+          combinator: 'and',
+          conditions: [
+            { field: 'fixReason', operator: 'is_any_of', value: ['queue_failed', 'ci_failed'] },
+          ],
+        }}
+        statuses={STATUSES}
+        members={MEMBERS}
+        sprints={SPRINTS}
+        customFields={CUSTOM_FIELDS}
+        components={COMPONENTS}
+        referencedLabels={REFERENCED_LABELS}
+      />,
+      locale === 'zh' ? { locale, messages: zhMessages } : {},
+    );
+    expect(screen.getByText(field)).toBeTruthy();
+    expect(document.body.textContent).toContain(text);
+  });
+
+  it('the applied chip reads "To fix is any" for the not-empty operator', () => {
+    renderWithIntl(
+      <AdvancedFilterSummary
+        ast={{
+          combinator: 'and',
+          conditions: [{ field: 'fixReason', operator: 'is_not_empty', value: null }],
+        }}
+        statuses={STATUSES}
+        members={MEMBERS}
+        sprints={SPRINTS}
+        customFields={CUSTOM_FIELDS}
+        components={COMPONENTS}
+        referencedLabels={REFERENCED_LABELS}
+      />,
+    );
+    expect(document.body.textContent).toContain('To fix');
+    expect(document.body.textContent).toContain('is any');
+  });
+});

@@ -158,10 +158,10 @@ export function indexFleetConfig(): IndexFleetConfig {
   try {
     region = flyFleetConfig().region;
   } catch (err) {
-    // Its message already reads `set A, B, C` — unwrap the verb so this one can
-    // re-add it once, over the union of BOTH accessors' missing variables.
-    const detail = err instanceof Error ? err.message.replace(/^set /, '') : '';
-    missing.push(detail || 'the fleet configuration');
+    // Merge the fleet's own list of missing variables with this one's, and say
+    // `set …` once: read the refusal's `detail`, never its rendered message
+    // (MOTIR-6571). `flyFleetConfig` throws nothing but this refusal.
+    missing.push((err as OrchestratorNotConfiguredError).detail.replace(/^set /, ''));
   }
   const image = flyIndexerImage();
   if (!image) missing.push(INDEXER_IMAGE_ENV_VAR);
@@ -169,6 +169,45 @@ export function indexFleetConfig(): IndexFleetConfig {
   // cast here would be a cast that outlives the reason for it.
   if (missing.length > 0 || !image) {
     throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
+  }
+  return { image, region };
+}
+
+/** The env var holding the hosted-agent image (`hosted-agent-run.md` §6). */
+export const HOSTED_AGENT_IMAGE_ENV_VAR = 'MOTIR_HOSTED_AGENT_IMAGE';
+
+/**
+ * The hosted-agent workload's configuration (MOTIR-690): the orchestrator's region
+ * and the image `MOTIR_HOSTED_AGENT_IMAGE` names — or the typed not-configured
+ * error naming every missing variable at once, like {@link indexFleetConfig}.
+ *
+ * ⚠️ A DIGEST, NEVER A TAG (`hosted-agent-run.md` §6), refused here rather than
+ * trusted: a tag lets a publish change what a running deployment boots, and a
+ * hosted run's image holds the agent a customer's code is handed to.
+ */
+export function hostedAgentFleetConfig(): IndexFleetConfig {
+  if (selectedOrchestratorProvider() === 'fake') {
+    return { image: 'motir/hosted-agent@sha256:fake', region: 'iad' };
+  }
+  const missing: string[] = [];
+  let region = 'iad';
+  try {
+    region = flyFleetConfig().region;
+  } catch (err) {
+    // Merge the fleet's own list of missing variables with this one's, and say
+    // `set …` once: read the refusal's `detail`, never its rendered message.
+    // `flyFleetConfig` throws nothing but this refusal.
+    missing.push((err as OrchestratorNotConfiguredError).detail.replace(/^set /, ''));
+  }
+  const image = process.env[HOSTED_AGENT_IMAGE_ENV_VAR]?.trim() ?? '';
+  if (!image) missing.push(HOSTED_AGENT_IMAGE_ENV_VAR);
+  if (missing.length > 0) {
+    throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
+  }
+  if (!/@sha256:[0-9a-f]{64}$/.test(image)) {
+    throw new OrchestratorNotConfiguredError(
+      `${HOSTED_AGENT_IMAGE_ENV_VAR} must be pinned by digest (…@sha256:<64 hex>), not a tag`,
+    );
   }
   return { image, region };
 }

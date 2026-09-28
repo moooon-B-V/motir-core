@@ -481,6 +481,30 @@ export interface OtherHostedProjectDto {
  * identity, and the org-wide CI truth so the page can be server-rendered and its
  * header updated by `router.refresh()` (the page-state contract, §14.10).
  */
+/**
+ * Whether MOTIR'S APP can write one connected repository for a hosted run
+ * (MOTIR-1895 · `design/repository-set/design-notes.md` §18.1) — the same answer
+ * MOTIR-6449's `hostedRunWriteAccess` gives the start path, so the room and a
+ * refused run cannot disagree.
+ *
+ * - `ready`             — the installation covers it and has accepted write.
+ * - `needs_permissions` — it has not accepted `contents` + `pull_requests`
+ *                         write; an owner of `account` accepts on GitHub.
+ * - `unreachable`       — the installation is gone or suspended, or no longer
+ *                         includes the repository; it is reconnected on GitHub.
+ *
+ * Each href is null when this deployment has nowhere to send the reader, and a
+ * null href drops the control rather than drawing one that goes nowhere.
+ */
+export type HostedRunRepoAccessDto =
+  | { state: 'ready' }
+  | { state: 'needs_permissions'; account: string; reviewHref: string | null }
+  | { state: 'unreachable'; repository: string; reconnectHref: string | null };
+
+/** The room's hosted-run lines, keyed by `ProjectRepoDto.id`. A repository with
+ *  no entry draws no line — Motir-hosted rows, and a row whose read failed. */
+export type HostedRunRepoAccessMapDto = Record<string, HostedRunRepoAccessDto>;
+
 export interface ProjectRepoRoomViewDto {
   projectId: string;
   rows: ProjectRepoDto[];

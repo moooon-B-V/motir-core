@@ -185,15 +185,27 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
   try {
     const result = await new Promise<Omit<AgentRunResult, 'model'>>((resolve, reject) => {
       const tee = opts.onOutput;
-      const child = spawnFn(opts.command.binary, opts.command.args, {
+      const promptOnStdin = opts.command.promptOnStdin !== false;
+      const args = [
+        ...opts.command.args,
+        ...(opts.command.promptArgs?.(opts.prompt, promptFile) ?? []),
+      ];
+      const child = spawnFn(opts.command.binary, args, {
         cwd: opts.cwd,
         // stdin piped (we write the prompt); stdout/stderr inherited so the
         // agent's output streams straight through to the user's terminal —
         // unless a caller wants a COPY, in which case they are piped and
-        // forwarded to the very same streams below.
-        stdio: ['pipe', tee ? 'pipe' : 'inherit', tee ? 'pipe' : 'inherit'],
+        // forwarded to the very same streams below. A launcher that takes its
+        // prompt on argv leaves stdin unconnected (`promptOnStdin: false`).
+        stdio: [
+          promptOnStdin ? 'pipe' : 'ignore',
+          tee ? 'pipe' : 'inherit',
+          tee ? 'pipe' : 'inherit',
+        ],
         env: {
-          ...(opts.env ?? process.env),
+          // A built-in launcher's environment REPLACES the inherited one — it is
+          // an allow-list (MOTIR-6559), and merging would defeat it.
+          ...(opts.command.env ?? opts.env ?? process.env),
           MOTIR_PROMPT_FILE: promptFile,
           MOTIR_AGENT_REPORT: reportFile,
           // Set ONLY when every file landed. An unset variable is what tells the
@@ -237,7 +249,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentRunResult> {
       // An agent that closes stdin early (or never reads it) makes the write
       // fail with EPIPE. That is not an error: the prompt is ALSO on disk at
       // $MOTIR_PROMPT_FILE, which is the whole reason both channels exist.
-      const stdin = child.stdin;
+      const stdin = promptOnStdin ? child.stdin : null;
       if (stdin) {
         stdin.on('error', () => {});
         stdin.end(opts.prompt);

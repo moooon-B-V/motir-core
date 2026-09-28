@@ -29,6 +29,7 @@ import {
   dispatchRunCardSchema,
   dispatchRunCloseBodySchema,
   dispatchRunCloseOutPromptSchema,
+  dispatchRunGitCredentialsSchema,
   currentTestInstructionsSchema,
   dispatchRunOpenBodySchema,
   dispatchRunOpenedSchema,
@@ -830,6 +831,39 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
   }),
 
   defineOperation({
+    method: 'GET',
+    path: '/api/v1/dispatch-runs/{id}',
+    operationId: 'getDispatchRun',
+    summary: 'Get a dispatch run, with the SET of cards it owns',
+    description:
+      'READ one run and its set: every card in the run’s own order with its current ' +
+      'disposition, and the stream’s cursor. ' +
+      'It is how a CLI that did not open a run — a hosted run the SERVER opened, which the ' +
+      '`motir` CLI in its container then adopts (`docs/decisions/hosted-run-runs-the-cli-as-the-app.md` ' +
+      '§3) — learns the cards it owns and their order, instead of claiming a second set. ' +
+      'A hosted run’s own credential may read its own run and no other. ' +
+      'A read: it writes nothing and moves no status.',
+    permission: 'project:browse',
+    parameters: [
+      {
+        name: 'id',
+        in: 'path',
+        required: true,
+        description: 'The dispatch run’s id.',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: dispatchRunSchema },
+      description: 'The run with its set and its resume cursor.',
+    },
+    // 403 for a run credential naming another run; 404 for an unknown or
+    // cross-workspace run (no existence leak).
+    errorStatuses: [403, 404],
+  }),
+
+  defineOperation({
     method: 'POST',
     path: '/api/v1/dispatch-runs/{id}/events',
     operationId: 'appendDispatchRunEvents',
@@ -911,6 +945,42 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     // 404 for an unknown or cross-workspace run; 409 when it is already closed;
     // 422 for a malformed body.
     errorStatuses: [404, 409, 422],
+  }),
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/dispatch-runs/{id}/git-credential',
+    operationId: 'issueDispatchRunGitCredentials',
+    summary: 'Get a running hosted run’s git credentials',
+    description:
+      'A running HOSTED run trades its own run credential for fresh git credentials: one entry ' +
+      'per repository of the run, each an installation token of the Motir GitHub App that writes ' +
+      'that repository, narrowed to the run’s repositories and to contents + pull-request ' +
+      'write. Repositories in one installation share a token. Each lives one hour, so the run ' +
+      'asks again whenever it needs one — this is also its FIRST git credential. Every token ' +
+      'handed out is recorded against the run and revoked when the run ends. ' +
+      'The author is the App’s bot, never a person; `dispatchedBy` names the dispatcher for ' +
+      'pull-request bodies. ' +
+      'Only the run’s own credential is answered — any other token, a person’s included, is ' +
+      'refused before the run is read.',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'id',
+        in: 'path',
+        required: true,
+        description: 'The hosted run’s id — the run its credential is bound to.',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: dispatchRunGitCredentialsSchema },
+      description: 'One credential per repository of the run, and who dispatched it.',
+    },
+    // 403 for any credential not bound to this run; 404 for a run outside the
+    // caller's workspace; 409 when the run has ended or a repository can no
+    // longer be written; 503 when GitHub or an App is unavailable.
+    errorStatuses: [403, 404, 409, 503],
   }),
   defineOperation({
     method: 'POST',

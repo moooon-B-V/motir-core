@@ -102,6 +102,7 @@ function node(over: Partial<WorkItemTreeRowDto> & { id: string; key: number }): 
     title: `Issue ${over.key}`,
     status: 'todo',
     ciState: null,
+    fixReason: null,
     priority: 'medium',
     assigneeId: 'u1',
     reporterId: 'u1',

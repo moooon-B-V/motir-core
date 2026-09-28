@@ -15,6 +15,7 @@ import {
   DispatchRunNoTargetError,
   DispatchRunNotFoundError,
   DispatchRunTerminalError,
+  DispatchRunTokenOutOfScopeError,
   DuplicateDispatchRunError,
   UnknownDispatchRunCardError,
 } from '@/lib/dispatchRuns/errors';
@@ -26,7 +27,10 @@ import type {
   DispatchRunAppendedDto,
   DispatchRunCardDto,
   DispatchRunCloseOutPromptDto,
+  DispatchRunCostDto,
   DispatchRunDetailDto,
+  DispatchRunHostedEndDto,
+  DispatchRunMachineTimeDto,
   DispatchRunDto,
   DispatchRunEventDto,
   DispatchRunOpenedDto,
@@ -40,6 +44,7 @@ import {
   toDispatchRunScopeDto,
 } from '@/lib/mappers/dispatchRunMappers';
 import { assembleRunCloseOutPrompt } from '@/lib/dispatch/runCloseOutPrompt';
+import { getAgentRunUsage } from '@/lib/ai/motirAiClient';
 import { toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
 import { standingMergeRefusals, standingQueueFailures } from './deliveryVerdict';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
@@ -49,6 +54,7 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { holdsRecordView, projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
+import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/context';
@@ -278,6 +284,75 @@ async function assertMayReadRun(
 }
 
 /**
+ * A HOSTED run's token and credit cost — model calls, machine time (MOTIR-6514)
+ * and their total — read from motir-ai by the run's own id (MOTIR-689; `docs/decisions/hosted-agent-run.md` §1). Zeroes when motir-ai has
+ * recorded no billed call yet (its 404); `null` when it could not be asked at
+ * all — a transport failure, a refusal or an unconfigured deployment — so an
+ * outage never reads as a run that cost nothing, and never fails the run page.
+ */
+async function readHostedRunCost(runId: string): Promise<DispatchRunCostDto | null> {
+  try {
+    const usage = await getAgentRunUsage(runId);
+    return {
+      inputTokens: usage?.inputTokens ?? 0,
+      outputTokens: usage?.outputTokens ?? 0,
+      cacheReadTokens: usage?.cacheReadTokens ?? 0,
+      cacheWriteTokens: usage?.cacheWriteTokens ?? 0,
+      credits: usage?.credits ?? 0,
+      machineCredits: usage?.machineCredits ?? 0,
+      totalCredits: usage?.totalCredits ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** The end path's closing-line prefix: `[motir] hosted run ended (<label>): `. */
+const HOSTED_END_PREFIX = /^\[motir\] hosted run ended \([^)]*\): /;
+
+/**
+ * How a HOSTED run ended (MOTIR-691): the end path's closing `log` line
+ * (`hostedRunService.endHostedRun`, `data.end`) and its legs' agent exit codes.
+ * Read, never stored. A leg's exit code is on the leg itself — the ingest writes
+ * an `agent_exited` event's code onto its `dispatch_run_card`, not into the
+ * event's data.
+ */
+async function readHostedEnd(
+  runId: string,
+  legExitCodes: readonly (number | null)[],
+  tx: Prisma.TransactionClient,
+): Promise<DispatchRunHostedEndDto> {
+  const line = await dispatchRunEventRepository.findHostedEndLine(runId, tx);
+  const endData = line?.data as { end?: unknown } | null | undefined;
+  const detail = line?.body ? line.body.replace(HOSTED_END_PREFIX, '').trim() : '';
+  // The failing leg's code when one failed; otherwise any recorded code.
+  const codes = legExitCodes.filter((c): c is number => c !== null);
+  const exitCode = codes.find((c) => c !== 0) ?? codes[0] ?? null;
+  return {
+    outcome: typeof endData?.end === 'string' ? endData.end : null,
+    detail: detail === '' ? null : detail,
+    exitCode,
+  };
+}
+
+/**
+ * A hosted run's own credential may reach ONE run (MOTIR-688,
+ * `docs/decisions/hosted-agent-run.md` §3). `ctx.tokenDispatchRunId` is set only
+ * when a RUN token reached an ingest route that admits one; every other caller
+ * leaves it absent and passes straight through.
+ *
+ * ⚠️ Checked BEFORE the run is read, so a refusal says nothing about whether the
+ * named run exists, is closed, or lives elsewhere. Pass `null` for an OPEN,
+ * which a run token never performs: the server opens a hosted run itself.
+ */
+function assertRunTokenScope(runId: string | null, ctx: ServiceContext): void {
+  if (ctx.tokenDispatchRunId === undefined) return;
+  if (runId === null || runId !== ctx.tokenDispatchRunId) {
+    throw new DispatchRunTokenOutOfScopeError();
+  }
+}
+
+/**
  * A Runs-room read's reader (Story MOTIR-6170 · MOTIR-6645): a member's own
  * context, or — for a Visitor — the narrowed service context (bound to their one
  * public project, granted the Visitor keys) plus the private-epic hidden set. A
@@ -325,6 +400,7 @@ export const dispatchRunService = {
    * rather than allowed to escape.
    */
   async open(input: OpenDispatchRunInput, ctx: ServiceContext): Promise<DispatchRunOpenedDto> {
+    assertRunTokenScope(null, ctx);
     const project = await projectsService.getByKey(input.projectKey, ctx);
     await projectAccessService.assertCanEdit(project.id, ctx);
 
@@ -461,6 +537,7 @@ export const dispatchRunService = {
     events: AppendDispatchRunEventInput[],
     ctx: ServiceContext,
   ): Promise<DispatchRunAppendedDto> {
+    assertRunTokenScope(runId, ctx);
     for (const event of events) {
       if (event.body !== undefined) {
         const bytes = Buffer.byteLength(event.body, 'utf8');
@@ -718,6 +795,10 @@ export const dispatchRunService = {
    * a run's event budget, and the stream is for what the run DID.
    */
   async heartbeat(runId: string, ctx: ServiceContext): Promise<void> {
+    // A hosted run's own credential beats only its own run (MOTIR-6558) — its
+    // liveness is really its server supervision (`run-death-keeps-work.md` §2),
+    // but the CLI's reporter beats whatever run it holds regardless of origin.
+    assertRunTokenScope(runId, ctx);
     await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
       const locked = await dispatchRunRepository.findTerminalStateForUpdate(runId, tx);
       if (!locked || locked.createdById !== ctx.userId) {
@@ -751,6 +832,7 @@ export const dispatchRunService = {
     input: CloseDispatchRunInput,
     ctx: ServiceContext,
   ): Promise<DispatchRunDto> {
+    assertRunTokenScope(runId, ctx);
     return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
       dispatchRunService.closeWithin(runId, input, ctx, tx),
     );
@@ -828,14 +910,19 @@ export const dispatchRunService = {
   },
 
   /**
-   * The run WITH its set — the read the ingest operations answer with, and the
-   * one MOTIR-1793's browser routes will compose.
+   * The run WITH its set — the read the ingest operations answer with, the one
+   * MOTIR-1793's browser routes compose, and the one a CLI ADOPTING a
+   * server-opened hosted run reads its set from (`GET /api/v1/dispatch-runs/{id}`,
+   * MOTIR-6558).
    */
   async getRun(
     runId: string,
     reader: ServiceContext | VisitorReadContext,
   ): Promise<DispatchRunDto> {
     const { svc: ctx, hidden, projectId } = runReader(reader);
+    // A hosted run's own credential reads its own run and no other — checked
+    // before the read, like every run-token route (MOTIR-6558).
+    assertRunTokenScope(runId, ctx);
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
@@ -866,6 +953,8 @@ export const dispatchRunService = {
     runId: string,
     ctx: ServiceContext,
   ): Promise<DispatchRunCloseOutPromptDto> {
+    // A hosted run's own credential reads only ITS run's close-out (MOTIR-6557).
+    assertRunTokenScope(runId, ctx);
     const binding = { userId: ctx.userId, workspaceId: ctx.workspaceId };
     const run = await withWorkspaceContext(binding, (tx) =>
       dispatchRunRepository.findByIdWithCards(runId, tx),
@@ -945,7 +1034,7 @@ export const dispatchRunService = {
     reader: ServiceContext | VisitorReadContext,
   ): Promise<DispatchRunDetailDto> {
     const { svc: ctx, hidden, projectId } = runReader(reader);
-    return withWorkspaceContext(
+    const detail = await withWorkspaceContext<DispatchRunDetailDto>(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
         const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
@@ -981,8 +1070,19 @@ export const dispatchRunService = {
         }
 
         const base = toDispatchRunDto(run, seq);
+        // A HOSTED run's reason line (MOTIR-691) — read in the same transaction,
+        // off the two events that carry it. A local run has neither to read.
+        const hostedEnd =
+          base.origin === 'hosted'
+            ? await readHostedEnd(
+                runId,
+                base.cards.map((c) => c.exitCode),
+                tx,
+              )
+            : undefined;
         return {
           ...base,
+          ...(hostedEnd ? { hostedEnd } : {}),
           cards: base.cards.map((card) => ({
             ...card,
             // A leg whose card was deleted has no deliveries to join and never
@@ -992,6 +1092,30 @@ export const dispatchRunService = {
         };
       },
     );
+    // A HOSTED run's cost is read from motir-ai AFTER the transaction, never
+    // inside it: an outbound call must not hold a connection and the RLS
+    // binding open (MOTIR-689). A local run makes no call and carries no key.
+    if (detail.origin !== 'hosted') return detail;
+    return { ...detail, cost: await readHostedRunCost(detail.id) };
+  },
+
+  /**
+   * A run's MACHINE TIME (MOTIR-691), for the hosted cost block: billable seconds
+   * and whether every container row has settled. Gated exactly as the run is — a
+   * run the reader may not see is not found — then read from the fleet meter by
+   * the run's id (MOTIR-6448). A LOCAL run meters nothing and answers zero.
+   *
+   * ⚠️ NEVER THE METER'S COST FIGURE — that is Motir's own fleet cost, not a
+   * price; what the run was charged is the credits on its cost.
+   */
+  async getMachineTime(runId: string, ctx: ServiceContext): Promise<DispatchRunMachineTimeDto> {
+    await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+      const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
+      if (!run) throw new DispatchRunNotFoundError(runId);
+      await assertMayReadRun(run, ctx, tx);
+    });
+    const time = await ciFleetCostMeterService.getMachineTimeForDispatchRun(runId);
+    return { billableSeconds: time.billableSeconds, settled: time.settled };
   },
 
   /**

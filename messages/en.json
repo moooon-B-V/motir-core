@@ -390,8 +390,8 @@
       "description": "Permanently delete a work item and everything beneath it. Cannot be undone."
     },
     "work_item_triage": {
-      "label": "Triage requests",
-      "description": "Accept, decline, promote or snooze an item in the triage queue."
+      "label": "Handle requested features",
+      "description": "Accept, decline, promote or snooze an item in Requested features."
     },
     "comment_add": {
       "label": "Add comments",
@@ -435,7 +435,7 @@
     },
     "public_request_submit": {
       "label": "Submit requests",
-      "description": "Send a bug report or feature request into the project's triage queue. Public projects only."
+      "description": "Send a bug report or feature request to the project's Requested features. Public projects only."
     },
     "public_request_upvote": {
       "label": "Upvote requests",
@@ -1091,7 +1091,7 @@
       "git": "Git",
       "github": "GitHub",
       "backlog": "Backlog",
-      "triage": "Triage",
+      "triage": "Requested features",
       "roadmap": "Roadmap",
       "plans": "Plans",
       "resumeOnboarding": "Resume onboarding",
@@ -1482,6 +1482,7 @@
     "advancedBacklog": "Backlog",
     "advancedValueCount": "{count, plural, one {# value} other {# values}}",
     "advancedFieldChecks": "Checks",
+    "advancedFieldToFix": "To fix",
     "advancedFieldPriority": "Priority",
     "advancedFieldType": "Type",
     "advancedFieldDifficulty": "Difficulty",
@@ -1508,6 +1509,8 @@
     "advancedOpIsNotEmpty": "is not empty",
     "advancedOpChecksIsEmpty": "has no checks",
     "advancedOpChecksIsNotEmpty": "has checks",
+    "advancedOpToFixIsEmpty": "is none",
+    "advancedOpToFixIsNotEmpty": "is any",
     "advancedOpContains": "contains",
     "advancedOpNotContains": "does not contain",
     "advancedOpEq": "=",
@@ -5357,19 +5360,19 @@
     }
   },
   "triage": {
-    "heading": "Triage",
-    "count": "{count, plural, other {# to triage}}",
+    "heading": "Requested features",
+    "count": "{count, plural, other {# waiting}}",
     "subtitle": "{project} · {key} — incoming bug reports & feature requests, excluded from the tree until you act",
-    "noAccessTitle": "No access to triage",
-    "noAccessDescription": "You don’t have access to triage for this project.",
-    "loadError": "Couldn’t load the triage queue. Please try again.",
+    "noAccessTitle": "No access to Requested features",
+    "noAccessDescription": "You don’t have access to Requested features for this project.",
+    "loadError": "Couldn’t load Requested features. Please try again.",
     "queueLabel": "Queue · newest first",
     "searchPlaceholder": "Search submissions",
     "searchAria": "Search submissions",
     "loadOlder": "Load older",
     "loadingMore": "Loading…",
     "noSearchResults": "No submissions match your search.",
-    "selectPrompt": "Select a submission to triage",
+    "selectPrompt": "Select a request to review",
     "selectPromptBody": "Pick a row from the queue to see its full report and act on it.",
     "detailLoading": "Loading submission…",
     "publicChip": "Public",
@@ -5383,7 +5386,7 @@
     "commentsLabel": "Comments",
     "noComments": "No comments yet.",
     "empty": {
-      "title": "No items to triage",
+      "title": "Nothing waiting in Requested features",
       "description": "New bug reports and feature requests land here — from the in-app “Report” button or a signed-in “Submit a request” on the public project page."
     },
     "actions": {
@@ -5461,7 +5464,7 @@
       "descriptionPlaceholder": "Add any details that help us reproduce or understand it…",
       "submit": "Submit",
       "submitted": "Thanks — your report was submitted",
-      "submittedDetail": "Filed as {key}, now waiting in triage.",
+      "submittedDetail": "Filed as {key}, now waiting in Requested features.",
       "error": "Couldn’t submit your report. Please try again."
     }
   },
@@ -5512,7 +5515,7 @@
     "upvoteThis": "Upvote this",
     "continueAsNew": "Not the same? Continue and submit as new →",
     "confirmTitle": "Thanks — we got it",
-    "confirmBody": "Your request landed in the team’s triage queue. You’ll see it on the public roadmap once they review it. We’ll attribute it to your account.",
+    "confirmBody": "Your request landed in the team’s Requested features. You’ll see it on the public roadmap once they review it. We’ll attribute it to your account.",
     "upvotedTitle": "Thanks — your vote is in",
     "upvotedBody": "We added your upvote to the existing request. You’ll see it move on the public roadmap as the team works on it.",
     "submitAnother": "Submit another",
@@ -5563,7 +5566,7 @@
     "faqQ1": "Can anyone view this project?",
     "faqA1": "Yes. This is a public project — anyone on the web can view it with no account, and it’s indexable by search engines. You only need to sign in to submit, upvote, or comment on requests.",
     "faqQ2": "How do I submit a request?",
-    "faqA2": "Use the “Submit a request” button. You’ll be asked to sign in first (sign-in-to-act), then your bug or idea lands in the team’s triage queue and can appear on the public roadmap.",
+    "faqA2": "Use the “Submit a request” button. You’ll be asked to sign in first (sign-in-to-act), then your bug or idea lands in the team’s Requested features and can appear on the public roadmap.",
     "faqQ3": "What’s hidden on the public view?",
     "faqA3": "Internal fields are stripped by the public projection: assignees, estimates, story points, and internal work-item comments are never sent to the public view — they’re absent from the data, not just hidden in the page.",
     "priorityHighest": "Highest",
@@ -6593,7 +6596,7 @@
       "state_error": "The GitHub sign-in couldn't be verified. Please try connecting again.",
       "error": "Something went wrong connecting to GitHub. Please try again.",
       "not_configured": "GitHub isn't configured on this deployment yet.",
-      "installed": "GitHub App installed — Motir can now read your selected repositories.",
+      "installed": "GitHub App installed — Motir can now read your selected repositories, and its app pushes hosted runs’ branches and opens their pull requests.",
       "repos_updated": "Repository access updated. Motir reads the repositories you selected on GitHub — there is nothing else to finish here.",
       "install_unbound": "The Motir GitHub App was installed on GitHub, but not from this workspace, so it isn't connected to it yet. Start the install from here to connect it.",
       "install_expired": "The install link expired while you were on GitHub. Nothing is broken — start again from Settings.",
@@ -8805,6 +8808,123 @@
     "indexEmptyBodyRead": "When work in this project is dispatched with motir next, motir run or motir batch, every run appears here — the one happening now, and every one before it.",
     "noneRunningMine": "Nothing you started is running.",
     "nonePastMine": "No run you started has finished yet.",
+    "hosted": {
+      "door": {
+        "run": "Run hosted",
+        "runAgain": "Run hosted again",
+        "starting": "Starting…"
+      },
+      "picker": {
+        "label": "Model",
+        "default": "Default",
+        "defaultSecondary": "Default · {provider}",
+        "footer": "The models that can run a hosted work item. The run is billed to your organization in credits.",
+        "loadingTrigger": "Loading models…",
+        "loadingBody": "Loading the models that can run hosted…",
+        "unavailableTrigger": "Models unavailable",
+        "unavailableBody": "Couldn’t load the models that can run hosted, so Run hosted is off for now.",
+        "retry": "Try again",
+        "emptyTrigger": "No model available",
+        "emptyBody": "No model can run a hosted work item right now, so Run hosted is off. Local runs are unaffected."
+      },
+      "notReady": "Run hosted is available once this work item is ready — it has {count, plural, one {# open blocker} other {# open blockers}}.",
+      "refused": {
+        "notReady": {
+          "title": "Not started — this work item isn’t ready to run.",
+          "body": "Nothing was booted and nothing was charged."
+        },
+        "outOfCredits": {
+          "title": "Not started — your organization is out of credits.",
+          "body": "Nothing was booted and nothing was charged. Run hosted works again once the organization has credits."
+        },
+        "modelNotOffered": {
+          "title": "{model} is no longer offered for hosted runs.",
+          "body": "Nothing was started. The list has been refreshed — choose a model and run again."
+        },
+        "notWritable": {
+          "lead": "Not started — Motir’s app can’t write to {count} of this run’s {total} repositories.",
+          "leadNoTotal": "Not started — Motir’s app can’t write to {count, plural, one {# of this run’s repositories} other {# of this run’s repositories}}.",
+          "detail": "Nothing was booted and nothing was charged. Each repository below says what fixes it; an owner of the GitHub account may have to do it.",
+          "open": "Open in Repositories"
+        },
+        "unavailable": {
+          "title": "Not started — hosted runs aren’t available right now.",
+          "body": "Nothing was booted and nothing was charged. Try again shortly."
+        },
+        "bootFailed": {
+          "title": "The hosted run couldn’t start its machine.",
+          "body": "It was opened and ended as failed, and nothing is left running."
+        },
+        "failed": {
+          "title": "Not started — Motir couldn’t start the run.",
+          "body": "Nothing was booted. Try again shortly."
+        }
+      },
+      "phase": {
+        "starting": "Starting",
+        "cloned": "Cloned",
+        "running": "Running",
+        "finished": "Agent finished",
+        "pullRequest": "Pull request open",
+        "done": "Done"
+      },
+      "phaseChip": "{phase} · {position} of 6",
+      "phaseDetail": {
+        "running": "opencode · {model}",
+        "exit": "exit {code}"
+      },
+      "meta": {
+        "lane": "Lane",
+        "hosted": "Hosted",
+        "agent": "Agent",
+        "model": "Model",
+        "elapsed": "Elapsed",
+        "took": "Took"
+      },
+      "modalTitle": "Hosted run",
+      "logFooter": "A hosted run always reports its output. · Deleted after 30 days.",
+      "prHeadline": "Pull request opened —",
+      "end": {
+        "succeeded": "The run delivered its work.",
+        "failed": "The agent exited without a pull request.",
+        "crashed": "The run’s machine stopped before the run closed.",
+        "cancelled": "The run was cancelled.",
+        "stalled": "The agent stopped producing output.",
+        "timedOut": "The run reached its time limit.",
+        "lostSupervision": "Motir lost track of the run’s machine.",
+        "stays": "This work item stays where it was — work the agent pushed is on the run’s branch."
+      },
+      "exitReason": "agent exited with code {code}",
+      "cancel": {
+        "button": "Cancel run",
+        "title": "Cancel this run?",
+        "body": "The agent stops, its machine is torn down and its key is revoked. Work it already pushed stays on the run’s branch, and this work item stays where it is.",
+        "keep": "Keep running",
+        "confirm": "Cancel run",
+        "failed": "Couldn’t cancel the run. Try again."
+      },
+      "cost": {
+        "head": "Cost",
+        "liveHint": "So far — updating while the run is live",
+        "stripLive": "Cost so far",
+        "stripUpdating": "updating",
+        "tokens": "Tokens",
+        "tokensValue": "{input, number} in · {output, number} out",
+        "cache": "Cache: {read, number} read · {write, number} write",
+        "credits": "Credits",
+        "creditsValue": "{count, plural, one {# credit} other {# credits}}",
+        "split": "{model, number} model calls · {machine, number} machine time",
+        "splitPending": "{model, number} model calls · machine time is charged when the run ends",
+        "machine": "Machine time",
+        "machineCharged": "Charged in credits",
+        "unavailable": "Motir couldn’t read this run’s cost right now.",
+        "unit": {
+          "h": "{n} h",
+          "min": "{n} min",
+          "s": "{n} s"
+        }
+      }
+    },
     "runDied": "This run died — last heard from <b><when></when></b>. Its work is kept on its branch; continue it from Development below."
   },
   "repositoryPicker": {
@@ -8837,6 +8957,15 @@
       "body": "It stays connected to {org}, other projects keep it, and the code index is untouched. You can add it back at any time and nothing will re-index.",
       "confirm": "Remove",
       "cancel": "Cancel"
+    },
+    "hostedRuns": {
+      "ready": "Hosted runs can write here — Motir’s app pushes their branches and opens their pull requests.",
+      "needsPermissionsTitle": "Needs updated permissions.",
+      "needsPermissionsBody": "Motir Integration on {account} can’t write yet — an owner of {account} accepts its updated permissions on GitHub. Until then a hosted run that touches this repository is refused before anything starts.",
+      "reviewPermissions": "Review permissions on GitHub",
+      "unreachableTitle": "Motir Integration can no longer reach {repo}.",
+      "unreachableBody": "Its installation was removed or suspended, or no longer includes this repository. Reconnect it on GitHub; until then a hosted run that touches it is refused.",
+      "reconnect": "Reconnect"
     }
   },
   "code": {
@@ -9983,6 +10112,52 @@
       "rateLimitedTitle": "You’re reading a little too fast",
       "rateLimitedBody": "This public project limits how quickly one reader can open it. Try again in {seconds, plural, one {# second} other {# seconds}}.",
       "rateLimitedRetry": "Try again"
+    },
+    "requestedFeatures": {
+      "heading": "Requested features",
+      "subtitle": "What people have asked this project for, most-voted first. Vote for the ones you want too.",
+      "total": "{count, plural, other {# waiting}}",
+      "listLabel": "Pending feature requests",
+      "featureRequest": "Feature request",
+      "bugReport": "Bug report",
+      "shown": "Showing {shown} of {total}",
+      "loadMore": "Load more",
+      "loading": "Loading…",
+      "loadFailed": "Couldn’t load more requests.",
+      "loadLimited": "You’re reading a little too fast. Try again in a moment.",
+      "tryAgain": "Try again",
+      "emptyTitle": "Nothing is waiting for a vote",
+      "emptyBody": "When someone asks this project for a feature or reports a bug, it appears here until the team picks it up.",
+      "upvote": "Upvote",
+      "removeVote": "Remove your vote",
+      "voteCount": "{count, plural, one {# vote} other {# votes}}",
+      "voteLimited": "You’re voting a little too fast. Your vote wasn’t saved — try again in a moment.",
+      "voteFailed": "Your vote wasn’t saved. Try again."
+    }
+  },
+  "toFix": {
+    "tagName": {
+      "queue_failed": "To fix · failed in the merge queue",
+      "conflicted": "To fix · conflicts with its base branch",
+      "ci_failed": "To fix · CI failed",
+      "changes_requested": "To fix · changes requested"
+    },
+    "banner": {
+      "queueFailed": "This needs a fix: it failed in the merge queue (check <code>{check}</code>).",
+      "queueFailedReason": "This needs a fix: it failed in the merge queue ({reason}).",
+      "queueFailedBare": "This needs a fix: it failed in the merge queue.",
+      "conflicted": "This needs a fix: it conflicts with <code>{base}</code>.",
+      "conflictedNoBase": "This needs a fix: it conflicts with its base branch.",
+      "ciFailed": "This needs a fix: CI failed (check <code>{check}</code>).",
+      "ciFailedBare": "This needs a fix: CI failed.",
+      "changesRequested": "This needs a fix: <b>{name}</b> requested changes — “{note}”",
+      "changesRequestedNoNote": "This needs a fix: <b>{name}</b> requested changes.",
+      "changesRequestedAnon": "This needs a fix: changes were requested.",
+      "onAcceptance": "Sent back from the acceptance video.",
+      "leadFix": "Repair it with this command:",
+      "leadRun": "Re-run the work item. The new run’s prompt carries the reviewer’s note:",
+      "toDevelopment": "See its pull requests",
+      "opening": "Opening its pull requests…"
     }
   },
   "workItems": {

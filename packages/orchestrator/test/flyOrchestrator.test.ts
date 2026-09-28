@@ -679,6 +679,43 @@ describe('reap — the provider is the source of truth, and AGE is the test', ()
     expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(2);
   });
 
+  it('leaves a machine the caller SPARES — asked before it is resolved or destroyed (MOTIR-6450)', async () => {
+    // A hosted run still holding its fleet slot is old by the CI cutoff and alive
+    // by design; the caller's predicate keeps it, and only it.
+    handler = (call) =>
+      call.method === 'GET'
+        ? json(200, [
+            machine({ id: 'long-run', createdAt: '2026-08-02T09:00:00.000Z' }),
+            machine({ id: 'orphan', createdAt: '2026-08-02T09:00:00.000Z' }),
+          ])
+        : new Response(null, { status: 200 });
+    const resolved: string[] = [];
+    const usages = await flyOrchestrator.reap(
+      OLDER_THAN,
+      async (handle) => {
+        resolved.push(handle.id);
+        return ATTRIBUTION;
+      },
+      async (handle) => handle.id === 'long-run',
+    );
+    expect(usages.map((u) => u.handleId)).toEqual(['orphan']);
+    expect(resolved).toEqual(['orphan']);
+    expect(calls.filter((c) => c.method === 'DELETE').map((c) => c.url)).toEqual([
+      expect.stringContaining('orphan'),
+    ]);
+  });
+
+  it('a spare check that throws spares nothing — the reaper is the backstop', async () => {
+    handler = (call) =>
+      call.method === 'GET'
+        ? json(200, [machine({ id: 'old-1', createdAt: '2026-08-02T09:00:00.000Z' })])
+        : new Response(null, { status: 200 });
+    const usages = await flyOrchestrator.reap(OLDER_THAN, resolveAll, async () => {
+      throw new Error('the slot table is unreachable');
+    });
+    expect(usages.map((u) => u.handleId)).toEqual(['old-1']);
+  });
+
   it('tolerates a list containing entries that are not machines', async () => {
     handler = () =>
       json(200, [null, 'nope', machine({ id: 'real', createdAt: '2026-08-02T09:00:00.000Z' })]);

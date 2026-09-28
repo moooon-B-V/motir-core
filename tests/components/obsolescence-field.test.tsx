@@ -360,6 +360,7 @@ const DATA: QuickViewData = {
   kind: 'story',
   statusLabel: 'Done',
   statusCategory: 'done',
+  fixReason: null,
   descriptionMd: null,
   explanationMd: null,
   type: null,

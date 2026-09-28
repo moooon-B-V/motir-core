@@ -150,6 +150,28 @@ describe('splitPlanBody — the plan-body section parser', () => {
   });
 });
 
+describe('assembleDispatchPrompt — the work branch as a field (MOTIR-6539)', () => {
+  it('names the branch the GIT WORKFLOW tells the agent to create, the one it instructs', () => {
+    const { prompt, workBranch } = assembleDispatchPrompt(source());
+    expect(workBranch).toBe('subtask/PROD-7-add-the-ready-set-filter-bar');
+    expect(prompt).toContain(`-b ${workBranch} origin/main`);
+  });
+
+  it('is the same branch on a session lineage — the pull request comes from the lineage', () => {
+    const out = assembleDispatchPrompt(source({ sessionBranch: 'motir/session-9' }));
+    expect(out.workflowMode).toBe('session_lineage');
+    expect(out.sessionBranch).toBe('motir/session-9');
+    expect(out.workBranch).toBe('subtask/PROD-7-add-the-ready-set-filter-bar');
+    expect(out.prompt).toContain(`-b ${out.workBranch} origin/motir/session-9`);
+  });
+
+  it('is null for a MANUAL item, which renders no GIT WORKFLOW at all', () => {
+    expect(assembleDispatchPrompt(source({ type: 'manual', executor: 'human' })).workBranch).toBe(
+      null,
+    );
+  });
+});
+
 describe('assembleDispatchPrompt — the four-section grammar', () => {
   it('emits all four sections in order, with the card interpolated', () => {
     const { prompt, workflowMode, sessionBranch } = assembleDispatchPrompt(source());

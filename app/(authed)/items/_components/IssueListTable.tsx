@@ -71,7 +71,8 @@ export function IssueListTable({
   // ISSUE_TITLE_MIN_TRACK so it can't collapse onto the Type chip under width
   // pressure — bug MOTIR-1307), the rest take their fixed widths (Type 116 ·
   // Priority 120 · Assignee 150 · Reporter 150 · Est. 72 · Points 80 · Status
-  // 144, which holds the decision-waiting glyph — MOTIR-5881). Status is the last
+  // 168, which holds the decision-waiting glyph and the To fix tag — MOTIR-5881,
+  // MOTIR-6610). Status is the last
   // track: MOTIR-4258 removed the 76px Actions column.
   const gridTemplate = [
     `minmax(${ISSUE_TITLE_MIN_TRACK},1fr)`,

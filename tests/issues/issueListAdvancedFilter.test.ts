@@ -234,6 +234,9 @@ describe('advancedBuilderFields (the registry-driven field menu)', () => {
       // is the menu's contract: a field the gate drops disappears from HERE and
       // nowhere else, so the assertion is what makes the drop visible.
       'ciState',
+      // Story MOTIR-6589 · MOTIR-6609: the To fix field, registry-ordered right
+      // after `ciState`, admitted by the `fix-reason-select` editor kind.
+      'fixReason',
       'priority',
       // Story 2.7 (2.7.6): the work-item `type` facet — registry-ordered right
       // after `priority`. Its `type-select` editor is now in the builder's

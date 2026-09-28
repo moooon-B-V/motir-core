@@ -207,10 +207,15 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
    * alive.
    */
   function startHeartbeat(id: string): void {
-    const beat = deps.client.heartbeatDispatchRun?.bind(deps.client);
-    if (beat === undefined || heartbeat !== null) return;
+    const client = deps.client;
+    if (client.heartbeatDispatchRun === undefined || heartbeat !== null) return;
     heartbeat = setInterval(() => {
-      void beat(id).then(
+      // Called directly (not through a hoisted, pre-bound local): the run-token
+      // route table's CLI scan (`tests/hostedRuns/runTokenRouteTable.test.ts`)
+      // finds a call by the literal text `client.<operation>(`, on any run path
+      // this reporter serves — local and hosted alike (MOTIR-6558).
+      if (client.heartbeatDispatchRun === undefined) return;
+      void client.heartbeatDispatchRun(id).then(
         (answer) => {
           if (answer === 'closed' && heartbeat !== null) {
             stopHeartbeat();

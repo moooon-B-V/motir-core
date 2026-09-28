@@ -124,6 +124,14 @@ account-level for the same reason.)
 
 ### 3. Scopes — reuse `TokenScope` verbatim, mapped PER OPERATION
 
+> **⚠️ Superseded 2026-08-10, recorded 2026-09-28 — see [Amendment 20](#amendment-20-2026-09-28--a-v1-route-authorizes-by-permission-the-tokenscope-vocabulary-is-retired).**
+> A v1 route no longer authorizes by `TokenScope`. It declares a **`PermissionKey`**
+> from `lib/permissions/catalog.ts`, and the token's grant must hold it
+> (Story MOTIR-2572, `docs/decisions/token-permissions.md`; the gate moved in
+> MOTIR-2576). The table and the scope names below are the model this ADR was
+> written against, kept as history. The two rules under the table survive,
+> re-expressed in permissions; Amendment 20 says how.
+>
 > **⚠️ Amended 2026-08-05 — see [Amendment 6, Q2](#q2--scopes-mirror-libmcpscopests-the-map-is-the-source-this-table-is-derived).**
 > The table below maps the CRUD surface it was written for. Amendment 6 states the
 > underlying principle — **one capability model, two transports** — and records
@@ -4444,3 +4452,83 @@ stale-label trap that rule exists to avoid elsewhere, so it moves with its value
 - **Amendment 11's `/docs` route table** gains the root as a rendered page; its
   tier rules, prefix rule and placement rule are quoted and applied above, not
   re-opened.
+
+### Amendment 20 (2026-09-28) — a v1 route authorizes by PERMISSION; the `TokenScope` vocabulary is retired
+
+**Amends:** §3, whose vocabulary and table are superseded. A v1 route declares a
+`PermissionKey`, not a `TokenScope`, and the per-operation map now lives in
+`docs/decisions/token-permissions.md` §3 rather than in this ADR.
+**Leaves unchanged:** every other clause and amendment. Their text is not
+rewritten here. Where §2, the Context or Amendments 6 and 13 name a scope, a
+`TokenScope` or `TOOL_SCOPES`, they record the model they were written against;
+read the argument of `authenticateApiToken` as the permission described below.
+**Card:** MOTIR-6778 (a documentation bug found by the MOTIR-6759 audit). The
+decision itself is Story **MOTIR-2572** (`docs/decisions/token-permissions.md`,
+decided 2026-08-10), and **MOTIR-2576** moved the gates onto it. Neither added an
+amendment here, so §3 went on describing the retired model with no pointer to its
+replacement. This amendment records the change. It decides nothing new.
+
+#### What changed
+
+MOTIR-2572 retired the six Story 7.7 scopes (`read`, `work_items:write`,
+`work_items:archive`, `work_items:delete`, `sprints:write`, `integration`). A token
+now GRANTS a set of `PermissionKey`s from the product's permission catalog
+(`lib/permissions/catalog.ts`), the same keys the Roles & permissions screen
+shows. `lib/mcp/scopes.ts` survives only as the forward map for scope strings
+already stored on old `api_token` rows, and its header says nothing new may be
+typed against `TokenScope`.
+
+The shipped shape, read on `origin/main` @ `ddcf0dd07`:
+
+- **The route declares a permission.** `withV1Route` (`lib/api/v1/route.ts`) takes
+  `{ permission: PermissionKey }`, for example
+  `withV1Route({ permission: 'project:browse' }, …)`. The option's own comment
+  names `docs/decisions/token-permissions.md` §3 as the table it implements.
+- **The gate checks the grant.** The wrapper calls
+  `authenticateApiToken(req, requiredPermission: PermissionKey)`
+  (`lib/apiTokens/routeAuth.ts`). That function resolves the token to its grant
+  and refuses with `forbidden` unless `grantAllows(grant, requiredPermission)`
+  (`lib/tokens/grant.ts`). Its header records that it _"took a `TokenScope`
+  until the vocabularies merged"_ (MOTIR-2576).
+- **The refusal names the permission.** A `forbidden` result becomes **403
+  `INSUFFICIENT_PERMISSION`** (`lib/api/v1/errors.ts`), whose message names the
+  permission the token lacks.
+- **The published contract says the same.** The emitted OpenAPI carries
+  `x-motir-permission` on every operation, in place of `x-motir-scope`
+  (`token-permissions.md` §6).
+
+#### Where the per-operation map lives now
+
+§3's table mapped HTTP operations to scopes, and Amendment 6 Q2 derived a second
+table from `TOOL_SCOPES`. **Both are superseded by `token-permissions.md` §3**: each
+v1 operation declares _the permission its own service already asserts_, read from
+`docs/decisions/permission-inventory.md`, and MCP tools do the same through
+`TOOL_PERMISSIONS` (`lib/mcp/toolPermissions.ts`). This ADR keeps no copy of that
+table, because a second copy would drift from the one the code implements.
+
+Amendment 6 Q2's principle survives unchanged: **one capability model, two
+transports.** A v1 operation and its MCP counterpart declare the same permission,
+because both read it off the same service.
+
+#### What survives of §3, restated in permissions
+
+- **A route DECLARES its permission; it does not infer one.** `permission` is a
+  required option on the wrapper, and MOTIR-1861's route audit
+  (`tests/helpers/v1RouteAudit.ts`) fails a v1 route that declares none
+  (`no-permission-declared`).
+- **The grant NARROWS, never widens.** An operation is allowed only when the
+  owner's role permits it **and** the token's grant holds its permission
+  (`token-permissions.md` §4). This is §3's scope ∩ role rule with the new word.
+- **The irreversible cascade delete stays unexposed.** `work_item:delete` is not
+  declared by any v1 route, and the route audit asserts it
+  (`declares-unexposed-permission`, `reaches-cascade-delete`).
+- **A missing capability is not invented at the route.** It is a card against
+  the permission catalog and `docs/decisions/permission-inventory.md`, where §3
+  used to say `lib/mcp/scopes.ts`.
+
+#### Later, and recorded elsewhere
+
+`authenticateApiToken` has since gained an `acceptsRunToken` option (MOTIR-688,
+`docs/decisions/hosted-agent-run.md` §3). A token bound to one dispatch run is
+refused at every v1 route that has not opted in, before its grant is read. That
+is a later rule layered on top of the permission gate. It changes nothing above.

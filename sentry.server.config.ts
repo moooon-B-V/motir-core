@@ -12,6 +12,7 @@
 // property — it is an anecdote.
 import * as Sentry from '@sentry/nextjs';
 import { serverSentryInitOptions } from '@/lib/monitoring/serverInit';
+import { startTransactionStallMonitor } from '@/lib/monitoring/transactionStall';
 
 // ⚠️ THE OPTIONS MOVED, THE GATE DID NOT (MOTIR-3606). `serverSentryInitOptions()`
 // returns null when there is no DSN, so this file still calls `init` exactly
@@ -25,4 +26,9 @@ import { serverSentryInitOptions } from '@/lib/monitoring/serverInit';
 // about the EDGE runtime, which resolves `@sentry/nextjs` to a different build
 // and genuinely cannot share this.
 const options = serverSentryInitOptions();
-if (options) Sentry.init(options);
+// The event-loop reading a transaction-timeout report carries (MOTIR-6701)
+// starts under the same gate: a build with no DSN measures nothing.
+if (options) {
+  Sentry.init(options);
+  startTransactionStallMonitor();
+}

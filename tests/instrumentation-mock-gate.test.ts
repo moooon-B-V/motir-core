@@ -58,6 +58,7 @@ const codeHealth = vi.hoisted(() => ({ installCodeHealthBoundaryMock: vi.fn() })
 const aiJobs = vi.hoisted(() => ({ installAiJobsBoundaryMock: vi.fn() }));
 const lessons = vi.hoisted(() => ({ installLessonsBoundaryMock: vi.fn() }));
 const codeGraph = vi.hoisted(() => ({ installCodeGraphBoundaryMock: vi.fn() }));
+const hostedRun = vi.hoisted(() => ({ installHostedRunMock: vi.fn() }));
 
 vi.mock('@/lib/test-mock-agent', () => ({ installSharedMockAgent }));
 vi.mock('@/lib/test-oauth-mock', () => oauth);
@@ -69,6 +70,7 @@ vi.mock('@/lib/test-code-health-mock', () => codeHealth);
 vi.mock('@/lib/test-ai-jobs-mock', () => aiJobs);
 vi.mock('@/lib/test-lessons-mock', () => lessons);
 vi.mock('@/lib/test-code-graph-mock', () => codeGraph);
+vi.mock('@/lib/test-hosted-run-mock', () => hostedRun);
 
 /** Which installers each flag owns — the assertion that the RIGHT seam ran. */
 const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
@@ -101,6 +103,9 @@ const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
   // the WORKER only (which installs from the same table — MOTIR-5837). The table
   // declares it once for both processes, so the table's own guard owes it an entry.
   E2E_TEST_CODE_GRAPH: [codeGraph.installCodeGraphBoundaryMock],
+  // MOTIR-6452 — a hosted run's gateway, motir-ai and GitHub-installation seams,
+  // registered here in the same change that adds them to the shipped table.
+  E2E_TEST_HOSTED_RUN: [hostedRun.installHostedRunMock],
 };
 
 const ALL_INSTALLERS = Object.values(INSTALLERS).flat();

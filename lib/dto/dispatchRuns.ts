@@ -155,9 +155,72 @@ export interface DispatchRunCardWithDeliveriesDto extends DispatchRunCardDto {
   deliveries: WorkItemDeliveryDto[];
 }
 
+/**
+ * What a HOSTED run cost in model tokens and credits (MOTIR-689), read from
+ * motir-ai's per-run usage (`GET /v1/agent-runs/:coreRunId/usage`), keyed by the
+ * run's own id (`docs/decisions/hosted-agent-run.md` §1).
+ *
+ * ⚠️ A READ, NEVER A COLUMN: `DispatchRun` carries no cost (MOTIR-1801). Zeroes
+ * mean motir-ai has recorded no billed call for the run yet. Machine SECONDS are
+ * not here — they are the fleet meter's (MOTIR-6448); the CREDITS they were
+ * charged at are (MOTIR-6514), and never the meter's cost figure.
+ */
+export interface DispatchRunCostDto {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  /** The MODEL-CALL credits (MOTIR-689). */
+  credits: number;
+  /** The machine-time charge (MOTIR-6514); `0` until the run's container settles. */
+  machineCredits: number;
+  /** `credits + machineCredits` — what the run cost the org, in credits. */
+  totalCredits: number;
+}
+
 /** The run as the BROWSER reads it — the header, its set, and what each leg shipped. */
 export interface DispatchRunDetailDto extends Omit<DispatchRunDto, 'cards'> {
   cards: DispatchRunCardWithDeliveriesDto[];
+  /**
+   * A HOSTED run's token and credit cost (MOTIR-689). ABSENT on a local run,
+   * which is billed nowhere Motir can read and makes no such call. `null` on a
+   * hosted run means motir-ai could not be asked — never "cost nothing".
+   */
+  cost?: DispatchRunCostDto | null;
+  /**
+   * How a HOSTED run ended, for its reason line (MOTIR-691). ABSENT on a local
+   * run. `null` fields mean the fact is not recorded — never a guess.
+   */
+  hostedEnd?: DispatchRunHostedEndDto;
+}
+
+/**
+ * A HOSTED run's END, as the run record holds it (MOTIR-691).
+ *
+ * ⚠️ READ, NEVER STORED — the run record carries no reason column. `outcome` and
+ * `detail` are the closing `log` line the end path writes (`endHostedRun`);
+ * `exitCode` is its legs' agent exit code (a failing leg's first), the only
+ * reason a run the CLI closed itself has. A run still going has all three null.
+ */
+export interface DispatchRunHostedEndDto {
+  /** The end path's outcome name — `exited` (a crash), `failed`, `cancelled`,
+   *  `stall`, `backstop`, `lost_supervision` — or null when the CLI closed it. */
+  outcome: string | null;
+  /** The closing line's detail, verbatim (`stalled: no agent output for 15
+   *  minutes`), or null once its body has aged out or when there is none. */
+  detail: string | null;
+  /** The agent's exit code — a failing leg's first, else any leg's — or null. */
+  exitCode: number | null;
+}
+
+/**
+ * A run's MACHINE TIME (MOTIR-691 over MOTIR-6448's by-run read): billable
+ * seconds, and whether every container row has settled. Never a money figure —
+ * the meter's cost is Motir's own fleet cost, not a price.
+ */
+export interface DispatchRunMachineTimeDto {
+  billableSeconds: number;
+  settled: boolean;
 }
 
 /**

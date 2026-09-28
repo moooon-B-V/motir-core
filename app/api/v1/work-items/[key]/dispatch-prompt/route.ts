@@ -117,21 +117,27 @@ function parsePolicy(req: Request): FindingsPolicy {
   return parsed.policy;
 }
 
-export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async (ctx) => {
-  // Parse BEFORE reading: an unsafe branch name is the caller's to fix, and
-  // answering 422 without a database round-trip is both faster and honest.
-  const sessionBranch = parseSessionBranch(ctx.req);
-  const findingsPolicy = parsePolicy(ctx.req);
-  // A CONTINUE of a dead run (MOTIR-6531): the run's id, validated by the service
-  // against this item — an invalid one is `CONTINUE_FROM_INVALID` (422).
-  const continueFrom = new URL(ctx.req.url).searchParams.get('continueFrom')?.trim() || undefined;
-  const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-688) fetches its
+// card's prompt here, and ONLY that card's: `dispatchPromptService` answers any
+// other key `WORK_ITEM_NOT_FOUND` (404), exactly as for a card it cannot see.
+export const GET = withV1Route<{ key: string }>(
+  { permission: 'project:browse', acceptsRunToken: true },
+  async (ctx) => {
+    // Parse BEFORE reading: an unsafe branch name is the caller's to fix, and
+    // answering 422 without a database round-trip is both faster and honest.
+    const sessionBranch = parseSessionBranch(ctx.req);
+    const findingsPolicy = parsePolicy(ctx.req);
+    // A CONTINUE of a dead run (MOTIR-6531): the run's id, validated by the service
+    // against this item — an invalid one is `CONTINUE_FROM_INVALID` (422).
+    const continueFrom = new URL(ctx.req.url).searchParams.get('continueFrom')?.trim() || undefined;
+    const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
 
-  const dto = await dispatchPromptService.getDispatchPrompt(projectId, identifier, ctx.service, {
-    sessionBranch,
-    findingsPolicy,
-    ...(continueFrom ? { continueFrom } : {}),
-  });
+    const dto = await dispatchPromptService.getDispatchPrompt(projectId, identifier, ctx.service, {
+      sessionBranch,
+      findingsPolicy,
+      ...(continueFrom ? { continueFrom } : {}),
+    });
 
-  return NextResponse.json(presentDispatchPrompt(dto));
-});
+    return NextResponse.json(presentDispatchPrompt(dto));
+  },
+);

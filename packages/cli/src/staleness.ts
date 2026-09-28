@@ -329,8 +329,17 @@ export function shouldCheckStaleness(argv: readonly string[]): boolean {
   return !argv.some((token) => CHEAP_FLAGS.has(token));
 }
 
-/** Is this argv one of the loop lanes that must never be prompted? */
-export function isUnattendedArgv(argv: readonly string[]): boolean {
+/**
+ * Is this argv one of the loop lanes that must never be prompted?
+ *
+ * A HOSTED run (MOTIR-6558) is unattended whatever its command: it runs in a
+ * container nobody is watching, and the run id it was booted with says so.
+ */
+export function isUnattendedArgv(
+  argv: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (env['MOTIR_DISPATCH_RUN_ID']?.trim() || argv.includes('--run-id')) return true;
   return UNATTENDED.has(argv[0] ?? '');
 }
 

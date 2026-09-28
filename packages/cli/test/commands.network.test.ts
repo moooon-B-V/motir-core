@@ -223,6 +223,20 @@ describe('resolveServerUrl — the ladder, rung by rung (MOTIR-1876)', () => {
     expect(resolveServerUrl('https://flag.motir.test')).toBe('https://flag.motir.test');
   });
 
+  it('takes the hosted MOTIR_API_URL one rung BELOW MOTIR_SERVER (MOTIR-6558)', async () => {
+    await linked();
+    // A hosted container is booted with MOTIR_API_URL and no link to walk up to.
+    vi.stubEnv('MOTIR_API_URL', 'https://hosted.motir.test/');
+    expect(resolveServerUrl()).toBe('https://hosted.motir.test');
+    // A person who exports MOTIR_SERVER has said which server they mean.
+    vi.stubEnv('MOTIR_SERVER', 'https://env.motir.test');
+    expect(resolveServerUrl()).toBe('https://env.motir.test');
+    // An empty one is absent, like every value in the env tier.
+    vi.stubEnv('MOTIR_SERVER', '');
+    vi.stubEnv('MOTIR_API_URL', '  ');
+    expect(resolveServerUrl()).toBe(server.url);
+  });
+
   it('treats an EMPTY MOTIR_SERVER as unset rather than as a server', async () => {
     await linked();
     vi.stubEnv('MOTIR_SERVER', '   ');
@@ -281,6 +295,26 @@ describe('the credential ladder — MOTIR_TOKEN above the stored config (MOTIR-1
     expect(stored?.origin).toBe(join(home, 'motir', 'config.json'));
     // The stored tier keeps the recorded owner; the env tier cannot know one.
     expect(stored?.user).toEqual(STORED_USER);
+  });
+
+  it('takes the hosted MOTIR_RUN_TOKEN one rung BELOW MOTIR_TOKEN, and names it (MOTIR-6558)', () => {
+    setCredential(server.url, { token: 'stored-token', user: STORED_USER });
+
+    vi.stubEnv('MOTIR_RUN_TOKEN', 'run-token');
+    const run = resolveCredential(server.url);
+    expect(run?.token).toBe('run-token');
+    expect(run?.source).toBe('environment');
+    expect(run?.origin).toBe('environment (MOTIR_RUN_TOKEN)');
+    expect(envToken()).toBe('run-token');
+
+    // MOTIR_TOKEN outranks it: an explicit choice is never overridden by the image.
+    vi.stubEnv('MOTIR_TOKEN', 'env-token');
+    expect(resolveCredential(server.url)?.origin).toBe('environment (MOTIR_TOKEN)');
+
+    // Both empty → the stored tier, as with MOTIR_TOKEN alone.
+    vi.stubEnv('MOTIR_TOKEN', '');
+    vi.stubEnv('MOTIR_RUN_TOKEN', ' ');
+    expect(resolveCredential(server.url)?.source).toBe('config');
   });
 
   it('treats an EMPTY / whitespace MOTIR_TOKEN as UNSET, not as a token', () => {

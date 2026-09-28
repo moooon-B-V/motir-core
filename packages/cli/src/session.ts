@@ -4,6 +4,8 @@ import { CliError } from './errors.js';
 import { requireLink, type FoundLink } from './config/linkConfig.js';
 import { resolveServerUrl } from './serverResolve.js';
 import { resolveCredential } from './config/userConfig.js';
+import { prepareHostedRun } from './hostedGit.js';
+import { hostedLink, hostedWorkspace, readAdoptedRun, type AdoptedRun } from './hostedMode.js';
 
 // Shared plumbing for the commands that talk to a linked project: resolve the
 // `.motir.json` binding (walked up from cwd), resolve the server + its
@@ -51,6 +53,47 @@ export async function withProjectSession<T>(
   fn: (session: ProjectSession) => Promise<T>,
 ): Promise<T> {
   return fn(await openProjectSession());
+}
+
+/**
+ * Run `fn` inside a HOSTED run's session (MOTIR-6558): the run the server opened
+ * is read and checked BEFORE anything else, its project is taken from its own
+ * cards, and the link is the workspace's — synthesised when the container has no
+ * `.motir.json`, which is the ordinary case.
+ *
+ * ⚠️ THE SAME CREDENTIAL LADDER AS A LOCAL SESSION. The hosted names
+ * (`MOTIR_API_URL`, `MOTIR_RUN_TOKEN`) are rungs on it, not a second resolver, so
+ * a person who exports `MOTIR_TOKEN` into a container still gets what they asked
+ * for.
+ */
+export async function withHostedProjectSession<T>(
+  runId: string,
+  fn: (session: ProjectSession, run: AdoptedRun) => Promise<T>,
+  /** The card the command was given — what the run's pull requests link (MOTIR-6559). */
+  targetKey?: string,
+): Promise<T> {
+  const serverUrl = resolveServerUrl();
+  const cred = resolveCredential(serverUrl);
+  if (!cred) {
+    throw new CliError(`Not logged in to ${serverUrl}.`, {
+      hint: 'A hosted run is booted with MOTIR_RUN_TOKEN; set it, or MOTIR_TOKEN.',
+    });
+  }
+  const client = new MotirClient({ serverUrl, token: cred.token });
+  const run = await readAdoptedRun(client, runId);
+  // ⚠️ GITHUB ACCESS BEFORE ANY CHECKOUT (MOTIR-6559). The run's git config —
+  // the credential helper, the App's identity per repository — and its `gh`
+  // shim must exist before the first clone, and the run's credentials read here
+  // are also where the pull requests' `dispatchedBy` comes from.
+  await prepareHostedRun({
+    serverUrl,
+    token: cred.token,
+    runId,
+    targetKey: targetKey ?? run.legs[0] ?? runId,
+    client,
+  });
+  const link = hostedLink(hostedWorkspace(), serverUrl, run.projectKey);
+  return fn({ link, serverUrl, projectKey: run.projectKey, client }, run);
 }
 
 /** The list_ready page size cap (server clamps `limit` to 200). We page at the

@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { CircleDot, Columns3, Map, Sparkles, Stamp, Waypoints } from 'lucide-react';
+import { CircleDot, Columns3, Inbox, Map, Sparkles, Stamp, Waypoints } from 'lucide-react';
 import { Sidebar, type SidebarItem } from '@/components/ui/Sidebar';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed';
@@ -22,6 +22,15 @@ const ROWS: { views: readonly VisitorView[]; to: VisitorView; label: string; ico
   { views: ['runs'], to: 'runs', label: 'nav.runs', icon: <Waypoints /> },
   { views: ['board'], to: 'board', label: 'nav.boards', icon: <Columns3 /> },
   { views: ['roadmap'], to: 'roadmap', label: 'nav.roadmap', icon: <Map /> },
+  // MOTIR-6769 — the pending feature requests, drawn after Roadmap (MOTIR-6767).
+  // The members' own glyph and label key (`nav.triage` reads "Requested
+  // features" since MOTIR-6772): one list, one name, one mark.
+  {
+    views: ['requested-features'],
+    to: 'requested-features',
+    label: 'nav.triage',
+    icon: <Inbox />,
+  },
   { views: ['plans'], to: 'plans', label: 'nav.plans', icon: <Sparkles /> },
   { views: ['approvals'], to: 'approvals', label: 'nav.approvalRecords', icon: <Stamp /> },
 ];

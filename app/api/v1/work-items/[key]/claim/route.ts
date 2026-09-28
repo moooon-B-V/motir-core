@@ -28,8 +28,13 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // may simply proceed — the same reasoning `POST /api/v1/sessions/complete` gives
 // for reporting per-item outcomes rather than failing. Real failures keep their
 // statuses: 404 for an unknown or cross-workspace key, 422 for a malformed one.
-export const POST = withV1Route<{ key: string }>({ permission: 'work_item:edit' }, async (ctx) => {
-  const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
-  const claim = await workItemsService.claimWorkItem(projectId, identifier, ctx.service);
-  return NextResponse.json(presentWorkItemClaim(claim));
-});
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-6557) may call this,
+// bound as `lib/hostedRuns/runTokenRoutes.ts` says; the service enforces it.
+export const POST = withV1Route<{ key: string }>(
+  { permission: 'work_item:edit', acceptsRunToken: true },
+  async (ctx) => {
+    const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
+    const claim = await workItemsService.claimWorkItem(projectId, identifier, ctx.service);
+    return NextResponse.json(presentWorkItemClaim(claim));
+  },
+);

@@ -145,6 +145,7 @@ const EMPTY: QuickViewData = {
   kind: 'subtask',
   statusLabel: 'To Do',
   statusCategory: 'todo',
+  fixReason: null,
   descriptionMd: 'Sign in with email and password.',
   // MOTIR-4183 — the peek payload carries the WHY, so proposal mode can render
   // it inline. `/items` still defers it to the full page.

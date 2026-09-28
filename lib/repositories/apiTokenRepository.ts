@@ -50,6 +50,10 @@ export interface CreateApiTokenInput {
    * DEVICE-CREDENTIAL SHAPE, not an absent value — see the column's own
    * doc-comment in `prisma/schema.prisma`. */
   projectId: string | null;
+  /** The DISPATCH RUN this token is bound to (MOTIR-688) — set only by
+   * `runCredentialService.mintRunCredential`. Omitted everywhere else, which
+   * leaves the column NULL: an ordinary PAT or device credential. */
+  dispatchRunId?: string;
 }
 
 export const apiTokenRepository = {
@@ -67,7 +71,10 @@ export const apiTokenRepository = {
    * defect this card removes, so it must not reappear in the deploy window. */
   async findByUser(userId: string, tx: Prisma.TransactionClient): Promise<ApiTokenWithScope[]> {
     return tx.apiToken.findMany({
-      where: { userId, revokedAt: null },
+      // `dispatchRunId: null` — a RUN token (MOTIR-688) is not a credential the
+      // person minted or manages: the run mints it and the run's end deletes it.
+      // Listing it would offer a revoke control on something mid-run.
+      where: { userId, revokedAt: null, dispatchRunId: null },
       orderBy: { createdAt: 'desc' },
       include: SCOPE_INCLUDE,
     });
@@ -84,7 +91,7 @@ export const apiTokenRepository = {
    *
    * `tx` REQUIRED: `api_token_owner_or_system` reads `app.user_id`. */
   async countByUser(userId: string, tx: Prisma.TransactionClient): Promise<number> {
-    return tx.apiToken.count({ where: { userId, revokedAt: null } });
+    return tx.apiToken.count({ where: { userId, revokedAt: null, dispatchRunId: null } });
   },
 
   /** The verify lookup — an equality probe on the unique `token_hash` index
@@ -129,6 +136,19 @@ export const apiTokenRepository = {
    * already permitted without a policy change. Required `tx`. */
   async remove(tokenId: string, tx: Prisma.TransactionClient): Promise<void> {
     await tx.apiToken.delete({ where: { id: tokenId } });
+  },
+
+  /** Delete every token bound to one dispatch run — the run credential's revoke
+   * (MOTIR-688). Deleting is revocation here exactly as in {@link remove}, and it
+   * is IDEMPOTENT by construction: a second call finds nothing and returns 0.
+   * Runs under `withSystemContext` (the end path has no dispatcher user
+   * context), which `api_token_owner_or_system` admits. Required `tx`. */
+  async deleteByDispatchRunId(
+    dispatchRunId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const { count } = await tx.apiToken.deleteMany({ where: { dispatchRunId } });
+    return count;
   },
 
   /** Stamp `lastUsedAt` — the throttled verify touch. Required `tx`. */

@@ -4,6 +4,8 @@ import type {
   DispatchItem,
   DispatchRunAppended,
   DispatchRunOpened,
+  DispatchRunView,
+  RunGitCredentials,
   PlanJobState,
   PlanOutcome,
   PlanProposal,
@@ -581,6 +583,10 @@ export function toDispatchPrompt(body: PromptBody): DispatchPrompt {
         }),
     workflowMode: body.workflowMode,
     sessionBranch: body.sessionBranch,
+    // MOTIR-6539 — carried because the run NAMES it on `checkout_ready` and
+    // checkpoints it while the agent works. Absent from an older server stays
+    // absent, and absent means "nothing to checkpoint".
+    ...(body.workBranch === undefined ? {} : { workBranch: body.workBranch }),
     // MOTIR-6530 — absent from an older server stays absent.
     ...(body.branch === undefined ? {} : { branch: body.branch }),
     advisories: body.advisories as DispatchAdvisory[],
@@ -747,6 +753,37 @@ export function toDispatchRunOpened(body: SuccessBody<'openDispatchRun'>): Dispa
     status: body.run.status,
     seq: body.run.seq,
     cards: body.run.cards.map((card) => ({ key: card.key, disposition: card.disposition })),
+  };
+}
+
+/** A run READ back, for a CLI adopting a run the server opened (MOTIR-6558). */
+export function toDispatchRunView(body: SuccessBody<'getDispatchRun'>): DispatchRunView {
+  return {
+    runId: body.id,
+    status: body.status,
+    command: body.command,
+    origin: body.origin,
+    model: body.model,
+    endedAt: body.endedAt,
+    cards: [...body.cards]
+      .sort((a, b) => a.position - b.position)
+      .map((card) => ({ key: card.key, position: card.position, disposition: card.disposition })),
+  };
+}
+
+/** A hosted run's git credentials, one per repository (MOTIR-6538). */
+export function toRunGitCredentials(
+  body: SuccessBody<'issueDispatchRunGitCredentials'>,
+): RunGitCredentials {
+  return {
+    credentials: body.credentials.map((c) => ({
+      repository: c.repository,
+      token: c.token,
+      expiresAt: c.expiresAt,
+      authorName: c.authorName,
+      authorEmail: c.authorEmail,
+    })),
+    dispatchedBy: body.dispatchedBy,
   };
 }
 

@@ -77,7 +77,7 @@ const EXPECTED_PRIMARY_ORDER = [
   '/plans',
   '/backlog',
   '/dashboard',
-  '/triage',
+  '/requested-features',
   '/reports',
   // Approval records (MOTIR-5302) — after Reports and before Code, the position
   // `design/approvals/design-notes.md` § The ENTRANCE argues: a record you consult,
@@ -106,7 +106,7 @@ describe('SidebarNav — the primary section renders in the decided order', () =
     expect(links.slice(0, EXPECTED_PRIMARY_ORDER.length)).toEqual(EXPECTED_PRIMARY_ORDER);
   });
 
-  it('puts Dashboard AFTER Backlog and BEFORE Triage — the change itself', () => {
+  it('puts Dashboard AFTER Backlog and BEFORE Requested features — the change itself', () => {
     // Stated on its own as well as inside the whole-list equality above, so a
     // future reader who breaks it is told WHICH property they broke rather than
     // being handed a twelve-element diff.
@@ -115,7 +115,7 @@ describe('SidebarNav — the primary section renders in the decided order', () =
     );
     const links = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
     expect(links.indexOf('/dashboard')).toBe(links.indexOf('/backlog') + 1);
-    expect(links.indexOf('/triage')).toBe(links.indexOf('/dashboard') + 1);
+    expect(links.indexOf('/requested-features')).toBe(links.indexOf('/dashboard') + 1);
   });
 
   it('leaves Home leading the rail — the demotion moved Dashboard, nothing else', () => {

@@ -43,6 +43,7 @@ const DATA: QuickViewData = {
   kind: 'subtask',
   statusLabel: 'In Progress',
   statusCategory: 'in_progress',
+  fixReason: null,
   descriptionMd: 'Sign in with email and password.',
   explanationMd: null,
   type: 'code',

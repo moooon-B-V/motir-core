@@ -65,6 +65,9 @@ export interface CiContainerUsageCreateInput {
    *  teardown reason yet. */
   terminalState: string | null;
   teardownReason: string | null;
+  /** The dispatch run a hosted-agent container served (MOTIR-6448); NULL for a CI
+   *  runner and an index container, which serve no run. */
+  dispatchRunId: string | null;
 }
 
 /** What the row for a handle holds RIGHT NOW, read under a lock so the caller can
@@ -102,6 +105,36 @@ export interface CiContainerUsageAccrueInput {
   containerStoppedAt: Date | null;
   terminalState: string | null;
   teardownReason: string | null;
+  /** The dispatch run the container served. A NON-NULL value is written; a null
+   *  leaves whatever the row holds, so a record that does not carry the run (a
+   *  reaper-built settle) can never un-name a row an earlier write named. */
+  dispatchRunId: string | null;
+}
+
+/** One dispatch run's machine time (MOTIR-6448) — summed over every usage row that
+ *  names the run. A run normally has one row; a retried boot can have two. */
+export interface DispatchRunMachineTime {
+  billableSeconds: number;
+  /** Decimal string, never floated — the same discipline as the row's own
+   *  `cost_usd`. `'0'` for a run with no container row. */
+  costUsd: string;
+  /** True only when the run HAS a row and every one of its rows is settled.
+   *  False while any row is still accruing, and false for a run with none. */
+  settled: boolean;
+}
+
+/** A live hosted-agent container's row, as the reaper reads it (MOTIR-6524). */
+export interface LiveAgentUsage {
+  dispatchRunId: string;
+  organizationId: string;
+  workspaceId: string;
+  projectId: string | null;
+  /** Null for a handle that served more than one repository (MOTIR-3255). */
+  repoFullName: string | null;
+  cpuKind: string;
+  cpus: number;
+  memoryMb: number;
+  containerStartedAt: Date | null;
 }
 
 /** One repository's container totals for a period — the fleet reconciliation's
@@ -176,6 +209,7 @@ export const ciContainerUsageRepository = {
           rateEffectiveFrom: data.rateEffectiveFrom,
           terminalState: data.terminalState,
           teardownReason: data.teardownReason,
+          dispatchRunId: data.dispatchRunId,
         },
       ],
       skipDuplicates: true,
@@ -266,8 +300,112 @@ export const ciContainerUsageRepository = {
         containerStoppedAt: data.containerStoppedAt,
         terminalState: data.terminalState,
         teardownReason: data.teardownReason,
+        ...(data.dispatchRunId ? { dispatchRunId: data.dispatchRunId } : {}),
       },
     });
+  },
+
+  /**
+   * The dispatch run a LIVE hosted-agent container serves, by its handle
+   * (MOTIR-6450) — the reaper's question "is this machine a hosted run still in
+   * progress?". Live = the row has no `container_stopped_at` yet (it is an
+   * accrual checkpoint, not a settle). Null for any other container.
+   */
+  async findLiveAgentRunByHandle(
+    containerProvider: string,
+    handleId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ dispatchRunId: string } | null> {
+    const row = await tx.ciContainerUsage.findFirst({
+      where: {
+        containerProvider,
+        handleId,
+        workload: 'agent',
+        containerStoppedAt: null,
+        dispatchRunId: { not: null },
+      },
+      select: { dispatchRunId: true },
+    });
+    return row?.dispatchRunId ? { dispatchRunId: row.dispatchRunId } : null;
+  },
+
+  /**
+   * The LIVE hosted-agent row for a handle, with the attribution its checkpoint
+   * already carries (MOTIR-6524) — what the reaper settles a hosted-agent machine
+   * against when no supervisor is left to. Same predicate as
+   * {@link findLiveAgentRunByHandle}; null for any other container.
+   */
+  async findLiveAgentUsageByHandle(
+    containerProvider: string,
+    handleId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<LiveAgentUsage | null> {
+    const row = await tx.ciContainerUsage.findFirst({
+      where: {
+        containerProvider,
+        handleId,
+        workload: 'agent',
+        containerStoppedAt: null,
+        dispatchRunId: { not: null },
+      },
+      select: {
+        dispatchRunId: true,
+        organizationId: true,
+        workspaceId: true,
+        projectId: true,
+        repoFullName: true,
+        cpuKind: true,
+        cpus: true,
+        memoryMb: true,
+        containerStartedAt: true,
+      },
+    });
+    if (!row?.dispatchRunId) return null;
+    return { ...row, dispatchRunId: row.dispatchRunId };
+  },
+
+  /**
+   * ONE dispatch run's machine time (MOTIR-6448) — Σ `billable_seconds` and
+   * Σ `cost_usd` over every row naming the run, and whether all of them are
+   * settled. Live while the container runs (a checkpoint row's figure is its
+   * absolute-to-date total, so the sum is the run's time so far), final once it
+   * has settled.
+   *
+   * A run with NO row answers zeroes and `settled: false` — never a throw, and not
+   * "settled", which would claim a run had finished its spend when nothing was
+   * ever metered for it.
+   *
+   * Raw SQL because it is one aggregate (SUM + COUNT + a settled count) the
+   * delegate cannot express as a single op. The caller supplies the context (the
+   * rows are RLS-gated; the fleet reads under `withSystemContext`).
+   */
+  async getMachineTimeForDispatchRun(
+    dispatchRunId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<DispatchRunMachineTime> {
+    const rows = await tx.$queryRaw<
+      Array<{
+        billableSeconds: bigint | number | null;
+        costUsd: Prisma.Decimal | string | null;
+        rowCount: bigint | number;
+        openCount: bigint | number;
+      }>
+    >`
+      SELECT
+        COALESCE(SUM("billable_seconds"), 0)                          AS "billableSeconds",
+        COALESCE(SUM("cost_usd"), 0)                                  AS "costUsd",
+        COUNT(*)                                                      AS "rowCount",
+        COUNT(*) FILTER (WHERE "container_stopped_at" IS NULL)        AS "openCount"
+      FROM "ci_container_usage"
+      WHERE "dispatch_run_id" = ${dispatchRunId}
+    `;
+    const row = rows[0];
+    const rowCount = Number(row?.rowCount ?? 0);
+    return {
+      billableSeconds: Number(row?.billableSeconds ?? 0),
+      costUsd: new Prisma.Decimal(row?.costUsd ?? 0).toFixed(),
+      settled: rowCount > 0 && Number(row?.openCount ?? 0) === 0,
+    };
   },
 
   // ⚠️ `findByHandle` IS GONE (MOTIR-1995), and its removal is part of the write

@@ -310,12 +310,14 @@ export function checkBootstrapCheckout(
 }
 
 /** How the agent command was resolved, so the summary can say so. */
-export type AgentSource = 'flag' | 'env' | 'config';
+export type AgentSource = 'flag' | 'env' | 'config' | 'hosted';
 
 const AGENT_SOURCE_LABEL: Record<AgentSource, string> = {
   flag: '--agent',
   env: 'MOTIR_AGENT',
   config: 'config agentCommand',
+  // The hosted run's built-in launcher (MOTIR-6559): OpenCode on MOTIR_MODEL.
+  hosted: 'the hosted run (MOTIR_MODEL)',
 };
 
 export function agentSourceLabel(source: AgentSource): string {

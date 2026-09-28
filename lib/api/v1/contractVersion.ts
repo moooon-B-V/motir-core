@@ -737,5 +737,52 @@
  *   was `1.47.0` at the merge of `origin/main` that brought MOTIR-6735 (which took
  *   `1.47.0` first — this entry was renumbered from it), so this claims `1.48.0`. If a
  *   sibling has taken it since, RENUMBER this entry — it names the CODES.
+ *
+ * - `1.49.0` — MOTIR-6558 adds `getDispatchRun` (`GET /api/v1/dispatch-runs/{id}`):
+ *   one run with its SET, the same `DispatchRun` component the ingest operations
+ *   already answer with. A hosted run is opened by the SERVER, and the `motir`
+ *   CLI in its container ADOPTS it (`hosted-run-runs-the-cli-as-the-app.md` §3) —
+ *   this read is how it learns the cards it owns, in the run's own order. A run's
+ *   own credential may read its own run and no other.
+ *
+ *   Additive: one new READ operation reusing an existing component (§8's allowed
+ *   list); nothing existing changes.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.48.0` on `origin/main` when this was merged (MOTIR-6735 took `1.47.0`
+ *   and MOTIR-6672/6673 `1.48.0` after MOTIR-6528, MOTIR-6530, MOTIR-6532,
+ *   MOTIR-6531 and MOTIR-6535/6537 took `1.46.0` together), so this claims
+ *   `1.49.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   OPERATION.
+ *
+ * - `1.50.0` — MOTIR-6538 adds `issueDispatchRunGitCredentials`:
+ *   `POST /api/v1/dispatch-runs/{id}/git-credential`, a running HOSTED run's git
+ *   credentials — one entry per repository of the run, each an installation token
+ *   of the Motir GitHub App that writes it, with the App's bot as author and the
+ *   dispatcher named only as `dispatchedBy`
+ *   (`docs/decisions/hosted-run-runs-the-cli-as-the-app.md` §5).
+ *
+ *   Additive: a NEW operation (§8's allowed list); no existing operation, field
+ *   or code changes meaning. It answers ONLY a hosted run's own credential
+ *   (`DISPATCH_RUN_TOKEN_OUT_OF_SCOPE`, 403, for any other token, a person's
+ *   included), so no person's grant is widened by it.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.49.0` after MOTIR-6558, so this claims `1.50.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the OPERATION.
+ *
+ * - `1.51.0` — MOTIR-6539 adds `workBranch` (nullable) to the `DispatchPrompt`
+ *   component `getWorkItemDispatchPrompt` answers: the branch the prompt tells the
+ *   agent to CREATE for its work — the same name in every repository the item
+ *   ships in — or `null` for a manual item. A runner names it on `checkout_ready`
+ *   before the agent exists, and pushes it as the agent commits so a run that dies
+ *   leaves its work on origin.
+ *
+ *   Additive: one new nullable field on an existing component (§8's allowed list);
+ *   nothing existing changes meaning, and `sessionBranch` still names the lineage.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.50.0` after MOTIR-6538, so this claims `1.51.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.48.0';
+export const V1_CONTRACT_VERSION = '1.51.0';

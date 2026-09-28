@@ -297,7 +297,10 @@ test('a re-planned card springs back from a drag, its status control opens the p
       .getByRole('main')
       .getByRole('button', { name: `Edit ${en.issueViews.status}`, exact: true })
       .click();
-    await page.getByRole('main').getByRole('combobox').click();
+    await page
+      .getByRole('main')
+      .getByRole('combobox', { name: en.issueViews.status, exact: true })
+      .click();
     for (const name of ['To Do', 'In Progress', 'Blocked', 'Cancelled']) {
       const option = page.getByRole('option', { name: new RegExp(`^${name}`) });
       await expect(option).toHaveAttribute('aria-disabled', 'true');

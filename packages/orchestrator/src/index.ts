@@ -24,6 +24,7 @@ export * from './errors';
 export * from './rates';
 export * from './usage';
 export * from './usageSink';
+export * from './reap';
 export * from './imagePull';
 export * from './adapters/fly';
 export * from './adapters/fly/flyMachines';

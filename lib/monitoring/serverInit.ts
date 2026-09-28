@@ -4,6 +4,7 @@ import {
   serverSentryDsn,
 } from './config';
 import { dropExpectedDomainErrors } from './expectedDomainErrors';
+import { tagTransactionStall } from './transactionStall';
 
 // THE NODE RUNTIMES' `Sentry.init` OPTIONS, IN ONE PLACE (MOTIR-3606).
 //
@@ -29,6 +30,20 @@ import { dropExpectedDomainErrors } from './expectedDomainErrors';
 // `tests/monitoring/sentry-init-gate.test.ts` asserts the gate per surface
 // rather than once.
 
+/**
+ * The Node runtimes' `beforeSend`: drop an expected domain 4xx, then tag a
+ * Prisma transaction timeout (P2028) with what the process was waiting on
+ * (MOTIR-6701, `./transactionStall`). The drop runs first so nothing is tagged
+ * that is not going to be sent.
+ */
+export function serverBeforeSend(
+  ...args: Parameters<typeof dropExpectedDomainErrors>
+): ReturnType<typeof dropExpectedDomainErrors> {
+  const [, hint] = args;
+  const kept = dropExpectedDomainErrors(...args);
+  return kept ? tagTransactionStall(kept, hint) : null;
+}
+
 /** The `Sentry.init` options a Node runtime should use, or null when monitoring
  *  is off.
  *
@@ -40,7 +55,7 @@ export function serverSentryInitOptions(): {
   dsn: string;
   environment: string | undefined;
   tracesSampleRate: number;
-  beforeSend: typeof dropExpectedDomainErrors;
+  beforeSend: typeof serverBeforeSend;
   sendDefaultPii: false;
 } | null {
   const dsn = serverSentryDsn();
@@ -52,7 +67,9 @@ export function serverSentryInitOptions(): {
     // Expected typed domain 4xx are the product refusing on purpose, not
     // faults — see the module this comes from for why the discriminator is the
     // shipped status map and not an error-shape heuristic.
-    beforeSend: dropExpectedDomainErrors,
+    // …and a P2028 that IS a fault carries the readings that say which stall
+    // caused it (MOTIR-6701).
+    beforeSend: serverBeforeSend,
     // No request bodies, no headers, no cookies, no IP. An error report is a
     // subset of what the database already holds ONLY if we keep it that way,
     // and `sendDefaultPii` is the switch that decides. MOTIR-1161's transfer

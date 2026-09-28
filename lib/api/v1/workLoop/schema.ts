@@ -376,6 +376,18 @@ export const dispatchPromptSchema = z.object({
   /** The session branch the prompt instructs, or `null` in `per_item_pr` mode. */
   sessionBranch: z.string().nullable(),
   /**
+   * The branch the prompt tells the agent to create for its work — the SAME name
+   * in every repository the item ships in — or `null` for a manual item, which
+   * has no branch (MOTIR-6539). The pull request comes from it in `per_item_pr`
+   * mode and from `sessionBranch` in `session_lineage` mode. Additive under §8.
+   *
+   * OPTIONAL in the schema though this server always sends it: the `motir` CLI is
+   * published separately and is routinely pointed at an older self-hosted Motir,
+   * whose payload has no such key — absent must validate, and read as "no branch
+   * to checkpoint", never as a malformed response.
+   */
+  workBranch: z.string().nullable().optional(),
+  /**
    * The branch the prompt tells the agent to work on (MOTIR-6530) — the session
    * branch, else the card's per-item branch; `null` for a manual item.
    *
@@ -412,6 +424,7 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
     })),
     workflowMode: dto.workflowMode,
     sessionBranch: dto.sessionBranch,
+    workBranch: dto.workBranch,
     branch: dto.branch,
     advisories: dto.advisories.map((advisory) => {
       if (isBlockerCountAdvisory(advisory)) {
@@ -2073,6 +2086,32 @@ export const dispatchRunAppendedSchema = z.object({
   seq: z.number().int(),
   /** Every leg this batch moved, so the caller need not re-read the run. */
   cards: z.array(dispatchRunCardSchema),
+});
+
+/**
+ * What `POST /api/v1/dispatch-runs/{id}/git-credential` answers (MOTIR-6538,
+ * `docs/decisions/hosted-run-runs-the-cli-as-the-app.md` §5): the run's git
+ * credentials, ONE ENTRY PER REPOSITORY of the run. Repositories written through
+ * one App installation share a token. The author is that App's bot — never the
+ * dispatcher, who is named only as `dispatchedBy`, for pull-request bodies.
+ *
+ * ⚠️ `token` is a live secret. It is answered to the run's own credential only,
+ * and nothing may log or echo it.
+ */
+export const dispatchRunGitCredentialsSchema = z.object({
+  credentials: z.array(
+    z.object({
+      /** `owner/name`. */
+      repository: z.string(),
+      token: z.string(),
+      /** ISO-8601; GitHub's own expiry, one hour from the mint. */
+      expiresAt: z.string(),
+      authorName: z.string(),
+      authorEmail: z.string(),
+    }),
+  ),
+  /** The dispatcher's Motir display name, or `null` when the run has none. */
+  dispatchedBy: z.string().nullable(),
 });
 
 /**

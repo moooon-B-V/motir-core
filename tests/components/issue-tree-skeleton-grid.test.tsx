@@ -63,6 +63,7 @@ const ROW: IssueRowData = {
   type: null,
   status: 'todo',
   ciState: null,
+  fixReason: null,
   obsolescence: null,
   statusLabel: 'To Do',
   statusCategory: 'todo',

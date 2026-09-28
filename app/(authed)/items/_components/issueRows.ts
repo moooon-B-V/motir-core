@@ -1,4 +1,5 @@
 import { personDisplayName } from '@/lib/people/personLabel';
+import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type {
   WorkItemKindDto,
   WorkItemListItemDto,
@@ -54,6 +55,10 @@ export interface IssueRowData {
    *  the GLYPH form only, and only for `failing` / `running` off the `done`
    *  category — `ciBadgeState`, shared with the board card (MOTIR-5474). */
   ciState: string | null;
+  /** Why the card is stuck until something is repaired (MOTIR-6600). The row draws
+   *  the To fix tag's GLYPH form in the Status cell, and only off the `done`
+   *  category — `toFixTagState`, shared with the board card (MOTIR-6610). */
+  fixReason: WorkItemFixReasonDto | null;
   /** The OBSOLESCENCE mark (MOTIR-6677) — the status cell draws its GLYPH after the
    *  status pill. Nothing hides, dims or re-sorts a marked row. */
   obsolescence: WorkItemObsolescenceDto | null;
@@ -177,6 +182,7 @@ function shapeRowData(
     statusLabel: status?.label ?? item.status,
     statusCategory: status?.category ?? null,
     ciState: item.ciState,
+    fixReason: item.fixReason,
     obsolescence: item.obsolescence,
     assigneeId: item.assigneeId,
     assigneeName: item.assigneeId ? (nameById.get(item.assigneeId) ?? null) : null,

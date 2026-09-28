@@ -56,8 +56,10 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // (two queries for the whole page, whatever its size). ADR Amendment 3 (Q4)
 // permits precisely this and forbids the per-row form: an N+1 here is invisible
 // until a 100-row page.
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-6557) may call this,
+// bound as `lib/hostedRuns/runTokenRoutes.ts` says; the service enforces it.
 export const GET = withV1Route<{ projectKey: string }>(
-  { permission: 'project:browse' },
+  { permission: 'project:browse', acceptsRunToken: true },
   async (ctx) => {
     // Parse BEFORE reading. The ready cursor is the service's own opaque token,
     // wrapped in v1's signed collection envelope — so a cursor from another

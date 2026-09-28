@@ -274,6 +274,7 @@ const DATA: QuickViewData = {
   kind: 'subtask',
   statusLabel: 'To Do',
   statusCategory: 'todo',
+  fixReason: null,
   descriptionMd: null,
   explanationMd: null,
   type: null,

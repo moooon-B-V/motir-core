@@ -500,6 +500,7 @@ const TARGET_PAYLOAD: QuickViewData = {
   status: 'done',
   statusLabel: 'Done',
   statusCategory: 'done',
+  fixReason: null,
   descriptionMd: null,
   explanationMd: null,
   type: 'code',

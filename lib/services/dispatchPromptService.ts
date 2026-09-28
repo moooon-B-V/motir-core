@@ -334,6 +334,8 @@ export const dispatchPromptService = {
       throw new ProjectNotFoundError(projectId);
     }
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
+    // A hosted run's own credential reads only its run's cards' prompts — checked
+    // inside `getWorkItemByIdentifier` above (MOTIR-6557), before any read below.
     // Validated FIRST, before the fan-out: a continue that cannot happen is the
     // caller's to fix, and the answer must not wait on ten reads.
     const continueFrom = opts.continueFrom
@@ -513,6 +515,7 @@ export const dispatchPromptService = {
       targetRepos,
       workflowMode: assembled.workflowMode,
       sessionBranch: assembled.sessionBranch,
+      workBranch: assembled.workBranch,
       branch: assembled.branch,
       // Handed over SEPARATELY as well as rendered into the prompt: the prompt
       // reaches the agent, this reaches the human watching the CLI. Always an

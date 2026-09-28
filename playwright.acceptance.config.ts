@@ -106,6 +106,17 @@ process.env['E2E_JOB_WORKER_MONITOR_FAKE'] ??= '1';
 // mock's origin, and the runner-side sets below (MOTIR_CLOUD is set on the
 // runner too so seed-side reads like setOrgBillingState match the server).
 const MOTIR_AI_URL = 'http://motir-ai.e2e.local';
+// Set on the RUNNER too (not only in `webServer.env`, below), so
+// `hostedRunSeamEnv` (`tests/e2e/_helpers/job-worker-process.ts`) can mirror the
+// SAME host + token into the job worker for the hosted-run stall/cancel end
+// path's motir-ai calls (Story MOTIR-683 · MOTIR-6452). Safe here specifically
+// because this whole lane is already cloud-on with `MOTIR_AI_URL` reaching its
+// webServer (unlike the index-writer's OWN, unrelated motir-ai host, which must
+// NOT reach this lane's webServer — see `indexWriterSeamEnv`'s warning) — the
+// runner process runs no app code, so this cannot flip anything cloud-on that
+// was not already.
+process.env['MOTIR_AI_URL'] ??= MOTIR_AI_URL;
+process.env['MOTIR_AI_SERVICE_TOKEN'] ??= 'e2e-acceptance-placeholder-token';
 // The code-health boundary fixture (MOTIR-2253): the audit-coverage spec drives
 // the SERVER-rendered /code-health page, whose motir-ai reads no browser
 // `page.route` can reach. `lib/test-code-health-mock` answers them from this
@@ -158,6 +169,59 @@ process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH'] ??= MOTIR_GITHUB_MERGE_JOURNAL_PA
 // alone, reached the REAL api.github.com. The two halves only ever travel
 // together: `githubMergeSeamEnv` in `tests/e2e/_helpers/job-worker-process.ts`.
 process.env['E2E_JOB_WORKER_GITHUB_MERGE_SEAM'] ??= '1';
+
+// ── The HOSTED RUN seams (Story MOTIR-683 · MOTIR-6452) ──────────────────────
+//
+// `hostedRunService.start` calls three real services this lane cannot reach:
+// the GATEWAY (mints/revokes the run's model key), motir-ai (the offered-model
+// list, the credit pre-flight, the run's usage and its machine-time charge) and
+// GitHub (the repo-level installation read `repositoriesForItems` makes). None
+// of those were stubbed here before this card — `card-MOTIR-6452.md`'s own
+// "lane reachability" note is what found the gap, checked at `84b69443e`.
+//
+// The fleet half was ALREADY reachable (`MOTIR_FLEET_ORCHESTRATOR` below,
+// mirroring the main lane's own `??= 'fake'`, `playwright.config.ts` L165); this
+// section is the rest of it, `lib/test-hosted-run-mock.ts` behind
+// `E2E_TEST_HOSTED_RUN=1`. NO REAL GATEWAY, motir-ai OR GITHUB CALL IS EVER MADE
+// by this suite.
+//
+// Fixture + journal, same two-file split as every sibling seam: the fixture
+// (models / credit pre-flight / repo-installation / usage) is re-read on every
+// request so the model-withdrawn case can change it MID-TEST; the journal is
+// how the spec — a separate process — proves each stub actually answered.
+process.env['MOTIR_FLEET_ORCHESTRATOR'] ??= 'fake';
+process.env['MOTIR_GATEWAY_URL'] ??= 'http://motir-gateway.e2e.local';
+process.env['MOTIR_RUN_KEY_MINT_SECRET'] ??= 'e2e-acceptance-run-key-secret';
+const MOTIR_HOSTED_RUN_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-hosted-run-fixture.json');
+const MOTIR_HOSTED_RUN_JOURNAL_PATH = path.resolve(
+  '/tmp/motir-acceptance-hosted-run-journal.jsonl',
+);
+process.env['MOTIR_HOSTED_RUN_FIXTURE_PATH'] ??= MOTIR_HOSTED_RUN_FIXTURE_PATH;
+process.env['MOTIR_HOSTED_RUN_JOURNAL_PATH'] ??= MOTIR_HOSTED_RUN_JOURNAL_PATH;
+// The fake orchestrator's cross-process container store (MOTIR-3828's shape,
+// this lane's own copy — never the main/index-writer lane's `out/` path, which
+// belongs to a different `webServer`). A hosted run BOOTS in the webServer
+// (`start`) and is POLLED/SETTLED in the worker (`supervise`), so both processes
+// — and the runner, which reads a booted container's launcher env to learn the
+// run's own credential (`MOTIR_RUN_TOKEN`), exactly as the real container would
+// receive it — must agree on one file.
+process.env['MOTIR_FAKE_CONTAINER_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-containers.json',
+);
+// The stall watchdog's test-only config seam (`hostedRunStallWindowMs`,
+// `lib/hostedRuns/limits.ts`) — shortened from the real 15 minutes so the
+// "stalled" case can run in this lane at all. Read directly by whichever
+// process runs `stallDetail` (the worker, via `supervise`); see
+// `hostedRunSeamEnv` for why it also has to reach that process by hand.
+// 25 s, not less: the window is lane-wide, and the paced happy path leaves a
+// few seconds (its video beats) between the boot and its first event — at 4 s
+// the supervisor rightly ended THAT run as stalled. 25 s clears those gaps and
+// still ends the stall case well inside its 90 s wait.
+process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS'] ??= '25000';
+// …and the JOB WORKER installs the same three seams, because the stall/cancel
+// end path's gateway revoke and machine-time charge run inside `supervise`'s
+// durable job — see `hostedRunSeamEnv` in `tests/e2e/_helpers/job-worker-process.ts`.
+process.env['E2E_JOB_WORKER_HOSTED_RUN_SEAM'] ??= '1';
 
 /** The Studio App's credentials. The private key is GENERATED per run rather than
  *  committed: `createAppJwt` really signs RS256 with it (the shipped path runs
@@ -355,6 +419,17 @@ export default defineConfig({
         // The identity/installation the seed binds are read back on this surface;
         // the App slug is what the settings pane the step hands off to renders.
         GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+        // The hosted-run gateway/motir-ai/GitHub seams (Story MOTIR-683 ·
+        // MOTIR-6452) — see the "HOSTED RUN seams" block above this config for
+        // why each of these exists.
+        MOTIR_FLEET_ORCHESTRATOR: process.env['MOTIR_FLEET_ORCHESTRATOR']!,
+        E2E_TEST_HOSTED_RUN: '1',
+        MOTIR_GATEWAY_URL: process.env['MOTIR_GATEWAY_URL']!,
+        MOTIR_RUN_KEY_MINT_SECRET: process.env['MOTIR_RUN_KEY_MINT_SECRET']!,
+        MOTIR_HOSTED_RUN_FIXTURE_PATH,
+        MOTIR_HOSTED_RUN_JOURNAL_PATH,
+        MOTIR_FAKE_CONTAINER_STATE_PATH: process.env['MOTIR_FAKE_CONTAINER_STATE_PATH']!,
+        E2E_HOSTED_RUN_STALL_WINDOW_MS: process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS']!,
         // Story MOTIR-4928 · MOTIR-5264 — the MONITORING room's connect walk.
         // ⚠️ THE FAKE IS SELECTED HERE OR NOWHERE. This server is spawned, so a
         // `vi.mock` cannot reach it; `lib/monitors/index.ts` re-registers the fake

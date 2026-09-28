@@ -37,13 +37,15 @@ const { EpicNotPublicBlock, EpicNotPublicPill } =
 afterEach(() => cleanup());
 
 describe('VisitorRail', () => {
-  it('links the six Visitor views, and lights Work Items for the list, the tree and an item', () => {
+  it('links the seven Visitor views, and lights Work Items for the list, the tree and an item', () => {
     for (const [path, lit] of [
       ['/p/NW/items', 'Work Items'],
       ['/p/NW/tree', 'Work Items'],
       ['/p/NW/items/NW-4', 'Work Items'],
       ['/p/NW/board', 'Boards'],
       ['/p/NW/runs', 'Runs'],
+      // MOTIR-6769 — the pending public requests, under the members' own label.
+      ['/p/NW/requested-features', 'Requested features'],
     ] as const) {
       nav.pathname = path;
       render(<VisitorRail identifier="NW" helpMenu={<span data-testid="help" />} />);
@@ -53,6 +55,7 @@ describe('VisitorRail', () => {
         '/p/NW/runs',
         '/p/NW/board',
         '/p/NW/roadmap',
+        '/p/NW/requested-features',
         '/p/NW/plans',
         '/p/NW/approvals',
       ]);

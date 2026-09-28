@@ -140,6 +140,43 @@ export const dispatchRunEventRepository = {
   },
 
   /**
+   * A HOSTED run's closing line (MOTIR-691), or null — the `log` event the end
+   * path (`hostedRunService.endHostedRun`) writes with `data.end`, naming which
+   * end it was. The run panel quotes it as the run's reason line. A run the CLI
+   * closed itself has none. Its BODY may be null once the retention sweep has
+   * cleared it; `data.end` survives the sweep.
+   */
+  async findHostedEndLine(
+    dispatchRunId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Pick<DispatchRunEvent, 'body' | 'data'> | null> {
+    return tx.dispatchRunEvent.findFirst({
+      // Any string `end` — the outcome's name. `string_contains: ''` is the
+      // path filter's "is a string" test, which is what the end path writes.
+      where: { dispatchRunId, kind: 'log', data: { path: ['end'], string_contains: '' } },
+      orderBy: { seq: 'desc' },
+      select: { body: true, data: true },
+    });
+  },
+
+  /**
+   * When the run's LATEST event was written, or null — the hosted stall read
+   * (MOTIR-690): a run whose newest event is older than the stall window has an
+   * agent that is alive and silent. Ordered by `seq`, the server-assigned order.
+   */
+  async findLatestCreatedAt(
+    dispatchRunId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Date | null> {
+    const row = await tx.dispatchRunEvent.findFirst({
+      where: { dispatchRunId },
+      orderBy: { seq: 'desc' },
+      select: { createdAt: true },
+    });
+    return row?.createdAt ?? null;
+  },
+
+  /**
    * The branch the run's newest `checkout_ready` recorded (MOTIR-6530 writes it as
    * `data.branch`), for one leg — or for ANY leg of the run when `cardId` is null
    * (a scoped run's session branch is every leg's). Null when none named one.

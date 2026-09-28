@@ -1,5 +1,6 @@
 import { buildProgram } from './program.js';
 import { CliError } from './errors.js';
+import { runHostedPlumbing } from './hostedGit.js';
 import { isInteractive, promptLine } from './prompts.js';
 import { announceStaleness, isUnattendedArgv, shouldCheckStaleness } from './staleness.js';
 
@@ -20,6 +21,16 @@ async function main(): Promise<void> {
   // typed, and a courtesy notice that broke `motir run` would be a far worse
   // defect than the staleness it reports.
   const argv = process.argv.slice(2);
+  // ── THE HOSTED PLUMBING (MOTIR-6559) ─────────────────────────────────────
+  // `git-credential` and `hosted-gh` are invoked by git and by a hosted run's
+  // `gh` shim, never typed by a person. They are served BEFORE everything else:
+  // git reads a credential helper's stdout as protocol, so nothing — not a
+  // staleness notice, not help — may run ahead of them.
+  const plumbing = await runHostedPlumbing(argv);
+  if (plumbing !== null) {
+    process.exitCode = plumbing;
+    return;
+  }
   if (shouldCheckStaleness(argv)) {
     const prompt =
       isUnattendedArgv(argv) || !isInteractive() ? {} : { confirm: (q: string) => promptLine(q) };

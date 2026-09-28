@@ -1,4 +1,5 @@
 import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
+import { hostedRunService } from '@/lib/services/hostedRunService';
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
 import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
@@ -92,6 +93,8 @@ export const jobServices = {
   ciMinutesReconciliation: ciMinutesReconciliationService,
   ciActionsGate: ciActionsGateService,
   ciRunnerBoot: ciRunnerBootService,
+  // A hosted run's supervision (Story MOTIR-683 · MOTIR-690).
+  hostedRun: hostedRunService,
   jobScheduleHealth: jobScheduleHealthService,
   fleetPreflight: fleetPreflightService,
   // The rebuild-streak probe (MOTIR-5027) — the daily check's fifth, and the
