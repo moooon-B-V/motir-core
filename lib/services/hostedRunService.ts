@@ -12,6 +12,7 @@ import {
   HostedRunAlreadyEndedError,
   HostedRunBootFailedError,
   HostedRunCancelForbiddenError,
+  HostedContinueRefusedError,
   HostedRunCardNotReadyError,
   HostedRunCreditsUnavailableError,
   HostedRunNotFoundError,
@@ -52,6 +53,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { runCredentialService } from '@/lib/services/runCredentialService';
 import { scopeClaimService } from '@/lib/services/scopeClaimService';
+import { workItemContinueService } from '@/lib/services/workItemContinueService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { isClaimableState } from '@/lib/workItems/claimOutcome';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -89,6 +91,12 @@ export interface StartHostedRunInput {
   workItemKey: string;
   model: string;
   idempotencyKey: string;
+  /**
+   * `run` (the default) starts a READY card. `continue` (MOTIR-6792) resumes a
+   * card whose last run DIED, on that run's branches: the container runs
+   * `motir continue <KEY>` instead of `motir run <KEY>`.
+   */
+  mode?: 'run' | 'continue';
 }
 
 export interface HostedRunStarted {
@@ -274,6 +282,258 @@ function detailOf(err: unknown): string {
   return err instanceof Error ? err.message.slice(0, 300) : String(err);
 }
 
+/** What the pre-flights settled — the inputs the boot needs. */
+interface HostedRunPreflight {
+  organizationId: string;
+  repositories: RunRepository[];
+  fleet: ReturnType<typeof hostedAgentFleetConfig>;
+}
+
+/**
+ * EVERY REFUSAL BEFORE ANY SPEND, in order: the CI-credit gate, the model, the
+ * organization's credits, every repository of the run writable, the fleet
+ * configured. Each is a read. Shared by Run hosted and Continue hosted
+ * (MOTIR-6792) so a continue costs and refuses exactly like a run.
+ */
+async function preflight(
+  input: Pick<StartHostedRunInput, 'model'>,
+  projectId: string,
+  legIds: string[],
+  ctx: ServiceContext,
+): Promise<HostedRunPreflight> {
+  // The CI-credit gate every dispatch entry point runs — here, before the run
+  // opens, so an exhausted organization is refused rather than failed.
+  await ciAllowanceService.assertDispatchAllowed(ctx);
+
+  // ── 2 · The model, live — never a cache ──────────────────────────────────
+  await hostedRunModelService.assertOffered(input.model);
+
+  // ── 3 · Credits — the gateway's own balance rule ────────────────────────
+  const organizationId = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workspaceRepository.findOrganizationId(ctx.workspaceId, tx),
+  );
+  /* v8 ignore next -- a workspace always belongs to an organization */
+  if (!organizationId) throw new HostedRunCreditsUnavailableError();
+  const credits = await checkAgentRunCredits(organizationId);
+  if (credits === null) throw new HostedRunCreditsUnavailableError();
+  if (!credits.mayRun) throw new HostedRunOutOfCreditsError(credits.balanceCredits);
+
+  // ── 3b · Every repository the run touches can be written ────────────────
+  const repositories: RunRepository[] = await repositoriesForItems(
+    projectId,
+    ctx.workspaceId,
+    legIds,
+  );
+  const access = await hostedRunWriteAccess(repositories);
+  const refusals = access.filter((a): a is Extract<typeof a, { ok: false }> => !a.ok);
+  if (refusals.length > 0) {
+    throw new HostedRunRepositoryNotWritableError(
+      refusals.map(({ ok: _ok, app: _app, ...refusal }) => refusal as RunGitWriteRefusal),
+      repositories.length,
+    );
+  }
+  // The fleet, last of the reads: an unconfigured deployment opens nothing.
+  const fleet = hostedAgentFleetConfig();
+  return { organizationId, repositories, fleet };
+}
+
+/**
+ * Stamp the legs hosted, mint the run's two credentials, boot the container and
+ * hand it to the durable supervisor — for a run already OPENED (by Run hosted's
+ * open, or by the continue claim's hosted opening). A failure after this starts
+ * is the caller's to end.
+ */
+async function launch(
+  run: { id: string; startedAt: string },
+  input: Pick<StartHostedRunInput, 'model'>,
+  target: { identifier: string; projectId: string; legIds: string[] },
+  checked: HostedRunPreflight,
+  ctx: ServiceContext,
+  options: HostedRunStartOptions,
+  extraEnv: Record<string, string> = {},
+): Promise<void> {
+  const now = options.now ?? ((): Date => new Date());
+  const { identifier, legIds } = target;
+  const { organizationId, repositories, fleet } = checked;
+  const project = { id: target.projectId };
+  await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+    for (const id of legIds) {
+      await workItemsService.recordImplementationProvenance(
+        id,
+        { source: 'hosted', harness: 'opencode', model: input.model },
+        tx,
+      );
+    }
+  });
+
+  // ── 6 · The two credentials, each dying by the backstop ────────────────
+  const startedAt = new Date(run.startedAt);
+  const runKey = await hostedRunKeyService.mintRunKey(
+    { id: run.id, organizationId, startedAt },
+    input.model,
+    now(),
+  );
+  const runCredential = await runCredentialService.mintRunCredential(
+    {
+      dispatchRunId: run.id,
+      dispatcherUserId: ctx.userId,
+      expiresAt: latestRunCredentialExpiry(startedAt),
+    },
+    now(),
+  );
+
+  // ── 7 · Boot — the launcher's inputs, and no other credential ─────────
+  const request: HostedAgentContainerRequest = {
+    dispatchId: hostedRunDispatchId(run.id),
+    runId: run.id,
+    dispatchRunId: run.id,
+    organizationId,
+    workspaceId: ctx.workspaceId,
+    projectId: project.id,
+    /* v8 ignore next -- `repositoriesForItems` refuses an empty set */
+    repoFullName: repositories[0]?.repository ?? '',
+    image: fleet.image,
+    env: {
+      MOTIR_DISPATCH_RUN_ID: run.id,
+      MOTIR_WORK_ITEM_KEY: identifier,
+      MOTIR_API_URL: resolveBaseUrlTrimmed(),
+      MOTIR_RUN_TOKEN: runCredential.token,
+      MOTIR_GATEWAY_URL: runKey.containerEnv.MOTIR_GATEWAY_URL,
+      MOTIR_RUN_KEY: runKey.containerEnv.MOTIR_RUN_KEY,
+      MOTIR_MODEL: toOpenCodeModel(input.model),
+      ...extraEnv,
+    },
+    region: fleet.region,
+    size: FLEET_CONTAINER_SIZE,
+    timeoutSeconds: HOSTED_RUN_TIMEOUT_MS / 1000,
+  };
+  const booted = await hostedAgentContainerService.boot(request, options.supervision);
+  if (booted.phase === 'terminal') {
+    const detail = bootFailureDetail(booted.outcome);
+    await hostedRunService.endHostedRun(run.id, 'failed', detail);
+    throw new HostedRunBootFailedError(run.id, detail);
+  }
+
+  // ── 8 · Hand the booted session to the durable supervisor ─────────────
+  try {
+    await sendEvent(
+      'hosted-run/supervise',
+      {
+        workspaceId: ctx.workspaceId,
+        dispatchRunId: run.id,
+        session: booted.session,
+        idempotencyKey: hostedRunDispatchId(run.id),
+      },
+      { strict: true },
+    );
+  } catch (err) {
+    // A container nobody supervises spends until the reaper finds it. Tear it
+    // down now, through the seam's own settle, and fail the run.
+    await hostedAgentContainerService.settle(booted.session, {
+      done: true,
+      reason: 'provision_failed' satisfies TeardownReason,
+      startedAt: null,
+      exitCode: null,
+      failureDetail: 'its supervision could not be enqueued',
+    });
+    throw err;
+  }
+}
+
+/**
+ * CONTINUE HOSTED (Story MOTIR-6527 · MOTIR-6792) — Run hosted's start, with the
+ * continue claim where the readiness check and the open were.
+ *
+ * ⚠️ THE ORDER IS THE CONTRACT. Read which card the continue takes over (the
+ * card, or the parent of a dead parent run's leg) WITHOUT a lock; run every
+ * pre-flight Run hosted runs, in its order, over the resumed run's repositories;
+ * and only then take the claim — so a person told "out of credits" has not
+ * locked the card against a teammate's terminal `motir continue`. The claim opens
+ * the hosted run itself (its hosted opening, MOTIR-6790): one row is the lock and
+ * the run, with ONE `run_opened`. A failure after it ends the run through the
+ * shared end path, which never writes the card — so it is continuable again.
+ */
+async function startContinue(
+  input: StartHostedRunInput,
+  identifier: string,
+  projectId: string,
+  ctx: ServiceContext,
+  options: HostedRunStartOptions,
+  now: Date,
+): Promise<HostedRunStarted> {
+  const preview = await workItemContinueService.previewHostedContinue(
+    projectId,
+    identifier,
+    ctx,
+    now,
+  );
+  if (!preview.ok) {
+    throw new HostedContinueRefusedError(
+      identifier,
+      preview.reason,
+      preview.holder,
+      preview.startedAt,
+      preview.parentKey,
+    );
+  }
+  const target = preview.key;
+  const checked = await preflight(input, projectId, preview.legItemIds, ctx);
+
+  let replayed = false;
+  const claim = await workItemContinueService.claimContinue(projectId, target, ctx, now, {
+    opening: {
+      origin: 'hosted',
+      agent: 'opencode',
+      model: input.model,
+      idempotencyKey: input.idempotencyKey,
+    },
+    onReplay: () => {
+      replayed = true;
+    },
+  });
+  if (claim.outcome === 'not_continuable') {
+    throw new HostedContinueRefusedError(
+      target,
+      claim.reason ?? 'no_dead_run',
+      claim.holder,
+      claim.startedAt,
+      claim.parentKey,
+    );
+  }
+  // `mine` is the caller's OWN open continue — a terminal one, never this
+  // opening (a repeat of the key is answered `claimed`). A hosted start does not
+  // adopt a run somebody's terminal holds, even their own.
+  if (claim.outcome !== 'claimed' || claim.runId === null) {
+    throw new HostedContinueRefusedError(target, 'taken', claim.holder, claim.startedAt);
+  }
+  const runId = claim.runId;
+  // The same press, raced past the short-circuit above: its run is booting.
+  if (replayed) return { dispatchRunId: runId, created: false };
+  const startedAt = claim.startedAt ?? now.toISOString();
+
+  try {
+    await launch(
+      { id: runId, startedAt },
+      input,
+      { identifier: target, projectId, legIds: preview.legItemIds },
+      checked,
+      ctx,
+      options,
+      { MOTIR_RUN_MODE: 'continue' },
+    );
+    return { dispatchRunId: runId, created: true };
+  } catch (err) {
+    if (!(err instanceof HostedRunBootFailedError)) {
+      await hostedRunService.endHostedRun(
+        runId,
+        'failed',
+        `the continue could not start: ${detailOf(err)}`,
+      );
+    }
+    throw err;
+  }
+}
+
 export const hostedRunService = {
   /**
    * Start a hosted run on a READY card — a leaf, or a parent through its
@@ -306,6 +566,12 @@ export const hostedRunService = {
       dispatchRunRepository.findByIdempotencyKey(ctx.workspaceId, input.idempotencyKey, tx),
     );
     if (already) return { dispatchRunId: already.id, created: false };
+
+    // A CONTINUE of a dead run (MOTIR-6792) — the card is In Progress by design,
+    // so it takes the continue claim's path instead of the readiness below.
+    if (input.mode === 'continue') {
+      return startContinue(input, identifier, project.id, ctx, options, now());
+    }
 
     // ── 1 · READY — a leaf by the keyed claim's rule, a parent by the scope claim's ──
     const children = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
@@ -346,39 +612,7 @@ export const hostedRunService = {
       }
       legIds = [item.id];
     }
-    // The CI-credit gate every dispatch entry point runs — here, before the run
-    // opens, so an exhausted organization is refused rather than failed.
-    await ciAllowanceService.assertDispatchAllowed(ctx);
-
-    // ── 2 · The model, live — never a cache ──────────────────────────────────
-    await hostedRunModelService.assertOffered(input.model);
-
-    // ── 3 · Credits — the gateway's own balance rule ────────────────────────
-    const organizationId = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workspaceRepository.findOrganizationId(ctx.workspaceId, tx),
-    );
-    /* v8 ignore next -- a workspace always belongs to an organization */
-    if (!organizationId) throw new HostedRunCreditsUnavailableError();
-    const credits = await checkAgentRunCredits(organizationId);
-    if (credits === null) throw new HostedRunCreditsUnavailableError();
-    if (!credits.mayRun) throw new HostedRunOutOfCreditsError(credits.balanceCredits);
-
-    // ── 3b · Every repository the run touches can be written ────────────────
-    const repositories: RunRepository[] = await repositoriesForItems(
-      project.id,
-      ctx.workspaceId,
-      legIds,
-    );
-    const access = await hostedRunWriteAccess(repositories);
-    const refusals = access.filter((a): a is Extract<typeof a, { ok: false }> => !a.ok);
-    if (refusals.length > 0) {
-      throw new HostedRunRepositoryNotWritableError(
-        refusals.map(({ ok: _ok, app: _app, ...refusal }) => refusal as RunGitWriteRefusal),
-        repositories.length,
-      );
-    }
-    // The fleet, last of the reads: an unconfigured deployment opens nothing.
-    const fleet = hostedAgentFleetConfig();
+    const checked = await preflight(input, project.id, legIds, ctx);
 
     // ── 4 · Open the run, one leg per card, idempotent on the key ───────────
     const legKeys = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
@@ -430,90 +664,14 @@ export const hostedRunService = {
           throw new HostedRunCardNotReadyError(identifier, `its claim was ${claim.outcome}`);
         }
       }
-      await withWorkspaceContext(
-        { userId: ctx.userId, workspaceId: ctx.workspaceId },
-        async (tx) => {
-          for (const id of legIds) {
-            await workItemsService.recordImplementationProvenance(
-              id,
-              { source: 'hosted', harness: 'opencode', model: input.model },
-              tx,
-            );
-          }
-        },
+      await launch(
+        run,
+        input,
+        { identifier, projectId: project.id, legIds },
+        checked,
+        ctx,
+        options,
       );
-
-      // ── 6 · The two credentials, each dying by the backstop ────────────────
-      const startedAt = new Date(run.startedAt);
-      const runKey = await hostedRunKeyService.mintRunKey(
-        { id: run.id, organizationId, startedAt },
-        input.model,
-        now(),
-      );
-      const runCredential = await runCredentialService.mintRunCredential(
-        {
-          dispatchRunId: run.id,
-          dispatcherUserId: ctx.userId,
-          expiresAt: latestRunCredentialExpiry(startedAt),
-        },
-        now(),
-      );
-
-      // ── 7 · Boot — the launcher's inputs, and no other credential ─────────
-      const request: HostedAgentContainerRequest = {
-        dispatchId: hostedRunDispatchId(run.id),
-        runId: run.id,
-        dispatchRunId: run.id,
-        organizationId,
-        workspaceId: ctx.workspaceId,
-        projectId: project.id,
-        /* v8 ignore next -- `repositoriesForItems` refuses an empty set */
-        repoFullName: repositories[0]?.repository ?? '',
-        image: fleet.image,
-        env: {
-          MOTIR_DISPATCH_RUN_ID: run.id,
-          MOTIR_WORK_ITEM_KEY: identifier,
-          MOTIR_API_URL: resolveBaseUrlTrimmed(),
-          MOTIR_RUN_TOKEN: runCredential.token,
-          MOTIR_GATEWAY_URL: runKey.containerEnv.MOTIR_GATEWAY_URL,
-          MOTIR_RUN_KEY: runKey.containerEnv.MOTIR_RUN_KEY,
-          MOTIR_MODEL: toOpenCodeModel(input.model),
-        },
-        region: fleet.region,
-        size: FLEET_CONTAINER_SIZE,
-        timeoutSeconds: HOSTED_RUN_TIMEOUT_MS / 1000,
-      };
-      const booted = await hostedAgentContainerService.boot(request, options.supervision);
-      if (booted.phase === 'terminal') {
-        const detail = bootFailureDetail(booted.outcome);
-        await this.endHostedRun(run.id, 'failed', detail);
-        throw new HostedRunBootFailedError(run.id, detail);
-      }
-
-      // ── 8 · Hand the booted session to the durable supervisor ─────────────
-      try {
-        await sendEvent(
-          'hosted-run/supervise',
-          {
-            workspaceId: ctx.workspaceId,
-            dispatchRunId: run.id,
-            session: booted.session,
-            idempotencyKey: hostedRunDispatchId(run.id),
-          },
-          { strict: true },
-        );
-      } catch (err) {
-        // A container nobody supervises spends until the reaper finds it. Tear it
-        // down now, through the seam's own settle, and fail the run.
-        await hostedAgentContainerService.settle(booted.session, {
-          done: true,
-          reason: 'provision_failed' satisfies TeardownReason,
-          startedAt: null,
-          exitCode: null,
-          failureDetail: 'its supervision could not be enqueued',
-        });
-        throw err;
-      }
       return { dispatchRunId: run.id, created: true };
     } catch (err) {
       if (!(err instanceof HostedRunBootFailedError)) {

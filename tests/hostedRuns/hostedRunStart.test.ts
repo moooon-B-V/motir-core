@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { fakeOrchestrator } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import {
+  HostedContinueRefusedError,
   HostedModelNotOfferedError,
   HostedModelsUnavailableError,
   HostedRunCardNotReadyError,
@@ -14,6 +15,7 @@ import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { HOSTED_AGENT_MAX_TIMEOUT_MS } from '@/lib/services/hostedAgentContainerService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
+import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { runCredentialService } from '@/lib/services/runCredentialService';
 import { scopeClaimService } from '@/lib/services/scopeClaimService';
 import {
@@ -573,5 +575,293 @@ describe('a parent card — one run over its children', () => {
     const runs = await runRows();
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({ status: 'failed', stopReason: 'halted' });
+  });
+});
+
+// ── CONTINUE HOSTED (Story MOTIR-6527 · MOTIR-6792) ─────────────────────────
+// `start` with `mode: 'continue'`: the continue claim where Run hosted's
+// readiness check and open were, behind every one of Run hosted's pre-flights.
+
+/** An In Progress card, assigned to the owner, whose one LOCAL run checked out a
+ *  branch and then went silent — the run a hosted continue takes over. */
+async function deadCard(opts: { silentMinutes?: number } = {}) {
+  const card = await newCard({ kind: 'task', title: 'a card whose run died' });
+  await adminDb.workItem.update({
+    where: { id: card.id },
+    data: { status: 'in_progress', assigneeId: fx.ownerId },
+  });
+  const { run } = await dispatchRunService.open(
+    {
+      projectKey: fx.projectIdentifier,
+      command: 'run',
+      cards: [{ key: card.identifier, disposition: 'queued' }],
+    },
+    fx.ctx,
+  );
+  await dispatchRunService.appendEvents(
+    run.id,
+    [
+      {
+        kind: 'checkout_ready',
+        workItemKey: card.identifier,
+        disposition: 'running',
+        data: { branch: `subtask/${card.identifier}-work` },
+      },
+    ],
+    fx.ctx,
+  );
+  await adminDb.dispatchRun.update({
+    where: { id: run.id },
+    data: { lastHeartbeatAt: new Date(Date.now() - (opts.silentMinutes ?? 7) * 60_000) },
+  });
+  return { card, deadRunId: run.id };
+}
+
+const startContinue = (key: string, idempotencyKey = `idem-${++seq}`) =>
+  hostedRunService.start(
+    { workItemKey: key, model: MODEL, idempotencyKey, mode: 'continue' },
+    fx.ctx,
+  );
+
+const continueRuns = () =>
+  adminDb.dispatchRun.findMany({ where: { workspaceId: fx.workspaceId, command: 'continue' } });
+
+describe('continue hosted — a leaf whose run died', () => {
+  it('opens ONE hosted continue run, boots ONE container in continue mode, and writes no status', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card, deadRunId } = await deadCard();
+
+    const started = await startContinue(card.identifier);
+    expect(started.created).toBe(true);
+
+    const runs = await continueRuns();
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({
+      id: started.dispatchRunId,
+      origin: 'hosted',
+      command: 'continue',
+      agent: 'opencode',
+      model: MODEL,
+      status: 'running',
+    });
+    // The lapsed run is closed by the claim, in the claim's transaction.
+    const dead = await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: deadRunId } });
+    expect(dead).toMatchObject({ stopReason: 'abandoned' });
+
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    expect(after).toMatchObject({
+      status: 'in_progress',
+      assigneeId: fx.ownerId,
+      implementationSource: 'hosted',
+      implementationModel: MODEL,
+    });
+
+    expect(mintCalls()).toHaveLength(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+    expect(fakeOrchestrator.specs[0]!.env).toMatchObject({
+      MOTIR_DISPATCH_RUN_ID: started.dispatchRunId,
+      MOTIR_WORK_ITEM_KEY: card.identifier,
+      MOTIR_RUN_MODE: 'continue',
+    });
+
+    // ONE `run_opened`, written by the claim — the container adopts it.
+    const events = await adminDb.dispatchRunEvent.findMany({
+      where: { dispatchRunId: started.dispatchRunId },
+    });
+    expect(events.map((e) => e.kind)).toEqual(['run_opened']);
+    expect(events[0]!.data).toMatchObject({
+      continuesRunId: deadRunId,
+      branch: `subtask/${card.identifier}-work`,
+      origin: 'hosted',
+      model: MODEL,
+    });
+  });
+
+  it('the same key twice answers one run and boots one container', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card } = await deadCard();
+
+    const first = await startContinue(card.identifier, 'same-press');
+    const second = await startContinue(card.identifier, 'same-press');
+
+    expect(second).toEqual({ dispatchRunId: first.dispatchRunId, created: false });
+    expect(await continueRuns()).toHaveLength(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+  });
+
+  it('a Run hosted start (mode run) on the same In Progress card is still refused as not ready', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card } = await deadCard();
+
+    await expect(start(card.identifier)).rejects.toBeInstanceOf(HostedRunCardNotReadyError);
+    expect(await continueRuns()).toEqual([]);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+  });
+});
+
+describe('continue hosted — every refusal before anything is opened', () => {
+  async function expectNoContinue(cardId: string): Promise<void> {
+    expect(await continueRuns()).toEqual([]);
+    expect(mintCalls()).toEqual([]);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: cardId } });
+    expect(after.assigneeId).toBe(fx.ownerId);
+    expect(after.implementationSource).toBeNull();
+  }
+
+  it('out of credits: refused after the preview, with no run, no claim and the dead run left open', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card, deadRunId } = await deadCard();
+    stub({ mayRun: false });
+
+    await expect(startContinue(card.identifier)).rejects.toBeInstanceOf(HostedRunOutOfCreditsError);
+    await expectNoContinue(card.id);
+    // The claim never ran, so the lapsed run was not even closed.
+    const dead = await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: deadRunId } });
+    expect(dead.stopReason).toBeNull();
+  });
+
+  it('a model not offered: refused, nothing opened', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card } = await deadCard();
+
+    await expect(
+      hostedRunService.start(
+        { workItemKey: card.identifier, model: 'nope', idempotencyKey: 'k', mode: 'continue' },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(HostedModelNotOfferedError);
+    await expectNoContinue(card.id);
+  });
+
+  it('a run still heartbeating: hosted_continue_run_alive, before the model is even asked', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card } = await deadCard({ silentMinutes: 1 });
+
+    const err = await startContinue(card.identifier).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HostedContinueRefusedError);
+    expect(err).toMatchObject({ code: 'hosted_continue_run_alive' });
+    expect(aiCalls()).toEqual([]);
+    await expectNoContinue(card.id);
+  });
+
+  it('a card never run: hosted_continue_no_dead_run', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const card = await newCard({ kind: 'task', title: 'never run' });
+    await adminDb.workItem.update({
+      where: { id: card.id },
+      data: { status: 'in_progress', assigneeId: fx.ownerId },
+    });
+
+    await expect(startContinue(card.identifier)).rejects.toMatchObject({
+      code: 'hosted_continue_no_dead_run',
+    });
+    await expectNoContinue(card.id);
+  });
+
+  it('a card at To Do: hosted_continue_not_in_progress', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const card = await newCard({ kind: 'task', title: 'to do' });
+    await adminDb.workItem.update({ where: { id: card.id }, data: { assigneeId: fx.ownerId } });
+
+    await expect(startContinue(card.identifier)).rejects.toMatchObject({
+      code: 'hosted_continue_not_in_progress',
+    });
+    await expectNoContinue(card.id);
+  });
+
+  it('a second continue while the first is running: hosted_continue_taken, naming its holder', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card } = await deadCard();
+    await startContinue(card.identifier);
+
+    await expect(startContinue(card.identifier)).rejects.toMatchObject({
+      code: 'hosted_continue_taken',
+      holder: { id: fx.ownerId },
+    });
+    expect(await continueRuns()).toHaveLength(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+  });
+});
+
+describe('continue hosted — a failure after the claim', () => {
+  it('ends the continue run failed, leaves the card as it was, and a second continue is accepted', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card } = await deadCard();
+    const mint = vi
+      .spyOn(runCredentialService, 'mintRunCredential')
+      .mockRejectedValueOnce(new Error('mint down'));
+
+    await expect(startContinue(card.identifier)).rejects.toThrow('mint down');
+    const failed = await continueRuns();
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toMatchObject({ status: 'failed' });
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    expect(after.status).toBe('in_progress');
+
+    mint.mockRestore();
+    const again = await startContinue(card.identifier);
+    expect(again.created).toBe(true);
+    const runs = await continueRuns();
+    expect(runs).toHaveLength(2);
+    expect(runs.find((r) => r.id === again.dispatchRunId)).toMatchObject({ status: 'running' });
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+  });
+});
+
+describe('continue hosted — a leg of a dead PARENT run', () => {
+  it('continues the PARENT: the container boots on the parent key, over every leg', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const story = await newCard({ kind: 'story', title: 'the story' });
+    const first = await newCard({ kind: 'task', title: 'first', parentId: story.id });
+    const second = await newCard({ kind: 'task', title: 'second', parentId: story.id });
+    for (const id of [story.id, first.id, second.id]) {
+      await adminDb.workItem.update({
+        where: { id },
+        data: { status: 'in_progress', assigneeId: fx.ownerId },
+      });
+    }
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run_scope',
+        scopeKey: story.identifier,
+        cards: [first, second].map((c) => ({ key: c.identifier, disposition: 'queued' as const })),
+      },
+      fx.ctx,
+    );
+    await dispatchRunService.appendEvents(
+      run.id,
+      [
+        {
+          kind: 'card_settled',
+          workItemKey: first.identifier,
+          disposition: 'integrated',
+          sessionBranch: 'motir/auto-20260928-0900',
+        },
+      ],
+      fx.ctx,
+    );
+    await adminDb.dispatchRun.update({
+      where: { id: run.id },
+      data: { lastHeartbeatAt: new Date(Date.now() - 8 * 60_000) },
+    });
+
+    const started = await startContinue(second.identifier);
+
+    expect(started.created).toBe(true);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+    expect(fakeOrchestrator.specs[0]!.env).toMatchObject({
+      MOTIR_WORK_ITEM_KEY: story.identifier,
+      MOTIR_RUN_MODE: 'continue',
+    });
+    const opened = await adminDb.dispatchRun.findUniqueOrThrow({
+      where: { id: started.dispatchRunId },
+    });
+    expect(opened).toMatchObject({
+      command: 'continue',
+      origin: 'hosted',
+      scopeWorkItemId: story.id,
+    });
   });
 });

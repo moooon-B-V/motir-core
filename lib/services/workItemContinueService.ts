@@ -370,6 +370,12 @@ export interface HostedContinueOpening {
 
 export interface ClaimContinueOptions {
   opening?: HostedContinueOpening | undefined;
+  /**
+   * Told when the opening's key was ALREADY used, and the answer is a replay of
+   * the run it opened — so a hosted start racing its own repeat does not boot
+   * that run a second container.
+   */
+  onReplay?: ((runId: string) => void) | undefined;
 }
 
 function refused(
@@ -440,6 +446,26 @@ async function replayOpening(
   };
 }
 
+/**
+ * What a HOSTED continue would take over (MOTIR-6792) — read before any lock, so
+ * the hosted start can run every pre-flight over the right repositories and
+ * refuse the way the claim would, having touched nothing.
+ *
+ * `ok` names the continue's TARGET: the card itself, or — for an in-flight leg of
+ * a dead PARENT run — that parent, which is continued whole. `legItemIds` are the
+ * cards whose repositories the resumed run covers.
+ */
+export type HostedContinuePreview =
+  | { ok: true; key: string; legItemIds: string[] }
+  | {
+      ok: false;
+      /** The claim's refusal, or `taken` when a `continue` run already holds it. */
+      reason: WorkItemContinueRefusal | 'taken';
+      holder: ClaimActorDto | null;
+      startedAt: string | null;
+      parentKey: string | null;
+    };
+
 export const workItemContinueService = {
   /**
    * CLAIM the continue of one work item whose last run died.
@@ -493,6 +519,7 @@ export const workItemContinueService = {
             if (!replayed || replayed.command !== 'continue') {
               throw new DuplicateDispatchRunError(opening.idempotencyKey);
             }
+            options.onReplay?.(replayed.id);
             return replayOpening(item, replayed, tx);
           }
         }
@@ -675,6 +702,93 @@ export const workItemContinueService = {
         };
       },
     );
+  },
+
+  /**
+   * Which card a HOSTED continue of `identifier` takes over, and over which legs
+   * — or the refusal the claim would give (MOTIR-6792). The claim's own
+   * evaluation, WITHOUT a lock and writing nothing; the claim decides again under
+   * its lock, so this is a pre-flight, never the decision.
+   *
+   * A leg of a dead parent run redirects ONCE to that parent: a hosted continue
+   * boots `motir continue <PARENT>`, exactly what a terminal would run.
+   */
+  async previewHostedContinue(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+    now: Date = new Date(),
+    redirected = false,
+  ): Promise<HostedContinuePreview> {
+    const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
+    const statuses = await workflowsService.listStatusesByProject(projectId, ctx.workspaceId);
+    const refuse = (
+      reason: WorkItemContinueRefusal | 'taken',
+      extra: Partial<Extract<HostedContinuePreview, { ok: false }>> = {},
+    ): HostedContinuePreview => ({
+      ok: false,
+      reason,
+      holder: null,
+      startedAt: null,
+      parentKey: null,
+      ...extra,
+    });
+
+    const verdict = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+      async (tx) => {
+        const state = await workItemRepository.findClaimStateById(item.id, tx);
+        /* v8 ignore next -- the row was resolved above; only a delete between the two reads gets here */
+        if (!state) throw new WorkItemNotFoundError(identifier);
+        const evaluated = await evaluate(
+          {
+            id: item.id,
+            status: state.status,
+            archivedAt: state.archivedAt,
+            targetRepos: item.targetRepos,
+          },
+          statuses,
+          now,
+          tx,
+        );
+        const legs =
+          evaluated.kind === 'died' && evaluated.run.scopeWorkItemId === item.id
+            ? await dispatchRunCardRepository.listByRun(evaluated.run.id, tx)
+            : [];
+        return { evaluated, state, legs };
+      },
+    );
+    const { evaluated, state, legs } = verdict;
+
+    if (evaluated.kind === 'continuing') {
+      return refuse('taken', {
+        holder: actor(evaluated.run.createdBy),
+        startedAt: evaluated.run.startedAt.toISOString(),
+      });
+    }
+    if (evaluated.kind === 'alive') {
+      return refuse('run_alive', {
+        holder: actor(evaluated.run.createdBy),
+        startedAt: evaluated.run.startedAt.toISOString(),
+      });
+    }
+    if (evaluated.kind === 'none') {
+      return refuse(
+        statusRefusal(state.status, state.archivedAt !== null, statuses) ?? 'no_dead_run',
+      );
+    }
+    if (evaluated.refusal === 'continue_the_parent' && evaluated.parentKey && !redirected) {
+      return this.previewHostedContinue(projectId, evaluated.parentKey, ctx, now, true);
+    }
+    if (evaluated.refusal !== null) {
+      return refuse(evaluated.refusal, { parentKey: evaluated.parentKey });
+    }
+    const legItemIds = legs.map((l) => l.workItemId).filter((id): id is string => id !== null);
+    return {
+      ok: true,
+      key: item.identifier,
+      legItemIds: legItemIds.length > 0 ? legItemIds : [item.id],
+    };
   },
 
   /**
