@@ -158,10 +158,10 @@ export function indexFleetConfig(): IndexFleetConfig {
   try {
     region = flyFleetConfig().region;
   } catch (err) {
-    // Its message already reads `set A, B, C` — unwrap the verb so this one can
-    // re-add it once, over the union of BOTH accessors' missing variables.
-    const detail = err instanceof Error ? err.message.replace(/^set /, '') : '';
-    missing.push(detail || 'the fleet configuration');
+    // Merge the fleet's own list of missing variables with this one's, and say
+    // `set …` once: read the refusal's `detail`, never its rendered message
+    // (MOTIR-6571). `flyFleetConfig` throws nothing but this refusal.
+    missing.push((err as OrchestratorNotConfiguredError).detail.replace(/^set /, ''));
   }
   const image = flyIndexerImage();
   if (!image) missing.push(INDEXER_IMAGE_ENV_VAR);

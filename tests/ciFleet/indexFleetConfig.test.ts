@@ -114,6 +114,16 @@ describe('indexFleetConfig — unconfigured must be LOUD', () => {
     expect(err!.message).toContain(INDEXER_IMAGE_ENV_VAR);
   });
 
+  it('says it in ONE sentence — the fleet refusal merged by its detail, not its rendered message', () => {
+    // MOTIR-6571: merging the fleet's RENDERED message nested one sentence in the
+    // other ("… not configured: set The container orchestrator is not configured:
+    // set …"), and the `toContain` checks above cannot see that.
+    expect(() => indexFleetConfig()).toThrow(
+      'The container orchestrator is not configured: set FLY_FLEET_API_TOKEN, FLY_FLEET_APP, ' +
+        `MOTIR_RUNNER_IMAGE, ${INDEXER_IMAGE_ENV_VAR}.`,
+    );
+  });
+
   it('names ONLY the indexer image when the rest of the fleet is wired', () => {
     configureCloudFleet();
     vi.stubEnv(INDEXER_IMAGE_ENV_VAR, '');
@@ -126,8 +136,9 @@ describe('indexFleetConfig — unconfigured must be LOUD', () => {
       }
     })();
     expect(err).toBeInstanceOf(OrchestratorNotConfiguredError);
-    expect(err!.message).toContain(INDEXER_IMAGE_ENV_VAR);
-    expect(err!.message).not.toContain('FLY_FLEET_API_TOKEN');
+    expect(err!.message).toBe(
+      `The container orchestrator is not configured: set ${INDEXER_IMAGE_ENV_VAR}.`,
+    );
   });
 
   it('returns the image + region on a wired deployment', () => {
