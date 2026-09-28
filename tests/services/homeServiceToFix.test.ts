@@ -51,7 +51,13 @@ async function card(
   fx: WorkItemFixture,
   title: string,
   status: string,
-  fixReason: 'queue_failed' | 'conflicted' | 'ci_failed' | 'changes_requested' | null = null,
+  fixReason:
+    | 'run_died'
+    | 'queue_failed'
+    | 'conflicted'
+    | 'ci_failed'
+    | 'changes_requested'
+    | null = null,
 ) {
   const item = await createTestWorkItem(fx, { kind: 'task', title });
   await adminDb.workItem.update({
@@ -134,17 +140,26 @@ describe('To fix and In progress PARTITION the in-progress set', () => {
     expect((await homeService.tabCounts(hctx(fx))).toFix).toBe(0);
   });
 
-  it('lists by REASON PRIORITY first — queue, conflict, red, sent back (design § 30, Order)', async () => {
+  it('lists by REASON PRIORITY first — run died, queue, conflict, red, sent back (design § 30, Order; § 31)', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'ORD' });
     // Created in the REVERSE of the priority, so neither id nor kind order can pass it.
     const sentBack = await card(fx, 'sent back', 'in_review', 'changes_requested');
     const red = await card(fx, 'red', 'implemented', 'ci_failed');
     const conflict = await card(fx, 'conflict', 'implemented', 'conflicted');
     const queue = await card(fx, 'queue', 'implemented', 'queue_failed');
+    // The enum value was added with `BEFORE 'queue_failed'` (MOTIR-6880): a generated
+    // `ADD VALUE` would have sorted it LAST, and this is the read that would show it.
+    const died = await card(fx, 'died', 'in_progress', 'run_died');
 
     const page = await homeService.listToFix(hctx(fx));
 
-    expect(page.items.map((r) => r.id)).toEqual([queue.id, conflict.id, red.id, sentBack.id]);
+    expect(page.items.map((r) => r.id)).toEqual([
+      died.id,
+      queue.id,
+      conflict.id,
+      red.id,
+      sentBack.id,
+    ]);
   });
 
   it('pages like the other tabs, with the shipped total and clamp', async () => {

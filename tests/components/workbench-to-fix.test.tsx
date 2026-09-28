@@ -58,6 +58,13 @@ function detail(over: Partial<FixDetailDto> = {}): FixDetailDto {
     reviewerName: null,
     notePreview: null,
     gate: null,
+    lastHeardAt: null,
+    ranByName: null,
+    branch: null,
+    branches: null,
+    pushed: null,
+    continueKey: null,
+    diedReason: null,
     affected: 1,
     total: 1,
     ...over,
@@ -224,6 +231,100 @@ describe('To fix — one fix line per reason (§ 30 Panel 2)', () => {
     render(list(FOUR, { tab: 'in-progress' }));
     expect(screen.queryByTestId('workbench-fix-M-1')).toBeNull();
     expect(screen.getByTestId('workbench-row-M-1')).toBeTruthy();
+  });
+});
+
+describe('To fix — a dead run (§ 31, MOTIR-6880)', () => {
+  const heard = () => new Date(Date.now() - 12 * 60_000).toISOString();
+  const died = (over: Partial<FixDetailDto> = {}) =>
+    detail({
+      repair: 'continue',
+      lastHeardAt: heard(),
+      ranByName: 'Mara S.',
+      branch: 'subtask/M-14-throttle',
+      branches: [{ repository: 'web', branch: 'subtask/M-14-throttle' }],
+      pushed: true,
+      continueKey: 'M-14',
+      diedReason: 'lapsed',
+      affected: 0,
+      total: 0,
+      ...over,
+    });
+
+  it('pushed, own run — the reason line, and `motir continue` on its own key', () => {
+    render(list([stuck('M-14', 'run_died', died())]));
+    expect(fixLine('M-14').querySelector('p')?.textContent).toMatch(
+      /^Run died · last heard from 12 min\. ago · Mara S\. · branch subtask\/M-14-throttle$/,
+    );
+    expect(fixLine('M-14').querySelector('p time')?.getAttribute('title')).toMatch(/UTC$/);
+    expect(fixLine('M-14').querySelector('p b')?.textContent).toBe('subtask/M-14-throttle');
+    expect(within(fixLine('M-14')).getByText('motir continue M-14')).toBeTruthy();
+    // The run-died marker's glyph, muted — nothing about the work failed.
+    const glyph = fixLine('M-14').querySelector('svg')!;
+    expect(glyph.getAttribute('class')).toContain('lucide-triangle-alert');
+    expect(glyph.getAttribute('class')).toContain('text-(--el-icon-muted)');
+  });
+
+  it('several repositories — the primary branch, then how many more', () => {
+    render(
+      list([
+        stuck(
+          'M-15',
+          'run_died',
+          died({
+            continueKey: 'M-15',
+            branches: [
+              { repository: 'web', branch: 'subtask/M-14-throttle' },
+              { repository: 'api', branch: 'subtask/M-14-throttle' },
+              { repository: 'cli', branch: 'subtask/M-14-throttle' },
+            ],
+          }),
+        ),
+      ]),
+    );
+    expect(fixLine('M-15').querySelector('p')?.textContent).toContain(
+      'branch subtask/M-14-throttle + 2 more repositories',
+    );
+  });
+
+  it('a leg of a parent run — the parent clause, and the command continues the parent', () => {
+    render(list([stuck('M-16', 'run_died', died({ continueKey: 'M-12' }))]));
+    expect(fixLine('M-16').querySelector('p')?.textContent).toContain(
+      'Part of M-12’s run — both repairs continue the whole run',
+    );
+    expect(within(fixLine('M-16')).getByText('motir continue M-12')).toBeTruthy();
+  });
+
+  it('nothing pushed — says so, and offers NO command (the claim would refuse it)', () => {
+    render(
+      list([
+        stuck(
+          'M-17',
+          'run_died',
+          died({ repair: 'none', pushed: false, branch: null, branches: [], continueKey: null }),
+        ),
+      ]),
+    );
+    expect(fixLine('M-17').querySelector('p')?.textContent).toMatch(
+      /^Run died · last heard from 12 min\. ago · Mara S\. · nothing was pushed$/,
+    );
+    expect(fixLine('M-17').textContent).not.toContain('motir');
+    expect(screen.queryByRole('button', { name: 'Copy the repair command for M-17' })).toBeNull();
+    expect(fixCommandOf(detail({ repair: 'none' }), 'M-17')).toBeNull();
+  });
+
+  it('a deleted dispatcher drops the name, not the line', () => {
+    render(list([stuck('M-18', 'run_died', died({ ranByName: null, continueKey: 'M-18' }))]));
+    expect(fixLine('M-18').querySelector('p')?.textContent).toMatch(
+      /^Run died · last heard from 12 min\. ago · branch subtask\/M-14-throttle$/,
+    );
+  });
+
+  it('reads in Chinese', () => {
+    render(list([stuck('M-14', 'run_died', died())]), { locale: 'zh', messages: zhMessages });
+    expect(fixLine('M-14').querySelector('p')?.textContent).toMatch(
+      /^运行已中断 · 最后一次联系在.+ · Mara S\. · 分支 subtask\/M-14-throttle$/,
+    );
   });
 });
 

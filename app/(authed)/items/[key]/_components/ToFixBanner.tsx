@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, type ReactNode } from 'react';
-import { useTranslations } from 'next-intl';
+import { useCallback, useState, type ReactNode } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import { ArrowDown, LoaderCircle, Wrench } from 'lucide-react';
+import { relativeLabel } from '@/components/github/RepairFixPart';
 import { CopyableCodeBlock } from '@/components/markdown/CopyableCodeBlock';
 import { toFixTagState } from '@/components/workItems/ToFixTag';
 import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import { formatRunInstant } from '@/lib/runs/runClock';
 import { DEVELOPMENT_SECTION_ID } from './decisionAnchor';
 import { useLandOnLateSection } from './useLandOnLateSection';
 
@@ -26,6 +28,11 @@ import { useLandOnLateSection } from './useLandOnLateSection';
 // ⚠️ IT DRAWS WHAT THE STORED DETAIL SAYS AND NOTHING ELSE. No pull request is
 // read here: the Development block below already lists them, and the banner points
 // there rather than repeating them.
+//
+// ⚠️ A DEAD RUN (`run_died`, MOTIR-6880) DRAWS NO COMMAND. The run-died marker in the
+// Development block already carries `motir continue` and Continue hosted, and one page
+// must not hold two copies of one control (`design/work-items/design-notes.md` § *The
+// TO FIX tag and banner: RUN DIED*). The banner says one sentence and points there.
 
 /** GitHub's raw queue reasons the Workbench humanises (`workbench.toFix.queueReason.*`);
  *  any other raw reason falls to the bare sentence, as the Workbench row does. */
@@ -60,14 +67,42 @@ export function ToFixBanner({
 }: ToFixBannerProps) {
   const t = useTranslations('toFix.banner');
   const tw = useTranslations('workbench.toFix');
+  const locale = useLocale();
+  // Read ONCE per mount: a relative label that moved between renders would be a
+  // hydration mismatch (the continue part's rule).
+  const [clock] = useState(() => Date.now());
   const findDevelopment = useCallback(() => document.getElementById(DEVELOPMENT_SECTION_ID), []);
   const { press, pending } = useLandOnLateSection(findDevelopment);
 
   const reason = toFixTagState(fixReason, statusCategory);
   if (!reason || !fixDetail) return null;
 
+  const when = (iso: string) =>
+    function BannerWhen() {
+      return (
+        <time className="whitespace-nowrap" dateTime={iso} title={formatRunInstant(iso)}>
+          {relativeLabel(iso, locale, clock)}
+        </time>
+      );
+    };
+  const isDeadRun = reason === 'run_died';
+  const nothingPushed = isDeadRun && fixDetail.pushed === false;
+
   const sentence = ((): ReactNode => {
     switch (reason) {
+      case 'run_died': {
+        // A detail missing its time is a row written by a newer shape than this
+        // reader: the plainest true sentence is the pushed one without a time.
+        const heard = when(fixDetail.lastHeardAt ?? new Date(clock).toISOString());
+        if (nothingPushed) return t.rich('runDiedNothingPushed', { when: heard });
+        const parent =
+          fixDetail.continueKey !== null && fixDetail.continueKey !== identifier
+            ? fixDetail.continueKey
+            : null;
+        return parent
+          ? t.rich('runDiedParent', { parent, b: bold, when: heard })
+          : t.rich('runDied', { when: heard });
+      }
       case 'queue_failed':
         if (fixDetail.check) return t.rich('queueFailed', { check: fixDetail.check, code });
         if (fixDetail.queueReason && QUEUE_REASONS.has(fixDetail.queueReason)) {
@@ -100,12 +135,16 @@ export function ToFixBanner({
     }
   })();
 
-  const meta = [
-    fixDetail.gate === 'acceptance_result' ? t('onAcceptance') : null,
-    fixDetail.total > 1
-      ? tw('affected', { affected: fixDetail.affected, total: fixDetail.total })
-      : null,
-  ].filter((line): line is string => line !== null);
+  const meta = (
+    isDeadRun
+      ? []
+      : [
+          fixDetail.gate === 'acceptance_result' ? t('onAcceptance') : null,
+          fixDetail.total > 1
+            ? tw('affected', { affected: fixDetail.affected, total: fixDetail.total })
+            : null,
+        ]
+  ).filter((line): line is string => line !== null);
 
   return (
     <div
@@ -130,10 +169,14 @@ export function ToFixBanner({
             {meta.join(' · ')}
           </p>
         ) : null}
-        <p className="m-0 mt-1 font-sans text-[13px] text-(--el-danger-surface-text)">
-          {t(fixDetail.repair === 'run' ? 'leadRun' : 'leadFix')}
-        </p>
-        <CopyableCodeBlock language="shell" code={`motir ${fixDetail.repair} ${identifier}`} />
+        {isDeadRun ? null : (
+          <>
+            <p className="m-0 mt-1 font-sans text-[13px] text-(--el-danger-surface-text)">
+              {t(fixDetail.repair === 'run' ? 'leadRun' : 'leadFix')}
+            </p>
+            <CopyableCodeBlock language="shell" code={`motir ${fixDetail.repair} ${identifier}`} />
+          </>
+        )}
         {/* A real `#development` link, so it works with scripting off; with it on,
             the press waits for the late stack the way the header marker does. */}
         <a
@@ -145,7 +188,7 @@ export function ToFixBanner({
           aria-busy={pending || undefined}
           className="inline-flex w-fit items-center gap-1 font-sans text-[13px] font-medium text-(--el-text-strong) underline decoration-(--el-border-strong) underline-offset-2 hover:decoration-(--el-text-strong) focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
-          {t('toDevelopment')}
+          {t(isDeadRun ? (nothingPushed ? 'toStartOver' : 'toContinue') : 'toDevelopment')}
           {pending ? (
             <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
           ) : (
@@ -153,7 +196,7 @@ export function ToFixBanner({
           )}
         </a>
         <span className="sr-only" role="status" aria-live="polite">
-          {pending ? t('opening') : ''}
+          {pending ? t(isDeadRun ? 'openingDevelopment' : 'opening') : ''}
         </span>
       </div>
     </div>

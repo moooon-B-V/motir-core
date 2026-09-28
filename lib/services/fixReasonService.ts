@@ -8,8 +8,13 @@ import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { evaluateRepair } from '@/lib/services/repairPredicate';
 import {
+  describeDeadRunWithin,
+  evaluateContinueWithin,
+} from '@/lib/services/workItemContinueService';
+import {
   NOTHING_TO_FIX,
   changesRequestedOf,
+  deadRunReasonOf,
   pullRequestReasonOf,
   reviewerNameOf,
   sameFixReason,
@@ -31,6 +36,13 @@ import {
 // approve-to-merge gate, which MOVES NOTHING (`approval-gates.md`'s kind table): the
 // card waits at In Review with no awaiting gate, and without this column nothing
 // anywhere says so.
+//
+// ── A dead run is read THROUGH `motir continue`'s predicate, the same way ─────
+// `run_died` (MOTIR-6880) ranks first and is asked first: `evaluateContinueWithin` is
+// the continue claim's own evaluation, so the tab never lists a card the claim would
+// refuse as `run_alive` or `no_dead_run`, and `isRunAlive`, the died set and the
+// refusal ladder are never restated here. A `use_fix` or `not_in_progress` verdict is
+// not this reason, and the pull-request derivation below answers exactly as before.
 //
 // ── The shape is `recomputeWorkItemCiState`'s ───────────────────────────────
 // A read-derived write, so the card's row lock is taken FIRST and everything is read
@@ -60,12 +72,15 @@ async function reviewerName(
 export async function deriveFixReason(
   item: {
     id: string;
+    identifier: string;
     projectId: string;
     workspaceId: string;
     status: string;
     archivedAt: Date | null;
+    targetRepos: readonly string[];
   },
   tx: Prisma.TransactionClient,
+  now: Date = new Date(),
 ): Promise<FixReasonValue> {
   if (item.archivedAt !== null) return NOTHING_TO_FIX;
   const statuses = (
@@ -73,6 +88,24 @@ export async function deriveFixReason(
   ).map(toWorkflowStatusDto);
   if (statuses.find((s) => s.key === item.status)?.category !== 'in_progress') {
     return NOTHING_TO_FIX;
+  }
+
+  // FIRST: a run that died. Nothing else on the card is repairable until somebody owns
+  // its branch again, so it outranks every pull-request reason (`FIX_REASON_PRIORITY`).
+  const continued = await evaluateContinueWithin(item, statuses, now, tx);
+  if (continued.kind === 'died') {
+    const { deadRun, reason } = await describeDeadRunWithin(continued.run, tx);
+    const died = deadRunReasonOf({
+      key: item.identifier,
+      refusal: continued.refusal,
+      parentKey: continued.parentKey,
+      branch: continued.branch,
+      branches: continued.branches,
+      lastHeardAt: deadRun.lastHeardAt,
+      ranByName: deadRun.dispatcher?.name ?? null,
+      diedReason: reason,
+    });
+    if (died) return died;
   }
 
   const [verdict, deliveries] = await Promise.all([
@@ -143,6 +176,7 @@ export async function deriveFixReason(
 export async function recomputeWorkItemFixReason(
   workItemId: string,
   tx: Prisma.TransactionClient,
+  now: Date = new Date(),
 ): Promise<FixReasonValue> {
   const locked = await workItemRepository.lockById(workItemId, tx);
   if (!locked) return NOTHING_TO_FIX;
@@ -151,7 +185,7 @@ export async function recomputeWorkItemFixReason(
      (`recomputeWorkItemCiState` records why); the read is nullable, so it is guarded. */
   if (!item) return NOTHING_TO_FIX;
 
-  const next = await deriveFixReason(item, tx);
+  const next = await deriveFixReason(item, tx, now);
   if (!sameFixReason(item, next)) {
     await workItemRepository.updateFixReason(workItemId, next, tx);
   }

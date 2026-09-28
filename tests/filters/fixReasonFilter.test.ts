@@ -42,6 +42,8 @@ describe('the fixReason filter field', () => {
     // One list, read — never retyped: a new reason reaches the filter on its own.
     expect(def?.valueWhitelist).toBe(FIX_REASON_PRIORITY);
     expect([...FIX_REASON_PRIORITY]).toEqual(Object.values(WorkItemFixReason));
+    // A dead run ranks FIRST, so the value editor, which maps the tuple, offers it first.
+    expect(FIX_REASON_PRIORITY[0]).toBe('run_died');
   });
 
   it('validates the reasons and refuses anything else with the typed error', () => {
@@ -50,6 +52,12 @@ describe('the fixReason filter field', () => {
       validateFilterAst({
         combinator: 'and',
         conditions: [{ field: 'fixReason', operator: 'is_any_of', value: ['run_died'] }],
+      }),
+    ).not.toThrow();
+    expect(() =>
+      validateFilterAst({
+        combinator: 'and',
+        conditions: [{ field: 'fixReason', operator: 'is_any_of', value: ['lost_in_space'] }],
       }),
     ).toThrow(InvalidFilterValueError);
   });

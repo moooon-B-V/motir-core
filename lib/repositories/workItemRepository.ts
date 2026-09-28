@@ -4734,8 +4734,20 @@ export const workItemRepository = {
       where: { id },
       data: {
         fixReason: value.fixReason,
-        // A plain data record — every field a string, number or null.
-        fixDetail: value.fixDetail === null ? Prisma.DbNull : { ...value.fixDetail },
+        // A plain data record — every field a string, number, boolean or null, and a
+        // dead run's branch list re-spelled as literal objects (an interface carries no
+        // index signature, so the JSON input type refuses it as declared).
+        fixDetail:
+          value.fixDetail === null
+            ? Prisma.DbNull
+            : {
+                ...value.fixDetail,
+                branches:
+                  value.fixDetail.branches?.map((b) => ({
+                    repository: b.repository,
+                    branch: b.branch,
+                  })) ?? null,
+              },
       },
     });
   },

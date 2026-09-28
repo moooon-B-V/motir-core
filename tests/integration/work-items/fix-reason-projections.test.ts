@@ -125,7 +125,17 @@ describe('fixReason + fixDetail on the item page read (MOTIR-6611)', () => {
 
     const read = await workItemsService.getIssueDetail(fx.projectId, stuck.identifier, fx.ctx);
     expect(read.fixReason).toBe('changes_requested');
-    expect(read.fixDetail).toEqual(detail);
+    // A detail stored before the dead-run fields existed (MOTIR-6880) reads them as null.
+    expect(read.fixDetail).toEqual({
+      ...detail,
+      lastHeardAt: null,
+      ranByName: null,
+      branch: null,
+      branches: null,
+      pushed: null,
+      continueKey: null,
+      diedReason: null,
+    });
 
     const none = await workItemsService.getIssueDetail(fx.projectId, healthy.identifier, fx.ctx);
     expect(none.fixReason).toBeNull();
