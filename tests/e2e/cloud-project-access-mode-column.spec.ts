@@ -146,10 +146,17 @@ test('the access mode alone decides who reads a project — public, members only
     name: 'Una Added-nowhere',
   });
   await workspacesService.addMember({ userId: member.id, workspaceId: s.workspaceId });
-  await db.workspaceMembership.update({
-    where: { userId_workspaceId: { userId: member.id, workspaceId: s.workspaceId } },
-    data: { activeProjectId: s.projectId },
-  });
+  // Pin the member to THIS project before every read of its item. The pin must be
+  // re-written each time: when the pinned project is one the member cannot enter,
+  // the active-project resolver falls back to another project in the workspace
+  // and PERSISTS that fallback (`projectsService` resolution step 2), so the
+  // pointer does not survive the Members-only case below.
+  const pinMember = () =>
+    db.workspaceMembership.update({
+      where: { userId_workspaceId: { userId: member.id, workspaceId: s.workspaceId } },
+      data: { activeProjectId: s.projectId },
+    });
+  await pinMember();
   const memberContext = await browser.newContext();
   const memberPage = await memberContext.newPage();
   await signIn(memberPage, MEMBER_EMAIL, MEMBER_PASSWORD);
@@ -174,6 +181,7 @@ test('the access mode alone decides who reads a project — public, members only
     expect(read.status, 'GET /api/public/p/<KEY> signed out').toBe(404);
     expect(read.listed, 'explore no longer lists it').toBe(false);
 
+    await pinMember();
     const res = await memberPage.goto(`/items/${s.itemKey}`);
     expect(res?.status(), 'the unadded member reads not-found').toBe(404);
     await expect(memberPage.getByRole('heading', { name: s.itemKey })).toHaveCount(0);
@@ -181,6 +189,7 @@ test('the access mode alone decides who reads a project — public, members only
 
   await test.step('3 — Open to the workspace: the member reads it; signed out still 404', async () => {
     await chooseMode(page, /^Open to the workspace/, null);
+    await pinMember();
     const res = await memberPage.goto(`/items/${s.itemKey}`);
     expect(res?.status(), 'the Full member now reads the item').toBe(200);
     const read = await readSignedOut(browser, KEY);
