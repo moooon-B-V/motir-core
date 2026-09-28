@@ -188,6 +188,34 @@ describe('the press (Panels 12s, 12t, 12u)', () => {
     expect(refreshSpy).toHaveBeenCalled();
   });
 
+  // Bug MOTIR-6735: a SETTING refusal at the press quotes the host's own words beneath the
+  // union's copy — the only thing that names which setting refused the merge.
+  it('a setting refusal at the press quotes GitHub’s own message under the refusal', async () => {
+    const message =
+      'Repository rule violations found: changes must be made through a pull request.';
+    const actions = fakeActions({
+      approveAndMerge: vi.fn().mockResolvedValue({
+        ok: true,
+        gate: APPROVED,
+        members: [
+          { subjectVersion: CORE_V, pullRequestId: CORE_PR.id, outcome: 'merged' },
+          {
+            subjectVersion: GATEWAY_V,
+            pullRequestId: GATEWAY_PR.id,
+            outcome: 'refused',
+            refusal: { tag: 'MERGE_BRANCH_PROTECTED', reason: message },
+          },
+        ],
+      }),
+    });
+    renderFrame({ gate: AWAITING }, actions);
+    await pressApproveAndMerge();
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain(en.approvalGate.refusal.mergeBranchProtected.title);
+    expect(alert.textContent).toContain(fill(pra.setting.hostReason, { reason: message }));
+  });
+
   it('one refused: the approval stands, the refusal is named in place, and Retry merge repaints only that row', async () => {
     const actions = fakeActions({
       approveAndMerge: vi.fn().mockResolvedValue({

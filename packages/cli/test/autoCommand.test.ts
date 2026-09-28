@@ -860,6 +860,7 @@ function ciDelivery(ci: string, repo = 'moooon/motir-core', number = 1): Record<
     baseRef: 'main',
     defaultBranch: 'main',
     queueExit: null,
+    mergeRefusal: null,
   };
 }
 

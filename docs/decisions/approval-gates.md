@@ -2047,6 +2047,14 @@ An approval that does not merge is a note, not a gate.
 > in the press's HTTP response, so a reload showed a card reading **Approved** with
 > nothing anywhere saying the merge had been refused or why. A class cannot be
 > assigned to an outcome nobody wrote down.
+> **AMENDED (Bug MOTIR-6735, 2026-09-28): the row also keeps the host's OWN message**
+> (`reason`, nullable, verbatim, bounded at 2000 characters). The classifier files
+> every host error it does not recognise under `branch_protected`, so for that code
+> the message is the only record of WHICH setting refused the merge — and without it
+> the card told a person to "change the setting" and named none. It is quoted,
+> attributed to the host, beneath the refusal's own line in the Development block
+> and the approval overlay, and returned by the work item's delivery set
+> (`mergeRefusal`, MCP and `/api/v1` `1.47.0`).
 >
 > **6. `motir fix` IS FOR THE CLASSES WHERE THE CODE MAY BE AT FAULT.** It claims a
 > CAN'T-LAND card at `implemented` (where it already did) and a `CI_FAILURE` /

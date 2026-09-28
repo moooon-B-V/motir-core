@@ -28,7 +28,8 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //     put back, while the pull request is still at the head the gate named (MOTIR-5634), and
 //     the approval it would act on has not already been spent on that outcome (MOTIR-5802).
 //
-// ⚠️ NO REFUSAL REASON: the press does not persist one.
+// ⚠️ A REFUSAL CARRIES THE HOST'S OWN MESSAGE when it gave one (Bug MOTIR-6735) — for a
+// refusal classed `branch_protected` that message is the only thing naming the setting.
 //
 // ⚠️ A LEAF ON PURPOSE. It imports repositories and nothing else, so `workItemsService` (the
 // quick view) can read it without evaluating `pullRequestMergeService`'s git-provider and
@@ -146,6 +147,7 @@ async function approvedMembers(
               landingClass: refusalClass,
               refusedAt: refusalRow.refusedAt.toISOString(),
               permission: refusalRow.permission,
+              reason: refusalRow.reason,
             }
           : null,
       // Which gate the row's press DECIDES — the re-asked one, or null on the decided
