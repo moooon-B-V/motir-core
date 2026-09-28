@@ -1,5 +1,6 @@
 'use client';
 
+import { EpicNotPublicPill } from '@/components/issues/EpicNotPublicPill';
 import type { MouseEvent } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
@@ -107,6 +108,8 @@ export function BoardCardView({
       <span className="flex items-center gap-1.5">
         <IssueTypeIcon type={card.kind} className="h-4 w-4 shrink-0" />
         <span className="font-mono text-xs text-(--el-text-muted)">{card.identifier}</span>
+        {/* A Visitor's PRIVATE epic (MOTIR-6648; design MOTIR-6641). */}
+        {card.childrenHidden ? <EpicNotPublicPill /> : null}
         <span className="flex-1" />
         {/* Drag affordance cue — the whole card is the drag handle (3.2.4); the
             grip is the hover-revealed hint. */}

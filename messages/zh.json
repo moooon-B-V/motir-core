@@ -151,6 +151,7 @@
     "codeLanguage": "语言"
   },
   "common": {
+    "personFallback": "项目成员",
     "close": "关闭",
     "dialog": "对话框",
     "retry": "重试",
@@ -2449,7 +2450,19 @@
       },
       "emptyMembersOnlyTitle": "只有管理者可以打开此项目",
       "emptyMembersOnlyBody": "此项目仅限成员，且尚未添加任何人。添加人员即可让他们进入。",
-      "readOnlyModeNote": "只有工作区管理者可以更改谁能打开此项目。"
+      "readOnlyModeNote": "只有工作区管理者可以更改谁能打开此项目。",
+      "visitors": {
+        "heading": "访客",
+        "countLabel": "{count} 位访客",
+        "subtitle": "观看此公开项目的 {workspace} 以外的人。每个人在首次访问前都同意与此项目的管理者分享其姓名和电子邮件。只有管理者能看到此列表。",
+        "firstVisit": "首次访问",
+        "latestVisit": "最近访问",
+        "agreed": "同意于",
+        "showMore": "显示更多",
+        "loadFailed": "无法加载更多访客，请重试。",
+        "emptyTitle": "还没有人访问",
+        "emptyBody": "当 {workspace} 以外的人打开此项目的访客链接并同意分享其信息后，他们会显示在这里。"
+      }
     },
     "publicPage": {
       "title": "公开页面",
@@ -2499,6 +2512,18 @@
         "title": "放弃未保存的更改？",
         "keep": "继续编辑",
         "discard": "放弃"
+      },
+      "visitorLink": {
+        "title": "访客链接",
+        "subtitle": "打开此链接的人在登录并同意与此项目的管理者分享其姓名和电子邮件后，即可在应用中阅读 <strong>{projectName}</strong>——它的工作项、看板、路线图、计划、审批和运行。他们无法更改任何内容，并且只能看到你的团队成员的名字。",
+        "copy": "复制访客链接",
+        "open": "以访客身份打开",
+        "copied": "已复制访客链接",
+        "hint": "打开后显示看板。你可以在“成员与访问”中查看访客。成员打开此链接会直接进入自己的视图。",
+        "notPublic": {
+          "lead": "此项目未公开，因此没有访客链接。",
+          "body": "只有项目的访问权限为<strong>公开</strong>时，访客才能阅读它，可在<link>成员与访问</link>中设置。"
+        }
       }
     },
     "publicAddress": {
@@ -9878,5 +9903,27 @@
   "roomView": {
     "mine": "我的",
     "project": "整个项目"
+  },
+  "visitor": {
+    "consent": {
+      "pill": "公开项目 · {workspace}",
+      "headline": "在观看 {project} 之前",
+      "body": "<b>{project}</b> 由 <b>{workspace}</b> 公开构建。如果继续，<b>此项目所在工作区的管理者</b>将能看到你的<b>姓名和电子邮件</b>，以及你访问的时间。对于此项目，我们只询问一次。",
+      "seeLabel": "他们会看到",
+      "seeRow": "{email} · 你的首次和最近访问时间",
+      "continue": "继续",
+      "continuing": "正在继续…",
+      "goBack": "返回",
+      "goBackLine": "返回不会分享任何信息。下次打开 {project} 时会再次询问。",
+      "failed": "无法保存，请重试。"
+    },
+    "shell": {
+      "banner": "你正在观看 <b>{project}</b> 公开构建的过程。这里是只读的，此项目的管理者可以看到你访问过。",
+      "brandLabel": "motir.co 上的 {project}",
+      "projectKey": "项目键 {key}",
+      "rateLimitedTitle": "你浏览得有点太快了",
+      "rateLimitedBody": "此公开项目限制了单个读者的访问速度。请在 {seconds} 秒后重试。",
+      "rateLimitedRetry": "重试"
+    }
   }
 }

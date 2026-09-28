@@ -1000,7 +1000,11 @@ describe('guard · the handler stays a THIN HTTP layer', () => {
       join(process.cwd(), 'app/(authed)/items/[key]/_components/lateReads.ts'),
       'utf8',
     );
-    const page = readFileSync(join(process.cwd(), 'app/(authed)/items/[key]/page.tsx'), 'utf8');
+    // The item page's body is `_view.tsx`, and its permission set is read through
+    // the page context (MOTIR-6643) — together they are the item page's reads.
+    const page = ['app/(authed)/items/[key]/_view.tsx', 'lib/pages/projectPageContext.ts']
+      .map((f) => readFileSync(join(process.cwd(), f), 'utf8'))
+      .join('\n');
     // The approve-to-merge port's reads, each one the item page already makes.
     for (const call of [
       'decisionDocumentService.readViewForWorkItem',

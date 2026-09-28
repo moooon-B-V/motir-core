@@ -55,6 +55,14 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { gateSetFor } from '@/lib/services/gateSetFor';
 import { summarizeGateSubjects } from '@/lib/approvalGates/subjectSummary';
 import { HOME_PAGE_SIZE, type HomeActorContext } from '@/lib/services/homeService';
+import {
+  VISITOR_ACTOR_ID,
+  visitorServiceContext,
+  type VisitorReadContext,
+} from '@/lib/visitor/context';
+import { personName } from '@/lib/people/personLabel';
+import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -675,15 +683,58 @@ function recordRoutedToId(row: {
 }
 
 /**
+ * The room's view key, written ONCE (`tests/approval-records-story-gate.test.ts`):
+ * the member read below and the Visitor reads (MOTIR-6645) name it through this.
+ */
+const APPROVAL_VIEW_KEY = 'approval:view_any' satisfies PermissionKey;
+
+/**
  * The Approvals room's views for a reader (MOTIR-6333): `project` on
  * `approval:view_any` (role ∩ token grant), `mine` on a way to act
  * (`APPROVAL_ACT_PERMISSIONS`). The ONE place the service reads the view key.
  */
 function approvalRoomViews(held: ReadonlySet<PermissionKey>, ctx: HomeActorContext): RoomView[] {
   return availableRoomViews({
-    hasViewKey: holdsRecordView(held, ctx, 'approval:view_any'),
+    hasViewKey: holdsRecordView(held, ctx, APPROVAL_VIEW_KEY),
     canAct: canActOnApprovals(held),
   });
+}
+
+/**
+ * Whether a read runs on a Visitor's narrowed service context (MOTIR-6645) — the
+ * one actor every label below must name by display name only (MOTIR-6646).
+ */
+function isVisitorActor(ctx: { userId: string }): boolean {
+  return ctx.userId === VISITOR_ACTOR_ID;
+}
+
+/**
+ * The routed person's label for THIS reader: a member's keeps the shipped
+ * `name || email` rule; a Visitor's is the name or the neutral label, never the
+ * email (MOTIR-6646).
+ */
+function routedLabelFor(
+  ctx: { userId: string },
+  user: Parameters<typeof routedToDisplayName>[0],
+): string | null {
+  if (!isVisitorActor(ctx)) return routedToDisplayName(user);
+  return user ? personName(user.name) : null;
+}
+
+/**
+ * The deciders' display names by id, for a Visitor's read (MOTIR-6646). The
+ * stored `decidedByLabel` is `"Name <email>"` and is NEVER parsed for a Visitor:
+ * the name comes from the user row, and a decider with no row left reads as the
+ * neutral label.
+ */
+async function visitorDeciderNames(
+  ids: ReadonlyArray<string | null>,
+  tx: Prisma.TransactionClient,
+): Promise<(id: string | null) => string | null> {
+  const wanted = [...new Set(ids.filter((id): id is string => id !== null))];
+  const users = wanted.length > 0 ? await userRepository.findByIds(wanted, tx) : [];
+  const byId = new Map(users.map((u) => [u.id, personName(u.name)]));
+  return (id) => (id === null ? null : (byId.get(id) ?? personName(null)));
 }
 
 export const approvalGatesService = {
@@ -857,13 +908,22 @@ export const approvalGatesService = {
       const offersRefusalVerdict =
         row.state === 'awaiting' ? await refusalVerdictOfferFor(row, tx) : false;
 
+      const gateDto = toApprovalGateDto(row, item.descriptionMd, offersRefusalVerdict);
+      const earlierDto = earlier ? toEarlierApprovalDto(earlier) : null;
+      // A Visitor reads every person by name only (MOTIR-6646).
+      const decider = isVisitorActor(ctx)
+        ? await visitorDeciderNames([row.decidedById, earlier?.decidedById ?? null], tx)
+        : null;
       return {
-        gate: toApprovalGateDto(row, item.descriptionMd, offersRefusalVerdict),
+        gate: decider ? { ...gateDto, decidedByLabel: decider(row.decidedById) } : gateDto,
         canDecide,
         stamp,
         movedSince,
-        routedToLabel: routedToDisplayName(routedTo),
-        earlierApproval: earlier ? toEarlierApprovalDto(earlier) : null,
+        routedToLabel: routedLabelFor(ctx, routedTo),
+        earlierApproval:
+          earlierDto && decider && earlier
+            ? { ...earlierDto, decidedByLabel: decider(earlier.decidedById) }
+            : earlierDto,
         settingsDoor: settingsDoorFor(
           isRegisteredGateKind(input.kind) ? handlerFor(input.kind).settingsDoor : undefined,
           held,
@@ -921,16 +981,18 @@ export const approvalGatesService = {
           ? movedAsReaderSees(stampMoved(input.since, stampInputs), PLAN_KIND)
           : [];
 
+      const decider = isVisitorActor(ctx) ? await visitorDeciderNames([row.decidedById], tx) : null;
       return {
         gate: {
           ...toApprovalGateDto(row),
+          ...(decider ? { decidedByLabel: decider(row.decidedById) } : {}),
           // Only a question still being asked can be held (§11.5c).
           held: row.state === 'awaiting' ? await readPlanGateHeld(plan.id, tx) : null,
         },
         canDecide,
         stamp,
         movedSince,
-        routedToLabel: routedToDisplayName(routedTo),
+        routedToLabel: routedLabelFor(ctx, routedTo),
         earlierApproval: null,
         settingsDoor: null,
       };
@@ -968,7 +1030,9 @@ export const approvalGatesService = {
         gateId: gate.id,
         kind: gate.kind,
         noteMd: gate.noteMd,
-        decidedByLabel: gate.decidedByLabel,
+        decidedByLabel: isVisitorActor(ctx)
+          ? (await visitorDeciderNames([gate.decidedById], tx))(gate.decidedById)
+          : gate.decidedByLabel,
         decidedAt: gate.decidedAt.toISOString(),
         decisionSource: gate.decisionSource,
         refusalVerdict: gate.refusalVerdict,
@@ -1033,7 +1097,7 @@ export const approvalGatesService = {
           kind,
           gateId: move.gateId,
           canDecide,
-          routedToLabel: routedToDisplayName(routedTo),
+          routedToLabel: routedLabelFor(ctx, routedTo),
         });
       }
       return out;
@@ -1176,7 +1240,7 @@ export const approvalGatesService = {
         // not while the merge is what the move waits for, and not while the pull
         // request is open but no gate has been raised yet.
         canDecide: err.waitingOn === 'decision' && err.gateId !== null && canDecide,
-        routedToLabel: routedToDisplayName(routedTo),
+        routedToLabel: routedLabelFor(ctx, routedTo),
       };
     });
   },
@@ -1446,7 +1510,16 @@ export const approvalGatesService = {
    * WITHOUT the records: the room's failed-read face keeps the switch, so the
    * other view stays one press away.
    */
-  async recordViews(ctx: HomeActorContext): Promise<RoomView[]> {
+  async recordViews(ctx: HomeActorContext | VisitorReadContext): Promise<RoomView[]> {
+    // A Visitor's room is decided from the Visitor key set alone (MOTIR-6645):
+    // `approval:view_any` and nothing that acts ⇒ Project only.
+    if (isVisitorContext(ctx)) {
+      openVisitorRead(ctx.project.id, ctx);
+      return availableRoomViews({
+        hasViewKey: ctx.permissions.has(APPROVAL_VIEW_KEY),
+        canAct: false,
+      });
+    }
     return withWorkspaceContext(ctx, async (tx) => {
       const routing = await routingScope(ctx, tx);
       if (routing.projectIds.length === 0) return [];
@@ -1456,16 +1529,39 @@ export const approvalGatesService = {
   },
 
   async listRecords(
-    ctx: HomeActorContext,
+    reader: HomeActorContext | VisitorReadContext,
     options: ApprovalQueueListOptions & { view?: RoomView | null } = {},
   ): Promise<ApprovalRecordsPageDto> {
     const pageSize = clampApprovalQueueLimit(options.limit);
+    // A VISITOR (Story MOTIR-6170 · MOTIR-6645) reads their one public project's
+    // records on a narrowed service context, holding the Visitor key set, decides
+    // nothing, and never sees a record on a private epic's descendant or on a
+    // withheld plan. A member's read is unchanged.
+    const visitor = isVisitorContext(reader) ? reader : null;
+    if (visitor) openVisitorRead(visitor.project.id, visitor, APPROVAL_VIEW_KEY);
+    const ctx: HomeActorContext = visitor
+      ? { ...visitorServiceContext(visitor), projectId: visitor.project.id }
+      : (reader as HomeActorContext);
     return withWorkspaceContext(ctx, async (tx) => {
-      const routing = await routingScope(ctx, tx);
+      const routing = visitor
+        ? { projectIds: [visitor.project.id], userId: ctx.userId }
+        : await routingScope(ctx, tx);
       const browsable = routing.projectIds.length > 0;
-      const held = browsable
-        ? await projectAccessService.getPermissions(ctx.projectId, ctx, tx)
-        : new Set<PermissionKey>();
+      const held = visitor
+        ? visitor.permissions
+        : browsable
+          ? await projectAccessService.getPermissions(ctx.projectId, ctx, tx)
+          : new Set<PermissionKey>();
+      const withheld = visitor
+        ? {
+            workItemIds: [...visitor.hiddenIds],
+            planIds: await planChangeSessionRepository.findWithheldPlanIds(
+              visitor.project.id,
+              [...visitor.hiddenIds],
+              tx,
+            ),
+          }
+        : null;
       // THE VIEW (MOTIR-6333): the reader ASKS, this read SERVES. `project` needs
       // `approval:view_any`; `mine` needs a way to act (`APPROVAL_ACT_PERMISSIONS`).
       // A view the reader lacks falls back to the one they have; a reader with
@@ -1488,6 +1584,7 @@ export const approvalGatesService = {
       const scope: ApprovalRecordsScope = {
         ...routing,
         fullView: served === 'project',
+        ...(withheld ? { withheld } : {}),
       };
 
       const awaitingTotal = await approvalGateRepository.countRecordsAwaiting(scope, tx);
@@ -1509,6 +1606,14 @@ export const approvalGatesService = {
             )
           : Promise.resolve([]),
       ]);
+
+      // A Visitor names each decider from the user row, never the stored label (MOTIR-6646).
+      const decider = visitor
+        ? await visitorDeciderNames(
+            decidedRows.map((row) => row.decidedById),
+            tx,
+          )
+        : null;
 
       // ONE subject query per KIND on the page, across BOTH sections.
       const subjects = await summarizeGateSubjects([...awaitingRows, ...decidedRows], tx);
@@ -1534,17 +1639,19 @@ export const approvalGatesService = {
             subjects.get(row.id) ?? null,
             // A card-less row (MOTIR-6034; ADR §11.6) is decided on its kind's
             // permission alone — there is no card for the relationship half to read.
-            row.workItem
-              ? await canDecideGate(
-                  { ...row.workItem, projectId: ctx.projectId },
-                  row.kind,
-                  ctx,
-                  tx,
-                  held,
-                )
-              : canDecideCardlessGate(row.kind, held),
+            visitor
+              ? false
+              : row.workItem
+                ? await canDecideGate(
+                    { ...row.workItem, projectId: ctx.projectId },
+                    row.kind,
+                    ctx,
+                    tx,
+                    held,
+                  )
+                : canDecideCardlessGate(row.kind, held),
             // A routed user whose row has gone resolves to nothing, as on the item page.
-            routedToDisplayName(usersById.get(recordRoutedToId(row)) ?? null),
+            routedLabelFor(ctx, usersById.get(recordRoutedToId(row)) ?? null),
           ),
         ),
       );
@@ -1556,9 +1663,10 @@ export const approvalGatesService = {
         sections: {
           awaiting: { items: awaitingItems, total: awaitingTotal },
           decided: {
-            items: decidedRows.map((row) =>
-              toApprovalRecordDecidedRowDto(row, subjects.get(row.id) ?? null),
-            ),
+            items: decidedRows.map((row) => {
+              const dto = toApprovalRecordDecidedRowDto(row, subjects.get(row.id) ?? null);
+              return decider ? { ...dto, decidedByLabel: decider(row.decidedById) } : dto;
+            }),
             total: decidedTotal,
           },
         },

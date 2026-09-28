@@ -161,6 +161,28 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: [
+        // Story MOTIR-6170 · MOTIR-6650 — the VISITOR story's new modules (the
+        // Visitor read context, its resolution helpers, the visitor record's
+        // repository / service / mapper, the name-only person label, the page
+        // context the eight read pages share, and the Not public pill). Pinned at
+        // the project floor in `thresholds` below after being MEASURED on this
+        // branch against the story's own specs — every one ≥ 90 on all four
+        // metrics. `lib/visitor/pageGate.ts` (branches 85) and the story's
+        // `app/**` files are not pinned: the MOTIR-6650 PR body carries their
+        // numbers and why.
+        'lib/visitor/consentPath.ts',
+        'lib/visitor/context.ts',
+        'lib/visitor/cookie.ts',
+        'lib/visitor/errors.ts',
+        'lib/visitor/readActor.ts',
+        'lib/visitor/readScope.ts',
+        'lib/visitor/routes.ts',
+        'lib/services/visitorRecordsService.ts',
+        'lib/repositories/projectVisitorRepository.ts',
+        'lib/mappers/visitorMappers.ts',
+        'lib/people/personLabel.ts',
+        'lib/pages/projectPageContext.ts',
+        'components/issues/EpicNotPublicPill.tsx',
         // Story MOTIR-6574 · MOTIR-6584 — the OBSOLESCENCE story's two NEW modules
         // (the scale's one list, and the MCP write fields + text-block lines) and
         // the relationship model it widened with the `supersedes` pair, which had
@@ -2760,6 +2782,46 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // ── Story MOTIR-6170 · THE VISITOR (Subtask MOTIR-6650) — see `include`. ──
+        'lib/visitor/consentPath.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/visitor/context.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/visitor/cookie.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/visitor/errors.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/visitor/readActor.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/visitor/readScope.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/visitor/routes.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/services/visitorRecordsService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/projectVisitorRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/visitorMappers.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/people/personLabel.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/pages/projectPageContext.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/issues/EpicNotPublicPill.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/rateLimit/publicReadGuard.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // ── Story MOTIR-6169 · ACCESS LIVES ON THE PROJECT (Subtask MOTIR-6552) ──
         // Pinned at the project's 90, not at the measurement (see `include`).
         'lib/projects/accessMode.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },

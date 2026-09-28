@@ -12,6 +12,8 @@ import { teamAccessSummary } from '@/lib/projectRepos/teamAccessView';
 import { publicProjectUrl } from '@/lib/publicProjects/urls';
 import { ProjectMembersSettings } from './_components/ProjectMembersSettings';
 import { CodeAccessDoorCard } from './_components/CodeAccessDoorCard';
+import { ProjectVisitorsCard } from './_components/ProjectVisitorsCard';
+import { visitorRecordsService } from '@/lib/services/visitorRecordsService';
 import { guardSettingsPage } from '../_guard';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
@@ -82,6 +84,17 @@ async function AccessMembersSection({ ctx }: { ctx: ProjectContext }) {
     ]);
   const codeAccessCounts = teamAccessSummary(codeAccess, repos);
 
+  // The project's VISITORS (MOTIR-6667, design MOTIR-6641 panel 10) — ABSENT, not
+  // empty, unless the project is Public AND the reader holds
+  // `project:manage_access`. A project that was public and is not any more shows
+  // no section; its records stay and come back if it is made public again. The
+  // service refuses the read to everyone else on its own, so this condition only
+  // decides whether to ask.
+  const visitorsPage =
+    access.accessMode === 'public' && capabilities.canManageAccess
+      ? await visitorRecordsService.listForManagers({ key: ctx.project.identifier, ctx })
+      : null;
+
   return (
     <>
       <ProjectMembersSettings
@@ -103,6 +116,14 @@ async function AccessMembersSection({ ctx }: { ctx: ProjectContext }) {
         // is a server variable and the editor is a client island.
         publicPageUrl={publicProjectUrl(ctx.project.identifier)}
       />
+
+      {visitorsPage ? (
+        <ProjectVisitorsCard
+          projectKey={ctx.project.identifier}
+          workspaceName={workspace?.name ?? ''}
+          initialPage={visitorsPage}
+        />
+      ) : null}
 
       <CodeAccessDoorCard
         granted={codeAccessCounts.granted}

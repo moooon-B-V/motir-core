@@ -4,7 +4,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { composeOwnerReach } from '@/lib/workspaces/membershipGate';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { customRolePermissionsOf } from '@/lib/workspaces/roles';
 import type { Project, ProjectAccessMode } from '@/generated/prisma/client';
 import {
@@ -36,6 +36,17 @@ import { hasPermission, resolvePermissions } from '@/lib/permissions/resolve';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { toActorPermissionsDTO } from '@/lib/mappers/permissionMappers';
 import type { ActorPermissionsDTO } from '@/lib/dto/permissions';
+import { isCloud } from '@/lib/billing/availability';
+import { VISITOR_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import {
+  VISITOR_NOT_FOUND,
+  type VisitorReadContext,
+  type VisitorVerdict,
+} from '@/lib/visitor/context';
+import { projectVisitorRepository } from '@/lib/repositories/projectVisitorRepository';
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { visitorRecordsService } from '@/lib/services/visitorRecordsService';
 
 // projectAccessService — the ENFORCEMENT half of the Story 6.4 access model
 // (Subtask 6.4.3). It resolves the three policy inputs (the project's access
@@ -640,6 +651,108 @@ export const projectAccessService = {
       // — admin-only; an anonymous / cross-org viewer resolves to `false`.
       canManage: canManageProject(inputs),
     };
+  },
+
+  /**
+   * THE VISITOR'S ONE RESOLUTION (Story MOTIR-6170 · MOTIR-6642, MOTIR-6666;
+   * `public-projects.md` AMENDMENTS 2–3, `visitor-sign-in-and-records.md`). Given
+   * the identifier a Visitor URL carries and the request's session (or none),
+   * answer who this reader is on that project, asking in THIS order — the order
+   * is the privacy boundary:
+   *
+   * 1. `not_found` when the public surface is off (`isCloud()` false — the same
+   *    predicate `publicSurfaceUnavailable` answers), when no public project
+   *    carries the identifier, or when the project it names is not `public`. ONE
+   *    frozen value, asked BEFORE the session, so a signed-out stranger learns no
+   *    more about a private project than a signed-in one.
+   * 2. `sign_in` when there is no session: reading the live views needs an
+   *    account. It carries only the key, for the way back.
+   * 3. `enter` when the session's user can ENTER the project (`canEnter`): they
+   *    belong in their own view, and are never asked to consent.
+   * 4. `consent` when they cannot enter and have no visitor record for this
+   *    project yet: the one-time consent screen comes first. It carries what that
+   *    screen says — the project's name and key and the workspace's name — and
+   *    nothing from inside the project.
+   * 5. `visitor` otherwise, with the {@link VisitorReadContext} every Visitor
+   *    read takes (the Visitor key set and the private-epic hidden set), and the
+   *    record's latest visit touched on the way (never failing the read).
+   *
+   * Built ON {@link resolvePublicInputs}, the existing cross-org touch-point, so it
+   * is not a third place that grants cross-org read (`public-projects.md` §2).
+   */
+  async resolveVisitor(
+    identifier: string,
+    session: { user: { id: string } } | null,
+  ): Promise<VisitorVerdict> {
+    if (!isCloud()) return VISITOR_NOT_FOUND;
+    // The same resolver `publicProjectsService.resolvePublicProject` uses: the one
+    // PUBLIC project carrying this key, across workspaces.
+    const project = await projectRepository.findPublicByIdentifier(identifier);
+    if (!project || project.accessMode !== 'public') return VISITOR_NOT_FOUND;
+
+    if (!session) return { kind: 'sign_in', identifier: project.identifier };
+    const actorUserId = session.user.id;
+
+    let inputs: ProjectAccessInputs;
+    try {
+      inputs = await resolvePublicInputs(project.id, actorUserId);
+    } catch (err) {
+      // A project that stopped being public between the two reads is the same
+      // not-found as one that never was.
+      if (err instanceof ProjectNotFoundError) return VISITOR_NOT_FOUND;
+      throw err;
+    }
+    if (canEnter(inputs)) return { kind: 'enter', project };
+
+    // BOUND to the project's own workspace — a value the database handed us above,
+    // never the reader's — so the reads see exactly this project's rows under the
+    // non-bypass role (the RLS call-site guard's rule for a new caller).
+    const { record, hidden, workspace } = await withWorkspaceServiceContext(
+      project.workspaceId,
+      async (tx) => {
+        const found = await projectVisitorRepository.findByProjectAndUser(
+          project.id,
+          actorUserId,
+          tx,
+        );
+        if (!found) {
+          return {
+            record: null,
+            hidden: [],
+            workspace: await workspaceRepository.findById(project.workspaceId, tx),
+          };
+        }
+        return {
+          record: found,
+          hidden: await workItemRepository.findPublicHiddenDescendantIds(
+            project.id,
+            project.workspaceId,
+            tx,
+          ),
+          workspace: null,
+        };
+      },
+    );
+    if (!record) {
+      return {
+        kind: 'consent',
+        subject: {
+          identifier: project.identifier,
+          projectName: project.name,
+          workspaceName: workspace?.name ?? project.name,
+        },
+      };
+    }
+
+    const ctx: VisitorReadContext = {
+      kind: 'visitor',
+      project,
+      actorUserId,
+      permissions: VISITOR_PERMISSIONS,
+      hiddenIds: new Set(hidden),
+    };
+    await visitorRecordsService.touchVisit(ctx, record.lastVisitAt);
+    return { kind: 'visitor', ctx };
   },
 
   /**

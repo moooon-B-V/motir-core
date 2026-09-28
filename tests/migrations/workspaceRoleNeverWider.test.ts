@@ -51,6 +51,16 @@ function literal(name: string): string[] {
 
 const sorted = (s: Iterable<string>) => [...s].sort();
 
+/** `PUBLIC_PROJECT_PERMISSIONS` when this migration was written (before MOTIR-6642). */
+const PUBLIC_SET_AT_MIGRATION = [
+  'plan:view_any',
+  'project:browse',
+  'public_request:comment',
+  'public_request:submit',
+  'public_request:upvote',
+  'run:view_any',
+];
+
 const implicitSnapshot = JSON.parse(
   readFileSync(
     path.join(__dirname, 'fixtures/implicit-workspace-member-permissions.at-7717433af.json'),
@@ -77,7 +87,15 @@ describe('the literal sets', () => {
     expect(literal('gated')).toEqual(sorted(BUILTIN_ROLE_PERMISSIONS.admin));
     expect(literal('member')).toEqual(sorted(BUILTIN_ROLE_PERMISSIONS.member));
     expect(literal('viewer')).toEqual(sorted(BUILTIN_ROLE_PERMISSIONS.viewer));
-    expect(literal('public')).toEqual(sorted(PUBLIC_PROJECT_PERMISSIONS));
+    // ⚠️ The public literal is a POINT IN TIME, like the implicit one below. The
+    // migration ran with the public set as it stood before the Visitor role
+    // (MOTIR-6642) added `approval:view_any` and `report:view`; the migration is
+    // not rewritten, so its literal is pinned to that set and the live constant
+    // is asserted to be exactly it plus those two.
+    expect(literal('public')).toEqual(sorted(PUBLIC_SET_AT_MIGRATION));
+    expect(sorted(PUBLIC_PROJECT_PERMISSIONS)).toEqual(
+      sorted([...PUBLIC_SET_AT_MIGRATION, 'approval:view_any', 'report:view']),
+    );
   });
 
   it('the implicit set equals the committed snapshot of the retired constant', () => {

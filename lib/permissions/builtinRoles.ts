@@ -291,19 +291,33 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<ProjectRole, ReadonlySet<Permissio
 };
 
 /**
- * The grants decided by the project's ACCESS LEVEL alone, held by every actor —
+ * The VISITOR's key set (Story MOTIR-6170 · MOTIR-6642) — what anyone who cannot
+ * ENTER a `public` project holds on it: an anonymous reader, a signed-in person
+ * of another organisation, a Limited member who was not added.
+ *
+ * DERIVED from the Viewer set, never retyped. `role-model.md` §4 gives the
+ * Visitor "every VIEW permission and nothing that writes", which is the Viewer's
+ * definition word for word — so a Visitor is a Viewer nobody assigned, and a key
+ * added to (or removed from) the Viewer moves the Visitor with it.
+ */
+export const VISITOR_PERMISSIONS: ReadonlySet<PermissionKey> = new Set(
+  WORKSPACE_ROLE_PERMISSIONS.viewer,
+);
+
+/**
+ * The grants decided by the project's ACCESS MODE alone, held by every actor —
  * signed-in or not, in the workspace or not — when the project is `public`
- * (Story 6.12 · `docs/decisions/public-projects.md`). `project:browse` is
- * `canBrowse`'s leading unconditional branch; the three request grants are the
- * only writes a public non-member may perform.
+ * (Story 6.12 · `docs/decisions/public-projects.md`, its Visitor amendment):
+ * the {@link VISITOR_PERMISSIONS} plus the three request grants motir.co's act
+ * routes assert, the only writes a public non-member may perform.
+ *
+ * MOTIR-6642 — this ADDS `approval:view_any` and `report:view` to what a
+ * non-entrant held before. The DECISION (MOTIR-6165, `role-model.md` §4) gives
+ * a Visitor every approval record of a public project, so the earlier note
+ * that a public reader "has never held" `approval:view_any` is retired.
  */
 export const PUBLIC_PROJECT_PERMISSIONS: readonly PermissionKey[] = [
-  'project:browse',
-  // MOTIR-6328 — a signed-in non-member of a `public` project opens `/plans` and
-  // `/runs` on browse today, so they keep that reach once the reads assert the
-  // rooms' view keys. Not `approval:view_any`, which they have never held.
-  'plan:view_any',
-  'run:view_any',
+  ...VISITOR_PERMISSIONS,
   'public_request:submit',
   'public_request:upvote',
   'public_request:comment',

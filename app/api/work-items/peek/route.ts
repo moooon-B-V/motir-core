@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { visitorThenMember } from '@/lib/visitor/readActor';
 import { getLocale } from 'next-intl/server';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -22,7 +23,7 @@ import { refuseIfNonCompliant } from '@/lib/auth/requireCompliantSession';
 // A stale / deleted / cross-workspace / forbidden key is the same 404 (the
 // no-existence-leak contract) — the controller renders it as the not-found
 // panel. Never a 403 (would leak "it exists but you can't see it").
-export async function GET(req: Request): Promise<Response> {
+async function memberGET(req: Request): Promise<Response> {
   const ctx = await getActiveProject();
   if (!ctx) {
     return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
@@ -69,4 +70,42 @@ export async function GET(req: Request): Promise<Response> {
     }
     throw err;
   }
+}
+
+/**
+ * The quick-view peek — for a VISITOR (MOTIR-6647), an item of the public project
+ * the Visitor cookie names, through `getVisitorQuickView` (a hidden key is
+ * the same 404 an unknown one is); everyone else is answered exactly as before.
+ */
+export async function GET(req: Request): Promise<Response> {
+  return visitorThenMember(
+    req,
+    () => memberGET(req),
+    async (ctx) => {
+      const key = new URL(req.url).searchParams.get('key')?.trim();
+      if (!key) {
+        return NextResponse.json(
+          { code: 'BAD_REQUEST', error: '`key` is required.' },
+          { status: 400 },
+        );
+      }
+      const locale = (await getLocale()) as Locale;
+      try {
+        const data = await workItemsService.getVisitorQuickView(key, ctx, locale);
+        return NextResponse.json(data, { headers: { 'Cache-Control': 'private, no-store' } });
+      } catch (err) {
+        if (
+          err instanceof WorkItemNotFoundError ||
+          err instanceof ProjectAccessDeniedError ||
+          err instanceof ProjectNotFoundError
+        ) {
+          return NextResponse.json(
+            { code: 'NOT_FOUND', error: 'Work item not available.' },
+            { status: 404 },
+          );
+        }
+        throw err;
+      }
+    },
+  );
 }

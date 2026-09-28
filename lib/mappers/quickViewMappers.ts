@@ -1,3 +1,4 @@
+import { personDisplayName } from '@/lib/people/personLabel';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { IssueDetailDto, WorkItemRefMap } from '@/lib/dto/workItems';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
@@ -58,7 +59,7 @@ export function toQuickViewData(
   designEvidence: DesignEvidenceDTO | null = null,
 ): QuickViewData {
   const { item, parent, workflow } = detail;
-  const nameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
+  const nameById = new Map(members.map((m) => [m.userId, personDisplayName(m)]));
   const status = workflow.statuses.find((s) => s.key === item.status);
 
   return {

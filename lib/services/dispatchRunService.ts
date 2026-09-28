@@ -51,6 +51,8 @@ import { holdsRecordView, projectAccessService } from '@/lib/services/projectAcc
 import { projectsService } from '@/lib/services/projectsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/context';
+import { isVisitorContext } from '@/lib/visitor/readScope';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { availableRoomViews, holdsAnyOf, RUN_ACT_PERMISSIONS } from '@/lib/rooms/roomView';
@@ -273,6 +275,37 @@ async function assertMayReadRun(
   if (holdsRecordView(held, ctx, 'run:view_any')) return;
   if (run.createdById !== null && run.createdById === ctx.userId) return;
   throw new DispatchRunNotFoundError(run.id);
+}
+
+/**
+ * A Runs-room read's reader (Story MOTIR-6170 · MOTIR-6645): a member's own
+ * context, or — for a Visitor — the narrowed service context (bound to their one
+ * public project, granted the Visitor keys) plus the private-epic hidden set. A
+ * run scoped to, or carrying a card for, a hidden item is withheld; reading one
+ * by id answers exactly as an unknown id does.
+ */
+function runReader(ctx: ServiceContext | VisitorReadContext): {
+  svc: ServiceContext;
+  hidden?: readonly string[];
+  projectId?: string;
+} {
+  if (!isVisitorContext(ctx)) return { svc: ctx };
+  return {
+    svc: visitorServiceContext(ctx),
+    hidden: [...ctx.hiddenIds],
+    projectId: ctx.project.id,
+  };
+}
+
+/** Whether a loaded run joins a withheld work item (its scope or any card). */
+function runTouches(
+  run: { scopeWorkItemId: string | null; cards: ReadonlyArray<{ workItemId: string | null }> },
+  hidden: readonly string[] | undefined,
+): boolean {
+  if (!hidden || hidden.length === 0) return false;
+  const set = new Set(hidden);
+  if (run.scopeWorkItemId && set.has(run.scopeWorkItemId)) return true;
+  return run.cards.some((card) => card.workItemId !== null && set.has(card.workItemId));
 }
 
 export const dispatchRunService = {
@@ -798,12 +831,18 @@ export const dispatchRunService = {
    * The run WITH its set — the read the ingest operations answer with, and the
    * one MOTIR-1793's browser routes will compose.
    */
-  async getRun(runId: string, ctx: ServiceContext): Promise<DispatchRunDto> {
+  async getRun(
+    runId: string,
+    reader: ServiceContext | VisitorReadContext,
+  ): Promise<DispatchRunDto> {
+    const { svc: ctx, hidden, projectId } = runReader(reader);
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
         const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
-        if (!run) throw new DispatchRunNotFoundError(runId);
+        if (!run || (projectId && run.projectId !== projectId) || runTouches(run, hidden)) {
+          throw new DispatchRunNotFoundError(runId);
+        }
         await assertMayReadRun(run, ctx, tx);
         const seq = (await dispatchRunEventRepository.maxSeq(runId, tx)) ?? 0;
         return toDispatchRunDto(run, seq);
@@ -901,12 +940,18 @@ export const dispatchRunService = {
    * ONE batched read for the whole set, not one per leg: a sprint run's card set
    * is not small, and a per-leg read would be an N+1 on the run view's only query.
    */
-  async getRunDetail(runId: string, ctx: ServiceContext): Promise<DispatchRunDetailDto> {
+  async getRunDetail(
+    runId: string,
+    reader: ServiceContext | VisitorReadContext,
+  ): Promise<DispatchRunDetailDto> {
+    const { svc: ctx, hidden, projectId } = runReader(reader);
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
         const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
-        if (!run) throw new DispatchRunNotFoundError(runId);
+        if (!run || (projectId && run.projectId !== projectId) || runTouches(run, hidden)) {
+          throw new DispatchRunNotFoundError(runId);
+        }
         await assertMayReadRun(run, ctx, tx);
         const seq = (await dispatchRunEventRepository.maxSeq(runId, tx)) ?? 0;
 
@@ -1019,8 +1064,9 @@ export const dispatchRunService = {
       /** WHOSE runs — asked for; the service serves (MOTIR-6331). */
       view?: DispatchRunView | undefined;
     },
-    ctx: ServiceContext,
+    reader: ServiceContext | VisitorReadContext,
   ): Promise<DispatchRunListPageDto> {
+    const { svc: ctx, hidden } = runReader(reader);
     const project = await projectsService.getByKey(projectKey, ctx);
     await projectAccessService.assertCanBrowse(project.id, ctx);
 
@@ -1040,6 +1086,7 @@ export const dispatchRunService = {
           ...(page.cursor ? { cursor: page.cursor } : {}),
           ...(page.statuses && page.statuses.length > 0 ? { statuses: page.statuses } : {}),
           ...(createdById ? { createdById } : {}),
+          ...(hidden ? { withheldWorkItemIds: hidden } : {}),
         };
 
         // A SCOPE narrowing resolves its key inside the same transaction, so the
@@ -1054,7 +1101,7 @@ export const dispatchRunService = {
           }
           const identifier = page.scopeWorkItemKey.trim().toUpperCase();
           const scope = await workItemRepository.findByIdentifier(project.id, identifier, tx);
-          if (!scope) throw new WorkItemNotFoundError(identifier);
+          if (!scope || hidden?.includes(scope.id)) throw new WorkItemNotFoundError(identifier);
           return dispatchRunRepository.listByScope(scope.id, bounded, tx);
         })();
 
@@ -1071,8 +1118,23 @@ export const dispatchRunService = {
    */
   async roomAccess(
     projectKey: string,
-    ctx: ServiceContext,
+    reader: ServiceContext | VisitorReadContext,
   ): Promise<{ views: DispatchRunView[]; canRun: boolean }> {
+    // A Visitor's room is decided from the Visitor key set alone (MOTIR-6645):
+    // `run:view_any` and nothing that acts ⇒ Project only, never a Run button.
+    if (isVisitorContext(reader)) {
+      if (projectKey.trim().toUpperCase() !== reader.project.identifier.toUpperCase()) {
+        throw new ProjectNotFoundError(projectKey);
+      }
+      return {
+        views: availableRoomViews({
+          hasViewKey: reader.permissions.has('run:view_any'),
+          canAct: false,
+        }),
+        canRun: false,
+      };
+    }
+    const ctx = reader;
     const project = await projectsService.getByKey(projectKey, ctx);
     const held = await projectAccessService.getPermissions(project.id, ctx);
     if (!held.has('project:browse')) return { views: [], canRun: false };
@@ -1106,8 +1168,9 @@ export const dispatchRunService = {
   async getRunScope(
     projectKey: string,
     scopeWorkItemKey: string,
-    ctx: ServiceContext,
+    reader: ServiceContext | VisitorReadContext,
   ): Promise<DispatchRunScopeDto> {
+    const { svc: ctx, hidden } = runReader(reader);
     const project = await projectsService.getByKey(projectKey, ctx);
     await projectAccessService.assertCanBrowse(project.id, ctx);
     const identifier = scopeWorkItemKey.trim().toUpperCase();
@@ -1116,7 +1179,7 @@ export const dispatchRunService = {
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
       async (tx) => {
         const item = await workItemRepository.findByIdentifier(project.id, identifier, tx);
-        if (!item) throw new WorkItemNotFoundError(identifier);
+        if (!item || hidden?.includes(item.id)) throw new WorkItemNotFoundError(identifier);
         return toDispatchRunScopeDto(item);
       },
     );
@@ -1135,9 +1198,10 @@ export const dispatchRunService = {
    */
   async listActiveRunsForProject(
     projectKey: string,
-    ctx: ServiceContext,
+    reader: ServiceContext | VisitorReadContext,
     opts: { view?: DispatchRunView | undefined } = {},
   ): Promise<ActiveDispatchRunsDto> {
+    const { svc: ctx, hidden } = runReader(reader);
     const project = await projectsService.getByKey(projectKey, ctx);
     await projectAccessService.assertCanBrowse(project.id, ctx);
 
@@ -1145,7 +1209,12 @@ export const dispatchRunService = {
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
       async (tx) => {
         const { scope, createdById } = await resolveRunScope(project.id, ctx, opts.view, tx);
-        const runs = await dispatchRunRepository.listActiveByProject(project.id, tx, createdById);
+        const runs = await dispatchRunRepository.listActiveByProject(
+          project.id,
+          tx,
+          createdById,
+          hidden,
+        );
         const rows: ActiveDispatchRunDto[] = runs.map((run) => ({
           id: run.id,
           command: run.command,

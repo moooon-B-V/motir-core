@@ -84,6 +84,10 @@ confused. §2's rejected-alternatives table carries both.
 **`motir-core` ships no public rendering at all.** That is the point of the
 arrangement rather than a side effect of it.
 
+> **Amended 2026-09-27 (AMENDMENT 7, MOTIR-6648):** the `/p/*` row splits — the
+> Visitor's signed-in READ views at `/p/<identifier>/<view>` are served by
+> `motir-core` on `app.motir.co`; the landing and act pages stay on `motir.co`.
+
 ### Where the line comes from — measured, not asserted
 
 Read on `origin/main`, 2026-08-29:
@@ -178,6 +182,10 @@ consumer. A consumer-side check is a smoke alarm in the wrong building.
 **The Better-Auth session cookie stays host-only on `app.motir.co`.** No
 `Domain=` widening to `.motir.co`, now or as a convenience later. MOTIR-3877's
 test gate asserts it.
+
+> **Amended 2026-09-27 (AMENDMENT 7 §B, MOTIR-6648):** unchanged. The Visitor
+> views add `motir_visitor`, a second, host-only, NON-session cookie that grants
+> nothing without the session and the visitor record.
 
 ### ⚠️ The deviation, stated rather than glossed
 
@@ -308,6 +316,9 @@ says _this is the hosted service_, and nothing else is allowed to imply it.
 | -------------- | ----------------- | ---------------------------------------------------------------------------------------------- |
 | `motir.co`     | `motir-marketing` | allow; the public surface it serves; its own sitemap                                           |
 | `app.motir.co` | `motir-core`      | `app/robots.ts` (MOTIR-3726) — disallow the API and the signed-in surfaces, and **NO sitemap** |
+
+> **Amended 2026-09-27 (AMENDMENT 7 §C, MOTIR-6648):** `app.motir.co` does not
+> index `/p/` — its Visitor views carry `noindex` and are disallowed by view.
 
 This is the arrangement that needs no cross-repo list, which is the whole reason
 it is stated. A single sitemap describing surfaces served by two applications
@@ -1651,3 +1662,80 @@ not a decision this record is waiting on. §9 is updated in place.
   nothing on this namespace can execute script, and if that ever changes the
   isolation is INHERITED from the hosting platform's own already-listed domain
   rather than applied for. MOTIR-4213 was cancelled on that reasoning.
+
+---
+
+## AMENDMENT 7 — the `/p/*` row splits: the Visitor's READ views are served by `motir-core` on `app.motir.co` to signed-in, consented readers (MOTIR-6648, 2026-09-27)
+
+Story MOTIR-6170 (a Visitor signs in to watch a public project) builds on two
+decisions: the role model (DECISION MOTIR-6165 — a Visitor is granted automatically on a public project, read-only)
+and the Visitor sign-in decision (DECISION MOTIR-6664 — a Visitor signs in, consents once per project, and is recorded for
+the project's Managers; reading a public project in the app is no longer
+anonymous). Reading a project's live views now needs a SESSION, and the session
+lives on `app.motir.co` and nowhere else (§4). So those views cannot be
+`motir.co` pages: they are served where the session is. MOTIR-6648 ships the
+route tree; this amendment is the record of what it changes here.
+
+### §A — §2: the `/p/*` row splits in two
+
+| surface                                                                                                                     | host           | repository        | why                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------- | -------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/p/<identifier>` (the landing), its changelog, requests, follow, subscribe, votes and comments — the ACT and landing pages | `motir.co`     | `motir-marketing` | **unchanged**: anonymous, tenant-authored, rendered over the public contract                                                                                        |
+| `/p/<identifier>/<view>` — `items`, `items/<key>`, `tree`, `board`, `roadmap`, `plans`, `plans/<id>`, `approvals`, `runs`   | `app.motir.co` | `motir-core`      | the READ views, served to a **signed-in, consented** Visitor under the Visitor chrome, from the same page bodies a member reads (MOTIR-6643). They need the session |
+| `/p/<identifier>/consent` and `/p/<identifier>/enter`                                                                       | `app.motir.co` | `motir-core`      | the one-time consent screen (MOTIR-6669) and the redirect that sends a MEMBER who opened a Visitor link into their own view                                         |
+
+`proxy.ts` keeps its 308 for every `/p/*` path that is not one of these —
+`isAppVisitorPath` is the list, and `lib/visitor/routes.ts` the table of views —
+and forwards the listed ones WITHOUT its optimistic session bounce: the Visitor
+layout owns the sign-in redirect, because only it knows whether the project
+exists, and it answers not-found (identical for a signed-out reader) before it
+asks anyone to sign in. A bounce in the proxy would tell a stranger that a
+private project's key is real.
+
+**§2's closing sentence — _"`motir-core` ships no public rendering at all"_ —
+still holds**, and this is why the row can split without reversing it: nothing
+on the Visitor tree renders for an anonymous reader. A signed-out request is
+sent to sign in; the anonymous public surface is still `motir.co`'s alone.
+
+### §B — §4: the session cookie is unchanged; `motir_visitor` is a second, non-session cookie
+
+**The Better-Auth session cookie stays host-only on `app.motir.co`, exactly as
+§4 decided.** Nothing here widens it, and the Visitor views need no widening:
+they are on the session's own host.
+
+The Visitor views add ONE cookie, `motir_visitor` (`lib/visitor/cookie.ts`),
+written by `proxy.ts` on every Visitor view and cleared on a navigation to any
+other page:
+
+- **host-only** (no `Domain=`, so `motir.co` never receives it), `HttpOnly`,
+  `SameSite=Lax`, `Path=/`, `Secure` wherever the session cookie is, and no
+  `Max-Age`;
+- its value is the public project's KEY — **an address, never a credential**.
+  It grants nothing without the session and the visitor record: the client data
+  doors serve a Visitor only when the SESSION resolves, through
+  `resolveVisitor`, to a consented Visitor of exactly the project it names
+  (MOTIR-6647).
+
+It is not a session cookie in §4's sense and changes nothing §4 accepted.
+
+### §C — §6: `app.motir.co` does not index `/p/`
+
+§6's row for `app.motir.co` gains the Visitor paths: each Visitor page emits
+`<meta name="robots" content="noindex, nofollow">`, and `robots.txt` disallows
+`/p/*/<view>` for each view, the consent screen and the member redirect
+(`VISITOR_SEGMENTS` in `lib/robotsPolicy.ts`). `motir.co`'s anonymous pages stay
+the indexed surface.
+
+It is disallowed BY VIEW rather than as `Disallow: /p/`: the bare
+`/p/<identifier>` and its changelog still 308 from this host onto `motir.co`, and
+disallowing `/p/` whole would stop a crawler following that redirect to the page
+that renders — the reason `/p/*` stayed on the allow list before these views
+existed.
+
+### §D — What this amendment does NOT decide
+
+- **motir.co's links into these URLs** — which of its read pages send a reader
+  here, and how — are the motir.co story's (MOTIR-6171).
+- **The Visitor's reads and verdicts** — the key set, the hidden set, the
+  name-only rule, the consent record — are MOTIR-6642, MOTIR-6645, MOTIR-6646,
+  MOTIR-6652, MOTIR-6665 and MOTIR-6666, and `visitor-sign-in-and-records.md`.

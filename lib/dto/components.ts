@@ -16,7 +16,8 @@
 export interface ComponentUserDto {
   id: string;
   name: string;
-  email: string;
+  /** Absent on a VISITOR's read (MOTIR-6646): a Visitor sees the name only. */
+  email?: string;
 }
 
 export interface ComponentDto {

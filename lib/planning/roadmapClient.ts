@@ -48,6 +48,9 @@ export interface RoadmapLevelItem {
   executor?: ExecutorDto | null;
   /** Has children → the canvas can DRILL into it. */
   hasChildren: boolean;
+  /** A Visitor's PRIVATE epic (MOTIR-6648): the node wears "Not public" and never
+   *  drills. Optional client-side: absent on every member read. */
+  childrenHidden?: boolean;
   /** Subtree progress roll-up — present on container nodes, `null` on leaves
    *  (Subtask 7.20.6 / MOTIR-1013). Optional client-side: an older / onboarding
    *  read that omits it degrades to "no meter". */
@@ -155,6 +158,7 @@ interface RoadmapNode {
   statusCategory?: string | null;
   isDone: boolean;
   hasChildren: boolean;
+  childrenHidden?: boolean;
   progress?: { done: number; total: number } | null;
   ready?: boolean;
   inActiveSprint?: boolean;
@@ -221,6 +225,7 @@ export function toItem(n: RoadmapNode): RoadmapLevelItem {
       ? (n.statusCategory as StatusCategoryDto)
       : null,
     hasChildren: n.hasChildren,
+    ...(n.childrenHidden ? { childrenHidden: true } : {}),
     progress: n.progress ?? null,
     ready: n.ready ?? false,
     inActiveSprint: n.inActiveSprint ?? false,

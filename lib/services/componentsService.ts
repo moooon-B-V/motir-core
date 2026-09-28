@@ -1,4 +1,7 @@
 import { Prisma, type Component, type Project, type WorkItem } from '@/generated/prisma/client';
+import type { VisitorReadContext } from '@/lib/visitor/context';
+import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
+import { toPersonLabel } from '@/lib/people/personLabel';
 import {
   componentRepository,
   type ComponentUpdateInput,
@@ -250,6 +253,28 @@ function mapNameRace(err: unknown, name: string): never {
   throw err;
 }
 
+/** {@link componentsService.listComponents} for a Visitor — names only (MOTIR-6646). */
+async function listComponentsForVisitor(
+  key: string,
+  ctx: VisitorReadContext,
+): Promise<ComponentWithCountDto[]> {
+  if (key.trim().toUpperCase() !== ctx.project.identifier.toUpperCase()) {
+    throw new ProjectNotFoundError(key);
+  }
+  const { workspaceId } = openVisitorRead(ctx.project.id, ctx);
+  const rows: ComponentWithCount[] = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    componentRepository.listByProject(ctx.project.id, tx),
+  );
+  const assigneeIds = [...new Set(rows.flatMap((r) => r.defaultAssigneeId ?? []))];
+  const users = assigneeIds.length > 0 ? await userRepository.findByIds(assigneeIds) : [];
+  const labelById = new Map(users.map((u) => [u.id, toPersonLabel(u)]));
+  return rows.map((row) => {
+    const dto = toComponentWithCountDto(row, new Map());
+    const label = row.defaultAssigneeId ? (labelById.get(row.defaultAssigneeId) ?? null) : null;
+    return { ...dto, defaultAssignee: label };
+  });
+}
+
 export const componentsService = {
   /**
    * The admin-page / picker read: the project's components in name order,
@@ -259,7 +284,14 @@ export const componentsService = {
    * cross-tenant project reads as 404. Bounded by the taxonomy's
    * admin-curated nature (the recorded finding-#57 call).
    */
-  async listComponents(key: string, ctx: WorkspaceContext): Promise<ComponentWithCountDto[]> {
+  async listComponents(
+    key: string,
+    reader: WorkspaceContext | VisitorReadContext,
+  ): Promise<ComponentWithCountDto[]> {
+    // A VISITOR (MOTIR-6646) reads their one public project's components with the
+    // default assignee as a name only — never an email.
+    if (isVisitorContext(reader)) return listComponentsForVisitor(key, reader);
+    const ctx = reader;
     const project = await resolveProject(key, ctx);
     try {
       await projectAccessService.assertCanBrowse(project.id, ctx);

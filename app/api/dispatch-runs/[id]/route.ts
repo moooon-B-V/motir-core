@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { memberThenVisitor } from '@/lib/visitor/readActor';
+import type { VisitorReadContext } from '@/lib/visitor/context';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 import { DispatchRunNotFoundError } from '@/lib/dispatchRuns/errors';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
@@ -20,20 +23,45 @@ import { dispatchRunService } from '@/lib/services/dispatchRunService';
 // ⚠️ 404 FOR A RUN IN ANOTHER WORKSPACE, never 403 — the shipped convention, and
 // here it falls out of RLS rather than being re-implemented: the read simply
 // returns nothing.
-export async function GET(
+/** The read itself, for a member's context or a Visitor's (MOTIR-6647). */
+async function serve(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
+  ctx: ServiceContext | VisitorReadContext,
 ): Promise<Response> {
-  const gate = await requireCompliantWorkspaceContext();
-  if (!gate.ok) return gate.response;
-
   const { id } = await params;
   try {
-    return NextResponse.json(await dispatchRunService.getRunDetail(id, gate.ctx));
+    return NextResponse.json(await dispatchRunService.getRunDetail(id, ctx));
   } catch (err) {
     if (err instanceof DispatchRunNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }
     throw err;
   }
+}
+
+async function memberGET(
+  req: Request,
+  route: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+
+  return serve(req, route, gate.ctx);
+}
+
+/**
+ * One run's detail — members exactly as before; a VISITOR (MOTIR-6647) of the run's
+ * public project reads it only when the run touches no private-epic descendant
+ * (MOTIR-6645), and only when the member read found nothing for them.
+ */
+export async function GET(
+  req: Request,
+  route: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  return memberThenVisitor(
+    req,
+    () => memberGET(req, route),
+    (ctx) => serve(req, route, ctx),
+  );
 }
