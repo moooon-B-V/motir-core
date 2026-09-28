@@ -4,13 +4,15 @@ import { Fragment, type MouseEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { GitMerge, Lock, ScanEye, Sparkles } from 'lucide-react';
+import { ArrowDown, GitMerge, Lock, ScanEye, Sparkles } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/Button';
 import { withApprovalOverlay } from '@/lib/approvals/overlayAddress';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { planRowDestination } from '@/lib/planning/planDestination';
 import type { ApprovalGateKindDTO } from '@/lib/dto/approvalGate';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
+import { OBSOLESCENCE_FIELD_ANCHOR, goToObsolescenceField } from './ObsolescenceBadge';
+import type { MarkHold } from './useStatusHeld';
 
 // THE STATUS CONTROL SAYS SO (Story MOTIR-4887 · Subtask MOTIR-5528), built to
 // `design/work-items/status-held-by-decision.mock.html` and its § _The status
@@ -40,6 +42,15 @@ import type { PlanHoldDTO } from '@/lib/dto/plans';
 // too: it decides nothing, it goes and looks. While a plan holds, a gate's line
 // says it can be decided once the plan is, with NO button — deciding it is itself
 // refused while the plan holds (AMENDMENT 21 §6).
+//
+// A MARK (Story MOTIR-6575 · MOTIR-6676), built to
+// `design/work-items/status-held-by-mark.mock.html` panels 5 and 5c: a line of its
+// own in this box — what is refused (or, for a refusal that arrived anyway, that the
+// move was not made), then the way out, then **Clear the mark**. That door is a
+// SECONDARY button with a trailing `ArrowDown`: it goes to the Obsolescence field
+// and clears nothing, because clearing is a deliberate act made in the field. It
+// is an ordinary link to the item page's field, so on the edit page (which draws
+// no field) it navigates there; where the field is on screen it scrolls instead.
 //
 // Presentational: no fetch, no status write. The surfaces own the read and the
 // refusal that feeds it.
@@ -84,6 +95,10 @@ export interface StatusHeldNoticeProps {
   lines: StatusHeldLine[];
   /** The undecided plan holding the card at Planning, or null / absent. */
   plan?: PlanHoldDTO | null;
+  /** The obsolescence mark holding every non-done status, or null / absent. */
+  mark?: MarkHold | null;
+  /** The Obsolescence field *Clear the mark* goes to — the peek passes its own. */
+  markFieldId?: string;
 }
 
 /** The door — its own component so the URL hooks run only where a door is drawn
@@ -157,9 +172,69 @@ function ReviewPlanLink({ plan }: { plan: PlanHoldDTO }) {
   );
 }
 
-export function StatusHeldNotice({ itemKey, lines, plan = null }: StatusHeldNoticeProps) {
+/** The mark's door — to the Obsolescence field, never a write. */
+function ClearTheMarkLink({ itemKey, fieldId }: { itemKey: string; fieldId: string }) {
+  const t = useTranslations('workItems.obsolescence.held');
+  const href = `/items/${itemKey}#${OBSOLESCENCE_FIELD_ANCHOR}`;
+  function onClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+      return;
+    // The field is on this page: go to it in place. Otherwise the link navigates.
+    if (goToObsolescenceField(fieldId)) event.preventDefault();
+  }
+  return (
+    <a
+      href={href}
+      onClick={onClick}
+      data-mark-door=""
+      className={buttonVariants({ variant: 'secondary', size: 'sm' })}
+    >
+      {t('door')}
+      <ArrowDown aria-hidden className="h-3.5 w-3.5" />
+    </a>
+  );
+}
+
+function MarkLine({
+  itemKey,
+  mark,
+  fieldId,
+}: {
+  itemKey: string;
+  mark: MarkHold;
+  fieldId: string;
+}) {
+  const t = useTranslations('workItems.obsolescence');
+  const word = t(`value.${mark.mark}`);
+  return (
+    <div className="flex items-start gap-2" data-waiting-on="mark">
+      <Lock aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-(--el-text-strong)" />
+      <div className="flex min-w-0 flex-col items-start gap-2">
+        <div>
+          <p className="m-0 text-[13px] leading-snug text-(--el-text-strong)">
+            {mark.refused
+              ? t('held.refusalArrived', { mark: word })
+              : t('held.text', { mark: word })}
+          </p>
+          <p className="m-0 mt-0.5 text-xs leading-snug text-(--el-text-secondary)">
+            {t('held.sub')}
+          </p>
+        </div>
+        <ClearTheMarkLink itemKey={itemKey} fieldId={fieldId} />
+      </div>
+    </div>
+  );
+}
+
+export function StatusHeldNotice({
+  itemKey,
+  lines,
+  plan = null,
+  mark = null,
+  markFieldId = OBSOLESCENCE_FIELD_ANCHOR,
+}: StatusHeldNoticeProps) {
   const t = useTranslations('approvalGate.statusHeld');
-  if (lines.length === 0 && !plan) return null;
+  if (lines.length === 0 && !plan && !mark) return null;
 
   const strong = (chunks: ReactNode) => <strong className="font-semibold">{chunks}</strong>;
 
@@ -181,6 +256,12 @@ export function StatusHeldNotice({ itemKey, lines, plan = null }: StatusHeldNoti
           </div>
         </div>
       ) : null}
+      {mark ? (
+        <>
+          {plan ? <hr aria-hidden className="border-(--el-border-soft)" /> : null}
+          <MarkLine itemKey={itemKey} mark={mark} fieldId={markFieldId} />
+        </>
+      ) : null}
       {lines.map((line, index) => {
         const decision = t(`decisionNoun.${line.kind}`);
         const { key, values } = heldSentence(line, decision);
@@ -194,7 +275,9 @@ export function StatusHeldNotice({ itemKey, lines, plan = null }: StatusHeldNoti
         const Glyph = line.waitingOn === 'merge' ? GitMerge : Lock;
         return (
           <Fragment key={line.statusKey}>
-            {index > 0 || plan ? <hr aria-hidden className="border-(--el-border-soft)" /> : null}
+            {index > 0 || plan || mark ? (
+              <hr aria-hidden className="border-(--el-border-soft)" />
+            ) : null}
             <div className="flex items-start gap-2" data-waiting-on={line.waitingOn}>
               <Glyph aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-(--el-text-strong)" />
               <div className="flex min-w-0 flex-col items-start gap-2">

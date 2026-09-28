@@ -59,6 +59,23 @@ export function ObsolescenceBadge({
 export const OBSOLESCENCE_FIELD_ANCHOR = 'obsolescence-field';
 
 /**
+ * Scroll to the Obsolescence field `targetId` and focus it — the one gesture both
+ * doors to the field make (the header badge, and the held status box's *Clear the
+ * mark*). Returns `false` when this page draws no such field, so a caller can fall
+ * back to the item page. Moves focus; changes nothing.
+ */
+export function goToObsolescenceField(targetId: string = OBSOLESCENCE_FIELD_ANCHOR): boolean {
+  const field = document.getElementById(targetId);
+  if (!field) return false;
+  const reduced =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  field.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
+  field.focus({ preventScroll: true });
+  return true;
+}
+
+/**
  * The badge as a POINTER (panel 2): pressing it scrolls to the Obsolescence field
  * and focuses it — the decision-waiting header link's rule, with its `ArrowDown`.
  * It never edits and never opens a menu.
@@ -73,13 +90,7 @@ export function ObsolescenceHeaderLink({
 }) {
   const t = useTranslations('workItems.obsolescence');
   const onPress = () => {
-    const field = document.getElementById(targetId);
-    if (!field) return;
-    const reduced =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    field.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
-    field.focus({ preventScroll: true });
+    goToObsolescenceField(targetId);
   };
   return (
     <button

@@ -5,7 +5,9 @@ import type { StatusHeldLine } from './StatusHeldNotice';
 import type { ApprovalGatePendingPayloadDTO, HeldTransitionDTO } from '@/lib/dto/approvalGate';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
+import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
 import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
+import { isReopenHeldByMark } from '@/lib/issues/obsolescence';
 
 /**
  * The status control's HELD state for one work item (Story MOTIR-4887 · Subtask
@@ -28,13 +30,29 @@ import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
  * PLAN holds it_) — seeded from `planTargetLockService.readPlanHold`, folded by a
  * `PLAN_TARGET_HELD` refusal. A gate holds ONE status; a plan holds EVERY move, so
  * while it holds, every option but the current one is locked.
+ *
+ * And a MARK (Story MOTIR-6575 · MOTIR-6676; `design/work-items/design-notes.md`
+ * § _The held status control_) — derived, not read: a card marked Outdated or
+ * Deprecated cannot be reopened, so every status OUTSIDE the done category is held
+ * (`isReopenHeldByMark`, the server's own predicate), and a move within the done
+ * category stays free. It comes from the card's `obsolescence` as the surface
+ * shows it NOW, so clearing the mark in the field lifts the hold with no reload.
+ * A `MARKED_CARD_CANNOT_REOPEN` refusal (marked in another tab) folds in the
+ * mark the server named, until the card shows anything else.
  */
 const EMPTY: HeldTransitionDTO[] = [];
 
 /** One locked picker target, and WHY it is locked — the `StatusPicker`'s `held`. */
 export interface HeldTarget {
   statusKey: string;
-  waitingOn: 'decision' | 'merge' | 'plan';
+  waitingOn: 'decision' | 'merge' | 'plan' | 'mark';
+}
+
+/** The mark holding the card — `refused` when it came from a refusal rather than
+ *  from the card as the page shows it (the line then says the move was not made). */
+export interface MarkHold {
+  mark: WorkItemObsolescenceDto;
+  refused: boolean;
 }
 
 function toLines(held: HeldTransitionDTO[]): StatusHeldLine[] {
@@ -80,6 +98,11 @@ export function useStatusHeld(
    * (`planTargetLockService.readPlanHold`) — `null` / absent when none does.
    */
   initialPlan?: PlanHoldDTO | null,
+  /**
+   * The card's obsolescence mark as the surface shows it NOW — an inline clear in
+   * the Obsolescence field lifts the hold at once. `null` / absent when unmarked.
+   */
+  obsolescence?: WorkItemObsolescenceDto | null,
 ) {
   const seed = initial ?? EMPTY;
   const planSeed = initialPlan ?? null;
@@ -101,12 +124,27 @@ export function useStatusHeld(
   // ⚠️ Keyed on the read's CONTENT, never its identity: a caller passing a fresh
   // array each render (an inline `[]`, a default parameter) would otherwise reset
   // on every render and loop.
+  // A `MARKED_CARD_CANNOT_REOPEN` refusal: the mark the server named, and the
+  // status the card showed when refused (the plan refusal's `at` rule).
+  const [markRefusal, setMarkRefusal] = useState<{
+    mark: WorkItemObsolescenceDto;
+    at: string | null;
+  } | null>(null);
   const signature = seedSignature(seed, planSeed);
   const [seenSignature, setSeenSignature] = useState(signature);
   if (seenSignature !== signature) {
     setSeenSignature(signature);
     setLines(toLines(seed));
     setPlan(planSeed ? { hold: planSeed, at: null } : null);
+    setMarkRefusal(null);
+  }
+  // The card's own mark changing (a write in the field, a new server read) is the
+  // newer word than a refusal's, so the refusal drops.
+  const markNow = obsolescence ?? null;
+  const [seenMark, setSeenMark] = useState(markNow);
+  if (seenMark !== markNow) {
+    setSeenMark(markNow);
+    setMarkRefusal(null);
   }
 
   const onRefused = useCallback(
@@ -137,8 +175,19 @@ export function useStatusHeld(
     [currentStatus],
   );
 
+  /** A `MARKED_CARD_CANNOT_REOPEN` refusal — the card was marked after render.
+   *  The surface reverts and this draws the mark's line, instead of a toast. */
+  const onMarkRefused = useCallback(
+    (mark: WorkItemObsolescenceDto) => {
+      setMarkRefusal({ mark, at: currentStatus ?? null });
+    },
+    [currentStatus],
+  );
+
   const onMoved = useCallback((toStatusKey: string) => {
     setLines((prev) => prev.filter((l) => l.statusKey !== toStatusKey));
+    // A move that went through was not a reopen the mark refused.
+    setMarkRefusal(null);
     // A move that went through means nothing holds the card any more.
     if (toStatusKey !== PLANNING_STATUS_KEY) setPlan(null);
   }, []);
@@ -162,16 +211,49 @@ export function useStatusHeld(
       currentStatus === plan.at)
       ? plan.hold
       : null;
-  const held = useMemo<HeldTarget[]>(
+  const refusedMark =
+    markRefusal && (currentStatus === undefined || currentStatus === markRefusal.at)
+      ? markRefusal.mark
+      : null;
+  const markHold = useMemo<MarkHold | null>(
     () =>
-      visiblePlan
-        ? // A plan holds EVERY move: every option but the current one is locked.
-          statuses
-            .filter((s) => s.key !== currentStatus)
-            .map((s) => ({ statusKey: s.key, waitingOn: 'plan' as const }))
-        : visible.map((l) => ({ statusKey: l.statusKey, waitingOn: l.waitingOn })),
-    [visible, visiblePlan, statuses, currentStatus],
+      markNow
+        ? { mark: markNow, refused: false }
+        : refusedMark
+          ? { mark: refusedMark, refused: true }
+          : null,
+    [markNow, refusedMark],
   );
+  const held = useMemo<HeldTarget[]>(() => {
+    if (visiblePlan)
+      // A plan holds EVERY move: every option but the current one is locked.
+      return statuses
+        .filter((s) => s.key !== currentStatus)
+        .map((s) => ({ statusKey: s.key, waitingOn: 'plan' as const }));
+    // The mark's targets first, so a status both a gate and the mark hold is
+    // tagged by the mark — the one the reader has to act on first.
+    const byMark: HeldTarget[] = markHold
+      ? statuses
+          .filter((s) => s.key !== currentStatus && isReopenHeldByMark(markHold.mark, s.category))
+          .map((s) => ({ statusKey: s.key, waitingOn: 'mark' as const }))
+      : [];
+    const markKeys = new Set(byMark.map((h) => h.statusKey));
+    return [
+      ...byMark,
+      ...visible
+        .filter((l) => !markKeys.has(l.statusKey))
+        .map((l) => ({ statusKey: l.statusKey, waitingOn: l.waitingOn })),
+    ];
+  }, [visible, visiblePlan, markHold, statuses, currentStatus]);
 
-  return { lines: visible, plan: visiblePlan, held, onRefused, onPlanHeldRefused, onMoved };
+  return {
+    lines: visible,
+    plan: visiblePlan,
+    mark: markHold,
+    held,
+    onRefused,
+    onPlanHeldRefused,
+    onMarkRefused,
+    onMoved,
+  };
 }

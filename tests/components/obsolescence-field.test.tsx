@@ -14,14 +14,15 @@ import type { QuickViewData } from '@/lib/dto/quickView';
 // reason visible / the finished-card refusal drawn IN the field / the header
 // badge that scrolls to the field.
 
-const { updateIssueAction, refresh, toast } = vi.hoisted(() => ({
+const { updateIssueAction, changeStatusAction, refresh, toast } = vi.hoisted(() => ({
   updateIssueAction: vi.fn(),
+  changeStatusAction: vi.fn(),
   refresh: vi.fn(),
   toast: vi.fn(),
 }));
 vi.mock('@/app/(authed)/items/[key]/edit/actions', () => ({
   updateIssueAction,
-  changeStatusAction: vi.fn(),
+  changeStatusAction,
   getWorkItemPlacementAction: vi.fn(),
   fileWorkItemAction: vi.fn(),
 }));
@@ -79,6 +80,16 @@ const workflow: WorkflowDto = {
       category: 'done',
       color: null,
       position: 'a1',
+      isInitial: false,
+    },
+    {
+      id: 's3',
+      projectId: 'p1',
+      key: 'cancelled',
+      label: 'Cancelled',
+      category: 'done',
+      color: null,
+      position: 'a2',
       isInitial: false,
     },
   ],
@@ -151,6 +162,8 @@ function openCardEditor() {
 
 beforeEach(() => {
   updateIssueAction.mockResolvedValue({ ok: true, updatedAt: '2026-09-03T00:00:00.000Z' });
+  changeStatusAction.mockReset();
+  changeStatusAction.mockResolvedValue({ ok: true, updatedAt: '2026-09-03T00:00:00.000Z' });
 });
 afterEach(() => {
   cleanup();
@@ -460,6 +473,116 @@ describe('quick view — the Obsolescence rail field', () => {
     });
     await waitFor(() => expect(within(row('Obsolescence')).getByText(REFUSED)).toBeTruthy());
     expect(within(row('Obsolescence')).getByText('Current')).toBeTruthy();
+    expect(toast).not.toHaveBeenCalled();
+  });
+});
+
+// ── MOTIR-6676 — the status control on a MARKED card ────────────────────────────
+
+const HELD_TEXT = 'Status can’t be reopened while this item is marked Outdated.';
+
+/** Open the item page's Status picker. */
+function openStatus() {
+  fireEvent.click(screen.getByRole('button', { name: 'Edit Status' }));
+  if (!screen.queryByRole('option', { name: /To Do/ }))
+    fireEvent.click(screen.getByRole('combobox', { name: 'Status' }));
+}
+
+function notice() {
+  return screen.queryByTestId('status-held-notice');
+}
+
+describe('item page — the status control holds a marked card', () => {
+  it('holds To Do by mark with the line and its door; Cancelled stays pickable', () => {
+    renderPanel(makeItem({ obsolescence: 'outdated' }));
+    expect(notice()!.textContent).toContain(HELD_TEXT);
+    openStatus();
+    const todo = screen.getByRole('option', { name: /To Do/ });
+    expect(todo.getAttribute('aria-disabled')).toBe('true');
+    expect(todo.textContent).toContain('held by mark');
+    expect(
+      screen.getByRole('option', { name: /Cancelled/ }).getAttribute('aria-disabled'),
+    ).not.toBe('true');
+  });
+
+  it('Clear the mark goes to the field on this page and leaves the mark set', () => {
+    renderPanel(makeItem({ obsolescence: 'outdated' }));
+    card().scrollIntoView = vi.fn();
+    fireEvent.click(within(notice()!).getByRole('link', { name: 'Clear the mark' }));
+    expect(document.activeElement).toBe(card());
+    expect(updateIssueAction).not.toHaveBeenCalled();
+    expect(card().querySelector('[data-obsolescence="outdated"]')).toBeTruthy();
+  });
+
+  it('clearing the mark in the field lifts the hold with no reload', async () => {
+    renderPanel(makeItem({ obsolescence: 'outdated' }));
+    const group = openCardEditor();
+    await act(async () => {
+      fireEvent.click(within(group).getByRole('button', { name: 'Current' }));
+    });
+    expect(notice()).toBeNull();
+    expect(refresh).not.toHaveBeenCalled();
+    openStatus();
+    expect(screen.getByRole('option', { name: /To Do/ }).getAttribute('aria-disabled')).not.toBe(
+      'true',
+    );
+  });
+
+  it('a MARKED_CARD_CANNOT_REOPEN refusal reverts and draws the line — no toast', async () => {
+    changeStatusAction.mockResolvedValueOnce({
+      ok: false,
+      error: 'marked',
+      field: 'status',
+      code: 'MARKED_CARD_CANNOT_REOPEN',
+      mark: 'deprecated',
+    });
+    renderPanel(makeItem());
+    expect(notice()).toBeNull();
+    openStatus();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('option', { name: /To Do/ }));
+    });
+    expect(notice()!.textContent).toContain(
+      'Marked Deprecated elsewhere — this move was not made.',
+    );
+    expect(toast).not.toHaveBeenCalled();
+    const statusCard = screen
+      .getByRole('button', { name: 'Edit Status' })
+      .closest('[data-surface="card"]')!;
+    expect(statusCard.textContent).toContain('Done');
+  });
+});
+
+describe('quick view — the status control holds a marked card', () => {
+  it('draws the line under Status, its door pointing at the peek’s own field', () => {
+    renderQuickView({ obsolescence: 'outdated' });
+    const box = notice()!;
+    expect(box.textContent).toContain(HELD_TEXT);
+    const field = document.getElementById('obsolescence-field-peek')!;
+    field.scrollIntoView = vi.fn();
+    fireEvent.click(within(box).getByRole('link', { name: 'Clear the mark' }));
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('a refusal folds in on the rail — no row error, no toast', async () => {
+    changeStatusAction.mockResolvedValueOnce({
+      ok: false,
+      error: 'marked',
+      field: 'status',
+      code: 'MARKED_CARD_CANNOT_REOPEN',
+      mark: 'outdated',
+    });
+    renderQuickView();
+    fireEvent.click(within(row('Status')).getByRole('button', { name: 'Edit Status' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('option', { name: /To Do/ }));
+    });
+    await waitFor(() =>
+      expect(notice()!.textContent).toContain(
+        'Marked Outdated elsewhere — this move was not made.',
+      ),
+    );
+    expect(within(row('Status')).queryByText('marked')).toBeNull();
     expect(toast).not.toHaveBeenCalled();
   });
 });

@@ -258,7 +258,15 @@ export function CoreFieldsPanel({
   const eff = { ...item, status: pageStatus, ...overrides };
   // The held moves, filtered by the status the card shows NOW — an approval that
   // repaints the page in place moves it without going through this panel.
-  const statusHeld = useStatusHeld(heldTransitions, workflow.statuses, eff.status, planHold);
+  const statusHeld = useStatusHeld(
+    heldTransitions,
+    workflow.statuses,
+    eff.status,
+    planHold,
+    // …and the mark, as the rail shows it NOW (MOTIR-6676): clearing it in the
+    // Obsolescence field below lifts the hold with no reload.
+    eff.obsolescence,
+  );
   const effParent = parentOverride !== undefined ? parentOverride : parent;
 
   // THE FOLDER FIELD (Story MOTIR-5309 · MOTIR-5377). Its value is the page's
@@ -423,6 +431,11 @@ export function CoreFieldsPanel({
         // plan's line with its Review plan door — never a toast.
         revert(['status']);
         statusHeld.onPlanHeldRefused(res.plan);
+      } else if (res.code === 'MARKED_CARD_CANNOT_REOPEN' && res.mark) {
+        // The card was marked after render (MOTIR-6676): revert, and draw the
+        // mark's line with its Clear the mark door — never a toast.
+        revert(['status']);
+        statusHeld.onMarkRefused(res.mark);
       } else {
         revert(['status']);
         toast({ variant: 'error', title: res.error });
@@ -505,6 +518,7 @@ export function CoreFieldsPanel({
             itemKey={item.identifier}
             lines={statusHeld.lines}
             plan={statusHeld.plan}
+            mark={statusHeld.mark}
           />
         </div>
       </FieldCard>

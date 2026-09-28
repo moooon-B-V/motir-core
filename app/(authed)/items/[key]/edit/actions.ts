@@ -14,6 +14,7 @@ import type { ApprovalGatePendingPayloadDTO } from '@/lib/dto/approvalGate';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
 import {
   ApprovalGatePendingError,
+  MarkedCardCannotReopenError,
   ObsolescenceRequiresFinishedError,
   PlanTargetHeldError,
   IllegalParentTypeError,
@@ -103,10 +104,16 @@ export type IssueActionResult =
       /** Set ONLY for a HELD move: an approval-gate refusal (MOTIR-5526), which the
        *  status control renders in place with a door into the approval from
        *  `gate`; or a plan hold (MOTIR-6265), rendered with a Review plan door
-       *  from `plan`. */
-      code?: 'APPROVAL_GATE_PENDING' | 'PLAN_TARGET_HELD' | 'OBSOLESCENCE_REQUIRES_FINISHED';
+       *  from `plan`; or a marked card's reopen (MOTIR-6676), rendered with a Clear
+       *  the mark door from `mark`. */
+      code?:
+        | 'APPROVAL_GATE_PENDING'
+        | 'PLAN_TARGET_HELD'
+        | 'MARKED_CARD_CANNOT_REOPEN'
+        | 'OBSOLESCENCE_REQUIRES_FINISHED';
       gate?: ApprovalGatePendingPayloadDTO;
       plan?: PlanHoldDTO;
+      mark?: WorkItemObsolescenceDto;
     };
 
 async function requireContext() {
@@ -285,6 +292,17 @@ export async function changeStatusAction(input: {
         field: 'status',
         code: 'PLAN_TARGET_HELD',
         plan: err.payload,
+      };
+    }
+    // A marked card cannot be reopened (MOTIR-6672 · MOTIR-6676) — its code and the
+    // mark, so the status control says so in place with its Clear the mark door.
+    if (err instanceof MarkedCardCannotReopenError) {
+      return {
+        ok: false,
+        error: workItemErrorMessage(err, t),
+        field: 'status',
+        code: 'MARKED_CARD_CANNOT_REOPEN',
+        mark: err.obsolescence,
       };
     }
     if (err instanceof IllegalTransitionError || err instanceof UnknownStatusError)

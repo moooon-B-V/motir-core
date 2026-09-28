@@ -373,6 +373,9 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
     edit.effective?.status ?? ready?.status,
     // …and the undecided PLAN holding it at Planning (MOTIR-6267).
     ready?.planHold,
+    // …and the MARK, as the rail shows it now (MOTIR-6676) — a clear in the
+    // Obsolescence row lifts the hold with no re-read.
+    edit.effective ? edit.effective.obsolescence : ready?.obsolescence,
   );
   const labelEdit = useLabelEditing({
     workItemId: ready?.id ?? '',
@@ -1014,6 +1017,9 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                         // The rail reverts the optimistic value; the plan's line
                         // says why, with its Review plan door (MOTIR-6267).
                         statusHeld.onPlanHeldRefused(res.plan);
+                      } else if (res.code === 'MARKED_CARD_CANNOT_REOPEN' && res.mark) {
+                        // Marked after render (MOTIR-6676): the mark's line says why.
+                        statusHeld.onMarkRefused(res.mark);
                       }
                       return res;
                     },
@@ -1031,12 +1037,14 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           </EditableRailField>
           {/* The held message under the status field (MOTIR-5528; design panel 13
               of quick-view.mock.html) — visible without opening the picker. */}
-          {statusHeld.lines.length > 0 || statusHeld.plan ? (
+          {statusHeld.lines.length > 0 || statusHeld.plan || statusHeld.mark ? (
             <div className="px-(--spacing-control-x)">
               <StatusHeldNotice
                 itemKey={view.identifier}
                 lines={statusHeld.lines}
                 plan={statusHeld.plan}
+                mark={statusHeld.mark}
+                markFieldId={OBSOLESCENCE_PEEK_ANCHOR}
               />
             </div>
           ) : null}

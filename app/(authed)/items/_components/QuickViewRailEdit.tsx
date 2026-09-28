@@ -189,10 +189,15 @@ export function useQuickViewRailEdit(
         for (const k of Object.keys(optimistic)) delete next[k as keyof QuickViewData];
         return next;
       });
-      // An approval-gate hold (MOTIR-5528) or a plan hold (MOTIR-6267) is said ON
+      // An approval-gate hold (MOTIR-5528), a plan hold (MOTIR-6267) or a mark
+      // (MOTIR-6676) is said ON
       // the status control, with its door, by the held notice — not as a row
       // error beside it.
-      if (res.code !== 'APPROVAL_GATE_PENDING' && res.code !== 'PLAN_TARGET_HELD')
+      if (
+        res.code !== 'APPROVAL_GATE_PENDING' &&
+        res.code !== 'PLAN_TARGET_HELD' &&
+        res.code !== 'MARKED_CARD_CANNOT_REOPEN'
+      )
         setErrorFor({ key, message: res.error });
       // A stale conflict is not a field error — the whole payload is behind, so
       // the rail says so at the top and the driver re-reads.
