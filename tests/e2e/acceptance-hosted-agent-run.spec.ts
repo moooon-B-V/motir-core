@@ -192,10 +192,10 @@ test.describe('a card runs on the hosted agent', () => {
         (e) => e.type === 'gateway_mint' && e.runRef === dispatchRunId,
       );
       expect(mint).toMatchObject({ type: 'gateway_mint', models: [ALT_MODEL] });
-      // The GitHub installation seam answered too — no real api.github.com call
-      // was reachable, and `start()` would have refused (`hosted_run_unavailable`)
-      // had it not.
-      expect(readHostedRunJournal().some((e) => e.type === 'github_installation')).toBe(true);
+      // The card's repository is Motir-created (`state: created`), which
+      // `motir-studio` always writes: the write check asks GitHub NOTHING for it
+      // (MOTIR-6449), so no installation read is journalled.
+      expect(readHostedRunJournal().some((e) => e.type === 'github_installation')).toBe(false);
     });
     await beat();
 
@@ -401,13 +401,15 @@ test.describe('a card runs on the hosted agent', () => {
     const dispatchRunId = await openAndStart(page, card, DEFAULT_MODEL);
 
     await page.getByRole('main').getByTestId('hosted-run-cancel').click();
-    await expect(page.getByRole('dialog').getByTestId('hosted-run-cancel-confirm')).toBeVisible();
+    await expect(
+      page.getByRole('alertdialog').getByTestId('hosted-run-cancel-confirm'),
+    ).toBeVisible();
     const cancelled = page.waitForResponse(
       (res) =>
         res.url().endsWith(`/api/dispatch-runs/${dispatchRunId}/cancel`) &&
         res.request().method() === 'POST',
     );
-    await page.getByRole('dialog').getByTestId('hosted-run-cancel-confirm').click();
+    await page.getByRole('alertdialog').getByTestId('hosted-run-cancel-confirm').click();
     const cancelRes = await cancelled;
     expect(cancelRes.status()).toBe(200);
 
@@ -448,7 +450,7 @@ test.describe('a card runs on the hosted agent', () => {
     // `page.reload()` anywhere in this test.
     await expect(page.getByRole('main').getByTestId('hosted-end')).toHaveAttribute(
       'data-end',
-      'timedOut',
+      'stalled',
       {
         timeout: 90_000,
       },
