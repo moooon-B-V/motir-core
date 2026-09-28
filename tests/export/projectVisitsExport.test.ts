@@ -10,6 +10,7 @@ import { projectVisitorRepository } from '@/lib/repositories/projectVisitorRepos
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // A person's VISITOR RECORDS in their data export (Story MOTIR-6170 · MOTIR-6668),
 // read back from the archive's zip bytes: one entry per public project they
@@ -42,7 +43,7 @@ async function publicProject() {
   const fx = await makeWorkItemFixture({ name: `Watched ${identifier}`, identifier });
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { accessMode: 'public', accessLevel: 'public' },
+    data: projectAccessData('public'),
   });
   return fx;
 }
@@ -116,7 +117,7 @@ describe('project-visits.json', () => {
     await consent(a.projectId, me.id, new Date('2026-09-20T09:00:00.000Z'));
     await adminDb.project.update({
       where: { id: a.projectId },
-      data: { accessMode: 'members', accessLevel: 'private' },
+      data: projectAccessData('members'),
     });
     const { visits } = await visitsOf(me.id);
     expect(visits).toHaveLength(1);

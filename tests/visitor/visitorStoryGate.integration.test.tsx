@@ -25,6 +25,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { changedTables, snapshotRows } from './_rowSnapshot';
 import { consent, emailsOf, storyGateFixture, type StoryGateFixture } from './_storyGateFixture';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // THE STORY'S INTEGRATION GATE (Story MOTIR-6170 · MOTIR-6650), for `motir-core`.
 //
@@ -854,7 +855,7 @@ describe('a project that is not Public', () => {
     for (const mode of ['workspace', 'members'] as const) {
       await adminDb.project.update({
         where: { id: t.fx.projectId },
-        data: { accessMode: mode, accessLevel: mode === 'workspace' ? 'open' : 'private' },
+        data: projectAccessData(mode),
       });
       for (const who of READERS) {
         const u = userOf(t, who);

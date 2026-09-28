@@ -16,6 +16,7 @@ import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFix
 import { adminDb } from '../helpers/adminDb';
 import { consentedVisitor } from './_consentedVisitor';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // A Visitor sees names, never emails (Story MOTIR-6170 · MOTIR-6646). Every
 // payload a Visitor reads through the real resolver and datastore is serialised
@@ -64,7 +65,7 @@ async function fixture() {
   const fx = await makeWorkItemFixture({ name: `VN ${identifier}`, identifier });
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { accessMode: 'public', accessLevel: 'public' },
+    data: projectAccessData('public'),
   });
   const ada = await adminDb.user.create({
     data: { email: `ada-${identifier}@example.com`, name: 'Ada', emailVerified: true },
