@@ -10,6 +10,7 @@
 
 import { customFieldIdOfFilterField } from '@/lib/filters/ast';
 import type { FilterFieldId, FilterOperatorId } from '@/lib/filters/ast';
+import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 
 type Translate = (key: string, values?: Record<string, string | number | Date>) => string;
 
@@ -24,6 +25,7 @@ const FIELD_LABEL_KEYS: Partial<Record<FilterFieldId, string>> = {
   kind: 'filterKind',
   status: 'status',
   ciState: 'advancedFieldChecks',
+  fixReason: 'advancedFieldToFix',
   priority: 'advancedFieldPriority',
   type: 'advancedFieldType',
   difficulty: 'advancedFieldDifficulty',
@@ -105,7 +107,31 @@ export const FIELD_EMPTY_OPERATOR_KEYS: Partial<
     is_empty: 'advancedOpChecksIsEmpty',
     is_not_empty: 'advancedOpChecksIsNotEmpty',
   },
+  // *To fix is any* / *is none* (MOTIR-6609) — the words the story's own
+  // verification recipe uses. `null` means nothing is waiting on a repair.
+  fixReason: {
+    is_empty: 'advancedOpToFixIsEmpty',
+    is_not_empty: 'advancedOpToFixIsNotEmpty',
+  },
 };
+
+/**
+ * The *To fix* field's value labels (MOTIR-6609): the Workbench To fix tab's own
+ * bare reason strings (`workbench.toFix.reason.*`), reused because the meaning is
+ * identical (design § *The TO FIX tag and banner*). Total over the reason enum, so
+ * a new reason fails the type check here until it has a label.
+ */
+export const FIX_REASON_VALUE_KEYS: Record<WorkItemFixReasonDto, string> = {
+  queue_failed: 'queueFailedBare',
+  conflicted: 'conflictedNoBase',
+  ci_failed: 'ciFailedBare',
+  changes_requested: 'changesRequestedAnon',
+};
+
+/** Whether a raw filter value is one of the reasons (a stale URL can carry anything). */
+export function isFixReason(value: string): value is WorkItemFixReasonDto {
+  return Object.prototype.hasOwnProperty.call(FIX_REASON_VALUE_KEYS, value);
+}
 
 export function advancedOperatorLabel(
   t: Translate,

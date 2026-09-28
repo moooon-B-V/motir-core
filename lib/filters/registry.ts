@@ -32,6 +32,7 @@ import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import { WORK_ITEM_OBSOLESCENCES } from '@/lib/issues/obsolescence';
 import { CI_STATES } from '@/lib/github/prCiState';
+import { FIX_REASON_PRIORITY } from '@/lib/workItems/fixReason';
 import { ISSUE_TYPES } from '@/lib/issues/parentRules';
 import {
   FILTER_BACKLOG_TOKEN,
@@ -62,6 +63,7 @@ export type FilterValueEditorKind =
   | 'kind-select'
   | 'status-select'
   | 'ci-state-select'
+  | 'fix-reason-select'
   | 'priority-select'
   | 'type-select'
   | 'difficulty-select'
@@ -180,6 +182,22 @@ export const FILTER_FIELDS: ReadonlyArray<FilterFieldDef> = [
   // not shared here: making a saved view silently drop done cards is a worse
   // failure than showing one.
   enumField('ciState', 'ci-state-select', { nullable: true, valueWhitelist: CI_STATES }),
+  // Why a card is stuck until something is repaired (`WorkItem.fixReason`,
+  // MOTIR-6600) — the *To fix* field (Story MOTIR-6589 · MOTIR-6609), placed
+  // right after *Checks*, the field a reader pairs it with (design
+  // `design/work-items/design-notes.md` § *The TO FIX tag and banner*).
+  //
+  // ⚠️ THE WHITELIST IS `FIX_REASON_PRIORITY`, the one tuple the recompute ranks
+  // by and a test holds equal to the Prisma enum — never four strings typed out
+  // again, so a new reason (the dead-run story's) is offered here the moment it
+  // exists.
+  //
+  // ⚠️ AND THE FILTER IS RAW, exactly as `ciState` above: it matches the column
+  // in any status. The tag's done-category rule is a DRAWING rule.
+  enumField('fixReason', 'fix-reason-select', {
+    nullable: true,
+    valueWhitelist: FIX_REASON_PRIORITY,
+  }),
   enumField('priority', 'priority-select', { valueWhitelist: PRIORITIES }),
   // The work-item TYPE (Story 2.7) — a closed-set enum facet over the ten
   // `WorkItemType` members (the fixed enum keeps it equality/`in`, never

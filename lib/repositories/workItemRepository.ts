@@ -5557,6 +5557,7 @@ const FILTER_FIELD_COLUMN_SQL: Record<Exclude<BuiltInFilterFieldId, 'text'>, Pri
   kind: Prisma.sql`w."kind"::text`,
   status: Prisma.sql`w."status"`,
   ciState: Prisma.sql`w."ciState"`,
+  fixReason: Prisma.sql`w."fixReason"::text`,
   priority: Prisma.sql`w."priority"::text`,
   type: Prisma.sql`w."type"::text`,
   difficulty: Prisma.sql`w."difficulty"::text`,

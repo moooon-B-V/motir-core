@@ -129,6 +129,18 @@ async function seedMatrix(): Promise<Seeded> {
       difficulty: 'high',
       obsolescence: 'outdated',
       ciState: 'failing',
+      fixReason: 'queue_failed',
+      fixDetail: {
+        repair: 'fix',
+        check: 'e2e',
+        queueReason: 'CI_FAILURE',
+        base: null,
+        reviewerName: null,
+        notePreview: null,
+        gate: null,
+        affected: 1,
+        total: 1,
+      },
     },
   });
   await adminDb.workItem.update({
@@ -146,6 +158,18 @@ async function seedMatrix(): Promise<Seeded> {
       difficulty: 'low',
       obsolescence: 'deprecated',
       ciState: 'running',
+      fixReason: 'conflicted',
+      fixDetail: {
+        repair: 'fix',
+        check: null,
+        queueReason: null,
+        base: 'main',
+        reviewerName: null,
+        notePreview: null,
+        gate: null,
+        affected: 1,
+        total: 1,
+      },
     },
   });
   await adminDb.workItem.update({
@@ -387,6 +411,14 @@ const CASES: MatrixCase[] = [
   builtin('ciState', 'is_none_of', ['failing'], ['b', 'c', 'd']),
   builtin('ciState', 'is_empty', null, ['d']),
   builtin('ciState', 'is_not_empty', null, ['a', 'b', 'c']),
+  // fixReason (enum, NULLABLE) — the *To fix* field (Story MOTIR-6589 ·
+  // MOTIR-6609). a=queue_failed, b=conflicted, c and d have nothing to fix.
+  // RAW, like `ciState`: c is done and still matched only by what its column
+  // says. `is_none_of` INCLUDES the null rows (nullable-enum semantics).
+  builtin('fixReason', 'is_any_of', ['queue_failed'], ['a']),
+  builtin('fixReason', 'is_none_of', ['queue_failed'], ['b', 'c', 'd']),
+  builtin('fixReason', 'is_empty', null, ['c', 'd']),
+  builtin('fixReason', 'is_not_empty', null, ['a', 'b']),
   builtin('type', 'is_any_of', ['code'], ['a']),
   builtin('type', 'is_none_of', ['code'], ['b', 'c', 'd']),
   builtin('type', 'is_empty', null, ['c', 'd']),
