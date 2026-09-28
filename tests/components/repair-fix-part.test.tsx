@@ -224,7 +224,11 @@ describe('a member the merge queue threw out (MOTIR-5721)', () => {
     repo: GATEWAY_PR.repo,
     number: GATEWAY_PR.number,
     ci: 'passing' as const,
-    queueExit: { rawReason: 'CI_FAILURE', failingCheckName: 'CI complete' },
+    queueExit: {
+      rawReason: 'CI_FAILURE',
+      disposition: 'failure' as const,
+      failingCheckName: 'CI complete',
+    },
     conflict: null,
   };
   const TAGS = ['<b>', '</b>', '<code>', '</code>'] as const;
@@ -279,7 +283,14 @@ describe('a member the merge queue threw out (MOTIR-5721)', () => {
       repairClass: 'ci',
       acceptanceRefusal: null,
       failing: [
-        { ...EJECTED, queueExit: { rawReason: 'INVALID_MERGE_COMMIT', failingCheckName: null } },
+        {
+          ...EJECTED,
+          queueExit: {
+            rawReason: 'INVALID_MERGE_COMMIT',
+            disposition: 'failure' as const,
+            failingCheckName: null,
+          },
+        },
       ],
       lastGaveUp: null,
     });
@@ -295,7 +306,14 @@ describe('a member the merge queue threw out (MOTIR-5721)', () => {
       acceptanceRefusal: null,
       failing: [
         { ...EJECTED, repo: CORE.repo, number: CORE.number },
-        { ...EJECTED, queueExit: { rawReason: 'MERGE_CONFLICT', failingCheckName: null } },
+        {
+          ...EJECTED,
+          queueExit: {
+            rawReason: 'MERGE_CONFLICT',
+            disposition: 'failure' as const,
+            failingCheckName: null,
+          },
+        },
       ],
       lastGaveUp: null,
     });

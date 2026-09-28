@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import en from '@/messages/en.json';
+import zh from '@/messages/zh.json';
 import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
 import type {
   DevelopmentGateActions,
@@ -122,7 +123,11 @@ const repairOffer = (): WorkItemRepairViewDto => ({
       // Its OWN checks are green — it is failing only because the queue removed it
       // (MOTIR-5719), which is what the which-to-use line reads.
       ci: 'passing',
-      queueExit: { rawReason: 'CI_FAILURE', failingCheckName: 'CI complete' },
+      queueExit: {
+        rawReason: 'CI_FAILURE',
+        disposition: 'failure' as const,
+        failingCheckName: 'CI complete',
+      },
       conflict: null,
     },
   ],
@@ -534,5 +539,165 @@ describe('the re-asked record band opens with the approval that was spent', () =
       earlierApproval: { decidedByLabel: 'Ada L.', decidedAt: SPENT_AT, commits: 2 },
     });
     expect(screen.queryByText(/Approved earlier by/)).toBeNull();
+  });
+});
+
+// §4 SIXTH AMENDMENT (MOTIR-6849; design § 32, `approve-and-merge--queue-exit--check-cancelled`
+// panels 1a–1c): a queue exit whose check HUNG is stored NEUTRAL and re-asked. The row
+// takes § 31 Panel 6a's shape — *Removed from the queue* and *Queue again* — and the exit
+// line names the check and says it was cancelled / timed out, never "failed".
+describe('a queue exit whose check HUNG — re-asked, the check named, nothing "failed"', () => {
+  const hung = (over: Partial<PullRequestQueueExitDTO>) =>
+    queueExit({ rawReason: 'CI_FAILURE', disposition: 'neutral', ...over });
+  const renderHung = (exit: PullRequestQueueExitDTO, locale?: 'zh') =>
+    locale
+      ? render(
+          <OptimisticStatusProvider serverStatus="in_review">
+            <DevelopmentSectionBody
+              pullRequests={[{ ...CORE_PR, state: 'merged' }, GATEWAY_PR]}
+              itemIdentifier="ACME-12"
+              manualLinkable
+              howToTest={STORY}
+              repair={null}
+              mergeGate={{
+                gate: REASKED,
+                canDecide: true,
+                routedToLabel: null,
+                stamp: 'v1.stamp-on-screen',
+                members: members({ exit, requeueable: true }),
+              }}
+              gateActions={fakeActions()}
+            />
+          </OptimisticStatusProvider>,
+          { locale: 'zh', messages: zh },
+        )
+      : renderBlock({ members: members({ exit, requeueable: true }) }, { repair: null });
+
+  it.each([
+    ['cancelled', 'cancelled'],
+    ['timed_out', 'timedOut'],
+  ] as const)(
+    'a check that concluded %s: Removed from the queue, Queue again, the stopped check linked',
+    (conclusion, key) => {
+      renderHung(hung({ failingCheckName: 'TypeScript', failingCheckConclusion: conclusion }));
+
+      expect(within(gatewayRow()).getByText(pra.outcome.removedFromQueue)).toBeTruthy();
+      expect(rowButton(pra.outcome.queueAgain)).toBeTruthy();
+      expect(
+        screen.getByText(
+          whole(plain(fill(pra.exit.hung[key], { pr: GATEWAY_NAME, check: 'TypeScript' }))),
+        ),
+      ).toBeTruthy();
+      expect(screen.getByText(whole(plain(pra.exit.hung.reasked)))).toBeTruthy();
+      expect(
+        screen.getByRole('link', {
+          name: fill(pra.exit.openStoppedCheck, { check: 'TypeScript' }),
+        }),
+      ).toBeTruthy();
+      expect(screen.queryByText(/Failing check/)).toBeNull();
+      expect(screen.queryByText(/motir fix ACME-12/)).toBeNull();
+      const block = document.querySelector('[data-queue-exit]')!;
+      // The only "failed" is the sentence saying nothing did.
+      expect(block.textContent!.replace(/Nothing failed in the code\./g, '')).not.toMatch(
+        /failed/i,
+      );
+    },
+  );
+
+  it('a CI_TIMEOUT with no check named: the queue’s own wait, and no check line', () => {
+    renderHung(
+      hung({
+        rawReason: 'CI_TIMEOUT',
+        failingCheckName: null,
+        failingCheckUrl: null,
+        failingCheckConclusion: null,
+      }),
+    );
+
+    expect(within(gatewayRow()).getByText(pra.outcome.removedFromQueue)).toBeTruthy();
+    expect(
+      screen.getByText(whole(plain(fill(pra.exit.hung.noCheck, { pr: GATEWAY_NAME })))),
+    ).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /stopped check/i })).toBeNull();
+  });
+
+  it('a check that FAILED is unchanged — held, the failure named, `motir fix`', () => {
+    renderBlock(
+      {
+        members: members({
+          exit: queueExit({ rawReason: 'CI_FAILURE', failingCheckConclusion: 'failure' }),
+        }),
+      },
+      { repair: repairOffer(), status: 'implemented' },
+    );
+
+    expect(within(gatewayRow()).getByText(pra.outcome.leftQueue)).toBeTruthy();
+    expect(
+      screen.getByText(
+        whole(plain(fill(pra.exit.failed.checks, { pr: GATEWAY_NAME, check: 'CI complete' }))),
+      ),
+    ).toBeTruthy();
+    expect(fixPart().textContent).toContain('motir fix ACME-12');
+  });
+
+  it('zh: the cancelled sentence and the stopped-check label, with no 失败 about the check', () => {
+    const zpra = zh.approvalGate.pullRequestApproval;
+    renderHung(hung({ failingCheckName: 'TypeScript', failingCheckConclusion: 'cancelled' }), 'zh');
+
+    expect(
+      screen.getByText(
+        whole(plain(fill(zpra.exit.hung.cancelled, { pr: GATEWAY_NAME, check: 'TypeScript' }))),
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('link', { name: fill(zpra.exit.openStoppedCheck, { check: 'TypeScript' }) }),
+    ).toBeTruthy();
+    for (const key of ['cancelled', 'timedOut', 'noCheck', 'reasked'] as const) {
+      expect(zpra.exit.hung[key]).not.toMatch(/失败(?!。)/);
+      expect(pra.exit.hung[key].replace('Nothing failed in the code.', '')).not.toMatch(
+        /\bfailed\b/,
+      );
+    }
+  });
+});
+
+describe('the fix part never names a HUNG exit on its left-the-queue line', () => {
+  it('a member whose only standing exit is neutral is not an ejected-only failure', () => {
+    renderBlock(
+      {
+        members: members({
+          exit: queueExit({
+            rawReason: 'CI_FAILURE',
+            disposition: 'neutral',
+            failingCheckConclusion: 'cancelled',
+          }),
+          requeueable: true,
+        }),
+      },
+      {
+        repair: {
+          ...repairOffer(),
+          failing: [
+            {
+              repo: 'moooon/motir-gateway',
+              number: 57,
+              ci: 'passing',
+              queueExit: {
+                rawReason: 'CI_FAILURE',
+                disposition: 'neutral',
+                failingCheckName: 'TypeScript',
+              },
+              conflict: null,
+            },
+          ],
+        },
+      },
+    );
+
+    expect(
+      screen.queryByText(
+        new RegExp(en.github.development.fix.leftQueueOn.split('{')[0]!.trim().slice(0, 20)),
+      ),
+    ).toBeNull();
   });
 });

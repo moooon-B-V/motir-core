@@ -52,9 +52,13 @@ const bold = (chunks: ReactNode) => <b className="font-semibold whitespace-nowra
  * A member failing ONLY because the merge queue threw it out — its own checks are
  * not red, and it carries a standing exit (§ 26's show-when rule, MOTIR-5721). It
  * is named on the left-the-queue line, because *Checks are failing* would be false.
+ *
+ * ⚠️ ONLY A FAILURE (§4 SIXTH AMENDMENT; MOTIR-6849). An exit whose check HUNG is
+ * stored `neutral`: nothing failed, so naming it on the failure line would send a
+ * person looking for a bug that does not exist.
  */
 function isEjectedOnly(pr: RepairPullRequestRefDto): boolean {
-  return pr.queueExit !== null && pr.ci !== 'failing';
+  return pr.queueExit !== null && pr.queueExit.disposition === 'failure' && pr.ci !== 'failing';
 }
 
 /** Which which-to-use sentence applies. A conflict wins: approving again cannot land

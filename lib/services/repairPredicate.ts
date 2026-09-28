@@ -140,6 +140,7 @@ function toRepairPullRequest(m: {
         ? null
         : {
             rawReason: exit.rawReason,
+            disposition: exit.disposition,
             exitedAt: exit.exitedAt.toISOString(),
             headSha: exit.headSha,
             failingCheckName: exit.failingCheckName,
