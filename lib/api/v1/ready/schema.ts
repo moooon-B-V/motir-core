@@ -409,26 +409,15 @@ export { SPRINT_ACTIVE };
 // pick unless that pick was bug work. Nothing here re-sorts.
 
 /**
- * The runnable container a lane row is grouped under: a `story`, `task` or `bug`
- * whose every child is childless. Keyed by its public `key`, never its id (§7).
+ * A runnable container — a `story`, `task` or `bug` whose every child is
+ * childless — and how much of it is ready. Keyed by its public `key`, never its
+ * id (§7). The CONTAINERS-lane row, and the group a lane row names.
  */
-export const readyContainerRefSchema = z.object({
+export const readyContainerSchema = z.object({
   key: workItemKeySchema,
   kind: z.enum(READY_KINDS),
   title: z.string(),
   priority: z.enum(READY_PRIORITIES),
-});
-export type V1ReadyContainerRef = z.infer<typeof readyContainerRefSchema>;
-
-/** A LANE row: the ready row plus the container it is grouped under. */
-export const readyLaneItemSchema = readyItemSchema.extend({
-  /** The runnable container this row groups under, or `null` when it stands alone. */
-  container: readyContainerRefSchema.nullable(),
-});
-export type V1ReadyLaneItem = z.infer<typeof readyLaneItemSchema>;
-
-/** A CONTAINERS-lane row: a runnable container and how much of it is ready. */
-export const readyContainerSchema = readyContainerRefSchema.extend({
   assigneeId: z.string().nullable(),
   assignee: actorRefSchema.nullable(),
   /** Its rows in the leaves lane — the leaves a parent run would take now. */
@@ -438,6 +427,16 @@ export const readyContainerSchema = readyContainerRefSchema.extend({
 });
 export type V1ReadyContainer = z.infer<typeof readyContainerSchema>;
 
+/**
+ * A LANE row: the ready row plus the runnable container it groups under, or
+ * `null` when it stands alone. On a row, `readyLeafCount` counts the group's
+ * rows in the same read — what the group header says is ready right now.
+ */
+export const readyLaneItemSchema = readyItemSchema.extend({
+  container: readyContainerSchema.nullable(),
+});
+export type V1ReadyLaneItem = z.infer<typeof readyLaneItemSchema>;
+
 /** A lane row plus its edges — {@link presentReadyItem} and the container ref. */
 export function presentReadyLaneItem(
   item: ReadyItemDto,
@@ -446,15 +445,7 @@ export function presentReadyLaneItem(
   const container = item.container ?? null;
   return {
     ...presentReadyItem(item, edges),
-    container:
-      container === null
-        ? null
-        : {
-            key: container.key,
-            kind: container.kind,
-            title: container.title,
-            priority: container.priority,
-          },
+    container: container === null ? null : presentReadyContainer(container),
   };
 }
 

@@ -12,7 +12,7 @@ import {
   workItemSummarySchema,
 } from '@/lib/api/v1/workItems/schema';
 import {
-  readyContainerRefSchema,
+  presentReadyContainer,
   readyContainerSchema,
   readyItemSchema,
 } from '@/lib/api/v1/ready/schema';
@@ -511,7 +511,7 @@ export const mcpReadyRowSchema = readyItemSchema.extend({
    * row now that both read a lane, absent on `claim_next_ready`, which keeps the
    * unlaned set.
    */
-  container: readyContainerRefSchema.nullable().optional(),
+  container: readyContainerSchema.nullable().optional(),
 });
 export type McpReadyRow = z.infer<typeof mcpReadyRowSchema>;
 
@@ -588,15 +588,7 @@ function readyRowFields(
     commentCount,
     ...(item.container !== undefined
       ? {
-          container:
-            item.container === null
-              ? null
-              : {
-                  key: item.container.key,
-                  kind: item.container.kind,
-                  title: item.container.title,
-                  priority: item.container.priority,
-                },
+          container: item.container === null ? null : presentReadyContainer(item.container),
         }
       : {}),
   };

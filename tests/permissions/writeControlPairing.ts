@@ -137,7 +137,8 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
   'items/actions.ts#moveFolderAction': EDIT,
   'items/actions.ts#renameFolderAction': EDIT,
   'plans/_actions.ts#loadMoreSessionsAction': READ,
-  'ready/_actions.ts#loadMoreReadyAction': READ,
+  'ready/_actions.ts#loadMoreReadyBugsAction': READ,
+  'ready/_actions.ts#loadMoreReadyLeavesAction': READ,
 
   // ── account settings (the actor's own account) ────────────────────────────
   'settings/account/data/actions.ts#requestDataExportAction': {

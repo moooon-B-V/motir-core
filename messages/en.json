@@ -4165,6 +4165,24 @@
       "declineLabel": "Decline",
       "approved": "{count, plural, one {# child created} other {# children created}}",
       "error": "Something went wrong ({code})."
+    },
+    "lanes": {
+      "switchAria": "Ready lanes",
+      "main": {
+        "heading": "Ready to run",
+        "empty": "Nothing ready to run."
+      },
+      "bugs": {
+        "heading": "Bugs",
+        "empty": "No ready bugs.",
+        "listAria": "Ready bugs"
+      }
+    },
+    "container": {
+      "hint": "{ready} of {total} ready",
+      "expand": "Expand {key}",
+      "collapse": "Collapse {key}",
+      "copyAria": "Copy parent-run command for {key}"
     }
   },
   "backlog": {

@@ -217,7 +217,6 @@ import {
 } from '@/lib/workItems/claimOutcome';
 import {
   toReadyContainerDto,
-  toReadyContainerRefDto,
   toReadyItemDto,
   toReadyItemDispatchDto,
   type ReadyItemContext,
@@ -7882,14 +7881,13 @@ export const workItemsService = {
     const { excludeIds, ...facets } = filter;
     const exclude = new Set(excludeIds ?? []);
     const partition = await partitionReadyLanes(projectId, workspaceId, null, facets, false);
-    const rows = groupLaneRows(lane === 'leaf' ? partition.leaves : partition.bugs).flatMap(
-      (g) => g.members,
-    );
-    const chosen = rows.find((r) => !exclude.has(r.row.id));
-    if (!chosen) return null;
+    const groups = groupLaneRows(lane === 'leaf' ? partition.leaves : partition.bugs);
+    const group = groups.find((g) => g.members.some((r) => !exclude.has(r.row.id)));
+    const chosen = group?.members.find((r) => !exclude.has(r.row.id));
+    if (!group || !chosen) return null;
     return {
       ...(await buildReadyDispatchDto(chosen.row, ctx)),
-      container: chosen.container ? toReadyContainerRefDto(chosen.container) : null,
+      container: group.container ? presentContainerGroup(group, null) : null,
     };
   },
 
@@ -8373,8 +8371,14 @@ async function listReadyLaneRows(
     facets,
     allowSoftBlock === true,
   );
-  const positioned = groupLaneRows(lane === 'leaf' ? partition.leaves : partition.bugs).flatMap(
-    (g) => g.members.map((m) => ({ entry: m, position: laneRowPosition(m, g.position) })),
+  const groups = groupLaneRows(lane === 'leaf' ? partition.leaves : partition.bugs);
+  const containerOf = new Map(
+    groups.flatMap((g) =>
+      g.container ? [[g.container.id, presentContainerGroup(g, hidden)]] : [],
+    ),
+  );
+  const positioned = groups.flatMap((g) =>
+    g.members.map((m) => ({ entry: m, position: laneRowPosition(m, g.position) })),
   );
   const start = cursor ? positioned.findIndex((p) => isAfterLaneCursor(p.position, cursor)) : 0;
   const begin = start === -1 ? positioned.length : start;
@@ -8402,7 +8406,7 @@ async function listReadyLaneRows(
           assignee,
           inheritedSessionBranch: lineages[r.id] ?? null,
         }),
-        container: entry.container ? toReadyContainerRefDto(entry.container) : null,
+        container: entry.container ? (containerOf.get(entry.container.id) ?? null) : null,
       };
     }),
     nextCursor,

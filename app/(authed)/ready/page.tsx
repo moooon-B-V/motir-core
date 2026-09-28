@@ -8,7 +8,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { buttonVariants } from '@/components/ui/Button';
-import { ReadyList } from './_components/ReadyList';
+import { ReadyLanes } from './_components/ReadyLanes';
 import { ReadyHelpPopover } from './_components/ReadyHelpPopover';
 import { ExpansionNudgeBanner } from './_components/ExpansionNudgeBanner';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
@@ -23,8 +23,10 @@ import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 //
 // Renders exactly what design/ready specifies: header (serif title + neutral
 // count chip + project subtitle + the "What is this?" predicate popover), then
-// the flat dispatch list (ReadyList — virtualized + cursor-streamed), or the
-// EmptyState (panel 3) when nothing is ready. The `?peek=<key>` quick-view peek
+// — since Story MOTIR-6829 (`ready--lanes.mock.html`) — the LANE SWITCH over one
+// full-height pane: Ready to run (the leaves lane, grouped by runnable container)
+// or Bugs, each a virtualized, cursor-streamed ReadyList; or the EmptyState
+// (panel 3) when BOTH lanes are empty. The `?peek=<key>` quick-view peek
 // reuses the SAME IssueQuickView surface /items + the board use (notes.html #7).
 
 export default async function ReadyPage() {
@@ -41,15 +43,16 @@ export default async function ReadyPage() {
 
   const svcCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
 
-  const [ready, count] = await Promise.all([
-    workItemsService.listReady(ctx.projectId, {}, svcCtx),
-    workItemsService.countReady(ctx.projectId, {}, svcCtx),
+  const [leaves, bugs, counts] = await Promise.all([
+    workItemsService.listReadyLeaves(ctx.projectId, {}, svcCtx),
+    workItemsService.listReadyBugs(ctx.projectId, {}, svcCtx),
+    workItemsService.countReadyLanes(ctx.projectId, svcCtx),
   ]);
 
-  const isEmpty = ready.items.length === 0;
-  const countLabel = count.hasMore
-    ? t('countCapped', { count: count.count })
-    : t('count', { count: count.count });
+  const isEmpty = leaves.items.length === 0 && bugs.items.length === 0;
+  const countLabel = counts.hasMore
+    ? t('countCapped', { count: counts.leaves })
+    : t('count', { count: counts.leaves });
 
   return (
     <div className="flex flex-col gap-6">
@@ -80,7 +83,11 @@ export default async function ReadyPage() {
           }
         />
       ) : (
-        <ReadyList initialItems={ready.items} initialCursor={ready.nextCursor} />
+        <ReadyLanes
+          leaves={leaves}
+          bugs={bugs}
+          counts={{ leaves: counts.leaves, bugs: counts.bugs }}
+        />
       )}
 
       {/* Quick-view peek (notes.html #7; bug 8.8.2) — a client island that

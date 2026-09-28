@@ -4165,6 +4165,24 @@
       "declineLabel": "拒绝",
       "approved": "已创建 {count} 个子项",
       "error": "出了点问题（{code}）。"
+    },
+    "lanes": {
+      "switchAria": "就绪通道",
+      "main": {
+        "heading": "可运行",
+        "empty": "暂无可运行的工作。"
+      },
+      "bugs": {
+        "heading": "缺陷",
+        "empty": "暂无就绪的缺陷。",
+        "listAria": "就绪的缺陷"
+      }
+    },
+    "container": {
+      "hint": "{ready} / {total} 已就绪",
+      "expand": "展开 {key}",
+      "collapse": "收起 {key}",
+      "copyAria": "复制 {key} 的父级运行命令"
     }
   },
   "backlog": {

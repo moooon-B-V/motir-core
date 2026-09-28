@@ -105,11 +105,13 @@ export interface ReadyItemDto {
   /**
    * The RUNNABLE CONTAINER this row is grouped under in a ready LANE (Story
    * MOTIR-6829) — its parent when that parent is a `story` / `task` / `bug`
-   * whose every child is childless, else `null`. PRESENT only on a lane read
-   * (`listReadyLeaves` / `listReadyBugs`); the flat `listReady` omits the key,
-   * so its payload is unchanged.
+   * whose every child is childless, else `null`. Carries what the group's
+   * header renders (its assignee and "{readyLeafCount} of {childCount} ready",
+   * `readyLeafCount` counting the group's rows in THIS read). PRESENT only on a
+   * lane read (`listReadyLeaves` / `listReadyBugs`); the flat `listReady` omits
+   * the key, so its payload is unchanged.
    */
-  container?: ReadyContainerRefDto | null;
+  container?: ReadyContainerDto | null;
   /**
    * The full Markdown instruction body — populated ONLY for a MANUAL row (the
    * source the *Show instruction* modal renders; 8.8.5 / 8.8.10) and `null` for
