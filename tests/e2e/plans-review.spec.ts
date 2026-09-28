@@ -211,8 +211,14 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   await expect(page.getByTestId('stale-badge')).toHaveCount(0);
 
   // The bundle became real, dispatchable work: the cleanly-materialized add
-  // (under the still-living parent) appears in the ready set.
+  // (under the still-living parent) appears in the ready set. That parent is a
+  // story over subtasks, so /ready shows it as ONE collapsed container row
+  // (MOTIR-6829) — expand it to reach the leaf.
+  const busyParent = await adminDb.workItem.findUniqueOrThrow({
+    where: { id: materialized.parentId! },
+  });
   await page.goto('/ready');
+  await page.getByRole('button', { name: `Expand ${busyParent.identifier}` }).click();
   await expect(
     page
       .getByRole('list', { name: 'Ready work items' })

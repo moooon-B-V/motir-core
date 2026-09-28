@@ -151,8 +151,8 @@ export async function collectReadyContainers(
   do {
     const page = await client.listReadyContainers({
       projectKey,
-      ...(filter.assigneeId !== undefined ? { assigneeId: filter.assigneeId } : {}),
-      ...(cursor ? { cursor } : {}),
+      assigneeId: filter.assigneeId,
+      cursor,
       limit: READY_PAGE_SIZE,
     });
     all.push(...page.items);
