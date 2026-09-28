@@ -11,7 +11,7 @@
 // ## What is asserted
 //
 // State 1 — a page under `(authed)` failed and the shell survived — driven with
-// the test-only `/_test/render-error` page, which throws on every render:
+// the test-only `/workbench/_render-error` page, which throws on every render:
 //
 //   1. the in-shell error panel renders (`role="alert"` with the page title),
 //      so the tab did not crash;
@@ -55,7 +55,7 @@ test.beforeEach(async ({ page }) => {
 test('a page that fails to render lands on the in-shell error panel, and Retry keeps it', async ({
   page,
 }) => {
-  await page.goto('/_test/render-error');
+  await page.goto('/workbench/_render-error');
 
   // Scoped by its title: Next's route announcer is a second `role="alert"`.
   const panel = page.getByRole('alert').filter({ hasText: PAGE_TITLE });
@@ -69,7 +69,7 @@ test('a page that fails to render lands on the in-shell error panel, and Retry k
   await expect(retry).toBeEnabled();
   const refetch = page.waitForResponse(
     (response) =>
-      response.url().includes('/_test/render-error') && response.request().method() === 'GET',
+      response.url().includes('/workbench/_render-error') && response.request().method() === 'GET',
   );
   await retry.click();
   await refetch;
@@ -85,6 +85,6 @@ test('a missing work item still answers 404 with the not-found page, not the err
 }) => {
   const response = await page.goto(`/items/${MISSING_KEY}`);
   expect(response?.status()).toBe(404);
-  await expect(page.getByText(NOT_FOUND_TITLE)).toBeVisible();
+  await expect(page.getByRole('heading', { name: NOT_FOUND_TITLE })).toBeVisible();
   await expect(page.getByText(PAGE_TITLE)).toHaveCount(0);
 });
