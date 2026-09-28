@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { truncateRateLimitCounters } from '@/tests/helpers/db';
 import { __resetSharedRateLimitStoreForTest } from '@/lib/rateLimit/store';
 import { pinSharedRateLimitStoreDeadline } from '@/tests/helpers/rateLimitStore';
+import { waitForWindowHeadroom } from '@/tests/helpers/rateLimitWindow';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -61,6 +62,11 @@ vi.mock('next-intl/server', () => ({
 }));
 
 let previousCloud: string | undefined;
+// The read budget's window for the budget case: large enough for its slow
+// calls, aligned by headroom rather than a whole-window sleep (rateLimitWindow.ts).
+const READ_WINDOW_MS = 20_000;
+const READ_HEADROOM_MS = 10_000;
+
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateRateLimitCounters();
@@ -78,6 +84,7 @@ afterEach(() => {
   if (previousCloud === undefined) delete process.env['MOTIR_CLOUD'];
   else process.env['MOTIR_CLOUD'] = previousCloud;
   delete process.env['MOTIR_PUBLIC_READ_RATE_LIMIT'];
+  delete process.env['MOTIR_PUBLIC_READ_RATE_LIMIT_WINDOW_MS'];
   __resetSharedRateLimitStoreForTest();
 });
 afterAll(async () => {
@@ -436,8 +443,12 @@ describe('each Visitor page renders its shared body for a consented Visitor', ()
 describe('the render-time read budget (design panel 9b)', () => {
   it('past the per-reader budget the view is replaced by the rate-limited state with its seconds', async () => {
     process.env['MOTIR_PUBLIC_READ_RATE_LIMIT'] = '1';
+    // The counted calls must share ONE epoch-aligned window cell (MOTIR-2648):
+    // pin a window, and guarantee the calls below its headroom before spending.
+    process.env['MOTIR_PUBLIC_READ_RATE_LIMIT_WINDOW_MS'] = String(READ_WINDOW_MS);
     const { identifier } = await project();
     await consented(identifier);
+    await waitForWindowHeadroom(READ_WINDOW_MS, READ_HEADROOM_MS);
     state.path = `/p/${identifier}/roadmap`;
     const { default: Page } = await import('@/app/(visitor)/p/[identifier]/roadmap/page');
     const first = await Page({ params: params(identifier), searchParams: noQuery() });

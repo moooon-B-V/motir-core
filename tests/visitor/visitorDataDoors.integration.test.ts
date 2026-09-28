@@ -5,6 +5,7 @@ import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { truncateRateLimitCounters } from '@/tests/helpers/db';
 import { __resetSharedRateLimitStoreForTest } from '@/lib/rateLimit/store';
 import { pinSharedRateLimitStoreDeadline } from '@/tests/helpers/rateLimitStore';
+import { waitForWindowHeadroom } from '@/tests/helpers/rateLimitWindow';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -55,6 +56,11 @@ const { listRootIssuesAction, listChildIssuesAction } =
 const BASE = 'http://localhost:3000';
 
 let previousCloud: string | undefined;
+// The read budget's window for the budget case: large enough for its slow
+// calls, aligned by headroom rather than a whole-window sleep (rateLimitWindow.ts).
+const READ_WINDOW_MS = 20_000;
+const READ_HEADROOM_MS = 10_000;
+
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateRateLimitCounters();
@@ -72,6 +78,7 @@ afterEach(() => {
   if (previousCloud === undefined) delete process.env['MOTIR_CLOUD'];
   else process.env['MOTIR_CLOUD'] = previousCloud;
   delete process.env['MOTIR_PUBLIC_READ_RATE_LIMIT'];
+  delete process.env['MOTIR_PUBLIC_READ_RATE_LIMIT_WINDOW_MS'];
   __resetSharedRateLimitStoreForTest();
 });
 afterAll(async () => {
@@ -289,8 +296,12 @@ describe('everyone else is answered exactly as today', () => {
 describe('the per-person read budget', () => {
   it('a Visitor past the budget answers 429; a member is never counted', async () => {
     process.env['MOTIR_PUBLIC_READ_RATE_LIMIT'] = '2';
+    // The counted calls must share ONE epoch-aligned window cell (MOTIR-2648):
+    // pin a window, and guarantee the calls below its headroom before spending.
+    process.env['MOTIR_PUBLIC_READ_RATE_LIMIT_WINDOW_MS'] = String(READ_WINDOW_MS);
     const t = await publicProject();
     await asVisitor(t);
+    await waitForWindowHeadroom(READ_WINDOW_MS, READ_HEADROOM_MS);
     const cookie = `motir_visitor=${t.identifier}`;
     expect((await boardGET(req('/api/board', cookie))).status).toBe(200);
     expect((await boardGET(req('/api/board', cookie))).status).toBe(200);

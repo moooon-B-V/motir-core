@@ -903,11 +903,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
   },
   {
-    file: 'design/public-projects/design-notes.md',
-    address: '/p/[identifier]/items/[key]',
-    why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
-  },
-  {
     file: 'design/public-projects/public-projects.mock.html',
     address: '/p/moooon-motir/opengraph-image',
     why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',

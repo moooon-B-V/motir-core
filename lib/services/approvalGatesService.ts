@@ -683,13 +683,19 @@ function recordRoutedToId(row: {
 }
 
 /**
+ * The room's view key, written ONCE (`tests/approval-records-story-gate.test.ts`):
+ * the member read below and the Visitor reads (MOTIR-6645) name it through this.
+ */
+const APPROVAL_VIEW_KEY = 'approval:view_any' satisfies PermissionKey;
+
+/**
  * The Approvals room's views for a reader (MOTIR-6333): `project` on
  * `approval:view_any` (role ∩ token grant), `mine` on a way to act
  * (`APPROVAL_ACT_PERMISSIONS`). The ONE place the service reads the view key.
  */
 function approvalRoomViews(held: ReadonlySet<PermissionKey>, ctx: HomeActorContext): RoomView[] {
   return availableRoomViews({
-    hasViewKey: holdsRecordView(held, ctx, 'approval:view_any'),
+    hasViewKey: holdsRecordView(held, ctx, APPROVAL_VIEW_KEY),
     canAct: canActOnApprovals(held),
   });
 }
@@ -1510,7 +1516,7 @@ export const approvalGatesService = {
     if (isVisitorContext(ctx)) {
       openVisitorRead(ctx.project.id, ctx);
       return availableRoomViews({
-        hasViewKey: ctx.permissions.has('approval:view_any'),
+        hasViewKey: ctx.permissions.has(APPROVAL_VIEW_KEY),
         canAct: false,
       });
     }
@@ -1532,7 +1538,7 @@ export const approvalGatesService = {
     // nothing, and never sees a record on a private epic's descendant or on a
     // withheld plan. A member's read is unchanged.
     const visitor = isVisitorContext(reader) ? reader : null;
-    if (visitor) openVisitorRead(visitor.project.id, visitor, 'approval:view_any');
+    if (visitor) openVisitorRead(visitor.project.id, visitor, APPROVAL_VIEW_KEY);
     const ctx: HomeActorContext = visitor
       ? { ...visitorServiceContext(visitor), projectId: visitor.project.id }
       : (reader as HomeActorContext);
