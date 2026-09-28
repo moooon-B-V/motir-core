@@ -179,6 +179,10 @@ const SUPPORTED_EDITOR_KINDS: ReadonlySet<FilterValueEditorKind> = new Set([
   // recorded below happening a second time. A registry addition is not shipped
   // until its editor kind is named here.
   'ci-state-select',
+  // Story MOTIR-6589 · MOTIR-6609: the *To fix* (`fixReason`) row — admitted HERE
+  // in the same change as its registry entry, for the reason the comment above
+  // records.
+  'fix-reason-select',
   'priority-select',
   // Story 2.7 (2.7.6): the work-item `type` facet. Its value editor ships in
   // AdvancedFilterValueEditor, but this allowlist (the builder's field-menu

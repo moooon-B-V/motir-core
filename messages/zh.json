@@ -1482,6 +1482,7 @@
     "advancedBacklog": "待办事项",
     "advancedValueCount": "{count, plural, other {#个值}}",
     "advancedFieldChecks": "检查",
+    "advancedFieldToFix": "待修复",
     "advancedFieldPriority": "优先级",
     "advancedFieldType": "工作类型",
     "advancedFieldDifficulty": "难度",
@@ -1508,6 +1509,8 @@
     "advancedOpIsNotEmpty": "不为空",
     "advancedOpChecksIsEmpty": "无检查",
     "advancedOpChecksIsNotEmpty": "有检查",
+    "advancedOpToFixIsEmpty": "无",
+    "advancedOpToFixIsNotEmpty": "为任意原因",
     "advancedOpContains": "包含",
     "advancedOpNotContains": "不包含",
     "advancedOpEq": "=",
@@ -10104,6 +10107,31 @@
       "rateLimitedTitle": "你浏览得有点太快了",
       "rateLimitedBody": "此公开项目限制了单个读者的访问速度。请在 {seconds} 秒后重试。",
       "rateLimitedRetry": "重试"
+    }
+  },
+  "toFix": {
+    "tagName": {
+      "queue_failed": "待修复 · 在合并队列中失败",
+      "conflicted": "待修复 · 与其目标分支冲突",
+      "ci_failed": "待修复 · CI 未通过",
+      "changes_requested": "待修复 · 已要求修改"
+    },
+    "banner": {
+      "queueFailed": "需要修复：它在合并队列中失败（检查 <code>{check}</code>）。",
+      "queueFailedReason": "需要修复：它在合并队列中失败（{reason}）。",
+      "queueFailedBare": "需要修复：它在合并队列中失败。",
+      "conflicted": "需要修复：它与 <code>{base}</code> 冲突。",
+      "conflictedNoBase": "需要修复：它与其目标分支冲突。",
+      "ciFailed": "需要修复：CI 未通过（检查 <code>{check}</code>）。",
+      "ciFailedBare": "需要修复：CI 未通过。",
+      "changesRequested": "需要修复：<b>{name}</b> 要求修改——“{note}”",
+      "changesRequestedNoNote": "需要修复：<b>{name}</b> 要求修改。",
+      "changesRequestedAnon": "需要修复：已要求修改。",
+      "onAcceptance": "由验收视频退回。",
+      "leadFix": "用以下命令修复：",
+      "leadRun": "重新运行该工作项。新一次运行的提示词会带上审阅者的说明：",
+      "toDevelopment": "查看它的拉取请求",
+      "opening": "正在打开它的拉取请求…"
     }
   },
   "workItems": {

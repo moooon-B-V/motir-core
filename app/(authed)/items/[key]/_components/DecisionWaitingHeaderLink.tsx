@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { ArrowDown, LoaderCircle } from 'lucide-react';
 import { DecisionWaitingMarker } from '@/components/approvals/DecisionWaitingMarker';
 import type { PendingDecisionDTO } from '@/lib/dto/approvalGate';
-import { LATE_FALLBACK_ATTR } from './decisionAnchor';
+import { useLandOnLateSection } from './useLandOnLateSection';
 
 // THE ITEM HEADER'S DECISION-WAITING MARKER (Story MOTIR-4908 · MOTIR-5878).
 //
@@ -34,14 +34,6 @@ function anchorFor(kind: PendingDecisionDTO['kind']): HTMLElement | null {
   return document.querySelector<HTMLElement>(`[data-decision-anchor~="${kind}"]`);
 }
 
-function land(el: HTMLElement) {
-  const reduced =
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  el.scrollIntoView({ block: 'start', behavior: reduced ? 'auto' : 'smooth' });
-  el.focus({ preventScroll: true });
-}
-
 export function DecisionWaitingHeaderLink({
   decision,
   routedToName,
@@ -51,16 +43,8 @@ export function DecisionWaitingHeaderLink({
   routedToName: string | null;
 }) {
   const t = useTranslations('approvalGate');
-  const [pending, setPending] = useState(false);
-  const observer = useRef<MutationObserver | null>(null);
-
-  const stopWaiting = useCallback(() => {
-    observer.current?.disconnect();
-    observer.current = null;
-    setPending(false);
-  }, []);
-
-  useEffect(() => () => observer.current?.disconnect(), []);
+  const find = useCallback(() => anchorFor(decision.kind), [decision.kind]);
+  const { press: onPress, pending } = useLandOnLateSection(find);
 
   const noun = t(`statusHeld.decisionNoun.${decision.kind}`);
   const name = routedToName ?? t('theAssignee');
@@ -69,31 +53,6 @@ export function DecisionWaitingHeaderLink({
       ? t('waiting.glyphYours', { decision: noun })
       : t('waiting.glyphOn', { name, decision: noun });
   const jump = t('waiting.jump', { decision: noun });
-
-  const onPress = () => {
-    const anchor = anchorFor(decision.kind);
-    if (anchor) {
-      land(anchor);
-      return;
-    }
-    // Not streamed yet. Nothing to wait FOR once the late stack has settled.
-    const fallback = document.querySelector<HTMLElement>(`[${LATE_FALLBACK_ATTR}]`);
-    if (!fallback) return;
-    fallback.scrollIntoView({ block: 'start' });
-    setPending(true);
-    observer.current?.disconnect();
-    observer.current = new MutationObserver(() => {
-      const mounted = anchorFor(decision.kind);
-      if (mounted) {
-        stopWaiting();
-        land(mounted);
-      } else if (!document.querySelector(`[${LATE_FALLBACK_ATTR}]`)) {
-        // The stack settled and drew no section for this kind — stay put.
-        stopWaiting();
-      }
-    });
-    observer.current.observe(document.body, { childList: true, subtree: true });
-  };
 
   return (
     <>

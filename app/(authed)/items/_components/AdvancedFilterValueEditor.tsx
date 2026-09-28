@@ -24,6 +24,8 @@ import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import { CI_STATE_META } from '@/components/github/ciStateMeta';
 import { CI_STATES } from '@/lib/github/prCiState';
+import { FIX_REASON_PRIORITY } from '@/lib/workItems/fixReason';
+import { FIX_REASON_VALUE_KEYS } from './advancedFilterLabels';
 import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
 import { statusDotColor } from '@/lib/workflows/statusColor';
 import { labelTint } from '@/lib/labels/labelTint';
@@ -385,6 +387,7 @@ export function AdvancedFilterValueEditor({
   const tGithub = useTranslations('github');
   const tWorkType = useTranslations('labels.workItemType');
   const tDifficulty = useTranslations('labels.difficulty');
+  const tFixReason = useTranslations('workbench.toFix.reason');
   const tObsolescence = useTranslations('labels.obsolescence');
   const tFolders = useTranslations('folders');
   const [query, setQuery] = useState('');
@@ -420,6 +423,16 @@ export function AdvancedFilterValueEditor({
           id: state,
           label: tGithub(`development.ciState.${state}`),
           glyph: CI_STATE_META[state].icon,
+        }));
+      // The *To fix* reasons (MOTIR-6609) in PRIORITY order — the order the
+      // recompute ranks them and the tab lists them — labelled with the Workbench
+      // tab's own bare reason words. No glyph: all four reasons draw the SAME tag
+      // (design § *The TO FIX tag and banner*), so a per-reason glyph here would
+      // invent a distinction the rows never show.
+      case 'fix-reason-select':
+        return FIX_REASON_PRIORITY.map((reason) => ({
+          id: reason,
+          label: tFixReason(FIX_REASON_VALUE_KEYS[reason]),
         }));
       case 'priority-select':
         return PRIORITIES.map((p) => ({
@@ -505,6 +518,7 @@ export function AdvancedFilterValueEditor({
     tDifficulty,
     tObsolescence,
     tGithub,
+    tFixReason,
   ]);
 
   const valuesAria = t('advancedValuesAria', { field: fieldLabel });
@@ -532,6 +546,7 @@ export function AdvancedFilterValueEditor({
     case 'kind-select':
     case 'status-select':
     case 'ci-state-select':
+    case 'fix-reason-select':
     case 'priority-select':
     case 'type-select':
     case 'difficulty-select':

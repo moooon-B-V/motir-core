@@ -103,6 +103,7 @@ function listRow(status: string, statusCategory: 'in_progress' | 'done'): IssueR
     statusLabel: statusCategory === 'done' ? 'Done' : 'In Progress',
     statusCategory,
     ciState: 'failing',
+    fixReason: null,
     obsolescence: null,
     assigneeId: null,
     assigneeName: null,

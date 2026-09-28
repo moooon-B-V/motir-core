@@ -24,6 +24,10 @@ export type BuiltInFilterFieldId =
    *  MOTIR-5470) — the *Checks* field (MOTIR-5473). Nullable: `null` is "no
    *  checks", which the empty pair addresses. */
   | 'ciState'
+  /** Why the card is stuck until something is repaired (`WorkItem.fixReason`,
+   *  MOTIR-6600) — the *To fix* field (Story MOTIR-6589 · MOTIR-6609). Nullable:
+   *  `null` is "nothing to fix", which the empty pair addresses. */
+  | 'fixReason'
   | 'priority'
   | 'type'
   /** How hard a leaf is to reason about (Story MOTIR-6016). Nullable: epics,

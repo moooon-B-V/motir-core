@@ -22,6 +22,8 @@ import { useAdvancedFilterPopover } from './AdvancedFilterContext';
 import {
   advancedFieldLabel,
   advancedOperatorLabel,
+  FIX_REASON_VALUE_KEYS,
+  isFixReason,
   type DynamicFieldLabels,
 } from './advancedFilterLabels';
 
@@ -67,6 +69,7 @@ export function AdvancedFilterSummary({
   const tPriority = useTranslations('labels.priority');
   const tWorkType = useTranslations('labels.workItemType');
   const tDifficulty = useTranslations('labels.difficulty');
+  const tFixReason = useTranslations('workbench.toFix.reason');
   const tObsolescence = useTranslations('labels.obsolescence');
   const format = useFormatter();
   const setOpen = useAdvancedFilterPopover()?.setOpen ?? (() => {});
@@ -122,6 +125,10 @@ export function AdvancedFilterSummary({
         // Only a member of the closed scale has a label; anything else is shown
         // raw rather than asking next-intl for a key that does not exist.
         return isWorkItemDifficulty(id) ? tDifficulty(id) : id;
+      case 'fixReason':
+        // The Workbench's own reason words (MOTIR-6609); a value outside the enum
+        // (a stale URL) is shown raw, as `difficulty` does.
+        return isFixReason(id) ? tFixReason(FIX_REASON_VALUE_KEYS[id]) : id;
       case 'obsolescence':
         // The same rule for the mark (MOTIR-6678).
         return isWorkItemObsolescence(id) ? tObsolescence(id) : id;

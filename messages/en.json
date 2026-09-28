@@ -1482,6 +1482,7 @@
     "advancedBacklog": "Backlog",
     "advancedValueCount": "{count, plural, one {# value} other {# values}}",
     "advancedFieldChecks": "Checks",
+    "advancedFieldToFix": "To fix",
     "advancedFieldPriority": "Priority",
     "advancedFieldType": "Type",
     "advancedFieldDifficulty": "Difficulty",
@@ -1508,6 +1509,8 @@
     "advancedOpIsNotEmpty": "is not empty",
     "advancedOpChecksIsEmpty": "has no checks",
     "advancedOpChecksIsNotEmpty": "has checks",
+    "advancedOpToFixIsEmpty": "is none",
+    "advancedOpToFixIsNotEmpty": "is any",
     "advancedOpContains": "contains",
     "advancedOpNotContains": "does not contain",
     "advancedOpEq": "=",
@@ -10108,6 +10111,31 @@
       "rateLimitedTitle": "You’re reading a little too fast",
       "rateLimitedBody": "This public project limits how quickly one reader can open it. Try again in {seconds, plural, one {# second} other {# seconds}}.",
       "rateLimitedRetry": "Try again"
+    }
+  },
+  "toFix": {
+    "tagName": {
+      "queue_failed": "To fix · failed in the merge queue",
+      "conflicted": "To fix · conflicts with its base branch",
+      "ci_failed": "To fix · CI failed",
+      "changes_requested": "To fix · changes requested"
+    },
+    "banner": {
+      "queueFailed": "This needs a fix: it failed in the merge queue (check <code>{check}</code>).",
+      "queueFailedReason": "This needs a fix: it failed in the merge queue ({reason}).",
+      "queueFailedBare": "This needs a fix: it failed in the merge queue.",
+      "conflicted": "This needs a fix: it conflicts with <code>{base}</code>.",
+      "conflictedNoBase": "This needs a fix: it conflicts with its base branch.",
+      "ciFailed": "This needs a fix: CI failed (check <code>{check}</code>).",
+      "ciFailedBare": "This needs a fix: CI failed.",
+      "changesRequested": "This needs a fix: <b>{name}</b> requested changes — “{note}”",
+      "changesRequestedNoNote": "This needs a fix: <b>{name}</b> requested changes.",
+      "changesRequestedAnon": "This needs a fix: changes were requested.",
+      "onAcceptance": "Sent back from the acceptance video.",
+      "leadFix": "Repair it with this command:",
+      "leadRun": "Re-run the work item. The new run’s prompt carries the reviewer’s note:",
+      "toDevelopment": "See its pull requests",
+      "opening": "Opening its pull requests…"
     }
   },
   "workItems": {

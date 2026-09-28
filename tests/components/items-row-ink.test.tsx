@@ -224,6 +224,7 @@ function treeNode(
     title: `Issue ${over.key}`,
     status: 'todo',
     ciState: null,
+    fixReason: null,
     priority: 'medium',
     assigneeId: 'u1',
     reporterId: 'u1',

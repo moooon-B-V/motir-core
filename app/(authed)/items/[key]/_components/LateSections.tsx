@@ -1,7 +1,7 @@
 import type * as React from 'react';
 import { getTranslations } from 'next-intl/server';
 import { ContentSectionCard } from './ContentSectionCard';
-import { LATE_FALLBACK_ATTR } from './decisionAnchor';
+import { DEVELOPMENT_SECTION_ID, LATE_FALLBACK_ATTR } from './decisionAnchor';
 import type { ApprovalGateKindDTO } from '@/lib/dto/approvalGate';
 import { AcceptancePanel } from './AcceptancePanel';
 import { DesignResultSection } from './DesignResultSection';
@@ -432,6 +432,8 @@ export async function LateUpperSections({
             )}
             headerRight={canEdit ? <LinkPullRequestDoor /> : undefined}
             decisionAnchor={developmentAnchors}
+            // The To fix banner's *See its pull requests* lands here (MOTIR-6611).
+            id={DEVELOPMENT_SECTION_ID}
           >
             {canEdit ? <LinkPullRequestForm /> : null}
             {/* A DESIGN THAT LEADS THIS BLOCK (Workflow B) is decided in the overlay too, and

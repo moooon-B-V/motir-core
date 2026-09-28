@@ -30,6 +30,7 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     pendingDecision: null,
     planHold: null,
     ciState: null,
+    fixReason: null,
     obsolescence: null,
     statusCategory: 'todo',
     ...over,

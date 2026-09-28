@@ -32,6 +32,13 @@ export interface ContentSectionCardProps {
    * `tabIndex={-1}`, so the landed section can take focus.
    */
   decisionAnchor?: readonly ApprovalGateKindDTO[];
+  /**
+   * A fragment id for the section — the Development block's `development`, which
+   * the To fix banner's *See its pull requests* link lands on (MOTIR-6611). Like a
+   * decision anchor, it makes the section focusable (`tabIndex={-1}`) and draws the
+   * focus ring, since the link moves focus there.
+   */
+  id?: string;
   children: ReactNode;
 }
 
@@ -42,19 +49,23 @@ export function ContentSectionCard({
   headerRight,
   editHref,
   decisionAnchor,
+  id,
   children,
 }: ContentSectionCardProps) {
   const t = useTranslations('issueViews');
+  const landable = (decisionAnchor && decisionAnchor.length > 0) || id !== undefined;
   return (
     <Card
       {...(decisionAnchor && decisionAnchor.length > 0
-        ? { 'data-decision-anchor': decisionAnchor.join(' '), tabIndex: -1 }
+        ? { 'data-decision-anchor': decisionAnchor.join(' ') }
         : {})}
+      {...(landable ? { tabIndex: -1 } : {})}
+      {...(id !== undefined ? { id } : {})}
       // The landed section takes focus from the header marker's press, so it draws
       // the focus ring the design names (panel 8A) — `focus`, not
       // `focus-visible`, because the focus is programmatic after a pointer press.
       className={
-        decisionAnchor && decisionAnchor.length > 0
+        landable
           ? 'shadow-(--shadow-card) focus:ring-2 focus:ring-(--focus-ring-color) focus:outline-none'
           : 'shadow-(--shadow-card)'
       }
