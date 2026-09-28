@@ -1,11 +1,7 @@
 import type { ProjectAccessMode } from '@/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import {
-  PUBLIC_PROJECT_PERMISSIONS,
-  ROLE_GATED_PERMISSIONS,
-  WORKSPACE_ROLE_PERMISSIONS,
-} from '@/lib/permissions/builtinRoles';
+import { ROLE_GATED_PERMISSIONS, WORKSPACE_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -104,14 +100,21 @@ describe('the Limited contractor, added to A only', () => {
     expect(sorted(held)).toEqual(sorted(WORKSPACE_ROLE_PERMISSIONS.member));
   });
 
-  it('holds nothing in a members or workspace project, and only the public read set in a public one', async () => {
+  it('holds nothing on the member path in any project it cannot enter, a public one included', async () => {
     const t = await tenant();
-    for (const p of [t.B, t.C]) {
+    for (const p of [t.B, t.C, t.D]) {
       const held = await projectAccessService.getPermissions(p.id, t.ctx(t.contractor.id));
       expect(sorted(held), p.identifier).toEqual([]);
     }
-    const onPublic = await projectAccessService.getPermissions(t.D.id, t.ctx(t.contractor.id));
-    expect(sorted(onPublic)).toEqual(sorted(PUBLIC_PROJECT_PERMISSIONS));
+  });
+
+  it('reads the public one only through the PUBLIC read path, as its Visitor (MOTIR-6733)', async () => {
+    const t = await tenant();
+    const caps = await projectAccessService.getPublicCapabilities(t.D.id, t.contractor.id);
+    expect(caps.canBrowse).toBe(true);
+    await expect(
+      projectAccessService.assertCanBrowse(t.D.id, t.ctx(t.contractor.id)),
+    ).rejects.toThrow();
   });
 
   it('is refused as NOT-FOUND on a non-public project it was not added to', async () => {
