@@ -490,3 +490,174 @@ describe('claimContinue — a PARENT whose scope run died (MOTIR-6535)', () => {
     });
   });
 });
+
+// A HOSTED opening (Story MOTIR-6527 · MOTIR-6790): the claim opens the lock AS
+// the hosted run, so the browser's Continue hosted and a terminal `motir
+// continue` race on ONE row.
+describe('claimContinue — a hosted opening', () => {
+  const opening = (idempotencyKey: string) => ({
+    origin: 'hosted' as const,
+    agent: 'opencode' as const,
+    model: 'anthropic/claude-sonnet-5',
+    idempotencyKey,
+  });
+  const hostedClaim = (
+    fx: WorkItemFixture,
+    key: string,
+    idempotencyKey: string,
+    ctx: ServiceContext = fx.ctx,
+  ) =>
+    workItemContinueService.claimContinue(fx.projectId, key, ctx, new Date(), {
+      opening: opening(idempotencyKey),
+    });
+
+  it('opens ONE hosted `continue` run with its agent, model and key, and ONE `run_opened` saying so', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, runId, branch } = await deadCard(fx);
+    const key = `hosted-${randomToken()}`;
+
+    const result = await hostedClaim(fx, card.identifier, key);
+
+    expect(result).toMatchObject({ outcome: 'claimed', branch, deadRun: { id: runId } });
+    const opened = await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: result.runId! } });
+    expect(opened).toMatchObject({
+      command: 'continue',
+      origin: 'hosted',
+      agent: 'opencode',
+      model: 'anthropic/claude-sonnet-5',
+      idempotencyKey: key,
+      status: 'running',
+    });
+    const events = await adminDb.dispatchRunEvent.findMany({
+      where: { dispatchRunId: opened.id, kind: 'run_opened' },
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0]!.seq).toBe(1);
+    expect(events[0]!.data).toMatchObject({
+      continuesRunId: runId,
+      branch,
+      origin: 'hosted',
+      model: 'anthropic/claude-sonnet-5',
+    });
+  });
+
+  it('the same key again answers the same run and opens nothing — even once that run has ended', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, runId } = await deadCard(fx);
+    const key = `hosted-${randomToken()}`;
+    const first = await hostedClaim(fx, card.identifier, key);
+
+    const again = await hostedClaim(fx, card.identifier, key);
+    expect(again).toMatchObject({
+      outcome: 'claimed',
+      runId: first.runId,
+      branch: first.branch,
+      deadRun: { id: runId },
+      previousAssignee: first.previousAssignee,
+    });
+
+    // The boot failed after the claim: the end path closed the run. A retried
+    // start with the SAME key is still told which run it opened, not handed a
+    // second takeover.
+    await dispatchRunService.close(first.runId!, { stopReason: 'halted' }, fx.ctx);
+    const afterEnd = await hostedClaim(fx, card.identifier, key);
+    expect(afterEnd.runId).toBe(first.runId);
+
+    const continues = await adminDb.dispatchRun.findMany({
+      where: { command: 'continue', cards: { some: { workItemId: card.id } } },
+    });
+    expect(continues).toHaveLength(1);
+  });
+
+  it('a DIFFERENT key while the hosted continue is alive is refused `taken`, naming its holder', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await deadCard(fx);
+    const first = await hostedClaim(fx, card.identifier, `hosted-${randomToken()}`);
+    const other = await member(fx, 'Terminal User');
+
+    const fromTerminal = await claim(fx, card.identifier, other.ctx);
+    const fromBrowser = await hostedClaim(
+      fx,
+      card.identifier,
+      `hosted-${randomToken()}`,
+      other.ctx,
+    );
+
+    for (const answer of [fromTerminal, fromBrowser]) {
+      expect(answer).toMatchObject({
+        outcome: 'taken',
+        runId: first.runId,
+        holder: { id: fx.ownerId },
+      });
+    }
+  });
+
+  it('a key that names some OTHER run is refused as a duplicate, not replayed', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await deadCard(fx);
+    const key = `hosted-${randomToken()}`;
+    const unrelated = await createTestWorkItem(fx, { kind: 'task', title: 'unrelated' });
+    await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run',
+        idempotencyKey: key,
+        cards: [{ key: unrelated.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+
+    await expect(hostedClaim(fx, card.identifier, key)).rejects.toMatchObject({
+      name: 'DuplicateDispatchRunError',
+    });
+  });
+
+  it('every refusal answers before any run is opened, opening or not', async () => {
+    const fx = await makeWorkItemFixture();
+    const alive = await deadCard(fx, { silentMinutes: 1 });
+    const fix = await deadCard(fx, { status: 'implemented' });
+    const todo = await deadCard(fx, { status: 'todo' });
+    const bare = await deadCard(fx, { branch: null });
+    const succeeded = await deadCard(fx);
+    await dispatchRunService.close(succeeded.runId, { stopReason: 'completed' }, fx.ctx);
+
+    const cases: Array<[string, string]> = [
+      [alive.card.identifier, 'run_alive'],
+      [fix.card.identifier, 'use_fix'],
+      [todo.card.identifier, 'not_in_progress'],
+      [bare.card.identifier, 'no_branch'],
+      [succeeded.card.identifier, 'no_dead_run'],
+    ];
+    for (const [key, reason] of cases) {
+      const answer = await hostedClaim(fx, key, `hosted-${randomToken()}`);
+      expect(answer).toMatchObject({ outcome: 'not_continuable', reason, runId: null });
+    }
+    expect(await adminDb.dispatchRun.count({ where: { command: 'continue' } })).toBe(0);
+  });
+
+  it('continue_the_parent is refused before any run is opened, with an opening', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'the story' });
+    const child = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'a child',
+      parentId: story.id,
+    });
+    await setStatus(child.id, 'in_progress');
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run_scope',
+        scopeKey: story.identifier,
+        cards: [{ key: child.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    await dispatchRunService.close(run.id, { stopReason: 'halted' }, fx.ctx);
+
+    const answer = await hostedClaim(fx, child.identifier, `hosted-${randomToken()}`);
+
+    expect(answer).toMatchObject({ reason: 'continue_the_parent', parentKey: story.identifier });
+    expect(await adminDb.dispatchRun.count({ where: { command: 'continue' } })).toBe(0);
+  });
+});

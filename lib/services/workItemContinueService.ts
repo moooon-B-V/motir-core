@@ -22,6 +22,7 @@ import { isRunAlive, lastHeardFrom } from '@/lib/runs/runLiveness';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { DuplicateDispatchRunError } from '@/lib/dispatchRuns/errors';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { IN_PROGRESS_STATUS_KEY } from '@/lib/workItems/claimOutcome';
@@ -262,6 +263,24 @@ async function evaluate(
   };
 }
 
+/**
+ * A HOSTED continue's opening (Story MOTIR-6527 · MOTIR-6790). The hosted start
+ * hands it to the claim so the lock it takes IS the hosted run: one `continue`
+ * row, recorded `origin: 'hosted'` with the agent and model it runs on, and
+ * idempotent on the start's key. Server-internal — the v1 continue route never
+ * accepts one.
+ */
+export interface HostedContinueOpening {
+  origin: 'hosted';
+  agent: 'opencode';
+  model: string;
+  idempotencyKey: string;
+}
+
+export interface ClaimContinueOptions {
+  opening?: HostedContinueOpening | undefined;
+}
+
 function refused(
   item: { identifier: string; title: string },
   reason: WorkItemContinueRefusal,
@@ -287,6 +306,46 @@ function refused(
   };
 }
 
+/**
+ * The answer a hosted opening already got, given again for a repeat of its key
+ * (MOTIR-6790) — read back off the run it opened and that run's `run_opened`.
+ */
+async function replayOpening(
+  item: { id: string; identifier: string; title: string },
+  run: LatestRunForWorkItem,
+  tx: Prisma.TransactionClient,
+): Promise<WorkItemContinueClaimDto> {
+  const opened = await dispatchRunEventRepository.findLatestOfKind(run.id, 'run_opened', tx);
+  const data = (opened?.data ?? null) as {
+    continuesRunId?: unknown;
+    branch?: unknown;
+    previousAssignee?: { id?: unknown; name?: unknown } | null;
+  } | null;
+  const deadId = typeof data?.continuesRunId === 'string' ? data.continuesRunId : null;
+  const dead = deadId ? await dispatchRunRepository.findForWorkItemById(deadId, item.id, tx) : null;
+  const previous = data?.previousAssignee;
+  return {
+    key: item.identifier,
+    title: item.title,
+    outcome: 'claimed',
+    reason: null,
+    parentKey: null,
+    runId: run.id,
+    holder: actor(run.createdBy),
+    startedAt: run.startedAt.toISOString(),
+    deadRun: dead ? toDeadRun(dead) : null,
+    branch: typeof data?.branch === 'string' ? data.branch : null,
+    pullRequest: dead ? (await resolveContinueBranch(item.id, dead, tx)).pullRequest : null,
+    previousAssignee:
+      previous && typeof previous.id === 'string' && typeof previous.name === 'string'
+        ? { id: previous.id, name: previous.name }
+        : null,
+    mode: run.scopeWorkItemId === item.id ? 'parent' : 'card',
+    landedKeys: [],
+    resumedKeys: [],
+  };
+}
+
 export const workItemContinueService = {
   /**
    * CLAIM the continue of one work item whose last run died.
@@ -301,7 +360,9 @@ export const workItemContinueService = {
     identifier: string,
     ctx: ServiceContext,
     now: Date = new Date(),
+    options: ClaimContinueOptions = {},
   ): Promise<WorkItemContinueClaimDto> {
+    const { opening } = options;
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
     // A continue starts an agent, exactly like a dispatch — the same credit gate,
     // before any lock.
@@ -318,6 +379,29 @@ export const workItemContinueService = {
         const state = await workItemRepository.findClaimStateById(item.id, tx);
         /* v8 ignore next -- the row was resolved above; only a delete between the two reads gets here */
         if (!state) throw new WorkItemNotFoundError(identifier);
+
+        // The SAME hosted opening again — a retried start. Answered with the run
+        // that opening already opened, whatever that run has done since: a
+        // repeat must never be refused `taken` by its own run, nor take the card
+        // over a second time once that run ended.
+        if (opening) {
+          const existing = await dispatchRunRepository.findByIdempotencyKey(
+            ctx.workspaceId,
+            opening.idempotencyKey,
+            tx,
+          );
+          if (existing) {
+            const replayed = await dispatchRunRepository.findForWorkItemById(
+              existing.id,
+              item.id,
+              tx,
+            );
+            if (!replayed || replayed.command !== 'continue') {
+              throw new DuplicateDispatchRunError(opening.idempotencyKey);
+            }
+            return replayOpening(item, replayed, tx);
+          }
+        }
 
         const verdict = await evaluate(
           { id: item.id, status: state.status, archivedAt: state.archivedAt },
@@ -417,16 +501,32 @@ export const workItemContinueService = {
           await workItemRepository.update(item.id, { assigneeId: ctx.userId }, tx);
         }
 
+        // The opening rides on the SAME insert, so the lock and the hosted run
+        // are one row. `openWithin` answers a known key with the run it names,
+        // but the replay above has already answered that case under this lock.
         const opened = await dispatchRunService.openWithin(
           projectId,
-          parent
-            ? {
-                command: 'continue',
-                scopeKey: item.identifier,
-                scopeLabel: item.identifier,
-                cards: legKeys.map((key) => ({ key, disposition: 'queued' as const })),
-              }
-            : { command: 'continue', cards: [{ key: item.identifier, disposition: 'queued' }] },
+          {
+            ...(parent
+              ? {
+                  command: 'continue' as const,
+                  scopeKey: item.identifier,
+                  scopeLabel: item.identifier,
+                  cards: legKeys.map((key) => ({ key, disposition: 'queued' as const })),
+                }
+              : {
+                  command: 'continue' as const,
+                  cards: [{ key: item.identifier, disposition: 'queued' as const }],
+                }),
+            ...(opening
+              ? {
+                  origin: opening.origin,
+                  agent: opening.agent,
+                  model: opening.model,
+                  idempotencyKey: opening.idempotencyKey,
+                }
+              : {}),
+          },
           ctx,
           tx,
         );
@@ -443,6 +543,9 @@ export const workItemContinueService = {
                 continuesRunId: deadRun.id,
                 previousAssignee: previousAssignee ? { ...previousAssignee } : null,
                 branch: verdict.branch,
+                // A hosted continue's ONE `run_opened` (the hosted start appends
+                // none of its own) says what Run hosted's does.
+                ...(opening ? { origin: opening.origin, model: opening.model } : {}),
               },
             },
           ],
