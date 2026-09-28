@@ -213,11 +213,13 @@ test.describe('a card runs on the hosted agent', () => {
 
     await chapter('It reaches a pull request; the card reads Implemented', async () => {
       const api = await ingestContext(runTokenFor(dispatchRunId), origin(baseURL));
-      const headRef = `hosted/${card.identifier.toLowerCase()}-21101`;
+      // Pull-request numbers: this spec owns the 22xxx block (MOTIR-3248's
+      // one-thousand-block-per-spec rule; 21xxx is acceptance-verdict.spec.ts's).
+      const headRef = `hosted/${card.identifier.toLowerCase()}-22101`;
       await linkPr(page, {
         workItemId: card.id,
         repo: E2E_REPO,
-        number: 21101,
+        number: 22101,
         headRef,
       });
       const opened = await postSignedWebhook(
@@ -225,7 +227,7 @@ test.describe('a card runs on the hosted agent', () => {
         'pull_request',
         pullRequestPayload({
           action: 'opened',
-          number: 21101,
+          number: 22101,
           title: `${card.identifier} — hosted run`,
           headRef,
           state: 'open',
@@ -247,7 +249,7 @@ test.describe('a card runs on the hosted agent', () => {
           timeout: 30_000,
         },
       );
-      await expect(page.getByRole('main').getByTestId('hosted-end')).toContainText('#21101');
+      await expect(page.getByRole('main').getByTestId('hosted-end')).toContainText('#22101');
       await expect(statusCard(page)).toContainText('Implemented', { timeout: 30_000 });
       // The chosen model's provenance, stamped at start (MOTIR-690's step 5) —
       // visible on the run panel's own meta row.
