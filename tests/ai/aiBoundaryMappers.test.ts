@@ -216,6 +216,7 @@ function listItem(over: Partial<WorkItemListItemDto>): WorkItemListItemDto {
     title: 'T',
     status: 'todo',
     ciState: null,
+    fixReason: null,
     priority: 'medium',
     assigneeId: null,
     reporterId: 'u_1',

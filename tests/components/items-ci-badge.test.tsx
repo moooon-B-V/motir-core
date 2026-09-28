@@ -94,6 +94,7 @@ function listRow(ciState: string | null): IssueRowData {
     status: 'todo',
     statusLabel: 'To Do',
     statusCategory: 'todo',
+    fixReason: null,
     ciState,
     assigneeId: null,
     assigneeName: null,

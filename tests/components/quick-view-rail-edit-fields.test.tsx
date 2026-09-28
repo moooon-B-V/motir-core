@@ -168,6 +168,7 @@ const DATA: QuickViewData = {
   kind: 'subtask',
   statusLabel: 'To Do',
   statusCategory: 'todo',
+  fixReason: null,
   descriptionMd: 'Sign in with email and password.',
   explanationMd: null,
   type: 'code',

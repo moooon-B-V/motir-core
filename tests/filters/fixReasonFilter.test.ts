@@ -66,7 +66,7 @@ describe('the fixReason filter field', () => {
       for (const reason of FIX_REASON_PRIORITY) {
         expect(reasons[FIX_REASON_VALUE_KEYS[reason]], reason).toBeTruthy();
       }
-      const views = messages.issueViews as Record<string, string>;
+      const views = messages.issueViews as unknown as Record<string, string>;
       expect(views.advancedFieldToFix).toBeTruthy();
       for (const key of Object.values(FIELD_EMPTY_OPERATOR_KEYS.fixReason ?? {})) {
         expect(views[key!], key).toBeTruthy();

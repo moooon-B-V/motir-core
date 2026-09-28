@@ -81,6 +81,7 @@ const DATA: QuickViewData = {
   kind: 'bug',
   statusLabel: 'In Review',
   statusCategory: 'in_progress',
+  fixReason: null,
   descriptionMd: null,
   explanationMd: null,
   type: 'code',

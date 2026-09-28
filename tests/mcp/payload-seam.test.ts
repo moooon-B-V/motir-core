@@ -561,6 +561,7 @@ describe('presentMcpWorkItemRow — the search row', () => {
     obsolescence: null,
     obsolescenceNoteMd: null,
     ciState: null,
+    fixReason: null,
   };
 
   it('carries `key` as the identifier, the numeric key beside it, and the count', () => {

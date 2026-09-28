@@ -82,6 +82,7 @@ function data(over: Partial<QuickViewData> = {}): QuickViewData {
     kind: 'story',
     statusLabel: 'To Do',
     statusCategory: 'todo',
+    fixReason: null,
     descriptionMd: null,
     explanationMd: null,
     type: null,

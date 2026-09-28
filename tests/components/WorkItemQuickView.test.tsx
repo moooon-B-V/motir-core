@@ -37,6 +37,7 @@ const DATA: QuickViewData = {
   kind: 'subtask',
   statusLabel: 'In Progress',
   statusCategory: 'in_progress',
+  fixReason: null,
   descriptionMd: 'Render the project roadmap as a spatial canvas.',
   explanationMd: null,
   type: 'code',
