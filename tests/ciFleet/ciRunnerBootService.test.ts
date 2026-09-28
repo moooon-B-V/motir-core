@@ -13,6 +13,7 @@ import {
 import { OrchestratorNotConfiguredError, fakeOrchestrator } from '@motir/orchestrator';
 import * as orchestrator from '@/lib/orchestrator';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
+import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import {
   runnerJitConfigClient,
@@ -741,11 +742,14 @@ describe('the REAPER — the backstop for the orchestrator crashing mid-flight',
 
     // Age the container past the cutoff and sweep.
     fakeOrchestrator.backdate(orphanId, new Date(Date.now() - 3 * 3_600_000));
+    const charge = vi.spyOn(hostedRunChargeService, 'chargeMachineTime');
     const result = await ciRunnerBootService.reapOrphans({
       olderThan: new Date(Date.now() - 3_600_000),
     });
 
     expect(result.reaped).toBe(1);
+    // A CI runner is metered, never CHARGED as a hosted run (MOTIR-6524 AC2).
+    expect(charge).not.toHaveBeenCalled();
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
     const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },

@@ -5,9 +5,15 @@ import {
   CI_RUNNER_INTENT_COMPLETED,
   CI_RUNNER_INTENT_FAILED,
 } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
-import { ciContainerUsageRepository } from '@/lib/repositories/ciContainerUsageRepository';
+import {
+  ciContainerUsageRepository,
+  type LiveAgentUsage,
+} from '@/lib/repositories/ciContainerUsageRepository';
 import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
+import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
+import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
+import { hostedRunService } from '@/lib/services/hostedRunService';
 import {
   ciRunnerAdmissionService,
   type AdmissionDeferralReason,
@@ -158,6 +164,11 @@ import {
  * grep instead of four string literals.
  */
 const CI_RUNNER_WORKLOAD = 'ci_runner' satisfies FleetWorkloadKind;
+/** The workload a hosted run's container is booted under — the reaper settles it
+ *  too (MOTIR-6524). */
+const HOSTED_AGENT_WORKLOAD = 'hosted_agent' satisfies FleetWorkloadKind;
+/** The failure detail a reaped container's run ends with. */
+const REAPED_DETAIL = 'the container outlived its supervisor and was reaped';
 
 /** How long a container has to reach a running state before it is written off as
  *  a boot that never happened. §6 budgets p95 ≤ 60s end to end; double that is a
@@ -821,6 +832,9 @@ export const ciRunnerBootService = {
    * STATE — the card's wording, and the reason is that the case it exists for is
    * the process that HELD that state having died. The provider is asked what
    * exists; the intent table is consulted only to attribute what came back.
+   *
+   * A hosted-agent machine has no intent: it is attributed from its own live
+   * usage row, and its run is settled, charged and ended here (MOTIR-6524).
    */
   async reapOrphans(
     options: { olderThan?: Date; now?: () => Date } = {},
@@ -843,20 +857,53 @@ export const ciRunnerBootService = {
       if (!live) return false;
       const slot = await withSystemContext((tx) =>
         fleetInFlightSlotRepository.findByRef(
-          'hosted_agent' satisfies FleetWorkloadKind,
+          HOSTED_AGENT_WORKLOAD,
           hostedRunDispatchId(live.dispatchRunId),
           tx,
         ),
       );
       return slot !== null && slot.expiresAt.getTime() > now().getTime();
     };
+    // ⚠️ A HOSTED-AGENT MACHINE IS ATTRIBUTED FROM ITS OWN LIVE ROW (MOTIR-6524).
+    // The resolver below was CI-intent-shaped, so a hosted machine that had lost
+    // its slot was destroyed with no usage row, no charge and no end of its run —
+    // and a run whose LAST container went that way was never charged at all (a
+    // settle defers the charge to the run's last open container). Its checkpoint
+    // row already carries the attribution; the handles it resolves are remembered
+    // here so the loop below can settle them as hosted runs rather than intents.
+    const hostedByHandle = new Map<string, LiveAgentUsage>();
     const usages = await orchestrator.reap(
       olderThan,
       async (handle) => {
         const intent = await withSystemContext((tx) =>
           intents.findByContainerId(handle.provider, handle.id, tx),
         );
-        if (!intent || !intent.projectId) return null;
+        if (!intent) {
+          const hosted = await withSystemContext((tx) =>
+            ciContainerUsageRepository.findLiveAgentUsageByHandle(handle.provider, handle.id, tx),
+          );
+          // A deleted project leaves nothing to attribute to — the same null an
+          // intent without one answers.
+          if (!hosted?.projectId) return null;
+          hostedByHandle.set(handle.id, hosted);
+          return {
+            orgId: hosted.organizationId,
+            workspaceId: hosted.workspaceId,
+            projectId: hosted.projectId,
+            // Overwritten with the row's own value (null for a multi-repo handle)
+            // before the usage is recorded, below.
+            repoFullName: hosted.repoFullName ?? '',
+            workload: HOSTED_AGENT_WORKLOAD,
+            workflowJobId: null,
+            size: {
+              cpuKind: hosted.cpuKind === 'performance' ? 'performance' : 'shared',
+              cpus: hosted.cpus,
+              memoryMb: hosted.memoryMb,
+            },
+            observedStartedAt: hosted.containerStartedAt,
+          };
+        }
+        if (!intent.projectId) return null;
         const workflowJobId = Number(intent.jobId);
         if (!Number.isInteger(workflowJobId)) return null;
         return {
@@ -876,7 +923,18 @@ export const ciRunnerBootService = {
       spare,
     );
 
+    const reapedRuns = new Set<string>();
     for (const usage of usages) {
+      const hosted = hostedByHandle.get(usage.handleId);
+      if (hosted) {
+        await recordContainerUsage({
+          ...usage,
+          repoFullName: hosted.repoFullName,
+          dispatchRunId: hosted.dispatchRunId,
+        });
+        reapedRuns.add(hosted.dispatchRunId);
+        continue;
+      }
       await recordContainerUsage(usage);
       const intent = await withSystemContext((tx) =>
         intents.findByContainerId(usage.provider, usage.handleId, tx),
@@ -887,8 +945,19 @@ export const ciRunnerBootService = {
         status: CI_RUNNER_INTENT_FAILED,
         teardownReason: 'reaped',
         settledAt: now(),
-        failureDetail: 'the container outlived its supervisor and was reaped',
+        failureDetail: REAPED_DETAIL,
       });
+    }
+
+    // Each reaped hosted run takes the terminal transition its supervisor would
+    // have — AFTER every usage row above is written, so a run whose containers
+    // were all reaped in this pass reads as settled and is charged once:
+    // the slot released, the machine time charged (one attempt, as the sweep's;
+    // motir-ai dedupes on the run id), then the one end path (MOTIR-6450).
+    for (const dispatchRunId of reapedRuns) {
+      await fleetCeilingService.release(HOSTED_AGENT_WORKLOAD, hostedRunDispatchId(dispatchRunId));
+      await hostedRunChargeService.chargeMachineTime(dispatchRunId, { now });
+      await hostedRunService.endHostedRun(dispatchRunId, 'lost_supervision', REAPED_DETAIL);
     }
 
     const staleClaims = await sweepStaleClaims(now);
