@@ -282,6 +282,50 @@ describe('wire → transport → adapter → renderer, over real routes', () => 
     expect(rendered).not.toContain('unassigned');
   });
 
+  it('READY LANES (MOTIR-6839) — a real story, its leaves and a bug reach the CLI through all three lanes', async () => {
+    // service → v1 route → the CLI's GENERATED validators → the adapter → the
+    // renderer, with a NON-null container on the wire — the shape an empty or
+    // flat fixture never exercises.
+    const mk = (kind: 'story' | 'subtask' | 'bug', title: string, parentId?: string) =>
+      workItemsService.createWorkItem(
+        { projectId: caller.fixture.projectId, kind, title, ...(parentId ? { parentId } : {}) },
+        caller.ctx,
+      );
+    const story = await mk('story', 'Seam story');
+    const leaf = await mk('subtask', 'Seam leaf', story.id);
+    await mk('subtask', 'Seam leaf two', story.id);
+    const bug = await mk('bug', 'Seam bug');
+    const client = clientFor(caller);
+
+    const leaves = await client.listReady({ projectKey: caller.projectKey });
+    const row = leaves.items.find((r) => r.key === leaf.identifier)!;
+    expect(row.container).toMatchObject({
+      key: story.identifier,
+      readyLeafCount: 2,
+      childCount: 2,
+    });
+    const rendered = renderReadyTable(leaves.items);
+    expect(rendered).toContain(`${story.identifier}`);
+    expect(rendered).toContain('(2 of 2 ready)');
+    expect(leaves.items.map((r) => r.key)).not.toContain(bug.identifier);
+
+    const containers = await client.listReadyContainers({ projectKey: caller.projectKey });
+    expect(containers.items.map((c) => c.key)).toEqual([story.identifier]);
+
+    const bugs = await client.listReady({ projectKey: caller.projectKey, lane: 'bug' });
+    expect(bugs.items.map((r) => r.key)).toEqual([bug.identifier]);
+    expect(bugs.items[0]!.container).toBeNull();
+
+    // The dispatch reads walk the same lanes: `next` takes a leaf, the snapshot
+    // (batch / a scoped run) holds the bug too.
+    expect((await client.nextReady({ projectKey: caller.projectKey })).item?.containerKey).toBe(
+      story.identifier,
+    );
+    const snapshot = await client.listReadyForDispatch({ projectKey: caller.projectKey });
+    expect(snapshot.map((i) => i.key)).toContain(bug.identifier);
+    expect(snapshot.at(-1)?.key).toBe(bug.identifier);
+  });
+
   it('DETAIL — the resource renders, and `--json` carries the SERVER payload', async () => {
     const item = await workItemsService.createWorkItem(
       { projectId: caller.fixture.projectId, kind: 'task', title: 'A detail read' },
