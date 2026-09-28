@@ -456,14 +456,24 @@
         stroke-linejoin: round;
       }
 
-      /* ═══ ADDED BY THIS ASSET — the two lane sections ═══ */
-      .ln-section {
+      /* ═══ ADDED BY THIS ASSET — the two full-height lane panes ═══ */
+      .ln-lanes {
+        display: grid;
+        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+        gap: 24px;
+        height: 560px;
+      }
+      .ln-pane {
         display: flex;
+        min-height: 0;
         flex-direction: column;
         gap: 10px;
       }
-      .ln-section + .ln-section {
-        margin-top: 32px;
+      .ln-scroll {
+        min-height: 0;
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 4px;
       }
       .ln-section-head {
         display: flex;
@@ -493,8 +503,10 @@
       .ln-card {
         position: relative;
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 12px;
+        gap: 4px 12px;
+        min-width: 0;
         min-height: var(--height-control);
         padding: var(--spacing-control-y) var(--spacing-control-x);
         border: 1px solid var(--el-border);
@@ -550,11 +562,14 @@
       .ln-row--hover .ln-title {
         text-decoration: underline;
       }
+      /* in a pane: the meta cluster takes the row's SECOND line, under the key */
       .ln-meta {
         display: flex;
-        flex-shrink: 0;
+        flex-basis: 100%;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 12px;
+        gap: 8px;
+        padding-left: 58px;
       }
       /* WorkItemTypeChip, abridged to its label */
       .ln-type-chip {
@@ -600,11 +615,6 @@
         stroke-linejoin: round;
       }
       /* Avatar (issueCellPrimitives) + name; the dashed unassigned placeholder */
-      .ln-person {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
       .ln-avatar {
         display: inline-flex;
         width: 22px;
@@ -616,10 +626,6 @@
         color: var(--el-text-inverted);
         font-size: 10px;
         font-weight: 600;
-      }
-      .ln-person-name {
-        font-size: 14px;
-        color: var(--el-text-secondary);
       }
       .ln-unassigned {
         display: inline-flex;
@@ -663,8 +669,9 @@
       }
       .ln-tip {
         position: absolute;
-        bottom: calc(100% + 6px);
-        right: 0;
+        top: 50%;
+        right: calc(100% + 6px);
+        transform: translateY(-50%);
         white-space: nowrap;
         border-radius: var(--radius-control);
         padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
@@ -827,6 +834,44 @@
         font-size: 12px;
         color: var(--el-text-muted);
       }
+
+      /* ═══ Below lg — the Segmented switch between the two panes ═══ */
+      .ln-narrow {
+        max-width: 420px;
+      }
+      .ln-seg {
+        display: inline-flex;
+        gap: 2px;
+        margin-bottom: 12px;
+        padding: 2px;
+        border-radius: var(--radius-btn);
+        background: var(--el-surface);
+      }
+      .ln-seg-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .ln-seg-item--on {
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-subtle);
+        color: var(--el-text);
+      }
+      .ln-seg-n {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .ln-pane--solo {
+        height: 560px;
+      }
     </style>
   </head>
   <body>
@@ -900,19 +945,26 @@
     </svg>
     <header class="review-head">
       <h1 class="review-title">Ready — the three lanes</h1>
-      <p class="review-sub">MOTIR-6831 · delta on design/ready/ready.mock.html · seven states</p>
+      <p class="review-sub">MOTIR-6831 · delta on design/ready/ready.mock.html · eight states · revised on review: two full-height panes</p>
     </header>
 
     <div class="board-label">
-      1 · Populated — runnable containers (collapsed), a standalone leaf, and the Bugs list
+      1 · Populated — two full-height panes: Ready to run and Bugs, side by side
     </div>
     <div class="board">
       <p class="board-note">
-        Default state. MOT-9 and MOT-2 are runnable stories, collapsed, each with its “{ready} of
-        {children} ready” hint; MOT-9 is shown HOVERED, revealing the parent-run copy button and its
-        tooltip. MOT-7 is a task directly under an epic: a standalone row, no chevron, its 16px
-        chevron slot reserved so every icon aligns. The epic itself is no row. Bugs below: MOT-12
-        childless, MOT-13 a bug with a ready subtask (collapsed).
+        REVISED on review (“we need full page height for both”): the two lists sit SIDE BY SIDE
+        below the header, Ready to run 3fr and Bugs 2fr, and each pane fills the page height with
+        its OWN scroll — a long main list no longer pushes Bugs off the screen. In a pane a row
+        takes TWO lines: the toggle, kind icon, key, title and copy button on the first, and the
+        meta cluster (hint · type · priority · assignee) on the second, aligned under the key — a
+        half-width pane cannot hold the one-line card without truncating every title to a word. The
+        assignee is the Avatar alone (the name is its tooltip and accessible label). Default state.
+        MOT-9 and MOT-2 are runnable stories, collapsed, each with its “{ready} of {children} ready”
+        hint; MOT-9 is shown HOVERED, revealing the parent-run copy button and its tooltip. MOT-7 is
+        a task directly under an epic: a standalone row, no chevron, its 16px chevron slot reserved
+        so every icon aligns. The epic itself is no row. Bugs, right: MOT-12 childless, MOT-13 a bug
+        with a ready subtask (collapsed).
       </p>
       <div class="ln-canvas">
         <header class="ln-head">
@@ -929,176 +981,187 @@
             >What is this?
           </button>
         </header>
-        <section class="ln-section" aria-label="Ready to run">
-          <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
-          <div class="ln-list" role="list" aria-label="Ready work items">
-            <div class="ln-row ln-row--hover" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <button
-                  type="button"
-                  class="ln-chev"
-                  aria-expanded="false"
-                  aria-label="Expand MOT-9"
-                >
-                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
-                    <use href="#i-chev" />
-                  </svg></button
-                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-story" /></svg
-                ><span class="ln-key">MOT-9</span
-                ><span class="ln-title">Run the next story from the terminal</span>
-                <div class="ln-meta">
-                  <span class="ln-hint">1 of 2 ready</span
-                  ><span class="ln-pri ln-pri--highest"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >Highest</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">A</span><span class="ln-person-name">Ana</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button
+        <div class="ln-lanes">
+          <section class="ln-pane" aria-label="Ready to run">
+            <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
+            <div class="ln-scroll">
+              <div class="ln-list" role="list" aria-label="Ready work items">
+                <div class="ln-row ln-row--hover" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <button
                       type="button"
-                      class="ln-copy ln-copy--shown"
-                      aria-label="Copy parent-run command for MOT-9"
+                      class="ln-chev"
+                      aria-expanded="false"
+                      aria-label="Expand MOT-9"
                     >
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
+                      <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chev" />
                       </svg></button
-                    ><span class="ln-tip" role="tooltip"
-                      >Copy <code class="ln-tip-code">motir run MOT-9</code></span
-                    ></span
-                  >
+                    ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-story" /></svg
+                    ><span class="ln-key">MOT-9</span
+                    ><span class="ln-title">Run the next story from the terminal</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy ln-copy--shown"
+                        aria-label="Copy parent-run command for MOT-9"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                      ><span class="ln-tip" role="tooltip"
+                        >Copy <code class="ln-tip-code">motir run MOT-9</code></span
+                      ></span
+                    >
+                    <div class="ln-meta">
+                      <span class="ln-hint">1 of 2 ready</span
+                      ><span class="ln-pri ln-pri--highest"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >Highest</span
+                      ><span class="ln-avatar" title="Ana" aria-label="Assigned to Ana">A</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <button
-                  type="button"
-                  class="ln-chev"
-                  aria-expanded="false"
-                  aria-label="Expand MOT-2"
-                >
-                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
-                    <use href="#i-chev" />
-                  </svg></button
-                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-story" /></svg
-                ><span class="ln-key">MOT-2</span
-                ><span class="ln-title">Group the ready list by story</span>
-                <div class="ln-meta">
-                  <span class="ln-hint">3 of 3 ready</span
-                  ><span class="ln-pri ln-pri--high"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >High</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <button
                       type="button"
-                      class="ln-copy"
-                      aria-label="Copy parent-run command for MOT-2"
+                      class="ln-chev"
+                      aria-expanded="false"
+                      aria-label="Expand MOT-2"
                     >
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
+                      <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chev" />
                       </svg></button
-                  ></span>
+                    ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-story" /></svg
+                    ><span class="ln-key">MOT-2</span
+                    ><span class="ln-title">Group the ready list by story</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy parent-run command for MOT-2"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-hint">3 of 3 ready</span
+                      ><span class="ln-pri ln-pri--high"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >High</span
+                      ><span class="ln-avatar" title="Yue" aria-label="Assigned to Yue">Y</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--task" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-task" /></svg
+                    ><span class="ln-key">MOT-7</span
+                    ><span class="ln-title">Reconcile the CLI changeset</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-7"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Chore</span
+                      ><span class="ln-pri ln-pri--low"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-down" /></svg
+                        >Low</span
+                      ><span class="ln-unassigned" aria-label="Unassigned"></span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--task" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-task" /></svg
-                ><span class="ln-key">MOT-7</span
-                ><span class="ln-title">Reconcile the CLI changeset</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Chore</span
-                  ><span class="ln-pri ln-pri--low"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-down" /></svg
-                    >Low</span
-                  ><span class="ln-unassigned" aria-label="Unassigned"></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-7">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
-                </div>
-              </div>
+          </section>
+          <section class="ln-pane" aria-label="Bugs">
+            <div class="ln-section-head">
+              <h3 class="ln-h2">Bugs</h3>
+              <span class="ln-count">2 bugs</span>
             </div>
-          </div>
-        </section>
-        <section class="ln-section" aria-label="Bugs">
-          <div class="ln-section-head">
-            <h3 class="ln-h2">Bugs</h3>
-            <span class="ln-count">2 bugs</span>
-          </div>
-          <div class="ln-list" role="list" aria-label="Ready bugs">
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-bug" /></svg
-                ><span class="ln-key">MOT-12</span
-                ><span class="ln-title">Copy toast clips long keys</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Code</span
-                  ><span class="ln-pri ln-pri--high"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >High</span
-                  ><span class="ln-unassigned" aria-label="Unassigned"></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-12">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
+            <div class="ln-scroll">
+              <div class="ln-list" role="list" aria-label="Ready bugs">
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-bug" /></svg
+                    ><span class="ln-key">MOT-12</span
+                    ><span class="ln-title">Copy toast clips long keys</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-12"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Code</span
+                      ><span class="ln-pri ln-pri--high"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >High</span
+                      ><span class="ln-unassigned" aria-label="Unassigned"></span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <button
-                  type="button"
-                  class="ln-chev"
-                  aria-expanded="false"
-                  aria-label="Expand MOT-13"
-                >
-                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
-                    <use href="#i-chev" />
-                  </svg></button
-                ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-bug" /></svg
-                ><span class="ln-key">MOT-13</span
-                ><span class="ln-title">Load-more drops the last row</span>
-                <div class="ln-meta">
-                  <span class="ln-hint">1 of 1 ready</span
-                  ><span class="ln-pri ln-pri--medium"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-minus" /></svg
-                    >Medium</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">A</span><span class="ln-person-name">Ana</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <button
                       type="button"
-                      class="ln-copy"
-                      aria-label="Copy parent-run command for MOT-13"
+                      class="ln-chev"
+                      aria-expanded="false"
+                      aria-label="Expand MOT-13"
                     >
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
+                      <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chev" />
                       </svg></button
-                  ></span>
+                    ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-bug" /></svg
+                    ><span class="ln-key">MOT-13</span
+                    ><span class="ln-title">Load-more drops the last row</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy parent-run command for MOT-13"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-hint">1 of 1 ready</span
+                      ><span class="ln-pri ln-pri--medium"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-minus" /></svg
+                        >Medium</span
+                      ><span class="ln-avatar" title="Ana" aria-label="Assigned to Ana">A</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
     </div>
     <div class="board-label">2 · A container expanded</div>
@@ -1124,243 +1187,268 @@
             >What is this?
           </button>
         </header>
-        <section class="ln-section" aria-label="Ready to run">
-          <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
-          <div class="ln-list" role="list" aria-label="Ready work items">
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <button
-                  type="button"
-                  class="ln-chev"
-                  aria-expanded="false"
-                  aria-label="Expand MOT-9"
-                >
-                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
-                    <use href="#i-chev" />
-                  </svg></button
-                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-story" /></svg
-                ><span class="ln-key">MOT-9</span
-                ><span class="ln-title">Run the next story from the terminal</span>
-                <div class="ln-meta">
-                  <span class="ln-hint">1 of 2 ready</span
-                  ><span class="ln-pri ln-pri--highest"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >Highest</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">A</span><span class="ln-person-name">Ana</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button
+        <div class="ln-lanes">
+          <section class="ln-pane" aria-label="Ready to run">
+            <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
+            <div class="ln-scroll">
+              <div class="ln-list" role="list" aria-label="Ready work items">
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <button
                       type="button"
-                      class="ln-copy"
-                      aria-label="Copy parent-run command for MOT-9"
+                      class="ln-chev"
+                      aria-expanded="false"
+                      aria-label="Expand MOT-9"
                     >
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
+                      <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chev" />
                       </svg></button
-                  ></span>
+                    ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-story" /></svg
+                    ><span class="ln-key">MOT-9</span
+                    ><span class="ln-title">Run the next story from the terminal</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy parent-run command for MOT-9"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-hint">1 of 2 ready</span
+                      ><span class="ln-pri ln-pri--highest"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >Highest</span
+                      ><span class="ln-avatar" title="Ana" aria-label="Assigned to Ana">A</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <button
-                  type="button"
-                  class="ln-chev"
-                  aria-expanded="true"
-                  aria-label="Collapse MOT-2"
-                >
-                  <svg class="ln-chev-ic ln-chev-ic--open" viewBox="0 0 24 24" aria-hidden="true">
-                    <use href="#i-chev" />
-                  </svg></button
-                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-story" /></svg
-                ><span class="ln-key">MOT-2</span
-                ><span class="ln-title">Group the ready list by story</span>
-                <div class="ln-meta">
-                  <span class="ln-hint">3 of 3 ready</span
-                  ><span class="ln-pri ln-pri--high"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >High</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <button
                       type="button"
-                      class="ln-copy"
-                      aria-label="Copy parent-run command for MOT-2"
+                      class="ln-chev"
+                      aria-expanded="true"
+                      aria-label="Collapse MOT-2"
                     >
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
+                      <svg
+                        class="ln-chev-ic ln-chev-ic--open"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <use href="#i-chev" />
                       </svg></button
-                  ></span>
+                    ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-story" /></svg
+                    ><span class="ln-key">MOT-2</span
+                    ><span class="ln-title">Group the ready list by story</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy parent-run command for MOT-2"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-hint">3 of 3 ready</span
+                      ><span class="ln-pri ln-pri--high"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >High</span
+                      ><span class="ln-avatar" title="Yue" aria-label="Assigned to Yue">Y</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="ln-row ln-row--child" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-subtask" /></svg
+                    ><span class="ln-key">MOT-4</span
+                    ><span class="ln-title">Partition the walk into lanes</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-4"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Code</span
+                      ><span class="ln-pri ln-pri--high"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >High</span
+                      ><span class="ln-avatar" title="Yue" aria-label="Assigned to Yue">Y</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="ln-row ln-row--child" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-subtask" /></svg
+                    ><span class="ln-key">MOT-5</span><span class="ln-title">Lane cursor codec</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-5"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Code</span
+                      ><span class="ln-pri ln-pri--medium"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-minus" /></svg
+                        >Medium</span
+                      ><span class="ln-avatar" title="Yue" aria-label="Assigned to Yue">Y</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="ln-row ln-row--child" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-subtask" /></svg
+                    ><span class="ln-key">MOT-6</span
+                    ><span class="ln-title">Container shapes read</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-6"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Code</span
+                      ><span class="ln-pri ln-pri--medium"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-minus" /></svg
+                        >Medium</span
+                      ><span class="ln-unassigned" aria-label="Unassigned"></span>
+                    </div>
+                  </div>
+                </div>
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--task" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-task" /></svg
+                    ><span class="ln-key">MOT-7</span
+                    ><span class="ln-title">Reconcile the CLI changeset</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-7"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Chore</span
+                      ><span class="ln-pri ln-pri--low"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-down" /></svg
+                        >Low</span
+                      ><span class="ln-unassigned" aria-label="Unassigned"></span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="ln-row ln-row--child" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-subtask" /></svg
-                ><span class="ln-key">MOT-4</span
-                ><span class="ln-title">Partition the walk into lanes</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Code</span
-                  ><span class="ln-pri ln-pri--high"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >High</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-4">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
-                </div>
-              </div>
+          </section>
+          <section class="ln-pane" aria-label="Bugs">
+            <div class="ln-section-head">
+              <h3 class="ln-h2">Bugs</h3>
+              <span class="ln-count">2 bugs</span>
             </div>
-            <div class="ln-row ln-row--child" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-subtask" /></svg
-                ><span class="ln-key">MOT-5</span><span class="ln-title">Lane cursor codec</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Code</span
-                  ><span class="ln-pri ln-pri--medium"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-minus" /></svg
-                    >Medium</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-5">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
+            <div class="ln-scroll">
+              <div class="ln-list" role="list" aria-label="Ready bugs">
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-bug" /></svg
+                    ><span class="ln-key">MOT-12</span
+                    ><span class="ln-title">Copy toast clips long keys</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-12"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Code</span
+                      ><span class="ln-pri ln-pri--high"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >High</span
+                      ><span class="ln-unassigned" aria-label="Unassigned"></span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div class="ln-row ln-row--child" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-subtask" /></svg
-                ><span class="ln-key">MOT-6</span
-                ><span class="ln-title">Container shapes read</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Code</span
-                  ><span class="ln-pri ln-pri--medium"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-minus" /></svg
-                    >Medium</span
-                  ><span class="ln-unassigned" aria-label="Unassigned"></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-6">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
-                </div>
-              </div>
-            </div>
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--task" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-task" /></svg
-                ><span class="ln-key">MOT-7</span
-                ><span class="ln-title">Reconcile the CLI changeset</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Chore</span
-                  ><span class="ln-pri ln-pri--low"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-down" /></svg
-                    >Low</span
-                  ><span class="ln-unassigned" aria-label="Unassigned"></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-7">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-        <section class="ln-section" aria-label="Bugs">
-          <div class="ln-section-head">
-            <h3 class="ln-h2">Bugs</h3>
-            <span class="ln-count">2 bugs</span>
-          </div>
-          <div class="ln-list" role="list" aria-label="Ready bugs">
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-bug" /></svg
-                ><span class="ln-key">MOT-12</span
-                ><span class="ln-title">Copy toast clips long keys</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Code</span
-                  ><span class="ln-pri ln-pri--high"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >High</span
-                  ><span class="ln-unassigned" aria-label="Unassigned"></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-12">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
-                </div>
-              </div>
-            </div>
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <button
-                  type="button"
-                  class="ln-chev"
-                  aria-expanded="false"
-                  aria-label="Expand MOT-13"
-                >
-                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
-                    <use href="#i-chev" />
-                  </svg></button
-                ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-bug" /></svg
-                ><span class="ln-key">MOT-13</span
-                ><span class="ln-title">Load-more drops the last row</span>
-                <div class="ln-meta">
-                  <span class="ln-hint">1 of 1 ready</span
-                  ><span class="ln-pri ln-pri--medium"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-minus" /></svg
-                    >Medium</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">A</span><span class="ln-person-name">Ana</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <button
                       type="button"
-                      class="ln-copy"
-                      aria-label="Copy parent-run command for MOT-13"
+                      class="ln-chev"
+                      aria-expanded="false"
+                      aria-label="Expand MOT-13"
                     >
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
+                      <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chev" />
                       </svg></button
-                  ></span>
+                    ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-bug" /></svg
+                    ><span class="ln-key">MOT-13</span
+                    ><span class="ln-title">Load-more drops the last row</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy parent-run command for MOT-13"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-hint">1 of 1 ready</span
+                      ><span class="ln-pri ln-pri--medium"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-minus" /></svg
+                        >Medium</span
+                      ><span class="ln-avatar" title="Ana" aria-label="Assigned to Ana">A</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
     </div>
     <div class="board-label">3 · Main list empty, bugs present</div>
@@ -1385,108 +1473,122 @@
             >What is this?
           </button>
         </header>
-        <section class="ln-section" aria-label="Ready to run">
-          <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
-          <p class="ln-empty-line">Nothing ready to run.</p>
-        </section>
-        <section class="ln-section" aria-label="Bugs">
-          <div class="ln-section-head">
-            <h3 class="ln-h2">Bugs</h3>
-            <span class="ln-count">2 bugs</span>
-          </div>
-          <div class="ln-list" role="list" aria-label="Ready bugs">
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-bug" /></svg
-                ><span class="ln-key">MOT-12</span
-                ><span class="ln-title">Copy toast clips long keys</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Code</span
-                  ><span class="ln-pri ln-pri--high"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >High</span
-                  ><span class="ln-unassigned" aria-label="Unassigned"></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-12">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
-                </div>
-              </div>
+        <div class="ln-lanes">
+          <section class="ln-pane" aria-label="Ready to run">
+            <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
+            <div class="ln-scroll"><p class="ln-empty-line">Nothing ready to run.</p></div>
+          </section>
+          <section class="ln-pane" aria-label="Bugs">
+            <div class="ln-section-head">
+              <h3 class="ln-h2">Bugs</h3>
+              <span class="ln-count">2 bugs</span>
             </div>
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <button
-                  type="button"
-                  class="ln-chev"
-                  aria-expanded="true"
-                  aria-label="Collapse MOT-13"
-                >
-                  <svg class="ln-chev-ic ln-chev-ic--open" viewBox="0 0 24 24" aria-hidden="true">
-                    <use href="#i-chev" />
-                  </svg></button
-                ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-bug" /></svg
-                ><span class="ln-key">MOT-13</span
-                ><span class="ln-title">Load-more drops the last row</span>
-                <div class="ln-meta">
-                  <span class="ln-hint">1 of 1 ready</span
-                  ><span class="ln-pri ln-pri--medium"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-minus" /></svg
-                    >Medium</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">A</span><span class="ln-person-name">Ana</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button
+            <div class="ln-scroll">
+              <div class="ln-list" role="list" aria-label="Ready bugs">
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-bug" /></svg
+                    ><span class="ln-key">MOT-12</span
+                    ><span class="ln-title">Copy toast clips long keys</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-12"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Code</span
+                      ><span class="ln-pri ln-pri--high"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >High</span
+                      ><span class="ln-unassigned" aria-label="Unassigned"></span>
+                    </div>
+                  </div>
+                </div>
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <button
                       type="button"
-                      class="ln-copy"
-                      aria-label="Copy parent-run command for MOT-13"
+                      class="ln-chev"
+                      aria-expanded="true"
+                      aria-label="Collapse MOT-13"
                     >
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
+                      <svg
+                        class="ln-chev-ic ln-chev-ic--open"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <use href="#i-chev" />
                       </svg></button
-                  ></span>
+                    ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-bug" /></svg
+                    ><span class="ln-key">MOT-13</span
+                    ><span class="ln-title">Load-more drops the last row</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy parent-run command for MOT-13"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-hint">1 of 1 ready</span
+                      ><span class="ln-pri ln-pri--medium"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-minus" /></svg
+                        >Medium</span
+                      ><span class="ln-avatar" title="Ana" aria-label="Assigned to Ana">A</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="ln-row ln-row--child" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-subtask" /></svg
+                    ><span class="ln-key">MOT-14</span
+                    ><span class="ln-title">Reproduce at the page boundary</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-14"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Test</span
+                      ><span class="ln-pri ln-pri--medium"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-minus" /></svg
+                        >Medium</span
+                      ><span class="ln-avatar" title="Ana" aria-label="Assigned to Ana">A</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="ln-row ln-row--child" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-subtask" /></svg
-                ><span class="ln-key">MOT-14</span
-                ><span class="ln-title">Reproduce at the page boundary</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Test</span
-                  ><span class="ln-pri ln-pri--medium"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-minus" /></svg
-                    >Medium</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">A</span><span class="ln-person-name">Ana</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-14">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
     </div>
     <div class="board-label">4 · Bugs empty</div>
     <div class="board">
       <p class="board-note">
-        The Bugs section never disappears: with no ready bug it keeps its heading, reads “0 bugs”,
-        and shows one line.
+        The Bugs pane never disappears and keeps its full height: with no ready bug it keeps its
+        heading, reads “0 bugs”, and shows one line.
       </p>
       <div class="ln-canvas">
         <header class="ln-head">
@@ -1503,113 +1605,119 @@
             >What is this?
           </button>
         </header>
-        <section class="ln-section" aria-label="Ready to run">
-          <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
-          <div class="ln-list" role="list" aria-label="Ready work items">
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <button
-                  type="button"
-                  class="ln-chev"
-                  aria-expanded="false"
-                  aria-label="Expand MOT-9"
-                >
-                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
-                    <use href="#i-chev" />
-                  </svg></button
-                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-story" /></svg
-                ><span class="ln-key">MOT-9</span
-                ><span class="ln-title">Run the next story from the terminal</span>
-                <div class="ln-meta">
-                  <span class="ln-hint">1 of 2 ready</span
-                  ><span class="ln-pri ln-pri--highest"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >Highest</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">A</span><span class="ln-person-name">Ana</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button
+        <div class="ln-lanes">
+          <section class="ln-pane" aria-label="Ready to run">
+            <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
+            <div class="ln-scroll">
+              <div class="ln-list" role="list" aria-label="Ready work items">
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <button
                       type="button"
-                      class="ln-copy"
-                      aria-label="Copy parent-run command for MOT-9"
+                      class="ln-chev"
+                      aria-expanded="false"
+                      aria-label="Expand MOT-9"
                     >
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
+                      <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chev" />
                       </svg></button
-                  ></span>
+                    ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-story" /></svg
+                    ><span class="ln-key">MOT-9</span
+                    ><span class="ln-title">Run the next story from the terminal</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy parent-run command for MOT-9"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-hint">1 of 2 ready</span
+                      ><span class="ln-pri ln-pri--highest"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >Highest</span
+                      ><span class="ln-avatar" title="Ana" aria-label="Assigned to Ana">A</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <button
-                  type="button"
-                  class="ln-chev"
-                  aria-expanded="false"
-                  aria-label="Expand MOT-2"
-                >
-                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
-                    <use href="#i-chev" />
-                  </svg></button
-                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-story" /></svg
-                ><span class="ln-key">MOT-2</span
-                ><span class="ln-title">Group the ready list by story</span>
-                <div class="ln-meta">
-                  <span class="ln-hint">3 of 3 ready</span
-                  ><span class="ln-pri ln-pri--high"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >High</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <button
                       type="button"
-                      class="ln-copy"
-                      aria-label="Copy parent-run command for MOT-2"
+                      class="ln-chev"
+                      aria-expanded="false"
+                      aria-label="Expand MOT-2"
                     >
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
+                      <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chev" />
                       </svg></button
-                  ></span>
+                    ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-story" /></svg
+                    ><span class="ln-key">MOT-2</span
+                    ><span class="ln-title">Group the ready list by story</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy parent-run command for MOT-2"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-hint">3 of 3 ready</span
+                      ><span class="ln-pri ln-pri--high"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >High</span
+                      ><span class="ln-avatar" title="Yue" aria-label="Assigned to Yue">Y</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--task" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-task" /></svg
+                    ><span class="ln-key">MOT-7</span
+                    ><span class="ln-title">Reconcile the CLI changeset</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-7"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Chore</span
+                      ><span class="ln-pri ln-pri--low"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-down" /></svg
+                        >Low</span
+                      ><span class="ln-unassigned" aria-label="Unassigned"></span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--task" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-task" /></svg
-                ><span class="ln-key">MOT-7</span
-                ><span class="ln-title">Reconcile the CLI changeset</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Chore</span
-                  ><span class="ln-pri ln-pri--low"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-down" /></svg
-                    >Low</span
-                  ><span class="ln-unassigned" aria-label="Unassigned"></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-7">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
-                </div>
-              </div>
+          </section>
+          <section class="ln-pane" aria-label="Bugs">
+            <div class="ln-section-head">
+              <h3 class="ln-h2">Bugs</h3>
+              <span class="ln-count">0 bugs</span>
             </div>
-          </div>
-        </section>
-        <section class="ln-section" aria-label="Bugs">
-          <div class="ln-section-head">
-            <h3 class="ln-h2">Bugs</h3>
-            <span class="ln-count">0 bugs</span>
-          </div>
-          <p class="ln-empty-line">No ready bugs.</p>
-        </section>
+            <div class="ln-scroll"><p class="ln-empty-line">No ready bugs.</p></div>
+          </section>
+        </div>
       </div>
     </div>
     <div class="board-label">5 · All empty — the existing EmptyState</div>
@@ -1652,7 +1760,7 @@
     <div class="board">
       <p class="board-note">
         The in-page PageSkeleton frame (behind a Suspense below the page gate, never a loading.tsx):
-        the REAL header and the two REAL section headings, and pulsing card-height blocks
+        the REAL header and the two panes with their REAL headings, and pulsing card-height blocks
         (`--el-muted`, `--radius-card`) for rows in both sections. The count chips arrive with the
         data.
       </p>
@@ -1665,52 +1773,72 @@
             </div>
           </header>
           <div class="ln-pulse" aria-hidden="true">
-            <section class="ln-section">
-              <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
-              <div class="ln-skel-list">
-                <div class="ln-skel-row">
-                  <span class="ln-skel-block ln-skel-block--icon"></span
-                  ><span class="ln-skel-block ln-skel-block--key"></span
-                  ><span class="ln-skel-block ln-skel-block--title"></span
-                  ><span class="ln-skel-block ln-skel-block--pill"></span>
+            <div class="ln-lanes">
+              <section class="ln-pane">
+                <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
+                <div class="ln-skel-list">
+                  <div class="ln-skel-row">
+                    <span class="ln-skel-block ln-skel-block--icon"></span
+                    ><span class="ln-skel-block ln-skel-block--key"></span
+                    ><span class="ln-skel-block ln-skel-block--title"></span
+                    ><span class="ln-skel-block ln-skel-block--pill"></span>
+                  </div>
+                  <div class="ln-skel-row">
+                    <span class="ln-skel-block ln-skel-block--icon"></span
+                    ><span class="ln-skel-block ln-skel-block--key"></span
+                    ><span class="ln-skel-block ln-skel-block--title"></span
+                    ><span class="ln-skel-block ln-skel-block--pill"></span>
+                  </div>
+                  <div class="ln-skel-row">
+                    <span class="ln-skel-block ln-skel-block--icon"></span
+                    ><span class="ln-skel-block ln-skel-block--key"></span
+                    ><span class="ln-skel-block ln-skel-block--title"></span
+                    ><span class="ln-skel-block ln-skel-block--pill"></span>
+                  </div>
+                  <div class="ln-skel-row">
+                    <span class="ln-skel-block ln-skel-block--icon"></span
+                    ><span class="ln-skel-block ln-skel-block--key"></span
+                    ><span class="ln-skel-block ln-skel-block--title"></span
+                    ><span class="ln-skel-block ln-skel-block--pill"></span>
+                  </div>
+                  <div class="ln-skel-row">
+                    <span class="ln-skel-block ln-skel-block--icon"></span
+                    ><span class="ln-skel-block ln-skel-block--key"></span
+                    ><span class="ln-skel-block ln-skel-block--title"></span
+                    ><span class="ln-skel-block ln-skel-block--pill"></span>
+                  </div>
+                  <div class="ln-skel-row">
+                    <span class="ln-skel-block ln-skel-block--icon"></span
+                    ><span class="ln-skel-block ln-skel-block--key"></span
+                    ><span class="ln-skel-block ln-skel-block--title"></span
+                    ><span class="ln-skel-block ln-skel-block--pill"></span>
+                  </div>
                 </div>
-                <div class="ln-skel-row">
-                  <span class="ln-skel-block ln-skel-block--icon"></span
-                  ><span class="ln-skel-block ln-skel-block--key"></span
-                  ><span class="ln-skel-block ln-skel-block--title"></span
-                  ><span class="ln-skel-block ln-skel-block--pill"></span>
+              </section>
+              <section class="ln-pane">
+                <div class="ln-section-head"><h3 class="ln-h2">Bugs</h3></div>
+                <div class="ln-skel-list">
+                  <div class="ln-skel-row">
+                    <span class="ln-skel-block ln-skel-block--icon"></span
+                    ><span class="ln-skel-block ln-skel-block--key"></span
+                    ><span class="ln-skel-block ln-skel-block--title"></span
+                    ><span class="ln-skel-block ln-skel-block--pill"></span>
+                  </div>
+                  <div class="ln-skel-row">
+                    <span class="ln-skel-block ln-skel-block--icon"></span
+                    ><span class="ln-skel-block ln-skel-block--key"></span
+                    ><span class="ln-skel-block ln-skel-block--title"></span
+                    ><span class="ln-skel-block ln-skel-block--pill"></span>
+                  </div>
+                  <div class="ln-skel-row">
+                    <span class="ln-skel-block ln-skel-block--icon"></span
+                    ><span class="ln-skel-block ln-skel-block--key"></span
+                    ><span class="ln-skel-block ln-skel-block--title"></span
+                    ><span class="ln-skel-block ln-skel-block--pill"></span>
+                  </div>
                 </div>
-                <div class="ln-skel-row">
-                  <span class="ln-skel-block ln-skel-block--icon"></span
-                  ><span class="ln-skel-block ln-skel-block--key"></span
-                  ><span class="ln-skel-block ln-skel-block--title"></span
-                  ><span class="ln-skel-block ln-skel-block--pill"></span>
-                </div>
-                <div class="ln-skel-row">
-                  <span class="ln-skel-block ln-skel-block--icon"></span
-                  ><span class="ln-skel-block ln-skel-block--key"></span
-                  ><span class="ln-skel-block ln-skel-block--title"></span
-                  ><span class="ln-skel-block ln-skel-block--pill"></span>
-                </div>
-              </div>
-            </section>
-            <section class="ln-section">
-              <div class="ln-section-head"><h3 class="ln-h2">Bugs</h3></div>
-              <div class="ln-skel-list">
-                <div class="ln-skel-row">
-                  <span class="ln-skel-block ln-skel-block--icon"></span
-                  ><span class="ln-skel-block ln-skel-block--key"></span
-                  ><span class="ln-skel-block ln-skel-block--title"></span
-                  ><span class="ln-skel-block ln-skel-block--pill"></span>
-                </div>
-                <div class="ln-skel-row">
-                  <span class="ln-skel-block ln-skel-block--icon"></span
-                  ><span class="ln-skel-block ln-skel-block--key"></span
-                  ><span class="ln-skel-block ln-skel-block--title"></span
-                  ><span class="ln-skel-block ln-skel-block--pill"></span>
-                </div>
-              </div>
-            </section>
+              </section>
+            </div>
           </div>
         </div>
       </div>
@@ -1720,11 +1848,11 @@
     </div>
     <div class="board">
       <p class="board-note">
-        The virtualized, cursor-streamed list (useRowWindow + a bottom sentinel), as today. The lane
-        cursor may end a page INSIDE a group; the next page’s first rows are that group’s remaining
-        members, and they MERGE into the rendered group rather than opening a second MOT-21 header.
-        A container expanded before the load stays expanded after it. The dashed rule is
-        review-only.
+        Each pane is its own virtualized, cursor-streamed list (useRowWindow + a bottom sentinel
+        INSIDE the pane’s scroll container). The lane cursor may end a page INSIDE a group; the next
+        page’s first rows are that group’s remaining members, and they MERGE into the rendered group
+        rather than opening a second MOT-21 header. A container expanded before the load stays
+        expanded after it. The dashed rule is review-only.
       </p>
       <div class="ln-canvas">
         <header class="ln-head">
@@ -1741,204 +1869,442 @@
             >What is this?
           </button>
         </header>
-        <section class="ln-section" aria-label="Ready to run">
-          <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
-          <div class="ln-list" role="list" aria-label="Ready work items">
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <button
-                  type="button"
-                  class="ln-chev"
-                  aria-expanded="true"
-                  aria-label="Collapse MOT-21"
-                >
-                  <svg class="ln-chev-ic ln-chev-ic--open" viewBox="0 0 24 24" aria-hidden="true">
-                    <use href="#i-chev" />
-                  </svg></button
-                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-story" /></svg
-                ><span class="ln-key">MOT-21</span><span class="ln-title">Import Jira epics</span>
-                <div class="ln-meta">
-                  <span class="ln-hint">5 of 6 ready</span
-                  ><span class="ln-pri ln-pri--highest"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >Highest</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button
+        <div class="ln-lanes">
+          <section class="ln-pane" aria-label="Ready to run">
+            <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
+            <div class="ln-scroll">
+              <div class="ln-list" role="list" aria-label="Ready work items">
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <button
                       type="button"
-                      class="ln-copy"
-                      aria-label="Copy parent-run command for MOT-21"
+                      class="ln-chev"
+                      aria-expanded="true"
+                      aria-label="Collapse MOT-21"
                     >
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
+                      <svg
+                        class="ln-chev-ic ln-chev-ic--open"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <use href="#i-chev" />
                       </svg></button
-                  ></span>
+                    ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-story" /></svg
+                    ><span class="ln-key">MOT-21</span
+                    ><span class="ln-title">Import Jira epics</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy parent-run command for MOT-21"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-hint">5 of 6 ready</span
+                      ><span class="ln-pri ln-pri--highest"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >Highest</span
+                      ><span class="ln-avatar" title="Yue" aria-label="Assigned to Yue">Y</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div class="ln-row ln-row--child" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-subtask" /></svg
-                ><span class="ln-key">MOT-22</span><span class="ln-title">Map issue types</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Code</span
-                  ><span class="ln-pri ln-pri--highest"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >Highest</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-22">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
+                <div class="ln-row ln-row--child" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-subtask" /></svg
+                    ><span class="ln-key">MOT-22</span><span class="ln-title">Map issue types</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-22"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Code</span
+                      ><span class="ln-pri ln-pri--highest"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >Highest</span
+                      ><span class="ln-avatar" title="Yue" aria-label="Assigned to Yue">Y</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div class="ln-row ln-row--child" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-subtask" /></svg
-                ><span class="ln-key">MOT-23</span><span class="ln-title">Map statuses</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Code</span
-                  ><span class="ln-pri ln-pri--highest"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >Highest</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-23">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
+                <div class="ln-row ln-row--child" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-subtask" /></svg
+                    ><span class="ln-key">MOT-23</span><span class="ln-title">Map statuses</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-23"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Code</span
+                      ><span class="ln-pri ln-pri--highest"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >Highest</span
+                      ><span class="ln-avatar" title="Yue" aria-label="Assigned to Yue">Y</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div class="ln-row ln-row--child" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-subtask" /></svg
-                ><span class="ln-key">MOT-24</span><span class="ln-title">Map custom fields</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Code</span
-                  ><span class="ln-pri ln-pri--highest"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >Highest</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-24">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
+                <div class="ln-row ln-row--child" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-subtask" /></svg
+                    ><span class="ln-key">MOT-24</span
+                    ><span class="ln-title">Map custom fields</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-24"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Code</span
+                      ><span class="ln-pri ln-pri--highest"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >Highest</span
+                      ><span class="ln-avatar" title="Yue" aria-label="Assigned to Yue">Y</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div class="ln-page-break" role="presentation">
-              <span class="ln-note"
-                >review note — page 1 of the lane cursor ends here; page 2 starts inside MOT-21’s
-                group</span
-              >
-            </div>
-            <div class="ln-row ln-row--child" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-subtask" /></svg
-                ><span class="ln-key">MOT-25</span
-                ><span class="ln-title">Resume after a rate limit</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Code</span
-                  ><span class="ln-pri ln-pri--high"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >High</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-25">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
+                <div class="ln-page-break" role="presentation">
+                  <span class="ln-note"
+                    >review note — page 1 of the lane cursor ends here; page 2 starts inside
+                    MOT-21’s group</span
+                  >
                 </div>
-              </div>
-            </div>
-            <div class="ln-row ln-row--child" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <span class="ln-chev-slot" aria-hidden="true"></span
-                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-subtask" /></svg
-                ><span class="ln-key">MOT-26</span><span class="ln-title">Report skipped rows</span>
-                <div class="ln-meta">
-                  <span class="ln-type-chip">Code</span
-                  ><span class="ln-pri ln-pri--high"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >High</span
-                  ><span class="ln-person"
-                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
-                  ><span class="ln-copy-wrap"
-                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-26">
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
-                      </svg></button
-                  ></span>
+                <div class="ln-row ln-row--child" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-subtask" /></svg
+                    ><span class="ln-key">MOT-25</span
+                    ><span class="ln-title">Resume after a rate limit</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-25"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Code</span
+                      ><span class="ln-pri ln-pri--high"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >High</span
+                      ><span class="ln-avatar" title="Yue" aria-label="Assigned to Yue">Y</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div class="ln-row" role="listitem">
-              <div class="ln-card" data-surface="card">
-                <button
-                  type="button"
-                  class="ln-chev"
-                  aria-expanded="false"
-                  aria-label="Expand MOT-30"
-                >
-                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
-                    <use href="#i-chev" />
-                  </svg></button
-                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
-                  <use href="#i-story" /></svg
-                ><span class="ln-key">MOT-30</span
-                ><span class="ln-title">Board swimlanes by story</span>
-                <div class="ln-meta">
-                  <span class="ln-hint">2 of 4 ready</span
-                  ><span class="ln-pri ln-pri--high"
-                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
-                      <use href="#i-up" /></svg
-                    >High</span
-                  ><span class="ln-unassigned" aria-label="Unassigned"></span
-                  ><span class="ln-copy-wrap"
-                    ><button
+                <div class="ln-row ln-row--child" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-subtask" /></svg
+                    ><span class="ln-key">MOT-26</span
+                    ><span class="ln-title">Report skipped rows</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-26"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Code</span
+                      ><span class="ln-pri ln-pri--high"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >High</span
+                      ><span class="ln-avatar" title="Yue" aria-label="Assigned to Yue">Y</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <button
                       type="button"
-                      class="ln-copy"
-                      aria-label="Copy parent-run command for MOT-30"
+                      class="ln-chev"
+                      aria-expanded="false"
+                      aria-label="Expand MOT-30"
                     >
-                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
-                        <use href="#i-copy" />
+                      <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chev" />
                       </svg></button
-                  ></span>
+                    ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-story" /></svg
+                    ><span class="ln-key">MOT-30</span
+                    ><span class="ln-title">Board swimlanes by story</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy parent-run command for MOT-30"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-hint">2 of 4 ready</span
+                      ><span class="ln-pri ln-pri--high"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >High</span
+                      ><span class="ln-unassigned" aria-label="Unassigned"></span>
+                    </div>
+                  </div>
+                </div>
+                <p class="ln-loading-more" role="status">Loading more…</p>
+              </div>
+            </div>
+          </section>
+          <section class="ln-pane" aria-label="Bugs">
+            <div class="ln-section-head">
+              <h3 class="ln-h2">Bugs</h3>
+              <span class="ln-count">2 bugs</span>
+            </div>
+            <div class="ln-scroll">
+              <div class="ln-list" role="list" aria-label="Ready bugs">
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-bug" /></svg
+                    ><span class="ln-key">MOT-12</span
+                    ><span class="ln-title">Copy toast clips long keys</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-12"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Code</span
+                      ><span class="ln-pri ln-pri--high"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >High</span
+                      ><span class="ln-unassigned" aria-label="Unassigned"></span>
+                    </div>
+                  </div>
+                </div>
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <button
+                      type="button"
+                      class="ln-chev"
+                      aria-expanded="false"
+                      aria-label="Expand MOT-13"
+                    >
+                      <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chev" />
+                      </svg></button
+                    ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-bug" /></svg
+                    ><span class="ln-key">MOT-13</span
+                    ><span class="ln-title">Load-more drops the last row</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy parent-run command for MOT-13"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-hint">1 of 1 ready</span
+                      ><span class="ln-pri ln-pri--medium"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-minus" /></svg
+                        >Medium</span
+                      ><span class="ln-avatar" title="Ana" aria-label="Assigned to Ana">A</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-            <p class="ln-loading-more" role="status">Loading more…</p>
+          </section>
+        </div>
+      </div>
+    </div>
+    <div class="board-label">8 · Below lg — one full-height pane at a time</div>
+    <div class="board">
+      <p class="board-note">
+        Two panes will not fit side by side under the `lg` breakpoint, so the section headings
+        become a Segmented control (Ready to run · Bugs, each with its count) and the chosen pane
+        takes the full height. The choice is client-local.
+      </p>
+      <div class="ln-canvas">
+        <div class="ln-narrow">
+          <header class="ln-head">
+            <div class="ln-head-titles">
+              <div class="ln-head-row">
+                <h2 class="ln-h1">Ready to start</h2>
+                <span class="ln-count">5 ready</span><span class="ln-count">2 bugs</span>
+              </div>
+              <p class="ln-sub">Motir · MOT</p>
+            </div>
+            <button type="button" class="ln-help">
+              <svg class="ln-help-ic" viewBox="0 0 24 24" aria-hidden="true">
+                <use href="#i-help" /></svg
+              >What is this?
+            </button>
+          </header>
+          <div class="ln-seg" role="tablist" aria-label="Ready lanes">
+            <button
+              type="button"
+              role="tab"
+              aria-selected="true"
+              class="ln-seg-item ln-seg-item--on"
+            >
+              Ready to run <span class="ln-seg-n">5</span></button
+            ><button type="button" role="tab" aria-selected="false" class="ln-seg-item">
+              Bugs <span class="ln-seg-n">2</span>
+            </button>
           </div>
-        </section>
+          <section class="ln-pane ln-pane--solo" aria-label="Ready to run">
+            <div class="ln-scroll">
+              <div class="ln-list" role="list" aria-label="Ready work items">
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <button
+                      type="button"
+                      class="ln-chev"
+                      aria-expanded="false"
+                      aria-label="Expand MOT-9"
+                    >
+                      <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chev" />
+                      </svg></button
+                    ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-story" /></svg
+                    ><span class="ln-key">MOT-9</span
+                    ><span class="ln-title">Run the next story from the terminal</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy parent-run command for MOT-9"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-hint">1 of 2 ready</span
+                      ><span class="ln-pri ln-pri--highest"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >Highest</span
+                      ><span class="ln-avatar" title="Ana" aria-label="Assigned to Ana">A</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <button
+                      type="button"
+                      class="ln-chev"
+                      aria-expanded="false"
+                      aria-label="Expand MOT-2"
+                    >
+                      <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-chev" />
+                      </svg></button
+                    ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-story" /></svg
+                    ><span class="ln-key">MOT-2</span
+                    ><span class="ln-title">Group the ready list by story</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy parent-run command for MOT-2"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-hint">3 of 3 ready</span
+                      ><span class="ln-pri ln-pri--high"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-up" /></svg
+                        >High</span
+                      ><span class="ln-avatar" title="Yue" aria-label="Assigned to Yue">Y</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="ln-row" role="listitem">
+                  <div class="ln-card" data-surface="card">
+                    <span class="ln-chev-slot" aria-hidden="true"></span
+                    ><svg class="ln-kind ln-kind--task" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-task" /></svg
+                    ><span class="ln-key">MOT-7</span
+                    ><span class="ln-title">Reconcile the CLI changeset</span
+                    ><span class="ln-copy-wrap"
+                      ><button
+                        type="button"
+                        class="ln-copy"
+                        aria-label="Copy run command for MOT-7"
+                      >
+                        <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-copy" />
+                        </svg></button
+                    ></span>
+                    <div class="ln-meta">
+                      <span class="ln-type-chip">Chore</span
+                      ><span class="ln-pri ln-pri--low"
+                        ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                          <use href="#i-down" /></svg
+                        >Low</span
+                      ><span class="ln-unassigned" aria-label="Unassigned"></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   </body>

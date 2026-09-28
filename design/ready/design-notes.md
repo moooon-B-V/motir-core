@@ -326,9 +326,12 @@ Story MOTIR-6829 splits the ready set into three **lanes**, defined once in
 - **containers** — every non-bug runnable container holding at least one ready leaf;
 - **bugs** — a ready `bug`, or a ready subtask of a bug.
 
-The page shows the leaves lane as **Ready to run** and the bugs lane as **Bugs**. An
+The page shows the leaves lane as **Ready to run** and the bugs lane as **Bugs**, in
+**two full-height panes side by side** (revised on review of the first version,
+`c181c7ae2`: _"We need full page height for both 'ready to run' and 'bugs'"_ — stacked,
+a long main list pushed Bugs off the screen). An
 **epic is never a row**, and neither is a container holding a grandchild: its leaves
-stand alone. Seven panels, one per state — review each.
+stand alone. Eight panels, one per state — review each.
 
 ### The page (panel 1)
 
@@ -336,28 +339,45 @@ stand alone. Seven panels, one per state — review each.
   count chips: **`{n} ready`** (`ready.count`, now the LEAVES lane's count from
   `countReadyLanes`) and **`{n} bugs`** (`ready.bugsCount`). Both chips drop out with
   the EmptyState (panel 5), as today's single chip does.
-- **"Ready to run" section** — an `h2`-level heading (`ready.lanes.main.heading`,
-  `text-sm font-semibold text-(--el-text)`), then the `role="list"` of rows
+- **Two panes, side by side, each the full page height** — a grid below the header,
+  `grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-6`, filling the viewport below the
+  header (`h-[calc(100dvh-<header + shell chrome>)]`, `min-h-0`). Each pane is a flex
+  column: its heading row, then ITS OWN scroll container (`flex-1 min-h-0
+overflow-y-auto`) holding its list. The page itself does not scroll; each pane does,
+  independently, so neither list pushes the other out of view.
+- **"Ready to run" pane** (left) — heading `ready.lanes.main.heading`
+  (`text-sm font-semibold text-(--el-text)`), then the `role="list"` of rows
   (`aria-label` stays **"Ready work items"**, `ready.listAria`), `gap-2` as today.
-- **"Bugs" section** — `mt-8` below, heading **"Bugs"** (`ready.lanes.bugs.heading`)
-  with its own neutral count chip (`ready.bugsCount`), then its own `role="list"`
+- **"Bugs" pane** (right) — heading **"Bugs"** (`ready.lanes.bugs.heading`) with its
+  own neutral count chip (`ready.bugsCount`), then its own `role="list"`
   (`aria-label` **"Ready bugs"**, `ready.lanes.bugs.listAria`).
 - **Order** — the service's lane order, never re-sorted by the page: groups rank by
   their best member's `(kind, priority, key)`, members keep that order inside a
   group. A group is contiguous by construction.
+- **Below `lg` (panel 8)** — two panes will not fit, so the two headings become a
+  `Segmented` control (**Ready to run {n}** · **Bugs {n}**) and the chosen pane takes
+  the full height alone. The choice is client-local state, defaulting to Ready to run.
 
 ### Rows
 
 Every row is **today's dispatch card** (`ReadyRow`: `IssueTypeIcon`, mono key in
 `--el-text-secondary`, title, `WorkItemTypeChip`, the priority `Pill`, `Avatar`, the
-hover copy button + `Tooltip`), with ONE addition at its lead: the **tree toggle slot**,
-composed from `components/ui/TreeTable.tsx` exactly.
+hover copy button + `Tooltip`), with TWO changes:
+
+- **the tree toggle slot** at its lead, composed from `components/ui/TreeTable.tsx`
+  exactly (below);
+- **two lines inside a pane** — a half-width pane cannot hold the one-line card
+  without truncating every title to a word, so line 1 is toggle · kind icon · key ·
+  title · copy button, and line 2 is the meta cluster (hint · type chip · priority ·
+  assignee), `pl-[58px]` so it aligns under the key (`flex-wrap`, `gap-y-1`). The
+  assignee is the **Avatar alone**; the name moves to its `title` and its
+  `aria-label` **"Assigned to {name}"** (`ready.assignedAria`).
 
 - **Runnable-container row** — a 16px **chevron button** (lucide `ChevronRight`, 12px,
   `text-(--el-text-secondary)`, `rounded-(--radius-control)`; `rotate-90` when open;
   `aria-expanded`; `aria-label` **"Expand {key}"** / **"Collapse {key}"** —
   `ready.container.expand` / `ready.container.collapse`), then the kind icon, key,
-  title and meta cluster. The meta cluster OPENS with the **hint**
+  title, copy button and the second-line meta cluster, which OPENS with the **hint**
   **"{ready} of {children} ready"** (`ready.container.hint`, `text-xs
 text-(--el-text-secondary)`) — `readyLeafCount` of `childCount`. A container has no
   work type, so no type chip. Its **copy** button copies **`motir run <KEY>`** — the
@@ -380,15 +400,16 @@ text-(--el-text-secondary)`) — `readyLeafCount` of `childCount`. A container h
   shows ONE line, **"Nothing ready to run."** (`ready.lanes.main.empty`,
   `text-sm text-(--el-text-secondary)`) — never the EmptyState, because the page is
   not empty.
-- **(4) Bugs empty** — the Bugs section never disappears: heading, **"0 bugs"**,
+- **(4) Bugs empty** — the Bugs pane never disappears and keeps its full height: heading, **"0 bugs"**,
   and **"No ready bugs."** (`ready.lanes.bugs.empty`).
 - **(5) All empty** — today's `EmptyState`, unchanged (panel 3 of `ready.mock.html`).
 - **(6) Loading** — `PageSkeleton` in an in-page `<Suspense>` below the page gate
-  (never a `loading.tsx`): the REAL header (without chips) and the two REAL section
-  headings, then pulsing card-height blocks (`--el-muted` on `--radius-card`), four
-  under "Ready to run" and two under "Bugs".
-- **(7) Load-more at scale** — the list stays virtualized and cursor-streamed
-  (`useRowWindow` + the bottom sentinel), one sentinel per section. The load-more
+  (never a `loading.tsx`): the REAL header (without chips) and the two panes with
+  their REAL headings, then pulsing card-height blocks (`--el-muted` on
+  `--radius-card`), six in "Ready to run" and three in "Bugs".
+- **(7) Load-more at scale** — each pane is its own virtualized, cursor-streamed list
+  (`useRowWindow` measured against the PANE's scroll container, and a bottom sentinel
+  inside it). The load-more
   cursor is the LANE cursor, which may end a page inside a group: the next page's
   first rows are that group's remaining members and they **merge into the rendered
   group** — never a second header for the same container. Expand state is
@@ -407,7 +428,7 @@ Unchanged: the sidebar **Ready** entry (`nav.ready`, lucide `circle-play`) opens
 ("Bugs"), `lanes.bugs.empty` ("No ready bugs."), `lanes.bugs.listAria` ("Ready
 bugs"), `container.hint` ("{ready} of {total} ready"), `container.expand` ("Expand
 {key}"), `container.collapse` ("Collapse {key}"), `container.copyAria` ("Copy
-parent-run command for {key}").
+parent-run command for {key}"), `assignedAria` ("Assigned to {name}").
 
 ### Primitives composed (no hand-rolling)
 
@@ -424,4 +445,4 @@ parent-run command for {key}").
 
 No new design-system entry. The expand grammar is TreeTable's; the page does not
 become a TreeTable — the lanes are two lists of dispatch cards, which is what the
-page already is.
+page already is — now two of them, each in a full-height pane.
