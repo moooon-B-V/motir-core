@@ -12,9 +12,11 @@ import { runCreateWorkItem } from '@/lib/mcp/tools/createWorkItem';
 import { runGetWorkItem } from '@/lib/mcp/tools/getWorkItem';
 import { runLinkWorkItems } from '@/lib/mcp/tools/linkWorkItems';
 import { runListReady } from '@/lib/mcp/tools/listReady';
+import { runMoveToParent } from '@/lib/mcp/tools/moveToParent';
 import { runNextReady } from '@/lib/mcp/tools/nextReady';
 import { runSearchWorkItems } from '@/lib/mcp/tools/searchWorkItems';
 import { runSkeleton } from '@/lib/mcp/tools/skeleton';
+import { runTransitionStatus } from '@/lib/mcp/tools/transitionStatus';
 import { runUpdateWorkItem } from '@/lib/mcp/tools/updateWorkItem';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -127,15 +129,16 @@ describe('update_work_item / create_work_item write the mark', () => {
     expect([dto.obsolescence, dto.obsolescenceNoteMd]).toEqual([null, 'Kept for the record.']);
 
     // A new card lands at the unfinished initial status, and a mark is a FINISHED
-    // card's state (MOTIR-6672) — so nothing is created. The tool's own wire code
-    // for the refusal is MOTIR-6673's; this pins only that no row is written.
+    // card's state (MOTIR-6672) — a TYPED refusal naming the remedy (MOTIR-6673),
+    // and nothing is created.
     const before = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
-    await Promise.resolve(
-      runCreateWorkItem(
-        { projectKey: 'PROD', kind: 'story', title: 'Retired', obsolescence: 'deprecated' },
-        fx.ctx,
-      ),
-    ).catch(() => null);
+    const refused = await runCreateWorkItem(
+      { projectKey: 'PROD', kind: 'story', title: 'Retired', obsolescence: 'deprecated' },
+      fx.ctx,
+    );
+    expect(refused.isError).toBe(true);
+    expect(text(refused)).toContain('OBSOLESCENCE_REQUIRES_FINISHED');
+    expect(text(refused)).toContain('archived, not marked');
     expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(before);
   });
 
@@ -327,5 +330,53 @@ describe('obsolescenceLines', () => {
     expect(
       obsolescenceLines({ obsolescence: 'outdated', obsolescenceNoteMd: '  \n\t\n ' }),
     ).toEqual(['obsolescence: outdated']);
+  });
+});
+
+describe('the finished-card refusals are typed on every MCP door (MOTIR-6673)', () => {
+  it('update_work_item refuses a mark on an unfinished card with OBSOLESCENCE_REQUIRES_FINISHED', async () => {
+    const fx = await makeWorkItemFixture();
+    const task = await mk(fx, 'Open');
+    const res = await runUpdateWorkItem({ key: task.identifier, obsolescence: 'outdated' }, fx.ctx);
+    expect(res.isError).toBe(true);
+    expect(text(res)).toContain('OBSOLESCENCE_REQUIRES_FINISHED');
+    expect(text(res)).toContain(task.identifier);
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: task.id } })).obsolescence,
+    ).toBeNull();
+  });
+
+  it('transition_status refuses to reopen a marked card with MARKED_CARD_CANNOT_REOPEN and the remedy', async () => {
+    const fx = await makeWorkItemFixture();
+    const task = await mk(fx, 'Shipped');
+    await mark(fx, task.id, 'deprecated', 'Retired.');
+    const res = await runTransitionStatus({ key: task.identifier, status: 'in_progress' }, fx.ctx);
+    expect(res.isError).toBe(true);
+    expect(text(res)).toContain('MARKED_CARD_CANNOT_REOPEN');
+    expect(text(res)).toContain('clear the mark to reopen this item');
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: task.id } })).status).toBe(
+      'done',
+    );
+  });
+
+  it('create_work_item and move_to_parent under a marked parent answer MARKED_CARD_CANNOT_REOPEN', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Old story', 'story');
+    await mark(fx, story.id, 'outdated', null);
+
+    const created = await runCreateWorkItem(
+      { projectKey: 'PROD', kind: 'subtask', title: 'New child', parentKey: story.identifier },
+      fx.ctx,
+    );
+    expect(created.isError).toBe(true);
+    expect(text(created)).toContain('MARKED_CARD_CANNOT_REOPEN');
+
+    const task = await mk(fx, 'Loose task');
+    const moved = await runMoveToParent(
+      { key: task.identifier, parentKey: story.identifier },
+      fx.ctx,
+    );
+    expect(moved.isError).toBe(true);
+    expect(text(moved)).toContain('MARKED_CARD_CANNOT_REOPEN');
   });
 });

@@ -1027,9 +1027,11 @@ export const createWorkItemBodySchema = z
     // Leaf-only, as `type` is: a non-null value on an epic or story is refused
     // by the service as `DIFFICULTY_NOT_ALLOWED_ON_KIND` (422).
     difficulty: difficultySchema.nullish(),
-    // The OBSOLESCENCE mark (MOTIR-6581): settable on ANY kind and in ANY status —
-    // a `done` card included — with no kind refusal, unlike `difficulty`. `null`
-    // clears it. A value outside the enum is `INVALID_OBSOLESCENCE` (422).
+    // The OBSOLESCENCE mark (MOTIR-6581): settable on ANY kind, with no kind
+    // refusal, unlike `difficulty` — but only on a FINISHED card (MOTIR-6672): the
+    // service refuses a mark on a status outside the done category as
+    // `OBSOLESCENCE_REQUIRES_FINISHED` (422). `null` clears it. A value outside the
+    // enum is `INVALID_OBSOLESCENCE` (422).
     obsolescence: obsolescenceSchema.nullish(),
     obsolescenceNoteMd: z.string().nullish(),
     storyPoints: storyPointsSchema.optional(),
@@ -1081,9 +1083,11 @@ export const updateWorkItemBodySchema = z
     // Leaf-only, as `type` is: a non-null value on an epic or story is refused
     // by the service as `DIFFICULTY_NOT_ALLOWED_ON_KIND` (422).
     difficulty: difficultySchema.nullish(),
-    // The OBSOLESCENCE mark (MOTIR-6581): settable on ANY kind and in ANY status —
-    // a `done` card included — with no kind refusal, unlike `difficulty`. `null`
-    // clears it. A value outside the enum is `INVALID_OBSOLESCENCE` (422).
+    // The OBSOLESCENCE mark (MOTIR-6581): settable on ANY kind, with no kind
+    // refusal, unlike `difficulty` — but only on a FINISHED card (MOTIR-6672): the
+    // service refuses a mark on a status outside the done category as
+    // `OBSOLESCENCE_REQUIRES_FINISHED` (422). `null` clears it. A value outside the
+    // enum is `INVALID_OBSOLESCENCE` (422).
     obsolescence: obsolescenceSchema.nullish(),
     obsolescenceNoteMd: z.string().nullish(),
     storyPoints: storyPointsSchema.optional(),
@@ -1220,6 +1224,40 @@ export const planTargetHeldSchema = z.object({
     planStatus: z.enum(['generating', 'planned', 'stale']),
     sessionId: z.string().nullable(),
     anchorKey: z.string().nullable(),
+  }),
+});
+
+/**
+ * The refusal body for a mark SET on an unfinished card (MOTIR-6672 · MOTIR-6673):
+ * the pinned `{ code, error }` PLUS an additive `item` — the card and the status
+ * it is at, whose category is not `done`. Answered by `createWorkItem` and
+ * `updateWorkItem`; the remedy is to archive a card nobody will finish.
+ */
+export const obsolescenceRequiresFinishedSchema = z.object({
+  code: z.literal('OBSOLESCENCE_REQUIRES_FINISHED'),
+  error: z.string(),
+  item: z.object({
+    key: z.string(),
+    statusKey: z.string(),
+    statusCategory: z.string().nullable(),
+  }),
+});
+
+/**
+ * The refusal body for REOPENING a marked card (MOTIR-6672 · MOTIR-6673): the
+ * pinned `{ code, error }` PLUS an additive `mark` — the marked card (the PARENT,
+ * when the refused write is a child created or moved under it), its mark, and the
+ * refused target status (`null` for a child write). Answered by
+ * `transitionWorkItem`, and by `createWorkItem` / `updateWorkItem` for a marked
+ * parent; the remedy is to clear the mark first.
+ */
+export const markedCardCannotReopenSchema = z.object({
+  code: z.literal('MARKED_CARD_CANNOT_REOPEN'),
+  error: z.string(),
+  mark: z.object({
+    key: z.string(),
+    obsolescence: z.enum(['outdated', 'deprecated']),
+    toStatusKey: z.string().nullable(),
   }),
 });
 

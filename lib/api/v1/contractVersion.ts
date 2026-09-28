@@ -705,5 +705,22 @@
  *   was `1.45.0` at `f9f970569`, so this claims `1.46.0` (renumbered from `1.42.0`
  *   and then `1.44.0`, which MOTIR-6501/6502 and MOTIR-6581/6547 took first). If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
+ *
+ * - `1.47.0` — MOTIR-6672 · MOTIR-6673: a mark is a FINISHED card's state. Two new
+ *   codes for two new conditions, both 422 and both with an additive payload:
+ *   `OBSOLESCENCE_REQUIRES_FINISHED` (`item`: the key, status and its category) on
+ *   `createWorkItem` / `updateWorkItem` when a mark is SET on a card whose status is
+ *   outside the done category, and `MARKED_CARD_CANNOT_REOPEN` (`mark`: the key, the
+ *   mark and the refused target) on `transitionWorkItem` for a marked card's move out
+ *   of the done category, and on the two writes for new work under a marked parent.
+ *   Both are named in the three operations' descriptions, and their bodies are
+ *   declared beside the other refusal bodies (`obsolescenceRequiresFinishedSchema`,
+ *   `markedCardCannotReopenSchema`). This narrows what 1.44.0 documented ("any status") —
+ *   the story's decision (MOTIR-6575), recorded here so the number says the rule
+ *   moved. No field changes shape.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.46.0` at `a42aefe47`, so this claims `1.47.0`. If a sibling has taken it
+ *   since, RENUMBER this entry — it names the CODES.
  */
-export const V1_CONTRACT_VERSION = '1.46.0';
+export const V1_CONTRACT_VERSION = '1.47.0';

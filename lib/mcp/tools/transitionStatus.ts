@@ -163,7 +163,10 @@ export function registerTransitionStatus(
       title: 'Transition status',
       description:
         'Move a work item (by identifier, e.g. "ACME-7") to a target workflow status, given as ' +
-        'its key or display name. An illegal move returns the allowed targets. Honors the ' +
+        'its key or display name. An illegal move returns the allowed targets. A MARKED item ' +
+        '(`obsolescence` set) stays finished: a move to any status outside the done category is ' +
+        'refused with MARKED_CARD_CANNOT_REOPEN until the mark is cleared with update_work_item; ' +
+        '`done` ↔ `cancelled` stays open. Honors the ' +
         "project's workflow rules and the same access checks as the UI.",
       inputSchema,
     },

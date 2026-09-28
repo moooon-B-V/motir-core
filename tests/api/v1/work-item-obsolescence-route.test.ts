@@ -2,10 +2,13 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { GET as LIST, POST } from '@/app/api/v1/projects/[projectKey]/work-items/route';
 import { GET as READY } from '@/app/api/v1/projects/[projectKey]/ready/route';
 import { GET, PATCH } from '@/app/api/v1/work-items/[key]/route';
+import { POST as TRANSITION } from '@/app/api/v1/work-items/[key]/transitions/route';
 import { classifyApiV1Error } from '@/lib/api/v1/errors';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { readyItemSchema, type V1ReadyItem } from '@/lib/api/v1/ready/schema';
 import {
+  markedCardCannotReopenSchema,
+  obsolescenceRequiresFinishedSchema,
   workItemDetailSchema,
   workItemSummarySchema,
   type WorkItemDetail,
@@ -13,7 +16,11 @@ import {
 } from '@/lib/api/v1/workItems/schema';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { InvalidObsolescenceError } from '@/lib/workItems/errors';
+import {
+  InvalidObsolescenceError,
+  MarkedCardCannotReopenError,
+  ObsolescenceRequiresFinishedError,
+} from '@/lib/workItems/errors';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
@@ -21,9 +28,10 @@ import { truncateAuthTables } from '../../helpers/db';
 // A work item's OBSOLESCENCE mark over `/api/v1` (Story MOTIR-6574 · MOTIR-6581),
 // end to end through `withV1Route` against real Postgres: every read that carries
 // the item — the detail, the collection row, the ready row — returns both fields;
-// both writes set, change and clear them on ANY kind in ANY status (a `done` story
-// and a `todo` subtask are the two named cases); and a value outside the enum is a
-// 422 naming `INVALID_OBSOLESCENCE` whichever check catches it.
+// both writes set, change and clear them on ANY kind of FINISHED card (a `done`
+// story and a `done` subtask are the two named cases); a value outside the enum is a
+// 422 naming `INVALID_OBSOLESCENCE` whichever check catches it; and — MOTIR-6673 —
+// a mark on an unfinished card and a reopen of a marked one are typed 422s.
 
 const BASE = 'http://localhost:3000/api/v1';
 const EDITOR = ['project:browse', 'work_item:edit'] as const;
@@ -62,6 +70,17 @@ function update(caller: V1ProjectCaller, key: string, body: unknown): Promise<Re
       method: 'PATCH',
       headers: { ...caller.headers, 'content-type': 'application/json' },
       body: JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ key }) },
+  );
+}
+
+function transition(caller: V1ProjectCaller, key: string, status: string): Promise<Response> {
+  return TRANSITION(
+    new Request(`${BASE}/work-items/${key}/transitions`, {
+      method: 'POST',
+      headers: { ...caller.headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ status }),
     }),
     { params: Promise.resolve({ key }) },
   );
@@ -279,6 +298,119 @@ describe('a value outside the enum is a 422 naming INVALID_OBSOLESCENCE', () => 
     expect(classifyApiV1Error(new InvalidObsolescenceError('stale'))).toEqual({
       status: 422,
       body: { code: 'INVALID_OBSOLESCENCE', error: expect.stringContaining('stale') as string },
+    });
+  });
+});
+
+// ── MOTIR-6672 · MOTIR-6673 — a mark is a FINISHED card's state ────────────────
+
+describe('the finished-card refusals are typed 422s with their payload', () => {
+  it('POST with a mark on the unfinished initial status: OBSOLESCENCE_REQUIRES_FINISHED, nothing written', async () => {
+    const caller = await createV1ProjectCaller({ permissions: [...EDITOR] });
+    const res = await create(caller, { kind: 'task', title: 'T', obsolescence: 'outdated' });
+    expect(res.status).toBe(422);
+    const body = obsolescenceRequiresFinishedSchema.parse(await res.json());
+    expect(body.item).toMatchObject({ statusKey: 'todo', statusCategory: 'todo' });
+    expect(body.error).toContain('archived, not marked');
+    expect(await adminDb.workItem.count()).toBe(0);
+  });
+
+  it('PATCH setting either mark on a `todo` card: 422 with the key and status; on a `done` card: 200', async () => {
+    const caller = await createV1ProjectCaller({ permissions: [...EDITOR] });
+    const task = await detail(await create(caller, { kind: 'task', title: 'T' }), 201);
+    for (const mark of ['outdated', 'deprecated']) {
+      const res = await update(caller, task.key, { obsolescence: mark });
+      expect(res.status).toBe(422);
+      const body = obsolescenceRequiresFinishedSchema.parse(await res.json());
+      expect(body.item).toEqual({ key: task.key, statusKey: 'todo', statusCategory: 'todo' });
+    }
+    // Clearing is legal on any status.
+    expect((await update(caller, task.key, { obsolescence: null })).status).toBe(200);
+
+    await markDone(caller, task.key);
+    expect(
+      (await detail(await update(caller, task.key, { obsolescence: 'outdated' }))).obsolescence,
+    ).toBe('outdated');
+  });
+
+  it('transitions of a marked `done` card: to `todo` is 422 MARKED_CARD_CANNOT_REOPEN; to `cancelled` is 200', async () => {
+    const caller = await createV1ProjectCaller({ permissions: [...EDITOR] });
+    const task = await detail(await create(caller, { kind: 'task', title: 'T' }), 201);
+    await markDone(caller, task.key);
+    await update(caller, task.key, { obsolescence: 'deprecated' });
+
+    const refused = await transition(caller, task.key, 'in_progress');
+    expect(refused.status).toBe(422);
+    const body = markedCardCannotReopenSchema.parse(await refused.json());
+    expect(body.mark).toEqual({
+      key: task.key,
+      obsolescence: 'deprecated',
+      toStatusKey: 'in_progress',
+    });
+    expect(body.error).toContain('clear the mark to reopen this item');
+
+    // A move within the done category is not a reopen. The default workflow draws
+    // no `done → cancelled` edge, so the edge refusal answers — NOT the mark's.
+    const within = await transition(caller, task.key, 'cancelled');
+    expect(((await within.json()) as { code: string }).code).not.toBe('MARKED_CARD_CANNOT_REOPEN');
+
+    // Clear the mark, then the same move goes through.
+    await update(caller, task.key, { obsolescence: null });
+    expect((await transition(caller, task.key, 'in_progress')).status).toBe(200);
+  });
+
+  it('a child under a marked parent — POST and a re-parenting PATCH — is 422 MARKED_CARD_CANNOT_REOPEN', async () => {
+    const caller = await createV1ProjectCaller({ permissions: [...EDITOR] });
+    const story = await detail(await create(caller, { kind: 'story', title: 'S' }), 201);
+    await markDone(caller, story.key);
+    await update(caller, story.key, { obsolescence: 'outdated' });
+
+    const created = await create(caller, { kind: 'subtask', title: 'ST', parentKey: story.key });
+    expect(created.status).toBe(422);
+    expect(markedCardCannotReopenSchema.parse(await created.json()).mark).toEqual({
+      key: story.key,
+      obsolescence: 'outdated',
+      toStatusKey: null,
+    });
+
+    const task = await detail(await create(caller, { kind: 'task', title: 'T' }), 201);
+    const moved = await update(caller, task.key, { parentKey: story.key });
+    expect(moved.status).toBe(422);
+    expect(markedCardCannotReopenSchema.parse(await moved.json()).mark.key).toBe(story.key);
+  });
+
+  it('both service errors map to the typed 422 with their payload — never a 500', () => {
+    expect(
+      classifyApiV1Error(
+        new ObsolescenceRequiresFinishedError({
+          key: 'P-1',
+          statusKey: 'todo',
+          statusCategory: 'todo',
+        }),
+      ),
+    ).toEqual({
+      status: 422,
+      body: {
+        code: 'OBSOLESCENCE_REQUIRES_FINISHED',
+        error: expect.any(String) as string,
+        item: { key: 'P-1', statusKey: 'todo', statusCategory: 'todo' },
+      },
+    });
+    expect(
+      classifyApiV1Error(
+        new MarkedCardCannotReopenError({
+          key: 'P-1',
+          obsolescence: 'outdated',
+          toStatusKey: 'todo',
+        }),
+      ),
+    ).toEqual({
+      status: 422,
+      body: {
+        code: 'MARKED_CARD_CANNOT_REOPEN',
+        error: expect.any(String) as string,
+        mark: { key: 'P-1', obsolescence: 'outdated', toStatusKey: 'todo' },
+      },
     });
   });
 });
