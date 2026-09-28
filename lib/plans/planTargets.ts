@@ -30,9 +30,11 @@ import { isFolderRef, isTempRef } from '@/lib/plans/refs';
  *   - `blockedByRefs` — an edge names a prerequisite, not a card this plan is
  *     about.
  *
- * A `done` or `cancelled` target never reaches a park at all: `validateProposals`
- * refuses a terminal target with `PlanTargetImmutableError` before this is read
- * (AMENDMENT 16 D2).
+ * A `done` or `cancelled` target is never PARKED (AMENDMENT 16 D2): the park
+ * skips a terminal status (`planTargetLockService`), and `validateProposals`
+ * refuses a terminal target with `PlanTargetImmutableError` — except a MARK-ONLY
+ * `modify` (MOTIR-6629), which reaches a finished card and is still never parked,
+ * so approve leaves that card's status where it is.
  */
 export function committedPlanTargets(
   proposals: ReadonlyArray<{

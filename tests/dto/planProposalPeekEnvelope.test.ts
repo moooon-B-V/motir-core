@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   PLAN_ITEM_CHANGE_FIELDS,
+  PLAN_ITEM_MARK_CHANGE_FIELDS,
   PLAN_ITEM_SETTABLE_RAIL_FIELDS,
   type PlanItemChangeField,
 } from '@/lib/dto/planReview';
@@ -50,23 +51,59 @@ const EVERY_PATCH_KEY: Required<PlanItemPatch> = {
   parentRef: null,
   blockedByAdd: [],
   blockedByRemove: [],
+  // The obsolescence pair (MOTIR-6629) — the Mark and Note rail rows (MOTIR-6632,
+  // Part XXIV §24.10).
+  obsolescence: null,
+  obsolescenceNoteMd: null,
+  // The supersedes edge lists (MOTIR-6630) — two rail rows, one per direction.
+  supersedesAdd: [],
+  supersedesRemove: [],
+  supersededByAdd: [],
+  supersededByRemove: [],
 };
 
 describe('the proposal envelope’s SETTABLE rail-field set (MOTIR-4183)', () => {
-  it('is the SEVEN rail rows a patch can move — and names them, so a silent change fails here', () => {
+  it('is the ELEVEN rail rows a patch can move — and names them, so a silent change fails here', () => {
     // `difficulty` is the seventh (story MOTIR-6095 · MOTIR-6137, design Part XX
-    // §20.5): the peek's count line reads "… 1 of the 7 fields it can set".
+    // §20.5). The mark group is the eighth to eleventh (story MOTIR-6577 ·
+    // MOTIR-6632, Part XXIV §24.10): the peek's count line reads "This plan
+    // changes 3 of the 11 fields it can set".
     expect([...PLAN_ITEM_SETTABLE_RAIL_FIELDS].sort()).toEqual(
       [
         'difficulty',
         'estimateMinutes',
+        'obsolescence',
+        'obsolescenceNote',
         'parent',
         'priority',
         'storyPoints',
+        'supersededBy',
+        'supersedes',
         'targetRepo',
         'type',
       ].sort(),
     );
+    expect(PLAN_ITEM_SETTABLE_RAIL_FIELDS).toHaveLength(11);
+  });
+
+  it('collapses each supersedes Add / Remove pair onto ONE row per direction', () => {
+    // Four patch lists, two rail rows: an Add and its Remove move the same row.
+    expect(Object.keys(EVERY_PATCH_KEY)).toEqual(
+      expect.arrayContaining([
+        'supersedesAdd',
+        'supersedesRemove',
+        'supersededByAdd',
+        'supersededByRemove',
+      ]),
+    );
+    expect(PLAN_ITEM_SETTABLE_RAIL_FIELDS.filter((f) => f === 'supersedes')).toHaveLength(1);
+    expect(PLAN_ITEM_SETTABLE_RAIL_FIELDS.filter((f) => f === 'supersededBy')).toHaveLength(1);
+  });
+
+  it('every mark-group row is a settable rail row — the peek can mark each one changed', () => {
+    for (const field of PLAN_ITEM_MARK_CHANGE_FIELDS) {
+      expect(PLAN_ITEM_SETTABLE_RAIL_FIELDS).toContain(field);
+    }
   });
 
   it('EXCLUDES `executor` — the patch has no key for it, so no plan can ever change it', () => {

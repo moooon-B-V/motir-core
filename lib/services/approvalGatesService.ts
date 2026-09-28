@@ -91,6 +91,7 @@ import { refusalVerdictOfferFor } from '@/lib/approvalGates/verdictOffer';
 import { planGateStampInputs, planSubjectVersion } from '@/lib/approvalGates/planApprovalDigest';
 import { readPlanGateHeld } from '@/lib/approvalGates/planApprovalHandler';
 import { planRepository } from '@/lib/repositories/planRepository';
+import { recomputeWorkItemFixReason } from './fixReasonService';
 
 // THE DECIDE DOOR (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
 // docs/decisions/approval-gates.md).
@@ -2318,6 +2319,12 @@ export const approvalGatesService = {
         },
         tx,
       );
+
+      // A card's to-fix answer reads its LATEST decided gate of any kind — a Request
+      // changes on the approve-to-merge question, or an acceptance Re-run — so every
+      // card decision re-decides it (MOTIR-6602). After the write, in this transaction,
+      // under the gate lock and the card lock the effect already took in that order.
+      if (item) await recomputeWorkItemFixReason(item.id, tx);
 
       return {
         gate: toApprovalGateDto(decided, item?.descriptionMd ?? null),

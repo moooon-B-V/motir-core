@@ -382,7 +382,8 @@ describe('the peek', () => {
     // The value approve will WRITE, not the target's `low`.
     expect(row.value.textContent).toBe('High');
     expect(within(row.term).getByText('changed')).toBeTruthy();
-    expect(peek.textContent).toContain('This plan changes 1 of the 7 fields it can set.');
+    // Eleven since the mark group joined the rail (MOTIR-6632, Part XXIV §24.10).
+    expect(peek.textContent).toContain('This plan changes 1 of the 11 fields it can set.');
   });
 
   it('a `modify` that CLEARS it reads None, marked changed', async () => {

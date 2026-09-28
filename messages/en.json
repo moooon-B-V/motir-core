@@ -210,6 +210,19 @@
     "field_storyPoints": "Story points",
     "field_estimateMinutes": "Estimate",
     "field_difficulty": "Difficulty",
+    "field_obsolescence": "Mark",
+    "field_obsolescenceNote": "Note",
+    "field_supersedes": "Supersedes",
+    "field_supersededBy": "Superseded by",
+    "obsolescenceCurrent": "Current",
+    "markHoldsStatus": "Stays {status} while marked",
+    "nodeProposedMark": "Proposed mark",
+    "nodeSupersedes": "Supersedes {n}",
+    "nodeSupersedesTitle": "Supersedes {keys}",
+    "edgeAdds": "Adds",
+    "edgeRemoves": "Removes",
+    "noteShowAll": "Show all",
+    "noteShowLess": "Show less",
     "field_description": "Description",
     "field_explanation": "Explanation",
     "field_links": "Dependencies",
@@ -7927,6 +7940,7 @@
       "label": "Workbench views",
       "toDo": "To do",
       "inProgress": "In progress",
+      "toFix": "To fix",
       "recentlyFinished": "Recently finished",
       "watching": "Watching",
       "toApprove": "To approve"
@@ -7958,6 +7972,10 @@
         "title": "Nothing in flight",
         "body": "Nothing you own is being worked on right now — by you or by an agent.",
         "action": "See what to start"
+      },
+      "toFix": {
+        "title": "Nothing to fix",
+        "body": "When a merge queue, a conflict, a failing check or a reviewer stops one of your work items, it shows up here with the command that repairs it."
       },
       "recentlyFinished": {
         "title": "Nothing finished this week",
@@ -8031,7 +8049,34 @@
     "live": {
       "new": "New",
       "decidedElsewhere": "Decided elsewhere",
-      "reconnecting": "Reconnecting…"
+      "reconnecting": "Reconnecting…",
+      "cleared": "Cleared"
+    },
+    "toFix": {
+      "reason": {
+        "queueFailed": "Failed in the merge queue · <d>{detail}</d>",
+        "queueFailedBare": "Failed in the merge queue",
+        "conflicted": "Conflicts with <d>{base}</d>",
+        "conflictedNoBase": "Conflicts with its base branch",
+        "ciFailed": "CI failed · <d>{check}</d>",
+        "ciFailedBare": "CI failed",
+        "changesRequested": "Changes requested by <b>{name}</b> — “{note}”",
+        "changesRequestedNoNote": "Changes requested by <b>{name}</b>",
+        "changesRequestedAnon": "Changes requested"
+      },
+      "queueReason": {
+        "CI_FAILURE": "checks failed",
+        "CI_TIMEOUT": "checks timed out",
+        "MERGE_CONFLICT": "merge conflict",
+        "INVALID_MERGE_COMMIT": "no merge commit could be built"
+      },
+      "affected": "{affected} of {total} pull requests affected",
+      "copyAria": "Copy the repair command for {key}",
+      "copyTooltip": "Copy <cmd>{command}</cmd>",
+      "toast": {
+        "title": "Copied",
+        "body": "Paste {command} into your terminal."
+      }
     }
   },
   "approvalRecords": {

@@ -192,12 +192,14 @@ async function fromTree(s: Scenario, itemId: string): Promise<string | null | un
 }
 
 async function fromWorkbench(s: Scenario, itemId: string): Promise<string | null | undefined> {
-  const page = await homeService.listInProgress({
-    userId: s.userId,
-    workspaceId: s.workspaceId,
-    projectId: s.projectId,
-  });
-  return page.items.find((r) => r.id === itemId)?.ciState;
+  // In progress's category is two tabs since MOTIR-6604: a card stuck until it is
+  // repaired (a red one, here) is listed on To fix instead. The row is the same row.
+  const ctx = { userId: s.userId, workspaceId: s.workspaceId, projectId: s.projectId };
+  const [inProgress, toFix] = await Promise.all([
+    homeService.listInProgress(ctx),
+    homeService.listToFix(ctx),
+  ]);
+  return [...inProgress.items, ...toFix.items].find((r) => r.id === itemId)?.ciState;
 }
 
 const ciAst = (value: string): FilterAst => ({

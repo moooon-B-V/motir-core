@@ -56,6 +56,24 @@ export const workspaceRepository = {
   },
 
   /**
+   * Every workspace id, ordered — or just `workspaceId` when given and it exists
+   * (Story MOTIR-6588 · MOTIR-6603). The cross-tenant enumeration a sweep binds one
+   * workspace at a time from; read under `withSystemContext`, which the
+   * `workspace_system_read` arm admits.
+   */
+  async listIds(
+    tx: Prisma.TransactionClient,
+    scope: { workspaceId?: string } = {},
+  ): Promise<string[]> {
+    const rows = await tx.workspace.findMany({
+      where: scope.workspaceId ? { id: scope.workspaceId } : {},
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((r) => r.id);
+  },
+
+  /**
    * Every workspace under an organization, ordered by createdAt asc. Takes `tx`
    * because the workspace RLS policy reads the per-transaction GUCs. Used by the
    * Story 6.10 cross-workspace member-roster enrichment and the org-admin

@@ -358,6 +358,210 @@ describe('the internal routes carry `difficulty` (MOTIR-6136)', () => {
   });
 });
 
+// ── MOTIR-6631 ─────────────────────────────────────────────────────────────────
+// The obsolescence MARK, its note and the `supersedes` edges through the INTERNAL
+// routes motir-ai writes through. The append passes `ProposalInput` whole and the
+// correction passes `modifyPatch` whole, so the six patch keys ride without a
+// parser change; `supersedesRefs` on a correction is read by `correctionFrom`.
+// This seam resolves NO keys — refs are ids or `planItem:` refs — and every
+// refusal is the service's, answered as a typed 422.
+describe('the internal routes carry the mark and its supersedes edges (MOTIR-6631)', () => {
+  async function doneLeaf(fx: WorkItemFixture, title: string) {
+    const leaf = await createTestWorkItem(fx, { kind: 'task', title });
+    await adminDb.workItem.update({ where: { id: leaf.id }, data: { status: 'done' } });
+    return leaf;
+  }
+
+  async function jobPlan(fx: WorkItemFixture, jobId: string) {
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Marks a card', authorSource: 'native', authorHarness: 'Motir' },
+      fx.ctx,
+    );
+    await adminDb.plan.update({ where: { id: plan.id }, data: { sourceJobId: jobId } });
+    return plan.id;
+  }
+
+  it('the APPEND route carries an `add`’s `supersedesRefs` and a mark-only `modify` of a DONE card', async () => {
+    const fx = await makeWorkItemFixture();
+    const old = await doneLeaf(fx, 'The old contract');
+    const planId = await jobPlan(fx, 'job-mark-append');
+
+    const first = await append(fx, {
+      jobId: 'job-mark-append',
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: { title: 'The new contract', kind: 'task' },
+          supersedesRefs: [old.id],
+        },
+      ],
+    });
+    expect(first.status).toBe(200);
+    const addId = ((await first.json()) as { planItemIds: string[] }).planItemIds[0]!;
+
+    const second = await append(fx, {
+      jobId: 'job-mark-append',
+      proposals: [
+        {
+          op: 'modify',
+          workItemId: old.id,
+          patch: {
+            obsolescence: 'outdated',
+            obsolescenceNoteMd: 'Replaced by the new contract.',
+            supersededByAdd: [`planItem:${addId}`],
+          },
+        },
+      ],
+    });
+    expect(second.status).toBe(200);
+
+    const rows = await adminDb.planItem.findMany({
+      where: { planId },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(rows[0]!.supersedesRefs).toEqual([old.id]);
+    expect(rows[1]!.patch).toEqual({
+      obsolescence: 'outdated',
+      obsolescenceNoteMd: 'Replaced by the new contract.',
+      supersededByAdd: [`planItem:${addId}`],
+    });
+  });
+
+  it('the APPEND route refuses a mark on an UNFINISHED card with the typed 422 pointing at `remove`', async () => {
+    const fx = await makeWorkItemFixture();
+    const open = await createTestWorkItem(fx, { kind: 'task', title: 'Still to do' });
+    await jobPlan(fx, 'job-mark-open');
+
+    const res = await append(fx, {
+      jobId: 'job-mark-open',
+      proposals: [{ op: 'modify', workItemId: open.id, patch: { obsolescence: 'deprecated' } }],
+    });
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string; error: string };
+    expect(body.code).toBe('INVALID_PROPOSAL');
+    expect(body.error).toContain('a plan may mark only a finished work item');
+    expect(body.error).toContain("op: 'remove'");
+  });
+
+  it('the APPEND route refuses `supersedesRefs` on a `modify`, naming the patch lists', async () => {
+    const fx = await makeWorkItemFixture();
+    const old = await doneLeaf(fx, 'Old');
+    const other = await doneLeaf(fx, 'Other');
+    await jobPlan(fx, 'job-mark-misplaced');
+
+    const res = await append(fx, {
+      jobId: 'job-mark-misplaced',
+      proposals: [
+        {
+          op: 'modify',
+          workItemId: old.id,
+          patch: { obsolescence: 'outdated' },
+          supersedesRefs: [other.id],
+        },
+      ],
+    });
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string; error: string };
+    expect(body.code).toBe('INVALID_PROPOSAL');
+    expect(body.error).toContain('supersededByAdd');
+  });
+
+  it('the CORRECT mode replaces an `add`’s `supersedesRefs` and a `modify`’s mark on `modifyPatch`', async () => {
+    const fx = await makeWorkItemFixture();
+    const old = await doneLeaf(fx, 'Old');
+    const newer = await doneLeaf(fx, 'Newer');
+    const planId = await jobPlan(fx, 'job-mark-correct');
+    const appended = await plansService.addProposals(
+      planId,
+      [
+        { op: 'add', proposedFields: { title: 'Replacement', kind: 'task' } },
+        { op: 'modify', workItemId: old.id, patch: { obsolescence: 'outdated' } },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(planId, fx.ctx);
+    const [addId, modifyId] = appended.appendedItemIds as [string, string];
+
+    const onAdd = await patch(fx, addId, {
+      jobId: 'job-mark-correct',
+      mode: 'correct',
+      supersedesRefs: [old.id],
+    });
+    expect(onAdd.status).toBe(200);
+    expect(
+      (await adminDb.planItem.findUniqueOrThrow({ where: { id: addId } })).supersedesRefs,
+    ).toEqual([old.id]);
+
+    const onModify = await patch(fx, modifyId, {
+      jobId: 'job-mark-correct',
+      mode: 'correct',
+      modifyPatch: {
+        obsolescence: 'deprecated',
+        obsolescenceNoteMd: 'Overturned.',
+        supersededByAdd: [newer.id],
+      },
+    });
+    expect(onModify.status).toBe(200);
+    expect((await adminDb.planItem.findUniqueOrThrow({ where: { id: modifyId } })).patch).toEqual({
+      obsolescence: 'deprecated',
+      obsolescenceNoteMd: 'Overturned.',
+      supersededByAdd: [newer.id],
+    });
+
+    // `supersedesRefs` is an `add`'s column: on the `modify` it is refused.
+    const misplaced = await patch(fx, modifyId, {
+      jobId: 'job-mark-correct',
+      mode: 'correct',
+      supersedesRefs: [newer.id],
+    });
+    expect(misplaced.status).toBe(422);
+    expect(((await misplaced.json()) as { code: string }).code).toBe('INVALID_PROPOSAL');
+  });
+
+  it('a supersedes CYCLE through the correction is a typed 422 INVALID_PLAN_REF_GRAPH', async () => {
+    const fx = await makeWorkItemFixture();
+    const old = await doneLeaf(fx, 'Old');
+    const planId = await jobPlan(fx, 'job-mark-cycle');
+    const appended = await plansService.addProposals(
+      planId,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Replacement', kind: 'task' },
+          supersedesRefs: [old.id],
+        },
+      ],
+      fx.ctx,
+    );
+    const second = await plansService.addProposals(
+      planId,
+      [
+        {
+          op: 'modify',
+          workItemId: old.id,
+          patch: { obsolescence: 'outdated' },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(planId, fx.ctx);
+    const addId = appended.appendedItemIds[0]!;
+    const modifyId = second.appendedItemIds[0]!;
+
+    // The old card now claims to REPLACE the card that replaces it.
+    const res = await patch(fx, modifyId, {
+      jobId: 'job-mark-cycle',
+      mode: 'correct',
+      modifyPatch: { obsolescence: 'outdated', supersedesAdd: [`planItem:${addId}`] },
+    });
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code: string; reason: string };
+    expect(body.code).toBe('INVALID_PLAN_REF_GRAPH');
+    expect(body.reason).toBe('cycle');
+  });
+});
+
 describe('PATCH — `mode: "correct"` reaches the correction door', () => {
   it('carries the STRUCTURAL fields the deepen turn may not touch', async () => {
     const fx = await makeWorkItemFixture();
@@ -521,6 +725,9 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
   > = {
     parentRef: 'planItem.parentRef',
     blockedByRefs: 'planItem.blockedByRefs',
+    // An `add`'s supersedes set (MOTIR-6630) lands in `planItem.supersedesRefs`;
+    // `correctionFrom` carries it (MOTIR-6631), driven through the body below.
+    supersedesRefs: 'planItem.supersedesRefs',
     targetRepo: 'proposedFields.targetRepo',
     // The SET spellings (bug MOTIR-4904) — the same landing place, one field
     // over, and the same transport: `correctionFrom` reads each when PRESENT.
@@ -572,6 +779,9 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
       patch: CONTENT_SAMPLE,
       parentRef: `planItem:${firstId}`,
       blockedByRefs: [`planItem:${peer}`],
+      // The corrected card REPLACES the story prerequisite (MOTIR-6631) — any
+      // kind may supersede any kind, and a supersedes edge orders nothing.
+      supersedesRefs: [`planItem:${firstId}`],
       // A ROLE needs no repository to exist — the closed vocabulary is exactly
       // what makes it pinnable this early, and it is the pin an ONBOARDING plan
       // carries.
@@ -592,6 +802,7 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     });
     expect(stored.parentRef).toBe(`planItem:${firstId}`);
     expect(stored.blockedByRefs).toEqual([`planItem:${peer}`]);
+    expect(stored.supersedesRefs).toEqual([`planItem:${firstId}`]);
   });
 
   it('`explanationMd` reaches the proposal on the DEEPEN mode too, not only on `correct`', async () => {

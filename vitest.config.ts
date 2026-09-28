@@ -193,6 +193,38 @@ export default defineConfig({
         'lib/issues/obsolescence.ts',
         'lib/mcp/obsolescence.ts',
         'lib/workItems/linkRelationships.ts',
+        // Story MOTIR-6577 · MOTIR-6633 — the seven NEW modules the "a plan MARKS a
+        // card" story added: the mark-only predicate the terminal-card carve-out
+        // and approve's write share, the plan path's mark bar (membership + the
+        // finished-card rule), the note's one-line form, and the review's four
+        // mark primitives. Pinned in `thresholds` below after being MEASURED on
+        // this branch, one spec at a time (stmts / branch / fn / lines):
+        //
+        //   markOnlyPatch.ts                 100 / 100   / 100 / 100  (tests/plans/planMarkPrimitives)
+        //   validateProposedObsolescence.ts  100 / 100   / 100 / 100  (same)
+        //   obsolescenceNote.ts              100 / 100   / 100 / 100  (same)
+        //   ObsolescencePill.tsx             100 / 100   / 100 / 100  (tests/components/plan-mark-primitives)
+        //   SupersedesChip.tsx               100 / 97.67 / 100 / 100  (same)
+        //   ProposalMarkRailRows.tsx         100 / 97.36 / 100 / 100  (same)
+        //   changeCellText.ts                100 / 100   / 100 / 100  (same)
+        //
+        // ⚠️ The story's CHANGED shared files are deliberately NOT added, by the
+        // rule the MOTIR-5548 block below states: `plansService`,
+        // `planReviewService`, `lib/dto/plans`, `lib/dto/planReview`, the three
+        // plan-proposal routes, `PlanItemNode` and `PlanningTargetChip` each carry
+        // other stories' methods, so a per-file floor would make this story cover
+        // code it did not write. Their story paths are held by
+        // `tests/integration/plans/planMarkStoryGate.test.ts` (every door →
+        // review → approve, and every refusal at every door) and the feature
+        // cards' own suites. `validateProposals`, `authorPlan`, `getPlan`,
+        // `ProposalPeek` and `PlanProposalList` were already gated and stay so.
+        'lib/plans/markOnlyPatch.ts',
+        'lib/plans/validateProposedObsolescence.ts',
+        'lib/workItems/obsolescenceNote.ts',
+        'components/issues/ObsolescencePill.tsx',
+        'components/planning/SupersedesChip.tsx',
+        'components/planning/ProposalMarkRailRows.tsx',
+        'components/planning/changeCellText.ts',
         // Story MOTIR-6016 · MOTIR-6102 — the three modules the DIFFICULTY story
         // added, pinned at the project floor in `thresholds` below after being
         // measured on this branch against the story's own specs.
@@ -2657,6 +2689,18 @@ export default defineConfig({
         'lib/services/workItemCiStateBackfillService.ts',
         'components/github/ciStateMeta.ts',
         'components/github/CiStateBadge.tsx',
+        // ── Story MOTIR-6588 · TO FIX ON THE WORKBENCH (gate MOTIR-6606) ──
+        // The modules this story WROTE, measured before being pinned (the numbers
+        // are in the `thresholds` note). The pre-existing files it widened by a call
+        // or a slice each — `workItemRepository`, `workItemsService`, the writer
+        // services, `homeService` — are not gated here, for the reason MOTIR-5469's
+        // note above gives.
+        'lib/services/fixReasonService.ts',
+        'lib/services/repairPredicate.ts',
+        'lib/workItems/fixReason.ts',
+        'lib/mappers/fixReasonMappers.ts',
+        'lib/services/workItemFixReasonBackfillService.ts',
+        'app/**/workbench/_components/WorkbenchFixLine.tsx',
         // ── Story MOTIR-6156 · THE MULTI-LINE COMPOSER (Subtask MOTIR-6239) ──
         // MEASURED on this branch before being pinned, per this list's own rule:
         // 97.11 statements / 90.43 branches / 100 functions / 100 lines, over the
@@ -2931,6 +2975,51 @@ export default defineConfig({
         'lib/issues/obsolescence.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/mcp/obsolescence.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
         'lib/workItems/linkRelationships.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ── Story MOTIR-6577 · A PLAN MARKS A CARD (Subtask MOTIR-6633) ──────
+        // Pinned at the floor, not at the ≥97 measured (the include block above
+        // carries the numbers), for the same reason as the obsolescence entries.
+        'lib/plans/markOnlyPatch.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/plans/validateProposedObsolescence.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/workItems/obsolescenceNote.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/issues/ObsolescencePill.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/planning/SupersedesChip.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/planning/ProposalMarkRailRows.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/planning/changeCellText.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
@@ -6003,6 +6092,49 @@ export default defineConfig({
           statements: 90,
         },
         'components/github/CiStateBadge.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ── Story MOTIR-6588 · TO FIX (gate MOTIR-6606) ─────────────────────────
+        // MEASURED on the parent branch over the story's own specs (21 files / 386
+        // tests), lines / branches / functions:
+        //   fixReasonService 100 / 95.45 / 100 · repairPredicate 100 / 97.5 / 100 ·
+        //   workItems/fixReason 100 / 97.14 / 100 · fixReasonMappers 100 / 94.73 / 100 ·
+        //   workItemFixReasonBackfillService 100 / 95.65 / 100 · WorkbenchFixLine 100 / 100 / 100.
+        // Pinned at the project's 90 floor, not at the reading.
+        'lib/services/fixReasonService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/repairPredicate.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/workItems/fixReason.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/fixReasonMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/workItemFixReasonBackfillService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/workbench/_components/WorkbenchFixLine.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,

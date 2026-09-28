@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { Circle, CircleCheck, CircleDot, Inbox, Star } from 'lucide-react';
+import { Circle, CircleCheck, CircleDot, Inbox, Star, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
@@ -65,6 +65,7 @@ const WORKBENCH_TESTID = 'workbench-page';
 const TAB_LABEL_KEY: Readonly<Record<WorkbenchTab, string>> = {
   todo: 'tabs.toDo',
   'in-progress': 'tabs.inProgress',
+  'to-fix': 'tabs.toFix',
   finished: 'tabs.recentlyFinished',
   watching: 'tabs.watching',
   approvals: 'tabs.toApprove',
@@ -92,6 +93,8 @@ function readTab(tab: WorkbenchTab, ctx: HomeActorContext, page: number): Promis
       return homeService.listToDo(ctx, { page });
     case 'in-progress':
       return homeService.listInProgress(ctx, { page });
+    case 'to-fix':
+      return homeService.listToFix(ctx, { page });
     case 'finished':
       return homeService.listRecentlyFinished(ctx, { page });
     case 'watching':
@@ -149,6 +152,15 @@ async function EmptyTab({ tab }: { tab: WorkbenchTab }): Promise<ReactNode> {
               {t('empty.inProgress.action')}
             </Link>
           }
+        />
+      );
+    case 'to-fix':
+      // § 30 Panel 4 — no action: nothing on this page repairs a card for you.
+      return (
+        <EmptyState
+          icon={<Wrench className="h-12 w-12" aria-hidden />}
+          title={t('empty.toFix.title')}
+          description={t('empty.toFix.body')}
         />
       );
     case 'finished':

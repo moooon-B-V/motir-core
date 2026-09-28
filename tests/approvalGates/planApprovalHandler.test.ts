@@ -174,6 +174,17 @@ describe('the DIGEST — exactly §11.3’s inputs, one function', () => {
     expect(planProposalDigest(withNoise)).toBe(planProposalDigest(rows));
   });
 
+  it('an `add`’s supersedesRefs (MOTIR-6630) moves it when non-empty and is invisible when empty', () => {
+    // Empty: the golden digest above — computed before the column existed — holds.
+    const empty = rows.map((row) => ({ ...row, supersedesRefs: [] }));
+    expect(planProposalDigest(empty)).toBe(planProposalDigest(rows));
+    // Non-empty: a correction replacing the set moves the version.
+    const withEdge = rows.map((row) =>
+      row.id === 'a-item' ? { ...row, supersedesRefs: ['wi-old'] } : row,
+    );
+    expect(planProposalDigest(withEdge)).not.toBe(planProposalDigest(rows));
+  });
+
   it('the stamp inputs carry only the digest — no companion, no card body', () => {
     expect(planGateStampInputs('plan.v1.x')).toEqual({
       subjectVersion: 'plan.v1.x',

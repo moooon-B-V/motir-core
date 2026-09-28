@@ -5,6 +5,7 @@ import {
   ApprovalGateSupersededError,
 } from '@/lib/approvalGates/errors';
 import {
+  InvalidProposalError,
   PlanApproveTimedOutError,
   PlanDecisionStampRequiredError,
   PlanGateAwaitingError,
@@ -136,6 +137,26 @@ describe('POST /api/plans/[id]/approve — an EMPTY plan is a 409', () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.code).toBe('PLAN_HAS_NO_PROPOSALS');
     expect(body.planId).toBe('plan_empty');
+  });
+});
+
+// MOTIR-6663 — a `modify` MARKS a target reopened since the append. The SERVICE
+// half is proved against a real Postgres in
+// `tests/integration/plans/proposedObsolescence.test.ts`; the route owns the 422.
+describe('POST /api/plans/[id]/approve — a mark on an unfinished target is a 422', () => {
+  it('maps InvalidProposalError to 422, naming the proposal', async () => {
+    ctx.current = { userId: 'u1', workspaceId: 'ws1' };
+    approvePlan.mockRejectedValue(
+      new InvalidProposalError('a plan may mark only a finished work item', 'pi_1'),
+    );
+
+    const res = await callApprove('plan_m');
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.code).toBe('INVALID_PROPOSAL');
+    expect(body.planItemId).toBe('pi_1');
+    expect(String(body.error)).toContain('finished work item');
   });
 });
 

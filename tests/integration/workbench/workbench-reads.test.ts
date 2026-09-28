@@ -520,6 +520,8 @@ describe('the five tab counts agree with the lists they sit beside', () => {
     expect(counts).toEqual({
       toDo: 1,
       inProgress: 1,
+      // Nothing is stuck — To fix is carved out of In progress (MOTIR-6604).
+      toFix: 0,
       recentlyFinished: 1, // the 8-day-old one is outside the window
       // The sibling story's number (MOTIR-4778) — this story draws the slot and
       // ships nothing behind it, so zero is the honest value rather than a

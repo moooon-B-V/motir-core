@@ -2613,3 +2613,267 @@ decision surface the row opens. This section is only the pointer from this area.
 - **Panels 5–6:** narrow, zh, dark.
 
 Built by MOTIR-6037.
+
+## 30 · TO FIX — the tab for work that is stuck until something is repaired — MOTIR-6599
+
+**Asset:** `design/workbench/workbench--to-fix.mock.html`, a new delta mock (Story
+[MOTIR-6588](motir:cmujrd23n012di0txbtqxfr63), card
+[MOTIR-6599](motir:cmujrd30l0130i0txysh4flmo)). No existing mock is edited.
+
+**It AMENDS:**
+
+- **§ 21** — the strip gains a sixth tab, second, and the landing cascade gains a rung.
+- **§ _Layout_** (the row anatomy, `workbench.mock.html`) — on this tab only, the row gains a second
+  line, the FIX LINE. Line 1 is unchanged.
+- **§ 26** (`workbench--live.mock.html`) — the held-row rule, scoped until now to the To-approve queue,
+  now also covers To fix.
+- **§ _The CI badge_** (`workbench--ci-badge.mock.html`) — **not changed**. This section says how the
+  badge and the new reason line differ, because they sit on the same row.
+
+**Panels:** 1 the strip and the cascade · 2 the populated tab, one row per reason, plus the
+acceptance-video variant · 3 a repaired row HELD · 4 the empty tab · 5 page 2 with the pager · 6 zh.
+
+### What the tab is
+
+**To fix lists the reader's work items that are stuck until something is repaired**, one row per
+work item. Membership is the same assigned-OR-reported rule every personal tab uses (MOTIR-4781). A
+card is on To fix exactly when its stored `fixReason` is non-null (MOTIR-6600). **To fix is carved OUT
+of In progress:** a card is on exactly one of the two, and the In progress count drops by what moved.
+
+The tab names something the READER must do, like To approve and unlike the four state tabs. That
+is why it sits beside To approve, and why it follows To approve's live rule (below) rather than the
+work tabs'.
+
+### Panel 1 — the STRIP and the CASCADE (amends § 21)
+
+**Strip order:** **To approve · To fix · In progress · To do · Recently finished · Watching.** Glyphs
+travel with their tabs; To fix takes lucide **`Wrench`**.
+
+**The count is the shipped count chip** (`--el-count-bg` / `--el-count-text`), the same chip every tab
+wears. The card asked for _"the attention count To approve uses"_: on `origin/main` To approve has no
+count style of its own (`WorkbenchTabs.tsx` renders one chip for all tabs), so there is no second
+treatment to borrow, and inventing one for two tabs would create one. The suppress-all-while-all-zero
+rule is unchanged and now counts six.
+
+**Width.** Rendered at 1200, the six-tab track measures about **812px**, inside the 894px content box.
+At `< md` the strip already scrolls (§ _Narrow_), so that verdict stands.
+
+**THE LANDING CASCADE — four rungs:**
+
+> **`/workbench` with no known `?tab=` resolves to: To approve** if its count is non-zero → **else To
+> fix** if its count is non-zero → **else In progress** if its count is non-zero → **else To do**
+> (TERMINAL, landed on even when empty).
+
+§ 21's four properties hold with one word changed: the cascade reads **four** tabs, and Recently
+finished and Watching are still never landed on. An explicit `?tab=` still wins. Its input is still
+the strip's counts, now including `toFix`. The strip order and the cascade order are still the
+same: the first four tabs are the four rungs.
+
+**Why To fix is second and not first.** An unmade decision holds up someone else's card. A stuck card
+is the reader's own. It still sits ahead of In progress, because a stuck card does not move until
+somebody acts on it, while an in-progress one is already moving.
+
+| tab         | its one address                                             |
+| ----------- | ----------------------------------------------------------- |
+| To approve  | `/workbench?tab=approvals`                                  |
+| **To fix**  | **`/workbench?tab=to-fix`** (new — slug and label the same) |
+| In progress | `/workbench?tab=in-progress` (now minus every to-fix card)  |
+| others      | unchanged                                                   |
+
+### Panel 2 — the ROW: line 1 unchanged, and a FIX LINE
+
+**Line 1 is `WorkbenchList`'s row, byte for byte:** kind glyph, key, title, the CI badge glyph, Your
+role, Assignee, Status, in `minmax(10rem,1fr) 96px 140px 108px`. **Line 2, the FIX LINE,** spans every
+column. It is indented to the title's left edge (16px glyph + 8px gap = 24px past the cell), `text-xs`,
+and sits 10px above the row's bottom border. The row is no longer 44px on this tab: it is 44px plus
+the fix line. Other tabs are untouched.
+
+**Left: WHY — one reason.** A glyph and a sentence.
+
+| `fixReason`         | glyph (ink)                          | en                                                               |
+| ------------------- | ------------------------------------ | ---------------------------------------------------------------- |
+| `queue_failed`      | `CircleX` (`--el-danger-on-surface`) | Failed in the merge queue · **`<check>`**                        |
+| `conflicted`        | `CircleX` (`--el-danger-on-surface`) | Conflicts with **`<base>`**                                      |
+| `ci_failed`         | `CircleX` (`--el-danger-on-surface`) | CI failed · **`<check>`**                                        |
+| `changes_requested` | `Undo2` (`--el-icon-muted`)          | Changes requested by **`<name>`** — “`<first line of the note>`” |
+
+These are the glyph and ink pairings `RepairFixPart` already uses for the same conditions: the
+failing lines take `CircleX` in danger-on-surface, and the sent-back line takes `Undo2`, muted,
+because _a refusal is not a failure_. The check name and the base branch are set in `font-mono`, bold.
+The note is truncated at about 34ch with an ellipsis, and the full note is one click away on the card.
+
+**When a card delivers more than one pull request,** a secondary-ink clause follows the reason:
+**`· 2 of 3 pull requests affected`**. It is drawn only when `total > 1`.
+
+**Right: WHAT REPAIRS IT.** A command chip followed by the copy icon-button, right-aligned so the
+commands form a column you can scan.
+
+- **The command comes from `fixDetail.repair`, never from the reason.** `fix` ⇒ `motir fix <KEY>`;
+  `run` ⇒ `motir run <KEY>`. A reviewer's Request changes on the approve-to-merge gate is `run`: the
+  next run's prompt carries the note. A story's acceptance video sent back with _Re-run_ is also stored
+  as `changes_requested`, with `gate: 'acceptance_result'`, and is `fix`, because `motir fix` claims
+  it. Panel 2's variant row draws that case.
+- **The chip** is the shipped inline-code recipe: `--el-code-bg` / `--el-code-text`, `--radius-control`,
+  `--spacing-tooltip-x/y`, `font-mono`.
+- **The copy button** is `ReadyList`'s icon-button (`--height-control` square, `--radius-control`,
+  `--spacing-icon-btn`, `Copy` 16px). **On this tab it is always visible, not revealed on hover.** The
+  command is the answer the row exists to give, and on a touch screen a hover-only button cannot be
+  reached at all. It sits above the row's stretched link (`z-10`), so pressing it copies the command
+  and does not open the card. On success it shows the `ready` toast pattern: _Copied_ / _Paste {command}
+  into your terminal._
+
+**The reason line is NOT the CI badge, and the two must not be read as one signal.** The badge is a
+GLYPH about the checks at the card's current head, drawn on every tab by the unchanged rule: failing
+and running draw, passing and done draw nothing. The reason line is a SENTENCE naming why the card is
+stuck and what to type. They agree only on `ci_failed`, where both appear: the badge says the checks
+are red, and the line names the failing check and the repair. A conflicted, queue-failed or sent-back
+card usually has GREEN checks, so it carries no badge and is still on this tab. That is the point of
+this tab, and why the line never rests on colour.
+
+**Order.** Reason priority first (`queue_failed` → `conflicted` → `ci_failed` → `changes_requested`),
+then the work tabs' shipped `READY_KIND_RANK` within a reason, then `id`. The page boundary must be
+exact, so the read orders and the client never re-sorts (§ _The ORDER_).
+
+### Panel 3 — a repaired row is HELD (extends § 26)
+
+**§ 26's rule, unchanged in wording: A NUDGE ADDS AND UPDATES. IT NEVER REMOVES.** Until now it applied
+only to To approve, and `WorkbenchList` deliberately does not hold rows on the work tabs, because a
+card moving To do → In progress is the list being correct. **To fix joins To approve,** for § 20's
+reason: the reader is working DOWN this list, and a row vanishing under the cursor is the most
+expensive thing a queue can teach.
+
+- The strip count drops at once (3 while four rows are on screen). The count is about what is to fix,
+  and a held row is a receipt, not a member.
+- The held row keeps its position. Its title and reason go `--el-text-secondary`, its glyph is dropped,
+  and **its command and copy button are replaced by the colourless chip _Cleared_** (§ 26's recipe:
+  `--el-chip-bg` · `--el-chip-border` · `--el-text-secondary`). It still opens.
+- The next load omits it: a tab switch, a pager move, a reload.
+
+**Why _Cleared_, not _Repaired_ or _Fixed_.** The nudge carries no content, so the surface knows that
+the card LEFT the set, not why. A green push, a resolved conflict, a new commit after changes were
+requested, a card reaching done, and an archive all clear it. _Repaired_ would claim a fix in the case
+where the card was simply archived. This is § 26's _Decided elsewhere_ reasoning: say the true thing,
+and let the card show the record.
+
+**An ARRIVAL** takes § 26's `New` chip on line 1, unchanged. Here it lands at its ordered position.
+
+### Panel 4 — the EMPTY state
+
+The shipped `EmptyState`: `Wrench` at 48px in `--el-icon-muted`, the serif title, and the
+`--el-text-subtitle` body. **No action**, by § _Empty states_' own rule: nothing a reader can press
+makes a repair appear. A reader sees this state only by asking for `?tab=to-fix`, because the cascade
+skips an empty To fix.
+
+### Panel 5 — more than one page
+
+The shipped `IssueListPager`, the last row inside the list box, with its range line and numbered
+buttons, as on every tab (§ _The pager_). Nothing is re-specified.
+
+### Panel 6 — zh
+
+The strip, the four reasons, the affected clause, the empty state, the held chip and the toast, all
+drawn in Chinese. Commands, check names and branch names are never translated.
+
+### `fixDetail` — what each row reads (the contract with MOTIR-6600)
+
+`fixReason`: `queue_failed | conflicted | ci_failed | changes_requested`. When several conditions
+hold, the first in that order is stored. `fixDetail` (JSON):
+
+| field          | used by                     | meaning                                                                                                              |
+| -------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `repair`       | every row                   | `'fix'` ⇒ `motir fix <KEY>`; `'run'` ⇒ `motir run <KEY>`. **The only source of the command.**                        |
+| `check`        | `queue_failed`, `ci_failed` | `ci_failed`: the first failing check's name (sorted). `queue_failed`: the queue's failing check name, else `null`    |
+| `queueReason`  | `queue_failed`              | GitHub's raw reason (`CI_FAILURE`, `CI_TIMEOUT`, `MERGE_CONFLICT`, …). Humanised when `check` is `null` (keys below) |
+| `base`         | `conflicted`                | the base branch. `null` ⇒ _Conflicts with its base branch_                                                           |
+| `reviewerName` | `changes_requested`         | who decided (`decidedByLabel`). `null` ⇒ _Changes requested_                                                         |
+| `notePreview`  | `changes_requested`         | first non-empty line of the note, ≤ 140 chars. `null` ⇒ the sentence ends after the name                             |
+| `gate`         | `changes_requested`         | `'pull_request_approval'` or `'acceptance_result'`, for reading only; the command still comes from `repair`          |
+| `affected`     | every row                   | the number of failing open pull requests                                                                             |
+| `total`        | every row                   | the number of open pull requests. The affected clause is drawn only when `total > 1`                                 |
+
+**Fallback order for `queue_failed`:** `check` → the humanised `queueReason` → the bare sentence.
+
+### Copy — every new string, `en` and `zh` (namespace `workbench.*`)
+
+| key                                                | `en`                                                                                                                                           | `zh`                                                                                     |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `workbench.tabs.toFix`                             | To fix                                                                                                                                         | 待修复                                                                                   |
+| `workbench.empty.toFix.title`                      | Nothing to fix                                                                                                                                 | 没有需要修复的工作                                                                       |
+| `workbench.empty.toFix.body`                       | When a merge queue, a conflict, a failing check or a reviewer stops one of your work items, it shows up here with the command that repairs it. | 当合并队列、冲突、未通过的检查或审阅者卡住你的某个工作项时，它会带着修复命令显示在这里。 |
+| `workbench.toFix.reason.queueFailed`               | Failed in the merge queue · {detail}                                                                                                           | 在合并队列中失败 · {detail}                                                              |
+| `workbench.toFix.reason.queueFailedBare`           | Failed in the merge queue                                                                                                                      | 在合并队列中失败                                                                         |
+| `workbench.toFix.queueReason.CI_FAILURE`           | checks failed                                                                                                                                  | 检查未通过                                                                               |
+| `workbench.toFix.queueReason.CI_TIMEOUT`           | checks timed out                                                                                                                               | 检查超时                                                                                 |
+| `workbench.toFix.queueReason.MERGE_CONFLICT`       | merge conflict                                                                                                                                 | 合并冲突                                                                                 |
+| `workbench.toFix.queueReason.INVALID_MERGE_COMMIT` | no merge commit could be built                                                                                                                 | 无法构建合并提交                                                                         |
+| `workbench.toFix.reason.conflicted`                | Conflicts with {base}                                                                                                                          | 与 {base} 冲突                                                                           |
+| `workbench.toFix.reason.conflictedNoBase`          | Conflicts with its base branch                                                                                                                 | 与其目标分支冲突                                                                         |
+| `workbench.toFix.reason.ciFailed`                  | CI failed · {check}                                                                                                                            | CI 未通过 · {check}                                                                      |
+| `workbench.toFix.reason.ciFailedBare`              | CI failed                                                                                                                                      | CI 未通过                                                                                |
+| `workbench.toFix.reason.changesRequested`          | Changes requested by {name} — “{note}”                                                                                                         | {name} 要求修改 ——“{note}”                                                               |
+| `workbench.toFix.reason.changesRequestedNoNote`    | Changes requested by {name}                                                                                                                    | {name} 要求修改                                                                          |
+| `workbench.toFix.reason.changesRequestedAnon`      | Changes requested                                                                                                                              | 已要求修改                                                                               |
+| `workbench.toFix.affected`                         | {affected} of {total} pull requests affected                                                                                                   | {total} 个拉取请求中有 {affected} 个受影响                                               |
+| `workbench.toFix.copyAria`                         | Copy the repair command for {key}                                                                                                              | 复制 {key} 的修复命令                                                                    |
+| `workbench.toFix.copyTooltip`                      | Copy <cmd>{command}</cmd>                                                                                                                      | 复制 <cmd>{command}</cmd>                                                                |
+| `workbench.toFix.toast.title`                      | Copied                                                                                                                                         | 已复制                                                                                   |
+| `workbench.toFix.toast.body`                       | Paste {command} into your terminal.                                                                                                            | 请将 {command} 粘贴到终端。                                                              |
+| `workbench.live.cleared`                           | Cleared                                                                                                                                        | 已解除                                                                                   |
+
+Unmatched `queueReason` values fall to `queueFailedBare`. These are drafts for the catalog: MOTIR-6605
+owns the `en` + `zh` entries, with MOTIR-6604 owning `tabs.toFix` if it lands first.
+
+### Token map — this section's own elements
+
+| Element                 | Colour                                                          | Shape                                                                 |
+| ----------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------- |
+| the `Wrench` tab glyph  | `--el-tabnav-active` / `--el-text-faint` (the shipped pair)     | `h-3.5 w-3.5`                                                         |
+| the To fix count        | `--el-count-bg` · `--el-count-text` (shipped)                   | `--radius-badge` · `--spacing-chip-x`                                 |
+| failing-reason glyph    | `--el-danger-on-surface`                                        | 14px                                                                  |
+| changes-requested glyph | `--el-icon-muted` (decorative, `aria-hidden`)                   | 14px                                                                  |
+| reason text             | `--el-text`; check / base / name bold                           | `text-xs`                                                             |
+| affected clause         | `--el-text-secondary`                                           | `text-xs`                                                             |
+| command chip            | `--el-code-bg` · `--el-code-text`                               | `--radius-control` · `--spacing-tooltip-x/y`                          |
+| copy button             | `--el-text-secondary`, hover `--el-text` on `--el-surface-soft` | `--height-control` square · `--radius-control` · `--spacing-icon-btn` |
+| held row ink            | `--el-text-secondary` (AA on the `--el-surface` hover fill)     | —                                                                     |
+| the `Cleared` chip      | `--el-chip-bg` · `--el-chip-border` · `--el-text-secondary`     | `--radius-badge` · `--spacing-chip-x/y`                               |
+| empty-state glyph       | `--el-icon-muted`                                               | 48px                                                                  |
+
+No `--el-text-muted` or `--el-text-faint` carries text anywhere on the row, because its hover fill is
+`--el-surface`. There are no raw hues and no raw shape utilities.
+
+### Which card builds which panel
+
+| card                                       | builds                                                                                                                                                                                        |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-6600** (`fixReason` + `fixDetail`) | the data every row reads — the table above                                                                                                                                                    |
+| **MOTIR-6604** (the read)                  | `to-fix` in `WORKBENCH_TABS` (second) and its `?tab=` spelling · `HOME_SLICE_TO_FIX` and In progress minus it · the `toFix` count · the cascade's new rung · the ORDER above                  |
+| **MOTIR-6605** (the UI)                    | panels 1–6: the strip entry and glyph, the fix line, the copy button and toast, the held `Cleared` row (To fix joins § 26's hold), the empty state, the pager mount, every `en` + `zh` string |
+| **MOTIR-6602 / MOTIR-6603**                | nothing drawn. They keep the stored reason true, which is what makes a live re-read hold the right row                                                                                        |
+| **MOTIR-6606 / MOTIR-6607**                | the assertions: four rows with their reasons and commands, none on In progress, the landing, the held row after a green push, zh                                                              |
+
+### GIVES / TAKES
+
+| card                          | GIVES                                                                                                                          | TAKES                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| **MOTIR-6604**                | STRUCTURE: the strip position, the address, the four-rung cascade, the order. PREMISE: To fix and In progress partition.       | Nothing.                                                                                         |
+| **MOTIR-6605**                | ELEMENT: the fix line, the chip, the copy button, `Cleared`, the empty state. STRUCTURE: line 2 spans every column; hold rule. | Nothing.                                                                                         |
+| **MOTIR-6600**                | PREMISE: the command is `fixDetail.repair`; the `check → queueReason → bare` fallback; the `total > 1` rule.                   | Nothing. Field names are its own.                                                                |
+| **MOTIR-5216 / § 21**         | Nothing new.                                                                                                                   | **The strip order and the cascade** — amended, not re-opened: one tab and one rung inserted.     |
+| **MOTIR-5239 / § 26**         | Nothing new.                                                                                                                   | **The hold's scope** — widened from To approve to To approve and To fix; the rule's words stand. |
+| **MOTIR-5471** (the CI badge) | Nothing.                                                                                                                       | Nothing — the badge is composed unchanged beside the new line.                                   |
+| **MOTIR-5460** (`motir fix`)  | Nothing.                                                                                                                       | Nothing. The tab shows the command; what `motir fix` claims is its own.                          |
+
+### What this does NOT decide
+
+- **How a to-fix card LOOKS elsewhere.** The To fix tag on `/items`, board and quick-view rows, and the
+  banner on the item page, are [MOTIR-6589](motir:cmujrd26p012ei0tx3j8fmlhn)'s design (MOTIR-6608).
+  Its tag reads the same `fixReason`; nothing here draws it.
+- **A card whose run DIED.** That is not a reason here. It joins as a fifth reason with
+  `motir continue <KEY>` in [MOTIR-6590](motir:cmujrd295012fi0tx2myssohp). The fix line has room for it,
+  because its command comes from `repair`.
+- **Neutral and setting-blocked queue outcomes.** They wait on a person's approval and stay on To
+  approve.
+- **What `motir fix` claims**, a workspace-wide list, and notifications.
+- **The Development section's own fix part** (`RepairFixPart`) on the item page. This tab borrows its
+  glyphs and inks and does not change it.

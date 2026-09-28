@@ -99,7 +99,7 @@ export const APPROVE_REFUSALS: Readonly<Record<string, RefusalClassification>> =
   INVALID_PROPOSAL: {
     cause: 'plan-internal',
     justification:
-      'A malformed proposal body — refused at the write door that received it, so it never reaches a closed plan.',
+      'A malformed proposal body — refused at the write door that received it, so it never reaches a closed plan. ONE shape also reaches approve (MOTIR-6663): a `modify` that marks a target no longer finished. The append, the correction and the close refuse it; approve re-asks only because a target can be reopened while the plan waits, and the 422 names the proposal to remove instead.',
   },
   UNRESOLVED_PLAN_REF: {
     cause: 'plan-internal',
