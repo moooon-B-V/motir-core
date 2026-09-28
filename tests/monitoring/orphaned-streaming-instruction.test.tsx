@@ -74,8 +74,12 @@ async function streamTwoPartBoundary(): Promise<string> {
 
 /** The inline script that carries `$RS(...)`, exactly as React wrote it. */
 function completeSegmentScript(html: string): string {
-  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]!);
-  const script = scripts.find((s) => s.includes('$RS('));
+  // Parsed, not regex-matched: an HTML parser is the only reader of a <script>
+  // element that agrees with the browser's.
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  const script = [...parsed.querySelectorAll('script')]
+    .map((s) => s.textContent ?? '')
+    .find((s) => s.includes('$RS('));
   if (!script) throw new Error(`React emitted no $RS instruction:\n${html}`);
   return script;
 }
