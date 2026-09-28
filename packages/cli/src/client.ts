@@ -699,6 +699,27 @@ export interface AcceptanceRefusal {
  * CONTINUE claim on a work item whose last run died. A refusal is a result, not an
  * error: `not_continuable` carries its `reason`, `taken` its `holder`.
  */
+/** One repository's share of a dead run's work (MOTIR-6791). */
+export interface ContinueClaimBranch {
+  /** The repository's NAME, or null when the dead run did not record it. */
+  repository: string | null;
+  branch: string;
+  pullRequest: { repo: string; number: number; url: string; headRef: string } | null;
+}
+
+/**
+ * The branches a continue claim handed over — every repository's, primary first —
+ * or the single `branch` from a server that sends no `branches`.
+ */
+export function continueBranchesOf(
+  claim: Pick<WorkItemContinueClaim, 'branch' | 'branches' | 'pullRequest'>,
+): ContinueClaimBranch[] {
+  if (claim.branches && claim.branches.length > 0) return claim.branches;
+  return claim.branch === null
+    ? []
+    : [{ repository: null, branch: claim.branch, pullRequest: claim.pullRequest }];
+}
+
 export interface WorkItemContinueClaim {
   key: string;
   title: string;
@@ -724,7 +745,14 @@ export interface WorkItemContinueClaim {
     lastHeardAt: string;
     dispatcher: { id: string; name: string } | null;
   } | null;
+  /** The PRIMARY repository's branch — `branches[0].branch`. */
   branch: string | null;
+  /**
+   * EVERY repository's branch of the dead run, primary first (MOTIR-6791).
+   * Optional because a server older than contract 1.52.0 does not send it — read
+   * it through `continueBranchesOf`, which falls back to `branch`.
+   */
+  branches?: ContinueClaimBranch[];
   pullRequest: { repo: string; number: number; url: string; headRef: string } | null;
   previousAssignee: { id: string; name: string } | null;
   /** `parent` when the dead run was a scoped run over this container (MOTIR-6535). */

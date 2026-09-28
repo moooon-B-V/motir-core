@@ -2057,6 +2057,16 @@ export interface components {
                 } | null;
             } | null;
             branch: string | null;
+            branches: {
+                repository: string | null;
+                branch: string;
+                pullRequest: {
+                    repo: string;
+                    number: number;
+                    url: string;
+                    headRef: string;
+                } | null;
+            }[];
             pullRequest: {
                 repo: string;
                 number: number;

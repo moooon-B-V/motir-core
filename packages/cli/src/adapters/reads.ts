@@ -649,6 +649,8 @@ export function toWorkItemContinueClaim(
   body: SuccessBody<'claimWorkItemContinue'>,
 ): WorkItemContinueClaim {
   const ref = (a: { id: string; name: string } | null) => (a ? { id: a.id, name: a.name } : null);
+  const pr = (p: SuccessBody<'claimWorkItemContinue'>['pullRequest']) =>
+    p ? { repo: p.repo, number: p.number, url: p.url, headRef: p.headRef } : null;
   return {
     key: body.key,
     title: body.title,
@@ -670,14 +672,12 @@ export function toWorkItemContinueClaim(
         }
       : null,
     branch: body.branch,
-    pullRequest: body.pullRequest
-      ? {
-          repo: body.pullRequest.repo,
-          number: body.pullRequest.number,
-          url: body.pullRequest.url,
-          headRef: body.pullRequest.headRef,
-        }
-      : null,
+    branches: body.branches.map((b) => ({
+      repository: b.repository,
+      branch: b.branch,
+      pullRequest: pr(b.pullRequest),
+    })),
+    pullRequest: pr(body.pullRequest),
     previousAssignee: ref(body.previousAssignee),
     mode: body.mode,
     landedKeys: [...body.landedKeys],

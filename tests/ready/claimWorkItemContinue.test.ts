@@ -661,3 +661,103 @@ describe('claimContinue — a hosted opening', () => {
     expect(await adminDb.dispatchRun.count({ where: { command: 'continue' } })).toBe(0);
   });
 });
+
+// A dead run's branch PER REPOSITORY (Story MOTIR-6527 · MOTIR-6791).
+describe('claimContinue — a run across repositories', () => {
+  async function twoRepoDeadCard(fx: WorkItemFixture) {
+    const { card, runId } = await deadCard(fx, { branch: null });
+    await adminDb.workItem.update({
+      where: { id: card.id },
+      data: { targetRepo: 'web', targetRepos: ['web', 'core'] },
+    });
+    await dispatchRunService.appendEvents(
+      runId,
+      [
+        {
+          kind: 'checkout_ready',
+          workItemKey: card.identifier,
+          data: {
+            branches: [
+              { repository: 'core', branch: 'task/core-side', workBranch: 'task/core-side' },
+              { repository: 'web', branch: 'task/web-side', workBranch: 'task/web-side' },
+            ],
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    await adminDb.dispatchRun.update({
+      where: { id: runId },
+      data: { lastHeartbeatAt: new Date(Date.now() - 7 * 60_000) },
+    });
+    return { card, runId };
+  }
+
+  it('the claim and the view carry EVERY repository’s branch, the primary’s first and as `branch`', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await twoRepoDeadCard(fx);
+
+    const view = await workItemContinueService.getContinueView(card.id, fx.ctx);
+    expect(view).toMatchObject({
+      state: 'died',
+      branch: 'task/web-side',
+      branches: [
+        { repository: 'web', branch: 'task/web-side', pullRequest: null },
+        { repository: 'core', branch: 'task/core-side', pullRequest: null },
+      ],
+    });
+
+    const result = await claim(fx, card.identifier);
+    expect(result).toMatchObject({
+      outcome: 'claimed',
+      branch: 'task/web-side',
+      branches: [
+        { repository: 'web', branch: 'task/web-side' },
+        { repository: 'core', branch: 'task/core-side' },
+      ],
+    });
+
+    // The continue itself records both, so a continue that dies before its own
+    // checkout is continuable across both repositories again.
+    const continuing = await workItemContinueService.getContinueView(card.id, fx.ctx);
+    expect(continuing).toMatchObject({
+      state: 'continuing',
+      branches: [
+        { repository: 'web', branch: 'task/web-side' },
+        { repository: 'core', branch: 'task/core-side' },
+      ],
+    });
+    await adminDb.dispatchRun.update({
+      where: { id: result.runId! },
+      data: { lastHeartbeatAt: new Date(Date.now() - 10 * 60_000) },
+    });
+    const again = await claim(fx, card.identifier);
+    expect(again.branches.map((b) => b.branch)).toEqual(['task/web-side', 'task/core-side']);
+  });
+
+  it('an open pull request in ONE repository replaces only that repository’s branch', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await twoRepoDeadCard(fx);
+    const core = await connectRepairRepo(fx, 'core');
+    await deliveredPr(fx, card.id, core, { headRef: 'task/core-pr', checks: {} });
+
+    const result = await claim(fx, card.identifier);
+
+    expect(result.branches).toEqual([
+      { repository: 'web', branch: 'task/web-side', pullRequest: null },
+      {
+        repository: 'core',
+        branch: 'task/core-pr',
+        pullRequest: expect.objectContaining({ repo: 'acme/core', headRef: 'task/core-pr' }),
+      },
+    ]);
+    expect(result.branch).toBe('task/web-side');
+  });
+
+  it('a one-repository run answers a one-element `branches`', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, branch } = await deadCard(fx);
+    const result = await claim(fx, card.identifier);
+    expect(result.branches).toEqual([{ repository: null, branch, pullRequest: null }]);
+  });
+});

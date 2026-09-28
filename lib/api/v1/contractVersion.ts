@@ -784,5 +784,19 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.50.0` after MOTIR-6538, so this claims `1.51.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD.
+ *
+ * - `1.52.0` — MOTIR-6791 adds `branches` to `WorkItemContinueClaim`: EVERY
+ *   repository's branch of the dead run, primary first — `{ repository, branch,
+ *   pullRequest }` — because a run that spanned several repositories pushed a
+ *   branch in each and `branch` could only name one. `branch` stays, equal to the
+ *   primary repository's entry. The CONTINUE block of `getWorkItemDispatchPrompt`
+ *   names each repository's branch — prompt TEXT, not contract.
+ *
+ *   Additive: one new array field on an existing shape (§8's allowed list); no
+ *   declared field changes meaning.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.51.0` after MOTIR-6539, so this claims `1.52.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the FIELD.
  */
-export const V1_CONTRACT_VERSION = '1.51.0';
+export const V1_CONTRACT_VERSION = '1.52.0';

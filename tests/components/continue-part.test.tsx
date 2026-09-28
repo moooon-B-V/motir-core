@@ -43,6 +43,7 @@ function died(over: Partial<Extract<ContinuePartView, { state: 'died' }>> = {}):
     deadRun,
     reason: 'lapsed',
     branch: 'motir/ACME-12-export',
+    branches: [{ repository: null, branch: 'motir/ACME-12-export', pullRequest: null }],
     pullRequest: null,
     refusal: null,
     parentKey: null,
@@ -154,6 +155,7 @@ describe('D5 — continuing', () => {
       byViewer: false,
       startedAt: '2026-09-27T14:25:00.000Z',
       branch: 'motir/ACME-12-export',
+      branches: [],
       tookOverFrom: { runId: 'run_1', dispatcher: { id: 'usr_1', name: 'Ana' } },
     });
     expect(screen.getByText('Continuing')).toBeTruthy();
@@ -170,6 +172,7 @@ describe('D5 — continuing', () => {
       byViewer: false,
       startedAt: '2026-09-27T14:25:00.000Z',
       branch: null,
+      branches: [],
       tookOverFrom: { runId: 'run_1', dispatcher: null },
     });
     expect(text()).toContain(`Being continued · started ${ago('2026-09-27T14:25:00.000Z')}`);
@@ -184,6 +187,7 @@ describe('D5 — continuing', () => {
       byViewer: true,
       startedAt: '2026-09-27T14:25:00.000Z',
       branch: null,
+      branches: [],
       tookOverFrom: null,
     });
     expect(text()).toContain('Being continued by you');
