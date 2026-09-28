@@ -1,6 +1,6 @@
 import { CliError } from '../errors.js';
 import { errVerbatim, info, outVerbatim } from '../output.js';
-import { parseKinds } from './read.js';
+import { parseKinds, refuseLaneFlagConflicts } from './read.js';
 import { withHostedProjectSession, withProjectSession, type ProjectSession } from '../session.js';
 import {
   assertAdoptsLeaf,
@@ -675,11 +675,34 @@ export interface NextOptions extends DeliveryOptions {
   kinds?: string;
   /** `--reset` — clear this project's session exclude list first. */
   reset?: boolean;
+  /** `--parent` — run the next runnable CONTAINER as a parent run (MOTIR-6837). */
+  parent?: boolean;
+  /** `--bug` — take the next BUG instead of the next leaf (MOTIR-6837). */
+  bug?: boolean;
 }
 
+/**
+ * `motir next` — the next item of ONE ready lane (Story MOTIR-6829 ·
+ * MOTIR-6837). By default the next LEAF, never a bug. `--parent` takes the next
+ * runnable container and runs it exactly as `motir run <KEY>` does — the same
+ * function, so a parent run has one implementation. `--bug` takes the next bug:
+ * a childless bug dispatches as a leaf, and a bug's subtask runs its bug as a
+ * parent run.
+ */
 export async function nextCommand(opts: NextOptions, deps: DeliveryDeps = {}): Promise<void> {
   refuseAutoOnlyFlag(opts, 'next');
+  refuseLaneFlagConflicts(opts);
+  if (opts.parent) {
+    // `motir run <container> --print`'s own refusal, verbatim: a parent run has
+    // no single prompt to print.
+    refuseLeafOnlyFlag(opts);
+    const key = await pickLaneContainer(opts);
+    if (key) await runCommand(key, opts, deps);
+    return;
+  }
   const kinds = parseKinds(opts.kinds);
+  const lane = opts.bug ? 'bug' : 'leaf';
+  let runWhole: string | null = null;
   await withProjectSession(async (session) => {
     const { client, serverUrl, projectKey } = session;
     if (opts.reset) {
@@ -692,13 +715,19 @@ export async function nextCommand(opts: NextOptions, deps: DeliveryDeps = {}): P
     }
 
     const ownerId = await resolveOwnerId(client);
-    const item = await claimNextNotExcluded(client, projectKey, kinds, excluded, ownerId);
+    const item = await claimNextNotExcluded(client, projectKey, kinds, excluded, ownerId, lane);
     if (!item) {
       info(
         excluded.length > 0
-          ? 'No ready work items (excluding the skipped ones — `motir next --reset` to retry them).'
-          : 'No ready work items.',
+          ? `No ready work items in the ${lane} lane (excluding the skipped ones — \`motir next --reset\` to retry them).`
+          : `No ready work items in the ${lane} lane.`,
       );
+      return;
+    }
+    // A BUG'S SUBTASK runs its bug whole, as a parent run (MOTIR-6837) — outside
+    // this session, through `runCommand`, exactly as `motir run <bug>` would.
+    if (lane === 'bug' && item.containerKey) {
+      runWhole = item.containerKey;
       return;
     }
 
@@ -722,6 +751,36 @@ export async function nextCommand(opts: NextOptions, deps: DeliveryDeps = {}): P
       opts,
       deps,
     });
+  });
+  if (runWhole) {
+    refuseLeafOnlyFlag(opts);
+    await runCommand(runWhole, opts, deps);
+  }
+}
+
+/**
+ * The next runnable container not on the persisted exclude list — `motir next
+ * --parent`'s pick (MOTIR-6837). The exclude list is keyed by KEY and a
+ * container's key is its own, so the one store serves every lane. `null` (and
+ * the empty-lane line) when the containers lane has nothing left.
+ */
+async function pickLaneContainer(opts: NextOptions): Promise<string | null> {
+  return withProjectSession(async ({ client, serverUrl, projectKey }) => {
+    if (opts.reset) {
+      const cleared = clearExcludes(serverUrl, projectKey);
+      info(`Cleared ${cleared} excluded item${cleared === 1 ? '' : 's'}.`);
+    }
+    const excluded = readExcludes(serverUrl, projectKey);
+    const { container } = await client.nextReadyContainer({
+      projectKey,
+      ...(excluded.length > 0 ? { excludeKeys: excluded.map((e) => e.key) } : {}),
+    });
+    if (!container) {
+      info('No ready work items in the container lane.');
+      return null;
+    }
+    info(`Next container: ${container.key} — ${container.title}.`);
+    return container.key;
   });
 }
 
@@ -798,6 +857,7 @@ async function claimNextNotExcluded(
   kinds: string[] | undefined,
   excluded: readonly { key: string }[],
   ownerId: string,
+  lane: 'leaf' | 'bug' = 'leaf',
 ): Promise<DispatchItem | null> {
   // ONE call. The hold-out is applied inside the client's page walk (MOTIR-2398),
   // so the ask-learn-the-id-ask-again loop this used to need is gone: the
@@ -805,6 +865,7 @@ async function claimNextNotExcluded(
   const { item } = await client.nextReady({
     projectKey,
     ownerId,
+    lanes: [lane],
     ...(kinds ? { kinds } : {}),
     ...(excluded.length > 0 ? { excludeKeys: excluded.map((e) => e.key) } : {}),
   });

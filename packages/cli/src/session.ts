@@ -1,4 +1,9 @@
-import { MotirClient, type ReadyItemSummary, type SearchItemSummary } from './client.js';
+import {
+  MotirClient,
+  type ReadyContainerSummary,
+  type ReadyItemSummary,
+  type SearchItemSummary,
+} from './client.js';
 import { sprintFilter } from './render.js';
 import { CliError } from './errors.js';
 import { requireLink, type FoundLink } from './config/linkConfig.js';
@@ -103,6 +108,8 @@ export const READY_PAGE_SIZE = 200;
 export interface ReadyFilter {
   kinds?: string[];
   assigneeId?: string | null;
+  /** Which ready ROW lane — the leaves (default) or the bugs (MOTIR-6837). */
+  lane?: 'leaf' | 'bug';
 }
 
 /**
@@ -121,9 +128,31 @@ export async function collectReady(
   do {
     const page = await client.listReady({
       projectKey,
+      lane: filter.lane ?? 'leaf',
       kinds: filter.kinds,
       assigneeId: filter.assigneeId,
       cursor,
+      limit: READY_PAGE_SIZE,
+    });
+    all.push(...page.items);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return all;
+}
+
+/** Page through the WHOLE containers lane (MOTIR-6837) — `motir ready --parent`. */
+export async function collectReadyContainers(
+  client: MotirClient,
+  projectKey: string,
+  filter: { assigneeId?: string | null } = {},
+): Promise<ReadyContainerSummary[]> {
+  const all: ReadyContainerSummary[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await client.listReadyContainers({
+      projectKey,
+      ...(filter.assigneeId !== undefined ? { assigneeId: filter.assigneeId } : {}),
+      ...(cursor ? { cursor } : {}),
       limit: READY_PAGE_SIZE,
     });
     all.push(...page.items);

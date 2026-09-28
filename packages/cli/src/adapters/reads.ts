@@ -1073,5 +1073,6 @@ export function toDispatchItem(row: ReadyBody['items'][number]): DispatchItem {
     executor: row.executor,
     assigneeId: row.assigneeId,
     inheritedSessionBranch: row.inheritedSessionBranch,
+    containerKey: row.container?.key ?? null,
   };
 }

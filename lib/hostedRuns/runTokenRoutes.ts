@@ -74,6 +74,13 @@ export const RUN_TOKEN_ROUTES: readonly RunTokenRoute[] = [
     calledBy: 'cli',
   },
   {
+    operationId: 'getProjectReadyContainers',
+    method: 'GET',
+    path: '/api/v1/projects/{projectKey}/ready/containers',
+    binding: 'project',
+    calledBy: 'cli',
+  },
+  {
     operationId: 'getProjectReadyBugs',
     method: 'GET',
     path: '/api/v1/projects/{projectKey}/ready/bugs',

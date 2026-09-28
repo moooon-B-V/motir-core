@@ -338,6 +338,13 @@ export interface DispatchItem {
    * `main`, and a lineage item's base has not merged.
    */
   inheritedSessionBranch: string | null;
+  /**
+   * The RUNNABLE CONTAINER this row groups under in its lane, or `null`
+   * (MOTIR-6837) — how `motir next --bug` knows a bug's subtask belongs to a
+   * bug it should run whole, as a parent run. Absent on an item not read off a
+   * lane (a hosted run's adopted legs, a continue's resumed card).
+   */
+  containerKey?: string | null;
 }
 
 /** WHICH `GIT WORKFLOW` variant the server-assembled prompt carries — chosen

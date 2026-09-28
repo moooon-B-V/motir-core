@@ -9,6 +9,7 @@ import type {
   ActivityPart,
   ActivityValue,
   CommentsPage,
+  ReadyContainerSummary,
   ReadyItemSummary,
   SearchFilterEnvelope,
   SearchItemSummary,
@@ -245,17 +246,45 @@ const READY_EDGE_HEADERS = ['KEY', 'KIND', 'PRIORITY', 'ASSIGNEE', 'BLOCKS', 'TI
  * things are waiting on it." Against a server with no edge projection the column
  * is omitted entirely and this is exactly the table 7.9.2 shipped.
  */
-export function renderReadyTable(items: ReadyItemSummary[], titleWidth = 60): string {
-  if (items.length === 0) return 'No ready work items.';
+export function renderReadyTable(
+  items: ReadyItemSummary[],
+  titleWidth = 60,
+  /** The lane the rows came from (MOTIR-6837) — named in the empty-lane line. */
+  lane: 'leaf' | 'bug' = 'leaf',
+): string {
+  if (items.length === 0) return emptyLaneLine(lane);
   const graphed = hasEdges(items);
-  const rows = items.map((it) => [
-    it.key,
-    it.kind,
-    it.priority,
-    it.assignee?.name ?? 'unassigned',
-    ...(graphed ? [edgeCell(it.dependencies?.blocks)] : []),
-    truncate(it.title, titleWidth),
-  ]);
+  // GROUPED by runnable container (MOTIR-6837): a container prints once, as a
+  // header line (`KEY  kind  title  (n of m ready)`), over its leaves indented
+  // two spaces; a row with no container stands alone, unindented. The rows keep
+  // the server's order — a group is contiguous by construction.
+  const rows: string[][] = [];
+  const headed = new Set<string>();
+  for (const it of items) {
+    const container = it.container ?? null;
+    if (container && !headed.has(container.key)) {
+      headed.add(container.key);
+      rows.push([
+        container.key,
+        container.kind,
+        container.priority,
+        container.assignee?.name ?? 'unassigned',
+        ...(graphed ? [''] : []),
+        truncate(
+          `${container.title}  (${container.readyLeafCount} of ${container.childCount} ready)`,
+          titleWidth,
+        ),
+      ]);
+    }
+    rows.push([
+      container ? `  ${it.key}` : it.key,
+      it.kind,
+      it.priority,
+      it.assignee?.name ?? 'unassigned',
+      ...(graphed ? [edgeCell(it.dependencies?.blocks)] : []),
+      truncate(it.title, titleWidth),
+    ]);
+  }
   const count = `${items.length} ready work item${items.length === 1 ? '' : 's'}:`;
   const headers = graphed ? READY_EDGE_HEADERS : READY_HEADERS;
   const table = `${count}\n${formatTable(headers, rows)}`;
@@ -265,6 +294,32 @@ export function renderReadyTable(items: ReadyItemSummary[], titleWidth = 60): st
         rows.map((row) => row[4] ?? ''),
       )
     : table;
+}
+
+/** What each empty ready lane says — one line, never an error (MOTIR-6837). */
+export function emptyLaneLine(lane: 'leaf' | 'container' | 'bug'): string {
+  return `No ready work items in the ${lane} lane.`;
+}
+
+const CONTAINER_HEADERS = ['KEY', 'KIND', 'PRIORITY', 'ASSIGNEE', 'READY', 'TITLE'];
+
+/** The `motir ready --parent` table: the runnable containers, in the server's
+ *  group order — each one what `motir run <KEY>` runs as a parent run. */
+export function renderReadyContainers(
+  containers: ReadyContainerSummary[],
+  titleWidth = 60,
+): string {
+  if (containers.length === 0) return emptyLaneLine('container');
+  const rows = containers.map((c) => [
+    c.key,
+    c.kind,
+    c.priority,
+    c.assignee?.name ?? 'unassigned',
+    `${c.readyLeafCount} of ${c.childCount}`,
+    truncate(c.title, titleWidth),
+  ]);
+  const count = `${containers.length} runnable container${containers.length === 1 ? '' : 's'}:`;
+  return `${count}\n${formatTable(CONTAINER_HEADERS, rows)}`;
 }
 
 export interface StatusPulse {
