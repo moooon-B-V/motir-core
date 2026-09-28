@@ -689,6 +689,24 @@ describe('continue hosted — a leaf whose run died', () => {
     expect(fakeOrchestrator.provisioned).toHaveLength(1);
   });
 
+  it('two presses of the same key AT ONCE answer one run and boot one container', async () => {
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card } = await deadCard();
+
+    // Whichever way the two interleave — the second seeing the first's run at the
+    // short-circuit, or both passing it and the claim replaying the opening —
+    // the answer is the same run, opened once.
+    const [a, b] = await Promise.all([
+      startContinue(card.identifier, 'double-click'),
+      startContinue(card.identifier, 'double-click'),
+    ]);
+
+    expect(a.dispatchRunId).toBe(b.dispatchRunId);
+    expect([a.created, b.created].sort()).toEqual([false, true]);
+    expect(await continueRuns()).toHaveLength(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+  });
+
   it('a Run hosted start (mode run) on the same In Progress card is still refused as not ready', async () => {
     await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
     const { card } = await deadCard();

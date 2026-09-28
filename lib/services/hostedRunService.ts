@@ -491,6 +491,10 @@ async function startContinue(
       replayed = true;
     },
   });
+  // ⚠️ RACE-ONLY BELOW: the preview refused every state the claim refuses, so
+  // these three answers reach here only when a terminal continue or another
+  // start won in the gap between the preview and the claim's lock.
+  /* v8 ignore next 9 -- race-only: the preview refused this state a moment earlier */
   if (claim.outcome === 'not_continuable') {
     throw new HostedContinueRefusedError(
       target,
@@ -503,12 +507,15 @@ async function startContinue(
   // `mine` is the caller's OWN open continue — a terminal one, never this
   // opening (a repeat of the key is answered `claimed`). A hosted start does not
   // adopt a run somebody's terminal holds, even their own.
+  /* v8 ignore next 3 -- race-only: a continue opened since the preview holds the lock */
   if (claim.outcome !== 'claimed' || claim.runId === null) {
     throw new HostedContinueRefusedError(target, 'taken', claim.holder, claim.startedAt);
   }
   const runId = claim.runId;
   // The same press, raced past the short-circuit above: its run is booting.
+  /* v8 ignore next -- race-only: two presses of one key both passed the short-circuit */
   if (replayed) return { dispatchRunId: runId, created: false };
+  /* v8 ignore next -- a `claimed` answer always carries its run's start */
   const startedAt = claim.startedAt ?? now.toISOString();
 
   try {
