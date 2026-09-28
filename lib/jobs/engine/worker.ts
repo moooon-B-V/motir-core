@@ -347,6 +347,10 @@ export class JobWorker {
   private readonly slotWaiters = new Set<() => void>();
   /** Resolves when the idle sleep should be cut short — the NOTIFY path. */
   private wake: (() => void) | undefined;
+  /** The running loop, so `shutdown()` can wait for a claim it is in the middle of. */
+  private loopDone: Promise<void> | undefined;
+  /** The lease renewal in flight, if any — `clearInterval` stops the next, not this one. */
+  private renewing: Promise<unknown> | undefined;
 
   constructor(opts: JobWorkerOptions) {
     this.workerId = opts.workerId ?? `worker-${randomUUID()}`;
@@ -646,13 +650,13 @@ export class JobWorker {
     this.running = true;
     this.draining = false;
     this.heartbeat = setInterval(() => {
-      void withSystemContext((tx) =>
+      this.renewing = withSystemContext((tx) =>
         jobQueueRepository.renewLeases(this.workerId, this.leaseMs, tx),
       ).catch((err: unknown) => this.log.warn('[job-worker] lease renewal failed', err));
     }, this.renewMs);
     // `unref` so a heartbeat timer alone never holds the process open.
     this.heartbeat.unref?.();
-    void this.loop();
+    this.loopDone = this.loop();
   }
 
   /**
@@ -674,6 +678,12 @@ export class JobWorker {
       clearInterval(this.heartbeat);
       this.heartbeat = undefined;
     }
+    // Wait for the loop to leave its current claim, and for a renewal already on
+    // the wire (MOTIR-6734). Without this, shutdown returned while a claim query
+    // was still running: a claim landing after the release below leaves rows held
+    // by a worker that has stopped, until their lease runs out.
+    await this.loopDone;
+    await this.renewing;
 
     // ⚠️ IT WAITS ON `inFlight`, WHICH IS STILL THE WHOLE SET (MOTIR-3762). The
     // settles are detached now, so there is no `tick()` promise left to await —
