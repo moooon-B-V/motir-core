@@ -95,6 +95,14 @@ import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { AttachmentError } from '@/lib/blob/errors';
 import { DesignEvidenceError } from '@/lib/designEvidence/errors';
 import { TestInstructionsError } from '@/lib/testInstructions/errors';
+import {
+  EmptyTodoTextError,
+  TodoCommandTooLongError,
+  TodoNotesTooLongError,
+  TodoReorderConflictError,
+  TodoTextTooLongError,
+  WorkItemTodoNotFoundError,
+} from '@/lib/workItemTodos/errors';
 import { AcceptanceEvidenceError } from '@/lib/acceptanceEvidence/errors';
 import {
   GithubNotConnectedError,
@@ -372,6 +380,24 @@ export function toToolError(err: unknown): CallToolResult {
   // click-path that is both or neither, and a malformed field are each fixable in
   // one hop, and an agent refused with an opaque internal error instead carries on
   // as though its instructions landed.
+  // The to-do family (MOTIR-6725) — the three to-do tools reach the shipped
+  // `workItemTodosService`, whose refusals are each the caller's to act on: a
+  // step id that is not on this card (not-found, the same for a cross-tenant
+  // id), and the store's own caps on text, notes and command. Enumerated
+  // because `lib/workItemTodos/errors.ts` has no base class. The caps' messages
+  // say what to do (split the step; move the notes to a card), which is only
+  // worth writing if the sentence reaches the agent rather than a JSON-RPC
+  // internal error.
+  if (
+    err instanceof WorkItemTodoNotFoundError ||
+    err instanceof EmptyTodoTextError ||
+    err instanceof TodoTextTooLongError ||
+    err instanceof TodoNotesTooLongError ||
+    err instanceof TodoCommandTooLongError ||
+    err instanceof TodoReorderConflictError
+  ) {
+    return toolError(err.code, err.message);
+  }
   if (err instanceof TestInstructionsError) {
     return toolError(err.code, err.message);
   }

@@ -928,6 +928,19 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Permanently delete a comment you wrote, with its replies. Only its author can delete it here.',
     descriptionFingerprint: 'e09c5b6edd67',
   },
+  list_work_item_todos: {
+    summary: 'Read a work item’s to-do list: its steps in order, which are done, and the progress.',
+    descriptionFingerprint: '2ec9edb36848',
+  },
+  add_work_item_todo: {
+    summary: 'Append one step to the end of a work item’s to-do list.',
+    descriptionFingerprint: 'cb50e4038b0a',
+  },
+  set_work_item_todo_done: {
+    summary:
+      'Tick or untick one step of a work item’s to-do list. Ticking the last step does not change the work item’s status.',
+    descriptionFingerprint: 'c69111aa37be',
+  },
   add_lesson: {
     summary:
       'Record a lesson for this project, so later plans for it are given the lesson. This project only.',
