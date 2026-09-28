@@ -70,20 +70,40 @@ export const githubPullRequestQueueExitRepository = {
   },
 
   /** Name a FAILURE exit's failing check — only if none is named yet (MOTIR-5633).
-   *  For a check that completed after the exit was written. Returns the count. Write
-   *  path → `tx`. */
+   *  For a check that completed after the exit was written. A `CI_TIMEOUT` exit is
+   *  recorded `neutral` when no check is known (§4 SIXTH AMENDMENT), and still takes
+   *  the check its queue run names. Returns the count. Write path → `tx`. */
   async setFailingCheckIfUnset(
     exitId: string,
     check: { name: string; url: string; conclusion: string | null },
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const result = await tx.githubPullRequestQueueExit.updateMany({
-      where: { id: exitId, disposition: 'failure', failingCheckName: null },
+      where: {
+        id: exitId,
+        failingCheckName: null,
+        OR: [{ disposition: 'failure' }, { rawReason: 'CI_TIMEOUT' }],
+      },
       data: {
         failingCheckName: check.name,
         failingCheckUrl: check.url,
         failingCheckConclusion: check.conclusion,
       },
+    });
+    return result.count;
+  },
+
+  /** RE-JUDGE a standing exit's disposition (§4 SIXTH AMENDMENT, MOTIR-6847) — only
+   *  while nobody has re-queued it, so a requeue that raced the re-judge wins. Returns
+   *  the count. Write path → `tx`. */
+  async setDisposition(
+    exitId: string,
+    disposition: 'failure' | 'neutral',
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubPullRequestQueueExit.updateMany({
+      where: { id: exitId, requeuedAt: null },
+      data: { disposition },
     });
     return result.count;
   },

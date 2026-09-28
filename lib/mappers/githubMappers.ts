@@ -123,6 +123,7 @@ export function toWorkItemDeliveryDto(
    *  (`standingQueueFailures`, MOTIR-5720) — the exit row itself, mapped here. */
   standingExit: {
     rawReason: string;
+    disposition: 'failure' | 'neutral' | 'landed';
     headSha: string;
     failingCheckName: string | null;
     failingCheckUrl: string | null;
@@ -150,6 +151,7 @@ export function toWorkItemDeliveryDto(
         ? null
         : {
             rawReason: standingExit.rawReason,
+            disposition: standingExit.disposition,
             headSha: standingExit.headSha,
             failingCheckName: standingExit.failingCheckName,
             failingCheckUrl: standingExit.failingCheckUrl,

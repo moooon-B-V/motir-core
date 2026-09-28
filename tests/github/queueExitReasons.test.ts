@@ -4,10 +4,19 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyQueueExit,
   classOfQueueExit,
+  judgeQueueExit,
   QUEUE_EXIT_REASONS,
   type LandingClass,
 } from '@/lib/mergeQueue/queueExit';
 import { getGitProvider } from '@/lib/git';
+
+/** An exit as it was stored under the reason's OWN disposition — a `CI_FAILURE` /
+ *  `CI_TIMEOUT` whose check did not hang, or one in an `auto` project. The SIXTH
+ *  AMENDMENT's re-judged rows are asserted by the judge's table below. */
+const asStored = (reason: string | null | undefined) => ({
+  rawReason: reason,
+  disposition: classifyQueueExit(reason).disposition,
+});
 
 // THE REASON MAP (Story MOTIR-5461 · MOTIR-5632; `docs/decisions/approval-gates.md` §4
 // THIRD AMENDMENT, decision 2) and GitHub's parser for the `dequeued` delivery. The
@@ -125,7 +134,7 @@ const CLASSES: ReadonlyArray<[string, LandingClass]> = [
 
 describe('what can be DONE about an un-landed merge — the class map', () => {
   it.each(CLASSES)('%s → %s', (reason, expected) => {
-    expect(classOfQueueExit(reason)).toBe(expected);
+    expect(classOfQueueExit(asStored(reason))).toBe(expected);
   });
 
   it('is TOTAL over the reason map — every reason it names has a class', () => {
@@ -135,9 +144,9 @@ describe('what can be DONE about an un-landed merge — the class map', () => {
   });
 
   it('an unmapped reason is RETRYABLE, so a person is asked rather than offered nothing', () => {
-    expect(classOfQueueExit('SOME_NEW_REASON')).toBe('retryable');
-    expect(classOfQueueExit(null)).toBe('retryable');
-    expect(classOfQueueExit(undefined)).toBe('retryable');
+    expect(classOfQueueExit(asStored('SOME_NEW_REASON'))).toBe('retryable');
+    expect(classOfQueueExit(asStored(null))).toBe('retryable');
+    expect(classOfQueueExit(asStored(undefined))).toBe('retryable');
   });
 
   // THE FIFTH AMENDMENT's line (MOTIR-6594): every FAILURE is can't-land EXCEPT the one a
@@ -145,7 +154,7 @@ describe('what can be DONE about an un-landed merge — the class map', () => {
   // whole reason map, so a reason added later cannot slip into either side unclassed.
   it('a failure is CAN’T-LAND unless a setting answers it; nothing else is', () => {
     for (const [reason, disposition] of Object.entries(QUEUE_EXIT_REASONS)) {
-      const cls = classOfQueueExit(reason);
+      const cls = classOfQueueExit(asStored(reason));
       if (disposition === 'failure' && reason !== 'BRANCH_PROTECTIONS') {
         expect(cls, reason).toBe('cant_land');
       } else {
@@ -156,8 +165,68 @@ describe('what can be DONE about an un-landed merge — the class map', () => {
 
   it('the class is not the disposition — BRANCH_PROTECTIONS and MANUAL are the tells', () => {
     expect(classifyQueueExit('BRANCH_PROTECTIONS').disposition).toBe('failure');
-    expect(classOfQueueExit('BRANCH_PROTECTIONS')).toBe('setting');
+    expect(classOfQueueExit(asStored('BRANCH_PROTECTIONS'))).toBe('setting');
     expect(classifyQueueExit('MANUAL').disposition).toBe('neutral');
-    expect(classOfQueueExit('MANUAL')).toBe('retryable');
+    expect(classOfQueueExit(asStored('MANUAL'))).toBe('retryable');
+  });
+});
+
+// §4 SIXTH AMENDMENT's table (MOTIR-6844 · MOTIR-6847): the judge over EVERY reason ×
+// every conclusion a merge-group check can end with, plus none recorded. Stated here
+// rather than read back from the module, as the reason table above is.
+describe('the judge — a queue exit by its REASON and its check’s CONCLUSION', () => {
+  const CONCLUSIONS = [
+    'cancelled',
+    'timed_out',
+    'failure',
+    'startup_failure',
+    'action_required',
+    null,
+  ];
+  const HUNG = new Set(['cancelled', 'timed_out']);
+
+  function expected(reason: string, conclusion: string | null) {
+    if (reason === 'CI_FAILURE') {
+      return conclusion !== null && HUNG.has(conclusion)
+        ? { disposition: 'neutral', landingClass: 'retryable' }
+        : { disposition: 'failure', landingClass: 'cant_land' };
+    }
+    if (reason === 'CI_TIMEOUT') {
+      return conclusion === null || HUNG.has(conclusion)
+        ? { disposition: 'neutral', landingClass: 'retryable' }
+        : { disposition: 'failure', landingClass: 'cant_land' };
+    }
+    // Every other reason answers exactly what the two tables above answer.
+    return {
+      disposition: classifyQueueExit(reason).disposition,
+      landingClass: classOfQueueExit(asStored(reason)),
+    };
+  }
+
+  const rows = [...Object.keys(QUEUE_EXIT_REASONS), 'SOMETHING_NEW'].flatMap((reason) =>
+    CONCLUSIONS.map((conclusion) => [reason, conclusion] as const),
+  );
+
+  it.each(rows)('%s with %s', (reason, conclusion) => {
+    expect(judgeQueueExit({ rawReason: reason, failingCheckConclusion: conclusion })).toEqual(
+      expected(reason, conclusion),
+    );
+  });
+
+  it('the stored disposition decides the class of a CI_FAILURE / CI_TIMEOUT — so auto’s kept `failure` stays can’t-land', () => {
+    for (const reason of ['CI_FAILURE', 'CI_TIMEOUT']) {
+      expect(classOfQueueExit({ rawReason: reason, disposition: 'neutral' })).toBe('retryable');
+      expect(classOfQueueExit({ rawReason: reason, disposition: 'failure' })).toBe('cant_land');
+    }
+  });
+
+  it('the class a judged exit is stored with agrees with the judge', () => {
+    for (const [reason, conclusion] of rows) {
+      const judged = judgeQueueExit({ rawReason: reason, failingCheckConclusion: conclusion });
+      if (judged.disposition === 'landed') continue;
+      expect(classOfQueueExit({ rawReason: reason, disposition: judged.disposition })).toBe(
+        judged.landingClass,
+      );
+    }
   });
 });

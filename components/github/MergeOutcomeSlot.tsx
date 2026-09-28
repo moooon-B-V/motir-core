@@ -142,7 +142,7 @@ export function persistedRowOutcome(
     // offers no retry: a conflict says *Cannot be merged*, and a queue FAILURE — can't-land
     // since the FIFTH AMENDMENT — keeps saying it *Left the queue*, held. The next
     // reclassification changes `queueExit.ts` and nothing here.
-    if (classOfQueueExit(fact.exit.rawReason) === 'cant_land') {
+    if (classOfQueueExit(fact.exit) === 'cant_land') {
       return fact.exit.rawReason === 'MERGE_CONFLICT' ? 'cannotLand' : 'failedHeld';
     }
     return fact.exit.disposition === 'failure' ? 'leftQueue' : 'removedFromQueue';

@@ -106,8 +106,8 @@ async function standingExitsAtHead(
  * `cant_land` now, and no `retryable` reason is a failure, so the arm could never answer
  * true again.
  */
-function repairableOutcome(exit: { rawReason: string }): boolean {
-  return classOfQueueExit(exit.rawReason) === 'cant_land';
+function repairableOutcome(exit: { rawReason: string; disposition: string }): boolean {
+  return classOfQueueExit(exit) === 'cant_land';
 }
 
 /** One open member as a repair hands it over — the claim's wire row. */

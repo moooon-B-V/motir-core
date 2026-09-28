@@ -257,9 +257,11 @@ describe('the run view publishes each delivery’s STANDING queue failure (MOTIR
     const byNumber = new Map(deliveries.map((d) => [d.pullRequest.number, d]));
     expect(byNumber.get(ejected.number)?.queueExit).toEqual({
       rawReason: 'MERGE_CONFLICT',
+      disposition: 'failure',
       headSha: 'c'.repeat(40),
       failingCheckName: null,
       failingCheckUrl: null,
+      failingCheckConclusion: null,
     });
     expect(deliveries.filter((d) => d.queueExit === null)).toHaveLength(1);
   });

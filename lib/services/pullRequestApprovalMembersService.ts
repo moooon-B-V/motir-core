@@ -119,7 +119,7 @@ async function approvedMembers(
     // the same commits cannot land however many times anyone says yes, so a button that
     // acts on them is a button guaranteed to fail. `motir fix` is the way forward.
     const cantLand =
-      (standingExit && classOfQueueExit(exit!.rawReason) === 'cant_land') ||
+      (standingExit && classOfQueueExit(exit!) === 'cant_land') ||
       (standingRefusal && refusalClass === 'cant_land');
     // A member the row's verb can act on is one carrying a standing outcome at the head
     // the gate names — an exit put back by *Queue again*, a refusal retried by *Retry

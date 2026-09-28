@@ -1,6 +1,12 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import type { GitProviderId, NormalizedMergeQueueExit } from '@/lib/git/types';
-import { classifyQueueExit, classOfQueueExit, type LandingClass } from '@/lib/mergeQueue/queueExit';
+import {
+  classifyQueueExit,
+  classOfQueueExit,
+  judgeQueueExit,
+  type LandingClass,
+  type QueueExitDisposition,
+} from '@/lib/mergeQueue/queueExit';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubMergeQueueAttemptRepository } from '@/lib/repositories/githubMergeQueueAttemptRepository';
@@ -23,6 +29,8 @@ import { workItemsService } from './workItemsService';
 import { reconcileGatesFor } from './gateSetFor';
 import { readPlanHoldWithin } from './planTargetLockService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
+import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
 import {
   IllegalTransitionError,
   MarkedCardCannotReopenError,
@@ -132,6 +140,8 @@ export const mergeQueueExitService = {
     now?: Date;
   }): Promise<MergeQueueExitResult> {
     const { exit } = input;
+    // The REASON's disposition. For `CI_FAILURE` / `CI_TIMEOUT` the stored one is the
+    // judge's, from the recorded check's conclusion (§4 SIXTH AMENDMENT) — see below.
     const { disposition, recognised } = classifyQueueExit(exit.rawReason);
     const base = {
       event: 'pull_request_dequeued' as const,
@@ -205,12 +215,27 @@ export const mergeQueueExitService = {
         disposition === 'failure'
           ? await githubMergeQueueAttemptRepository.findLatestByPullRequest(pr.id, tx)
           : null;
+      // ⚠️ THE CHECK'S CONCLUSION DECIDES A `CI_FAILURE` / `CI_TIMEOUT` (§4 SIXTH
+      // AMENDMENT, MOTIR-6847): a check that was CANCELLED or TIMED OUT failed nothing,
+      // so the exit is stored `neutral` and re-asks like `MANUAL`. Written only when no
+      // delivered card sits in an `auto` project — there nobody is asked, and a
+      // released hold would let the promotion merge the same head again unattended.
+      const delivered = await resolveDeliveredWorkItems(pr.id, tx);
+      // `landed` returned before the transaction opened, so neither answer is it.
+      const stored = (
+        (await deliversIntoAutoMode(delivered, tx))
+          ? disposition
+          : judgeQueueExit({
+              rawReason: exit.rawReason,
+              failingCheckConclusion: attempt?.failingCheckConclusion ?? null,
+            }).disposition
+      ) as Exclude<QueueExitDisposition, 'landed'>;
       await githubPullRequestQueueExitRepository.create(
         {
           pullRequestId: pr.id,
           deliveryId,
           rawReason: exit.rawReason ?? '',
-          disposition,
+          disposition: stored,
           headSha: exit.headSha,
           exitedAt: input.now ?? new Date(),
           failingCheckName: attempt?.failingCheckName ?? null,
@@ -227,6 +252,7 @@ export const mergeQueueExitService = {
       await recomputeDeliveredCiState(pr.id, tx);
       const result: MergeQueueExitResult = {
         ...base,
+        disposition: stored,
         outcome: 'recorded',
         moved: [],
         reasked: [],
@@ -237,9 +263,9 @@ export const mergeQueueExitService = {
       // points 1–2; MOTIR-5805). A NEUTRAL removal spends the approval exactly as a
       // failure does — Yue, 2026-09-19: *"re-ask too"* — so it is settled by class like
       // any other. `landed` returned above, before anything was written.
-      const landingClass = classOfQueueExit(exit.rawReason);
+      const landingClass = classOfQueueExit({ rawReason: exit.rawReason, disposition: stored });
 
-      for (const ref of await resolveDeliveredWorkItems(pr.id, tx)) {
+      for (const ref of delivered) {
         if (!ctx) {
           result.skipped!.push({ key: ref.identifier, status: ref.status, reason: 'no_actor' });
           continue;
@@ -294,7 +320,8 @@ export const mergeQueueExitService = {
           continue;
         }
         // AUTO mode is unchanged: no gate, no person to ask, and only a FAILURE moves
-        // the card (THIRD AMENDMENT, decision 3).
+        // the card (THIRD AMENDMENT, decision 3) — the REASON's disposition, which the
+        // SIXTH AMENDMENT leaves alone in `auto`.
         if (disposition !== 'failure') continue;
         const { transition } = await workItemsService.applyStatusTransition(
           item.id,
@@ -417,6 +444,106 @@ export async function settleUnlandedOutcome(
     (gate) => gate.kind === 'pull_request_approval',
   );
   return { transition, raised };
+}
+
+/** Does any card this pull request delivers sit in an `auto`-mode project? There a
+ *  queue failure keeps its `failure` disposition whatever its check's conclusion (§4
+ *  SIXTH AMENDMENT, point 2). */
+async function deliversIntoAutoMode(
+  delivered: ReadonlyArray<{ projectId: string }>,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  for (const ref of delivered) {
+    const mode = (await projectRepository.findPrMergeMode(ref.projectId, tx))?.prMergeMode;
+    if (mode === 'auto') return true;
+  }
+  return false;
+}
+
+export interface ResettleResult {
+  /** Whether the exit's disposition was rewritten `failure → neutral`. */
+  rejudged: boolean;
+  /** Cards moved `implemented → in_review`, for the caller's post-commit events. */
+  moved: { id: string; key: string; revisionId: string; from: string; to: string }[];
+  /** Keys of the cards now asking ONE fresh approve-to-merge question. */
+  reasked: string[];
+  /** Who the moves were written as — the workspace's stand-in manager, as `recordExit`. */
+  actorId: string | null;
+}
+
+/**
+ * RE-JUDGE A PULL REQUEST'S STANDING QUEUE EXIT once its check's conclusion is known
+ * (§4 SIXTH AMENDMENT, point 4; MOTIR-6847), in the caller's transaction.
+ *
+ * The check's completion routinely lands AFTER the `dequeued` delivery, so a
+ * `CI_FAILURE` exit is often recorded `failure` with no conclusion and its card held
+ * at `implemented`. When a `cancelled` / `timed_out` conclusion is then recorded —
+ * by the `check_run` webhook (`mergeQueueCheckService.attachFailingCheck`) or read
+ * from GitHub by the reconcile tick — this rewrites the exit `neutral`, recomputes
+ * the delivered cards' CI state and fix reason, and settles each manual card still at
+ * `implemented` through {@link settleUnlandedOutcome} as `retryable`: `in_review`
+ * with ONE gate, the same entry point a live exit runs.
+ *
+ * It moves nothing when the exit no longer STANDS at the pull request's head (a push
+ * or a requeue settled it already), when the judgement does not change, or when a
+ * delivered card sits in an `auto` project. Idempotent: a second call finds the exit
+ * `neutral` and does nothing.
+ */
+export async function resettleStandingExit(input: {
+  pullRequestId: string;
+  workspaceId: string;
+  tx: Prisma.TransactionClient;
+}): Promise<ResettleResult> {
+  const { pullRequestId, workspaceId, tx } = input;
+  const none: ResettleResult = { rejudged: false, moved: [], reasked: [], actorId: null };
+  // LOCK ORDER — the pull request, then each card's gates and card, as `recordExit`.
+  await githubPullRequestRepository.lockById(pullRequestId, tx);
+  const exit = (
+    await githubPullRequestQueueExitRepository.findLatestByPullRequests([pullRequestId], tx)
+  ).get(pullRequestId);
+  if (!exit || exit.disposition !== 'failure') return none;
+  if (judgeQueueExit(exit).disposition !== 'neutral') return none;
+  const pr = (await githubPullRequestRepository.findManyByIdsForSummary([pullRequestId], tx)).get(
+    pullRequestId,
+  );
+  const head = pr ? liveRowsAtLatestSha([...pr.checkRuns])[0]?.commitSha : undefined;
+  if (!queueExitStandsAtHead(exit, head)) return none;
+  const delivered = await resolveDeliveredWorkItems(pullRequestId, tx);
+  if (await deliversIntoAutoMode(delivered, tx)) return none;
+  if ((await githubPullRequestQueueExitRepository.setDisposition(exit.id, 'neutral', tx)) === 0) {
+    return none;
+  }
+  // The badge and To fix read the stored disposition (`queueExitHoldsAtHead`).
+  await recomputeDeliveredCiState(pullRequestId, tx);
+  const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(workspaceId, tx);
+  const result: ResettleResult = {
+    rejudged: true,
+    moved: [],
+    reasked: [],
+    actorId: owner?.userId ?? null,
+  };
+  if (!owner) return result;
+  const ctx = { userId: owner.userId, workspaceId };
+  for (const ref of delivered) {
+    await lockCard(ref.id, tx);
+    const item = await workItemRepository.findById(ref.id, tx);
+    // Only a card still where the exit put it: a person who moved it decided.
+    if (!item || item.status !== UNLANDED_STATUS.cantLand) continue;
+    const mode = (await projectRepository.findPrMergeMode(item.projectId, tx))?.prMergeMode;
+    if (mode !== 'manual') continue;
+    const settled = await settleUnlandedOutcome(item, 'retryable', ctx, tx);
+    if (settled.transition) {
+      result.moved.push({
+        id: item.id,
+        key: item.identifier,
+        revisionId: settled.transition.revisionId,
+        from: settled.transition.fromStatusKey,
+        to: settled.transition.toStatusKey,
+      });
+    }
+    if (settled.raised) result.reasked.push(item.identifier);
+  }
+  return result;
 }
 
 // ── The card moves Queue again makes (MOTIR-5634) ───────────────────────────────
