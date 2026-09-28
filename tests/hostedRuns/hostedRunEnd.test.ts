@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fakeOrchestrator } from '@motir/orchestrator';
+import { FLEET_CONTAINER_SIZE, fakeOrchestrator } from '@motir/orchestrator';
 import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { isJobRunDefer } from '@/lib/jobs/engine/defer';
@@ -18,6 +18,7 @@ import {
   HOSTED_AGENT_MAX_TIMEOUT_MS,
   hostedAgentBootStepId,
 } from '@/lib/services/hostedAgentContainerService';
+import { hostedRunChargeService } from '@/lib/services/hostedRunChargeService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { supervisionSweepService } from '@/lib/services/supervisionSweepService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -57,8 +58,14 @@ let revokedKeys: string[] = [];
 let revokedGitTokens: string[] = [];
 let failGatewayRevoke = false;
 let failGitRevoke = false;
+/** Every machine charge motir-ai was asked for, in order — and, as motir-ai does,
+ *  the run ids it has already debited (it dedupes on `externalRef`). */
+let machineCharges: Array<Record<string, unknown>> = [];
+let debitedRuns = new Set<string>();
 
 function stubHttp(): void {
+  machineCharges = [];
+  debitedRuns = new Set<string>();
   revokedKeys = [];
   revokedGitTokens = [];
   failGatewayRevoke = false;
@@ -82,12 +89,16 @@ function stubHttp(): void {
         return json(200, { balanceCredits: 100, hasCredits: true, mayRun: true });
       }
       if (url === `${AI}/v1/credits/agent-machine`) {
+        machineCharges.push(body ?? {});
+        const ref = String(body?.externalRef);
+        const idempotent = debitedRuns.has(ref);
+        debitedRuns.add(ref);
         return json(200, {
           balanceAfter: 90,
           credits: 1,
           billableSeconds: 1,
           exhausted: false,
-          idempotent: false,
+          idempotent,
         });
       }
       if (url === `${GATEWAY}/api/motir/run-keys` && method === 'POST') {
@@ -691,5 +702,99 @@ describe('the CI orphan reaper spares a hosted run that still holds its fleet sl
     await adminDb.fleetInFlightSlot.deleteMany({});
     await ciRunnerBootService.reapOrphans();
     expect(fakeOrchestrator.liveContainerIds()).not.toContain(handleId);
+  });
+});
+
+describe('a hosted run whose container the REAPER destroys is settled, charged and ended (MOTIR-6524)', () => {
+  /** A live run whose container has lost its fleet slot — the reaper's orphan. */
+  async function orphanedRun(): Promise<Started> {
+    const started = await startRun();
+    const memo = new Map<string, unknown>();
+    const store = inMemorySupervisionStore();
+    for (let i = 0; i < 3; i += 1) await pass(started.data, memo, store, () => new Date());
+    fakeOrchestrator.backdate(started.handleId, new Date(Date.now() - 5 * 60 * MINUTE));
+    await adminDb.fleetInFlightSlot.deleteMany({});
+    // Nothing has been charged yet: the run's only container is still open.
+    expect(machineCharges).toEqual([]);
+    return started;
+  }
+
+  const chargesFor = (dispatchRunId: string) =>
+    machineCharges.filter((c) => c.externalRef === dispatchRunId);
+
+  it('AC1 — a reaped hosted-agent container naming run R charges R exactly once', async () => {
+    const { data, handleId, cardId } = await orphanedRun();
+    const card = await cardOf(cardId);
+
+    const reaped = await ciRunnerBootService.reapOrphans();
+
+    expect(reaped.reaped).toBe(1);
+    expect(fakeOrchestrator.liveContainerIds()).not.toContain(handleId);
+    // The container's row is SETTLED, still naming its run — which is what makes
+    // the run read as settled to the charge.
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow({ where: { handleId } });
+    expect(row).toMatchObject({
+      dispatchRunId: data.dispatchRunId,
+      workload: 'agent',
+      teardownReason: 'reaped',
+    });
+    expect(row.containerStoppedAt).not.toBeNull();
+    expect(chargesFor(data.dispatchRunId)).toHaveLength(1);
+    expect(chargesFor(data.dispatchRunId)[0]).toMatchObject({
+      coreRunId: data.dispatchRunId,
+      externalRef: data.dispatchRunId,
+    });
+    expect(machineCharges).toHaveLength(1);
+    // …and the run ends through the one end path, as a lost supervision.
+    expect(await runOf(data.dispatchRunId)).toMatchObject({
+      status: 'timed_out',
+      stopReason: 'abandoned',
+    });
+    expect((await lastLog(data.dispatchRunId))?.body).toContain(
+      'hosted run ended (lost supervision)',
+    );
+    expect((await cardOf(cardId)).status).toBe(card.status);
+    await expectNothingAlive(data.dispatchRunId);
+  });
+
+  it('AC3 — a run charged elsewhere too is debited once: every charge carries the run as `externalRef`', async () => {
+    const { data } = await orphanedRun();
+    await ciRunnerBootService.reapOrphans();
+    // A second reap finds nothing left to charge.
+    await ciRunnerBootService.reapOrphans();
+    expect(chargesFor(data.dispatchRunId)).toHaveLength(1);
+
+    // The run's own pass or the sweep charging the same run afterwards asks
+    // motir-ai again under the SAME key, and motir-ai answers it as a replay.
+    const again = await hostedRunChargeService.chargeMachineTime(data.dispatchRunId);
+    expect(again).toMatchObject({ outcome: 'charged', idempotent: true });
+    expect(chargesFor(data.dispatchRunId).map((c) => c.externalRef)).toEqual([
+      data.dispatchRunId,
+      data.dispatchRunId,
+    ]);
+    expect([...debitedRuns]).toEqual([data.dispatchRunId]);
+  });
+
+  it('AC2 — a reaped container that is not a hosted run is never charged', async () => {
+    const handle = await fakeOrchestrator.provision({
+      orgId: fx.workspace.organizationId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      repoFullName: 'motir-projects/site',
+      workload: 'code_graph_index',
+      workflowJobId: null,
+      image: 'motir/indexer@sha256:test',
+      size: FLEET_CONTAINER_SIZE,
+      env: {},
+      timeoutSeconds: 3600,
+      region: 'iad',
+    });
+    fakeOrchestrator.backdate(handle.id, new Date(Date.now() - 5 * 60 * MINUTE));
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await ciRunnerBootService.reapOrphans();
+
+    expect(fakeOrchestrator.liveContainerIds()).not.toContain(handle.id);
+    expect(machineCharges).toEqual([]);
   });
 });

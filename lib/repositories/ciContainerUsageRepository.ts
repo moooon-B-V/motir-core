@@ -123,6 +123,20 @@ export interface DispatchRunMachineTime {
   settled: boolean;
 }
 
+/** A live hosted-agent container's row, as the reaper reads it (MOTIR-6524). */
+export interface LiveAgentUsage {
+  dispatchRunId: string;
+  organizationId: string;
+  workspaceId: string;
+  projectId: string | null;
+  /** Null for a handle that served more than one repository (MOTIR-3255). */
+  repoFullName: string | null;
+  cpuKind: string;
+  cpus: number;
+  memoryMb: number;
+  containerStartedAt: Date | null;
+}
+
 /** One repository's container totals for a period — the fleet reconciliation's
  *  own side of the comparison (`ci-minutes-allowance.md` §Q.2). */
 export interface RepoContainerTotal {
@@ -313,6 +327,41 @@ export const ciContainerUsageRepository = {
       select: { dispatchRunId: true },
     });
     return row?.dispatchRunId ? { dispatchRunId: row.dispatchRunId } : null;
+  },
+
+  /**
+   * The LIVE hosted-agent row for a handle, with the attribution its checkpoint
+   * already carries (MOTIR-6524) — what the reaper settles a hosted-agent machine
+   * against when no supervisor is left to. Same predicate as
+   * {@link findLiveAgentRunByHandle}; null for any other container.
+   */
+  async findLiveAgentUsageByHandle(
+    containerProvider: string,
+    handleId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<LiveAgentUsage | null> {
+    const row = await tx.ciContainerUsage.findFirst({
+      where: {
+        containerProvider,
+        handleId,
+        workload: 'agent',
+        containerStoppedAt: null,
+        dispatchRunId: { not: null },
+      },
+      select: {
+        dispatchRunId: true,
+        organizationId: true,
+        workspaceId: true,
+        projectId: true,
+        repoFullName: true,
+        cpuKind: true,
+        cpus: true,
+        memoryMb: true,
+        containerStartedAt: true,
+      },
+    });
+    if (!row?.dispatchRunId) return null;
+    return { ...row, dispatchRunId: row.dispatchRunId };
   },
 
   /**
