@@ -70,21 +70,21 @@ const statusCard = (page: Page): Locator =>
 const modelCombobox = (page: Page): Locator => page.getByRole('combobox', { name: 'Model' });
 const modelsResponse = (page: Page) =>
   page.waitForResponse(
-    (res) => res.url().endsWith('/api/hosted-runs/models') && res.request().method() === 'GET',,
+    (res) => res.url().endsWith('/api/hosted-runs/models') && res.request().method() === 'GET',
     { timeout: 30_000 },
   );
 const startResponse = (page: Page, itemKey: string) =>
   page.waitForResponse(
     (res) =>
       res.url().endsWith(`/api/work-items/${itemKey}/hosted-runs`) &&
-      res.request().method() === 'POST',,
+      res.request().method() === 'POST',
     { timeout: 30_000 },
   );
 const runsListResponse = (page: Page, itemKey: string) =>
   page.waitForResponse(
     (res) =>
       res.url().includes(`/api/work-items/${itemKey}/dispatch-runs`) &&
-      res.request().method() === 'GET',,
+      res.request().method() === 'GET',
     { timeout: 30_000 },
   );
 
