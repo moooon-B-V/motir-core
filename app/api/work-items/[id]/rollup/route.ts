@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { memberThenVisitor } from '@/lib/visitor/readActor';
+import type { VisitorReadContext } from '@/lib/visitor/context';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { estimationService } from '@/lib/services/estimationService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
@@ -15,14 +18,12 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 //
 // Typed errors → status codes:
 //   WorkItemNotFoundError → 404 (unknown / cross-workspace parent, no existence leak)
-export async function GET(
+/** The read itself, for a member's context or a Visitor's (MOTIR-6647). */
+async function serve(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
+  ctx: ServiceContext | VisitorReadContext,
 ): Promise<Response> {
-  const gate = await requireCompliantWorkspaceContext();
-  if (!gate.ok) return gate.response;
-  const { ctx } = gate;
-
   const { id } = await params;
 
   try {
@@ -36,4 +37,31 @@ export async function GET(
     }
     throw err;
   }
+}
+
+async function memberGET(
+  req: Request,
+  route: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
+
+  return serve(req, route, ctx);
+}
+
+/**
+ * A container's rollup — members exactly as before; a VISITOR (MOTIR-6647) of the
+ * item's public project gets the rollup over VISIBLE descendants only
+ * (MOTIR-6652), only when the member read found nothing for them.
+ */
+export async function GET(
+  req: Request,
+  route: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  return memberThenVisitor(
+    req,
+    () => memberGET(req, route),
+    (ctx) => serve(req, route, ctx),
+  );
 }

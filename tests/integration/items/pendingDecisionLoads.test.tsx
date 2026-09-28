@@ -147,8 +147,8 @@ async function section(view: 'list' | 'tree', filtered = false) {
   const workflow = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
   return IssueTreeSection({
     projectId: fx.projectId,
-    workspaceId: fx.workspaceId,
-    userId: fx.ownerId,
+    reader: { userId: fx.ownerId, workspaceId: fx.workspaceId },
+    service: { userId: fx.ownerId, workspaceId: fx.workspaceId },
     view,
     sort: DEFAULT_SORT,
     filter: filtered ? { ...EMPTY_FILTER, statuses: ['todo'] } : EMPTY_FILTER,

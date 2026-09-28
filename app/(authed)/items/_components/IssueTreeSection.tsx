@@ -24,6 +24,8 @@ import type { FilterAst } from '@/lib/filters/ast';
 import type { WorkItemTreeNodeDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { VisitorReadContext } from '@/lib/visitor/context';
 import { collectTreeIds, toIssueRows, toIssueListRows, type PendingDecisionMap } from './issueRows';
 import { IssueTreeTable } from './IssueTreeTable';
 import { IssueTreeStaticTable } from './IssueTreeStaticTable';
@@ -44,8 +46,14 @@ import { NewIssueButton } from './NewIssueButton';
 
 export interface IssueTreeSectionProps {
   projectId: string;
-  workspaceId: string;
-  userId: string;
+  /**
+   * The reader the COLLECTION reads take — a member's `{ userId, workspaceId }`,
+   * or a Visitor's read context (MOTIR-6648), which withholds a private epic's
+   * descendants from every row, count and level.
+   */
+  reader: ServiceContext | VisitorReadContext;
+  /** The reader for everything else — the member's own, or the Visitor's narrowed one. */
+  service: ServiceContext;
   view: IssueListView;
   sort: IssueSort;
   /** The active filter (Subtask 2.5.4); applied to BOTH views. */
@@ -63,8 +71,8 @@ export interface IssueTreeSectionProps {
 
 export async function IssueTreeSection({
   projectId,
-  workspaceId,
-  userId,
+  reader,
+  service,
   view,
   sort,
   filter,
@@ -73,7 +81,7 @@ export async function IssueTreeSection({
   workflow,
   members,
 }: IssueTreeSectionProps) {
-  const ctx = { userId, workspaceId };
+  const ctx = service;
   const repoFilter = toProjectTreeFilter(filter);
   if (ast !== null) repoFilter.ast = ast;
   const filtered = isFilterActive(filter) || ast !== null;
@@ -149,7 +157,7 @@ export async function IssueTreeSection({
     } = await workItemsService.getProjectIssuesList(
       projectId,
       { sort, filter: repoFilter, page },
-      ctx,
+      reader,
     );
     if (items.length === 0) return empty;
     const pending = await pendingFor(items.map((item) => item.id));
@@ -172,7 +180,7 @@ export async function IssueTreeSection({
   // the filter; matched nodes keep their ancestors). Rendered with the static
   // tree — lazy-loading a context-preserving filter is an Epic-6 problem.
   if (filtered) {
-    const tree = await workItemsService.getProjectTree(projectId, repoFilter, ctx);
+    const tree = await workItemsService.getProjectTree(projectId, repoFilter, reader);
     if (tree.length === 0) return empty;
     const pending = await pendingFor(collectTreeIds(tree));
     return withEstimation(
@@ -199,7 +207,7 @@ export async function IssueTreeSection({
   // it pushes to the signed-in landing, so the switch case now unmounts the
   // island outright instead of relying on the project key to re-seed it. The
   // key stays because the OTHER remount reasons above are untouched.
-  const initialLevel = await workItemsService.listRootIssues(projectId, { sort }, ctx);
+  const initialLevel = await workItemsService.listRootIssues(projectId, { sort }, reader);
   // An EDITOR's empty project still mounts the tree (which draws the same empty
   // state) so the toolbar's "New folder" has a level to create into (MOTIR-5344).
   // A root holding folders but no work items mounts it for EVERY member: the tree

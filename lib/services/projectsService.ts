@@ -835,6 +835,38 @@ export const projectsService = {
   },
 
   /**
+   * A reader who can ENTER a public project opened its Visitor link (Story
+   * MOTIR-6170 · MOTIR-6648): make that project their active one, so the member
+   * route they are sent to shows it. Re-derives the reader's standing through
+   * `resolveVisitor` rather than trusting whoever sent them here, and returns the
+   * project's workspace for the caller's active-workspace cookie — or `null` when
+   * the verdict is not `enter` (the Visitor layout then decides again).
+   *
+   * The active-project write is the shipped switch ({@link setActiveProject}).
+   * A reader who enters without a membership row to hold the pointer (the case
+   * that switch refuses) still gets the workspace: the redirect is a convenience,
+   * and refusing it would strand a reader who is entitled to the project.
+   */
+  async enterFromVisitorLink(
+    identifier: string,
+    userId: string,
+  ): Promise<{ workspaceId: string } | null> {
+    const verdict = await projectAccessService.resolveVisitor(identifier, { user: { id: userId } });
+    if (verdict.kind !== 'enter') return null;
+    const { project } = verdict;
+    try {
+      await projectsService.setActiveProject({
+        userId,
+        workspaceId: project.workspaceId,
+        projectId: project.id,
+      });
+    } catch (err) {
+      if (!(err instanceof NotAMemberError) && !(err instanceof ProjectNotFoundError)) throw err;
+    }
+    return { workspaceId: project.workspaceId };
+  },
+
+  /**
    * Set the user's active project within a workspace (or clear it with
    * null). Asserts membership and that the project belongs to the
    * workspace, then updates the membership row in a transaction.

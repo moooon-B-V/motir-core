@@ -73,6 +73,30 @@ describe('the room island is mounted on the hero read (MOTIR-4171)', () => {
   });
 });
 
+describe('the Visitor link (MOTIR-6170 · MOTIR-6649)', () => {
+  const src = code(PAGE);
+
+  it('is built on the APP origin, only while the project is Public', () => {
+    // The app's own address for the board — never a hard-coded host, and never
+    // the public site's origin (that is the Members & access share link).
+    expect(src).toContain("from '@/lib/baseUrl'");
+    expect(src).toMatch(
+      /ctx\.project\.accessMode === 'public'\s*\?\s*`\$\{resolveBaseUrlTrimmed\(\)\}\$\{visitorViewPath\(ctx\.project\.identifier, 'board'\)\}`\s*:\s*null/,
+    );
+    expect(src).not.toMatch(/app\.motir\.co/);
+  });
+
+  it('renders the card with that value, behind the cloud gate and the page guard', () => {
+    expect(src).toContain("from './_components/VisitorLinkCard'");
+    expect(src).toContain('<VisitorLinkCard visitorUrl={visitorUrl}');
+    const card = src.indexOf('<VisitorLinkCard');
+    expect(card).toBeGreaterThan(src.indexOf('if (!isCloud()) notFound()'));
+    expect(card).toBeGreaterThan(src.indexOf("guardSettingsPage('public-page'"));
+    // At the top of the room, above the overview editor (panel 11).
+    expect(card).toBeLessThan(src.indexOf('<PublicPageEditor'));
+  });
+});
+
 describe('the destination guard, and the key it is NOT allowed to re-declare', () => {
   const src = code(PAGE);
 

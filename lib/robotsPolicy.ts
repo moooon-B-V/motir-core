@@ -129,9 +129,38 @@ export const AUTH_SEGMENTS = [
   'unsubscribe',
 ] as const;
 
+/**
+ * The Visitor's paths under `/p/<identifier>/` (Story MOTIR-6170 · MOTIR-6648):
+ * its live views, its consent screen and its member redirect. They need a session
+ * now, so this host does not admit them (`public-surface-hosts.md` §6, amended);
+ * motir.co's anonymous pages stay the indexed surface.
+ *
+ * ⚠️ BY VIEW, NOT `/p/` WHOLE. The bare `/p/<identifier>` and its changelog still
+ * 308 onto motir.co from this host, and a `Disallow: /p/` would stop a crawler
+ * ever following that redirect to the page that renders — the reason `/p/*` was
+ * on the allow list before these views existed. `*` is the wildcard the major
+ * crawlers honour in a path.
+ */
+export const VISITOR_SEGMENTS = [
+  'approvals',
+  'board',
+  'consent',
+  'enter',
+  'items',
+  'plans',
+  'roadmap',
+  'runs',
+  'tree',
+] as const;
+
 /** Every path prefix this application asks crawlers to skip, in served order. */
 export function disallowedPaths(): string[] {
-  return ['/api/', ...AUTH_SEGMENTS.map((s) => `/${s}`), ...SIGNED_IN_SEGMENTS.map((s) => `/${s}`)];
+  return [
+    '/api/',
+    ...AUTH_SEGMENTS.map((s) => `/${s}`),
+    ...SIGNED_IN_SEGMENTS.map((s) => `/${s}`),
+    ...VISITOR_SEGMENTS.map((s) => `/p/*/${s}`),
+  ];
 }
 
 /**

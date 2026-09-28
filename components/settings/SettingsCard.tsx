@@ -23,7 +23,8 @@ export function SettingsCard({
 }: {
   icon: ReactNode;
   title: string;
-  subtitle: string;
+  /** Plain copy, or rich copy (a `t.rich` result) where it bolds a name. */
+  subtitle: ReactNode;
   /**
    * Optional affordance at the head's trailing edge — a link or a small button
    * that belongs to the card as a whole rather than to one field (the Public

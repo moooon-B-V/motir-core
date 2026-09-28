@@ -31,6 +31,8 @@ import {
 } from '@/lib/comments/errors';
 import type { CommentDTO, CommentsPageDTO, DeletedCommentDTO } from '@/lib/dto/comments';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { VisitorReadContext } from '@/lib/visitor/context';
+import { isVisitorContext, redactWithheldWorkItemRefs } from '@/lib/visitor/readScope';
 import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
@@ -145,6 +147,39 @@ async function resolveGatedWorkItem(
   const caps = await projectAccessService.getCommentCapabilities(item.projectId, ctx, tx);
   if (!caps.canBrowse) throw new WorkItemNotFoundError(workItemId);
   return { item, caps };
+}
+
+/**
+ * A Visitor's comment gate (MOTIR-6652): the item must be a live, VISIBLE row of
+ * their one public project. Anything else — another project, a private epic's
+ * descendant, an unknown id — is the same `WorkItemNotFoundError`.
+ */
+async function resolveVisitorGatedWorkItem(
+  workItemId: string,
+  ctx: VisitorReadContext,
+): Promise<{ item: WorkItem }> {
+  const item = await withWorkspaceServiceContext(ctx.project.workspaceId, (tx) =>
+    workItemRepository.findById(workItemId, tx),
+  );
+  if (!item || item.projectId !== ctx.project.id || ctx.hiddenIds.has(item.id)) {
+    throw new WorkItemNotFoundError(workItemId);
+  }
+  return { item };
+}
+
+/** A comment thread as a Visitor reads it — withheld chips redacted from every body. */
+function redactThread<T extends { bodyMd: string; replies: Array<{ bodyMd: string }> }>(
+  thread: T,
+  hidden: ReadonlySet<string>,
+): T {
+  return {
+    ...thread,
+    bodyMd: redactWithheldWorkItemRefs(thread.bodyMd, hidden),
+    replies: thread.replies.map((r) => ({
+      ...r,
+      bodyMd: redactWithheldWorkItemRefs(r.bodyMd, hidden),
+    })),
+  };
 }
 
 /**
@@ -555,14 +590,21 @@ export const commentsService = {
   async listComments(
     workItemId: string,
     options: ListCommentsOptions,
-    ctx: ServiceContext,
+    ctx: ServiceContext | VisitorReadContext,
   ): Promise<CommentsPageDTO> {
-    const gate = await resolveGatedWorkItem(workItemId, ctx);
+    // A VISITOR (MOTIR-6652) reads the comments of a VISIBLE item of their one
+    // public project; a hidden or foreign item is the same not-found an unknown
+    // one is, and every chip naming a withheld item is redacted from the bodies.
+    const visitor = isVisitorContext(ctx) ? ctx : null;
+    const gate = visitor
+      ? await resolveVisitorGatedWorkItem(workItemId, visitor)
+      : await resolveGatedWorkItem(workItemId, ctx as ServiceContext);
+    const workspaceId = gate.item.workspaceId;
     const order = options.order ?? 'asc';
     const pageSize = clampCommentPageSize(options.limit);
 
     // take+1 probes for a next page without a second count read.
-    const window = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    const window = await withWorkspaceServiceContext(workspaceId, (tx) =>
       commentRepository.listThreadsByWorkItem(
         workItemId,
         { take: pageSize + 1, cursor: options.cursor, order },
@@ -578,14 +620,14 @@ export const commentsService = {
     // path is already spent; these three are peer reads of a page whose
     // visibility is settled.
     const [mentionRows, authors, totalCount] = await Promise.all([
-      withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      withWorkspaceServiceContext(workspaceId, (tx) =>
         commentMentionRepository.findByCommentIds(
           pageComments.map((c) => c.id),
           tx,
         ),
       ),
       userRepository.findByIds([...new Set(pageComments.map((c) => c.authorId))]),
-      withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      withWorkspaceServiceContext(workspaceId, (tx) =>
         commentRepository.countByWorkItem(workItemId, tx),
       ),
     ]);
@@ -609,8 +651,9 @@ export const commentsService = {
       ctx,
     );
 
+    const threads = roots.map((root) => toCommentThreadDto(root, authorsById, mentionsByCommentId));
     return {
-      threads: roots.map((root) => toCommentThreadDto(root, authorsById, mentionsByCommentId)),
+      threads: visitor ? threads.map((t) => redactThread(t, visitor.hiddenIds)) : threads,
       totalCount,
       nextCursor: hasMore ? (roots[roots.length - 1]?.id ?? null) : null,
       order,

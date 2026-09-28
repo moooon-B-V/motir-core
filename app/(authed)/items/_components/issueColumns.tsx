@@ -1,3 +1,4 @@
+import { EpicNotPublicPill } from '@/components/issues/EpicNotPublicPill';
 import type { ReactNode } from 'react';
 import type { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -78,9 +79,16 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
           <span className="shrink-0 font-mono text-xs text-(--el-text-identifier)">
             {r.identifier}
           </span>
-          <span className="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline">
+          <span
+            className={`${r.childrenHidden ? 'min-w-20' : 'min-w-0'} flex-1 truncate text-(--el-text) group-hover:underline`}
+          >
             {r.title}
           </span>
+          {/* A Visitor's PRIVATE epic (MOTIR-6648; design MOTIR-6641) — the row
+              stays, marked, with its children withheld and no drill. The title
+              keeps a floor and the pill gives way to its lock on a narrow
+              (indented tree) row, so the pill never pushes the title out. */}
+          {r.childrenHidden ? <EpicNotPublicPill shrinkable /> : null}
           {/* THE CI BADGE (MOTIR-5474), in the TITLE cell and in its GLYPH form —
               both forced by the row's width budget, measured in
               `design/work-items/design-notes.md` § *The CI badge (MOTIR-5471)*.

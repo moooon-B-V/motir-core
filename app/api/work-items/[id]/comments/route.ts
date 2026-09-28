@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { memberThenVisitor } from '@/lib/visitor/readActor';
+import type { VisitorReadContext } from '@/lib/visitor/context';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { commentsService } from '@/lib/services/commentsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -46,14 +49,12 @@ function mapCommentError(err: unknown): NextResponse | null {
   return null;
 }
 
-export async function GET(
+/** The read itself, for a member's context or a Visitor's (MOTIR-6647). */
+async function serve(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
+  ctx: ServiceContext | VisitorReadContext,
 ): Promise<Response> {
-  const gate = await requireCompliantWorkspaceContext();
-  if (!gate.ok) return gate.response;
-  const { ctx } = gate;
-
   const { id } = await params;
   const url = new URL(req.url);
   const cursor = url.searchParams.get('cursor') ?? undefined;
@@ -77,6 +78,34 @@ export async function GET(
     if (mapped) return mapped;
     throw err;
   }
+}
+
+async function memberGET(
+  req: Request,
+  route: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
+
+  return serve(req, route, ctx);
+}
+
+/**
+ * A work item's comments — members exactly as before; a VISITOR (MOTIR-6647) of the
+ * item's public project reads them through the Visitor path (a hidden item is
+ * not-found, and every chip to a withheld item is redacted — MOTIR-6652), and only
+ * when the member read found nothing for them.
+ */
+export async function GET(
+  req: Request,
+  route: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  return memberThenVisitor(
+    req,
+    () => memberGET(req, route),
+    (ctx) => serve(req, route, ctx),
+  );
 }
 
 export async function POST(

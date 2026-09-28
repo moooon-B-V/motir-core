@@ -144,6 +144,9 @@ export interface BoardColumnStatusDto {
  * `position` is already the opaque fractional-index string on the row.
  */
 export interface BoardCardDto {
+  /** A Visitor's PRIVATE epic (MOTIR-6648): the card wears "Not public". Absent
+   *  on every member read. */
+  childrenHidden?: true;
   id: string;
   projectId: string;
   parentId: string | null;

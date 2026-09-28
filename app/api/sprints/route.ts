@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { visitorThenMember } from '@/lib/visitor/readActor';
+import { visitorServiceContext } from '@/lib/visitor/context';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { sprintsService } from '@/lib/services/sprintsService';
@@ -22,7 +24,7 @@ import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
 // workspace from the active-project context (NEVER the client). Exposes the
 // already-shipped `sprintRepository.listByProject` leaf (Story 4.1) the backlog
 // UI binds to. Available to any project member (a read, not owner-gated).
-export async function GET(): Promise<Response> {
+async function memberGET(): Promise<Response> {
   const gate = await requireCompliantSession();
   if (!gate.ok) return gate.response;
 
@@ -47,6 +49,28 @@ export async function GET(): Promise<Response> {
     if (gate) return gate;
     throw err;
   }
+}
+
+/**
+ * The project's sprints — for a VISITOR (MOTIR-6647), those of the public project
+ * the Visitor cookie names, on the Visitor's narrowed service context; for
+ * everyone else exactly as before.
+ */
+export async function GET(req?: Request): Promise<Response> {
+  if (!req) return memberGET();
+  return visitorThenMember(req, memberGET, async (ctx) => {
+    try {
+      const sprints = await sprintsService.listByProject(
+        ctx.project.id,
+        visitorServiceContext(ctx),
+      );
+      return NextResponse.json({ sprints });
+    } catch (err) {
+      const gate = sprintGateErrorResponse(err);
+      if (gate) return gate;
+      throw err;
+    }
+  });
 }
 
 // POST /api/sprints — create a PLANNED sprint on the active project. Body:

@@ -464,3 +464,27 @@ describe('BoardCard — the CI badge (MOTIR-5474)', () => {
     expect(document.querySelector('[data-ci-state]')?.className).toContain('whitespace-nowrap');
   });
 });
+
+// MOTIR-6170 · MOTIR-6648 — a Visitor's PRIVATE epic card wears "Not public"; a
+// card without the mark (every member read) never does.
+describe('BoardCard — a Visitor’s private epic', () => {
+  it('shows the Not public pill only on a card marked childrenHidden', () => {
+    render(
+      <BoardCard
+        card={{ ...card({ id: 'e1', key: 1 }), kind: 'epic', childrenHidden: true }}
+        assigneeName={null}
+        onOpenQuickView={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('epic-not-public-pill').textContent).toContain('Not public');
+    cleanup();
+    render(
+      <BoardCard
+        card={{ ...card({ id: 'e2', key: 2 }), kind: 'epic' }}
+        assigneeName={null}
+        onOpenQuickView={() => {}}
+      />,
+    );
+    expect(screen.queryByTestId('epic-not-public-pill')).toBeNull();
+  });
+});
