@@ -110,6 +110,12 @@ export interface ScopeDrainInput {
    * and merge `origin/main` into it before the first child. Unset for a fresh run.
    */
   resumeBranch?: boolean;
+  /**
+   * A resumed scope's session branch PER REPOSITORY (MOTIR-6794) — each
+   * repository resumes the branch, and so the draft pull request, its dead run
+   * left there. Absent: `branch` in every repository.
+   */
+  branches?: readonly { repository: string | null; branch: string; cloneUrl?: string | null }[];
 }
 
 /**
@@ -134,7 +140,10 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
   const records: DispatchRecord[] = [];
   const skipped: SkipRecord[] = [];
   const planning: PlanningRecord[] = [];
-  const repos = new RepoSessions(branch, run, { mergeBaseOnReuse: input.resumeBranch === true });
+  const repos = new RepoSessions(branch, run, {
+    mergeBaseOnReuse: input.resumeBranch === true,
+    ...(input.branches ? { branches: input.branches } : {}),
+  });
   /** Cards that have LANDED — what an in-scope blocker is satisfied by. */
   const satisfied = new Set<string>();
   /**
@@ -279,17 +288,17 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
           ...(decision ? {} : { sessionBranch: branch }),
           findingsPolicy: findingsPolicyOf(opts),
         });
-        const targets = resolveDispatchTargets(
-          session.link.dir,
-          session.link.config,
-          // The clone URL travels WITH the name only when this drain clones
-          // (MOTIR-6558); a local scope keeps resolving by name alone.
-          (dispatch.targetRepos ?? []).map((r) =>
-            input.materialize ? { name: r.name, cloneUrl: r.cloneUrl } : r.name,
-          ),
-        );
-        const resolved =
-          targets.length > 0
+        const resolveTargets = () => {
+          const targets = resolveDispatchTargets(
+            session.link.dir,
+            session.link.config,
+            // The clone URL travels WITH the name only when this drain clones
+            // (MOTIR-6558); a local scope keeps resolving by name alone.
+            (dispatch.targetRepos ?? []).map((r) =>
+              input.materialize ? { name: r.name, cloneUrl: r.cloneUrl } : r.name,
+            ),
+          );
+          return targets.length > 0
             ? targets
             : [
                 resolveDispatchTarget(
@@ -299,7 +308,8 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
                   input.materialize ? { cloneUrl: dispatch.targetRepoCloneUrl ?? null } : {},
                 ),
               ];
-        const target = resolved[0]!;
+        };
+        let resolved = resolveTargets();
 
         // ⚠️ MATERIALIZE BEFORE `repos.ensure` — `ensure` makes the session
         // branch IN a real checkout, so a missing repository must arrive first,
@@ -312,8 +322,14 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
             stopReason = 'halted';
             break drain;
           }
+          // What was just cloned is a checkout NOW (MOTIR-6794): resolved as
+          // `clonable_checkout` a moment ago, it would read to `repos.ensure` as
+          // having nowhere to branch, and a multi-repository card would lose its
+          // session lineage in every repository.
+          if (materialized.cloned.length > 0) resolved = resolveTargets();
         }
 
+        const target = resolved[0]!;
         let repo: RepoSession[] | null = null;
         try {
           if (!decision) repo = repos.ensure(resolved);
@@ -452,6 +468,40 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
     }
   } finally {
     detachInterrupt();
+  }
+
+  // A RESUMED scope closes out EVERY repository its dead run pushed to
+  // (MOTIR-6795) — not only the ones a remaining leg touched. A repository whose
+  // children all landed before the run died holds a draft nothing else would
+  // finish: without this it stays a draft, the story's work in it unreviewable.
+  if (input.resumeBranch && input.branches) {
+    for (const own of input.branches) {
+      if (!own.repository) continue;
+      try {
+        const [target] = resolveDispatchTargets(session.link.dir, session.link.config, [
+          input.materialize
+            ? { name: own.repository, cloneUrl: own.cloneUrl ?? null }
+            : own.repository,
+        ]);
+        let resolvedTarget = target!;
+        if (input.materialize && resolvedTarget.reason !== 'repo_checkout') {
+          const materialized = materializeDispatchCheckouts(session.link.dir, [resolvedTarget], {
+            run,
+          });
+          for (const line of renderMaterialization(materialized)) info(line);
+          if (materialized.failures.length > 0) continue;
+          resolvedTarget = resolveDispatchTargets(session.link.dir, session.link.config, [
+            own.repository,
+          ])[0]!;
+        }
+        if (resolvedTarget.reason === 'repo_checkout') repos.ensure([resolvedTarget]);
+      } catch (err) {
+        info(
+          `${own.repository}: its session branch ${own.branch} was not closed out ` +
+            `(${err instanceof Error ? err.message : String(err)}).`,
+        );
+      }
+    }
   }
 
   // Whatever is STILL held was not approved by the time the run ended — its

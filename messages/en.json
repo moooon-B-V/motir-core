@@ -6773,7 +6773,37 @@
         },
         "loading": "Checking whether this work item's run is still alive",
         "error": "Couldn't check whether this work item's run is still alive.",
-        "retry": "Try again"
+        "retry": "Try again",
+        "hosted": {
+          "lead": "Continue it here, in a hosted container — no terminal needed:",
+          "button": "Continue hosted",
+          "buttonParent": "Continue {key} hosted",
+          "orTerminal": "Or carry it on from your terminal:",
+          "branches": {
+            "lead": "Its work is on a branch in each of its {count} repositories:",
+            "row": "<b>{repository}</b> · <ref>{branch}</ref>",
+            "rowWithPr": "<b>{repository}</b> · <ref>{branch}</ref> · pull request <b>{pr}</b>"
+          },
+          "continuing": {
+            "byYou": "Being continued by <b>you</b> in a hosted container · started <when></when>",
+            "by": "Being continued by <b>{name}</b> in a hosted container · started <when></when>",
+            "watch": "Watch it work in Run above."
+          },
+          "refused": {
+            "taken": "Not started — <b>{name}</b> is already continuing this work item, since <when></when>.",
+            "takenByYou": "Not started — you are already continuing this work item, since <when></when>.",
+            "runAlive": "Not started — <b>{name}</b>'s run is still reporting, so there is nothing to continue.",
+            "nothingPushed": "Not started — the run pushed nothing to continue from.",
+            "useFix": "Not started — the pull request is open, so its checks decide from here.",
+            "notInProgress": "Not started — this work item is not In Progress any more.",
+            "noDeadRun": "Not started — no run of this work item died.",
+            "theParent": "Not started — this is part of <link>{key}</link>'s run, so it is continued from there.",
+            "outOfCredits": {
+              "body": "Nothing was booted and nothing was charged. Continue hosted works again once the organization has credits — or carry it on from your terminal."
+            }
+          },
+          "runDied": "This run died — last heard from <b><when></when></b>. Its work is kept on its branch; continue it hosted or from a terminal in Development below."
+        }
       },
       "emptyTitle": "No linked pull request",
       "emptyDescription": "Use + Link pull request here or <mono>link_pull_request</mono> over the MCP to add a PR and show live PR and CI status.",
@@ -7561,7 +7591,8 @@
       "state_error": "The GitLab sign-in couldn't be verified. Please try connecting again.",
       "error": "Something went wrong connecting to GitLab. Please try again.",
       "not_configured": "GitLab isn't configured on this deployment yet.",
-      "no_workspace": "Create a workspace first, then connect GitLab."
+      "no_workspace": "Create a workspace first, then connect GitLab.",
+      "forbidden": "Only an organization Owner or Admin can connect GitLab. Nothing was changed."
     },
     "connect": {
       "title": "Connect GitLab",

@@ -4,6 +4,7 @@ import { OrchestratorNotConfiguredError } from '@motir/orchestrator';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import {
+  HostedContinueRefusedError,
   HostedModelNotOfferedError,
   HostedModelsUnavailableError,
   HostedRunBootFailedError,
@@ -19,7 +20,10 @@ import { hostedRunService } from '@/lib/services/hostedRunService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 
 // POST /api/work-items/[id]/hosted-runs (Story MOTIR-683 · MOTIR-690) — START a
-// hosted run on a card: `{ model, idempotencyKey? }` → `201 { dispatchRunId }`.
+// hosted run on a card: `{ model, idempotencyKey?, mode? }` → `201 { dispatchRunId }`.
+// `mode: 'continue'` (Story MOTIR-6527 · MOTIR-6792) resumes a card whose last run
+// died — Continue hosted — and adds the continue claim's refusals, each a 409
+// `hosted_continue_*` (`taken` naming its holder).
 // The route MOTIR-691's Run hosted control calls; `hostedRunService.start` is the
 // whole behaviour.
 //
@@ -50,9 +54,14 @@ export async function POST(
   const body = (await req.json().catch(() => null)) as {
     model?: unknown;
     idempotencyKey?: unknown;
+    mode?: unknown;
   } | null;
   const model = typeof body?.model === 'string' ? body.model.trim() : '';
   if (!model) return problem('BAD_REQUEST', '`model` must be a model id.', 400);
+  const mode = body?.mode ?? 'run';
+  if (mode !== 'run' && mode !== 'continue') {
+    return problem('BAD_REQUEST', '`mode` must be "run" or "continue".', 400);
+  }
   const idempotencyKey =
     typeof body?.idempotencyKey === 'string' && body.idempotencyKey.trim()
       ? body.idempotencyKey.trim()
@@ -60,7 +69,7 @@ export async function POST(
 
   try {
     const started = await hostedRunService.start(
-      { workItemKey: key, model, idempotencyKey },
+      { workItemKey: key, model, idempotencyKey, mode },
       gate.ctx,
     );
     return NextResponse.json(
@@ -82,6 +91,12 @@ export async function POST(
       });
     }
     if (err instanceof HostedRunCardNotReadyError) return problem(err.code, err.message, 409);
+    if (err instanceof HostedContinueRefusedError) {
+      return problem(err.code, err.message, 409, {
+        ...(err.holder ? { holder: err.holder, startedAt: err.startedAt } : {}),
+        ...(err.parentKey ? { parentKey: err.parentKey } : {}),
+      });
+    }
     if (err instanceof HostedRunBootFailedError) {
       return problem(err.code, err.message, 503, { dispatchRunId: err.dispatchRunId });
     }

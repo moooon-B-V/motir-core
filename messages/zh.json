@@ -6769,7 +6769,37 @@
         },
         "loading": "正在检查此工作项的运行是否仍在进行",
         "error": "无法检查此工作项的运行是否仍在进行。",
-        "retry": "重试"
+        "retry": "重试",
+        "hosted": {
+          "lead": "在这里用托管容器继续——无需终端：",
+          "button": "托管继续",
+          "buttonParent": "托管继续 {key}",
+          "orTerminal": "或者在终端中继续：",
+          "branches": {
+            "lead": "其工作位于它的 {count} 个代码仓库各自的分支上：",
+            "row": "<b>{repository}</b> · <ref>{branch}</ref>",
+            "rowWithPr": "<b>{repository}</b> · <ref>{branch}</ref> · 拉取请求 <b>{pr}</b>"
+          },
+          "continuing": {
+            "byYou": "<b>你</b>正在用托管容器继续 · <when></when>开始",
+            "by": "<b>{name}</b> 正在用托管容器继续 · <when></when>开始",
+            "watch": "在上方的“运行”中查看其进度。"
+          },
+          "refused": {
+            "taken": "未启动——<b>{name}</b> 已在继续此工作项（<when></when>开始）。",
+            "takenByYou": "未启动——你已在继续此工作项（<when></when>开始）。",
+            "runAlive": "未启动——<b>{name}</b> 的运行仍在上报，因此没有可继续的内容。",
+            "nothingPushed": "未启动——该运行没有推送任何可继续的内容。",
+            "useFix": "未启动——拉取请求已打开，接下来由其检查决定。",
+            "notInProgress": "未启动——此工作项已不再是进行中。",
+            "noDeadRun": "未启动——此工作项没有中断的运行。",
+            "theParent": "未启动——它是 <link>{key}</link> 运行的一部分，因此从那里继续。",
+            "outOfCredits": {
+              "body": "没有启动任何机器，也没有产生任何费用。组织有积分后即可再次托管继续——或者在终端中继续。"
+            }
+          },
+          "runDied": "此运行已中断——最后一次联系在<b><when></when></b>。其工作保留在分支上；请在下方“开发”中托管继续或在终端中继续。"
+        }
       },
       "emptyTitle": "暂无关联的拉取请求",
       "emptyDescription": "使用此处的“+关联拉取请求”，或通过 MCP 调用 <mono>link_pull_request</mono> 来添加 PR，并显示实时 PR 与 CI 状态。",
@@ -7557,7 +7587,8 @@
       "state_error": "无法验证此次 GitLab 登录，请重新尝试连接。",
       "error": "连接 GitLab 时出错，请重试。",
       "not_configured": "此部署尚未配置 GitLab。",
-      "no_workspace": "请先创建工作区，然后再连接 GitLab。"
+      "no_workspace": "请先创建工作区，然后再连接 GitLab。",
+      "forbidden": "只有组织的所有者或管理员可以连接 GitLab，未做任何更改。"
     },
     "connect": {
       "title": "连接 GitLab",

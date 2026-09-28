@@ -105,6 +105,8 @@ describe('client.getDispatchRun — the run a hosted CLI adopts', () => {
         { key: 'PROD-3', position: 2, disposition: 'queued' },
         { key: null, position: 3, disposition: 'skipped' },
       ],
+      // Not a continue run, so it resumes nothing (MOTIR-6795).
+      continues: null,
     });
   });
 });

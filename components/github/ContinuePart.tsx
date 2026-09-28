@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import {
   CircleEllipsis,
+  Cloud,
   CircleX,
   CornerLeftUp,
   GitBranch,
@@ -40,6 +41,28 @@ import { relativeLabel } from './RepairFixPart';
 
 /** The part's view, or `error` when the read failed (Panel D8). */
 export type ContinuePartView = WorkItemContinueViewDto | { state: 'error' };
+
+/**
+ * The CONTINUE HOSTED slot (Story MOTIR-6527 · MOTIR-6796; design § Continue hosted).
+ * The host passes it only where the Run hosted door is mounted for this viewer —
+ * may edit, not archived, not done — so its absence IS C6's last rule, and the
+ * part then renders exactly as shipped. `door` is the picker and the button,
+ * `notice` what the door answered.
+ */
+export interface ContinueHostedSlot {
+  door: ReactNode;
+  notice: ReactNode;
+}
+
+/** Whether the part offers Continue hosted for this view (C1–C3; C6 otherwise). */
+export function offersContinueHosted(
+  view: ContinuePartView,
+  hosted: ContinueHostedSlot | null | undefined,
+): boolean {
+  if (!hosted || view.state !== 'died') return false;
+  if (view.refusal === null) return view.branch !== null && view.branches.length > 0;
+  return view.refusal === 'continue_the_parent' && view.parentKey !== null;
+}
 
 const mono = (chunks: ReactNode) => <span className="font-mono">{chunks}</span>;
 const bold = (chunks: ReactNode) => <b className="font-medium text-(--el-text)">{chunks}</b>;
@@ -138,8 +161,11 @@ export function ContinuePart({
   itemIdentifier,
   statusLabel,
   now,
+  hosted = null,
 }: {
   view: ContinuePartView;
+  /** The Continue hosted door — see {@link ContinueHostedSlot}. */
+  hosted?: ContinueHostedSlot | null;
   /** The work item's own `MOTIR-<n>` — the command names it. */
   itemIdentifier: string;
   /** The work item's current status, in words — the *nothing moved* line names it. */
@@ -148,7 +174,9 @@ export function ContinuePart({
   now?: number;
 }) {
   const t = useTranslations('github.development.continue');
+  const tHosted = useTranslations('github.development.continue.hosted');
   const router = useRouter();
+  const offered = offersContinueHosted(view, hosted);
   // Read ONCE per mount, as the fix part does: a relative label that moved between
   // renders would be a hydration mismatch waiting to happen.
   const [clock] = useState(() => now ?? Date.now());
@@ -187,16 +215,28 @@ export function ContinuePart({
           </Pill>
         }
       >
+        {hosted?.notice}
         <Line quiet icon={<UserRound className={iconClass} aria-hidden />}>
-          {t.rich(
-            view.byViewer
-              ? 'continuing.byYou'
-              : view.holder
-                ? 'continuing.by'
-                : 'continuing.bySomeone',
-            { name: view.holder?.name ?? '', b: bold, when: when(view.startedAt) },
-          )}
+          {view.origin === 'hosted' && (view.byViewer || view.holder)
+            ? tHosted.rich(view.byViewer ? 'continuing.byYou' : 'continuing.by', {
+                name: view.holder?.name ?? '',
+                b: bold,
+                when: when(view.startedAt),
+              })
+            : t.rich(
+                view.byViewer
+                  ? 'continuing.byYou'
+                  : view.holder
+                    ? 'continuing.by'
+                    : 'continuing.bySomeone',
+                { name: view.holder?.name ?? '', b: bold, when: when(view.startedAt) },
+              )}
         </Line>
+        {view.origin === 'hosted' && view.byViewer ? (
+          <Line quiet icon={<Cloud className={iconClass} aria-hidden />}>
+            {tHosted('continuing.watch')}
+          </Line>
+        ) : null}
         {view.tookOverFrom?.dispatcher ? (
           <Line quiet icon={<History className={iconClass} aria-hidden />}>
             {t.rich('continuing.tookOver', { name: view.tookOverFrom.dispatcher.name, b: bold })}
@@ -221,6 +261,7 @@ export function ContinuePart({
   if (refusal === 'use_fix') {
     return (
       <Frame state="use_fix" pill={<DiedPill />}>
+        {hosted?.notice}
         <Line icon={<TriangleAlert className={iconClass} aria-hidden />}>
           {t.rich('implemented.line', { when: when(deadRun.lastHeardAt) })}
         </Line>
@@ -252,6 +293,13 @@ export function ContinuePart({
             ),
           })}
         </Line>
+        {offered ? (
+          <>
+            {hosted?.door}
+            {hosted?.notice}
+            <Note>{tHosted('orTerminal')}</Note>
+          </>
+        ) : null}
         <CopyableCodeBlock language="shell" code={`motir continue ${parentKey}`} />
         <Note>{t.rich('startOver', { target: parentKey, b: bold })}</Note>
       </Frame>
@@ -283,22 +331,63 @@ export function ContinuePart({
       <Line quiet icon={<UserRound className={iconClass} aria-hidden />}>
         {ranBy}
       </Line>
-      <Line quiet icon={<GitBranch className={iconClass} aria-hidden />}>
-        {refusal === 'no_branch' || view.branch === null
-          ? t('nothingPushed')
-          : view.pullRequest
-            ? t.rich('branchWithPr', {
-                branch: view.branch,
-                pr: `${view.pullRequest.repo} · #${view.pullRequest.number}`,
-                ref: branchTag,
-                b: bold,
-              })
-            : t.rich('branch', { branch: view.branch, ref: branchTag })}
-      </Line>
+      {refusal !== null || view.branch === null ? hosted?.notice : null}
+      {offered && view.branches.length > 1 ? (
+        <>
+          <Line quiet icon={<GitBranch className={iconClass} aria-hidden />}>
+            {tHosted('branches.lead', { count: view.branches.length })}
+          </Line>
+          <ul className="flex flex-col gap-1 pl-6" data-testid="continue-branches">
+            {view.branches.map((b) => (
+              <li
+                key={`${b.repository ?? ''}:${b.branch}`}
+                className="text-[13px] leading-normal text-(--el-text-secondary)"
+              >
+                {b.pullRequest
+                  ? tHosted.rich('branches.rowWithPr', {
+                      repository: b.repository ?? '—',
+                      branch: b.branch,
+                      pr: `${b.pullRequest.repo} · #${b.pullRequest.number}`,
+                      ref: branchTag,
+                      b: bold,
+                    })
+                  : tHosted.rich('branches.row', {
+                      repository: b.repository ?? '—',
+                      branch: b.branch,
+                      ref: branchTag,
+                      b: bold,
+                    })}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <Line quiet icon={<GitBranch className={iconClass} aria-hidden />}>
+          {refusal === 'no_branch' || view.branch === null
+            ? t('nothingPushed')
+            : view.pullRequest
+              ? t.rich('branchWithPr', {
+                  branch: view.branch,
+                  pr: `${view.pullRequest.repo} · #${view.pullRequest.number}`,
+                  ref: branchTag,
+                  b: bold,
+                })
+              : t.rich('branch', { branch: view.branch, ref: branchTag })}
+        </Line>
+      )}
       <Note>{t.rich('safe', { status: statusLabel, b: bold })}</Note>
       {refusal === null && view.branch !== null ? (
         <>
-          <p className="text-[13px] leading-normal text-(--el-text)">{t('lead')}</p>
+          {offered ? (
+            <>
+              <p className="text-[13px] leading-normal text-(--el-text)">{tHosted('lead')}</p>
+              {hosted?.door}
+              {hosted?.notice}
+              <Note>{tHosted('orTerminal')}</Note>
+            </>
+          ) : (
+            <p className="text-[13px] leading-normal text-(--el-text)">{t('lead')}</p>
+          )}
           <CopyableCodeBlock language="shell" code={`motir continue ${itemIdentifier}`} />
           <Note>{t('how')}</Note>
         </>

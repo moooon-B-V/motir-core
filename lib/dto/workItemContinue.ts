@@ -74,6 +74,22 @@ export interface ContinuePullRequestDto {
   headRef: string;
 }
 
+/**
+ * Where ONE repository's share of a dead run's work is (MOTIR-6791). A run that
+ * spanned several repositories pushed a branch in each, and each is continued.
+ *
+ * `repository` is the repository NAME as the card's `targetRepos` names it, or
+ * null when the run recorded a branch without saying where (a run older than
+ * the per-repository checkpoint, or a session branch — one name everywhere).
+ */
+export interface ContinueBranchDto {
+  repository: string | null;
+  branch: string;
+  /** The open pull request this repository's branch heads, when there is one —
+   *  its head is then the branch, whatever the checkpoint recorded. */
+  pullRequest: ContinuePullRequestDto | null;
+}
+
 /** The result of one continue claim attempt. */
 export interface WorkItemContinueClaimDto {
   key: string;
@@ -92,8 +108,12 @@ export interface WorkItemContinueClaimDto {
   startedAt: string | null;
   /** The run that died — set on `claimed` and `mine`. */
   deadRun: DeadRunDto | null;
-  /** The branch to continue on — set on `claimed` and `mine`. */
+  /** The branch to continue on — set on `claimed` and `mine`. The PRIMARY
+   *  repository's entry of `branches`; kept for readers that know one branch. */
   branch: string | null;
+  /** Every repository's branch to continue on, primary first — set on `claimed`
+   *  and `mine`, empty otherwise (MOTIR-6791). */
+  branches: ContinueBranchDto[];
   /** The open pull request the dead run left, when there is one. */
   pullRequest: ContinuePullRequestDto | null;
   /** Who the item was assigned to before this claim took it over. */
@@ -141,7 +161,11 @@ export type WorkItemContinueViewDto =
       deadRun: DeadRunDto;
       /** How it ended — the design's reason line (D3). */
       reason: RunDiedReason;
+      /** The primary repository's branch — `branches[0]`, or null when none. */
       branch: string | null;
+      /** Every repository's branch, primary first (MOTIR-6791). Empty is the
+       *  *nothing pushed* case: no repository has a branch. */
+      branches: ContinueBranchDto[];
       pullRequest: ContinuePullRequestDto | null;
       /** Null when the claim would take it; otherwise the refusal it would give
        *  (`use_fix`, `continue_the_parent`, `no_branch`, `not_in_progress`). */
@@ -153,8 +177,12 @@ export type WorkItemContinueViewDto =
       state: 'continuing';
       holder: ClaimActorDto | null;
       byViewer: boolean;
+      /** Where the continue runs — a HOSTED one says so on the card (MOTIR-6796). */
+      origin: 'local' | 'hosted';
       startedAt: string;
       branch: string | null;
+      /** Every repository's branch the continue took over (MOTIR-6791). */
+      branches: ContinueBranchDto[];
       /** Whose run the continue took over, when the claim recorded it. */
       tookOverFrom: { runId: string; dispatcher: ClaimActorDto | null } | null;
     };

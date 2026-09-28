@@ -225,3 +225,58 @@ export class HostedRunAlreadyEndedError extends Error {
     this.name = 'HostedRunAlreadyEndedError';
   }
 }
+
+// --- Continuing a dead run hosted (Story MOTIR-6527 · MOTIR-6792) ---
+
+/** Why a Continue hosted was refused — the continue claim's own answers, spelled
+ *  as the hosted door's codes. */
+export type HostedContinueRefusal =
+  | 'taken'
+  | 'run_alive'
+  | 'no_branch'
+  | 'use_fix'
+  | 'not_in_progress'
+  | 'no_dead_run'
+  | 'continue_the_parent';
+
+const HOSTED_CONTINUE_CODE = {
+  taken: 'hosted_continue_taken',
+  run_alive: 'hosted_continue_run_alive',
+  no_branch: 'hosted_continue_nothing_pushed',
+  use_fix: 'hosted_continue_use_fix',
+  not_in_progress: 'hosted_continue_not_in_progress',
+  no_dead_run: 'hosted_continue_no_dead_run',
+  continue_the_parent: 'hosted_continue_the_parent',
+} as const satisfies Record<HostedContinueRefusal, string>;
+
+const HOSTED_CONTINUE_WHY: Record<HostedContinueRefusal, string> = {
+  taken: 'somebody is already continuing it',
+  run_alive: 'its run is still running',
+  no_branch: 'its run pushed nothing to continue from',
+  use_fix: 'its pull request is open — a red one is fixed, not continued',
+  not_in_progress: 'it is not In Progress',
+  no_dead_run: 'no run of it died',
+  continue_the_parent: 'it is a leg of a parent run; continue the parent',
+};
+
+/**
+ * A Continue hosted the continue claim would refuse — or did, under its lock.
+ * Nothing was opened, minted or booted: every one of these answers before the
+ * lock is taken, or is the lock's own refusal.
+ */
+export class HostedContinueRefusedError extends Error {
+  readonly code: (typeof HOSTED_CONTINUE_CODE)[HostedContinueRefusal];
+  constructor(
+    readonly key: string,
+    readonly reason: HostedContinueRefusal,
+    /** Who holds it — `taken` and `run_alive`. */
+    readonly holder: { id: string; name: string } | null = null,
+    readonly startedAt: string | null = null,
+    /** The parent to continue instead — `continue_the_parent`. */
+    readonly parentKey: string | null = null,
+  ) {
+    super(`${key} cannot be continued hosted: ${HOSTED_CONTINUE_WHY[reason]}`);
+    this.name = 'HostedContinueRefusedError';
+    this.code = HOSTED_CONTINUE_CODE[reason];
+  }
+}

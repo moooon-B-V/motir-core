@@ -283,6 +283,7 @@ export interface DispatchPromptOptions {
 async function resolveContinueFrom(
   runId: string,
   itemId: string,
+  primaryRepo: string | null,
   ctx: ServiceContext,
 ): Promise<ContinueFromForPrompt> {
   return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
@@ -290,7 +291,12 @@ async function resolveContinueFrom(
     if (!run) throw new ContinueFromInvalidError(runId, 'unknown');
     if (run.status === 'running') throw new ContinueFromInvalidError(runId, 'still_running');
     if (run.status === 'succeeded') throw new ContinueFromInvalidError(runId, 'succeeded');
-    const { branch, pullRequest } = await resolveContinueBranch(itemId, run, tx);
+    const { branch, branches, pullRequest } = await resolveContinueBranch(
+      itemId,
+      run,
+      tx,
+      primaryRepo,
+    );
     if (branch === null) throw new ContinueFromInvalidError(runId, 'unknown');
     return {
       deadRunId: run.id,
@@ -298,6 +304,15 @@ async function resolveContinueFrom(
       lastHeardAt: (run.lastHeartbeatAt ?? run.endedAt ?? run.startedAt).toISOString(),
       dispatcherName: run.createdBy?.name ?? null,
       branch,
+      // One entry per repository, primary first (MOTIR-6791). A one-repository
+      // run's single entry leaves the prompt exactly as it was.
+      branches: branches.map((b) => ({
+        repository: b.repository,
+        branch: b.branch,
+        pullRequest: b.pullRequest
+          ? { repo: b.pullRequest.repo, number: b.pullRequest.number, url: b.pullRequest.url }
+          : null,
+      })),
       pullRequest: pullRequest
         ? { repo: pullRequest.repo, number: pullRequest.number, url: pullRequest.url }
         : null,
@@ -339,7 +354,7 @@ export const dispatchPromptService = {
     // Validated FIRST, before the fan-out: a continue that cannot happen is the
     // caller's to fix, and the answer must not wait on ten reads.
     const continueFrom = opts.continueFrom
-      ? await resolveContinueFrom(opts.continueFrom, item.id, ctx)
+      ? await resolveContinueFrom(opts.continueFrom, item.id, item.targetRepos[0] ?? null, ctx)
       : null;
 
     // ⚠️ `allSettledOrThrow`, NOT `Promise.all` (MOTIR-6235). The access gate
