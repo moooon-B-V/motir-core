@@ -1262,6 +1262,12 @@ export interface ClaimedScopeRunInput {
   reporter?: DispatchRunReporter;
   /** `branch` is a dead run's, being resumed: merge the base into it first. */
   resumeBranch?: boolean;
+  /** On a resume, each repository's own session branch (MOTIR-6794). */
+  branches?: readonly { repository: string | null; branch: string }[];
+  /** Clone a leg's missing repositories before its session branch is made. */
+  materialize?: boolean;
+  /** Prepare each leg's checkouts before its spawn (a hosted run's code graph). */
+  prepareCheckouts?: (cwds: string[]) => void;
 }
 
 /**
@@ -1324,6 +1330,9 @@ export async function runClaimedScope(input: ClaimedScopeRunInput): Promise<void
     branch,
     run,
     ...(input.resumeBranch ? { resumeBranch: true } : {}),
+    ...(input.branches ? { branches: input.branches } : {}),
+    ...(input.materialize ? { materialize: true } : {}),
+    ...(input.prepareCheckouts ? { prepareCheckouts: input.prepareCheckouts } : {}),
     clock: deps.clock ?? Date.now,
     runAgentFn: deps.runAgentFn ?? runAgent,
     reporter,

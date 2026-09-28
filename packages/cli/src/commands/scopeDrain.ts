@@ -110,6 +110,12 @@ export interface ScopeDrainInput {
    * and merge `origin/main` into it before the first child. Unset for a fresh run.
    */
   resumeBranch?: boolean;
+  /**
+   * A resumed scope's session branch PER REPOSITORY (MOTIR-6794) — each
+   * repository resumes the branch, and so the draft pull request, its dead run
+   * left there. Absent: `branch` in every repository.
+   */
+  branches?: readonly { repository: string | null; branch: string }[];
 }
 
 /**
@@ -134,7 +140,10 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
   const records: DispatchRecord[] = [];
   const skipped: SkipRecord[] = [];
   const planning: PlanningRecord[] = [];
-  const repos = new RepoSessions(branch, run, { mergeBaseOnReuse: input.resumeBranch === true });
+  const repos = new RepoSessions(branch, run, {
+    mergeBaseOnReuse: input.resumeBranch === true,
+    ...(input.branches ? { branches: input.branches } : {}),
+  });
   /** Cards that have LANDED — what an in-scope blocker is satisfied by. */
   const satisfied = new Set<string>();
   /**
@@ -279,17 +288,17 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
           ...(decision ? {} : { sessionBranch: branch }),
           findingsPolicy: findingsPolicyOf(opts),
         });
-        const targets = resolveDispatchTargets(
-          session.link.dir,
-          session.link.config,
-          // The clone URL travels WITH the name only when this drain clones
-          // (MOTIR-6558); a local scope keeps resolving by name alone.
-          (dispatch.targetRepos ?? []).map((r) =>
-            input.materialize ? { name: r.name, cloneUrl: r.cloneUrl } : r.name,
-          ),
-        );
-        const resolved =
-          targets.length > 0
+        const resolveTargets = () => {
+          const targets = resolveDispatchTargets(
+            session.link.dir,
+            session.link.config,
+            // The clone URL travels WITH the name only when this drain clones
+            // (MOTIR-6558); a local scope keeps resolving by name alone.
+            (dispatch.targetRepos ?? []).map((r) =>
+              input.materialize ? { name: r.name, cloneUrl: r.cloneUrl } : r.name,
+            ),
+          );
+          return targets.length > 0
             ? targets
             : [
                 resolveDispatchTarget(
@@ -299,7 +308,8 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
                   input.materialize ? { cloneUrl: dispatch.targetRepoCloneUrl ?? null } : {},
                 ),
               ];
-        const target = resolved[0]!;
+        };
+        let resolved = resolveTargets();
 
         // ⚠️ MATERIALIZE BEFORE `repos.ensure` — `ensure` makes the session
         // branch IN a real checkout, so a missing repository must arrive first,
@@ -312,8 +322,14 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
             stopReason = 'halted';
             break drain;
           }
+          // What was just cloned is a checkout NOW (MOTIR-6794): resolved as
+          // `clonable_checkout` a moment ago, it would read to `repos.ensure` as
+          // having nowhere to branch, and a multi-repository card would lose its
+          // session lineage in every repository.
+          if (materialized.cloned.length > 0) resolved = resolveTargets();
         }
 
+        const target = resolved[0]!;
         let repo: RepoSession[] | null = null;
         try {
           if (!decision) repo = repos.ensure(resolved);

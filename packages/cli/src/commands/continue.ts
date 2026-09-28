@@ -459,6 +459,11 @@ async function continueParent(input: {
     branch,
     reporter,
     resumeBranch: true,
+    // EVERY repository's session branch (MOTIR-6794), so each resumes its own
+    // line of work and its own draft — none cuts a second one — and a repository
+    // with no checkout here is cloned first, as the leaf continue does.
+    branches: continueBranchesOf(claim),
+    materialize: true,
   });
 }
 

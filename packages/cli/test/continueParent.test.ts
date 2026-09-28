@@ -173,7 +173,13 @@ function recordingGit(): CommandRunner {
   };
 }
 
-function setup(over: { ready?: DispatchItem[]; claim?: Partial<WorkItemContinueClaim> } = {}) {
+function setup(
+  over: {
+    ready?: DispatchItem[];
+    claim?: Partial<WorkItemContinueClaim>;
+    targetRepos?: DispatchPrompt['targetRepos'];
+  } = {},
+) {
   const calls: H['calls'] = [];
   const root = mkdtempSync(join(tmpdir(), 'motir-continue-parent-'));
   mkdirSync(join(root, 'motir-core'));
@@ -253,6 +259,7 @@ function setup(over: { ready?: DispatchItem[]; claim?: Partial<WorkItemContinueC
         targetRepo: 'motir-core',
         workflowMode: 'session_lineage',
         sessionBranch: opts?.sessionBranch ?? null,
+        ...(over.targetRepos ? { targetRepos: over.targetRepos } : {}),
       };
     },
     markIntegrated: async (args: unknown) => {
@@ -403,6 +410,113 @@ describe('motir continue <PARENT> — the IN-FLIGHT legs (MOTIR-6537)', () => {
         args: expect.objectContaining({ stopReason: 'completed' }),
       }),
     );
+  });
+});
+
+// MOTIR-6794 — a parent across repositories resumes EVERY repository's line of work.
+describe('motir continue <PARENT> — across repositories', () => {
+  const AI_BRANCH = 'motir/auto-20260927-0900-ai';
+  const twoRepos = [
+    { name: 'motir-core', cloneUrl: 'https://github.com/acme/motir-core.git' },
+    { name: 'motir-ai', cloneUrl: 'https://github.com/acme/motir-ai.git' },
+  ] as DispatchPrompt['targetRepos'];
+
+  /** A git/gh that knows WHICH checkout it runs in: origin has `onOrigin[cwd]`'s
+   *  branches, and each has an open draft — so nothing may `gh pr create`. */
+  function perRepoGit(onOrigin: Record<string, string[]>): {
+    run: CommandRunner;
+    seen: { line: string; cwd: string }[];
+  } {
+    const seen: { line: string; cwd: string }[] = [];
+    const run: CommandRunner = (bin, args, cwd) => {
+      const line = [bin, ...args].join(' ');
+      seen.push({ line, cwd });
+      h.commands.push(line);
+      if (bin === 'git' && args[0] === 'clone') {
+        mkdirSync(args[2]!, { recursive: true });
+        return ok();
+      }
+      if (bin === 'git' && args[0] === 'rev-parse' && args[1] === '--verify') {
+        const ref = args[3] ?? '';
+        const branches = onOrigin[cwd] ?? [];
+        return branches.some((b) => ref === `refs/remotes/origin/${b}`)
+          ? ok('abc')
+          : { exitCode: 1, stdout: '', stderr: '' };
+      }
+      if (bin === 'git' && args[0] === 'merge-base') return { exitCode: 1, stdout: '', stderr: '' };
+      if (bin === 'git' && args[0] === 'rev-list' && args[1] === '--count') return ok('1');
+      if (bin === 'git' && (args[0] === 'ls-remote' || args[0] === 'log'))
+        return ok(`abc\trefs/heads/${BRANCH}`);
+      if (bin === 'gh' && args[1] === 'list' && !args.includes('isDraft')) {
+        return ok('https://github.com/acme/repo/pull/77');
+      }
+      return ok();
+    };
+    return { run, seen };
+  }
+
+  it('resumes BOTH repositories on their own session branches and opens no new draft in either', async () => {
+    setup({
+      targetRepos: twoRepos,
+      claim: {
+        branches: [
+          { repository: 'motir-core', branch: BRANCH, pullRequest: null },
+          { repository: 'motir-ai', branch: AI_BRANCH, pullRequest: null },
+        ],
+      },
+    });
+    mkdirSync(join(h.root, 'motir-ai'));
+    const core = join(h.root, 'motir-core');
+    const ai = join(h.root, 'motir-ai');
+    const git = perRepoGit({ [core]: [BRANCH], [ai]: [AI_BRANCH] });
+    await continueCommand(
+      'PROD-1',
+      { agent: 'fake-agent' },
+      { run: git.run, clock: () => 0, now: () => new Date(0) },
+    );
+
+    // Each repository reuses ITS branch — neither is created on origin.
+    expect(h.stderr).toContain(`Session branch ${BRANCH} already on origin in ${core}`);
+    expect(h.stderr).toContain(`Session branch ${AI_BRANCH} already on origin in ${ai}`);
+    expect(git.seen.some((c) => c.line.includes('refs/remotes/origin/main:refs/heads/'))).toBe(
+      false,
+    );
+    // And main is merged into each before any child builds on it.
+    expect(
+      git.seen.filter((c) => c.line.startsWith('git merge --no-edit origin/main')),
+    ).not.toEqual([]);
+    expect(git.seen.some((c) => c.line.startsWith('gh pr create'))).toBe(false);
+    // The landed child is still never dispatched.
+    expect(h.stderr).toContain('Already landed — not run again: PROD-2.');
+    expect(h.calls.filter((c) => c.tool === 'dispatch_prompt').map((c) => c.args)).toEqual([
+      { key: 'PROD-3', sessionBranch: BRANCH },
+    ]);
+  });
+
+  it('a repository with no checkout is cloned first; one with no session branch yet gets one cut', async () => {
+    setup({
+      targetRepos: twoRepos,
+      claim: { branches: [{ repository: 'motir-core', branch: BRANCH, pullRequest: null }] },
+    });
+    const core = join(h.root, 'motir-core');
+    const ai = join(h.root, 'motir-ai');
+    const git = perRepoGit({ [core]: [BRANCH] });
+    await continueCommand(
+      'PROD-1',
+      { agent: 'fake-agent' },
+      { run: git.run, clock: () => 0, now: () => new Date(0) },
+    );
+
+    expect(git.seen.map((c) => c.line)).toContain(
+      `git clone https://github.com/acme/motir-ai.git ${ai}`,
+    );
+    // Cut exactly the way `motir run <parent>` cuts one: the run's branch name,
+    // pushed from origin/main — in the repository that had none.
+    expect(git.seen).toContainEqual({
+      line: `git push origin refs/remotes/origin/main:refs/heads/${BRANCH}`,
+      cwd: ai,
+    });
+    expect(h.stderr).toContain(`Session branch ${BRANCH} already on origin in ${core}`);
   });
 });
 
