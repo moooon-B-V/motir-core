@@ -6,6 +6,7 @@ import {
   type PlanRowDestinationInput,
 } from '@/lib/planning/planDestination';
 import { PLAN_STATUS_DTO_VALUES, type PlanStatusDto } from '@/lib/dto/plans';
+import { readerRoutes } from '@/lib/visitor/routes';
 
 // WHERE A PLAN'S ROW GOES — the one rule both lists call (Story MOTIR-6043 ·
 // MOTIR-6045; design Part XXI, ADR `approval-gates.md` §11.5b).
@@ -111,8 +112,35 @@ describe('UNDECIDED with NO session → the plan page, reason `no-conversation`'
 // one, so a future reader cannot reintroduce either without changing this file.
 describe('neither the session ORIGIN nor its TURN COUNT is an input', () => {
   it('the input type carries exactly the facts the rule reads', () => {
+    // `routes` (MOTIR-6888) is WHO is reading — a Visitor lands on the plan page —
+    // never a fact about the session.
     expectTypeOf<keyof PlanRowDestinationInput>().toEqualTypeOf<
-      'planStatus' | 'planId' | 'sessionId' | 'host' | 'anchorKey' | 'via'
+      'planStatus' | 'planId' | 'sessionId' | 'host' | 'anchorKey' | 'via' | 'routes'
     >();
+  });
+});
+
+describe('a Visitor’s row lands on the plan’s Visitor page (MOTIR-6888)', () => {
+  it('every status, with a session or without, is the Visitor plan page — never the planning surface', () => {
+    const routes = readerRoutes('ACME');
+    for (const planStatus of PLAN_STATUS_DTO_VALUES) {
+      for (const sessionId of ['s_1', null]) {
+        expect(call({ planStatus, sessionId, routes })).toEqual({
+          kind: 'plan-page',
+          href: '/p/ACME/plans/p_31',
+          reason: 'visitor',
+        });
+      }
+    }
+  });
+
+  it('a member’s routes change nothing', () => {
+    for (const planStatus of PLAN_STATUS_DTO_VALUES) {
+      for (const sessionId of ['s_1', null]) {
+        expect(call({ planStatus, sessionId, routes: readerRoutes(null) })).toEqual(
+          call({ planStatus, sessionId }),
+        );
+      }
+    }
   });
 });

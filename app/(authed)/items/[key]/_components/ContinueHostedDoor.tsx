@@ -10,6 +10,7 @@ import { formatRunInstant } from '@/lib/runs/runClock';
 import { relativeLabel } from '@/components/github/RepairFixPart';
 import { HostedModelPicker } from './HostedModelPicker';
 import { useHostedRun, type ContinueHostedRefusal } from './HostedRunProvider';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // THE CONTINUE HOSTED DOOR (Story MOTIR-6527 · MOTIR-6796), built to
 // `design/runs/design-notes.md` § Continue hosted, Panels C1–C5
@@ -112,6 +113,7 @@ function When({ iso }: { iso: string }) {
 }
 
 function Refusal({ refusal }: { refusal: ContinueHostedRefusal }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('github.development.continue.hosted.refused');
   const tRun = useTranslations('runs.hosted.refused');
   const door = useHostedRun();
@@ -183,7 +185,7 @@ function Refusal({ refusal }: { refusal: ContinueHostedRefusal }) {
         key,
         link: (chunks) => (
           <Link
-            href={`/items/${encodeURIComponent(key)}`}
+            href={routes.item(key)}
             className="font-medium text-(--el-link) underline-offset-2 hover:underline"
           >
             {chunks}

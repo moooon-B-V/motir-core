@@ -6,6 +6,7 @@ import { SearchX } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
 import { buildBoardFilterHref } from '@/lib/boards/boardFilterHref';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The board's FILTERED-EMPTY state (Story 6.15 · Subtask 6.15.3 · design
 // board-filter.mock.html panel 4). When an active filter matches no card, the
@@ -21,6 +22,7 @@ import { buildBoardFilterHref } from '@/lib/boards/boardFilterHref';
 // through.
 
 export function BoardFilteredEmptyState({ selectedBoardId }: { selectedBoardId?: string }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('boards');
   return (
     <EmptyState
@@ -30,7 +32,9 @@ export function BoardFilteredEmptyState({ selectedBoardId }: { selectedBoardId?:
       data-testid="board-filtered-empty"
       action={
         <Link
-          href={buildBoardFilterHref({ boardId: selectedBoardId, filter: EMPTY_FILTER })}
+          href={routes.view(
+            buildBoardFilterHref({ boardId: selectedBoardId, filter: EMPTY_FILTER }),
+          )}
           className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-(--el-border) px-3 font-sans text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           {t('filteredEmptyClear')}

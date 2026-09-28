@@ -22,6 +22,7 @@ import { DISPATCH_RUN_LIVE_STATUSES, DISPATCH_RUN_PAST_STATUSES } from '@/lib/ru
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { RunsIndex } from './_components/RunsIndex';
 import { RunsIndexSkeleton } from './_components/RunsIndexSkeleton';
+import { readerRoutes } from '@/lib/visitor/routes';
 
 // THE RUNS INDEX (Story MOTIR-1789 · MOTIR-3923) — every run this project has
 // made, current and past. The surface that makes a run FINDABLE at all: before
@@ -82,6 +83,8 @@ export default async function RunsView({
   // own, or a Visitor's, which withholds a run touching a private epic's
   // descendants and offers the Project view alone (MOTIR-6648).
   const ctx = pageScope(pageCtx);
+  // The reader's addresses (MOTIR-6888): the Visitor path on the Visitor tree.
+  const routes = readerRoutes(ctx.visitor?.project.identifier ?? null);
 
   const projectKey = ctx.project.identifier;
   const wsCtx = ctx.read;
@@ -163,7 +166,7 @@ export default async function RunsView({
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1">
           <Link
-            href={runsHref({ view: hasSwitch ? view : null })}
+            href={routes.view(runsHref({ view: hasSwitch ? view : null }))}
             className="inline-flex items-center gap-1 self-start text-sm text-(--el-link)"
           >
             <ChevronLeft className="size-4" aria-hidden="true" />
@@ -181,7 +184,7 @@ export default async function RunsView({
                     title: header.scope.title,
                     item: (chunks) => (
                       <Link
-                        href={`/items/${encodeURIComponent(header.scope.key)}`}
+                        href={routes.item(header.scope.key)}
                         className="text-(--el-link) underline"
                       >
                         {chunks}

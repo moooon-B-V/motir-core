@@ -4,6 +4,7 @@ import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PendingPlanNotice } from '@/app/(authed)/items/[key]/_components/PendingPlanNotice';
 import type { WorkItemPendingProposalDto } from '@/lib/dto/plans';
+import { readerRoutes } from '@/lib/visitor/routes';
 
 // The PENDING-PLAN indicator on the work-item detail page (bug MOTIR-4197 ·
 // design MOTIR-4256) under happy-dom, against the real `en` catalogue — the
@@ -271,5 +272,21 @@ describe('PendingPlanNotice — the empty case', () => {
     const { container } = renderWithIntl(<PendingPlanNotice identifier="PROD-49" proposals={[]} />);
     expect(container.innerHTML).toBe('');
     expect(screen.queryByTestId('pending-plan-notice')).toBeNull();
+  });
+});
+
+// MOTIR-6888 — on the Visitor tree the notice's plan link is the public
+// project's Visitor plan page, never the member `/plans/<id>`.
+describe('PendingPlanNotice on the Visitor tree', () => {
+  it('links to the Visitor plan page', () => {
+    renderWithIntl(
+      <PendingPlanNotice
+        identifier="PROD-49"
+        proposals={[modifyBy('pln_8f21', 'Epic 8 sweep')]}
+        routes={readerRoutes('ACME')}
+      />,
+    );
+    const link = screen.getByRole('link', { name: 'Review the plan that names PROD-49' });
+    expect(link.getAttribute('href')).toBe('/p/ACME/plans/pln_8f21');
   });
 });

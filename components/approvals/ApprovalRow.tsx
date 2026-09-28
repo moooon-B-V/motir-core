@@ -36,6 +36,7 @@ import type {
   PlanApprovalSubjectSummaryDTO,
   PullRequestApprovalSubjectSummaryDTO,
 } from '@/lib/dto/approvalGate';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // THE APPROVALS ROW — the ONE row both approval lists render: the Workbench's
 // To-approve tab (Story MOTIR-4879 · MOTIR-4794) and the Approval records room
@@ -155,6 +156,7 @@ function Sentence({
   /** A settled or unrenderable row — § 20's settled ink on both halves. */
   quiet: boolean;
 }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('workbench.approvals.sentence');
   const peekRowClick = usePeekRowClick();
   // The ARGUMENT is `name` and the TAG is `title`: next-intl reads both from one
@@ -170,7 +172,7 @@ function Sentence({
     title: (chunks) => (
       <Link
         key="title"
-        href={`/items/${identifier}`}
+        href={routes.item(identifier)}
         onClick={(e) => peekRowClick(e, identifier)}
         className={cn(
           'relative z-10 min-w-0 truncate font-medium hover:underline focus-visible:underline focus-visible:outline-none',
@@ -612,6 +614,7 @@ export function ApprovalRow({
    */
   arrived?: boolean;
 }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('workbench.approvals');
   const tSentence = useTranslations('workbench.approvals.sentence');
   const tGate = useTranslations('approvalGate');
@@ -690,7 +693,7 @@ export function ApprovalRow({
             them apart — the same reason `WorkbenchList`'s row link is labelled
             with the item. */}
         <Link
-          href={`/items/${card.identifier}`}
+          href={routes.item(card.identifier)}
           aria-haspopup="dialog"
           aria-label={t('reviewRow', { key: card.identifier, sentence: sentenceText })}
           onClick={onRowClick}
@@ -879,6 +882,7 @@ function PlanApprovalRow({
   arrived: boolean;
   announcedState: ApprovalGateStateDTO | null;
 }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('workbench.approvals');
   const tPlan = useTranslations('approvalGate.planApproval.row');
   const tGate = useTranslations('approvalGate');
@@ -899,7 +903,7 @@ function PlanApprovalRow({
     record.section === 'decided' ? record.row.state : announcedState;
   const settled = settledState !== null || record.section === 'held';
   const timeIso = record.section === 'decided' ? record.row.decidedAt : record.row.waitingSince;
-  const planHref = `/plans/${encodeURIComponent(subject.planId)}`;
+  const planHref = routes.plan(subject.planId);
   const qs = searchParams.toString();
   // THE ONE DESTINATION RULE, shared with the Plans page's session row
   // (design Part XXI). A To-approve row's subject is a PLAN and this list holds
@@ -913,6 +917,7 @@ function PlanApprovalRow({
     anchorKey: subject.targets[0]?.key ?? null,
     // `planVia=approvals` (§22.2): the reopened line says *Reopened from To approve*.
     via: 'approvals',
+    routes,
   });
   const opensSurface = destination.kind === 'planning-surface';
 
@@ -957,7 +962,7 @@ function PlanApprovalRow({
         // stretched row door on `z-10`.
         <Link
           key="title"
-          href={`/items/${sentence.key}`}
+          href={routes.item(sentence.key)}
           onClick={(e) => peekRowClick(e, sentence.key)}
           className={cn(
             'relative z-10 min-w-0 truncate font-medium hover:underline focus-visible:underline focus-visible:outline-none',

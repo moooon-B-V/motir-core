@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { getTranslations } from 'next-intl/server';
 import { pageMembers, pageScope, type ProjectPageContext } from '@/lib/pages/projectPageContext';
+import { readerRoutes } from '@/lib/visitor/routes';
 import { parsePage, parseSort, parseView, serializeSort } from '@/lib/issues/issueListView';
 import { parseIssueFilter, type IssueFilterParams } from '@/lib/issues/issueListFilter';
 import { parseAdvancedFilterParam } from '@/lib/issues/issueListAdvancedFilter';
@@ -62,6 +63,8 @@ export default async function ItemsView({
 }) {
   const t = await getTranslations('issueViews');
   const ctx = pageScope(pageCtx);
+  // The reader's addresses (MOTIR-6888): the Visitor path on the Visitor tree.
+  const routes = readerRoutes(ctx.visitor?.project.identifier ?? null);
 
   // Story 6.4.6 — gate the issue list on canBrowse; a non-browsable active
   // project renders the no-access state, not the list. The same permission SET
@@ -168,6 +171,7 @@ export default async function ItemsView({
                   MOTIR-6390 panel 6) — `null` for an open org. */}
               {ctx.visitor ? null : <OrganizationReadOnlyNote workspaceId={ctx.workspaceId} />}
               <IssueListToolbar
+                routes={routes}
                 view={view}
                 sort={sort}
                 filter={filter}

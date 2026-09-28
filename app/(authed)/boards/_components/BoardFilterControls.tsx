@@ -16,6 +16,7 @@ import { IssueFilterBar } from '../../items/_components/IssueFilterBar';
 import { IssueAdvancedFilter } from '../../items/_components/IssueAdvancedFilter';
 import { SavedFilterDropdown } from '../../items/_components/SavedFilterDropdown';
 import { useBoardFilterUi } from './BoardFilterUiContext';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The board toolbar's filter affordances (Story 6.15 · Subtask 6.15.3), per
 // design/boards/board-filter.mock.html panels 0–2: the enabled `[Filter]` quick
@@ -66,10 +67,12 @@ export function BoardFilterControls({
   projectKey,
   viewer,
 }: BoardFilterControlsProps) {
+  const routes = useReaderRoutes();
   const ui = useBoardFilterUi();
   const buildHref = useCallback(
-    (next: IssueFilter) => buildBoardFilterHref({ boardId: selectedBoardId, filter: next }),
-    [selectedBoardId],
+    (next: IssueFilter) =>
+      routes.view(buildBoardFilterHref({ boardId: selectedBoardId, filter: next })),
+    [selectedBoardId, routes],
   );
 
   return (

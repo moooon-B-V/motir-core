@@ -31,6 +31,7 @@ import type {
 } from '@/lib/dto/planSessions';
 
 import type { SessionRowView } from './types';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // One Plans-list row — ONE PLANNING CONVERSATION (MOTIR-6025), built to
 // `design/ai-planning/design-notes.md` Part XIX §19.2 and
@@ -168,11 +169,12 @@ const SEED_VERB_KEY: Record<PlanSessionSeedGateKindDto, string> = {
  *  conversation. Never truncated: the meta line wraps and it moves as one unit.
  *  A null seed draws nothing — not dimmed, not labelled. */
 function SeedLink({ seed }: { seed: PlanSessionSeedDto }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('aiPlanning.sessions');
   if (seed.origin === 'pick') return <PickSeedLink seed={seed} />;
   return (
     <Link
-      href={`/items/${seed.cardKey}`}
+      href={routes.item(seed.cardKey)}
       aria-label={t('seed.aria', { key: seed.cardKey })}
       data-testid="plan-session-seed"
       className="relative z-10 inline-flex items-center gap-1 rounded-(--radius-control) text-(--el-text-secondary) underline decoration-(--el-border-strong) underline-offset-2 hover:text-(--el-text) hover:decoration-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
@@ -196,11 +198,12 @@ function SeedLink({ seed }: { seed: PlanSessionSeedDto }) {
  *  the refusal's `Re-plan of` wording. The label truncates at `max-w-[10rem]`;
  *  the whole label is on the link's accessible name. */
 function PickSeedLink({ seed }: { seed: PlanSessionSeedDto }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('aiPlanning.sessions');
   const label = seed.chosenLabel ?? '';
   return (
     <Link
-      href={`/items/${seed.cardKey}`}
+      href={routes.item(seed.cardKey)}
       aria-label={t('seed.pickAria', { key: seed.cardKey, label })}
       data-testid="plan-session-seed"
       data-seed-origin="pick"
@@ -228,6 +231,7 @@ export function SessionRow({
   /** The `?session=<id>` landing — the shipped selected-row treatment (§19.5 panel 3). */
   highlighted?: boolean;
 }) {
+  const routes = useReaderRoutes();
   const t = useTranslations('aiPlanning.sessions');
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -246,6 +250,7 @@ export function SessionRow({
         sessionId: view.id,
         host: `${pathname}${qs ? `?${qs}` : ''}`,
         anchorKey: view.targetKeys[0] ?? null,
+        routes,
       })
     : null;
   const doorHref = destination?.href ?? conversationHref;
@@ -315,7 +320,7 @@ export function SessionRow({
         ) : null}
         {chipIsDoor && view.latestPlan ? (
           <Link
-            href={`/plans/${view.latestPlan.id}`}
+            href={routes.plan(view.latestPlan.id)}
             aria-label={t('openPlanAria', { state: stateLabel })}
             className="relative z-10 rounded-(--radius-badge) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
           >

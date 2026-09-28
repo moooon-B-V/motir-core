@@ -19,6 +19,7 @@ import { IssueViewSwitcher } from './IssueViewSwitcher';
 import { NewIssueButton } from './NewIssueButton';
 import { NewFolderButton } from './FolderCommands';
 import { isFilterActive } from '@/lib/issues/issueListFilter';
+import type { ReaderRoutes } from '@/lib/visitor/routes';
 
 // The /items toolbar (Subtask 2.5.3; view switcher 2.5.8; filter bar 2.5.4;
 // advanced builder 6.1.4), per design/work-items/tree.png + list.mock.html +
@@ -42,6 +43,8 @@ import { isFilterActive } from '@/lib/issues/issueListFilter';
 // interactive bits are the client children.
 
 export interface IssueListToolbarProps {
+  /** The reader's addresses (MOTIR-6888) — a Visitor has no archive to open. */
+  routes: ReaderRoutes;
   view: IssueListView;
   sort: IssueSort;
   filter: IssueFilter;
@@ -84,8 +87,10 @@ export async function IssueListToolbar({
   projectKey,
   viewer,
   archivedCount,
+  routes,
 }: IssueListToolbarProps) {
   const t = await getTranslations('issueViews');
+  const archivedHref = routes.path('/items/archived');
   return (
     <div className="flex items-center gap-2">
       {/* The [Archived] navigator entry-point (Story 2.9 · Subtask 2.9.3) — a
@@ -95,18 +100,20 @@ export async function IssueListToolbar({
           "Archived work items" aria-label, which would be a SUPERSTRING of the
           sidebar "Work Items" nav link and break every getByRole({name:'Work
           Items'}) locator under strict mode (the superstring-label gotcha). */}
-      <Link
-        href="/items/archived"
-        className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-transparent px-3 font-sans text-sm text-(--el-text-secondary) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-      >
-        <Archive className="h-4 w-4 text-(--el-text-muted)" aria-hidden />
-        {t('archivedEntry')}
-        {archivedCount > 0 ? (
-          <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-(--radius-badge) bg-(--el-muted) px-1.5 text-[11px] font-semibold text-(--el-text-secondary)">
-            {archivedCount}
-          </span>
-        ) : null}
-      </Link>
+      {archivedHref === null ? null : (
+        <Link
+          href={archivedHref}
+          className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-transparent px-3 font-sans text-sm text-(--el-text-secondary) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        >
+          <Archive className="h-4 w-4 text-(--el-text-muted)" aria-hidden />
+          {t('archivedEntry')}
+          {archivedCount > 0 ? (
+            <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-(--radius-badge) bg-(--el-muted) px-1.5 text-[11px] font-semibold text-(--el-text-secondary)">
+              {archivedCount}
+            </span>
+          ) : null}
+        </Link>
+      )}
       <IssueFilterBar
         filter={filter}
         statuses={statuses}

@@ -3,6 +3,7 @@ import {
   type PlanningEntrance,
   type PlanningLaunchContext,
 } from '@/lib/planning/launcher';
+import type { ReaderRoutes } from '@/lib/visitor/routes';
 import type { PlanStatusDto } from '@/lib/dto/plans';
 
 // WHERE A PLAN'S ROW GOES — ONE rule, both lists (Story MOTIR-6043 · MOTIR-6045;
@@ -52,7 +53,9 @@ export type PlanPageReason =
   /** The plan is `approved` or `declined`: there is nothing left to decide. */
   | 'decided'
   /** The plan has no session, so there is no conversation to return to. */
-  | 'no-conversation';
+  | 'no-conversation'
+  /** The reader is a Visitor (MOTIR-6888): the planning workspace is not served to one. */
+  | 'visitor';
 
 /** Where a plan's row goes, and — for the page — why. */
 export type PlanRowDestination =
@@ -82,6 +85,12 @@ export interface PlanRowDestinationInput {
   anchorKey?: string | null;
   /** Which list the row is in — only To approve sets it, for the reopened line. */
   via?: PlanningEntrance;
+  /**
+   * The reader's addresses (MOTIR-6888). On the Visitor route tree the row always
+   * lands on the plan's Visitor page: the planning workspace is not served there,
+   * and a Visitor decides nothing. Absent means a member reader.
+   */
+  routes?: ReaderRoutes;
 }
 
 /** The overlay context a session opens at: anchored at its first key, else project-wide. */
@@ -110,8 +119,12 @@ export function planRowDestination({
   host,
   anchorKey,
   via,
+  routes,
 }: PlanRowDestinationInput): PlanRowDestination {
-  const planPage = `/plans/${encodeURIComponent(planId)}`;
+  const planPage = routes ? routes.plan(planId) : `/plans/${encodeURIComponent(planId)}`;
+  if (routes && routes.identifier !== null) {
+    return { kind: 'plan-page', href: planPage, reason: 'visitor' };
+  }
 
   switch (planStatus) {
     case 'generating':
