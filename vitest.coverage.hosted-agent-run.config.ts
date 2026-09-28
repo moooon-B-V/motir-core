@@ -41,6 +41,13 @@ export default defineConfig({
       'tests/github/runGitCredential.test.ts',
       'tests/projectRepos/hostedRunRepoAccessService.test.ts',
       'tests/runCredentialService.test.ts',
+      // Story MOTIR-6527 (Continue hosted) · MOTIR-6797 — the continue claim's own
+      // suites and the item page's door.
+      'tests/ready/claimWorkItemContinue.test.ts',
+      'tests/ready/continueViewReasons.test.ts',
+      'tests/components/ContinueHostedDoor.test.tsx',
+      'tests/components/continue-part.test.tsx',
+      'tests/components/RunHostedDoor.test.tsx',
     ],
     coverage: {
       provider: 'v8',
@@ -55,9 +62,42 @@ export default defineConfig({
         'app/api/v1/dispatch-runs/**/git-credential/route.ts',
         'app/api/work-items/**/hosted-runs/route.ts',
         'app/api/dispatch-runs/**/cancel/route.ts',
+        // Story MOTIR-6527 · MOTIR-6797. The story also changed three SHARED files
+        // (`lib/dispatch/promptTemplate.ts`, `lib/mappers/dispatchRunMappers.ts`,
+        // `lib/repositories/dispatchRunEventRepository.ts`); their uncovered lines
+        // on this lane are code the story did not touch (the runs index, the event
+        // pager), so a whole-file floor here would measure other stories.
+        'lib/services/workItemContinueService.ts',
+        'components/github/ContinuePart.tsx',
+        'app/**/_components/ContinueHostedDoor.tsx',
+        'app/**/_components/HostedRunProvider.tsx',
       ],
       thresholds: {
         perFile: true,
+        'lib/services/workItemContinueService.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'components/github/ContinuePart.tsx': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'app/**/_components/ContinueHostedDoor.tsx': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'app/**/_components/HostedRunProvider.tsx': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
         'lib/hostedRuns/errors.ts': { statements: 90, functions: 90, branches: 90, lines: 90 },
         'lib/hostedRuns/ids.ts': { statements: 90, functions: 90, branches: 90, lines: 90 },
         'lib/hostedRuns/limits.ts': { statements: 90, functions: 90, branches: 90, lines: 90 },

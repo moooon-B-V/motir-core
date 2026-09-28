@@ -2069,6 +2069,27 @@ export const dispatchRunSchema = z.object({
   cards: z.array(dispatchRunCardSchema),
   /** The stream's highest `seq`, or `0` — the cursor to resume from. */
   seq: z.number().int(),
+  /**
+   * What a `continue` run resumes (MOTIR-6795) — only on `getDispatchRun`, and
+   * null there for any other command.
+   */
+  continues: z
+    .object({
+      fromRunId: z.string().nullable(),
+      branch: z.string().nullable(),
+      branches: z.array(
+        z.object({
+          repository: z.string().nullable(),
+          branch: z.string(),
+          cloneUrl: z.string().nullable(),
+        }),
+      ),
+      mode: z.enum(['card', 'parent']),
+      landedKeys: z.array(z.string()),
+      resumedKeys: z.array(z.string()),
+    })
+    .nullable()
+    .optional(),
 });
 
 /** What OPEN answers with. */
@@ -2327,6 +2348,14 @@ export const workItemContinueRefusalSchema = z.enum([
  * NEVER WRITTEN** — the claim is an open dispatch run with command `continue`, and
  * that run is the lock; the item is RE-ASSIGNED to the claimant.
  */
+const continuePullRequestSchema = z.object({
+  /** `owner/name`. */
+  repo: z.string(),
+  number: z.number().int(),
+  url: z.string(),
+  headRef: z.string(),
+});
+
 export const workItemContinueClaimSchema = z.object({
   key: workItemKeySchema,
   title: z.string(),
@@ -2356,18 +2385,24 @@ export const workItemContinueClaimSchema = z.object({
       dispatcher: actorRefSchema.nullable(),
     })
     .nullable(),
-  /** The branch to continue on — set on `claimed` and `mine`. */
+  /** The branch to continue on — set on `claimed` and `mine`. The PRIMARY
+   *  repository's entry of `branches`. */
   branch: z.string().nullable(),
+  /** EVERY repository's branch to continue on, primary first — set on `claimed`
+   *  and `mine`, empty otherwise (MOTIR-6791). A run that spanned several
+   *  repositories pushed a branch in each. */
+  branches: z.array(
+    z.object({
+      /** The repository's NAME as the item's `targetRepos` names it, or null when
+       *  the dead run recorded a branch without saying where. */
+      repository: z.string().nullable(),
+      branch: z.string(),
+      /** The open pull request this repository's branch heads, when there is one. */
+      pullRequest: continuePullRequestSchema.nullable(),
+    }),
+  ),
   /** The open pull request the dead run left, when there is one. */
-  pullRequest: z
-    .object({
-      /** `owner/name`. */
-      repo: z.string(),
-      number: z.number().int(),
-      url: z.string(),
-      headRef: z.string(),
-    })
-    .nullable(),
+  pullRequest: continuePullRequestSchema.nullable(),
   /** Who the item was assigned to before this claim took it over. */
   previousAssignee: actorRefSchema.nullable(),
   /** `parent` when the dead run was a SCOPED run over this container: the whole
@@ -2387,6 +2422,8 @@ export function presentWorkItemContinueClaim(
 ): V1WorkItemContinueClaim {
   const ref = (a: { id: string; name: string } | null) =>
     a === null ? null : { id: a.id, name: a.name };
+  const pr = (p: WorkItemContinueClaimDto['pullRequest']) =>
+    p === null ? null : { repo: p.repo, number: p.number, url: p.url, headRef: p.headRef };
   return {
     key: dto.key,
     title: dto.title,
@@ -2409,15 +2446,12 @@ export function presentWorkItemContinueClaim(
             dispatcher: ref(dto.deadRun.dispatcher),
           },
     branch: dto.branch,
-    pullRequest:
-      dto.pullRequest === null
-        ? null
-        : {
-            repo: dto.pullRequest.repo,
-            number: dto.pullRequest.number,
-            url: dto.pullRequest.url,
-            headRef: dto.pullRequest.headRef,
-          },
+    branches: dto.branches.map((b) => ({
+      repository: b.repository,
+      branch: b.branch,
+      pullRequest: pr(b.pullRequest),
+    })),
+    pullRequest: pr(dto.pullRequest),
     previousAssignee: ref(dto.previousAssignee),
     mode: dto.mode,
     landedKeys: [...dto.landedKeys],

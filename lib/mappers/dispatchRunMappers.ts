@@ -7,6 +7,7 @@ import type {
 } from '@/generated/prisma/client';
 import type {
   DispatchRunCardDto,
+  DispatchRunContinuesDto,
   DispatchRunDto,
   DispatchRunEventDto,
   DispatchRunLegCountsDto,
@@ -150,4 +151,38 @@ export function toDispatchRunScopeDto(
   row: Pick<WorkItem, 'identifier' | 'title' | 'archivedAt'>,
 ): DispatchRunScopeDto {
   return { key: row.identifier, title: row.title, archived: row.archivedAt !== null };
+}
+
+/**
+ * A `continue` run's `run_opened` data as what it resumes (MOTIR-6795). Written
+ * by the continue claim; read defensively, since an older claim wrote no scope
+ * shape and an unreadable field must read as absent, never throw.
+ */
+export function toDispatchRunContinuesDto(data: unknown): DispatchRunContinuesDto {
+  const d = (data ?? {}) as {
+    continuesRunId?: unknown;
+    branch?: unknown;
+    branches?: unknown;
+    mode?: unknown;
+    landedKeys?: unknown;
+    resumedKeys?: unknown;
+  };
+  const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+  const strings = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  const branches = Array.isArray(d.branches)
+    ? (d.branches as Array<{ repository?: unknown; branch?: unknown }>).flatMap((b) => {
+        const branch = str(b?.branch);
+        // The clone URL is the project's, not the event's: the service fills it.
+        return branch ? [{ repository: str(b?.repository), branch, cloneUrl: null }] : [];
+      })
+    : [];
+  return {
+    fromRunId: str(d.continuesRunId),
+    branch: str(d.branch),
+    branches,
+    mode: d.mode === 'parent' ? 'parent' : 'card',
+    landedKeys: strings(d.landedKeys),
+    resumedKeys: strings(d.resumedKeys),
+  };
 }

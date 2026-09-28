@@ -2057,6 +2057,16 @@ export interface components {
                 } | null;
             } | null;
             branch: string | null;
+            branches: {
+                repository: string | null;
+                branch: string;
+                pullRequest: {
+                    repo: string;
+                    number: number;
+                    url: string;
+                    headRef: string;
+                } | null;
+            }[];
             pullRequest: {
                 repo: string;
                 number: number;
@@ -2471,6 +2481,19 @@ export interface components {
                 exitCode: number | null;
             }[];
             seq: number;
+            continues?: {
+                fromRunId: string | null;
+                branch: string | null;
+                branches: {
+                    repository: string | null;
+                    branch: string;
+                    cloneUrl: string | null;
+                }[];
+                /** @enum {string} */
+                mode: "card" | "parent";
+                landedKeys: string[];
+                resumedKeys: string[];
+            } | null;
         };
         DispatchRunCard: {
             id: string;
@@ -2519,6 +2542,19 @@ export interface components {
                     exitCode: number | null;
                 }[];
                 seq: number;
+                continues?: {
+                    fromRunId: string | null;
+                    branch: string | null;
+                    branches: {
+                        repository: string | null;
+                        branch: string;
+                        cloneUrl: string | null;
+                    }[];
+                    /** @enum {string} */
+                    mode: "card" | "parent";
+                    landedKeys: string[];
+                    resumedKeys: string[];
+                } | null;
             };
             created: boolean;
         };

@@ -177,15 +177,21 @@ export const dispatchRunEventRepository = {
   },
 
   /**
-   * The branch the run's newest `checkout_ready` recorded (MOTIR-6530 writes it as
-   * `data.branch`), for one leg — or for ANY leg of the run when `cardId` is null
-   * (a scoped run's session branch is every leg's). Null when none named one.
+   * The branches the run's newest `checkout_ready` recorded, ONE PER REPOSITORY
+   * (MOTIR-6791) — for one leg, or for ANY leg of the run when `cardId` is null
+   * (a scoped run's session branch is every leg's). Empty when none named one.
+   *
+   * Two writers shipped this event: MOTIR-6530's single `data.branch`, read as ONE
+   * entry whose repository is unknown (`null`), and MOTIR-6539's per-repository
+   * `data.branches: [{ repository, branch, workBranch }]`, primary first, read
+   * whole. It used to keep only `branches[0]`, which lost every other
+   * repository's work for a run that spanned several.
    */
-  async findLatestCheckoutBranch(
+  async findLatestCheckoutBranches(
     dispatchRunId: string,
     cardId: string | null,
     tx: Prisma.TransactionClient,
-  ): Promise<string | null> {
+  ): Promise<Array<{ repository: string | null; branch: string }>> {
     const rows = await tx.dispatchRunEvent.findMany({
       where: {
         dispatchRunId,
@@ -198,16 +204,30 @@ export const dispatchRunEventRepository = {
     });
     for (const row of rows) {
       const data = row.data as { branch?: unknown; branches?: unknown } | null;
-      if (typeof data?.branch === 'string' && data.branch.length > 0) return data.branch;
-      // The per-repository shape MOTIR-6539 writes (`branches: [{ repository,
-      // branch, workBranch }]`, primary first) — read too, so the two writers of
-      // this event agree on where a leg's work is, whichever of them shipped it.
+      const scalar =
+        typeof data?.branch === 'string' && data.branch.length > 0 ? data.branch : null;
+      const out: Array<{ repository: string | null; branch: string }> = [];
       if (Array.isArray(data?.branches)) {
-        const first = data.branches[0] as { branch?: unknown } | undefined;
-        if (typeof first?.branch === 'string' && first.branch.length > 0) return first.branch;
+        for (const entry of data.branches as Array<{ repository?: unknown; branch?: unknown }>) {
+          if (typeof entry?.branch !== 'string' || entry.branch.length === 0) continue;
+          const repository =
+            typeof entry.repository === 'string' && entry.repository.length > 0
+              ? entry.repository
+              : null;
+          if (out.some((e) => e.repository === repository)) continue;
+          out.push({ repository, branch: entry.branch });
+        }
       }
+      // The scalar names the PRIMARY's branch, and it is the authoritative one: a
+      // continue's leg wrote the dead run's branch there while its `branches[]`
+      // still named the card's fresh branch (fixed in the CLI by MOTIR-6793).
+      if (out.length > 0) {
+        if (scalar !== null) out[0] = { repository: out[0]!.repository, branch: scalar };
+        return out;
+      }
+      if (scalar !== null) return [{ repository: null, branch: scalar }];
     }
-    return null;
+    return [];
   },
 
   async countByRun(dispatchRunId: string, tx: Prisma.TransactionClient): Promise<number> {

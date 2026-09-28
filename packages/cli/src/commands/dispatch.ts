@@ -17,6 +17,7 @@ import {
 import { runAgent } from '../agentRun.js';
 import { hostedOpenCodeAgent } from '../hostedAgent.js';
 import { prepareHostedCheckouts } from '../hostedCodegraph.js';
+import type { LegBranch } from '../checkpoint.js';
 import { runDispatchLeg } from '../dispatchLeg.js';
 import { createDispatchRunReporter, type DispatchRunReporter } from '../dispatchRunReporter.js';
 import { bindInterruptSignals, closeRunAndExit, type InterruptSignal } from '../interrupt.js';
@@ -322,6 +323,11 @@ export interface DeliverInput {
    * opens its own exactly as before.
    */
   adoptedRunId?: string | null;
+  /**
+   * Every repository's branch, for a `continue` (MOTIR-6793): the leg records and
+   * checkpoints THESE rather than the card's fresh branch. Absent otherwise.
+   */
+  continueBranches?: LegBranch[];
 }
 
 /**
@@ -495,6 +501,7 @@ export async function deliver(input: DeliverInput): Promise<void> {
         echoPromptIfAsked(opts, key, dispatch);
       },
       ...(deps.run ? { run: deps.run } : {}),
+      ...(input.continueBranches ? { branches: input.continueBranches } : {}),
       // A hosted container's checkouts are fresh clones: index them before the
       // agent starts, as the image's entrypoint used to (MOTIR-6560).
       ...(input.adoptedRunId ? { prepareCheckouts: hostedCheckoutPreparer } : {}),
@@ -741,7 +748,7 @@ export async function resolveOwnerId(client: MotirClient): Promise<string> {
  * once the CLI has cloned the checkout and before the agent is spawned on it.
  * Best-effort — every failure is a line on the transcript, never a stop.
  */
-function hostedCheckoutPreparer(cwds: string[]): void {
+export function hostedCheckoutPreparer(cwds: string[]): void {
   prepareHostedCheckouts(cwds, (line) => info(line));
 }
 
@@ -1255,6 +1262,12 @@ export interface ClaimedScopeRunInput {
   reporter?: DispatchRunReporter;
   /** `branch` is a dead run's, being resumed: merge the base into it first. */
   resumeBranch?: boolean;
+  /** On a resume, each repository's own session branch (MOTIR-6794). */
+  branches?: readonly { repository: string | null; branch: string }[];
+  /** Clone a leg's missing repositories before its session branch is made. */
+  materialize?: boolean;
+  /** Prepare each leg's checkouts before its spawn (a hosted run's code graph). */
+  prepareCheckouts?: (cwds: string[]) => void;
 }
 
 /**
@@ -1317,6 +1330,9 @@ export async function runClaimedScope(input: ClaimedScopeRunInput): Promise<void
     branch,
     run,
     ...(input.resumeBranch ? { resumeBranch: true } : {}),
+    ...(input.branches ? { branches: input.branches } : {}),
+    ...(input.materialize ? { materialize: true } : {}),
+    ...(input.prepareCheckouts ? { prepareCheckouts: input.prepareCheckouts } : {}),
     clock: deps.clock ?? Date.now,
     runAgentFn: deps.runAgentFn ?? runAgent,
     reporter,

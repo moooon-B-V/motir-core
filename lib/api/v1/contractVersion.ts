@@ -784,5 +784,32 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
  *   was `1.50.0` after MOTIR-6538, so this claims `1.51.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD.
+ *
+ * - `1.52.0` — MOTIR-6791 adds `branches` to `WorkItemContinueClaim`: EVERY
+ *   repository's branch of the dead run, primary first — `{ repository, branch,
+ *   pullRequest }` — because a run that spanned several repositories pushed a
+ *   branch in each and `branch` could only name one. `branch` stays, equal to the
+ *   primary repository's entry. The CONTINUE block of `getWorkItemDispatchPrompt`
+ *   names each repository's branch — prompt TEXT, not contract.
+ *
+ *   Additive: one new array field on an existing shape (§8's allowed list); no
+ *   declared field changes meaning.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.51.0` after MOTIR-6539, so this claims `1.52.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the FIELD.
+ *
+ * - `1.53.0` — MOTIR-6795 adds `continues` to `DispatchRun`, filled only by
+ *   `getDispatchRun` and only for a `continue` run: the dead run it carries on,
+ *   every repository's branch (each with its repository's clone URL, so a
+ *   repository no remaining leg touches can still be closed out), and for a
+ *   parent the legs that landed and the ones in flight. A hosted container ADOPTS the run the server's continue claim
+ *   opened instead of claiming, so this is how it learns what that claim decided.
+ *
+ *   Additive: one new optional, nullable field on an existing shape (§8's allowed
+ *   list); no declared field changes meaning.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.53.0` after this
+ *   branch's own `1.52.0`. If a sibling has taken either since, RENUMBER.
  */
-export const V1_CONTRACT_VERSION = '1.51.0';
+export const V1_CONTRACT_VERSION = '1.53.0';
