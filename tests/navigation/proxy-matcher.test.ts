@@ -296,3 +296,197 @@ describe('proxy()', () => {
     expect(forwardedHeaders(res).get('accept-language')).toBe('zh-CN');
   });
 });
+
+// ── The Visitor route tree (Story MOTIR-6170 · MOTIR-6648) ──────────────────
+//
+// `/p/<identifier>/<view>` for the nine Visitor views, the consent screen and
+// the member redirect are served HERE: no 308 to motir.co and no session bounce
+// (the Visitor layout owns the sign-in redirect, after its not-found). Every
+// other `/p/*` path keeps its 308. A view carries the `motir_visitor` cookie out
+// (host-only, HttpOnly, SameSite=Lax, Path=/); a real navigation to any member
+// page clears it; a member href followed from a Visitor view is sent to that
+// view's own path.
+describe('proxy() — the Visitor route tree', () => {
+  const VIEW_PATHS = [
+    '/p/ACME/board',
+    '/p/ACME/items',
+    '/p/ACME/items/ACME-7',
+    '/p/ACME/tree',
+    '/p/ACME/roadmap',
+    '/p/ACME/plans',
+    '/p/ACME/plans/cplan123',
+    '/p/ACME/approvals',
+    '/p/ACME/runs',
+  ];
+
+  async function withPublicOrigin<T>(run: () => Promise<T>): Promise<T> {
+    process.env['MOTIR_PUBLIC_SITE_URL'] = 'https://motir.co';
+    process.env['MOTIR_BASE_URL'] = 'https://app.motir.co';
+    try {
+      return await run();
+    } finally {
+      delete process.env['MOTIR_PUBLIC_SITE_URL'];
+      delete process.env['MOTIR_BASE_URL'];
+    }
+  }
+
+  it.each([...VIEW_PATHS, '/p/ACME/consent', '/p/ACME/enter'])(
+    '%s is forwarded — no 308, and no session bounce for a cookie-less request',
+    async (path) => {
+      cookiePresent.value = false;
+      const { NextRequest } = await import('next/server');
+      const { proxy, CURRENT_PATH_HEADER } = await import('@/proxy');
+      const res = await withPublicOrigin(() =>
+        proxy(new NextRequest(`https://app.motir.co${path}?peek=ACME-2`)),
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get('location')).toBeNull();
+      expect(res.headers.get('x-middleware-next')).toBe('1');
+      // The layout builds its `next=` from the forwarded path.
+      expect(forwardedHeaders(res).get(CURRENT_PATH_HEADER)).toBe(`${path}?peek=ACME-2`);
+    },
+  );
+
+  it.each(['/p/ACME', '/p/ACME/changelog', '/p/ACME/board/extra', '/p/ACME/requests'])(
+    '%s still 308s to motir.co',
+    async (path) => {
+      cookiePresent.value = false;
+      const { NextRequest } = await import('next/server');
+      const { proxy } = await import('@/proxy');
+      const res = await withPublicOrigin(() =>
+        proxy(new NextRequest(`https://app.motir.co${path}`)),
+      );
+      expect(res.status).toBe(308);
+      expect(res.headers.get('location')).toBe(`https://motir.co${path}`);
+    },
+  );
+
+  it('isAppVisitorPath names exactly the served paths', async () => {
+    const { isAppVisitorPath } = await import('@/proxy');
+    for (const path of [...VIEW_PATHS, '/p/ACME/consent', '/p/ACME/enter/']) {
+      expect(isAppVisitorPath(path), path).toBe(true);
+    }
+    for (const path of ['/p/ACME', '/p/ACME/changelog', '/p/ACME/consent/x', '/items']) {
+      expect(isAppVisitorPath(path), path).toBe(false);
+    }
+  });
+
+  it('a VIEW sets motir_visitor — host-only, HttpOnly, SameSite=Lax, Path=/', async () => {
+    cookiePresent.value = true;
+    const { NextRequest } = await import('next/server');
+    const { proxy } = await import('@/proxy');
+    const res = await proxy(new NextRequest('https://app.motir.co/p/ACME/board'));
+    const set = res.headers.get('set-cookie') ?? '';
+    expect(set).toMatch(/^motir_visitor=ACME;/);
+    expect(set).toMatch(/Path=\//);
+    expect(set).toMatch(/HttpOnly/i);
+    expect(set).toMatch(/SameSite=lax/i);
+    expect(set).not.toMatch(/Domain=/i);
+    expect(set).not.toMatch(/Max-Age/i);
+  });
+
+  it('the consent screen and the member redirect set no cookie', async () => {
+    cookiePresent.value = true;
+    const { NextRequest } = await import('next/server');
+    const { proxy } = await import('@/proxy');
+    for (const path of ['/p/ACME/consent', '/p/ACME/enter']) {
+      const res = await proxy(new NextRequest(`https://app.motir.co${path}`));
+      expect(res.headers.get('set-cookie'), path).toBeNull();
+    }
+  });
+
+  it('a navigation to a member page CLEARS motir_visitor', async () => {
+    cookiePresent.value = true;
+    const { NextRequest } = await import('next/server');
+    const { proxy } = await import('@/proxy');
+    const res = await proxy(
+      new NextRequest('https://app.motir.co/workbench', {
+        headers: { cookie: 'motir_visitor=ACME' },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const set = res.headers.get('set-cookie') ?? '';
+    expect(set).toMatch(/^motir_visitor=;/);
+    expect(set).toMatch(/Max-Age=0/);
+  });
+
+  it('…and on the sign-in bounce too, but never on a router PREFETCH', async () => {
+    const { NextRequest } = await import('next/server');
+    const { proxy } = await import('@/proxy');
+    cookiePresent.value = false;
+    const bounced = await proxy(
+      new NextRequest('https://app.motir.co/items', { headers: { cookie: 'motir_visitor=ACME' } }),
+    );
+    expect(bounced.status).toBe(307);
+    expect(bounced.headers.get('set-cookie') ?? '').toMatch(/^motir_visitor=;/);
+
+    cookiePresent.value = true;
+    const prefetch = await proxy(
+      new NextRequest('https://app.motir.co/settings/account', {
+        headers: { cookie: 'motir_visitor=ACME', 'next-router-prefetch': '1' },
+      }),
+    );
+    expect(prefetch.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('a request without the cookie is answered exactly as before — nothing set or cleared', async () => {
+    cookiePresent.value = true;
+    const { NextRequest } = await import('next/server');
+    const { proxy } = await import('@/proxy');
+    const res = await proxy(new NextRequest('https://app.motir.co/items'));
+    expect(res.headers.get('set-cookie')).toBeNull();
+  });
+
+  it.each([
+    ['/items/ACME-7', '/p/ACME/items/ACME-7'],
+    ['/items?view=tree&sort=key', '/p/ACME/tree?sort=key'],
+    ['/boards?board=b1', '/p/ACME/board?board=b1'],
+    ['/runs?scope=ACME-4', '/p/ACME/runs?scope=ACME-4'],
+    ['/plans/cplan1', '/p/ACME/plans/cplan1'],
+  ])('a member href %s followed FROM a Visitor view goes to %s', async (from, to) => {
+    cookiePresent.value = true;
+    const { NextRequest } = await import('next/server');
+    const { proxy } = await import('@/proxy');
+    const res = await proxy(
+      new NextRequest(`https://app.motir.co${from}`, {
+        headers: {
+          cookie: 'motir_visitor=ACME',
+          referer: 'https://app.motir.co/p/ACME/board?peek=ACME-2',
+        },
+      }),
+    );
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toBe(`https://app.motir.co${to}`);
+  });
+
+  it('is NOT redirected without the cookie, from another origin, another project, or a non-Visitor page', async () => {
+    cookiePresent.value = true;
+    const { NextRequest } = await import('next/server');
+    const { proxy } = await import('@/proxy');
+    const cases: Record<string, string>[] = [
+      { referer: 'https://app.motir.co/p/ACME/board' },
+      { cookie: 'motir_visitor=ACME', referer: 'https://evil.example/p/ACME/board' },
+      { cookie: 'motir_visitor=OTHER', referer: 'https://app.motir.co/p/ACME/board' },
+      { cookie: 'motir_visitor=ACME', referer: 'https://app.motir.co/workbench' },
+      { cookie: 'motir_visitor=ACME' },
+    ];
+    for (const headers of cases) {
+      const res = await proxy(new NextRequest('https://app.motir.co/items/ACME-7', { headers }));
+      expect(res.status, JSON.stringify(headers)).toBe(200);
+      expect(res.headers.get('location')).toBeNull();
+    }
+  });
+
+  it('a member route with no Visitor view is left alone, and the cookie cleared', async () => {
+    cookiePresent.value = true;
+    const { NextRequest } = await import('next/server');
+    const { proxy } = await import('@/proxy');
+    const res = await proxy(
+      new NextRequest('https://app.motir.co/settings/account', {
+        headers: { cookie: 'motir_visitor=ACME', referer: 'https://app.motir.co/p/ACME/board' },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('set-cookie') ?? '').toMatch(/^motir_visitor=;/);
+  });
+});

@@ -151,6 +151,7 @@
     "codeLanguage": "Language"
   },
   "common": {
+    "personFallback": "Project member",
     "close": "Close",
     "dialog": "Dialog",
     "retry": "Try again",
@@ -2462,7 +2463,19 @@
       },
       "emptyMembersOnlyTitle": "Only Managers can open this project",
       "emptyMembersOnlyBody": "It is members only and nobody has been added yet. Add people to let them in.",
-      "readOnlyModeNote": "Only a workspace Manager can change who can open this project."
+      "readOnlyModeNote": "Only a workspace Manager can change who can open this project.",
+      "visitors": {
+        "heading": "Visitors",
+        "countLabel": "{count, plural, one {# visitor} other {# visitors}}",
+        "subtitle": "People outside {workspace} who watched this public project. Each agreed to share their name and email with this project’s Managers before their first visit. Only Managers see this list.",
+        "firstVisit": "First visit",
+        "latestVisit": "Latest visit",
+        "agreed": "Agreed",
+        "showMore": "Show more",
+        "loadFailed": "We couldn’t load more visitors. Try again.",
+        "emptyTitle": "No one has visited yet",
+        "emptyBody": "When someone outside {workspace} opens this project’s Visitor link and agrees to share their details, they appear here."
+      }
     },
     "publicPage": {
       "title": "Public page",
@@ -2512,6 +2525,18 @@
         "title": "Discard unsaved changes?",
         "keep": "Keep editing",
         "discard": "Discard"
+      },
+      "visitorLink": {
+        "title": "Visitor link",
+        "subtitle": "People who open this link can read <strong>{projectName}</strong> in the app — its work items, board, roadmap, plans, approvals and runs — after they sign in and agree to share their name and email with this project’s Managers. They can’t change anything, and they see your team by name only.",
+        "copy": "Copy visitor link",
+        "open": "Open as a visitor",
+        "copied": "Visitor link copied",
+        "hint": "Opens on the board. You’ll see who visited under Members & access. Members who follow it land in their own view instead.",
+        "notPublic": {
+          "lead": "No visitor link while this project isn’t public.",
+          "body": "Visitors can read a project only when its access is <strong>Public</strong>, set in <link>Members & access</link>."
+        }
       }
     },
     "publicAddress": {
@@ -9895,5 +9920,27 @@
   "roomView": {
     "mine": "Mine",
     "project": "Project"
+  },
+  "visitor": {
+    "consent": {
+      "pill": "Public project · {workspace}",
+      "headline": "Before you watch {project}",
+      "body": "<b>{project}</b> is built in public by <b>{workspace}</b>. If you continue, your <b>name and email</b> will be visible to <b>this project’s workspace Managers</b>, along with when you visit. We only ask once for this project.",
+      "seeLabel": "What they will see",
+      "seeRow": "{email} · your first and latest visit",
+      "continue": "Continue",
+      "continuing": "Continuing…",
+      "goBack": "Go back",
+      "goBackLine": "Going back shares nothing. You’ll be asked again the next time you open {project}.",
+      "failed": "We couldn’t save that. Try again."
+    },
+    "shell": {
+      "banner": "You’re watching <b>{project}</b> being built in public. It’s read-only, and this project’s Managers can see that you visited.",
+      "brandLabel": "{project} on motir.co",
+      "projectKey": "Project key {key}",
+      "rateLimitedTitle": "You’re reading a little too fast",
+      "rateLimitedBody": "This public project limits how quickly one reader can open it. Try again in {seconds, plural, one {# second} other {# seconds}}.",
+      "rateLimitedRetry": "Try again"
+    }
   }
 }

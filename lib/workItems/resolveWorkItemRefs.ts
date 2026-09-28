@@ -8,6 +8,8 @@ import type { WorkItemRefs } from '@/lib/mentions/workItemRefs';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import type { VisitorReadContext } from '@/lib/visitor/context';
+import { isVisitorContext } from '@/lib/visitor/readScope';
 
 // Read-side resolution for work-item references (Story 5.8 · Subtask 5.8.6) —
 // the parallel of the write-side `autoRelateWorkItemMentions` (5.8.3). Given the
@@ -32,9 +34,10 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 export async function resolveWorkItemRefSummaries(
   refs: WorkItemRefs,
   activeProjectId: string,
-  ctx: ServiceContext,
+  ctx: ServiceContext | VisitorReadContext,
 ): Promise<WorkItemRefMap> {
   if (refs.ids.length === 0 && refs.keys.length === 0) return {};
+  if (isVisitorContext(ctx)) return resolveVisitorRefSummaries(refs, ctx);
 
   // Same-project bare keys → rows (the key parser only matches the active
   // project's prefix, so resolution is project-scoped — like auto-relate); token
@@ -82,6 +85,46 @@ export async function resolveWorkItemRefSummaries(
     const status = statusMeta.get(row.projectId)?.get(row.status) ?? null;
     const summary = toWorkItemRefSummaryDto(row, status);
     // Keyed by id (token href) AND current identifier (bare-key / title path).
+    map[row.id] = summary;
+    map[row.identifier] = summary;
+  }
+  return map;
+}
+
+/**
+ * A VISITOR's chip resolution (MOTIR-6652, `epic-privacy.md` §3). The only
+ * project a Visitor can read is `ctx.project`, so a target anywhere else — or in
+ * the private-epic hidden set — resolves to NOTHING: it is left out of the map
+ * altogether, id and key alike, so the chip names neither. (The Visitor's
+ * Markdown bodies have their withheld tokens redacted before they are sent;
+ * this keeps a bare key typed in prose from resolving to a title.)
+ */
+async function resolveVisitorRefSummaries(
+  refs: WorkItemRefs,
+  ctx: VisitorReadContext,
+): Promise<WorkItemRefMap> {
+  const { id: projectId, workspaceId } = ctx.project;
+  const [keyRows, idRows] = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    Promise.all([
+      refs.keys.length
+        ? workItemRepository.findByIdentifiers(projectId, refs.keys, tx)
+        : Promise.resolve<WorkItem[]>([]),
+      refs.ids.length
+        ? workItemRepository.findByIdsInWorkspace(refs.ids, workspaceId, tx)
+        : Promise.resolve<WorkItem[]>([]),
+    ]),
+  );
+  const visible = [...idRows, ...keyRows].filter(
+    (r) => r.projectId === projectId && !ctx.hiddenIds.has(r.id),
+  );
+  if (visible.length === 0) return {};
+  const statusMeta = await workflowsService.getStatusMetaByProjects([projectId], workspaceId);
+  const map: WorkItemRefMap = {};
+  for (const row of visible) {
+    const summary = toWorkItemRefSummaryDto(
+      row,
+      statusMeta.get(row.projectId)?.get(row.status) ?? null,
+    );
     map[row.id] = summary;
     map[row.identifier] = summary;
   }

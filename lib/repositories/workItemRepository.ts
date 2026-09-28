@@ -153,6 +153,8 @@ export interface WorkItemForestRow {
   obsolescenceNoteMd: string | null;
   depth: number;
   matched: boolean;
+  /** The epic-privacy flag — see {@link WorkItemListRow.publicChildrenHidden}. */
+  publicChildrenHidden?: boolean;
 }
 
 /**
@@ -544,6 +546,14 @@ export interface WorkItemListRow {
    *  it and the note — an omission would be `undefined` at runtime. */
   obsolescence: WorkItemObsolescence | null;
   obsolescenceNoteMd: string | null;
+  /**
+   * The EPIC-PRIVACY flag (Story 6.14; read for a Visitor, MOTIR-6644) — projected
+   * by the in-app collection reads a Visitor can reach (the flat List, the forest
+   * and the lazy tree level) so the service can mark a private epic's row
+   * `childrenHidden` and strip its tells. OPTIONAL because the other reads that
+   * produce this row shape do not select it; no member DTO carries it.
+   */
+  publicChildrenHidden?: boolean;
 }
 
 /**
@@ -3179,25 +3189,27 @@ export const workItemRepository = {
                w."title", w."status", w."ciState", w."priority", w."assigneeId", w."reporterId",
                w."dueDate", w."estimateMinutes", w."storyPoints", w."updatedAt",
                ${hasDescriptionSql('w')} AS "hasDescription",
-               w."obsolescence", w."obsolescenceNoteMd", 1 AS depth
+               w."obsolescence", w."obsolescenceNoteMd", w."publicChildrenHidden", 1 AS depth
           FROM "work_item" w
           WHERE w."projectId" = ${projectId}
             AND w."workspaceId" = ${workspaceId}
             AND w."parentId" IS NULL
             AND w."archivedAt" IS NULL
             AND ${notInTriageSql('w')}
+            AND ${notExcludedSql('w', filter.excludeIds)}
         UNION ALL
         SELECT c."id", c."parentId", c."kind", c."type", c."key", c."identifier",
                c."title", c."status", c."ciState", c."priority", c."assigneeId", c."reporterId",
                c."dueDate", c."estimateMinutes", c."storyPoints", c."updatedAt",
                ${hasDescriptionSql('c')} AS "hasDescription",
-               c."obsolescence", c."obsolescenceNoteMd", p.depth + 1
+               c."obsolescence", c."obsolescenceNoteMd", c."publicChildrenHidden", p.depth + 1
           FROM "work_item" c
           JOIN forest p ON c."parentId" = p."id"
           WHERE c."projectId" = ${projectId}
             AND c."workspaceId" = ${workspaceId}
             AND c."archivedAt" IS NULL
             AND ${notInTriageSql('c')}
+            AND ${notExcludedSql('c', filter.excludeIds)}
       )
       SELECT f."id",
              f."parentId",
@@ -3218,6 +3230,7 @@ export const workItemRepository = {
              f."hasDescription",
              f."obsolescence"::text AS "obsolescence",
              f."obsolescenceNoteMd",
+             f."publicChildrenHidden",
              f.depth::int         AS "depth",
              (${matched})         AS "matched"
         FROM forest f
@@ -3276,7 +3289,8 @@ export const workItemRepository = {
              w."updatedAt",
              ${hasDescriptionSql('w')} AS "hasDescription",
              w."obsolescence"::text AS "obsolescence",
-             w."obsolescenceNoteMd"
+             w."obsolescenceNoteMd",
+             w."publicChildrenHidden"
         FROM "work_item" w
         LEFT JOIN "user" au ON au."id" = w."assigneeId"
         LEFT JOIN "user" ru ON ru."id" = w."reporterId"
@@ -3864,7 +3878,14 @@ export const workItemRepository = {
     workspaceId: string,
     parentId: string | null,
     sort: IssueSort,
-    page: { take: number; offset: number; ids?: readonly string[] | undefined },
+    page: {
+      take: number;
+      offset: number;
+      ids?: readonly string[] | undefined;
+      /** The epic-privacy exclusion (MOTIR-6644, a Visitor's tree): dropped from the
+       *  level AND from the `hasChildren` probe. Absent ⇒ no clause. */
+      excludeIds?: readonly string[] | undefined;
+    },
     sprintId: string | null = null,
     tx?: Prisma.TransactionClient,
     folderLevel?: TreeFolderLevel,
@@ -3919,10 +3940,12 @@ export const workItemRepository = {
              ${hasDescriptionSql('w')} AS "hasDescription",
              w."obsolescence"::text AS "obsolescence",
              w."obsolescenceNoteMd",
+             w."publicChildrenHidden",
              EXISTS (
                SELECT 1 FROM "work_item" ch
                 WHERE ch."parentId" = w."id" AND ch."archivedAt" IS NULL
                   AND ${notInTriageSql('ch')}
+                  AND ${notExcludedSql('ch', page.excludeIds)}
              )                    AS "hasChildren"
         FROM "work_item" w
         LEFT JOIN "user" au ON au."id" = w."assigneeId"
@@ -3933,6 +3956,7 @@ export const workItemRepository = {
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
+          AND ${notExcludedSql('w', page.excludeIds)}
           AND ${treeLevelPredicate(parentPred, parentId, page.ids !== undefined, folderLevel)}
         ORDER BY ${orderCol} ${dir} NULLS LAST, w."key" ASC
         LIMIT ${page.take + 1} OFFSET ${page.offset}`;
@@ -3954,6 +3978,8 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
     ids?: readonly string[] | undefined,
     folderLevel?: TreeFolderLevel,
+    /** The epic-privacy exclusion (MOTIR-6644) — the level read's, so the two agree. */
+    excludeIds?: readonly string[],
   ): Promise<number> {
     const client = tx ?? dbRead;
     // The SAME level predicate `findProjectTreeLevel` builds, sprint arm included
@@ -3977,6 +4003,7 @@ export const workItemRepository = {
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
+          AND ${notExcludedSql('w', excludeIds)}
           AND ${treeLevelPredicate(parentPred, parentId, ids !== undefined, folderLevel)}`;
     return Number(rows[0]?.count ?? 0);
   },
@@ -4743,6 +4770,8 @@ export const workItemRepository = {
     workspaceId: string,
     statistic: EstimationStatistic,
     tx?: Prisma.TransactionClient,
+    /** A Visitor's private-epic exclusion (MOTIR-6644). Absent ⇒ no clause. */
+    excludeIds?: readonly string[],
   ): Promise<{ committed: number; completed: number }> {
     const client = tx ?? dbRead;
     const committed = pointsAggExpr(statistic, 'w', false);
@@ -4755,7 +4784,8 @@ export const workItemRepository = {
                ON ws."project_id" = w."projectId" AND ws."key" = w."status"
        WHERE w."sprintId" = ${sprintId}
          AND w."workspaceId" = ${workspaceId}
-         AND w."archivedAt" IS NULL`;
+         AND w."archivedAt" IS NULL
+         AND ${notExcludedSql('w', excludeIds)}`;
     return rows[0] ?? { committed: 0, completed: 0 };
   },
 
@@ -4812,6 +4842,8 @@ export const workItemRepository = {
     workspaceId: string,
     statistic: EstimationStatistic,
     tx?: Prisma.TransactionClient,
+    /** A Visitor's private-epic exclusion (MOTIR-6644). Absent ⇒ no clause. */
+    excludeIds?: readonly string[],
   ): Promise<Array<{ status: string; points: number }>> {
     const client = tx ?? dbRead;
     const points = pointsAggExpr(statistic, 'w', false);
@@ -4822,6 +4854,7 @@ export const workItemRepository = {
        WHERE w."sprintId" = ${sprintId}
          AND w."workspaceId" = ${workspaceId}
          AND w."archivedAt" IS NULL
+         AND ${notExcludedSql('w', excludeIds)}
        GROUP BY w."status"`;
   },
 
@@ -4841,6 +4874,9 @@ export const workItemRepository = {
     workspaceId: string,
     statistic: EstimationStatistic,
     tx?: Prisma.TransactionClient,
+    /** A Visitor's private-epic exclusion (MOTIR-6652): the walk neither counts
+     *  nor descends through a withheld row. Absent ⇒ no clause. */
+    excludeIds?: readonly string[],
   ): Promise<{ total: number }> {
     const client = tx ?? dbRead;
     const total = pointsAggExpr(statistic, 's', false);
@@ -4851,12 +4887,14 @@ export const workItemRepository = {
           WHERE w."parentId" = ${parentId}
             AND w."workspaceId" = ${workspaceId}
             AND w."archivedAt" IS NULL
+            AND ${notExcludedSql('w', excludeIds)}
         UNION ALL
         SELECT c."id", c."storyPoints", c."estimateMinutes"
           FROM "work_item" c
           JOIN subtree p ON c."parentId" = p."id"
           WHERE c."workspaceId" = ${workspaceId}
             AND c."archivedAt" IS NULL
+            AND ${notExcludedSql('c', excludeIds)}
       )
       SELECT ${total}::float8 AS "total" FROM subtree s`;
     return rows[0] ?? { total: 0 };
@@ -5362,8 +5400,10 @@ export interface RepoIssueFilter {
    * row-exclusion set (the descendants of a private epic) applied by the flat
    * COUNT read {@link workItemRepository.countProjectIssues} so a non-member's
    * board denominators never count a hidden subtree. Resolved by {@link
-   * workItemRepository.findPublicHiddenDescendantIds}. Honored ONLY as a real
-   * filter by `countProjectIssues`; it is deliberately NOT emitted by {@link
+   * workItemRepository.findPublicHiddenDescendantIds}. Honored as a real WHERE
+   * filter by `countProjectIssues`, by the flat List and keyset reads (through
+   * `projectIssuesScopeSql`) and by the forest's recursion (MOTIR-6644 — a
+   * Visitor reads those in-app views); it is deliberately NOT emitted by {@link
    * buildIssueFilterSql} (whose output is the forest read's `matched` SELECT
    * FLAG, not a WHERE filter — emitting it there would mis-flag rather than
    * exclude). Absent/empty ⇒ no-op (members + the no-private-epic case read the
@@ -5386,15 +5426,22 @@ export interface RepoIssueFilter {
 export interface BoardCardFilter {
   ast?: FilterAst;
   referents?: ProjectFilterReferents;
+  /** The epic-privacy exclusion (MOTIR-6644) — a Visitor's board lanes never
+   *  count a private epic's descendant. Absent/empty ⇒ no clause. */
+  excludeIds?: readonly string[];
 }
 
 /** The board filter as a `Prisma.Sql` predicate over alias `w`: the compiled
  * FilterAST when one is active, else `TRUE` (so an absent filter is a no-op and
- * the board read stays byte-for-byte the unfiltered projection). */
+ * the board read stays byte-for-byte the unfiltered projection), AND-ed with the
+ * Visitor's exclusion when one is given. */
 function boardCardFilterSql(filter?: BoardCardFilter): Prisma.Sql {
-  return filter?.ast && filter.ast.conditions.length > 0
-    ? Prisma.sql`(${compileFilterConditionsSql(filter.ast, filter.referents)})`
-    : Prisma.sql`TRUE`;
+  const ast =
+    filter?.ast && filter.ast.conditions.length > 0
+      ? Prisma.sql`(${compileFilterConditionsSql(filter.ast, filter.referents)})`
+      : Prisma.sql`TRUE`;
+  if (!filter?.excludeIds || filter.excludeIds.length === 0) return ast;
+  return Prisma.sql`${ast} AND ${notExcludedSql('w', filter.excludeIds)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -6069,7 +6116,7 @@ function topInSprintMembersSql(
  * fixed internal literal, not user input.
  */
 function notExcludedSql(
-  alias: 'w' | 'f' | 'ch',
+  alias: 'w' | 'f' | 'ch' | 'c',
   excludeIds: readonly string[] | undefined,
 ): Prisma.Sql {
   if (!excludeIds || excludeIds.length === 0) return Prisma.sql`TRUE`;
@@ -6113,6 +6160,7 @@ function projectIssuesScopeSql(
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
+          AND ${notExcludedSql('w', filter.excludeIds)}
           AND (${buildIssueFilterSql(filter, 'w')})`;
 }
 

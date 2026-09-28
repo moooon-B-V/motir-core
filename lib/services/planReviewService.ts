@@ -57,6 +57,10 @@ import type {
   PlanReviewTodoDto,
 } from '@/lib/dto/planReview';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/context';
+import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
+import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { PlanNotFoundError } from '@/lib/plans/errors';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { folderRefId, isFolderRef, isTempRef, SUPERSEDES_PATCH_SITES } from '@/lib/plans/refs';
 import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
@@ -644,6 +648,26 @@ function markRefIdsOf(plan: PlanWithItemsDto): Set<string> {
   return ids;
 }
 
+/**
+ * The Visitor's gate for ONE plan (Story MOTIR-6170 · MOTIR-6645): the plan must
+ * be in the Visitor's project and must not be withheld — a proposal naming a
+ * hidden id, or a withheld session. Every refusal is {@link PlanNotFoundError},
+ * the answer an unknown id gets.
+ */
+async function visitorPlanReader(
+  planId: string,
+  reader: VisitorReadContext,
+): Promise<ServiceContext> {
+  const { workspaceId, excludeIds } = openVisitorRead(reader.project.id, reader, 'plan:view_any');
+  const refused = await withWorkspaceServiceContext(workspaceId, async (tx) => {
+    const plan = await planRepository.findById(planId, workspaceId, tx);
+    if (!plan || plan.projectId !== reader.project.id) return true;
+    return planChangeSessionRepository.isPlanWithheld(planId, excludeIds, tx);
+  });
+  if (refused) throw new PlanNotFoundError(planId);
+  return visitorServiceContext(reader);
+}
+
 export const planReviewService = {
   /**
    * Assemble the plan-detail review model for `planId`. Reads the plan + its
@@ -722,7 +746,15 @@ export const planReviewService = {
     };
   },
 
-  async getPlanReview(planId: string, ctx: ServiceContext): Promise<PlanReviewDto> {
+  async getPlanReview(
+    planId: string,
+    reader: ServiceContext | VisitorReadContext,
+  ): Promise<PlanReviewDto> {
+    // A Visitor reads a plan of THEIR public project that touches no private
+    // epic's descendant (MOTIR-6645); anything else is the same not-found an
+    // unknown id is. Past that gate the read runs on the Visitor's narrowed
+    // service context, which resolves the Visitor key set and nothing more.
+    const ctx = isVisitorContext(reader) ? await visitorPlanReader(planId, reader) : reader;
     // A READ for an actor (the plan page, `GET /api/plans/[id]`, `get_plan`'s
     // placements), so it admits by the Plans room's scope: a plan outside the
     // reader's view is the same not-found as an unknown id (MOTIR-6330).

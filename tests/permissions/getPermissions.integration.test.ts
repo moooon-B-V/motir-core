@@ -16,7 +16,7 @@ import {
   isEnforced,
   type PermissionKey,
 } from '@/lib/permissions/catalog';
-import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { ROLE_GATED_PERMISSIONS, VISITOR_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { CUSTOM_WORKSPACE_ROLE_TIER } from '@/lib/workspaces/roles';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { grantablePermissionKeys } from '@/lib/permissions/grantable';
@@ -253,9 +253,6 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
  */
 function ROOM_VIEW_KEYS(): PermissionKey[] {
   return ['approval:view_any', 'plan:view_any', 'run:view_any'];
-}
-function PLAN_RUN_VIEW_KEYS(): PermissionKey[] {
-  return ['plan:view_any', 'run:view_any'];
 }
 
 /** The role screens draw ENFORCED keys only; a `planned` one is held but not drawn. */
@@ -600,7 +597,8 @@ describe('a membership on a WORKSPACE custom role, resolved through the database
         // …and it gains nothing either: the set is the whole answer.
         expect([...held].sort()).toEqual(
           level === 'public'
-            ? [...permissions, ...PLAN_RUN_VIEW_KEYS(), ...PUBLIC_KEYS()].sort()
+            ? // MOTIR-6642 — on a public project everyone also holds the Visitor set.
+              [...new Set([...permissions, ...VISITOR_PERMISSIONS, ...PUBLIC_KEYS()])].sort()
             : [...permissions].sort(),
         );
         await truncateAuthTables();

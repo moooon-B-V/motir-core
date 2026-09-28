@@ -58,6 +58,13 @@ const APP = join(ROOT, 'app');
 
 const rel = (p: string) => relative(ROOT, p).split(sep).join('/');
 
+/**
+ * The file a read page's BODY lives in once it is shared (MOTIR-6643): the
+ * `(authed)` page builds a context and CALLS the view, so a guard that rules on
+ * what a page does reads the view too.
+ */
+const PAGE_VIEW_FILE = '_view.tsx';
+
 function walk(dir: string, out: { pages: string[]; loading: Set<string> }) {
   for (const entry of readdirSync(dir)) {
     const p = join(dir, entry);
@@ -116,7 +123,9 @@ describe('no loading boundary sits above a route that decides existence (MOTIR-3
    *  tripped this by explaining, in a comment, why its deciding sibling must stay
    *  outside the boundary. Name the call indirectly in a framed page's prose. */
   const deciders = pages.filter((dir) => {
-    for (const name of ['page.tsx', 'page.ts']) {
+    // A page whose body moved into a sibling `_view.tsx` (MOTIR-6643) decides in
+    // THAT file — the page is a wrapper that calls it — so both are read.
+    for (const name of ['page.tsx', 'page.ts', PAGE_VIEW_FILE]) {
       try {
         if (readFileSync(join(dir, name), 'utf8').includes('notFound()')) return true;
       } catch {
@@ -414,6 +423,32 @@ export function serialReadCount(src: string): number | null {
   return calls.filter((c) => !REQUEST_LOCAL.has(c.split('.')[0]!)).length;
 }
 
+/**
+ * The page-context helpers a wrapper page awaits, by the SERIAL reads each makes
+ * internally beyond the one its own `await` is counted as (MOTIR-6643). The
+ * member helper starts the session and the active-project reads together, so it
+ * is one wave and adds nothing; the reader helper reads the session, THEN the
+ * workspace, so it is two.
+ */
+const PAGE_CONTEXT_EXTRA_READS: Record<string, number> = {
+  memberPageContext: 0,
+  memberReaderPageContext: 1,
+};
+
+/** A page's serial reads — its own, plus its `_view.tsx` body's and its helper's. */
+function pageSerialReadCount(dir: string): number | null {
+  const file = ['page.tsx', 'page.ts'].map((n) => join(dir, n)).find((f) => existsSync(f))!;
+  const src = readFileSync(file, 'utf8');
+  const own = serialReadCount(src);
+  if (own === null) return null;
+  const view = join(dir, PAGE_VIEW_FILE);
+  const body = existsSync(view) ? (serialReadCount(readFileSync(view, 'utf8')) ?? 0) : 0;
+  const helpers = Object.entries(PAGE_CONTEXT_EXTRA_READS)
+    .filter(([name]) => new RegExp(`\\bawait\\s+${name}\\(`).test(withoutComments(src)))
+    .reduce((n, [, extra]) => n + extra, 0);
+  return own + body + helpers;
+}
+
 // ── The debt list, and it only ever SHRINKS ───────────────────────────────
 //
 // Every page above the ceiling, with WHICH of the two reasons applies. A new
@@ -421,8 +456,8 @@ export function serialReadCount(src: string): number | null {
 const SERIAL_READ_DEBT: { page: string; count: number; why: string }[] = [
   {
     page: 'app/(authed)/items/[key]/page.tsx',
-    count: 6,
-    why: 'A genuine chain on a DECIDER. `getIssueDetail` needs the key from the params, `resolveAliasedIssueKey` runs only when that misses (a 308 alias), and `getPermissions` is about the item the detail just returned. MOTIR-3436 already collapsed the twenty-nine reads that COULD be one wave; what is left is the part that cannot be.',
+    count: 5,
+    why: 'A genuine chain on a DECIDER. `getIssueDetail` needs the key from the params, `resolveAliasedIssueKey` runs only when that misses (a 308 alias), and `getPermissions` is about the item the detail just returned. MOTIR-3436 already collapsed the twenty-nine reads that COULD be one wave; what is left is the part that cannot be. (6 → 5 with MOTIR-6643: the page context starts the session and active-project reads together.)',
   },
   {
     page: 'app/(authed)/items/[key]/edit/page.tsx',
@@ -433,11 +468,6 @@ const SERIAL_READ_DEBT: { page: string; count: number; why: string }[] = [
     page: 'app/(authed)/settings/project/ai-planning/lessons/[lessonId]/page.tsx',
     count: 5,
     why: 'ALL GATE. Two permission gates run here rather than one — the settings area guard and `guardLessonLibrary` — and the read that follows them decides the notFound(). MOTIR-3559 measured this page and specified a zero diff: there is nothing after the gate to make concurrent, which is also why it earns no frame.',
-  },
-  {
-    page: 'app/(authed)/roadmap/page.tsx',
-    count: 5,
-    why: 'A concurrency change was BUILT here and deliberately REVERTED (MOTIR-3445). `getActiveSprint` sits after an early return for the empty/onboarding branch, and `tests/planning/roadmapPageStreaming.test.tsx` asserts it is never called on that branch — a third read on a first-run project is a cost this surface was measured to avoid paying.',
   },
   {
     page: 'app/(authed)/plans/page.tsx',
@@ -466,7 +496,7 @@ describe('no page arrives SERIAL — the ratchet (MOTIR-3449)', () => {
   const counted = pages
     .map((dir) => {
       const file = ['page.tsx', 'page.ts'].map((n) => join(dir, n)).find((f) => existsSync(f))!;
-      return { page: rel(file), count: serialReadCount(readFileSync(file, 'utf8')) };
+      return { page: rel(file), count: pageSerialReadCount(dir) };
     })
     .filter((r): r is { page: string; count: number } => r.count !== null);
 
@@ -527,7 +557,9 @@ describe('no page arrives SERIAL — the ratchet (MOTIR-3449)', () => {
   it('the debt list may not GROW — adding to it is a reviewed act', () => {
     // Pinned exactly. A card that needs a ninth entry has to change this number
     // in the same diff, which is the review this guard exists to force.
-    expect(SERIAL_READ_DEBT).toHaveLength(8);
+    // 8 → 7 with MOTIR-6643: the roadmap came back under the ceiling when its
+    // session and active-project reads became one wave.
+    expect(SERIAL_READ_DEBT).toHaveLength(7);
   });
 
   it('FIRES on a page carrying a fresh serial chain — demonstrated, not assumed', () => {
@@ -639,7 +671,10 @@ describe('/items keeps its toolbar in the first flush (MOTIR-3449)', () => {
   });
 
   it('renders its toolbar ABOVE its only boundary, from the gate', () => {
-    const src = withoutComments(readFileSync(join(APP, '(authed)', 'items', 'page.tsx'), 'utf8'));
+    // The body — and so the toolbar and its boundary — is `_view.tsx` (MOTIR-6643).
+    const src = withoutComments(
+      readFileSync(join(APP, '(authed)', 'items', PAGE_VIEW_FILE), 'utf8'),
+    );
     const boundary = src.indexOf('<Suspense');
     expect(boundary).toBeGreaterThan(-1);
     // The table's skeleton is the fallback; the toolbar is not inside it.

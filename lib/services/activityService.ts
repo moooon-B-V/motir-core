@@ -60,6 +60,8 @@ import { commentsService } from '@/lib/services/commentsService';
 import { InvalidActivityCursorError } from '@/lib/activity/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { VisitorReadContext } from '@/lib/visitor/context';
+import { isVisitorContext } from '@/lib/visitor/readScope';
 import type { Prisma } from '@/generated/prisma/client';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
@@ -133,6 +135,40 @@ async function scanDisplayable(
 }
 
 /**
+ * The id a Visitor's history carries for a withheld work item (MOTIR-6652) — a
+ * fixed token, never the item's own id, so the entry cannot be followed or
+ * correlated. It renders as the not-found fallback (no identifier).
+ */
+export const WITHHELD_ISSUE_ID = 'withheld';
+
+/**
+ * Resolve the item an activity read is about, for either reader. A member's
+ * gate is the workspace check plus `project:browse`; a Visitor's (MOTIR-6652)
+ * is a live, VISIBLE row of their one public project. Every refusal is the same
+ * `WorkItemNotFoundError` an unknown id gets.
+ */
+async function resolveActivityItem(
+  workItemId: string,
+  ctx: ServiceContext | VisitorReadContext,
+): Promise<{ item: WorkItem; workspaceId: string; hidden?: ReadonlySet<string> }> {
+  if (isVisitorContext(ctx)) {
+    const workspaceId = ctx.project.workspaceId;
+    const item = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      workItemRepository.findById(workItemId, tx),
+    );
+    if (!item || item.projectId !== ctx.project.id || ctx.hiddenIds.has(item.id)) {
+      throw new WorkItemNotFoundError(workItemId);
+    }
+    return { item, workspaceId, hidden: ctx.hiddenIds };
+  }
+  const item = await readWorkItem(workItemId, ctx);
+  if (!item || item.workspaceId !== ctx.workspaceId) {
+    throw new WorkItemNotFoundError(workItemId);
+  }
+  return { item, workspaceId: ctx.workspaceId };
+}
+
+/**
  * Build the page's DisplayResolvers from ONE batched lookup set: gather every
  * id the page references (actors + diff refs), then at most one read per
  * source. Missing referents resolve to the stored-id fallback form.
@@ -140,7 +176,11 @@ async function scanDisplayable(
 async function buildResolvers(
   rows: WorkItemRevision[],
   item: WorkItem,
-  ctx: ServiceContext,
+  ctx: Pick<ServiceContext, 'workspaceId'>,
+  // A Visitor's private-epic exclusion (MOTIR-6652): a withheld item — or one in
+  // another project — renders as an UNAVAILABLE item, naming neither its id nor
+  // its key, so a re-parent or a link to it tells a Visitor nothing.
+  hidden?: ReadonlySet<string>,
 ): Promise<DisplayResolvers> {
   const refs = emptyDiffRefs();
   for (const row of rows) {
@@ -181,7 +221,10 @@ async function buildResolvers(
     folders.filter((f) => f.workspaceId === ctx.workspaceId).map((f) => [f.id, f]),
   );
   const issueById = new Map(
-    issues.filter((w) => w.workspaceId === ctx.workspaceId).map((w) => [w.id, w]),
+    issues
+      .filter((w) => w.workspaceId === ctx.workspaceId)
+      .filter((w) => !hidden || (w.projectId === item.projectId && !hidden.has(w.id)))
+      .map((w) => [w.id, w]),
   );
 
   return {
@@ -196,6 +239,9 @@ async function buildResolvers(
       return { type: 'sprint', sprintId: id, name: sprintById.get(id)?.name ?? null };
     },
     issue(id: string): ActivityValueDto {
+      if (hidden && !issueById.has(id)) {
+        return { type: 'issue', workItemId: WITHHELD_ISSUE_ID, identifier: null };
+      }
       return { type: 'issue', workItemId: id, identifier: issueById.get(id)?.identifier ?? null };
     },
     // A folder renders by its CURRENT name; one deleted since the entry was
@@ -278,13 +324,10 @@ export const activityService = {
   async listHistory(
     workItemId: string,
     options: ActivityListOptions,
-    ctx: ServiceContext,
+    ctx: ServiceContext | VisitorReadContext,
   ): Promise<ActivityHistoryPageDto> {
     const order = options.order ?? 'desc';
-    const item = await readWorkItem(workItemId, ctx);
-    if (!item || item.workspaceId !== ctx.workspaceId) {
-      throw new WorkItemNotFoundError(workItemId);
-    }
+    const { item, workspaceId, hidden } = await resolveActivityItem(workItemId, ctx);
     // `project:browse` (Story MOTIR-2291 · Subtask MOTIR-2365). The inventory
     // called this row `existing`; the same row's `Gate today` said "workspace
     // only", and the code agreed — the workspace check above was the whole of it,
@@ -292,12 +335,15 @@ export const activityService = {
     // item in any project. That contradiction inside one line of a `done`
     // document is what the CLAIMED_BUT_UNVERIFIED bucket exists to surface. The
     // project comes from the ITEM, never from the actor's active project.
-    await projectAccessService.assertPermission(item.projectId, ctx, 'project:browse');
+    // A Visitor's gate was the visible-row check above; they hold `project:browse`.
+    if (!isVisitorContext(ctx)) {
+      await projectAccessService.assertPermission(item.projectId, ctx, 'project:browse');
+    }
 
     // The count and the page it heads share ONE bound transaction: unbound the
     // count read 0, so the "show more" affordance vanished from an item with a
     // long history — a missing door rather than a visible error.
-    const { totalCount, scan } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+    const { totalCount, scan } = await withWorkspaceServiceContext(workspaceId, async (tx) => ({
       totalCount: await workItemRevisionRepository.countDisplayableByWorkItem(
         workItemId,
         [...SUPPRESSED_DIFF_KEYS],
@@ -306,7 +352,7 @@ export const activityService = {
       scan: await scanDisplayable(workItemId, options.cursor, order, tx),
     }));
 
-    const resolvers = await buildResolvers(scan.rows, item, ctx);
+    const resolvers = await buildResolvers(scan.rows, item, { workspaceId }, hidden);
     return {
       entries: scan.rows.map((row) => toActivityEntryDto(row, resolvers)),
       nextCursor: scan.nextCursor,
@@ -336,15 +382,12 @@ export const activityService = {
   async listAll(
     workItemId: string,
     options: ActivityListOptions,
-    ctx: ServiceContext,
+    ctx: ServiceContext | VisitorReadContext,
   ): Promise<ActivityAllPageDto> {
     const order = options.order ?? 'desc';
     const cursor = decodeAllCursor(options.cursor);
 
-    const item = await readWorkItem(workItemId, ctx);
-    if (!item || item.workspaceId !== ctx.workspaceId) {
-      throw new WorkItemNotFoundError(workItemId);
-    }
+    const { item, workspaceId, hidden } = await resolveActivityItem(workItemId, ctx);
 
     // One bounded read per source (each from its own cursor) + the History
     // total. listComments re-checks the gate it owns (capability-aware) —
@@ -358,19 +401,16 @@ export const activityService = {
       { cursor: cursor.c ?? undefined, order },
       ctx,
     );
-    const { scan, totalChanges } = await withWorkspaceServiceContext(
-      ctx.workspaceId,
-      async (tx) => ({
-        scan: await scanDisplayable(workItemId, cursor.h ?? undefined, order, tx),
-        totalChanges: await workItemRevisionRepository.countDisplayableByWorkItem(
-          workItemId,
-          [...SUPPRESSED_DIFF_KEYS],
-          tx,
-        ),
-      }),
-    );
+    const { scan, totalChanges } = await withWorkspaceServiceContext(workspaceId, async (tx) => ({
+      scan: await scanDisplayable(workItemId, cursor.h ?? undefined, order, tx),
+      totalChanges: await workItemRevisionRepository.countDisplayableByWorkItem(
+        workItemId,
+        [...SUPPRESSED_DIFF_KEYS],
+        tx,
+      ),
+    }));
 
-    const resolvers = await buildResolvers(scan.rows, item, ctx);
+    const resolvers = await buildResolvers(scan.rows, item, { workspaceId }, hidden);
     const history = scan.rows.map((row) => toActivityEntryDto(row, resolvers));
     const comments = commentsPage.threads;
 
