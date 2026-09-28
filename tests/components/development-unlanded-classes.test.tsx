@@ -690,7 +690,7 @@ describe('the fix part never names a HUNG exit on its left-the-queue line', () =
               conflict: null,
             },
           ],
-        },
+        } as WorkItemRepairViewDto,
       },
     );
 
