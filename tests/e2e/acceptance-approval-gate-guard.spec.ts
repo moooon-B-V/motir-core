@@ -124,7 +124,10 @@ test.describe('a pending approval holds the move it performs, and says so where 
           .getByRole('main')
           .getByRole('button', { name: `Edit ${en.issueViews.status}`, exact: true })
           .click();
-        await page.getByRole('main').getByRole('combobox').click();
+        await page
+          .getByRole('main')
+          .getByRole('combobox', { name: en.issueViews.status, exact: true })
+          .click();
         const done = page.getByRole('option', { name: /Done/ });
         await expect(done).toHaveAttribute('aria-disabled', 'true');
         await expect(done).toContainText(en.approvalGate.statusHeld.needsApproval);
@@ -238,7 +241,10 @@ test.describe('a pending approval holds the move it performs, and says so where 
         .getByRole('main')
         .getByRole('button', { name: `Edit ${en.issueViews.status}`, exact: true })
         .click();
-      await page.getByRole('main').getByRole('combobox').click();
+      await page
+        .getByRole('main')
+        .getByRole('combobox', { name: en.issueViews.status, exact: true })
+        .click();
       const moved = page.waitForResponse(
         (r) => r.request().method() === 'POST' && Boolean(r.request().headers()['next-action']),
       );

@@ -16,7 +16,10 @@ import { defineConfig } from 'vitest/config';
 // documented carve-outs and three ungated files (below).
 export default defineConfig({
   test: {
-    include: ['test/**/*.test.ts'],
+    // `sandbox/hosted/` is the hosted-agent image (MOTIR-687): its smoke test
+    // drives the entrypoint as a process here, and the image-level half runs
+    // only in `hosted-agent-image.yml`, which names a built image.
+    include: ['test/**/*.test.ts', 'sandbox/hosted/**/*.test.ts'],
     environment: 'node',
     coverage: {
       provider: 'v8',

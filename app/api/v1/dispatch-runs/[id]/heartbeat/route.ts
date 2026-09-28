@@ -15,7 +15,16 @@ import { dispatchRunService } from '@/lib/services/dispatchRunService';
 // the CLI's answer is to stop beating, not to retry. `DISPATCH_RUN_NOT_FOUND`
 // (404) covers an unknown id, another tenant's run and another operator's run
 // alike.
-export const POST = withV1Route<{ id: string }>({ permission: 'work_item:edit' }, async (ctx) => {
-  await dispatchRunService.heartbeat(ctx.params.id, ctx.service);
-  return new NextResponse(null, { status: 204 });
-});
+//
+// ⚠️ `acceptsRunToken` — a HOSTED run's own credential (MOTIR-6558) beats too:
+// its liveness is really its server supervision (`run-death-keeps-work.md` §2),
+// not this beat, but the CLI's reporter beats whatever run it holds regardless
+// of origin, so the route is admitted the same way, bound to the token's own run
+// (`lib/hostedRuns/runTokenRoutes.ts`).
+export const POST = withV1Route<{ id: string }>(
+  { permission: 'work_item:edit', acceptsRunToken: true },
+  async (ctx) => {
+    await dispatchRunService.heartbeat(ctx.params.id, ctx.service);
+    return new NextResponse(null, { status: 204 });
+  },
+);

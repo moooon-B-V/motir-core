@@ -1,4 +1,5 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
+import { runTokenScopeService } from '@/lib/services/runTokenScopeService';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -181,6 +182,8 @@ async function readVisibleItem(
   if (!item || item.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(key);
   const caps = await projectAccessService.getAttachmentCapabilities(item.projectId, ctx, tx);
   if (!caps.canBrowse) throw new WorkItemNotFoundError(key);
+  // A hosted run's own credential reads only its run's cards (MOTIR-6557).
+  await runTokenScopeService.assertReachesWorkItemsIn([item.id], ctx, tx);
   return item;
 }
 

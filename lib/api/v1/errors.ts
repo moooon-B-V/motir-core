@@ -84,6 +84,26 @@ export class InsufficientPermissionError extends ApiV1Error {
 }
 
 /**
+ * 403 — a RUN token (MOTIR-688) presented at a door that does not admit one.
+ * A run token is a valid credential bound to ONE hosted dispatch run, and only
+ * that run's ingest and its card's dispatch prompt accept it (`withV1Route`'s
+ * `acceptsRunToken`). Its own code rather than `INSUFFICIENT_PERMISSION`,
+ * because the grant is not what refused it — it holds the key the route asks
+ * for — and a caller told "not granted `work_item:edit`" would look for a key
+ * it already has.
+ */
+export class RunTokenNotAllowedError extends ApiV1Error {
+  constructor() {
+    super(
+      'RUN_TOKEN_NOT_ALLOWED',
+      403,
+      'A hosted-run credential may only report to its own run and read its own card.',
+    );
+    this.name = 'RunTokenNotAllowedError';
+  }
+}
+
+/**
  * 422 — a malformed request the caller can fix: an invalid cursor, an
  * out-of-range or non-numeric `limit`, a failed body validation.
  */
@@ -138,6 +158,21 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // moment earlier, which is what a conflict means. Raised by BOTH the append and
   // the close from the SAME locked read.
   DISPATCH_RUN_TERMINAL: 409,
+  // 403 — a hosted run's own credential naming another run, or opening one
+  // (MOTIR-688). Checked before the run is read, so it is not an existence
+  // oracle: the answer is the same for a run that exists and one that does not.
+  DISPATCH_RUN_TOKEN_OUT_OF_SCOPE: 403,
+  // ── MOTIR-6538, a hosted run's git credentials ─────────────────────────────
+  // 409 — the run ended between its read and the mint (a close racing the call).
+  // The same fact as DISPATCH_RUN_TERMINAL, raised from the mint's own re-read.
+  RUN_CREDENTIAL_RUN_NOT_LIVE: 409,
+  // 409 — a repository of the run can no longer be written by its App (the
+  // installation lost it, or its write permissions are not accepted). The run
+  // cannot go on; the message names every such repository and its fix.
+  hosted_repository_not_writable: 409,
+  // 503 — GitHub could not be reached, or the App a repository needs is not
+  // configured here: a Motir-side fault the run can retry, not a refusal.
+  run_git_credential_unavailable: 503,
   // 409 — two opens raced on one idempotency key. The ordinary repeat is not this
   // (it returns the existing run); this is the narrow window in which the unique
   // index is the arbiter, and it exists so a `P2002` never escapes as a bare 500.

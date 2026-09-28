@@ -313,6 +313,7 @@ import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
 import { ContainerRepoSetNotWritableError } from '@/lib/workItems/errors';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
+import { runTokenScopeService } from '@/lib/services/runTokenScopeService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 import { writeDerivedRepoSet, writeRepoRefs } from '@/lib/workItems/repoSetWrites';
 import { recomputeWorkItemFixReason } from './fixReasonService';
@@ -4103,6 +4104,12 @@ export const workItemsService = {
       workItemRepository.findBySessionBranch(sessionBranch, ctx.workspaceId, tx),
     );
     if (items.length === 0) return { sessionBranch, results: [] };
+    // A run token completes only a session of its own run's cards (MOTIR-6557):
+    // every card on the branch must be a leg or the run's scope.
+    await runTokenScopeService.assertReachesWorkItems(
+      items.map((item) => item.id),
+      ctx,
+    );
 
     const { results, transitions } = await withWorkspaceContext(ctx, async (tx) => {
       const results: CompleteSessionItemResultDto[] = [];
@@ -6127,6 +6134,10 @@ export const workItemsService = {
     );
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(identifier);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
+    // A hosted run's own credential reaches its run's cards and no other
+    // (MOTIR-6557) — the one gate every keyed `/api/v1` operation it may call
+    // opens with. A no-op for every other caller.
+    await runTokenScopeService.assertReachesWorkItems([row.id], ctx);
     return toWorkItemDto(row);
   },
 
@@ -6300,6 +6311,8 @@ export const workItemsService = {
       if (visitor.hiddenIds.has(item.id)) throw new WorkItemNotFoundError(identifier);
     } else {
       await projectAccessService.assertCanBrowse(item.projectId, ctx as ServiceContext);
+      // A run token reads only its run's cards (MOTIR-6557).
+      await runTokenScopeService.assertReachesWorkItems([item.id], ctx as ServiceContext);
     }
     const hidden = visitor ? visitor.hiddenIds : null;
 

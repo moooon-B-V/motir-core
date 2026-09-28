@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -37,6 +38,7 @@ import { defineOperation, operationKey, type V1Operation } from '@/lib/api/v1/op
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { workItemDetailSchema } from '@/lib/api/v1/workItems/schema';
 import { plansService } from '@/lib/services/plansService';
+import { runCredentialService } from '@/lib/services/runCredentialService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { adminDb } from '../../helpers/adminDb';
 import { LEGACY_SCOPE_PERMISSIONS } from '@/lib/mcp/scopes';
@@ -707,6 +709,14 @@ describe('every operation’s REAL response validates against its declared schem
       { id: runId },
     );
 
+    // The READ a CLI adopting a server-opened hosted run makes (MOTIR-6558).
+    await drive(
+      'getDispatchRun',
+      () => import('@/app/api/v1/dispatch-runs/[id]/route'),
+      send(`/api/v1/dispatch-runs/${runId}`, 'GET'),
+      { id: runId },
+    );
+
     await drive(
       'getDispatchRunCloseOutPrompt',
       () => import('@/app/api/v1/dispatch-runs/[id]/close-out-prompt/route'),
@@ -728,6 +738,84 @@ describe('every operation’s REAL response validates against its declared schem
       send(`/api/v1/dispatch-runs/${runId}/close`, 'POST', { stopReason: 'completed' }),
       { id: runId },
     );
+
+    // ── A hosted run's git credentials (MOTIR-6538) ─────────────────────────
+    // Driven with the run's OWN credential — the only caller the route answers —
+    // on a hosted run over the project's connected repository (`acme/web`, linked
+    // above). GitHub is stubbed at the HTTP seam for this one drive; nothing
+    // reaches github.com, and the stubs are removed straight after.
+    const hostedCard = await createItem('An item a hosted run builds');
+    const hostedOpen = await handlerFor(
+      () => import('@/app/api/v1/dispatch-runs/route'),
+      'POST',
+      send('/api/v1/dispatch-runs', 'POST', {
+        projectKey: caller.projectKey,
+        command: 'run',
+        origin: 'hosted',
+        idempotencyKey: 'drift-guard-hosted-1',
+        cards: [{ key: hostedCard, disposition: 'queued' }],
+      }),
+    );
+    expect(hostedOpen.status, 'seeding the hosted run').toBe(201);
+    const hostedRunId = ((await hostedOpen.json()) as { run: { id: string } }).run.id;
+    const { token: runToken } = await runCredentialService.mintRunCredential({
+      dispatchRunId: hostedRunId,
+      dispatcherUserId: caller.fixture.owner.id,
+      expiresAt: new Date(Date.now() + 60 * 60_000),
+    });
+    const pem = generateKeyPairSync('rsa', { modulusLength: 2048 })
+      .privateKey.export({ type: 'pkcs1', format: 'pem' })
+      .toString();
+    vi.stubEnv('GITHUB_APP_ID', '222');
+    vi.stubEnv('GITHUB_APP_PRIVATE_KEY', pem);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const method = init?.method ?? 'GET';
+        const json = (status: number, payload: unknown) =>
+          new Response(JSON.stringify(payload), {
+            status,
+            headers: { 'content-type': 'application/json' },
+          });
+        if (/\/repos\/acme\/web\/installation$/.test(url) && method === 'GET') {
+          return json(200, {
+            id: 42,
+            account: { login: 'acme' },
+            permissions: { contents: 'write', pull_requests: 'write', metadata: 'read' },
+            suspended_at: null,
+            html_url: 'https://github.com/organizations/acme/settings/installations/42',
+          });
+        }
+        if (/\/app\/installations\/42\/access_tokens$/.test(url) && method === 'POST') {
+          return json(201, {
+            token: 'ghs_drift_guard',
+            expires_at: new Date(Date.now() + 60 * 60_000).toISOString(),
+          });
+        }
+        if (url.endsWith('/app') && method === 'GET')
+          return json(200, { slug: 'motir-integration' });
+        if (/\/users\/.+$/.test(url) && method === 'GET') {
+          return json(200, { id: 2002, login: 'motir-integration[bot]' });
+        }
+        throw new Error(`unexpected fetch in the drift guard: ${method} ${url}`);
+      }),
+    );
+    try {
+      await drive(
+        'issueDispatchRunGitCredentials',
+        () => import('@/app/api/v1/dispatch-runs/[id]/git-credential/route'),
+        new Request(`${ORIGIN}/api/v1/dispatch-runs/${hostedRunId}/git-credential`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${runToken}` },
+        }),
+        { id: hostedRunId },
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
 
     // ── Session close-out (Story 11.7) ──────────────────────────────────────
     // On a DEDICATED item, and last: `recordWorkItemIntegration` moves it to

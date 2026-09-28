@@ -65,6 +65,7 @@ function requestFor(
   return {
     dispatchId: `rehearsal-${randomToken(6)}`,
     runId: `rehearsal-run-${randomToken(6)}`,
+    dispatchRunId: null,
     ...tenant,
     repoFullName: 'motir-projects/acme-web',
     image: 'motir/stand-in@sha256:fake',

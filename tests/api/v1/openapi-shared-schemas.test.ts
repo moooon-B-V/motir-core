@@ -476,10 +476,15 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     // (`docs/decisions/approval-gates.md` §2); an operation that named it would
     // fail the `isGrantable` loop below, which is the check standing between this
     // registry and a decide door nobody argued for.
-    // 64 with MOTIR-6528's `POST …/dispatch-runs/{id}/heartbeat` (`heartbeatDispatchRun`)
-    // and MOTIR-6532's `POST …/work-items/{key}/continue` (`claimWorkItemContinue`),
-    // both `work_item:edit`.
-    expect(V1_OPERATIONS.length).toBe(64);
+    // 63 with MOTIR-6558's `GET …/dispatch-runs/{id}` (`getDispatchRun`, on
+    // `project:browse`) and 64 with MOTIR-6538's
+    // `POST …/dispatch-runs/{id}/git-credential` (`issueDispatchRunGitCredentials`,
+    // on `work_item:edit`) — both answered to a hosted run's own credential.
+    // 65 with MOTIR-6528's `POST …/dispatch-runs/{id}/heartbeat`
+    // (`heartbeatDispatchRun`) and 66 with MOTIR-6532's
+    // `POST …/work-items/{key}/continue` (`claimWorkItemContinue`), both
+    // `work_item:edit`.
+    expect(V1_OPERATIONS.length).toBe(66);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

@@ -33,29 +33,34 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // later sends back, so the validator is minted by the same module that parses it
 // — a validator produced by one card and parsed by another is a contract, and it
 // belongs with the resource.
-export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async (ctx) => {
-  const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
-  const detail = await workItemsService.getIssueDetail(projectId, identifier, ctx.service);
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-6557) may call this,
+// bound as `lib/hostedRuns/runTokenRoutes.ts` says; the service enforces it.
+export const GET = withV1Route<{ key: string }>(
+  { permission: 'project:browse', acceptsRunToken: true },
+  async (ctx) => {
+    const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
+    const detail = await workItemsService.getIssueDetail(projectId, identifier, ctx.service);
 
-  // `commentCount` is deliberately NOT on `IssueDetailDto` (`lib/mcp/commentCounts.ts`
-  // records why: widening that aggregate breaks every exact-`toEqual` route-shape
-  // test that reads it back), so it is read here and handed to the presenter.
-  const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx.service);
+    // `commentCount` is deliberately NOT on `IssueDetailDto` (`lib/mcp/commentCounts.ts`
+    // records why: widening that aggregate breaks every exact-`toEqual` route-shape
+    // test that reads it back), so it is read here and handed to the presenter.
+    const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx.service);
 
-  ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
-  const childEdges = await readChildDependencyEdges(detail, ctx.service);
-  const deliveries = await workItemsService.listDeliverySet(detail.item.id, ctx.service);
-  const folderPath = await workItemsService.getFolderPath(detail.folderId, ctx.service);
-  return NextResponse.json(
-    presentWorkItemDetail(
-      detail,
-      commentCountFor(counts, detail.item.id),
-      childEdges,
-      deliveries,
-      folderPath,
-    ),
-  );
-});
+    ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
+    const childEdges = await readChildDependencyEdges(detail, ctx.service);
+    const deliveries = await workItemsService.listDeliverySet(detail.item.id, ctx.service);
+    const folderPath = await workItemsService.getFolderPath(detail.folderId, ctx.service);
+    return NextResponse.json(
+      presentWorkItemDetail(
+        detail,
+        commentCountFor(counts, detail.item.id),
+        childEdges,
+        deliveries,
+        folderPath,
+      ),
+    );
+  },
+);
 
 // PATCH /api/v1/work-items/{key} (Subtask 11.2.6 — MOTIR-2046) — the partial
 // update, with OPTIONAL optimistic concurrency.

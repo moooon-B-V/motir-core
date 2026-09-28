@@ -33,8 +33,10 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // That is the entire reason 11.2.3 exists. This route composes `parsePageRequest`
 // + `encodePageCursor` and lets the DATABASE do the windowing.
 
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-6557) may call this,
+// bound as `lib/hostedRuns/runTokenRoutes.ts` says; the service enforces it.
 export const GET = withV1Route<{ projectKey: string }>(
-  { permission: 'project:browse' },
+  { permission: 'project:browse', acceptsRunToken: true },
   async (ctx) => {
     // Parse BEFORE reading: a bad cursor, limit or filter is the caller's to fix,
     // and answering 422 without touching the database is both faster and honest.

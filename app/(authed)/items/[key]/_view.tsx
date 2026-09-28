@@ -653,6 +653,14 @@ export default async function ItemView({
                         }
                         canReplan={canEdit && !isArchived}
                         parentIdentifier={detail.parent?.identifier ?? null}
+                        hostedDoor={
+                          canEdit && !isArchived && statusCategory !== 'done'
+                            ? {
+                                ready: detail.readiness.ready,
+                                openBlockers: detail.readiness.openBlockers.length,
+                              }
+                            : null
+                        }
                       />
                     </Suspense>
                     {detail.childrenHidden ? (

@@ -472,8 +472,14 @@ describe('which argv gets a version check at all', () => {
   it('marks the loop lanes UNATTENDED so they are notified but never prompted', () => {
     expect(isUnattendedArgv(['auto'])).toBe(true);
     expect(isUnattendedArgv(['batch'])).toBe(true);
-    expect(isUnattendedArgv(['run'])).toBe(false);
-    expect(isUnattendedArgv([])).toBe(false);
+    expect(isUnattendedArgv(['run'], {})).toBe(false);
+    expect(isUnattendedArgv([], {})).toBe(false);
+  });
+
+  it('marks a HOSTED run unattended whatever its command (MOTIR-6558)', () => {
+    expect(isUnattendedArgv(['run', 'PROD-7'], { MOTIR_DISPATCH_RUN_ID: 'cmrun' })).toBe(true);
+    expect(isUnattendedArgv(['run', 'PROD-7', '--run-id', 'cmrun'], {})).toBe(true);
+    expect(isUnattendedArgv(['run', 'PROD-7'], { MOTIR_DISPATCH_RUN_ID: '  ' })).toBe(false);
   });
 });
 

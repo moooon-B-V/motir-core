@@ -504,6 +504,17 @@ export interface AssembledDispatchPrompt {
    */
   sessionBranch: string | null;
   /**
+   * The branch the prompt tells the agent to CREATE for its work (MOTIR-6539) —
+   * the SAME name in every repository the item ships in ({@link cardBranch}), or
+   * `null` for a MANUAL item, which renders no GIT WORKFLOW and so has no branch.
+   *
+   * Handed over as a field so a runner can name it before the agent exists and
+   * push it as the agent commits, without parsing prose the template may reword.
+   * The pull request comes from this branch in `per_item_pr` mode and from
+   * {@link sessionBranch} in `session_lineage` mode.
+   */
+  workBranch: string | null;
+  /**
    * The branch the prompt tells the agent to work on (MOTIR-6530) — the session
    * branch in `session_lineage` mode, else the card's own per-item branch
    * ({@link cardBranch}); `null` for a MANUAL item, which has none. It is what a
@@ -2811,5 +2822,11 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
   ];
 
   const branch = manual ? null : (src.continueFrom?.branch ?? sessionBranch ?? cardBranch(src));
-  return { prompt: lines.join('\n') + '\n', workflowMode, sessionBranch, branch };
+  return {
+    prompt: lines.join('\n') + '\n',
+    workflowMode,
+    sessionBranch,
+    workBranch: manual ? null : cardBranch(src),
+    branch,
+  };
 }

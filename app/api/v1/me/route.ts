@@ -20,7 +20,12 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 // return. No `db.*`, no `$transaction`. The response is `presentMe`'s output —
 // shaped field by field, never spread; that mapper's header records why (ADR
 // Amendment 5 §4: a v1 route MAPS THROUGH its schema).
-export const GET = withV1Route({ permission: 'project:browse' }, async (ctx) => {
-  const verified = await apiTokensService.verify(ctx.presentedToken);
-  return NextResponse.json(presentMe(verified));
-});
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-6557) may call this,
+// bound as `lib/hostedRuns/runTokenRoutes.ts` says; the service enforces it.
+export const GET = withV1Route(
+  { permission: 'project:browse', acceptsRunToken: true },
+  async (ctx) => {
+    const verified = await apiTokensService.verify(ctx.presentedToken);
+    return NextResponse.json(presentMe(verified));
+  },
+);

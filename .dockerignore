@@ -1,7 +1,9 @@
-# Build-context excludes. Two images build with this root as their context:
-# the production app (./Dockerfile) and the `motir auto` sandbox
-# (packages/cli/sandbox/Dockerfile), the latter because `pnpm install
-# --frozen-lockfile` validates the lockfile against every workspace manifest.
+# Build-context excludes. Three images build with this root as their context:
+# the production app (./Dockerfile), the `motir auto` sandbox
+# (packages/cli/sandbox/Dockerfile) and the hosted agent
+# (packages/cli/sandbox/hosted/Dockerfile, MOTIR-6560) — the last two because
+# `pnpm install --frozen-lockfile` validates the lockfile against every
+# workspace manifest.
 # Keep the context to SOURCE — installed/generated trees are rebuilt inside the
 # image and would otherwise dominate the upload.
 node_modules

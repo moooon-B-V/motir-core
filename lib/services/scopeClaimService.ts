@@ -1,4 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
+import { runTokenScopeService } from '@/lib/services/runTokenScopeService';
+import { DispatchRunTokenOutOfScopeError } from '@/lib/dispatchRuns/errors';
 import type { ClaimActorDto } from '@/lib/dto/claim';
 import type {
   ScopeClaimDto,
@@ -166,12 +168,19 @@ export const scopeClaimService = {
    * lock and a worktree pre-flight answer different questions.
    */
   async claimScope(input: ScopeClaimInput, ctx: ServiceContext): Promise<ScopeClaimDto> {
+    // A hosted run's own credential claims only its own run's scope (MOTIR-6557):
+    // never a sprint, and never a member that is not a leg of its run. The
+    // container resolves through `getWorkItemByIdentifier`, which checks it too.
+    if (ctx.tokenDispatchRunId !== undefined && input.kind !== 'work_item') {
+      throw new DispatchRunTokenOutOfScopeError();
+    }
     const resolved =
       input.kind === 'work_item'
         ? await resolveWorkItemScope(input.projectId, input.identifier, ctx, input.exceptLanded)
         : await resolveSprintScope(input.projectId, ctx);
 
     if (!resolved.ok) return presentEarlyRefusal(resolved.scope, resolved.refusal);
+    await runTokenScopeService.assertReachesWorkItems(resolved.memberIds, ctx);
 
     // The CI-credit gate (MOTIR-1901 · `ci-minutes-allowance.md` §6.2–6.3). This
     // is the FIFTH dispatch entry point, and the rule `getNextReady` states holds
@@ -224,6 +233,53 @@ export const scopeClaimService = {
       shape: null,
       blockers: [],
     };
+  },
+
+  /**
+   * WOULD this container's scope claim succeed? The same resolution, validation
+   * and shape rule as {@link claimScope}, and the same to-do-category test on
+   * every member — read WITHOUT a lock, and writing nothing.
+   *
+   * It exists for the hosted start path (MOTIR-690), which must refuse a run that
+   * could not be claimed BEFORE it opens a run, mints a key or boots a machine: a
+   * claim taken first and refused later (the model withdrawn, no credits) would
+   * strand every card in `in_progress`. The real claim still runs afterwards,
+   * under its lock, and is the arbiter of a race this read cannot see.
+   *
+   * Answers the root and its children in `position` order, or the reason in words.
+   */
+  async previewWorkItemScope(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+  ): Promise<{ ok: true; rootId: string; childIds: string[] } | { ok: false; detail: string }> {
+    const resolved = await resolveWorkItemScope(projectId, identifier, ctx);
+    if (!resolved.ok) {
+      const refusal = resolved.refusal;
+      return {
+        ok: false,
+        detail:
+          refusal.outcome === 'not_finishable'
+            ? `its scope is not finishable — waiting on ${[
+                ...new Set(refusal.blockers.map((b) => b.blockedBy)),
+              ].join(', ')}`
+            : `${refusal.shape.child} has children of its own; a parent run is one layer deep`,
+      };
+    }
+    const [rootId, ...childIds] = resolved.memberIds;
+    /* v8 ignore next -- `resolveWorkItemScope` always puts the root first */
+    if (!rootId) return { ok: false, detail: 'it could not be resolved' };
+    const states = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findClaimStatesByIds(resolved.memberIds, tx),
+    );
+    const offender = states.find((s) => !isClaimableState(s));
+    if (offender) {
+      return {
+        ok: false,
+        detail: `${offender.identifier} is ${offender.status}, not in the to-do category`,
+      };
+    }
+    return { ok: true, rootId, childIds };
   },
 };
 

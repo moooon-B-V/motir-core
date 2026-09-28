@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { withHostedAttribution } from './hostedAttribution.js';
 
 // The SESSION-BRANCH plumbing for `motir auto` (Story 7.9 · Subtask 7.9.4 ·
 // MOTIR-882) — the CLI's only git surface, and the only place it shells out to
@@ -292,7 +293,7 @@ export function updateSessionPr(
 ): { ok: boolean; message?: string } {
   const edited = run(
     'gh',
-    ['pr', 'edit', branch, '--title', input.title, '--body', input.body],
+    ['pr', 'edit', branch, '--title', input.title, '--body', withHostedAttribution(input.body)],
     cwd,
   );
   if (edited.exitCode !== 0) {
@@ -346,7 +347,9 @@ export function openSessionPr(
       '--title',
       input.title,
       '--body',
-      input.body,
+      // A hosted run's pull request names its dispatcher, card and run
+      // (MOTIR-6559); unchanged on a local run.
+      withHostedAttribution(input.body),
     ],
     cwd,
   );

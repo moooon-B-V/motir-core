@@ -54,7 +54,7 @@ export const API_MAJOR = 1;
  * compatible by construction and only a server BELOW it can be missing
  * something this client was generated to expect.
  */
-export const GENERATED_AGAINST = "1.48.0";
+export const GENERATED_AGAINST = "1.51.0";
 
 /** Every declared operation, keyed by `operationId`. */
 export const V1_OPERATIONS = {
@@ -191,6 +191,13 @@ export const V1_OPERATIONS = {
     successStatus: 204,
     responseComponent: undefined,
   },
+  "getDispatchRun": {
+    method: "GET",
+    path: "/api/v1/dispatch-runs/{id}",
+    permission: "project:browse",
+    successStatus: 200,
+    responseComponent: "DispatchRun",
+  },
   "getDispatchRunCloseOutPrompt": {
     method: "GET",
     path: "/api/v1/dispatch-runs/{id}/close-out-prompt",
@@ -308,6 +315,13 @@ export const V1_OPERATIONS = {
     path: "/api/v1/dispatch-runs/{id}/heartbeat",
     permission: "work_item:edit",
     successStatus: 204,
+    responseComponent: undefined,
+  },
+  "issueDispatchRunGitCredentials": {
+    method: "POST",
+    path: "/api/v1/dispatch-runs/{id}/git-credential",
+    permission: "work_item:edit",
+    successStatus: 200,
     responseComponent: undefined,
   },
   "linkWorkItemPullRequest": {

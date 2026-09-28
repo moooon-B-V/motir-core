@@ -33,22 +33,27 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // not `integration` is refused here, and that refusal is asserted: a bleed would
 // make the scope decorative.
 
-export const POST = withV1Route<{ key: string }>({ permission: 'work_item:edit' }, async (ctx) => {
-  const body = await parseV1Body(ctx.req, integrationBodySchema);
-  const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
-  const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-6557) may call this,
+// bound as `lib/hostedRuns/runTokenRoutes.ts` says; the service enforces it.
+export const POST = withV1Route<{ key: string }>(
+  { permission: 'work_item:edit', acceptsRunToken: true },
+  async (ctx) => {
+    const body = await parseV1Body(ctx.req, integrationBodySchema);
+    const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
+    const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);
 
-  // The provenance triple is a SELF-REPORT and is OMITTED entirely when the
-  // caller sent none — passing a half-built object would stamp `byok` over a
-  // hosted run's own record. `source` defaults to `byok` in the service.
-  const provenance = toProvenanceInput(body);
+    // The provenance triple is a SELF-REPORT and is OMITTED entirely when the
+    // caller sent none — passing a half-built object would stamp `byok` over a
+    // hosted run's own record. `source` defaults to `byok` in the service.
+    const provenance = toProvenanceInput(body);
 
-  const dto = await workItemsService.markIntegrated(
-    item.id,
-    body.sessionBranch,
-    ctx.service,
-    provenance,
-  );
+    const dto = await workItemsService.markIntegrated(
+      item.id,
+      body.sessionBranch,
+      ctx.service,
+      provenance,
+    );
 
-  return NextResponse.json(presentIntegrationResult(dto));
-});
+    return NextResponse.json(presentIntegrationResult(dto));
+  },
+);

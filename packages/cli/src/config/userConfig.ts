@@ -129,6 +129,17 @@ export const TOKEN_ENV_VAR = 'MOTIR_TOKEN';
 export const SERVER_ENV_VAR = 'MOTIR_SERVER';
 
 /**
+ * The HOSTED container's names for the same two values (MOTIR-6558) — what the
+ * hosted image is booted with (`docs/decisions/hosted-run-runs-the-cli-as-the-app.md`).
+ * Each sits one rung BELOW its general twin: a person who exports `MOTIR_TOKEN`
+ * in a container has said which credential they mean, and the run credential is
+ * the fallback the image supplies, never an override of an explicit choice.
+ * Like the rest of the env tier, neither is ever written to disk.
+ */
+export const RUN_TOKEN_ENV_VAR = 'MOTIR_RUN_TOKEN';
+export const API_URL_ENV_VAR = 'MOTIR_API_URL';
+
+/**
  * Read an env var as a VALUE, treating empty/whitespace as ABSENT.
  *
  * The empty-string case is load-bearing, not defensive tidiness: `FOO=` in a
@@ -145,14 +156,23 @@ function envValue(name: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-/** `MOTIR_TOKEN`, or undefined when unset / empty. */
-export function envToken(): string | undefined {
-  return envValue(TOKEN_ENV_VAR);
+/** Which env var supplied the token, or undefined when neither is set. */
+function envTokenSource(): { token: string; name: string } | undefined {
+  for (const name of [TOKEN_ENV_VAR, RUN_TOKEN_ENV_VAR]) {
+    const token = envValue(name);
+    if (token) return { token, name };
+  }
+  return undefined;
 }
 
-/** `MOTIR_SERVER`, normalized, or undefined when unset / empty. */
+/** `MOTIR_TOKEN`, else `MOTIR_RUN_TOKEN`, or undefined when both are unset / empty. */
+export function envToken(): string | undefined {
+  return envTokenSource()?.token;
+}
+
+/** `MOTIR_SERVER`, else `MOTIR_API_URL`, normalized, or undefined when both are unset / empty. */
 export function envServerUrl(): string | undefined {
-  const value = envValue(SERVER_ENV_VAR);
+  const value = envValue(SERVER_ENV_VAR) ?? envValue(API_URL_ENV_VAR);
   return value ? normalizeServerUrl(value) : undefined;
 }
 
@@ -169,8 +189,11 @@ export interface ResolvedCredential extends StoredCredential {
 }
 
 /** How a source is named in output: `environment (MOTIR_TOKEN)` / the path. */
-export function credentialOriginLabel(source: CredentialSource): string {
-  return source === 'environment' ? `environment (${TOKEN_ENV_VAR})` : configPath();
+export function credentialOriginLabel(
+  source: CredentialSource,
+  envVar: string = TOKEN_ENV_VAR,
+): string {
+  return source === 'environment' ? `environment (${envVar})` : configPath();
 }
 
 /**
@@ -192,8 +215,14 @@ export function credentialOriginLabel(source: CredentialSource): string {
  * session.
  */
 export function resolveCredential(serverUrl: string): ResolvedCredential | undefined {
-  const token = envToken();
-  if (token) return { token, source: 'environment', origin: credentialOriginLabel('environment') };
+  const fromEnv = envTokenSource();
+  if (fromEnv) {
+    return {
+      token: fromEnv.token,
+      source: 'environment',
+      origin: credentialOriginLabel('environment', fromEnv.name),
+    };
+  }
 
   const stored = getCredential(serverUrl);
   if (!stored) return undefined;

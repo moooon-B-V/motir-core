@@ -2754,3 +2754,117 @@ it measures 1.00–1.04:1 in every light palette. Raw `--el-danger` is not the a
 - **What happens to a `project_repository` row when a repository is added this way.** A picked
   repository is a link, not a hosted row; §16.11's _"promoting a connected repository into
   `project_repository`"_ remains unfixed and unfixed by this too.
+
+---
+
+# 18. `repositories-room--hosted-runs.mock.html` — WHERE MOTIR'S APP CAN WRITE (MOTIR-6518)
+
+**This is the third draft and supersedes both earlier ones** — `cmuiszohk00nahvoiin43xjr5` (a second
+GitHub App and a second account link) and `cmuivq6rw008ahvoiofyixyym` (one App, but pull requests
+authored as the dispatcher, with an identity reconnect state). The review refused the second: _"hosted
+run should commit as the app, not a person account. A non-tech user won't even have a github
+account."_ `docs/decisions/hosted-run-runs-the-cli-as-the-app.md` records the replacement: **a hosted
+run writes as Motir's GitHub App, never as a person**, over the run's whole repository set. Do not
+build from either earlier draft.
+
+**A DELTA on §16–§17** (`repositories-room.mock.html`, MOTIR-4674 as MOTIR-4954 reshaped it). The
+new mock, [`repositories-room--hosted-runs.mock.html`](repositories-room--hosted-runs.mock.html),
+holds only the changed panels. **Nothing is drawn on Settings → Account → Git**: a person's GitHub
+link plays no part in a hosted run, and that page's _"grants no access to any code"_ copy stays true.
+
+## 18.1 · Panel 1 — one line per connected repository
+
+**Where it lives:** Project settings → Repositories, **From your organisation**, as a line under each
+connected repository's row.
+
+The **Hosted by Motir** section is the shipped one and gets **no line**: Motir writes there with
+`motir-studio`, so there is nothing to accept or reconnect.
+
+| State                                                                                                                     | Line                                                                | Control                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **ready** — the repository's Motir Integration installation covers it and has accepted `contents` + `pull_requests` write | quiet: check icon + ready copy                                      | none                                                                                                            |
+| **needs updated permissions** — the installation has not accepted write                                                   | warning line, names the account and that **an owner of it** accepts | **Review permissions on GitHub** → `githubInstallationManageUrl({ accountLogin, accountType, installationId })` |
+| **can no longer reach** — the installation is gone or suspended, or no longer includes the repository                     | warning line                                                        | **Reconnect** → GitHub's install screen (`githubAppInstallUrl`), where the repository is added back             |
+
+- **The permission state belongs to the installation, not the repository.** GitHub asks each
+  installation to accept the new permissions once, so every row of that account shows the line
+  together. The mock puts it on `acme-labs/acme-infra` while `acme-inc` has already accepted.
+- **Its copy names who can fix it** — an owner of that GitHub account — because the admin reading the
+  room often is not one, and the person who pressed Run hosted may not be on GitHub at all.
+- **The state is read from MOTIR-6449's `hostedRunWriteAccess`**, the same check that refuses a run,
+  so the room and the refusal cannot disagree.
+
+## 18.2 · Panel 1b — back from GitHub: one banner line revised
+
+`github.banner.installed` changes (18.4): with Motir Integration asking for write, _"can now read your
+selected repositories"_ is no longer the whole truth. Every other `?github=` status
+(`lib/github/bannerStatus.ts`) is unchanged and renders verbatim through `GitConnectBanner` in its
+shipped tone. Accepting updated permissions happens on GitHub's installation page, which may not
+redirect back; the row reads **ready** on the next load, so **the row is the record, not the banner**.
+
+## 18.3 · Panel 2 — Run hosted, refused, per repository
+
+MOTIR-684's refused slot (the `notice warn` in the run section). **A run is refused as a whole and
+explained per repository**: a hosted run covers every repository its card touches — several for a
+multi-repository card, the union of the children's for a parent — and all are checked before
+anything is minted or booted.
+
+- The lead keeps the slot's `Not started — ` prefix and counts the repositories it cannot write.
+- One list item per refused repository: the repository (mono), the decision's reason **verbatim**,
+  and **Open in Repositories** — a link to that repository's row in the room, not straight to
+  GitHub, because the room names who has to act.
+- The two reasons, verbatim from the decision (`owner/name` and the account filled):
+  - `Motir Integration can no longer reach owner/name — reconnect it in the Repositories room`
+  - `hosted runs on owner/name need Motir Integration's updated permissions — an owner of <account> accepts them on GitHub`
+- A repository Motir created never appears; a run is never partly started.
+
+The mock draws two cases: a card spanning two repositories (one refused) and a parent whose children
+touch three (two refused).
+
+## 18.4 · Copy — every string, verbatim
+
+| Where                       | String                                                                                                                                                                                                                                       |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| row · ready                 | `Hosted runs can write here — Motir’s app pushes their branches and opens their pull requests.`                                                                                                                                              |
+| row · permissions           | **`Needs updated permissions.`** `Motir Integration on {account} can’t write yet — an owner of {account} accepts its updated permissions on GitHub. Until then a hosted run that touches this repository is refused before anything starts.` |
+| row · permissions · button  | `Review permissions on GitHub`                                                                                                                                                                                                               |
+| row · can't reach           | **`Motir Integration can no longer reach {owner/name}.`** `Its installation was removed or suspended, or no longer includes this repository. Reconnect it on GitHub; until then a hosted run that touches it is refused.`                    |
+| row · can't reach · button  | `Reconnect`                                                                                                                                                                                                                                  |
+| refused · lead              | `Not started — Motir’s app can’t write to {n} of this run’s {total} repositories.`                                                                                                                                                           |
+| refused · detail            | `Nothing was booted and nothing was charged. Each repository below says what fixes it; an owner of the GitHub account may have to do it.`                                                                                                    |
+| refused · item              | `{owner/name}` · the decision's reason verbatim · `Open in Repositories`                                                                                                                                                                     |
+| return banner · `installed` | **CHANGED:** `GitHub App installed — Motir can now read your selected repositories, and its app pushes hosted runs’ branches and opens their pull requests.` (was `… Motir can now read your selected repositories.`)                        |
+| other return banners        | `repos_updated` / `install_expired` / `install_unbound` / `install_error` — shipped, unchanged                                                                                                                                               |
+
+## 18.5 · Primitives — every element and its role
+
+| Element                        | Primitive                                                | Role                                         |
+| ------------------------------ | -------------------------------------------------------- | -------------------------------------------- |
+| repository row                 | the shipped `connected li` (`li-top`)                    | unchanged                                    |
+| hosted-runs line               | `agent-line` (quiet) / `agent-line--warn`                | can Motir's app write this repository        |
+| Review permissions / Reconnect | `Button` secondary sm with the external-link icon        | hands off to GitHub                          |
+| return line                    | `SettingsBanner` success                                 | the round trip just taken                    |
+| refused notice                 | MOTIR-684's `notice warn` in `secBody`                   | why the run did not start                    |
+| refused list                   | `refused-list` — `li` with `rr-repo`, `rr-why`, `a.link` | one refused repository and where it is fixed |
+
+## 18.6 · Token roles
+
+Only `--el-*` and shape tokens.
+
+| Element                      | Colour                                                                                         | Shape                                      |
+| ---------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| line · quiet                 | text `--el-text-secondary` · check `--el-success`                                              | —                                          |
+| line · warn                  | `--el-warning-surface` · `--el-warning-text` · icon `--el-warning` · border `--el-border-soft` | `--radius-card`                            |
+| secondary button             | `--el-button-border` · `--el-text`                                                             | `--height-btn-sm` · `--spacing-btn-x-sm`   |
+| banner · success             | `--el-tint-mint` · `--el-text-strong`                                                          | `--radius-card` · `--spacing-card-padding` |
+| refused notice               | `--el-warning-surface` · `--el-text-strong`                                                    | `--radius-control`                         |
+| refused list · repo / reason | `--el-text-strong` (on the warning surface) · separator `--el-border-soft`                     | —                                          |
+| refused list · link          | `--el-link` (the shipped `.link`)                                                              | —                                          |
+
+## 18.7 · Explicitly OUT of scope here
+
+- **How write access is computed** and **the refusal itself** — MOTIR-6449 and MOTIR-690.
+- **Granting the permissions on the Apps** — MOTIR-6523 (manual).
+- **The Hosted by Motir rows** — unchanged; `motir-studio` writes them.
+- **Settings → Account → Git** — untouched: a person's GitHub link is not involved in a hosted run.
+- **The run section's other states** — MOTIR-684.

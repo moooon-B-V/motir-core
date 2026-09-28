@@ -109,6 +109,70 @@ export function githubMergeSeamEnv(): Record<string, string> {
   };
 }
 
+/**
+ * ⚠️ A HOSTED RUN'S GATEWAY + motir-ai + GITHUB SEAMS, mirrored into the worker
+ * (Story MOTIR-683 · MOTIR-6452).
+ *
+ * `hostedRunService.supervise` — the durable job the fake orchestrator's
+ * cancel and stall paths run through — calls `endHostedRun` from INSIDE the
+ * worker: the gateway key revoke and, once the container settles, the
+ * machine-time charge to motir-ai. Both are HTTP calls `instrumentation.ts`'s
+ * seam table never reaches from here, exactly the shape this file's other two
+ * mirrors (`monitorFakeEnv`, `githubMergeSeamEnv`) already document — a job
+ * handler reaches a boundary the app server's own fake never installs itself
+ * into this THIRD process.
+ *
+ * The App credentials for the repo-installation read travel with it, same as
+ * the merge seam's: `repositoriesForItems` is only ever called from `start`
+ * (the webServer), never from a job, so strictly this worker never needs to
+ * mint an App JWT itself — but `installHostedRunMock` is one module shared by
+ * both processes, and `createAppJwt`'s throw-before-fetch means a config gap
+ * here would surface as a confusing crash the first time this seam's table
+ * entry runs in this process, rather than as nothing at all. Cheap to carry,
+ * expensive to have to re-diagnose.
+ *
+ * Opt-in (`E2E_JOB_WORKER_HOSTED_RUN_SEAM=1`, set by
+ * `playwright.acceptance.config.ts`), because only that lane's server selects
+ * this seam, and the two processes must agree about what the gateway,
+ * motir-ai and GitHub are.
+ */
+export function hostedRunSeamEnv(): Record<string, string> {
+  if (process.env['E2E_JOB_WORKER_HOSTED_RUN_SEAM'] !== '1') return {};
+  return {
+    E2E_TEST_HOSTED_RUN: '1',
+    MOTIR_FLEET_ORCHESTRATOR: 'fake',
+    ...(process.env['MOTIR_GATEWAY_URL']
+      ? { MOTIR_GATEWAY_URL: process.env['MOTIR_GATEWAY_URL'] }
+      : {}),
+    ...(process.env['MOTIR_RUN_KEY_MINT_SECRET']
+      ? { MOTIR_RUN_KEY_MINT_SECRET: process.env['MOTIR_RUN_KEY_MINT_SECRET'] }
+      : {}),
+    ...(process.env['MOTIR_AI_URL'] ? { MOTIR_AI_URL: process.env['MOTIR_AI_URL'] } : {}),
+    MOTIR_AI_SERVICE_TOKEN:
+      process.env['MOTIR_AI_SERVICE_TOKEN'] ?? 'e2e-acceptance-hosted-run-token',
+    ...(process.env['MOTIR_HOSTED_RUN_FIXTURE_PATH']
+      ? { MOTIR_HOSTED_RUN_FIXTURE_PATH: process.env['MOTIR_HOSTED_RUN_FIXTURE_PATH'] }
+      : {}),
+    ...(process.env['MOTIR_HOSTED_RUN_JOURNAL_PATH']
+      ? { MOTIR_HOSTED_RUN_JOURNAL_PATH: process.env['MOTIR_HOSTED_RUN_JOURNAL_PATH'] }
+      : {}),
+    ...(process.env['MOTIR_FAKE_CONTAINER_STATE_PATH']
+      ? { MOTIR_FAKE_CONTAINER_STATE_PATH: process.env['MOTIR_FAKE_CONTAINER_STATE_PATH'] }
+      : {}),
+    // The stall watchdog's test-only config seam (`hostedRunStallWindowMs`,
+    // `lib/hostedRuns/limits.ts`) — the stall READ itself runs in this process
+    // (`hostedRunService.stallDetail`, called from `supervise`), so without this
+    // the worker keeps the real 15-minute window regardless of what the webServer
+    // was told.
+    ...(process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS']
+      ? { E2E_HOSTED_RUN_STALL_WINDOW_MS: process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS'] }
+      : {}),
+    GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
+    GITHUB_STUDIO_APP_PRIVATE_KEY: generateAppPrivateKey(),
+    GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+  };
+}
+
 /** A fresh RSA private key (PKCS#8 PEM) for an App JWT nothing will verify. */
 function generateAppPrivateKey(): string {
   const { privateKey } = generateKeyPairSync('rsa', {
@@ -289,6 +353,8 @@ export async function startJobWorker(): Promise<void> {
       ...monitorFakeEnv(),
       // The GitHub merge seam and the App it merges as — see `githubMergeSeamEnv`.
       ...githubMergeSeamEnv(),
+      // The hosted-run gateway/motir-ai/GitHub seams — see `hostedRunSeamEnv`.
+      ...hostedRunSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -407,6 +473,8 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
       ...monitorFakeEnv(),
       // The GitHub merge seam and the App it merges as — see `githubMergeSeamEnv`.
       ...githubMergeSeamEnv(),
+      // The hosted-run gateway/motir-ai/GitHub seams — see `hostedRunSeamEnv`.
+      ...hostedRunSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

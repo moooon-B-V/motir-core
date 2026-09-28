@@ -65,8 +65,9 @@ export async function verifyMcpToken(
   let workspaceId: string;
   let grant: string[];
   let projectId: string | null;
+  let dispatchRunId: string | null;
   try {
-    ({ user, workspaceId, grant, projectId } = await apiTokensService.verify(token));
+    ({ user, workspaceId, grant, projectId, dispatchRunId } = await apiTokensService.verify(token));
   } catch (err) {
     if (
       err instanceof InvalidApiTokenError ||
@@ -77,6 +78,13 @@ export async function verifyMcpToken(
     }
     throw err;
   }
+
+  // A RUN token (MOTIR-688) never reaches the MCP surface. It holds
+  // `work_item:edit`, which every write tool here asserts, and nothing on this
+  // transport knows which run it is bound to — so the only safe answer is the
+  // same uniform rejection an unknown token gets. A hosted run reports through
+  // the `/api/v1` ingest, which checks the binding.
+  if (dispatchRunId !== null) return undefined;
 
   // The request workspace IS the workspace the token was bound to at mint time
   // (bug 7.21) — NOT the owner's default workspace. The per-tool 6.4 gates

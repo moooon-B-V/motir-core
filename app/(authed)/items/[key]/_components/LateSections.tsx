@@ -16,6 +16,8 @@ import { AcceptanceDevelopmentSlot } from '@/components/acceptance/AcceptanceDev
 import type { DevelopmentGateRead } from '@/components/github/DevelopmentGateFrame';
 import { DesignResultPanel } from './DesignResultPanel';
 import { RunSection } from './RunSection';
+import { HostedRunProvider } from './HostedRunProvider';
+import { RunHostedButton } from './RunHostedButton';
 import { ContinuePart } from '@/components/github/ContinuePart';
 import { formatRunTimes } from './runTimes';
 import { formatRunInstant } from '@/lib/runs/runClock';
@@ -264,7 +266,12 @@ export async function LateUpperSections({
   statusLabel = null,
   canReplan = false,
   parentIdentifier = null,
+  hostedDoor = null,
 }: LateProps & {
+  /** The Run hosted door's inputs (MOTIR-691) — the card's own readiness — or
+   *  null where no door is drawn: a reader who may not run the card, an archived
+   *  card, or one already in the done category. */
+  hostedDoor?: { ready: boolean; openBlockers: number } | null;
   /** The card's status, in words — the continue part's *nothing moved* line names it
    *  (MOTIR-6534). */
   statusLabel?: string | null;
@@ -363,6 +370,24 @@ export async function LateUpperSections({
     ...(designInDevelopment ? (['design_result'] as const) : []),
     ...(acceptanceInDevelopment ? (['acceptance_result'] as const) : []),
   ];
+  const runCard = (
+    <ContentSectionCard
+      title={tRuns('title')}
+      subtitle={tRuns('gloss')}
+      headerRight={hostedDoor ? <RunHostedButton /> : undefined}
+    >
+      <RunSection
+        initialRuns={r.runs ?? []}
+        initialCursor={
+          r.runs && r.runs.length === RUN_HISTORY_PAGE ? (r.runs.at(-1)?.id ?? null) : null
+        }
+        itemKey={itemIdentifier}
+        formattedTimes={formatRunTimes(r.runs ?? [])}
+        scopeRun={r.scopeRun}
+        scopeRunTime={r.scopeRun ? formatRunInstant(r.scopeRun.startedAt) : null}
+      />
+    </ContentSectionCard>
+  );
   return (
     <>
       {/* THE RUN — above Development, because the run is what produced it. It
@@ -371,18 +396,20 @@ export async function LateUpperSections({
           A container that was run as a SCOPE shows its scope block instead of that
           empty state (MOTIR-5363) — the time is formatted here, on the server, for
           the same first-paint reason `formatRunTimes` exists. */}
-      <ContentSectionCard title={tRuns('title')} subtitle={tRuns('gloss')}>
-        <RunSection
-          initialRuns={r.runs ?? []}
-          initialCursor={
-            r.runs && r.runs.length === RUN_HISTORY_PAGE ? (r.runs.at(-1)?.id ?? null) : null
-          }
+      {/* RUN HOSTED (MOTIR-691): the door rides the section header's
+          `headerRight`, and what it answers is drawn in the body — one
+          provider around both, since the header is a server-rendered slot. */}
+      {hostedDoor ? (
+        <HostedRunProvider
           itemKey={itemIdentifier}
-          formattedTimes={formatRunTimes(r.runs ?? [])}
-          scopeRun={r.scopeRun}
-          scopeRunTime={r.scopeRun ? formatRunInstant(r.scopeRun.startedAt) : null}
-        />
-      </ContentSectionCard>
+          ready={hostedDoor.ready}
+          openBlockers={hostedDoor.openBlockers}
+        >
+          {runCard}
+        </HostedRunProvider>
+      ) : (
+        runCard
+      )}
       {/* THE HOW-TO-TEST WRITE DOORS (Story MOTIR-5450 · MOTIR-5455, design § 24).
           Mounted ONLY for an actor holding `work_item:edit` and ONLY here: the
           block asks for this context and draws no door without it, so the

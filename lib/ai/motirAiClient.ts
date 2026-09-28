@@ -362,6 +362,53 @@ export async function debitCiOverage(
   return (await res.json()) as RawCiOverageDebitResponse;
 }
 
+// ── A hosted run's machine-time charge (MOTIR-6514 · motir-ai MOTIR-6513) ────
+
+/**
+ * What `POST /v1/credits/agent-machine` takes. motir-core owns the seconds, the
+ * rate and the conversion (`docs/decisions/hosted-agent-machine-charge.md` §5);
+ * motir-ai is handed WHOLE credits and the seconds they came from, and nothing
+ * else — no cost figure, no meter row.
+ */
+export interface AgentMachineDebitInput {
+  coreOrganizationId: string;
+  /** The run's `DispatchRun.id`. */
+  coreRunId: string;
+  /** Whole credits (integer ≥ 1), already converted. */
+  credits: number;
+  /** The settled billable seconds the credits were computed from (integer ≥ 1). */
+  billableSeconds: number;
+  /** The idempotency key — the dispatch run id: one charge per run. */
+  externalRef: string;
+  reason?: string;
+}
+
+/** The same body `ci-overage` answers, `idempotent` included. */
+export type RawAgentMachineDebitResponse = RawCiOverageDebitResponse;
+
+/**
+ * POST /v1/credits/agent-machine — charge an org's ledger for ONE hosted run's
+ * machine time, the ledger's third non-AI debit.
+ *
+ * `debitCiOverage`'s contract exactly: the caller invokes it AFTER the meter write
+ * has committed, and this function THROWS a typed error on failure — the caller
+ * (`hostedRunChargeService`) is the layer that knows the seconds are durable and
+ * decides to retry. Idempotent on `externalRef`, so a retry after a timed-out call
+ * that had in fact landed answers `idempotent: true` and moves nothing.
+ */
+export async function debitAgentMachine(
+  input: AgentMachineDebitInput,
+): Promise<RawAgentMachineDebitResponse> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/credits/agent-machine`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawAgentMachineDebitResponse;
+}
+
 /**
  * POST /v1/credits/index-check — may this organisation's next index container
  * boot? (MOTIR-4593; motir-ai MOTIR-5284.)
@@ -1199,6 +1246,87 @@ function parseRunTimings(value: unknown): CodeGraphRunTimings | null {
 }
 
 /** What motir-ai removed for ONE repo (`POST /v1/code-graph/offboard`). */
+// ── A hosted agent run's token and credit cost (MOTIR-689) ──────────────────
+
+/**
+ * What ONE hosted agent run cost, as motir-ai records it (MOTIR-6381's
+ * `AgentRunUsageDto`). The fields motir-core reads are the totals; the rest of
+ * the body is ignored.
+ */
+export interface RawAgentRunUsage {
+  coreRunId: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  /** The MODEL-CALL credits (MOTIR-689's figure, unchanged). */
+  credits: number;
+  /** The machine-time charge (MOTIR-6513 · MOTIR-6514); `0` until the run is charged. */
+  machineCredits: number;
+  machineSeconds: number;
+  /** `credits + machineCredits`, as motir-ai sums them. */
+  totalCredits: number;
+}
+
+const AGENT_RUN_USAGE_TOTALS = [
+  'inputTokens',
+  'outputTokens',
+  'cacheReadTokens',
+  'cacheWriteTokens',
+  'credits',
+] as const;
+
+/**
+ * GET /v1/agent-runs/:coreRunId/usage — one hosted run's token, cache and credit
+ * totals, keyed by its `DispatchRun.id` (`docs/decisions/hosted-agent-run.md` §1).
+ *
+ * ⚠️ A 404 IS `null`, NEVER AN ERROR: motir-ai answers it for a run whose agent
+ * has not yet made a billed call, which is the ordinary state of a run that has
+ * just booted. Every OTHER failure throws — transport and deadline as
+ * {@link MotirAiUnavailableError}, a non-2xx as its §5 typed error, a body that
+ * carries no numeric totals as `MotirAiUnavailableError` — so a caller can never
+ * read "could not ask" as "cost nothing".
+ */
+export async function getAgentRunUsage(coreRunId: string): Promise<RawAgentRunUsage | null> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/agent-runs/${encodeURIComponent(coreRunId)}/usage`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as Record<string, unknown> | null;
+  if (!body || typeof body !== 'object') {
+    throw new MotirAiUnavailableError('agent-run usage answered with no body');
+  }
+  for (const key of AGENT_RUN_USAGE_TOTALS) {
+    if (typeof body[key] !== 'number' || !Number.isFinite(body[key])) {
+      throw new MotirAiUnavailableError(`agent-run usage answered without a numeric ${key}`);
+    }
+  }
+  return {
+    coreRunId: typeof body['coreRunId'] === 'string' ? body['coreRunId'] : coreRunId,
+    inputTokens: body['inputTokens'] as number,
+    outputTokens: body['outputTokens'] as number,
+    cacheReadTokens: body['cacheReadTokens'] as number,
+    cacheWriteTokens: body['cacheWriteTokens'] as number,
+    credits: body['credits'] as number,
+    // ⚠️ OPTIONAL ON THE WIRE: a motir-ai that predates the machine charge omits
+    // them, and a run it never charged for machine time has none to report. The
+    // total then IS the model-call credits, never a missing number.
+    machineCredits: numericOr(body['machineCredits'], 0),
+    machineSeconds: numericOr(body['machineSeconds'], 0),
+    totalCredits: numericOr(
+      body['totalCredits'],
+      (body['credits'] as number) + numericOr(body['machineCredits'], 0),
+    ),
+  };
+}
+
+function numericOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
 export interface CodeGraphOffboardRepoResult {
   repoRef: string;
   snapshotObjectsDeleted: number;
@@ -1745,6 +1873,114 @@ export function retireLesson(query: LessonWriteQuery): Promise<RawLesson> {
 // decides whether that means clearing the retirement or exempting the row.
 export function applyLesson(query: LessonWriteQuery): Promise<RawLesson> {
   return lessonWrite(query, 'apply');
+}
+
+// ── The models a hosted run may use (MOTIR-6483) ────────────────────────────
+//
+// GET /v1/agent-models — motir-ai's OFFERED list for a hosted agent run and its
+// default (`docs/decisions/hosted-agent-run.md` §7): every model the gateway
+// serves, from a provider the hosted egress contract configures, that motir-ai
+// can bill in the agent lane. Ids are the gateway's BARE ids.
+//
+// Kept as one self-contained block — its types and parser live here rather than
+// in `./types` — so it stays a single hunk beside the other agent-run reads.
+
+/** One offered model, as motir-ai names it. */
+export interface AgentModel {
+  /** The gateway's bare id (`claude-opus-5-5`), never provider-prefixed (`toOpenCodeModel` adds that). */
+  id: string;
+  provider: string;
+}
+
+/**
+ * The offered list, or `unavailable`. ⚠️ `unavailable` is a STATE, never an
+ * empty list: a network error, a timeout, a non-2xx, an unconfigured client or
+ * a body that is not a model list must never read as "no models exist".
+ */
+export type AgentModelsRead =
+  | { state: 'ok'; models: AgentModel[]; default: string | null }
+  | { state: 'unavailable'; reason: string };
+
+function parseAgentModels(body: unknown): AgentModelsRead | null {
+  if (!body || typeof body !== 'object') return null;
+  const { models, default: defaultId } = body as { models?: unknown; default?: unknown };
+  if (!Array.isArray(models)) return null;
+  const parsed: AgentModel[] = [];
+  for (const m of models) {
+    const { id, provider } = (m ?? {}) as { id?: unknown; provider?: unknown };
+    if (typeof id !== 'string' || !id || typeof provider !== 'string') return null;
+    parsed.push({ id, provider });
+  }
+  if (defaultId !== null && defaultId !== undefined && typeof defaultId !== 'string') return null;
+  return { state: 'ok', models: parsed, default: defaultId ?? null };
+}
+
+/**
+ * GET /v1/agent-models over the service credential. TOTAL: every failure is
+ * `{ state: 'unavailable' }` with its reason, so the caller decides what an
+ * unanswered question means (the start path refuses; the picker disables).
+ * No cache — see `hostedRunModelService`.
+ */
+export async function getAgentModels(): Promise<AgentModelsRead> {
+  try {
+    const { url, serviceToken } = config();
+    const res = await aiFetch(`${url}/v1/agent-models`, {
+      method: 'GET',
+      headers: authHeaders(serviceToken),
+    });
+    if (!res.ok) return { state: 'unavailable', reason: `motir-ai answered ${res.status}` };
+    const parsed = parseAgentModels(await res.json().catch(() => null));
+    return (
+      parsed ?? {
+        state: 'unavailable',
+        reason: 'motir-ai answered a body that is not a model list',
+      }
+    );
+  } catch (err) {
+    return { state: 'unavailable', reason: describe(err) };
+  }
+}
+
+/** motir-ai's answer to the hosted-run credit pre-flight (MOTIR-6447). */
+export interface AgentRunCreditVerdict {
+  /** The one boolean the start path acts on — the gateway's own balance rule. */
+  mayRun: boolean;
+  balanceCredits: number;
+}
+
+function parseAgentRunCreditVerdict(body: unknown): AgentRunCreditVerdict | null {
+  if (!body || typeof body !== 'object') return null;
+  const { mayRun, balanceCredits } = body as { mayRun?: unknown; balanceCredits?: unknown };
+  if (typeof mayRun !== 'boolean') return null;
+  return { mayRun, balanceCredits: typeof balanceCredits === 'number' ? balanceCredits : 0 };
+}
+
+/**
+ * POST /v1/credits/agent-run-check — may this organization start a hosted agent
+ * run? (MOTIR-6447; motir-ai `docs/contract.md`.) Asked by the start path BEFORE a
+ * run is opened, a key minted or a container booted (MOTIR-690).
+ *
+ * ⚠️ TOTAL: every failure — unconfigured, unreachable, a non-2xx, a body with no
+ * `mayRun` — returns `null`, which means "could not ask". The contract answers a
+ * refusal as a 200 with `mayRun: false` and an undecidable request as an error
+ * with NO `mayRun`, precisely so the two never read alike; the start path refuses
+ * on both, with different words.
+ */
+export async function checkAgentRunCredits(
+  coreOrganizationId: string,
+): Promise<AgentRunCreditVerdict | null> {
+  try {
+    const { url, serviceToken } = config();
+    const res = await aiFetch(`${url}/v1/credits/agent-run-check`, {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify({ coreOrganizationId }),
+    });
+    if (!res.ok) return null;
+    return parseAgentRunCreditVerdict(await res.json().catch(() => null));
+  } catch {
+    return null;
+  }
 }
 
 // ── Organization lifecycle (Story MOTIR-6306) ────────────────────────────────

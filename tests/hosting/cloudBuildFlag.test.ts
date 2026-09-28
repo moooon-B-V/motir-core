@@ -59,6 +59,10 @@ const BILLING_SURFACES: ReadonlyArray<readonly [file: string, why: string]> = [
     'Monitoring · Index allowance (MOTIR-4595) — the internal allowance and the fleet meter it reads exist only on a billing build, the same switch ciFleetCostMeterService writes under',
   ],
   [
+    'lib/services/hostedRunChargeService.ts',
+    'charges a hosted run its machine time in credits (MOTIR-6514, hosted-agent-machine-charge.md) — the same billing-build switch the CI fleet meter charges under',
+  ],
+  [
     'lib/services/platformOrgIndexCostService.ts',
     'the org page’s Index & fleet cost card (MOTIR-5341) — the same billing-build switch as the fleet meter it reads',
   ],

@@ -632,6 +632,8 @@ describe('dispatch_prompt tool — access + shape', () => {
       // MOTIR-3131 — the whole repository set, of which `targetRepo` is the
       // projection. Always present, `[]` when Motir cannot say.
       'targetRepos',
+      // MOTIR-6539 — the branch the prompt tells the agent to create.
+      'workBranch',
       'workflowMode',
     ]);
     // `advisories` is always PRESENT, `[]` when there is nothing to say — so a

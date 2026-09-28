@@ -11,12 +11,17 @@ import { testInstructionsService } from '@/lib/services/testInstructionsService'
 // so the body and the item page render ONE record and cannot disagree.
 //
 // A READ. `record: null` when no run has written one — an answer, not a 404.
-export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async (ctx) => {
-  const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
-  const dto = await testInstructionsService.getCurrentByIdentifier(
-    projectId,
-    identifier,
-    ctx.service,
-  );
-  return NextResponse.json(presentCurrentTestInstructions(dto));
-});
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-6557) may call this,
+// bound as `lib/hostedRuns/runTokenRoutes.ts` says; the service enforces it.
+export const GET = withV1Route<{ key: string }>(
+  { permission: 'project:browse', acceptsRunToken: true },
+  async (ctx) => {
+    const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
+    const dto = await testInstructionsService.getCurrentByIdentifier(
+      projectId,
+      identifier,
+      ctx.service,
+    );
+    return NextResponse.json(presentCurrentTestInstructions(dto));
+  },
+);

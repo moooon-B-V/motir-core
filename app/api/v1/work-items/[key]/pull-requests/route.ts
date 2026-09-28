@@ -36,36 +36,41 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // copying the parse would let the two doors drift about what `url` means. A key
 // parse that drifts yields a 404 the caller sees; a coordinate parse that drifts
 // links the WRONG pull request under a 200.
-export const POST = withV1Route<{ key: string }>({ permission: 'work_item:edit' }, async (ctx) => {
-  const body = await parseV1Body(ctx.req, linkPullRequestBodySchema);
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-6557) may call this,
+// bound as `lib/hostedRuns/runTokenRoutes.ts` says; the service enforces it.
+export const POST = withV1Route<{ key: string }>(
+  { permission: 'work_item:edit', acceptsRunToken: true },
+  async (ctx) => {
+    const body = await parseV1Body(ctx.req, linkPullRequestBodySchema);
 
-  // Parsed BEFORE the item is read: an unparseable address is a request the
-  // caller can fix, and answering it costs no database round trip. A 422 rather
-  // than a 404 for the same reason `resolveWorkItemKey` refuses a malformed key
-  // early — the fault is in the argument, not in what exists.
-  const coordinate = resolveCoordinate(body);
-  if (!coordinate.ok) throw new InvalidRequestError('INVALID_BODY', coordinate.message);
+    // Parsed BEFORE the item is read: an unparseable address is a request the
+    // caller can fix, and answering it costs no database round trip. A 422 rather
+    // than a 404 for the same reason `resolveWorkItemKey` refuses a malformed key
+    // early — the fault is in the argument, not in what exists.
+    const coordinate = resolveCoordinate(body);
+    if (!coordinate.ok) throw new InvalidRequestError('INVALID_BODY', coordinate.message);
 
-  const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
-  const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);
+    const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
+    const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);
 
-  const result = await githubPullRequestService.linkPullRequestByCoordinates(
-    {
-      workItemId: item.id,
-      projectId,
-      owner: coordinate.owner,
-      name: coordinate.name,
-      number: coordinate.number,
-      headRef: body.headRef,
-      baseRef: body.baseRef,
-      title: body.title ?? null,
-    },
-    ctx.service,
-  );
+    const result = await githubPullRequestService.linkPullRequestByCoordinates(
+      {
+        workItemId: item.id,
+        projectId,
+        owner: coordinate.owner,
+        name: coordinate.name,
+        number: coordinate.number,
+        headRef: body.headRef,
+        baseRef: body.baseRef,
+        title: body.title ?? null,
+      },
+      ctx.service,
+    );
 
-  // 200, not 201. A link is a SET and this ADDS to it, so the same request twice
-  // is not two creations — and `created` reports the one thing a caller cannot
-  // derive: whether the pull-request ROW had to be written because no webhook
-  // delivery had arrived yet.
-  return NextResponse.json(presentLinkedPullRequest(identifier, result));
-});
+    // 200, not 201. A link is a SET and this ADDS to it, so the same request twice
+    // is not two creations — and `created` reports the one thing a caller cannot
+    // derive: whether the pull-request ROW had to be written because no webhook
+    // delivery had arrived yet.
+    return NextResponse.json(presentLinkedPullRequest(identifier, result));
+  },
+);

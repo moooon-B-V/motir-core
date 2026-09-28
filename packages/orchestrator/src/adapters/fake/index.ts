@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { buildContainerUsage } from '../../usage';
+import { sparedByCaller } from '../../reap';
 import { OrchestratorApiError } from '../../errors';
 import type {
   ContainerHandle,
@@ -10,6 +11,7 @@ import type {
   ContainerUsage,
   TeardownReason,
   UsageAttribution,
+  ReapSparePredicate,
   UsageAttributionResolver,
 } from '../../types';
 
@@ -427,12 +429,17 @@ export const fakeOrchestrator: ContainerOrchestrator & FakeOrchestratorControls 
     return usage;
   },
 
-  async reap(olderThan: Date, resolve: UsageAttributionResolver): Promise<ContainerUsage[]> {
+  async reap(
+    olderThan: Date,
+    resolve: UsageAttributionResolver,
+    spare?: ReapSparePredicate,
+  ): Promise<ContainerUsage[]> {
     loadShared();
     const usages: ContainerUsage[] = [];
     for (const machine of [...machines.values()]) {
       if (machine.gone) continue;
       if (machine.createdAt.getTime() >= olderThan.getTime()) continue;
+      if (await sparedByCaller(spare, machine.handle)) continue;
       const attribution = await resolve(machine.handle);
       if (!attribution) {
         // Destroyed anyway — an orphan Motir cannot attribute is still an orphan

@@ -47,76 +47,81 @@ export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }
   return NextResponse.json({ transitions: presentTransitionTargets(workflow, item.status) });
 });
 
-export const POST = withV1Route<{ key: string }>({ permission: 'work_item:edit' }, async (ctx) => {
-  const body = await parseV1Body(ctx.req, transitionBodySchema);
-  const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
-  const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);
+// ⚠️ `acceptsRunToken` — a hosted run's own credential (MOTIR-6557) may call this,
+// bound as `lib/hostedRuns/runTokenRoutes.ts` says; the service enforces it.
+export const POST = withV1Route<{ key: string }>(
+  { permission: 'work_item:edit', acceptsRunToken: true },
+  async (ctx) => {
+    const body = await parseV1Body(ctx.req, transitionBodySchema);
+    const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
+    const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);
 
-  try {
-    await workItemsService.updateStatus(item.id, body.status, ctx.service);
-  } catch (err) {
-    // ⚠️ The refusal TEACHES: it carries the allowed targets as DATA, not as a
-    // sentence to parse. Enriched here rather than in the shared wrapper
-    // because the extra field is specific to THIS condition — the wrapper's
-    // `{ code, error }` envelope stays the one shape every other failure has.
-    //
-    // The targets come from the SAME presenter `GET …/transitions` uses, so
-    // the two surfaces cannot disagree about what is legal.
-    if (err instanceof IllegalTransitionError) {
-      const workflow = await workflowsService.getWorkflow(projectId, ctx.workspaceId);
-      return NextResponse.json(
-        {
-          code: err.code,
-          error: err.message,
-          allowedTransitions: presentTransitionTargets(workflow, item.status),
-        },
-        { status: 422 },
-      );
+    try {
+      await workItemsService.updateStatus(item.id, body.status, ctx.service);
+    } catch (err) {
+      // ⚠️ The refusal TEACHES: it carries the allowed targets as DATA, not as a
+      // sentence to parse. Enriched here rather than in the shared wrapper
+      // because the extra field is specific to THIS condition — the wrapper's
+      // `{ code, error }` envelope stays the one shape every other failure has.
+      //
+      // The targets come from the SAME presenter `GET …/transitions` uses, so
+      // the two surfaces cannot disagree about what is legal.
+      if (err instanceof IllegalTransitionError) {
+        const workflow = await workflowsService.getWorkflow(projectId, ctx.workspaceId);
+        return NextResponse.json(
+          {
+            code: err.code,
+            error: err.message,
+            allowedTransitions: presentTransitionTargets(workflow, item.status),
+          },
+          { status: 422 },
+        );
+      }
+      // A pending approval owns the target (MOTIR-5526). The same additive-field
+      // treatment as the illegal move above: WHOSE decision it is, and whether this
+      // caller may make it, as data — the one payload every status door carries.
+      if (err instanceof ApprovalGatePendingError) {
+        return NextResponse.json(
+          {
+            code: err.code,
+            error: err.message,
+            gate: await approvalGatesService.describePendingRefusal(err, ctx.service),
+          },
+          { status: 422 },
+        );
+      }
+      // An undecided plan holds the card at Planning (MOTIR-6265). The same
+      // additive-field treatment: WHICH plan, in which state, and where it lives —
+      // the payload every door carries, complete without a second read.
+      if (err instanceof PlanTargetHeldError) {
+        return NextResponse.json(
+          { code: err.code, error: err.message, plan: err.payload },
+          { status: 422 },
+        );
+      }
+      // `UNKNOWN_STATUS` (a key the project's workflow does not define at all)
+      // stays a plain mapped 422 with its OWN code: collapsing it into
+      // ILLEGAL_TRANSITION would make a typo and a workflow rule
+      // indistinguishable, and a client can fix only one of those.
+      throw err;
     }
-    // A pending approval owns the target (MOTIR-5526). The same additive-field
-    // treatment as the illegal move above: WHOSE decision it is, and whether this
-    // caller may make it, as data — the one payload every status door carries.
-    if (err instanceof ApprovalGatePendingError) {
-      return NextResponse.json(
-        {
-          code: err.code,
-          error: err.message,
-          gate: await approvalGatesService.describePendingRefusal(err, ctx.service),
-        },
-        { status: 422 },
-      );
-    }
-    // An undecided plan holds the card at Planning (MOTIR-6265). The same
-    // additive-field treatment: WHICH plan, in which state, and where it lives —
-    // the payload every door carries, complete without a second read.
-    if (err instanceof PlanTargetHeldError) {
-      return NextResponse.json(
-        { code: err.code, error: err.message, plan: err.payload },
-        { status: 422 },
-      );
-    }
-    // `UNKNOWN_STATUS` (a key the project's workflow does not define at all)
-    // stays a plain mapped 422 with its OWN code: collapsing it into
-    // ILLEGAL_TRANSITION would make a typo and a workflow rule
-    // indistinguishable, and a client can fix only one of those.
-    throw err;
-  }
 
-  // Return the updated resource, so a client sees the new status without a
-  // second read.
-  const detail = await workItemsService.getIssueDetail(projectId, identifier, ctx.service);
-  const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx.service);
-  ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
-  const childEdges = await readChildDependencyEdges(detail, ctx.service);
-  const deliveries = await workItemsService.listDeliverySet(detail.item.id, ctx.service);
-  const folderPath = await workItemsService.getFolderPath(detail.folderId, ctx.service);
-  return NextResponse.json(
-    presentWorkItemDetail(
-      detail,
-      commentCountFor(counts, detail.item.id),
-      childEdges,
-      deliveries,
-      folderPath,
-    ),
-  );
-});
+    // Return the updated resource, so a client sees the new status without a
+    // second read.
+    const detail = await workItemsService.getIssueDetail(projectId, identifier, ctx.service);
+    const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx.service);
+    ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
+    const childEdges = await readChildDependencyEdges(detail, ctx.service);
+    const deliveries = await workItemsService.listDeliverySet(detail.item.id, ctx.service);
+    const folderPath = await workItemsService.getFolderPath(detail.folderId, ctx.service);
+    return NextResponse.json(
+      presentWorkItemDetail(
+        detail,
+        commentCountFor(counts, detail.item.id),
+        childEdges,
+        deliveries,
+        folderPath,
+      ),
+    );
+  },
+);

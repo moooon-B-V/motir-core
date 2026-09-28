@@ -8,6 +8,7 @@ import {
   type FlyMachine,
 } from './flyMachines';
 import { buildContainerUsage } from '../../usage';
+import { sparedByCaller } from '../../reap';
 import type { FleetWorkloadKind } from '../../types';
 import type {
   ContainerHandle,
@@ -17,6 +18,7 @@ import type {
   ContainerUsage,
   TeardownReason,
   UsageAttribution,
+  ReapSparePredicate,
   UsageAttributionResolver,
 } from '../../types';
 
@@ -270,7 +272,11 @@ export const flyOrchestrator: ContainerOrchestrator = {
    * gap it can see in the log. Stopping the fleet from billing is the property
    * that costs money; recording it is the property that costs an entry.
    */
-  async reap(olderThan: Date, resolve: UsageAttributionResolver): Promise<ContainerUsage[]> {
+  async reap(
+    olderThan: Date,
+    resolve: UsageAttributionResolver,
+    spare?: ReapSparePredicate,
+  ): Promise<ContainerUsage[]> {
     const machines = await flyMachinesClient.listMachines();
     const usages: ContainerUsage[] = [];
 
@@ -294,6 +300,7 @@ export const flyOrchestrator: ContainerOrchestrator = {
       if (createdAt.getTime() >= olderThan.getTime()) continue;
 
       const handle = toHandle(machine, machine.region);
+      if (await sparedByCaller(spare, handle)) continue;
       const attribution = await resolve(handle);
       try {
         await flyMachinesClient.destroyMachine(handle.id);

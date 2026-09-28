@@ -410,6 +410,21 @@ export function inMemorySupervisionStore(): SupervisionStore {
   };
 }
 
+/**
+ * Give a supervision's run back to the queue AFTER its terminal transition, due
+ * at `at` — for work a caller owes on a settled subject that could not finish on
+ * this pass (a hosted run's machine charge, MOTIR-6514).
+ *
+ * The next pass re-enters from the top, finds the row terminal and REPLAYS the
+ * settle memo — no poll, no second teardown — so the only thing it repeats is the
+ * caller's own unfinished step. It is `deferRun`, named for this folder so a
+ * service never imports the engine (`eslint.config`'s `JOB_ENGINE_RESTRICTION`);
+ * in-process, `driveSupervisionInProcess` turns it back into a wait.
+ */
+export function deferSettledSupervision(at: Date, reason: string): never {
+  deferRun(at, reason);
+}
+
 /** What a pass that SETTLED returns. A pass that suspended throws `JobRunDefer` instead and returns nothing. */
 export interface SupervisionSettled<O> {
   status: 'settled';

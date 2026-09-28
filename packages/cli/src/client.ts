@@ -15,6 +15,8 @@ import {
   toDispatchPrompt,
   toDispatchRunAppended,
   toDispatchRunOpened,
+  toDispatchRunView,
+  toRunGitCredentials,
   toExpandSubmitResult,
   toScopeClaim,
   toWorkItemClaim,
@@ -542,6 +544,16 @@ export interface DispatchPrompt {
   workflowMode: DispatchWorkflowMode;
   sessionBranch: string | null;
   /**
+   * The branch the prompt tells the agent to create for its work — the same name
+   * in every repository — or `null` for a manual item (MOTIR-6539). The CLI names
+   * it on `checkout_ready` and checkpoints it while the agent works.
+   *
+   * OPTIONAL on the wire for the same reason `targetRepos` is: a server older
+   * than MOTIR-6539 sends no such key, and absent reads as "nothing to
+   * checkpoint", never as a crash.
+   */
+  workBranch?: string | null;
+  /**
    * The branch the prompt tells the agent to work on (MOTIR-6530) — the session
    * branch, else the card's per-item branch; `null` for a manual item. OPTIONAL
    * for the same reason `advisories` is: a server older than this CLI sends none,
@@ -1067,6 +1079,42 @@ export interface DispatchRunOpened {
   cards: Array<{ key: string | null; disposition: string }>;
 }
 
+/**
+ * A run READ back — what a CLI that did not open the run needs to adopt it
+ * (MOTIR-6558): its lifecycle and its SET, in the run's own order.
+ *
+ * A card's `key` survives the work item's deletion and is null only when the row
+ * lost it, which no adopting caller can dispatch.
+ */
+export interface DispatchRunView {
+  runId: string;
+  status: string;
+  command: string;
+  origin: string;
+  model: string | null;
+  endedAt: string | null;
+  cards: Array<{ key: string | null; position: number; disposition: string }>;
+}
+
+/**
+ * A hosted run's GIT CREDENTIALS (MOTIR-6538 · MOTIR-6559) — one entry per
+ * repository of the run, each an App installation token and the App's bot as
+ * its author, and the dispatcher's Motir name for the pull request body.
+ *
+ * ⚠️ `token` is a live GitHub credential. It is handed to git and `gh` through
+ * `hostedGit.ts`'s helper and cache; nothing prints it.
+ */
+export interface RunGitCredentials {
+  credentials: Array<{
+    repository: string;
+    token: string;
+    expiresAt: string;
+    authorName: string;
+    authorEmail: string;
+  }>;
+  dispatchedBy: string | null;
+}
+
 export interface DispatchRunAppended {
   runId: string;
   appended: number;
@@ -1441,6 +1489,17 @@ export class MotirClient {
    * error the caller sees is the same either way — the FIRST read's, `/me`'s
    * when both fail — but the call no longer ends with its own work in flight.
    */
+  /**
+   * WHO the credential is — `getMe` ALONE (MOTIR-6558). A hosted run's own
+   * credential may read itself and nothing wider, so the hosted mode resolves
+   * the dispatcher here rather than through {@link whoami}, whose workspace list
+   * spans every workspace the person belongs to (`runTokenRoutes.ts`).
+   */
+  async me(): Promise<WhoamiResult['user']> {
+    const me = await this.v1.request('getMe');
+    return { id: me.user.id, name: me.user.name, email: me.user.email };
+  }
+
   async whoami(): Promise<WhoamiResult> {
     const [me, workspaces] = await Promise.allSettled([
       this.v1.request('getMe'),
@@ -2045,6 +2104,25 @@ export class MotirClient {
           ...(args.model === undefined ? {} : { model: args.model }),
         },
       }),
+    );
+  }
+
+  /**
+   * READ one run with its set (MOTIR-6558). The hosted mode reads the run the
+   * server opened so it can ADOPT it — its cards and their order — instead of
+   * opening, or claiming, a second.
+   */
+  async getDispatchRun(runId: string): Promise<DispatchRunView> {
+    return toDispatchRunView(await this.v1.request('getDispatchRun', { path: { id: runId } }));
+  }
+
+  /**
+   * Trade the RUN credential for fresh git credentials (MOTIR-6538) — one per
+   * repository of the run. Only a hosted run's own credential is answered.
+   */
+  async issueRunGitCredentials(runId: string): Promise<RunGitCredentials> {
+    return toRunGitCredentials(
+      await this.v1.request('issueDispatchRunGitCredentials', { path: { id: runId } }),
     );
   }
 

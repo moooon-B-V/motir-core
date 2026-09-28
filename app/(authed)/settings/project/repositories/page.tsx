@@ -6,6 +6,7 @@ import { Pause } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { projectRepoRoomService } from '@/lib/services/projectRepoRoomService';
+import { hostedRunRepoAccessService } from '@/lib/services/hostedRunRepoAccessService';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { summarizeRepositories } from '@/lib/projectRepos/roomSections';
 import { GitConnectBanner } from '@/components/settings/GitConnectBanner';
@@ -168,6 +169,17 @@ async function RepositoriesPaneBody({
   ]);
   const organizationName = organization?.name ?? '';
 
+  // WHETHER MOTIR'S APP CAN WRITE EACH ORGANISATION REPOSITORY (MOTIR-1895 ·
+  // design §18.1) — after the room read, because it is asked of the room's own
+  // rows. It is a PROP of the island, never seeded into its state: the island's
+  // add and remove already call `router.refresh()`, and a prop is what a refresh
+  // re-renders (a `useState` initializer would ignore it, which is the recurring
+  // page-state bug). A failed or slow GitHub read draws no line rather than a
+  // warning — see the service.
+  const hostedRunAccess = await hostedRunRepoAccessService.forRoomRows(view.rows, {
+    installHref: view.installHref,
+  });
+
   // ONE timestamp for the whole render, threaded into the rows: `Date.now()` in
   // a client render would disagree with the server's by the round-trip and the
   // "days later" copy would hydrate differently — this repo's known relative-time
@@ -242,6 +254,7 @@ async function RepositoriesPaneBody({
         projectName={projectName}
         organizationInventoryHref={ORGANIZATION_GIT_PATH}
         nowIso={nowIso}
+        hostedRunAccess={hostedRunAccess}
       />
     </>
   );

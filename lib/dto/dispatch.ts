@@ -146,6 +146,12 @@ export interface DispatchPromptDto {
   /** The session branch the prompt instructs, or `null` in `per_item_pr` mode. */
   sessionBranch: string | null;
   /**
+   * The branch the prompt tells the agent to create for its work — the same name
+   * in every repository — or `null` for a MANUAL item (MOTIR-6539). See
+   * `AssembledDispatchPrompt.workBranch`.
+   */
+  workBranch: string | null;
+  /**
    * The branch the prompt tells the agent to work on (MOTIR-6530): the session
    * branch in `session_lineage` mode, else the card's per-item branch; `null` for a
    * manual item. A local run writes it onto its leg's `checkout_ready` event.

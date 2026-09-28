@@ -921,6 +921,8 @@ describe('the work-loop payloads', () => {
     targetRepoDefaultBranch: null,
     workflowMode: 'per_item_pr' as const,
     sessionBranch: null,
+    // MOTIR-6539 — the branch the prompt tells the agent to create.
+    workBranch: 'subtask/PROD-7-do-the-thing',
     branch: null,
     advisories: [],
     // MOTIR-2445 — the parent the prompt already names in prose, as a field.

@@ -1,7 +1,13 @@
 import { CliError } from '../errors.js';
 import { errVerbatim, info, outVerbatim } from '../output.js';
 import { parseKinds } from './read.js';
-import { withProjectSession, type ProjectSession } from '../session.js';
+import { withHostedProjectSession, withProjectSession, type ProjectSession } from '../session.js';
+import {
+  assertAdoptsLeaf,
+  hostedRunId,
+  legAsDispatchItem,
+  type AdoptedRun,
+} from '../hostedMode.js';
 import { getAgentCommand } from '../config/userConfig.js';
 import {
   deriveAgentHarness,
@@ -9,6 +15,8 @@ import {
   type ParsedAgentCommand,
 } from '../agentProfiles.js';
 import { runAgent } from '../agentRun.js';
+import { hostedOpenCodeAgent } from '../hostedAgent.js';
+import { prepareHostedCheckouts } from '../hostedCodegraph.js';
 import { runDispatchLeg } from '../dispatchLeg.js';
 import { createDispatchRunReporter, type DispatchRunReporter } from '../dispatchRunReporter.js';
 import { bindInterruptSignals, closeRunAndExit, type InterruptSignal } from '../interrupt.js';
@@ -24,8 +32,8 @@ import {
   type ClaimedScope,
   type ScopeRunOptions,
 } from './scope.js';
-import { orderClaimedSet, type ScopeTarget } from '../scopedRun.js';
-import { drainScope } from './scopeDrain.js';
+import { orderClaimedSet, type ScopeEdges, type ScopeTarget } from '../scopedRun.js';
+import { drainScope, readScopeEdges } from './scopeDrain.js';
 import { runCloseOutHowToTest } from '../closeOutHowToTest.js';
 import { autoExitCode, renderAutoSummary } from '../autoLoop.js';
 import {
@@ -184,11 +192,20 @@ export interface DeliveryDeps {
  * (BYOK's default is "hand me the prompt", not "fail").
  */
 export function resolveAgent(
-  opts: DeliveryOptions,
+  opts: DeliveryOptions & { runId?: string },
   env: NodeJS.ProcessEnv = process.env,
   configured: () => string | undefined = getAgentCommand,
 ): { parsed: ParsedAgentCommand; source: AgentSource } | null {
   if (opts.print) return null;
+  // ⚠️ A HOSTED RUN LAUNCHES ITS OWN AGENT (MOTIR-6559): OpenCode on the run's
+  // model through the gateway key, on an allow-listed environment. `MOTIR_AGENT`
+  // and the user config are a LOCAL person's choices and are not read — only an
+  // explicit `--agent`, for someone running the hosted path by hand.
+  if (hostedRunId(opts, env)) {
+    const flagged = parseAgentCommand(opts.agent);
+    if (flagged) return { parsed: flagged, source: 'flag' };
+    return { parsed: hostedOpenCodeAgent(env), source: 'hosted' };
+  }
   const candidates: [string | undefined, AgentSource][] = [
     [opts.agent, 'flag'],
     [env['MOTIR_AGENT'], 'env'],
@@ -299,6 +316,12 @@ export interface DeliverInput {
   dispatch: DispatchPrompt;
   opts: DeliveryOptions;
   deps: DeliveryDeps;
+  /**
+   * The run the SERVER opened, when this is a hosted run (MOTIR-6558) — the
+   * reporter ADOPTS it instead of opening one. Null on every local run, which
+   * opens its own exactly as before.
+   */
+  adoptedRunId?: string | null;
 }
 
 /**
@@ -354,6 +377,15 @@ export async function deliver(input: DeliverInput): Promise<void> {
   // and `--print` would show a prompt whose missing branch had no explanation.
   const policyLine = renderFindingsPolicy(opts);
 
+  if (!agent && input.adoptedRunId) {
+    // ⚠️ A HOSTED RUN HAS NOBODY TO PASTE A PROMPT. Print mode is the local
+    // default because a person is at the terminal; in a container the default
+    // would end the run having done nothing, with the card claimed.
+    throw new CliError('A hosted run needs an agent to launch.', {
+      hint: 'A hosted run launches OpenCode itself; --print is not available on one.',
+    });
+  }
+
   if (!agent) {
     // PRINT mode: the prompt is the PAYLOAD (stdout, byte-identical), the
     // summary is DIAGNOSTICS (stderr). That split is what lets
@@ -399,23 +431,41 @@ export async function deliver(input: DeliverInput): Promise<void> {
   // reporter swallows its own failures by construction; there is deliberately no
   // error handling at this call site, because handling would imply there is
   // something a caller could do.
+  // ⚠️ A HOSTED RUN ALWAYS REPORTS ITS AGENT'S OUTPUT (MOTIR-6559). The stall
+  // watchdog ends a run with no event inside its window, and the agent's own
+  // output is the only thing a long step produces — the entrypoint this replaces
+  // teed it unconditionally, for exactly that reason.
   const adopted = input.reporter !== undefined;
   const reporter =
     input.reporter ??
-    createDispatchRunReporter({ client, reportLogBodies: opts.reportLog === true });
-  await reporter.open({
-    projectKey,
-    command: input.command,
-    runId: runIdFromDate((deps.now ?? (() => new Date()))()),
-    cards: [{ key, disposition: 'queued' }],
-    // `agent` is non-null here by construction — the PRINT arm above returns
-    // before this line, and printing a prompt is not a run. Written flat rather
-    // than guarded, because a guard on a value that cannot be null is a branch
-    // no test can reach and a reader has to stop and disprove.
-    agent: agent.parsed.binary,
-  });
-  // An adopted run's `run_opened` was written by the server that opened it.
-  if (!adopted) reporter.event({ kind: 'run_opened', data: { command: input.command, key } });
+    createDispatchRunReporter({
+      client,
+      reportLogBodies: opts.reportLog === true || Boolean(input.adoptedRunId),
+    });
+  if (!adopted) {
+    if (input.adoptedRunId) {
+      // ⚠️ ADOPT, NEVER OPEN, A HOSTED RUN (MOTIR-6558). The server opened it with
+      // this card as its leg and wrote its `run_opened`; a second open would be a
+      // second run for one dispatch, and the fleet, the gateway and motir-ai all
+      // already name the first (`hosted-agent-run.md` §1).
+      reporter.adopt(input.adoptedRunId);
+    } else {
+      await reporter.open({
+        projectKey,
+        command: input.command,
+        runId: runIdFromDate((deps.now ?? (() => new Date()))()),
+        cards: [{ key, disposition: 'queued' }],
+        // `agent` is non-null here by construction — the PRINT arm above returns
+        // before this line, and printing a prompt is not a run. Written flat rather
+        // than guarded, because a guard on a value that cannot be null is a branch
+        // no test can reach and a reader has to stop and disprove.
+        agent: agent.parsed.binary,
+      });
+      reporter.event({ kind: 'run_opened', data: { command: input.command, key } });
+    }
+  }
+  // An adopted run's `run_opened` was written by whoever opened it — `motir
+  // continue`'s claim (MOTIR-6533) or the hosted run's own open (MOTIR-6558).
 
   // ⚠️ A STOP IS A DECISION, AND THE RECORD SAYS SO (MOTIR-6530): Ctrl-C or a
   // SIGTERM closes the run `interrupted` after flushing what is queued, rather
@@ -445,6 +495,9 @@ export async function deliver(input: DeliverInput): Promise<void> {
         echoPromptIfAsked(opts, key, dispatch);
       },
       ...(deps.run ? { run: deps.run } : {}),
+      // A hosted container's checkouts are fresh clones: index them before the
+      // agent starts, as the image's entrypoint used to (MOTIR-6560).
+      ...(input.adoptedRunId ? { prepareCheckouts: hostedCheckoutPreparer } : {}),
     });
 
     if (verdict.kind === 'checkout_unavailable') {
@@ -684,6 +737,24 @@ export async function resolveOwnerId(client: MotirClient): Promise<string> {
 }
 
 /**
+ * A hosted run's per-checkout preparation (MOTIR-6560): its code graph, built
+ * once the CLI has cloned the checkout and before the agent is spawned on it.
+ * Best-effort — every failure is a line on the transcript, never a stop.
+ */
+function hostedCheckoutPreparer(cwds: string[]): void {
+  prepareHostedCheckouts(cwds, (line) => info(line));
+}
+
+/**
+ * The same answer for a HOSTED run (MOTIR-6558), from `getMe` alone: a run's own
+ * credential reads who it is and nothing wider — `whoami`'s workspace list is a
+ * route it is refused (`lib/hostedRuns/runTokenRoutes.ts`).
+ */
+export async function resolveHostedOwnerId(client: MotirClient): Promise<string> {
+  return (await client.me()).id;
+}
+
+/**
  * Why a NAMED card would not have been picked — or null when it would have been.
  *
  * ONE axis now: WHOSE it is (MOTIR-3048). It used to warn about WHERE it is too
@@ -755,6 +826,11 @@ export interface RunOptions extends DeliveryOptions, ScopeRunOptions {
   max?: string;
   /** `--keep-going` — continue a SCOPE past a failed agent. */
   keepGoing?: boolean;
+  /**
+   * `--run-id <id>` — ADOPT this run the server opened instead of opening one
+   * (MOTIR-6558): the hosted mode. `MOTIR_DISPATCH_RUN_ID` is its env twin.
+   */
+  runId?: string;
 }
 
 /**
@@ -808,7 +884,29 @@ export async function runCommand(
   refuseRedundantOverride(opts);
   const trimmed = key.trim();
   if (!trimmed) throw new CliError('A work item key is required, e.g. `motir run ACME-7`.');
-  await withProjectSession(async (session) => {
+
+  // ── HOSTED OR LOCAL? (MOTIR-6558) ─────────────────────────────────────────
+  // A run id — `--run-id`, or `MOTIR_DISPATCH_RUN_ID` from the hosted image —
+  // means the server has ALREADY opened this run and claimed its cards; this
+  // process adopts it. Everything below is the one pipeline either way: the
+  // hosted arm changes where the session comes from, who opened the run and
+  // where the scope's members come from, and nothing else.
+  const adoptId = hostedRunId(opts);
+  const enter = (fn: (session: ProjectSession, adopted: AdoptedRun | null) => Promise<void>) =>
+    adoptId
+      ? withHostedProjectSession(adoptId, fn, trimmed)
+      : withProjectSession((session) => fn(session, null));
+
+  if (adoptId && opts.includePlanning) {
+    // ⚠️ An expansion is an AI PLANNING surface a run's credential is refused, and
+    // what it produces is a plan a person approves — nothing a hosted run could
+    // wait for. Refused up front, before anything is read.
+    throw new CliError('`--include-planning` is not available on a hosted run.', {
+      hint: 'Expand the story in Motir, approve the plan, then run it hosted.',
+    });
+  }
+
+  await enter(async (session, adopted) => {
     const { client } = session;
 
     // ── SCOPE or CARD? The SHAPE decides (MOTIR-3195 / MOTIR-3198) ──────────
@@ -834,32 +932,168 @@ export async function runCommand(
       // print-mode scoped run to do. The message is `motir auto`'s, verbatim,
       // because it is the same requirement for the same reason.
       const agent = requireAgent({ ...opts, print: false }, 'motir run <scope>');
-      const ownerId = await resolveOwnerId(client);
-      const claimed = await claimScopeForRun(
-        session,
-        decision.target,
-        opts,
-        ownerId,
-        decision.readiness,
-      );
+      if (adopted && decision.target.kind !== 'work_item') {
+        throw new CliError('A hosted run adopts a work item scope, not a sprint.', {
+          hint: 'The server opens a hosted run on the card that was dispatched.',
+        });
+      }
+      // ⚠️ A HOSTED SCOPE IS NOT CLAIMED HERE (MOTIR-6558). The server already
+      // claimed it and opened the run with its members, in claim order — so the
+      // members are READ BACK from the run's legs, never re-derived from a ready
+      // set the claim has already emptied. Each leg is still re-claimed by
+      // `dispatchOne` exactly as locally, which answers `mine` for a card the
+      // server claimed for this dispatcher and refuses one somebody else holds.
+      const claimed =
+        adopted && decision.target.kind === 'work_item'
+          ? await adoptScope(client, decision.target, adopted, session.projectKey)
+          : await claimScopeForRun(
+              session,
+              decision.target,
+              opts,
+              await resolveOwnerId(client),
+              decision.readiness,
+            );
       if (!claimed) return;
 
-      const runId = runIdFromDate((deps.now ?? (() => new Date()))());
-      await runClaimedScope({
+      // The session branch names the run. A hosted run's is the server's run id,
+      // so the branch, the run page and the fleet all name the same run.
+      const runId = adopted ? adopted.runId : runIdFromDate((deps.now ?? (() => new Date()))());
+      const branch = sessionBranchName(runId);
+      const run = deps.run ?? execCommand;
+      // ⚠️ A HOSTED SCOPE (`claimed.claim === null`, MOTIR-6558) is handled
+      // inline here rather than through `runClaimedScope` (MOTIR-6535, used by
+      // `motir continue <parent>`): that helper's `ClaimedScope` requires a real
+      // claim to read `scope.name`/`outcome` off, which a hosted scope has none
+      // of — its set is the run's own legs, adopted rather than claimed.
+
+      // ── THE RUN RECORD (Story MOTIR-1789 · MOTIR-1794) ──────────────────
+      //
+      // ⚠️ OPENED WITH THE CLAIM'S FULL MEMBER SET, IN `orderClaimedSet` ORDER,
+      // and this is the operation the whole record is shaped around. The claim
+      // has just locked every member — including the ones that are not startable
+      // yet — and the order has just been computed from edges the run already
+      // holds. That knowledge exists for exactly one moment, in one process:
+      // rebuilt afterwards from per-card events it becomes a list of what the
+      // run got round to, and the SKIPPED cards vanish entirely.
+      //
+      // The order comes from the SAME `orderClaimedSet` the drain uses, so the
+      // positions a person reads on the run page are the order the drain
+      // actually worked. Nothing is re-queried to produce it.
+      const reporter = createDispatchRunReporter({
+        client,
+        // A hosted run always reports its agent's output (see the leaf path).
+        reportLogBodies: opts.reportLog === true || adopted !== null,
+      });
+      if (claimed.claim === null) {
+        // A HOSTED scope — nothing was claimed here. ADOPT, never open: the set
+        // is the one the server opened the run with, and `runId` is its id.
+        reporter.adopt(runId);
+      } else {
+        const claimOrder = orderClaimedSet(
+          claimed.ready.map((m) => m.key),
+          claimed.edges,
+        );
+        await reporter.open({
+          projectKey: session.projectKey,
+          command: 'run_scope',
+          runId,
+          cards: claimOrder.map((key) => ({ key, disposition: 'queued' as const })),
+          ...(decision.target.kind === 'work_item' ? { scopeKey: decision.target.key } : {}),
+          scopeLabel: claimed.claim.scope.name,
+          agent: agent.parsed.binary,
+        });
+        reporter.event({
+          kind: 'scope_claimed',
+          data: { outcome: claimed.claim.outcome, members: claimOrder.length },
+        });
+      }
+
+      const summary = await drainScope({
         session,
-        target: decision.target,
-        claimed,
-        opts,
-        deps,
+        // ⚠️ UNATTENDED (MOTIR-6558): nobody is at a hosted run to re-run it
+        // after the first failed card, so it keeps going, as `motir auto` does.
+        opts: adopted ? { ...opts, keepGoing: true } : opts,
+        members: claimed.ready,
+        edges: claimed.edges,
+        max: parseMax(opts.max),
         agent,
         runId,
-        branch: sessionBranchName(runId),
+        branch,
+        run,
+        clock: deps.clock ?? Date.now,
+        runAgentFn: deps.runAgentFn ?? runAgent,
+        reporter,
+        // A hosted workspace starts EMPTY: every repository a leg ships in is
+        // cloned before its session branch is made, as `motir auto` does.
+        materialize: adopted !== null,
+        ...(adopted ? { prepareCheckouts: hostedCheckoutPreparer } : {}),
       });
+      // ⚠️ THE CLOSE-OUT RE-READS THE CONTAINER'S CHILDREN FIRST (Bug
+      // MOTIR-3268). The claim was taken at t=0; a bug filed mid-drain
+      // (MOTIR-3017) parents itself under this very container, so the set this
+      // run holds is a statement about the past by the time it is finished.
+      //
+      // ⚠️ THE READ SURVIVES; ITS CONSEQUENCE CHANGED (MOTIR-4967). It used to
+      // decide whether a pull request was opened AT ALL, because one opened over
+      // an unfinished container claims the story is built. The pull request is
+      // now a DRAFT either way, and a draft cannot be merged — so it cannot
+      // complete the container or cascade `done` onto the children that are
+      // missing. What this read decides now is whether the close-out marks it
+      // READY, which is the same question asked at the only moment it can be
+      // answered.
+      const open = await readOpenChildren(client, decision.target);
+      // ⚠️ HOW TO TEST IS WRITTEN BEFORE THE PULL REQUESTS GO READY (MOTIR-5358;
+      // `docs/decisions/approval-gates.md` §9's 2026-09-13 amendment). The run
+      // target is the claimed container; ONE agent, handed the server's close-out
+      // prompt, publishes the run's record onto it, and the record it reads back
+      // is rendered into every body below. It never strands the run — a failure
+      // is logged and the close-out carries on. A sprint scope has no work-item
+      // target, so it has no step.
+      const howToTest =
+        decision.target.kind === 'work_item'
+          ? await runCloseOutHowToTest({
+              client,
+              dispatchRunId: reporter.runId,
+              targetKey: decision.target.key,
+              summary,
+              agent,
+              runAgentFn: deps.runAgentFn ?? runAgent,
+            })
+          : undefined;
+      // ONE pull request per TOUCHED repo, through the shipped close-out. On a
+      // multi-repo scope that is one PER REPO, and the summary names each — "one
+      // pull request, one CI run" is exactly true for a single-repo scope only.
+      closeOutRepos(summary, run, open, howToTest);
+      // ⚠️ THEN THE CONTAINER (MOTIR-4969), and only then. The close-out above
+      // is what rewrites every repository's pull request and marks it ready; the
+      // story is told it is built afterwards, so a run that dies in between
+      // leaves drafts AND a container that is not Implemented — the pair that is
+      // true. It re-reads the same `open` the close-out did, through
+      // `summary.outstanding`, so the two cannot disagree about whether a child
+      // is missing.
+      await closeOutContainer(client, summary);
+      // Each repository's session pull request, with the outcome the close-out
+      // reported — `opened` · `existing` · `failed` · `empty`. Whether it was
+      // left a DRAFT rides on the report too, and it is the thing a person
+      // reading a run page most needs to see: a draft is not something to merge.
+      for (const pr of summary.prs) {
+        reporter.event({
+          kind: 'session_pr',
+          data: { repo: pr.repoName, branch: pr.branch, url: pr.url, outcome: pr.outcome },
+        });
+      }
+      reporter.event({ kind: 'run_closed', data: { stopReason: summary.stopReason } });
+      await reporter.close(summary.stopReason);
+      info('');
+      info(renderAutoSummary(summary));
+      info(renderFindingsPolicy(opts));
+      process.exitCode = autoExitCode(summary);
       return;
     }
 
     const detail = decision.detail;
     const { item, readiness } = detail;
+    if (adopted) assertAdoptsLeaf(adopted, item.identifier);
 
     // HARD vs SOFT (MOTIR-6354), classified from the verdict already in hand —
     // no second read. `--allow-soft-block` passes only a SOFT block; `--force`
@@ -894,7 +1128,7 @@ export async function runCommand(
     // refuses anything outside the to-do category, so `in_review`, `planning`
     // and `done` are answered by the server, in the one place they can actually
     // be enforced.
-    const ownerId = await resolveOwnerId(client);
+    const ownerId = adopted ? await resolveHostedOwnerId(client) : await resolveOwnerId(client);
     const warning = pickWarning(item, ownerId);
     if (warning) info(`${item.identifier}: ${warning}`);
 
@@ -918,8 +1152,31 @@ export async function runCommand(
       dispatch,
       opts,
       deps,
+      adoptedRunId: adopted?.runId ?? null,
     });
   });
+}
+
+/**
+ * A HOSTED scope's members, from the run the server opened (MOTIR-6558).
+ *
+ * The same `{ ready, edges }` shape `claimScopeForRun` returns, so the drain and
+ * the close-out below cannot tell the two apart — except that nothing here
+ * claims: the members are the run's legs, in the run's own order, each read from
+ * its own card (the drain needs its type and executor), and the edges are the
+ * container's, read once exactly as a local scope reads them.
+ */
+async function adoptScope(
+  client: ProjectSession['client'],
+  target: { kind: 'work_item'; key: string },
+  adopted: AdoptedRun,
+  projectKey: string,
+): Promise<{ ready: DispatchItem[]; edges: ScopeEdges; claim: null }> {
+  const ready: DispatchItem[] = [];
+  for (const key of adopted.legs) ready.push(legAsDispatchItem(await client.getWorkItem(key)));
+  const edges = await readScopeEdges(client, target, projectKey);
+  info(`Adopted run ${adopted.runId}: ${adopted.legs.length} card(s) of ${target.key}.`);
+  return { ready, edges, claim: null };
 }
 
 // ── motir done <key> | --session <branch> ───────────────────────────────────
