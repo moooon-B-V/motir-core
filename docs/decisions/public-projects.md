@@ -505,3 +505,52 @@ portal pattern is built around.
   workspace-equality bypass in `resolvePublicInputs`, which now reads `accessModeOf(project) ===
 'public'`), §3's three grants, §4's projection and **§5 — READ anonymous, WRITE signed in** —
   are unchanged. The Visitor role that formalises the public read set is MOTIR-6170's.
+
+## AMENDMENT 2 (2026-09-27) — the Visitor role, and its one resolution
+
+**By:** Story MOTIR-6170 · Subtask MOTIR-6642, applying `docs/decisions/role-model.md` §4 and Q3
+(confirmed at the DECISION, MOTIR-6165).
+
+- **The Visitor is a role.** Anyone who cannot ENTER a `public` project — an anonymous reader, a
+  signed-in person of another organisation, a Limited member who was not added — is that project's
+  **Visitor**, granted automatically and stored nowhere.
+- **Its key set is the Viewer's.** `VISITOR_PERMISSIONS` (`lib/permissions/builtinRoles.ts`) is
+  DERIVED from `WORKSPACE_ROLE_PERMISSIONS.viewer`, never retyped: `project:browse`, `report:view`,
+  `approval:view_any`, `plan:view_any`, `run:view_any` — every view key and nothing that writes,
+  decides or authors (no `ai:view_plan`). A Visitor is a Viewer nobody assigned.
+- **The public read set is the Visitor's plus the three request grants.** `PUBLIC_PROJECT_PERMISSIONS`
+  = `VISITOR_PERMISSIONS` ∪ `{ public_request:submit, public_request:upvote,
+public_request:comment }`, the grants motir.co's act routes still assert (§3). This ADDS
+  `approval:view_any` and `report:view` to what a non-entrant held on a public project: the DECISION
+  gives a Visitor every approval record.
+- **One resolution.** `projectAccessService.resolveVisitor(identifier, session)` answers every
+  Visitor URL with one of three verdicts: `not_found` (the public surface is off, no public project
+  carries the identifier, or it is not `public` — ONE indistinguishable answer), `enter` (the
+  session's user can enter the project and belongs in their own view), or `visitor` with the
+  `VisitorReadContext` (`lib/visitor/context.ts`) every Visitor read takes — the project, the actor
+  (or none), the Visitor key set and the private-epic hidden set (§4, `epic-privacy.md` §3) read
+  once.
+- **Not a third place.** `resolveVisitor` is built ON `resolvePublicInputs`, §2's existing
+  workspace-equality bypass, so §2's _"any third place that grants cross-org read is a bug"_ stands
+  unchanged.
+- **Rate limited per IP.** A Visitor's reads spend the `public-read` scope
+  (`lib/rateLimit/publicReadGuard.ts`), keyed on the client IP and separate from `public-write`, so
+  reading never spends the allowance for filing a request.
+
+## AMENDMENT 3 (2026-09-27) — the in-app Visitor views need a session and a consent
+
+**By:** Story MOTIR-6170 · Subtask MOTIR-6666, applying `docs/decisions/visitor-sign-in-and-records.md`
+(DECISION MOTIR-6664).
+
+- **§5 no longer holds for the in-app Visitor views.** READ of `app.motir.co/p/<identifier>/<view>`
+  needs a signed-in account and a one-time consent per project; motir.co's pages keep §5 unchanged
+  (READ anonymous, WRITE signed in).
+- **AMENDMENT 2's anonymous branch is retired.** _"an anonymous reader"_ leaves the list of who is a
+  Visitor, and _"stored nowhere"_ becomes one visitor record per (person, project).
+- **The resolution grows two answers.** `resolveVisitor` asks, in order: `not_found` (unchanged, and
+  still asked FIRST so a signed-out stranger learns nothing about a private project), `sign_in` (no
+  session), `enter` (the person can enter), `consent` (no visitor record for this project yet), then
+  `visitor`. A Visitor read touches the record's latest visit, at most once per ten minutes.
+- **The public-read limit is keyed per person.** Every Visitor has an account now, so the
+  `public-read` scope is keyed on the signed-in user id rather than the client IP; the budget is
+  unchanged.

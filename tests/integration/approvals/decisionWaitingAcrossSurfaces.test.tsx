@@ -235,8 +235,8 @@ async function everySurface(actor: Actor, opts: { canEdit: boolean }) {
   const sectionFor = (view: 'list' | 'tree', filtered: boolean) =>
     IssueTreeSection({
       projectId: fx.projectId,
-      workspaceId: fx.workspaceId,
-      userId: actor.userId,
+      reader: { userId: actor.userId, workspaceId: fx.workspaceId },
+      service: { userId: actor.userId, workspaceId: fx.workspaceId },
       view,
       sort: DEFAULT_SORT,
       filter: filtered ? { ...EMPTY_FILTER, statuses: ['in_review'] } : EMPTY_FILTER,

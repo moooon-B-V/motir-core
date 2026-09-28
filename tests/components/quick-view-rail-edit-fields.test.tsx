@@ -270,7 +270,7 @@ describe('the option-sourced rows — the payload IS the option source (MOTIR-25
     await waitFor(() => expect(within(row('Status')).getByText('In Progress')).toBeTruthy());
   });
 
-  it('assignee falls back to the EMAIL when a member carries no name', async () => {
+  it('assignee falls back to the neutral label, never the email, when a member carries no name', async () => {
     render(<IssueQuickViewPanel state="ready" data={DATA} />);
 
     openRow('Assignee');
@@ -279,10 +279,11 @@ describe('the option-sourced rows — the payload IS the option source (MOTIR-25
     await waitFor(() =>
       expect(updateIssueAction.mock.calls[0]![0]).toMatchObject({ assigneeId: 'u_grace' }),
     );
-    // `name || email` — a blank name must not render an empty assignee row.
-    await waitFor(() =>
-      expect(within(row('Assignee')).getByText('grace@example.com')).toBeTruthy(),
-    );
+    // A blank name must not render an empty assignee row — and the row reads the
+    // name only (Story MOTIR-6170 · MOTIR-6646), so it draws the neutral label,
+    // never the address.
+    await waitFor(() => expect(within(row('Assignee')).getByText('Project member')).toBeTruthy());
+    expect(within(row('Assignee')).queryByText('grace@example.com')).toBeNull();
   });
 
   it('sprint commits through its OWN endpoint helper and shows the picked name', async () => {

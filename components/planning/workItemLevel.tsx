@@ -603,6 +603,7 @@ export function buildWorkItemLevel(
           crossBlockedSprint={scope === 'sprint'}
           notInSprint={notInSprint}
           progress={item.progress ?? null}
+          notPublic={item.childrenHidden ?? false}
           here={item.id === activeId}
           ready={item.ready ?? false}
           runLeg={opts.runLegs?.get(item.id) ?? null}

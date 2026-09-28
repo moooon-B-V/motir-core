@@ -49,7 +49,15 @@ vi.mock('@/lib/auth', () => ({ getSession }));
 vi.mock('@/lib/projects', () => ({ getActiveProject }));
 vi.mock('@/lib/ai/availability', () => ({ isMotirAiConfigured }));
 vi.mock('@/lib/services/projectAccessService', () => ({
-  projectAccessService: { getCapabilities },
+  // The page reads the reader's permission SET since MOTIR-6643; it is answered
+  // from the same `getCapabilities` mock every case below already drives.
+  projectAccessService: {
+    getCapabilities,
+    getPermissions: async (...args: unknown[]) => {
+      const caps = (await getCapabilities(...args)) as { canBrowse?: boolean } | undefined;
+      return new Set(caps?.canBrowse ? ['project:browse'] : []);
+    },
+  },
 }));
 vi.mock('@/lib/services/planSessionsService', () => ({
   planSessionsService: {

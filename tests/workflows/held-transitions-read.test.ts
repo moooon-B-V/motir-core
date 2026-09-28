@@ -9,6 +9,9 @@ import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../fi
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { spyOnJobDispatch } from '../helpers/jobs';
+import { VISITOR_ACTOR_ID } from '@/lib/visitor/context';
+import { VISITOR_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { PERSON_FALLBACK_LABEL } from '@/lib/people/personLabel';
 
 // `approvalGatesService.listHeldTransitions` (Story MOTIR-4887 · Subtask MOTIR-5528)
 // on real Postgres — the read the item page, quick view and edit page lock their
@@ -153,6 +156,29 @@ describe('listHeldTransitions', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ canDecide: false, routedToLabel: 'Rita Reporter' });
+  });
+
+  // Found by the MOTIR-6651 walk (Story MOTIR-6170): the held notice on a story
+  // page named a NAMELESS routed person by their EMAIL to a Visitor. A Visitor's
+  // read names people by display name only (MOTIR-6646).
+  it('a Visitor reads a nameless routed person as the neutral label, never the email', async () => {
+    const reporter = await createTestUser({ name: '', email: 'nameless-held@example.com' });
+    await adminDb.workspaceMembership.create({
+      data: { userId: reporter.id, workspaceId: fx.workspaceId, workspaceRole: 'member' },
+    });
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessMode: 'public' } });
+    const item = await cardInReview({ gateKind: 'design_result', reporterId: reporter.id });
+
+    const rows = await approvalGatesService.listHeldTransitions(item.id, {
+      userId: VISITOR_ACTOR_ID,
+      workspaceId: fx.workspaceId,
+      tokenProjectId: fx.projectId,
+      tokenGrant: [...VISITOR_PERMISSIONS],
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ canDecide: false, routedToLabel: PERSON_FALLBACK_LABEL });
+    expect(JSON.stringify(rows)).not.toContain('nameless-held');
   });
 
   it('an UNREGISTERED kind awaiting, no pull request → no row', async () => {

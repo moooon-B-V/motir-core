@@ -1,5 +1,6 @@
 'use client';
 
+import { personDisplayName } from '@/lib/people/personLabel';
 import {
   createContext,
   useCallback,
@@ -472,7 +473,7 @@ function InlineAssigneeEditor({
 
   const assigneeId = assignee.value;
   const member = assigneeId ? members.find((m) => m.userId === assigneeId) : undefined;
-  const name = member ? member.name || member.email : null;
+  const name = member ? personDisplayName(member) : null;
 
   function commit(userId: string | null) {
     setEditing(false);

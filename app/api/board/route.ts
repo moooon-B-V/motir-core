@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { visitorThenMember } from '@/lib/visitor/readActor';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { requireCompliantSession } from '@/lib/auth/requireCompliantSession';
 import { getActiveProject } from '@/lib/projects';
 import { boardsService } from '@/lib/services/boardsService';
@@ -45,7 +47,7 @@ import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 // `getBoard` re-validates the AST against the registry, so a structurally-valid
 // but semantically-bad condition throws `FilterValidationError` → 422.
 
-export async function GET(req: Request): Promise<Response> {
+async function memberGET(req: Request): Promise<Response> {
   const gate = await requireCompliantSession();
   if (!gate.ok) return gate.response;
 
@@ -94,6 +96,44 @@ export async function GET(req: Request): Promise<Response> {
     }
     throw err;
   }
+}
+
+/**
+ * The board projection — for a VISITOR (MOTIR-6647), the board of the public
+ * project the Visitor cookie names, with every private-epic descendant
+ * withheld and names only (MOTIR-6644 / MOTIR-6646); an inline `?filter=` still
+ * applies, a saved filter never does. Everyone else is answered exactly as before.
+ */
+export async function GET(req: Request): Promise<Response> {
+  return visitorThenMember(
+    req,
+    () => memberGET(req),
+    async (ctx) => {
+      const params = new URL(req.url).searchParams;
+      const boardId = params.get('boardId')?.trim() || undefined;
+      const rawFilter = params.get('filter')?.trim() || undefined;
+      let filter: BoardFilterInput | undefined;
+      if (rawFilter) {
+        const decoded = decodeFilterParam(rawFilter);
+        if (decoded.ok && decoded.ast.conditions.length > 0) filter = { ast: decoded.ast };
+      }
+      try {
+        const board = await boardsService.getBoard(ctx.project.id, ctx, boardId, filter);
+        return NextResponse.json(board);
+      } catch (err) {
+        if (err instanceof BoardNotFoundError || err instanceof ProjectNotFoundError) {
+          return NextResponse.json(
+            { code: 'BOARD_NOT_FOUND', error: 'Board not found.' },
+            { status: 404 },
+          );
+        }
+        if (err instanceof FilterValidationError) {
+          return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+        }
+        throw err;
+      }
+    },
+  );
 }
 
 // PATCH /api/board — mutate one of the active project's board attributes. ONE

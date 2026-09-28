@@ -3,6 +3,8 @@ import { getSessionCookie } from 'better-auth/cookies';
 import { publicSiteOrigin } from '@/lib/publicProjects/urls';
 import { publicCorsHeaders, publicCorsPreflightHeaders } from '@/lib/publicProjects/cors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
+import { VISITOR_COOKIE, isVisitorCookieValue, visitorCookieOptions } from '@/lib/visitor/cookie';
+import { parseVisitorPath, visitorPathForMemberPath } from '@/lib/visitor/routes';
 
 // Optimistic cookie-presence check on every incoming request to a
 // protected route: if no session cookie is present, bounce to /sign-in.
@@ -66,6 +68,115 @@ export const CURRENT_PATH_HEADER = 'x-current-path';
 export const PUBLIC_REDIRECT_SEGMENTS = new Set(['', 'explore', 'docs', 'legal', 'p']);
 
 /**
+ * The paths under `/p/*` that stay IN THIS APPLICATION although their segment has
+ * moved (Story MOTIR-6170):
+ *
+ * - the Visitor's one-time CONSENT screen, `/p/<identifier>/consent`
+ *   (MOTIR-6669), which must be answered on `app.motir.co`, where the session
+ *   lives;
+ * - the Visitor's nine live VIEWS (MOTIR-6648) — `items`, `items/<key>`, `tree`,
+ *   `board`, `roadmap`, `plans`, `plans/<id>`, `approvals` and `runs` under
+ *   `/p/<identifier>/` (`lib/visitor/routes.ts` is the table);
+ * - `/p/<identifier>/enter`, the route that sends a MEMBER who opened a Visitor
+ *   link into their own view (MOTIR-6648).
+ *
+ * The bare `/p/<identifier>` and every other `/p/*` path (the changelog, the
+ * requests, a sub-path under any other view) keep their 308 to motir.co.
+ */
+export function isAppVisitorPath(pathname: string): boolean {
+  return /^\/p\/[^/]+\/(?:consent|enter)\/?$/.test(pathname) || parseVisitorPath(pathname) !== null;
+}
+
+/**
+ * A Visitor path is FORWARDED, never bounced (MOTIR-6648). The proxy's session
+ * bounce is not theirs: only the Visitor layout knows whether the project exists,
+ * and it must answer not-found BEFORE it asks anyone to sign in — a proxy bounce to
+ * `/sign-in` would tell a stranger that a private project's key is real. So the
+ * layout owns the sign-in redirect, and this only forwards the path (the layout
+ * builds its `next=` from it, validated) and, on a VIEW, writes the
+ * `motir_visitor` cookie the client data doors read (`lib/visitor/cookie.ts`).
+ *
+ * The cookie is written HERE because a Server Component cannot set one. Writing it
+ * before the layout has decided anything is safe by construction: it is an
+ * address, not a credential, and every door re-derives the reader's standing from
+ * the session.
+ */
+function visitorSurface(request: NextRequest): NextResponse | null {
+  const { pathname, search } = request.nextUrl;
+  if (!isAppVisitorPath(pathname)) return null;
+  const headers = new Headers(request.headers);
+  headers.set(CURRENT_PATH_HEADER, `${pathname}${search}`);
+  const response = NextResponse.next({ request: { headers } });
+  const view = parseVisitorPath(pathname);
+  if (view && isVisitorCookieValue(view.identifier)) {
+    response.cookies.set(VISITOR_COOKIE, view.identifier, visitorCookieOptions());
+  }
+  return response;
+}
+
+/** Whether this request is Next's router PREFETCHING a link, not a reader navigating. */
+function isPrefetch(request: NextRequest): boolean {
+  if (request.headers.get('next-router-prefetch')) return true;
+  const purpose = request.headers.get('sec-purpose') ?? request.headers.get('purpose') ?? '';
+  return purpose.includes('prefetch');
+}
+
+/**
+ * A MEMBER route followed FROM a Visitor view, sent to the Visitor path it means
+ * (MOTIR-6648; design panel 5, "every in-page link a view body emits must point at
+ * the Visitor path").
+ *
+ * The eight page bodies are shared with the member app (MOTIR-6643), so the links
+ * they emit — a row's `/items/<key>`, the List/Tree switch's `/items?view=tree`,
+ * a room's pager — are member routes. Rather than thread a path builder through
+ * every client component that builds one, a navigation to one of those routes
+ * whose REFERER is a same-origin Visitor view of the project the `motir_visitor`
+ * cookie names is redirected to that project's Visitor equivalent. A route with
+ * no Visitor view (the account menu's settings, say) is not touched.
+ *
+ * Requiring the COOKIE as well as the referer is what ends the one loop this
+ * could make: the member redirect (`/api/visitor/enter`) clears the cookie, so a
+ * reader who became a member while reading lands in their own view instead of
+ * being sent back to the Visitor path it came from.
+ */
+function visitorLinkRedirect(request: NextRequest): NextResponse | null {
+  const cookie = request.cookies.get(VISITOR_COOKIE)?.value;
+  if (!cookie) return null;
+  const referer = request.headers.get('referer');
+  if (!referer) return null;
+  let from: URL;
+  try {
+    from = new URL(referer);
+  } catch {
+    return null;
+  }
+  if (from.origin !== request.nextUrl.origin) return null;
+  const view = parseVisitorPath(from.pathname);
+  if (!view || view.identifier.toLowerCase() !== cookie.toLowerCase()) return null;
+  const target = visitorPathForMemberPath(
+    view.identifier,
+    request.nextUrl.pathname,
+    request.nextUrl.search,
+  );
+  if (!target) return null;
+  return NextResponse.redirect(new URL(target, request.url));
+}
+
+/**
+ * Forget the Visitor's project on any other page (MOTIR-6648). The cookie is
+ * sticky, and the doors addressed by the ACTIVE project (`visitorThenMember` —
+ * the board, the peek) let a `visitor` verdict decide first: left set, a reader
+ * who goes back to their OWN workspace would be served the public project's board
+ * inside it. So a real navigation to any member page clears it — never a PREFETCH,
+ * which happens while the reader is still on the Visitor view.
+ */
+function clearVisitorCookie(request: NextRequest, response: NextResponse): NextResponse {
+  if (!request.cookies.has(VISITOR_COOKIE) || isPrefetch(request)) return response;
+  response.cookies.set(VISITOR_COOKIE, '', { ...visitorCookieOptions(), maxAge: 0 });
+  return response;
+}
+
+/**
  * Redirect a moved public surface to the public origin, or `null` when this
  * request is not one. Gated on the public origin being CONFIGURED: while
  * `MOTIR_PUBLIC_SITE_URL` is unset, `publicSiteOrigin()` falls back to THIS
@@ -74,6 +185,7 @@ export const PUBLIC_REDIRECT_SEGMENTS = new Set(['', 'explore', 'docs', 'legal',
  */
 function publicSiteRedirect(request: NextRequest): NextResponse | null {
   if (publicSiteOrigin() === resolveBaseUrlTrimmed()) return null;
+  if (isAppVisitorPath(request.nextUrl.pathname)) return null;
   const segment = request.nextUrl.pathname.split('/')[1] ?? '';
   if (!PUBLIC_REDIRECT_SEGMENTS.has(segment)) return null;
   const destination = new URL(
@@ -143,6 +255,11 @@ export async function proxy(request: NextRequest) {
   const moved = publicSiteRedirect(request);
   if (moved) return moved;
 
+  // The Visitor's consent screen and live views are served HERE and are not
+  // bounced (MOTIR-6648): their layout owns the not-found / sign-in order.
+  const visitor = visitorSurface(request);
+  if (visitor) return visitor;
+
   // While MOTIR_PUBLIC_SITE_URL is unset the moved surfaces are still served
   // HERE — the root `/` runs its own session handling in `app/page.tsx` (no
   // session → `/sign-in`, session → the landing), and the deleted pages 404. They
@@ -153,6 +270,10 @@ export async function proxy(request: NextRequest) {
   if (PUBLIC_REDIRECT_SEGMENTS.has(segment)) {
     return NextResponse.next();
   }
+
+  // A member route followed from a Visitor view means that view's own path.
+  const followed = visitorLinkRedirect(request);
+  if (followed) return followed;
 
   const sessionCookie = getSessionCookie(request);
   if (!sessionCookie) {
@@ -168,7 +289,7 @@ export async function proxy(request: NextRequest) {
     // `sanitizeNextPath` (`lib/navigation/nextDestination.ts`) admits — a query
     // has always been legal in it (`/device?user_code=…` is the older instance).
     signInUrl.searchParams.set('next', `${request.nextUrl.pathname}${request.nextUrl.search}`);
-    return NextResponse.redirect(signInUrl);
+    return clearVisitorCookie(request, NextResponse.redirect(signInUrl));
   }
 
   // Forward the requested path to the layouts underneath (MOTIR-3652).
@@ -193,7 +314,7 @@ export async function proxy(request: NextRequest) {
   // route's caching or revalidation behaviour changes.
   const headers = new Headers(request.headers);
   headers.set(CURRENT_PATH_HEADER, `${request.nextUrl.pathname}${request.nextUrl.search}`);
-  return NextResponse.next({ request: { headers } });
+  return clearVisitorCookie(request, NextResponse.next({ request: { headers } }));
 }
 
 export const config = {
@@ -234,7 +355,9 @@ export const config = {
     // The MOVED public surfaces (MOTIR-3884) — the proxy runs on them to 308
     // them onto motir.co. `/p/*` IS here: its move to motir.co was folded into
     // this redirect set (MOTIR-3877 renders the replacement; MOTIR-3951 deletes
-    // the page here), so it must 308, not 404.
+    // the page here), so it must 308, not 404 — except the Visitor's consent
+    // screen and views (MOTIR-6648), which the same entry reaches so that they
+    // can be forwarded with their cookie instead.
     // The public READ API — matched for CORS only (MOTIR-4114). Everything
     // below this line is a PAGE and takes the session bounce; this one is an
     // API path and takes only the cross-origin answer, which `proxy()` handles

@@ -19,7 +19,8 @@ import { describe, expect, it } from 'vitest';
 // imports, every imported name must be a component (PascalCase).
 
 const ROOT = process.cwd();
-const PAGE = 'app/(authed)/items/[key]/page.tsx';
+// The page's body — and so its imports — live in `_view.tsx` since MOTIR-6643.
+const PAGE = 'app/(authed)/items/[key]/_view.tsx';
 
 function resolveModule(fromFile: string, spec: string): string | null {
   const base = spec.startsWith('@/')

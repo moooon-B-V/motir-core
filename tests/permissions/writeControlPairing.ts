@@ -303,7 +303,7 @@ export const CONTROL_EXEMPTIONS: Record<string, ControlExemption> = {
   'app/(authed)/items/[key]/_components/MonitorErrorsLinkControl.tsx': {
     kind: 'mounted-by',
     parents: [
-      'app/(authed)/items/[key]/page.tsx',
+      'app/(authed)/items/[key]/_view.tsx',
       'app/(authed)/items/[key]/_components/WorkItemDetailActions.tsx',
       'app/(authed)/items/[key]/_components/MonitorErrorsCard.tsx',
     ],

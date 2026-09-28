@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { memberThenVisitor } from '@/lib/visitor/readActor';
+import type { VisitorReadContext } from '@/lib/visitor/context';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { activityService } from '@/lib/services/activityService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
@@ -17,14 +20,12 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // Typed errors → status codes:
 //   WorkItemNotFoundError → 404 (unknown / cross-workspace item, no existence leak)
 //   malformed ?order      → 400
-export async function GET(
+/** The read itself, for a member's context or a Visitor's (MOTIR-6647). */
+async function serve(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
+  ctx: ServiceContext | VisitorReadContext,
 ): Promise<Response> {
-  const gate = await requireCompliantWorkspaceContext();
-  if (!gate.ok) return gate.response;
-  const { ctx } = gate;
-
   const { id } = await params;
   const url = new URL(req.url);
   const cursor = url.searchParams.get('cursor') ?? undefined;
@@ -48,4 +49,31 @@ export async function GET(
     }
     throw err;
   }
+}
+
+async function memberGET(
+  req: Request,
+  route: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
+
+  return serve(req, route, ctx);
+}
+
+/**
+ * A work item's history — members exactly as before; a VISITOR (MOTIR-6647) of the
+ * item's public project reads it through the Visitor path (MOTIR-6652), only when
+ * the member read found nothing for them.
+ */
+export async function GET(
+  req: Request,
+  route: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  return memberThenVisitor(
+    req,
+    () => memberGET(req, route),
+    (ctx) => serve(req, route, ctx),
+  );
 }

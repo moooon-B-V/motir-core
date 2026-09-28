@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import { memberThenVisitor } from '@/lib/visitor/readActor';
+import { isVisitorContext } from '@/lib/visitor/readScope';
+import type { VisitorReadContext } from '@/lib/visitor/context';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -24,14 +28,12 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 //
 // Typed errors → status codes:
 //   ProjectNotFoundError → 404
-export async function GET(
+/** The read itself, for a member's context or a Visitor's (MOTIR-6647). */
+async function serve(
   req: Request,
   { params }: { params: Promise<{ key: string }> },
+  ctx: ServiceContext | VisitorReadContext,
 ): Promise<Response> {
-  const gate = await requireCompliantWorkspaceContext();
-  if (!gate.ok) return gate.response;
-  const { ctx } = gate;
-
   const { key } = await params;
   const search = new URL(req.url).searchParams;
   const parentId = search.get('parentId') || null;
@@ -83,8 +85,15 @@ export async function GET(
         ];
 
   try {
-    const project = await projectsService.getByKey(key, ctx);
-    const roadmap = await workItemsService.getProjectRoadmap(project.id, parentId, ctx, {
+    // A Visitor reads only the public project it is a Visitor of; any other key is
+    // the same not-found a stranger gets (MOTIR-6647).
+    const projectId = isVisitorContext(ctx)
+      ? key.trim().toUpperCase() === ctx.project.identifier.toUpperCase()
+        ? ctx.project.id
+        : null
+      : (await projectsService.getByKey(key, ctx)).id;
+    if (!projectId) throw new ProjectNotFoundError(key);
+    const roadmap = await workItemsService.getProjectRoadmap(projectId, parentId, ctx, {
       scope,
       all,
       ...(ids !== undefined ? { ids } : {}),
@@ -102,4 +111,31 @@ export async function GET(
     }
     throw err;
   }
+}
+
+async function memberGET(
+  req: Request,
+  route: { params: Promise<{ key: string }> },
+): Promise<Response> {
+  const gate = await requireCompliantWorkspaceContext();
+  if (!gate.ok) return gate.response;
+  const { ctx } = gate;
+
+  return serve(req, route, ctx);
+}
+
+/**
+ * One roadmap level — members exactly as before; a VISITOR (MOTIR-6647) of the
+ * public project reads its levels with every private-epic descendant withheld
+ * (MOTIR-6644), only when the member read found nothing for them.
+ */
+export async function GET(
+  req: Request,
+  route: { params: Promise<{ key: string }> },
+): Promise<Response> {
+  return memberThenVisitor(
+    req,
+    () => memberGET(req, route),
+    (ctx) => serve(req, route, ctx),
+  );
 }
