@@ -112,6 +112,30 @@ export interface DispatchRunDto {
    * client that has seen nothing uses the same call as one that has seen 400.
    */
   seq: number;
+  /**
+   * What a `continue` run resumes (MOTIR-6795), read from its `run_opened` — the
+   * dead run, every repository's branch, and for a parent which legs landed and
+   * which were in flight. A hosted container adopts the run instead of claiming,
+   * so this is how it learns what the claim decided. Only the single-run read
+   * fills it; null for every other command, and absent on the ingest answers.
+   */
+  continues?: DispatchRunContinuesDto | null;
+}
+
+export interface DispatchRunContinuesDto {
+  /** The dead run this one carries on. */
+  fromRunId: string | null;
+  /** The primary repository's branch. */
+  branch: string | null;
+  /**
+   * Every repository's branch, primary first, with the repository's clone URL
+   * where the project knows it — so a hosted container can clone a repository
+   * the dead run pushed to even when no leg left to run touches it.
+   */
+  branches: Array<{ repository: string | null; branch: string; cloneUrl: string | null }>;
+  mode: 'card' | 'parent';
+  landedKeys: string[];
+  resumedKeys: string[];
 }
 
 /** What the OPEN operation answers with. */

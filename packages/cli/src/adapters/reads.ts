@@ -768,6 +768,20 @@ export function toDispatchRunView(body: SuccessBody<'getDispatchRun'>): Dispatch
     cards: [...body.cards]
       .sort((a, b) => a.position - b.position)
       .map((card) => ({ key: card.key, position: card.position, disposition: card.disposition })),
+    continues: body.continues
+      ? {
+          fromRunId: body.continues.fromRunId,
+          branch: body.continues.branch,
+          branches: body.continues.branches.map((b) => ({
+            repository: b.repository,
+            branch: b.branch,
+            cloneUrl: b.cloneUrl ?? null,
+          })),
+          mode: body.continues.mode,
+          landedKeys: [...body.continues.landedKeys],
+          resumedKeys: [...body.continues.resumedKeys],
+        }
+      : null,
   };
 }
 

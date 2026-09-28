@@ -2069,6 +2069,27 @@ export const dispatchRunSchema = z.object({
   cards: z.array(dispatchRunCardSchema),
   /** The stream's highest `seq`, or `0` — the cursor to resume from. */
   seq: z.number().int(),
+  /**
+   * What a `continue` run resumes (MOTIR-6795) — only on `getDispatchRun`, and
+   * null there for any other command.
+   */
+  continues: z
+    .object({
+      fromRunId: z.string().nullable(),
+      branch: z.string().nullable(),
+      branches: z.array(
+        z.object({
+          repository: z.string().nullable(),
+          branch: z.string(),
+          cloneUrl: z.string().nullable(),
+        }),
+      ),
+      mode: z.enum(['card', 'parent']),
+      landedKeys: z.array(z.string()),
+      resumedKeys: z.array(z.string()),
+    })
+    .nullable()
+    .optional(),
 });
 
 /** What OPEN answers with. */

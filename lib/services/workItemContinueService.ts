@@ -404,6 +404,11 @@ function refused(
   };
 }
 
+/** A JSON array of strings, or `[]` for anything else. */
+function stringsOf(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+}
+
 /**
  * The answer a hosted opening already got, given again for a repeat of its key
  * (MOTIR-6790) — read back off the run it opened and that run's `run_opened`.
@@ -419,6 +424,8 @@ async function replayOpening(
     branch?: unknown;
     branches?: unknown;
     previousAssignee?: { id?: unknown; name?: unknown } | null;
+    landedKeys?: unknown;
+    resumedKeys?: unknown;
   } | null;
   const deadId = typeof data?.continuesRunId === 'string' ? data.continuesRunId : null;
   const dead = deadId ? await dispatchRunRepository.findForWorkItemById(deadId, item.id, tx) : null;
@@ -441,8 +448,8 @@ async function replayOpening(
         ? { id: previous.id, name: previous.name }
         : null,
     mode: run.scopeWorkItemId === item.id ? 'parent' : 'card',
-    landedKeys: [],
-    resumedKeys: [],
+    landedKeys: stringsOf(data?.landedKeys),
+    resumedKeys: stringsOf(data?.resumedKeys),
   };
 }
 
@@ -674,6 +681,12 @@ export const workItemContinueService = {
                   repository: b.repository,
                   branch: b.branch,
                 })),
+                // The scope shape (MOTIR-6795): a hosted container ADOPTS this run
+                // rather than claiming, so what the claim decided is read back
+                // from here — which legs landed, which were in flight.
+                mode: parent ? 'parent' : 'card',
+                landedKeys: [...landedKeys].sort(),
+                resumedKeys: [...resumedKeys].sort(),
                 // A hosted continue's ONE `run_opened` (the hosted start appends
                 // none of its own) says what Run hosted's does.
                 ...(opening ? { origin: opening.origin, model: opening.model } : {}),

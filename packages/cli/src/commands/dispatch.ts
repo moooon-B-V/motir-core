@@ -748,7 +748,7 @@ export async function resolveOwnerId(client: MotirClient): Promise<string> {
  * once the CLI has cloned the checkout and before the agent is spawned on it.
  * Best-effort — every failure is a line on the transcript, never a stop.
  */
-function hostedCheckoutPreparer(cwds: string[]): void {
+export function hostedCheckoutPreparer(cwds: string[]): void {
   prepareHostedCheckouts(cwds, (line) => info(line));
 }
 

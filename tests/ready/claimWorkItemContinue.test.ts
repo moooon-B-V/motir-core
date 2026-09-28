@@ -128,6 +128,18 @@ describe('claimContinue — the takeover', () => {
       where: { dispatchRunId: opened.id, kind: 'run_opened' },
     });
     expect(event?.data).toMatchObject({ continuesRunId: runId, branch });
+
+    // The run's own read says what it resumes (MOTIR-6795) — what a hosted
+    // container adopting it reads — and a run that is not a continue says null.
+    expect((await dispatchRunService.getRun(result.runId!, other.ctx)).continues).toEqual({
+      fromRunId: runId,
+      branch,
+      branches: [{ repository: null, branch, cloneUrl: null }],
+      mode: 'card',
+      landedKeys: [],
+      resumedKeys: [],
+    });
+    expect((await dispatchRunService.getRun(runId, fx.ctx)).continues).toBeNull();
   });
 
   it('prefers the OPEN pull request’s head over the recorded branch', async () => {
@@ -517,6 +529,13 @@ describe('claimContinue — a PARENT whose scope run died (MOTIR-6535)', () => {
     expect(await workItemContinueService.getContinueView(story.id, fx.ctx)).toMatchObject({
       state: 'continuing',
     });
+    expect((await dispatchRunService.getRun(result.runId!, other.ctx)).continues).toMatchObject({
+      fromRunId: run.id,
+      branch: 'motir/auto-20260927-0900',
+      mode: 'parent',
+      landedKeys: [landed.identifier],
+      resumedKeys: [inFlight.identifier],
+    });
   });
 });
 
@@ -762,6 +781,23 @@ describe('claimContinue — a run across repositories', () => {
     });
     const again = await claim(fx, card.identifier);
     expect(again.branches.map((b) => b.branch)).toEqual(['task/web-side', 'task/core-side']);
+  });
+
+  it('the continue run’s read gives each branch its repository’s clone URL, where the project knows one (MOTIR-6795)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await twoRepoDeadCard(fx);
+    await connectRepairRepo(fx, 'core');
+
+    const result = await claim(fx, card.identifier);
+    const run = await dispatchRunService.getRun(result.runId!, fx.ctx);
+    expect(run.continues?.branches).toEqual([
+      { repository: 'web', branch: 'task/web-side', cloneUrl: null },
+      {
+        repository: 'core',
+        branch: 'task/core-side',
+        cloneUrl: expect.stringMatching(/acme\/core/),
+      },
+    ]);
   });
 
   it('an open pull request in ONE repository replaces only that repository’s branch', async () => {

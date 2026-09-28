@@ -89,8 +89,10 @@ const BOTS: Record<string, { name: string; email: string }> = {
 /**
  * The fake OpenCode. Its instructions come from the PROMPT (the one channel the
  * CLI forwards unchanged): `FAKE:closeout` is the close-out's How-to-test agent,
- * which does nothing; otherwise `FAKE:key=`, `FAKE:mode=pr|session` and
- * `FAKE:repos=` say what to change and how to deliver it.
+ * which does nothing; otherwise `FAKE:key=`, `FAKE:mode=pr|session|continue`
+ * and `FAKE:repos=` say what to change and how to deliver it. A `continue` works
+ * in the checkout the CLI resumed at the dead branch (`<repo>-<key>`, the
+ * prompt's continue worktree) and opens a pull request only where none is open.
  */
 const FAKE_OPENCODE = `#!/usr/bin/env node
 const fs = require('node:fs');
@@ -128,7 +130,9 @@ const options = JSON.parse(configText).provider.anthropic.options;
   if (prompt.includes('FAKE:fail')) { console.error('boom: the fake agent failed on purpose'); process.exit(3); }
   const root = path.dirname(process.cwd());
   for (const repo of repos) {
-    const dir = path.join(root, repo);
+    const dir = mode === 'continue'
+      ? path.join(root, repo + '-' + key.toLowerCase())
+      : path.join(root, repo);
     fs.writeFileSync(path.join(dir, key + '.txt'), 'work for ' + key + ' in ' + repo + '\\n');
     if (mode === 'pr') git(dir, 'switch', '-c', 'hosted/' + key);
     // A session run integrates on the run's session branch, as its prompt says.
@@ -141,7 +145,11 @@ const options = JSON.parse(configText).provider.anthropic.options;
     git(dir, 'commit', '-m', key + ': the change in ' + repo);
     git(dir, ...redirect, 'push', '-u', 'origin', 'HEAD');
     if (mode === 'session') git(dir, ...redirect, 'fetch', 'origin');
-    if (mode === 'pr') {
+    const head = git(dir, 'rev-parse', '--abbrev-ref', 'HEAD').trim();
+    const open = mode === 'continue'
+      ? execFileSync('gh', ['pr', 'list', '--head', head], { cwd: dir, encoding: 'utf8' }).trim()
+      : '';
+    if (mode === 'pr' || (mode === 'continue' && !open)) {
       execFileSync('gh', ['pr', 'create', '--base', 'main', '--title', key + ' in ' + repo, '--body', 'Delivers ' + key + '.'], { cwd: dir, stdio: 'inherit' });
     }
   }
@@ -209,10 +217,19 @@ type Scenario = {
   runId: string;
   /** The card the launcher is booted with — the leaf, or the parent. */
   key: string;
-  command: 'run' | 'run_scope';
+  command: 'run' | 'run_scope' | 'continue';
   /** The run's legs, in the run's own order. */
   legs: string[];
   cards: Record<string, Card>;
+  /** A `continue` run: what its claim decided, as `GET /dispatch-runs/{id}` answers it. */
+  continues?: {
+    fromRunId: string;
+    branch: string;
+    branches: { repository: string; branch: string; cloneUrl: string }[];
+    mode: 'card' | 'parent';
+    landedKeys: string[];
+    resumedKeys: string[];
+  };
 };
 
 const leafCard = (key: string, repos: string[], parentKey: string | null = null): Card => ({
@@ -247,17 +264,98 @@ const SCENARIOS: Scenario[] = [
     key: 'ACME-10',
     command: 'run_scope',
     legs: ['ACME-11', 'ACME-12'],
-    cards: {
-      'ACME-10': {
-        key: 'ACME-10',
-        kind: 'story',
-        repos: ['app-a', 'app-b'],
-        parentKey: null,
-        children: ['ACME-11', 'ACME-12'],
-        status: 'in_progress',
-      },
-      'ACME-11': leafCard('ACME-11', ['app-a'], 'ACME-10'),
-      'ACME-12': leafCard('ACME-12', ['app-b'], 'ACME-10'),
+    cards: parentCards(),
+  },
+];
+
+function parentCards(): Record<string, Card> {
+  return {
+    'ACME-10': {
+      key: 'ACME-10',
+      kind: 'story',
+      repos: ['app-a', 'app-b'],
+      parentKey: null,
+      children: ['ACME-11', 'ACME-12'],
+      status: 'in_progress',
+    },
+    'ACME-11': leafCard('ACME-11', ['app-a'], 'ACME-10'),
+    'ACME-12': leafCard('ACME-12', ['app-b'], 'ACME-10'),
+  };
+}
+
+// The same three shapes CONTINUED (MOTIR-6795): each run died after pushing to
+// its branch in every repository, and the server's continue claim opened the run
+// this container adopts.
+const DEAD_LEAF = 'hosted/ACME-7-dead';
+const DEAD_LEAF2 = 'hosted/ACME-8-dead';
+const DEAD_SESSION = 'motir/auto-20260927-0900';
+const CONTINUE_SCENARIOS: Scenario[] = [
+  {
+    name: 'a one-repository leaf, continued',
+    runId: 'run_smoke_cont_leaf1',
+    key: 'ACME-7',
+    command: 'continue',
+    legs: ['ACME-7'],
+    cards: { 'ACME-7': leafCard('ACME-7', ['app-a']) },
+    continues: {
+      fromRunId: 'run_smoke_dead_leaf1',
+      branch: DEAD_LEAF,
+      branches: [
+        { repository: 'app-a', branch: DEAD_LEAF, cloneUrl: 'https://github.com/acme/app-a.git' },
+      ],
+      mode: 'card',
+      landedKeys: [],
+      resumedKeys: [],
+    },
+  },
+  {
+    name: 'a leaf that spans two repositories, continued',
+    runId: 'run_smoke_cont_leaf2',
+    key: 'ACME-8',
+    command: 'continue',
+    legs: ['ACME-8'],
+    cards: { 'ACME-8': leafCard('ACME-8', ['app-a', 'app-b']) },
+    continues: {
+      fromRunId: 'run_smoke_dead_leaf2',
+      branch: DEAD_LEAF2,
+      branches: [
+        { repository: 'app-a', branch: DEAD_LEAF2, cloneUrl: 'https://github.com/acme/app-a.git' },
+        {
+          repository: 'app-b',
+          branch: `${DEAD_LEAF2}-b`,
+          cloneUrl: 'https://github.com/acme/app-b.git',
+        },
+      ],
+      mode: 'card',
+      landedKeys: [],
+      resumedKeys: [],
+    },
+  },
+  {
+    name: 'a parent, continued after its first child landed',
+    runId: 'run_smoke_cont_parent',
+    key: 'ACME-10',
+    command: 'continue',
+    legs: ['ACME-11', 'ACME-12'],
+    cards: parentCards(),
+    continues: {
+      fromRunId: 'run_smoke_dead_parent',
+      branch: DEAD_SESSION,
+      branches: [
+        {
+          repository: 'app-a',
+          branch: DEAD_SESSION,
+          cloneUrl: 'https://github.com/acme/app-a.git',
+        },
+        {
+          repository: 'app-b',
+          branch: DEAD_SESSION,
+          cloneUrl: 'https://github.com/acme/app-b.git',
+        },
+      ],
+      mode: 'parent',
+      landedKeys: ['ACME-11'],
+      resumedKeys: [],
     },
   },
 ];
@@ -319,7 +417,7 @@ function workItemDetail(s: Scenario, key: string) {
       dependencies: {
         blockedBy:
           child === 'ACME-12'
-            ? [{ key: 'ACME-11', title: 'Card ACME-11', status: 'in_progress' }]
+            ? [{ key: 'ACME-11', title: 'Card ACME-11', status: s.cards['ACME-11']!.status }]
             : [],
         blocks: [],
       },
@@ -365,8 +463,8 @@ function dispatchRun(s: Scenario, status: 'running' | 'succeeded') {
     projectId: 'prj_acme',
     command: s.command,
     origin: 'hosted',
-    scopeWorkItemId: s.command === 'run_scope' ? 'wi_acme_10' : null,
-    scopeLabel: s.command === 'run_scope' ? s.key : null,
+    scopeWorkItemId: s.key === 'ACME-10' ? 'wi_acme_10' : null,
+    scopeLabel: s.key === 'ACME-10' ? s.key : null,
     status,
     stopReason: null,
     lastHeartbeatAt: null,
@@ -388,12 +486,18 @@ function dispatchRun(s: Scenario, status: 'running' | 'succeeded') {
       exitCode: null,
     })),
     seq: 0,
+    continues: s.continues ?? null,
   };
 }
 
-function prompt(s: Scenario, key: string, sessionBranch: string | null) {
+function prompt(
+  s: Scenario,
+  key: string,
+  sessionBranch: string | null,
+  continueFrom: string | null = null,
+) {
   const card = s.cards[key]!;
-  const mode = sessionBranch ? 'session' : 'pr';
+  const mode = sessionBranch ? 'session' : continueFrom ? 'continue' : 'pr';
   return {
     key,
     prompt:
@@ -517,7 +621,15 @@ async function startStub(): Promise<Stub> {
         if (method === 'GET' && sub === '/designs') return json(200, { designs: [] });
         if (method === 'GET' && sub === '/how-to-test') return json(200, { key, record: null });
         if (method === 'GET' && sub === '/dispatch-prompt') {
-          return json(200, prompt(s, key, url.searchParams.get('sessionBranch')));
+          return json(
+            200,
+            prompt(
+              s,
+              key,
+              url.searchParams.get('sessionBranch'),
+              url.searchParams.get('continueFrom'),
+            ),
+          );
         }
         if (method === 'POST' && sub === '/claim') {
           card.status = 'in_progress';
@@ -928,17 +1040,158 @@ describe('the hosted image, as processes: the launcher runs the real CLI (MOTIR-
     expect(s.cards['ACME-12']!.status).toBe('implemented');
   }, 180_000);
 
-  it('continue mode reaches the CLI as `motir continue <KEY>`, and the CLI answers for it', async () => {
-    const s = SCENARIOS[0]!;
+  /** The dead run's work: one commit on `branch` in `repo`'s remote, as it pushed it. */
+  function seedDead(world: World, repo: string, branch: string, key: string) {
+    const dir = tempDir('hosted-smoke-dead-');
+    git(dir, 'clone', '-q', world.remotes[repo]!, 'w');
+    const w = join(dir, 'w');
+    git(w, 'switch', '-q', '-c', branch);
+    writeFileSync(join(w, `${key}-dead.txt`), `what the dead run pushed for ${key}\n`);
+    git(w, 'add', '.');
+    git(
+      w,
+      '-c',
+      'user.name=Dead',
+      '-c',
+      'user.email=dead@example.com',
+      'commit',
+      '-q',
+      '-m',
+      `${key}: before the run died`,
+    );
+    git(w, 'push', '-q', 'origin', branch);
+  }
+
+  /** The commit subjects on a remote branch, newest first, less the seed. */
+  const subjects = (bare: string, ref: string) =>
+    git(bare, 'log', '--format=%s', ref)
+      .trim()
+      .split('\n')
+      .filter((l) => l !== 'seed');
+
+  function armContinue(s: Scenario): World {
     const world = arm(s);
     world.env.MOTIR_RUN_MODE = 'continue';
+    return world;
+  }
+
+  it('a one-repository leaf, continued: on the dead branch, both commits, one pull request', async () => {
+    const s = CONTINUE_SCENARIOS[0]!;
+    const world = armContinue(s);
+    seedDead(world, 'app-a', DEAD_LEAF, 'ACME-7');
     const res = await launch(world.env);
-    // `motir continue` is the run-dies story's; until it ships the CLI refuses
-    // the command, non-zero, and nothing is pushed or opened.
-    expect(res.code).not.toBe(0);
-    expect(res.stderr).toContain('motir continue ACME-7');
-    expect(readPrs(world.home).prs).toEqual([]);
-  }, 60_000);
+    expect(res.code, res.stderr + res.stdout).toBe(0);
+    expectAdoptedAndClosed(s);
+    expectAgentsConfined(world.home);
+
+    const paths = stub.requests.map((r) => `${r.method} ${r.path}`);
+    // Adopted, never claimed again: the server's continue claim opened this run.
+    expect(paths.some((p) => p.endsWith('/continue'))).toBe(false);
+    expect(paths.some((p) => p.endsWith('/claim'))).toBe(false);
+    const prompts = stub.requests.filter((r) => r.path.endsWith('/dispatch-prompt'));
+    expect(prompts).toHaveLength(1);
+    const { prs } = readPrs(world.home);
+    expect(prs.map((p) => `${p.repo} ${p.head}`)).toEqual([`acme/app-a ${DEAD_LEAF}`]);
+    expect(subjects(world.remotes['app-a']!, DEAD_LEAF)).toEqual([
+      'ACME-7: the change in app-a',
+      'ACME-7: before the run died',
+    ]);
+    expect(authorOn(world.remotes['app-a']!, DEAD_LEAF)).toBe(
+      `${BOTS['acme/app-a']!.name} <${BOTS['acme/app-a']!.email}>`,
+    );
+    expect(s.cards['ACME-7']!.status).toBe('implemented');
+  }, 120_000);
+
+  it('a leaf across two repositories, continued: each repository on its OWN dead branch, a pull request in each', async () => {
+    const s = CONTINUE_SCENARIOS[1]!;
+    const world = armContinue(s);
+    seedDead(world, 'app-a', DEAD_LEAF2, 'ACME-8');
+    seedDead(world, 'app-b', `${DEAD_LEAF2}-b`, 'ACME-8');
+    const res = await launch(world.env);
+    expect(res.code, res.stderr + res.stdout).toBe(0);
+    expectAdoptedAndClosed(s);
+    expectAgentsConfined(world.home);
+
+    const { prs } = readPrs(world.home);
+    expect(prs.map((p) => `${p.repo} ${p.head}`).sort()).toEqual([
+      `acme/app-a ${DEAD_LEAF2}`,
+      `acme/app-b ${DEAD_LEAF2}-b`,
+    ]);
+    for (const [repo, branch] of [
+      ['app-a', DEAD_LEAF2],
+      ['app-b', `${DEAD_LEAF2}-b`],
+    ] as const) {
+      expect(subjects(world.remotes[repo]!, branch)).toEqual([
+        `ACME-8: the change in ${repo}`,
+        'ACME-8: before the run died',
+      ]);
+      const bot = BOTS[`acme/${repo}`]!;
+      expect(authorOn(world.remotes[repo]!, branch)).toBe(`${bot.name} <${bot.email}>`);
+    }
+    expect(s.cards['ACME-8']!.status).toBe('implemented');
+  }, 120_000);
+
+  it('a parent, continued: the landed child is not run again, the rest resume on the session branch in every repository, through the draft it already has', async () => {
+    const s = CONTINUE_SCENARIOS[2]!;
+    const world = armContinue(s);
+    s.cards['ACME-11']!.status = 'implemented';
+    seedDead(world, 'app-a', DEAD_SESSION, 'ACME-11');
+    seedDead(world, 'app-b', DEAD_SESSION, 'ACME-12');
+    // The dead run opened its draft in app-a when ACME-11 landed.
+    writeFileSync(
+      join(world.home, 'fake-gh.json'),
+      JSON.stringify({
+        prs: [
+          {
+            repo: 'acme/app-a',
+            head: DEAD_SESSION,
+            number: 1,
+            url: 'https://github.com/acme/app-a/pull/1',
+            draft: true,
+            title: 'the dead run',
+            body: `Dispatched by ${DISPATCHER}.`,
+            state: 'open',
+          },
+        ],
+        calls: [],
+      }),
+    );
+    const res = await launch(world.env);
+    expect(res.code, res.stderr + res.stdout).toBe(0);
+    expectAdoptedAndClosed(s);
+    expectAgentsConfined(world.home);
+
+    const paths = stub.requests.map((r) => `${r.method} ${r.path}`);
+    expect(paths.some((p) => p.includes('scope-claims'))).toBe(false);
+    expect(paths.some((p) => p.endsWith('/continue'))).toBe(false);
+    // Only the child that had not landed ran, on the dead run's session branch.
+    const integrated = stub.requests
+      .filter((r) => r.method === 'POST' && r.path.endsWith('/integration'))
+      .map((r) => `${r.path.split('/')[4]} ${(r.body as { sessionBranch: string }).sessionBranch}`);
+    expect(integrated).toEqual([`ACME-12 ${DEAD_SESSION}`]);
+    const prompted = stub.requests
+      .filter((r) => r.path.endsWith('/dispatch-prompt'))
+      .map((r) => r.path.split('/')[4]);
+    expect(prompted).toEqual(['ACME-12']);
+
+    // app-a's draft was reused, app-b's opened now; one pull request per
+    // repository, all on the session branch, all ready at the close-out.
+    const { prs, calls } = readPrs(world.home);
+    expect(prs.map((p) => `${p.repo} ${p.head}`).sort()).toEqual([
+      `acme/app-a ${DEAD_SESSION}`,
+      `acme/app-b ${DEAD_SESSION}`,
+    ]);
+    expect(calls.filter((c) => c.args[1] === 'create').map((c) => c.repo)).toEqual(['acme/app-b']);
+    expect(prs.every((p) => p.draft === false)).toBe(true);
+    expect(subjects(world.remotes['app-b']!, DEAD_SESSION).slice(-2)).toEqual([
+      'ACME-12: the change in app-b',
+      'ACME-12: before the run died',
+    ]);
+    expect(subjects(world.remotes['app-a']!, DEAD_SESSION)).toContain(
+      'ACME-11: before the run died',
+    );
+    expect(s.cards['ACME-12']!.status).toBe('implemented');
+  }, 180_000);
 });
 
 // ── Layer 2: the image ─────────────────────────────────────────────────────

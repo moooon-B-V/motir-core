@@ -705,6 +705,12 @@ export interface ContinueClaimBranch {
   repository: string | null;
   branch: string;
   pullRequest: { repo: string; number: number; url: string; headRef: string } | null;
+  /**
+   * Where to clone it from — carried by a hosted continue's run read
+   * (MOTIR-6795), so a repository no remaining leg touches can still be closed
+   * out. Absent on the claim itself, whose caller has its own checkouts.
+   */
+  cloneUrl?: string | null;
 }
 
 /**
@@ -1122,6 +1128,22 @@ export interface DispatchRunView {
   model: string | null;
   endedAt: string | null;
   cards: Array<{ key: string | null; position: number; disposition: string }>;
+  /**
+   * What a `continue` run resumes (MOTIR-6795) — what the server's continue claim
+   * decided when it opened the run. Null for any other command; absent from a
+   * server older than contract 1.53.0.
+   */
+  continues?: DispatchRunContinues | null;
+}
+
+export interface DispatchRunContinues {
+  fromRunId: string | null;
+  branch: string | null;
+  /** Each with its repository's clone URL, where the project knows one. */
+  branches: Array<{ repository: string | null; branch: string; cloneUrl: string | null }>;
+  mode: 'card' | 'parent';
+  landedKeys: string[];
+  resumedKeys: string[];
 }
 
 /**

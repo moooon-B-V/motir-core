@@ -115,7 +115,7 @@ export interface ScopeDrainInput {
    * repository resumes the branch, and so the draft pull request, its dead run
    * left there. Absent: `branch` in every repository.
    */
-  branches?: readonly { repository: string | null; branch: string }[];
+  branches?: readonly { repository: string | null; branch: string; cloneUrl?: string | null }[];
 }
 
 /**
@@ -468,6 +468,40 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
     }
   } finally {
     detachInterrupt();
+  }
+
+  // A RESUMED scope closes out EVERY repository its dead run pushed to
+  // (MOTIR-6795) — not only the ones a remaining leg touched. A repository whose
+  // children all landed before the run died holds a draft nothing else would
+  // finish: without this it stays a draft, the story's work in it unreviewable.
+  if (input.resumeBranch && input.branches) {
+    for (const own of input.branches) {
+      if (!own.repository) continue;
+      try {
+        const [target] = resolveDispatchTargets(session.link.dir, session.link.config, [
+          input.materialize
+            ? { name: own.repository, cloneUrl: own.cloneUrl ?? null }
+            : own.repository,
+        ]);
+        let resolvedTarget = target!;
+        if (input.materialize && resolvedTarget.reason !== 'repo_checkout') {
+          const materialized = materializeDispatchCheckouts(session.link.dir, [resolvedTarget], {
+            run,
+          });
+          for (const line of renderMaterialization(materialized)) info(line);
+          if (materialized.failures.length > 0) continue;
+          resolvedTarget = resolveDispatchTargets(session.link.dir, session.link.config, [
+            own.repository,
+          ])[0]!;
+        }
+        if (resolvedTarget.reason === 'repo_checkout') repos.ensure([resolvedTarget]);
+      } catch (err) {
+        info(
+          `${own.repository}: its session branch ${own.branch} was not closed out ` +
+            `(${err instanceof Error ? err.message : String(err)}).`,
+        );
+      }
+    }
   }
 
   // Whatever is STILL held was not approved by the time the run ended — its

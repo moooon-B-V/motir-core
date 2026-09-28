@@ -18,14 +18,19 @@ import type {
 // child. Driven through the real `continueCommand` against a scripted client and
 // a recording git/gh, the same shape as `scopeCommand.test.ts`.
 
-const { runAgentMock, sessionRef } = vi.hoisted(() => ({
+const { runAgentMock, sessionRef, adoptedRef } = vi.hoisted(() => ({
   runAgentMock: vi.fn(),
   sessionRef: { current: null as unknown },
+  adoptedRef: { current: null as unknown },
 }));
 
 vi.mock('../src/agentRun.js', () => ({ runAgent: runAgentMock }));
 vi.mock('../src/session.js', () => ({
   withProjectSession: async (fn: (s: unknown) => Promise<unknown>) => fn(sessionRef.current),
+  withHostedProjectSession: async (
+    _runId: string,
+    fn: (s: unknown, run: unknown) => Promise<unknown>,
+  ) => fn(sessionRef.current, adoptedRef.current),
 }));
 
 const { continueCommand } = await import('../src/commands/continue.js');
@@ -517,6 +522,63 @@ describe('motir continue <PARENT> — across repositories', () => {
       cwd: ai,
     });
     expect(h.stderr).toContain(`Session branch ${BRANCH} already on origin in ${core}`);
+  });
+});
+
+// MOTIR-6795 — a hosted parent continue ADOPTS the run the server's continue
+// claim opened: no continue claim, no scope claim, and the landed legs stay landed.
+describe('motir continue <PARENT> — hosted, on the run the server opened', () => {
+  const RUN = 'run_hosted_parent';
+  afterEach(() => {
+    delete process.env['MOTIR_DISPATCH_RUN_ID'];
+    adoptedRef.current = null;
+  });
+
+  it('drains the adopted legs less the landed ones on the dead session branch, claiming nothing', async () => {
+    setup({ ready: [] });
+    process.env['MOTIR_DISPATCH_RUN_ID'] = RUN;
+    adoptedRef.current = { runId: RUN, projectKey: 'PROD', legs: ['PROD-2', 'PROD-3'] };
+    const client = (sessionRef.current as { client: Record<string, unknown> }).client;
+    client['getDispatchRun'] = async (id: string) => {
+      h.calls.push({ tool: 'get_run', args: id });
+      return {
+        runId: RUN,
+        status: 'running',
+        command: 'continue',
+        origin: 'hosted',
+        model: 'claude-opus-5-5',
+        endedAt: null,
+        cards: [],
+        continues: {
+          fromRunId: 'run_dead_scope',
+          branch: BRANCH,
+          branches: [{ repository: 'motir-core', branch: BRANCH }],
+          mode: 'parent',
+          landedKeys: ['PROD-2'],
+          resumedKeys: [],
+        },
+      };
+    };
+    client['me'] = async () => ({ id: OWNER, name: 'Me', email: 'me@motir.test' });
+
+    await continueCommand(
+      'PROD-1',
+      { agent: 'fake-agent' },
+      { run: recordingGit(), clock: () => 0, now: () => new Date(0) },
+    );
+
+    const tools = h.calls.map((c) => c.tool);
+    expect(tools).not.toContain('claim_continue');
+    expect(tools).not.toContain('claim_scope');
+    expect(tools).not.toContain('open_run');
+    // Only the NOT-landed leg runs, on the dead run's branch.
+    const prompts = h.calls.filter((c) => c.tool === 'dispatch_prompt');
+    expect(prompts.map((p) => p.args)).toEqual([{ key: 'PROD-3', sessionBranch: BRANCH }]);
+    expect(h.commands.some((c) => c.startsWith('git merge --no-edit origin/main'))).toBe(true);
+    expect(h.commands.some((c) => c.startsWith('gh pr create'))).toBe(false);
+    const appended = h.calls.filter((c) => c.tool === 'append');
+    expect(appended.length).toBeGreaterThan(0);
+    expect(appended.every((c) => (c.args as { runId: string }).runId === RUN)).toBe(true);
   });
 });
 

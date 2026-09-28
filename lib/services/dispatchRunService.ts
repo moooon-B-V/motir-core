@@ -27,6 +27,7 @@ import type {
   DispatchRunAppendedDto,
   DispatchRunCardDto,
   DispatchRunCloseOutPromptDto,
+  DispatchRunContinuesDto,
   DispatchRunCostDto,
   DispatchRunDetailDto,
   DispatchRunHostedEndDto,
@@ -36,8 +37,10 @@ import type {
   DispatchRunOpenedDto,
   DispatchRunScopeDto,
 } from '@/lib/dto/dispatchRuns';
+import { listDispatchRepoNames } from '@/lib/workItems/dispatchRepo';
 import {
   toDispatchRunCardDto,
+  toDispatchRunContinuesDto,
   toDispatchRunDto,
   toDispatchRunEventDto,
   toDispatchRunListItemDto,
@@ -263,6 +266,35 @@ async function resolveRunScope(
  * link confirms nothing about a run the reader may not see. Called inside the
  * read's transaction.
  */
+/**
+ * A continue's branches with each repository's clone URL (MOTIR-6795), read
+ * OUTSIDE the run read's transaction as `listDispatchRepoNames` requires. A
+ * coordinate the project cannot supply reads as `null` — the read of the run
+ * never fails on it; the container then works only where it has a checkout.
+ */
+async function withCloneUrls(
+  continues: DispatchRunContinuesDto,
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<DispatchRunContinuesDto> {
+  let domain: Awaited<ReturnType<typeof listDispatchRepoNames>> = [];
+  try {
+    domain = await listDispatchRepoNames(projectId, ctx);
+  } catch {
+    return continues;
+  }
+  return {
+    ...continues,
+    branches: continues.branches.map((b) => ({
+      ...b,
+      cloneUrl:
+        (b.repository &&
+          domain.find((r) => r.name.toLowerCase() === b.repository!.toLowerCase())?.cloneUrl) ||
+        null,
+    })),
+  };
+}
+
 async function assertMayReadRun(
   run: { id: string; projectId: string; createdById: string | null },
   ctx: ServiceContext,
@@ -923,7 +955,7 @@ export const dispatchRunService = {
     // A hosted run's own credential reads its own run and no other — checked
     // before the read, like every run-token route (MOTIR-6558).
     assertRunTokenScope(runId, ctx);
-    return withWorkspaceContext(
+    const dto = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
         const run = await dispatchRunRepository.findByIdWithCards(runId, tx);
@@ -932,9 +964,18 @@ export const dispatchRunService = {
         }
         await assertMayReadRun(run, ctx, tx);
         const seq = (await dispatchRunEventRepository.maxSeq(runId, tx)) ?? 0;
-        return toDispatchRunDto(run, seq);
+        const opened =
+          run.command === 'continue'
+            ? await dispatchRunEventRepository.findLatestOfKind(runId, 'run_opened', tx)
+            : null;
+        return {
+          ...toDispatchRunDto(run, seq),
+          continues: run.command === 'continue' ? toDispatchRunContinuesDto(opened?.data) : null,
+        };
       },
     );
+    if (!dto.continues || dto.continues.branches.length === 0) return dto;
+    return { ...dto, continues: await withCloneUrls(dto.continues, dto.projectId, ctx) };
   },
 
   /**

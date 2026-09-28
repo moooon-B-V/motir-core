@@ -19,17 +19,25 @@ import { createDispatchRunReporter } from '../dispatchRunReporter.js';
 import { CliError } from '../errors.js';
 import { execCommand, type CommandRunner } from '../git.js';
 import type { LinkConfig } from '../config/linkConfig.js';
+import {
+  assertAdoptsLeaf,
+  hostedRunId,
+  legAsDispatchItem,
+  type AdoptedRun,
+} from '../hostedMode.js';
 import { info } from '../output.js';
-import { withProjectSession } from '../session.js';
+import { withHostedProjectSession, withProjectSession } from '../session.js';
 import { requireAgent } from './auto.js';
 import {
   deliver,
+  hostedCheckoutPreparer,
   resolveOwnerId,
   runClaimedScope,
   type DeliveryDeps,
   type RunOptions,
 } from './dispatch.js';
-import { claimScopeForRun } from './scope.js';
+import { claimScopeForRun, type ClaimedScope } from './scope.js';
+import { readScopeEdges } from './scopeDrain.js';
 import { runIdFromDate } from '../git.js';
 
 // `motir continue <key>` (Story MOTIR-6526 · MOTIR-6533,
@@ -54,6 +62,9 @@ import { runIdFromDate } from '../git.js';
 // It never resets, cleans, stashes or re-points a worktree: the dead run's
 // worktree is reused AS FOUND, dirty or clean — the claim proved its run dead, so
 // nobody else is in it — and one on another branch is a refusal naming it.
+
+/** The launcher's exit code for a run that could not be set up (`sandbox/hosted/entrypoint.ts`). */
+const HOSTED_SETUP_FAILED = 20;
 
 /** What `motir continue` reads — its own flags, registered in `program.ts`. */
 export interface ContinueOptions {
@@ -311,8 +322,23 @@ export async function continueCommand(
 ): Promise<void> {
   const trimmed = key.trim();
   if (!trimmed) throw new CliError('A work item key is required, e.g. `motir continue ACME-7`.');
+
+  // ── HOSTED OR LOCAL? (MOTIR-6795) ─────────────────────────────────────────
+  // A run id means the SERVER already took the continue claim (the browser's
+  // Continue hosted) and opened this run; this container ADOPTS it rather than
+  // claiming — a second claim would find the card `taken` by its own run.
+  const adoptId = hostedRunId({});
+  if (adoptId) {
+    await withHostedProjectSession(
+      adoptId,
+      (session, adopted) => continueHosted({ key: trimmed, session, adopted, opts, deps }),
+      trimmed,
+    );
+    return;
+  }
+
   await withProjectSession(async (session) => {
-    const { client, link } = session;
+    const { client } = session;
     // The agent is resolved BEFORE the claim: a continue nobody can run must not
     // take a card over and then have to hand it back.
     const agent = requireAgent({ ...opts, print: false }, 'motir continue');
@@ -329,72 +355,179 @@ export async function continueCommand(
       await continueParent({ session, claim, opts, deps, agent });
       return;
     }
-
-    // The run the SERVER opened, adopted — so this process heartbeats it and
-    // closes it `interrupted` on a signal (MOTIR-6530), exactly as a `motir run`.
-    const reporter = createDispatchRunReporter({
-      client,
-      reportLogBodies: opts.reportLog === true,
-    });
-    reporter.adopt(claim.runId as string);
-
-    const dispatch = await client.dispatchPrompt(claim.key, {
-      ...(claim.deadRun ? { continueFrom: claim.deadRun.id } : {}),
-    });
-
-    const prepared = prepareContinueCheckouts({
-      key: claim.key,
-      branches: continueBranchesOf(claim),
-      dispatch,
-      rootDir: link.dir,
-      config: link.config,
-      run: deps.run ?? execCommand,
-      exists: deps.exists ?? existsSync,
-    });
-    if (!prepared.ok) {
-      info(prepared.message);
-      reporter.event({ kind: 'card_settled', workItemKey: claim.key, disposition: 'failed' });
-      await reporter.close('halted');
-      process.exitCode = 1;
-      return;
-    }
-    for (const line of prepared.materialized) info(line);
-    const [primary] = prepared.checkouts as [ContinueCheckout, ...ContinueCheckout[]];
-    const several = prepared.checkouts.length > 1;
-    for (const c of prepared.checkouts) {
-      info(`  ${several && c.repository ? `${c.repository}: ` : ''}${c.branch} at ${c.path}`);
-    }
-    // EVERY repository's branch (MOTIR-6793), so a continue that dies again is
-    // continuable again on all of them — the `branches[]` shape MOTIR-6539 writes.
-    const legBranches: LegBranch[] = prepared.checkouts.map((c) => ({
-      repository: c.repository,
-      branch: c.branch,
-      workBranch: c.branch,
-    }));
-    reporter.event({
-      kind: 'checkout_ready',
-      workItemKey: claim.key,
-      disposition: 'running',
-      data: {
-        branch: primary.branch,
-        path: primary.path,
-        branches: prepared.checkouts.map((c) => ({ ...c, workBranch: c.branch })),
-      },
-    });
-
-    // `motir run`'s own delivery — the agent, the push check, Implemented, the CI
-    // watch — with the run already held.
-    await deliver({
+    await continueLeaf({
       session,
-      command: 'continue',
       key: claim.key,
       title: claim.title,
-      dispatch,
+      runId: claim.runId as string,
+      continueFrom: claim.deadRun?.id ?? null,
+      branches: continueBranchesOf(claim),
       opts,
       deps,
-      reporter,
-      continueBranches: legBranches,
+      hosted: false,
     });
+  });
+}
+
+type Session = Parameters<Parameters<typeof withProjectSession>[0]>[0];
+
+/**
+ * THE LEAF ARM — every repository checked out on its dead branch, then `motir
+ * run`'s own delivery on the run the continue claim opened. Shared by a terminal
+ * continue and a hosted one; they differ only in where the claim's answer came
+ * from and in the hosted run's own needs (its agent output reported, its
+ * checkouts indexed).
+ */
+async function continueLeaf(input: {
+  session: Session;
+  key: string;
+  title: string | null;
+  runId: string;
+  continueFrom: string | null;
+  branches: readonly ContinueClaimBranch[];
+  opts: ContinueOptions;
+  deps: ContinueDeps;
+  hosted: boolean;
+}): Promise<void> {
+  const { session, key, opts, deps } = input;
+  const { client, link } = session;
+  // The run the SERVER opened, adopted — so this process heartbeats it and
+  // closes it `interrupted` on a signal (MOTIR-6530), exactly as a `motir run`.
+  // A hosted run always reports its agent's output (MOTIR-6559).
+  const reporter = createDispatchRunReporter({
+    client,
+    reportLogBodies: opts.reportLog === true || input.hosted,
+  });
+  reporter.adopt(input.runId);
+
+  const dispatch = await client.dispatchPrompt(key, {
+    ...(input.continueFrom ? { continueFrom: input.continueFrom } : {}),
+  });
+
+  const prepared = prepareContinueCheckouts({
+    key,
+    branches: input.branches,
+    dispatch,
+    rootDir: link.dir,
+    config: link.config,
+    run: deps.run ?? execCommand,
+    exists: deps.exists ?? existsSync,
+  });
+  if (!prepared.ok) {
+    info(prepared.message);
+    reporter.event({ kind: 'card_settled', workItemKey: key, disposition: 'failed' });
+    await reporter.close('halted');
+    process.exitCode = 1;
+    return;
+  }
+  for (const line of prepared.materialized) info(line);
+  const [primary] = prepared.checkouts as [ContinueCheckout, ...ContinueCheckout[]];
+  const several = prepared.checkouts.length > 1;
+  for (const c of prepared.checkouts) {
+    info(`  ${several && c.repository ? `${c.repository}: ` : ''}${c.branch} at ${c.path}`);
+  }
+  // EVERY repository's branch (MOTIR-6793), so a continue that dies again is
+  // continuable again on all of them — the `branches[]` shape MOTIR-6539 writes.
+  const legBranches: LegBranch[] = prepared.checkouts.map((c) => ({
+    repository: c.repository,
+    branch: c.branch,
+    workBranch: c.branch,
+  }));
+  reporter.event({
+    kind: 'checkout_ready',
+    workItemKey: key,
+    disposition: 'running',
+    data: {
+      branch: primary.branch,
+      path: primary.path,
+      branches: prepared.checkouts.map((c) => ({ ...c, workBranch: c.branch })),
+    },
+  });
+
+  // `motir run`'s own delivery — the agent, the push check, Implemented, the CI
+  // watch — with the run already held.
+  await deliver({
+    session,
+    command: 'continue',
+    key,
+    title: input.title,
+    dispatch,
+    opts,
+    deps,
+    reporter,
+    continueBranches: legBranches,
+    // Marks the delivery hosted: its checkouts are indexed before the spawn, and
+    // print mode is refused (nobody is there to paste a prompt).
+    ...(input.hosted ? { adoptedRunId: input.runId } : {}),
+  });
+}
+
+/**
+ * `motir continue` IN A HOSTED CONTAINER (Story MOTIR-6527 · MOTIR-6795) — on
+ * the `continue` run the server's continue claim opened. Nothing is claimed
+ * here: what the claim decided (the dead run, every repository's branch, and for
+ * a parent the legs that landed and those in flight) is read back from the run
+ * itself, and the same leaf and parent arms a terminal continue uses do the rest.
+ */
+async function continueHosted(input: {
+  key: string;
+  session: Session;
+  adopted: AdoptedRun;
+  opts: ContinueOptions;
+  deps: ContinueDeps;
+}): Promise<void> {
+  const { key, session, adopted, opts, deps } = input;
+  const agent = requireAgent({ ...opts, print: false }, 'motir continue');
+  const view = await session.client.getDispatchRun(adopted.runId);
+  const resumes = view.continues ?? null;
+  if (view.command !== 'continue' || resumes === null) {
+    // ⚠️ A SETUP FAILURE, not a refusal to guess: without what the claim decided
+    // there is no branch to continue on, and inventing one is how work is lost.
+    throw new CliError(
+      `Run ${adopted.runId} is a \`${view.command}\` run, not a continue — nothing to resume.`,
+      {
+        exitCode: HOSTED_SETUP_FAILED,
+        hint: 'A hosted continue is booted by Continue hosted, on the run its claim opened.',
+      },
+    );
+  }
+  const branches = resumes.branches.map((b) => ({ ...b, pullRequest: null }));
+  const { item } = await session.client.getWorkItem(key);
+  info(
+    `Adopted run ${adopted.runId}: continuing ${item.identifier} on ${resumes.branch ?? 'its branch'}.`,
+  );
+
+  if (resumes.mode === 'parent') {
+    await continueParent({
+      session,
+      claim: {
+        key: item.identifier,
+        title: item.title,
+        runId: adopted.runId,
+        branch: resumes.branch,
+        branches,
+        pullRequest: null,
+        landedKeys: resumes.landedKeys,
+        resumedKeys: resumes.resumedKeys,
+      },
+      opts,
+      deps,
+      agent,
+      adopted,
+    });
+    return;
+  }
+  assertAdoptsLeaf(adopted, item.identifier);
+  await continueLeaf({
+    session,
+    key: item.identifier,
+    title: item.title,
+    runId: adopted.runId,
+    continueFrom: resumes.fromRunId,
+    branches,
+    opts,
+    deps,
+    hosted: true,
   });
 }
 
@@ -411,16 +544,23 @@ export async function continueCommand(
  * leg already Implemented or later is not in that set at all.
  */
 async function continueParent(input: {
-  session: Parameters<Parameters<typeof withProjectSession>[0]>[0];
-  claim: WorkItemContinueClaim;
+  session: Session;
+  claim: Pick<
+    WorkItemContinueClaim,
+    'key' | 'title' | 'runId' | 'branch' | 'branches' | 'pullRequest' | 'landedKeys' | 'resumedKeys'
+  >;
   opts: ContinueOptions;
   deps: ContinueDeps;
   agent: ReturnType<typeof requireAgent>;
+  /** A HOSTED continue's run (MOTIR-6795): its legs are the scope, nothing is claimed. */
+  adopted?: AdoptedRun;
 }): Promise<void> {
-  const { session, claim, opts, deps, agent } = input;
+  const { session, claim, deps, agent, adopted } = input;
+  // ⚠️ UNATTENDED when hosted: nobody is there to re-run it after a failed card.
+  const opts: ContinueOptions = adopted ? { ...input.opts, keepGoing: true } : input.opts;
   const reporter = createDispatchRunReporter({
     client: session.client,
-    reportLogBodies: opts.reportLog === true,
+    reportLogBodies: opts.reportLog === true || adopted !== undefined,
   });
   reporter.adopt(claim.runId as string);
 
@@ -430,13 +570,21 @@ async function continueParent(input: {
   }
 
   const target = { kind: 'work_item' as const, key: claim.key };
-  const ownerId = await resolveOwnerId(session.client);
   // `continue` registers only its own flags; the scope helpers read the rest as unset.
   const runOpts: RunOptions = { ...opts };
   // The dead run's IN-FLIGHT legs are run again: the claim made them ours, and the
   // ready set — To Do leaves only — would never list them.
   const resume = await resumedItems(session.client, claim.resumedKeys);
-  const claimed = await claimScopeForRun(session, target, runOpts, ownerId, undefined, resume);
+  const claimed = adopted
+    ? await adoptedScope(session, target, claim, adopted, resume)
+    : await claimScopeForRun(
+        session,
+        target,
+        runOpts,
+        await resolveOwnerId(session.client),
+        undefined,
+        resume,
+      );
   if (!claimed) {
     // Nothing left to dispatch (or the scope claim refused and said why).
     await reporter.close('completed');
@@ -464,7 +612,51 @@ async function continueParent(input: {
     // with no checkout here is cloned first, as the leaf continue does.
     branches: continueBranchesOf(claim),
     materialize: true,
+    ...(adopted ? { prepareCheckouts: hostedCheckoutPreparer } : {}),
   });
+}
+
+/**
+ * A HOSTED parent continue's set (MOTIR-6795) — the run's own legs, less the ones
+ * that already landed, each read from its card. Nothing is claimed: the server's
+ * continue claim re-assigned the in-flight legs when it opened this run, and a
+ * scope claim from here would be refused for any child the run does not own.
+ * The members' order and edges are the container's, read once, as `motir run`'s
+ * hosted scope reads them.
+ */
+async function adoptedScope(
+  session: Session,
+  target: { kind: 'work_item'; key: string },
+  claim: { title: string; landedKeys: readonly string[] },
+  adopted: AdoptedRun,
+  resume: DispatchItem[],
+): Promise<ClaimedScope | null> {
+  const landed = new Set(claim.landedKeys);
+  const resumed = new Set(resume.map((r) => r.key));
+  const ready: DispatchItem[] = [...resume];
+  for (const leg of adopted.legs) {
+    if (landed.has(leg) || resumed.has(leg)) continue;
+    ready.push(legAsDispatchItem(await session.client.getWorkItem(leg)));
+  }
+  if (ready.length === 0) {
+    info(`Nothing left to continue in ${target.key}: every card of run ${adopted.runId} landed.`);
+    return null;
+  }
+  const edges = await readScopeEdges(session.client, target, session.projectKey);
+  return {
+    // The server's continue claim IS this scope's claim; this records it as held.
+    claim: {
+      scope: { kind: 'work_item', key: target.key, sprintId: null, name: claim.title },
+      outcome: 'mine',
+      claimed: true,
+      members: [],
+      offender: null,
+      shape: null,
+      blockers: [],
+    },
+    ready,
+    edges,
+  };
 }
 
 /**
