@@ -66,7 +66,7 @@ async function seedProject(page: Page, email: string, identifier: string): Promi
   const project = await projectsService.createProject({
     workspaceId: ws!.id,
     actorUserId: user!.id,
-    name: 'Triage Flow',
+    name: 'Intake Flow',
     identifier,
   });
   await db.workspaceMembership.update({

@@ -203,7 +203,14 @@ test('a MEMBER is offered no settings area — and the room is still shut', asyn
   // ⚠️ Leave the settings AREA first: inside it the rail SWAPS to the settings
   // nav, so asserting project-nav rows there fails for the wrong reason.
   await page.goto('/dashboard');
-  for (const label of ['Dashboard', 'Work Items', 'Boards', 'Backlog', 'Reports', 'Triage']) {
+  for (const label of [
+    'Dashboard',
+    'Work Items',
+    'Boards',
+    'Backlog',
+    'Reports',
+    'Requested features',
+  ]) {
     await expect(rail(page).getByRole('link', { name: label }), label).toBeVisible();
   }
 });
@@ -222,7 +229,7 @@ test('a VIEWER loses the destinations that refuse them, and keeps every read', a
   // browses the rooms' view-any keys, so a viewer now opens Plans on
   // `plan:view_any` — the room's Project view, with nothing to author. It moved to
   // the kept list below, with Approval records and Runs, which a viewer holds the same way.
-  for (const gone of ['Triage', 'Code health']) {
+  for (const gone of ['Requested features', 'Code health']) {
     await expect(rail(page).getByRole('link', { name: gone, exact: true }), gone).toHaveCount(0);
   }
   // Every read surface stays — the primary nav never renders empty.
