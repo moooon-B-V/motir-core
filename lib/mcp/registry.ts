@@ -57,6 +57,12 @@ import {
   SET_WORK_ITEM_TODO_DONE_TOOL_NAME,
   registerWorkItemTodos,
 } from './tools/workItemTodos';
+import {
+  CLAIM_WORK_ITEM_REPAIR_TOOL_NAME,
+  CLOSE_WORK_ITEM_REPAIR_TOOL_NAME,
+  TOUCH_WORK_ITEM_REPAIR_TOOL_NAME,
+  registerWorkItemRepair,
+} from './tools/workItemRepair';
 import { ADD_LESSON_TOOL_NAME, registerAddLesson } from './tools/addLesson';
 import { SEARCH_LESSONS_TOOL_NAME, registerSearchLessons } from './tools/searchLessons';
 import { REINFORCE_LESSON_TOOL_NAME, registerReinforceLesson } from './tools/reinforceLesson';
@@ -145,6 +151,9 @@ export const MCP_TOOL_NAMES = [
   NEXT_READY_TOOL_NAME,
   CLAIM_NEXT_READY_TOOL_NAME,
   CLAIM_WORK_ITEM_TOOL_NAME,
+  CLAIM_WORK_ITEM_REPAIR_TOOL_NAME,
+  TOUCH_WORK_ITEM_REPAIR_TOOL_NAME,
+  CLOSE_WORK_ITEM_REPAIR_TOOL_NAME,
   DISPATCH_PROMPT_TOOL_NAME,
   EXPAND_ITEM_TOOL_NAME,
   GET_PLAN_STATUS_TOOL_NAME,
@@ -330,6 +339,10 @@ export function registerMcpTools(
   // or untick one, over the shipped `workItemTodosService`. Edit, reorder and
   // delete stay the UI's: the guide that consumes these needs none of them.
   registerWorkItemTodos(target, resolveContext);
+  // The REPAIR claim's door (MOTIR-6807) — claim a red card's repair, keep it
+  // alive, close it with its outcome, over the shipped `workItemRepairService`
+  // and dispatch-run heartbeat/close. The same lock `motir fix` takes over v1.
+  registerWorkItemRepair(target, resolveContext);
   registerAddLesson(target, resolveContext);
   registerSearchLessons(target, resolveContext);
   registerReinforceLesson(target, resolveContext);

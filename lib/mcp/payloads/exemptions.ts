@@ -137,6 +137,18 @@ export const EXEMPT_TOOLS = {
     'Returns the ticked (or unticked) step and the list’s progress — `{ workItemKey, todo, ' +
     'progress }`. Same boundary as its two siblings. `progress` is read inside the tick’s own ' +
     'transaction, so it describes the list the tick produced (MOTIR-6725).',
+  touch_work_item_repair:
+    'Returns a REPAIR RUN’s liveness — `{ key, runId, open, status, stopReason, startedAt, ' +
+    'endedAt, lastHeartbeatAt }` — the answer an agent holding a repair acts on (stop when ' +
+    '`open` is false). v1’s heartbeat is a 204 with no body, and its run read is the whole ' +
+    '`DispatchRun` resource, which no MCP tool returns by decision ' +
+    '(`MCP_UNREACHABLE_RESOURCES.DispatchRun`). So there is nothing to derive from, and this ' +
+    'narrow shape must not grow into that resource (MOTIR-6807).',
+  close_work_item_repair:
+    'The same repair-run liveness shape as `touch_work_item_repair`, after the close. v1’s close ' +
+    'returns the whole `DispatchRun` with its legs, which the agent surface does not carry, for ' +
+    'the reason `MCP_UNREACHABLE_RESOURCES.DispatchRun` records; the agent needs only that its ' +
+    'repair is closed and how (MOTIR-6807).',
   delete_work_item:
     'Returns a cascade-delete summary (`totalCount`, `descendantCount`, `byKind`). ADR §3 ' +
     'leaves the irreversible cascade delete OUT of v1 entirely, and `tests/helpers/v1RouteAudit.ts` ' +

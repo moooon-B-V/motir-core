@@ -93,7 +93,7 @@ import {
 } from '@/lib/planChange/errors';
 import { InvalidTargetError } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError } from '@/lib/ai/errors';
-import { RunFoundReportReasonInvalidError } from '@/lib/dispatchRuns/errors';
+import { RepairRunRefusedError, RunFoundReportReasonInvalidError } from '@/lib/dispatchRuns/errors';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { AttachmentError } from '@/lib/blob/errors';
 import { DesignEvidenceError } from '@/lib/designEvidence/errors';
@@ -583,7 +583,12 @@ export function toToolError(err: unknown): CallToolResult {
     // input, fixable in one hop (send the same text as the card comment); the
     // bound is the SERVICE's, so it must reach the runner as this code rather
     // than as a JSON-RPC internal error.
-    err instanceof RunFoundReportReasonInvalidError
+    err instanceof RunFoundReportReasonInvalidError ||
+    // REPAIR_RUN_NOT_FOUND / REPAIR_RUN_NOT_YOURS (MOTIR-6807) — a
+    // `touch_work_item_repair` / `close_work_item_repair` naming a run that is not
+    // the caller's own repair run of that card. Refused before anything is
+    // written; the message says to claim first, or that somebody else holds it.
+    err instanceof RepairRunRefusedError
   ) {
     return toolError(err.code, err.message);
   }

@@ -938,6 +938,21 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Atomically claim ONE named work item and flip it to In Progress. A lost claim says WHO holds it.',
     descriptionFingerprint: '272d4e9c0a23',
   },
+  claim_work_item_repair: {
+    summary:
+      'Take the repair lock on a work item with failing pull requests, as `motir fix` does. One fixer at a time.',
+    descriptionFingerprint: 'ce7801d719d9',
+  },
+  touch_work_item_repair: {
+    summary:
+      'Keep your repair of a work item alive. A repair silent for five minutes is closed and its lock released.',
+    descriptionFingerprint: '7383e1d2aeaf',
+  },
+  close_work_item_repair: {
+    summary:
+      'End your repair of a work item with how it went, so the page shows it and a new repair may start.',
+    descriptionFingerprint: '1b8e5165724b',
+  },
   add_comment: {
     summary: 'Post a Markdown comment as the token owner. Mentions notify the member named.',
     descriptionFingerprint: '81d096a6d087',

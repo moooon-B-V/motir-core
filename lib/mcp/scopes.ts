@@ -269,6 +269,11 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   list_work_item_todos: 'read',
   add_work_item_todo: 'work_items:write',
   set_work_item_todo_done: 'work_items:write',
+  // The repair tools (MOTIR-6807) — three writes, in the legacy write bucket; the
+  // real gate is `work_item:edit` in `toolPermissions.ts`.
+  claim_work_item_repair: 'work_items:write',
+  touch_work_item_repair: 'work_items:write',
+  close_work_item_repair: 'work_items:write',
   // `add_lesson` (MOTIR-3361). This legacy table records the 7.7.16 vocabulary,
   // which has no lesson axis at all — the real gate is the PERMISSION
   // (`lesson:manage`, in `toolPermissions.ts`). Filed under `work_items:write`
