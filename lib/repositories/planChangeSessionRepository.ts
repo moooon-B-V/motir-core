@@ -265,6 +265,8 @@ export const planChangeSessionRepository = {
       sessionId?: string;
       /** The reader's OWN sessions only (`mine`), or null for every session. */
       mine?: PlanSessionMineScope | null;
+      /** A Visitor's private-epic hidden set (MOTIR-6645) — see {@link sessionWithheldSql}. */
+      hiddenIds?: readonly string[];
     },
     tx: Prisma.TransactionClient,
   ): Promise<PlanSessionListRow[]> {
@@ -302,9 +304,78 @@ export const planChangeSessionRepository = {
       ) pc ON true
       WHERE s."project_id" = ${args.projectId} AND s."workspace_id" = ${args.workspaceId}
         ${stateFilter(args.state)} ${mineFilter(args.mine ?? null)} ${after} ${only}
+        ${sessionWithheldSql(args.hiddenIds)}
       ORDER BY s."last_activity_at" DESC, s."id" DESC
       LIMIT ${args.limit}
     `;
+  },
+
+  /**
+   * Whether a Visitor must be refused ONE plan (Story MOTIR-6170 · MOTIR-6645) —
+   * its proposals name a hidden id, or its session is withheld by
+   * {@link sessionWithheldSql}. The same predicates the room's list applies, so a
+   * plan the list does not show is exactly one its page refuses. An empty hidden
+   * set withholds nothing.
+   */
+  async isPlanWithheld(
+    planId: string,
+    hiddenIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    if (hiddenIds.length === 0) return false;
+    const hidden = hiddenIds as string[];
+    const rows = await tx.$queryRaw<Array<{ withheld: boolean }>>`
+      SELECT (
+        EXISTS (
+          SELECT 1 FROM "plan_item" pi
+           WHERE pi."plan_id" = ${planId} AND ${planItemTouchesHiddenSql('pi', hidden)}
+        )
+        OR EXISTS (
+          SELECT 1 FROM "plan" p
+           WHERE p."id" = ${planId}
+             AND p."session_id" IS NOT NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM "plan_change_session" s
+                WHERE s."id" = p."session_id"
+                  ${sessionWithheldSql(hiddenIds)}
+             )
+        )
+      ) AS "withheld"`;
+    return rows[0]?.withheld ?? false;
+  },
+
+  /**
+   * EVERY plan of a project a Visitor must be refused (MOTIR-6645) — the
+   * {@link isPlanWithheld} predicate over the whole project, for the rooms that
+   * reach a plan only through its id (a `plan_approval` record's subject). An
+   * empty hidden set withholds nothing and reads nothing.
+   */
+  async findWithheldPlanIds(
+    projectId: string,
+    hiddenIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (hiddenIds.length === 0) return [];
+    const hidden = hiddenIds as string[];
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT p."id"
+        FROM "plan" p
+       WHERE p."project_id" = ${projectId}
+         AND (
+           EXISTS (
+             SELECT 1 FROM "plan_item" pi
+              WHERE pi."plan_id" = p."id" AND ${planItemTouchesHiddenSql('pi', hidden)}
+           )
+           OR (
+             p."session_id" IS NOT NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM "plan_change_session" s
+                WHERE s."id" = p."session_id"
+                  ${sessionWithheldSql(hiddenIds)}
+             )
+           )
+         )`;
+    return rows.map((r) => r.id);
   },
 
   /**
@@ -318,6 +389,8 @@ export const planChangeSessionRepository = {
     workspaceId: string,
     tx: Prisma.TransactionClient,
     mine: PlanSessionMineScope | null = null,
+    /** A Visitor's hidden set (MOTIR-6645): the counts are over the list's rows. */
+    hiddenIds?: readonly string[],
   ): Promise<Array<{ state: string; count: number }>> {
     return tx.$queryRaw<Array<{ state: string; count: number }>>`
       SELECT COALESCE(lp."status"::text, 'none') AS "state", count(*)::int AS "count"
@@ -325,6 +398,7 @@ export const planChangeSessionRepository = {
       ${latestPlanJoin}
       WHERE s."project_id" = ${projectId} AND s."workspace_id" = ${workspaceId}
         ${mineFilter(mine)}
+        ${sessionWithheldSql(hiddenIds)}
       GROUP BY 1
     `;
   },
@@ -361,6 +435,60 @@ export interface PlanSessionListRow {
   /** Whether that work item is in the SESSION's project — the one the list is
    *  browse-gated on. False when there is no such work item. */
   seedCardInProject: boolean;
+}
+
+/**
+ * The Plans room's WITHHOLDING for a Visitor (Story MOTIR-6170 · MOTIR-6645;
+ * `epic-privacy.md` §3). A session is withheld when ANY of these joins reaches a
+ * private epic's descendant — the whole session, because its turns, its plans'
+ * titles and summaries may describe the hidden work and cannot be redacted:
+ *
+ * - its `target_keys` name a hidden work item;
+ * - its seeding gate sits on a hidden work item;
+ * - ANY of its plans holds a proposal whose `work_item_id`, `parent_ref`,
+ *   `blocked_by_refs`, or a `modify` patch's `parentRef` / `blockedByAdd`, names
+ *   a hidden id.
+ *
+ * Absent / empty ⇒ no clause (a member's read, and a project with no private
+ * epic, are byte-for-byte unchanged).
+ */
+export function sessionWithheldSql(hiddenIds: readonly string[] | undefined): Prisma.Sql {
+  if (!hiddenIds || hiddenIds.length === 0) return Prisma.empty;
+  const hidden = hiddenIds as string[];
+  return Prisma.sql`AND NOT EXISTS (
+          SELECT 1 FROM "work_item" hw
+           WHERE hw."id" = ANY(${hidden}) AND hw."identifier" = ANY(s."target_keys")
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM "approval_gate" hg
+           WHERE hg."id" = s."seed_gate_id" AND hg."work_item_id" = ANY(${hidden})
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM "plan" hp
+            JOIN "plan_item" hpi ON hpi."plan_id" = hp."id"
+           WHERE hp."session_id" = s."id"
+             AND ${planItemTouchesHiddenSql('hpi', hidden)}
+        )`;
+}
+
+/**
+ * Whether one proposal row (alias `alias`) names a hidden id through any of its
+ * references — the predicate {@link sessionWithheldSql} and the plan-by-id read
+ * share, so a plan the list withholds is exactly one its page refuses.
+ */
+export function planItemTouchesHiddenSql(alias: 'hpi' | 'pi', hidden: string[]): Prisma.Sql {
+  const a = Prisma.raw(alias);
+  return Prisma.sql`(
+               ${a}."work_item_id" = ANY(${hidden})
+            OR ${a}."parent_ref" = ANY(${hidden})
+            OR ${a}."blocked_by_refs" && ${hidden}
+            OR (${a}."patch" ->> 'parentRef') = ANY(${hidden})
+            OR (jsonb_typeof(${a}."patch" -> 'blockedByAdd') = 'array'
+                AND EXISTS (
+                  SELECT 1 FROM jsonb_array_elements_text(${a}."patch" -> 'blockedByAdd') ref
+                   WHERE ref = ANY(${hidden})
+                ))
+          )`;
 }
 
 /** A session's LATEST plan — newest `created_at`, `id` breaking a tie. */

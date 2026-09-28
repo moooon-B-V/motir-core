@@ -128,8 +128,8 @@ async function listOps() {
   return recordModelOps(() =>
     IssueTreeSection({
       projectId: fx.projectId,
-      workspaceId: fx.workspaceId,
-      userId: fx.ownerId,
+      reader: { userId: fx.ownerId, workspaceId: fx.workspaceId },
+      service: { userId: fx.ownerId, workspaceId: fx.workspaceId },
       view: 'list',
       sort: DEFAULT_SORT,
       filter: EMPTY_FILTER,

@@ -1,5 +1,6 @@
 'use client';
 
+import { personDisplayName } from '@/lib/people/personLabel';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
@@ -294,7 +295,7 @@ export function BoardContainer({
   );
 
   const assigneeNameById = useMemo(
-    () => new Map(members.map((m) => [m.userId, m.name || m.email])),
+    () => new Map(members.map((m) => [m.userId, personDisplayName(m)])),
     [members],
   );
 

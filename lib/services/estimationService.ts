@@ -14,6 +14,8 @@ import { SprintNotFoundError } from '@/lib/sprints/errors';
 import { InvalidScaleConfigError } from '@/lib/estimation/errors';
 import { validateStoryPoints } from '@/lib/estimation/validate';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { VisitorReadContext } from '@/lib/visitor/context';
+import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type {
   EstimationConfigDto,
@@ -248,7 +250,10 @@ export const estimationService = {
   async sprintBoardPoints(
     sprintId: string,
     columns: Array<{ id: string; statusKeys: string[] }>,
-    ctx: ServiceContext,
+    // Only the workspace is read — a Visitor's board passes its project's.
+    ctx: Pick<ServiceContext, 'workspaceId'>,
+    // A Visitor's private-epic exclusion (MOTIR-6644): the sums count visible items.
+    excludeIds?: readonly string[],
   ): Promise<{ points: SprintPointsDto; columnPoints: Record<string, number> }> {
     const { committed, completed, perStatus } = await withWorkspaceServiceContext(
       ctx.workspaceId,
@@ -261,6 +266,7 @@ export const estimationService = {
           ctx.workspaceId,
           statistic,
           tx,
+          excludeIds,
         );
         return {
           ...sums,
@@ -269,6 +275,7 @@ export const estimationService = {
             ctx.workspaceId,
             statistic,
             tx,
+            excludeIds,
           ),
         };
       },
@@ -293,7 +300,32 @@ export const estimationService = {
    *
    * Throws: `WorkItemNotFoundError` (404 — unknown / cross-workspace parent).
    */
-  async rollupForParent(parentId: string, ctx: ServiceContext): Promise<ParentRollupDto> {
+  async rollupForParent(
+    parentId: string,
+    ctx: ServiceContext | VisitorReadContext,
+  ): Promise<ParentRollupDto> {
+    if (isVisitorContext(ctx)) {
+      // A Visitor's rollup (MOTIR-6652): the parent must be a visible row of their
+      // one public project — a hidden or foreign id is the same not-found — and
+      // the sum walks visible descendants only.
+      const { workspaceId, excludeIds } = openVisitorRead(ctx.project.id, ctx);
+      const parent = await withWorkspaceServiceContext(workspaceId, (tx) =>
+        workItemRepository.findById(parentId, tx),
+      );
+      if (!parent || parent.projectId !== ctx.project.id || ctx.hiddenIds.has(parent.id)) {
+        throw new WorkItemNotFoundError(parentId);
+      }
+      return withWorkspaceServiceContext(workspaceId, async (tx) => {
+        const statistic = await resolveStatistic(parent.projectId, tx);
+        return workItemRepository.sumPointsForParent(
+          parentId,
+          workspaceId,
+          statistic,
+          tx,
+          excludeIds,
+        );
+      });
+    }
     const item = await readWorkItem(parentId, ctx);
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(parentId);

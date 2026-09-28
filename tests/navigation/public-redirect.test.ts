@@ -75,6 +75,54 @@ describe('the moved public surfaces 308 to motir.co', () => {
     expect(res.headers.get('location')).toBe('https://motir.co/p/PROD');
   });
 
+  // MOTIR-6669 — the Visitor's consent screen asks a SIGNED-IN reader, so it is
+  // answered here where the session lives; every other /p/* path keeps its 308.
+  it('does NOT 308 the Visitor consent screen /p/<id>/consent — it is answered in the app', async () => {
+    process.env['MOTIR_PUBLIC_SITE_URL'] = PUBLIC;
+    process.env['MOTIR_BASE_URL'] = APP;
+    const res = await redirect('/p/PROD/consent?next=%2Fp%2FPROD%2Fboard');
+    expect(res.status).not.toBe(308);
+    expect(res.headers.get('location')).toBeNull();
+    // …and neither is it bounced to sign-in by the proxy: the page decides.
+    expect(res.headers.get('x-middleware-next')).toBe('1');
+  });
+
+  it('does NOT 308 the Visitor views /p/<id>/<view> — they are served in the app (MOTIR-6648)', async () => {
+    process.env['MOTIR_PUBLIC_SITE_URL'] = PUBLIC;
+    process.env['MOTIR_BASE_URL'] = APP;
+    for (const path of [
+      '/p/PROD/board',
+      '/p/PROD/items',
+      '/p/PROD/items/PROD-7',
+      '/p/PROD/tree',
+      '/p/PROD/roadmap',
+      '/p/PROD/plans',
+      '/p/PROD/plans/cplan1',
+      '/p/PROD/approvals',
+      '/p/PROD/runs',
+      '/p/PROD/enter?next=%2Fp%2FPROD%2Fboard',
+    ]) {
+      const res = await redirect(path);
+      expect(res.status, path).not.toBe(308);
+      expect(res.headers.get('location'), path).toBeNull();
+      expect(res.headers.get('x-middleware-next'), path).toBe('1');
+    }
+  });
+
+  it('still 308s the bare /p/<id> and any other /p/* path', async () => {
+    process.env['MOTIR_PUBLIC_SITE_URL'] = PUBLIC;
+    process.env['MOTIR_BASE_URL'] = APP;
+    for (const path of [
+      '/p/PROD',
+      '/p/PROD/changelog',
+      '/p/PROD/consent/extra',
+      '/p/PROD/board/extra',
+    ]) {
+      const res = await redirect(path);
+      expect(res.status, path).toBe(308);
+    }
+  });
+
   it('does not redirect while the public origin is unconfigured (no self-loop)', async () => {
     delete process.env['MOTIR_PUBLIC_SITE_URL'];
     delete process.env['MOTIR_BASE_URL'];

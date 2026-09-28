@@ -1,4 +1,6 @@
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/context';
+import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import type { Prisma } from '@/generated/prisma/client';
 import { holdsRecordView, projectAccessService } from '@/lib/services/projectAccessService';
@@ -106,6 +108,22 @@ export interface ListSessionsOptions {
   limit?: number;
 }
 
+/**
+ * A room read's reader, resolved ONCE (Story MOTIR-6170 · MOTIR-6645): a member's
+ * own context with no withholding, or — for a Visitor — the narrowed service
+ * context (bound to this project, granted the Visitor keys) plus the private-epic
+ * hidden set every session is filtered against. A Visitor reading another
+ * project's room is the same not-found a stranger gets.
+ */
+function roomReader(
+  projectId: string,
+  ctx: ServiceContext | VisitorReadContext,
+): { svc: ServiceContext; hiddenIds?: readonly string[] } {
+  if (!isVisitorContext(ctx)) return { svc: ctx };
+  const { excludeIds } = openVisitorRead(projectId, ctx, 'plan:view_any');
+  return { svc: visitorServiceContext(ctx), hiddenIds: excludeIds };
+}
+
 export const planSessionsService = {
   /**
    * A page of the project's sessions, newest activity first, cursor-paged on
@@ -114,9 +132,10 @@ export const planSessionsService = {
    */
   async listSessions(
     projectId: string,
-    ctx: ServiceContext,
+    reader: ServiceContext | VisitorReadContext,
     opts: ListSessionsOptions = {},
   ): Promise<PlanSessionListPageDto> {
+    const { svc: ctx, hiddenIds } = roomReader(projectId, reader);
     await projectAccessService.assertCanBrowse(projectId, ctx);
     const limit = clampLimit(opts.limit);
     const after = decodeCursor(opts.cursor);
@@ -130,6 +149,7 @@ export const planSessionsService = {
           after,
           state: opts.planState ?? null,
           mine: resolved.mine,
+          ...(hiddenIds ? { hiddenIds } : {}),
         },
         tx,
       );
@@ -151,9 +171,10 @@ export const planSessionsService = {
   async getSessionRow(
     projectId: string,
     sessionId: string,
-    ctx: ServiceContext,
+    reader: ServiceContext | VisitorReadContext,
     opts: { view?: PlanSessionView } = {},
   ): Promise<PlanSessionRowDto | null> {
+    const { svc: ctx, hiddenIds } = roomReader(projectId, reader);
     await projectAccessService.assertCanBrowse(projectId, ctx);
     // A session outside the served scope is null — the SAME answer as an id that
     // names no session, so a `?session=` link confirms nothing it may not show.
@@ -168,6 +189,7 @@ export const planSessionsService = {
           state: null,
           sessionId,
           mine,
+          ...(hiddenIds ? { hiddenIds } : {}),
         },
         tx,
       );
@@ -181,7 +203,22 @@ export const planSessionsService = {
    * author or decide a plan (`PLAN_ACT_PERMISSIONS`). Empty ⇒ the room is closed
    * to them. `canAuthor` (`ai:plan`) is what offers the fresh start.
    */
-  async roomAccess(projectId: string, ctx: ServiceContext): Promise<PlanRoomAccess> {
+  async roomAccess(
+    projectId: string,
+    ctx: ServiceContext | VisitorReadContext,
+  ): Promise<PlanRoomAccess> {
+    // A Visitor's room is decided from the Visitor key set alone (MOTIR-6645):
+    // `plan:view_any` and nothing that acts ⇒ Project only, no fresh start.
+    if (isVisitorContext(ctx)) {
+      openVisitorRead(projectId, ctx);
+      return {
+        views: availableRoomViews({
+          hasViewKey: ctx.permissions.has('plan:view_any'),
+          canAct: false,
+        }),
+        canAuthor: false,
+      };
+    }
     const held = await projectAccessService.getPermissions(projectId, ctx);
     if (!held.has('project:browse')) return { views: [], canAuthor: false };
     return {
@@ -202,7 +239,7 @@ export const planSessionsService = {
   async isSessionInReaderScope(
     projectId: string,
     sessionId: string,
-    ctx: ServiceContext,
+    ctx: ServiceContext | VisitorReadContext,
   ): Promise<boolean> {
     return (await this.getSessionRow(projectId, sessionId, ctx)) !== null;
   },
@@ -213,9 +250,10 @@ export const planSessionsService = {
    */
   async countSessionsByPlanState(
     projectId: string,
-    ctx: ServiceContext,
+    reader: ServiceContext | VisitorReadContext,
     opts: { view?: PlanSessionView } = {},
   ): Promise<PlanSessionStateCountsDto> {
+    const { svc: ctx, hiddenIds } = roomReader(projectId, reader);
     await projectAccessService.assertCanBrowse(projectId, ctx);
     // Counted over the SERVED scope, so the filter's numbers are the list's.
     const rows = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
@@ -225,6 +263,7 @@ export const planSessionsService = {
         ctx.workspaceId,
         tx,
         mine,
+        hiddenIds,
       );
     });
     const counts = Object.fromEntries(

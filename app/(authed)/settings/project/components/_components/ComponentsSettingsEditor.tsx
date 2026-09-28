@@ -321,7 +321,9 @@ function ComponentRow({
       </span>
       <span className="flex w-[9.5rem] shrink-0 items-center gap-2">
         {component.defaultAssignee ? (
-          <InkAvatar name={component.defaultAssignee.name || component.defaultAssignee.email} />
+          <InkAvatar
+            name={component.defaultAssignee.name || (component.defaultAssignee.email ?? '')}
+          />
         ) : (
           <NoneAvatar />
         )}

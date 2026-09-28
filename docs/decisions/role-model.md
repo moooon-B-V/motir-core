@@ -92,6 +92,11 @@ project can reuse the same repo.
 
 ### 4. The Visitor
 
+> **⚠️ AMENDED (2026-09-27, AMENDMENT 2 below; `visitor-sign-in-and-records.md`, MOTIR-6664).**
+> A Visitor now signs in, consents once per project, and is recorded for the project's Managers.
+> _"Whoever arrives at a public project from outside"_ reads as a signed-in person who cannot enter
+> it and has consented. The key set, public-only, private epics hidden and _never assigned_ stand.
+
 A Visitor is the same combination of role and access:
 
 - **role:** Visitor, holding every VIEW permission and nothing that writes;
@@ -155,6 +160,10 @@ Rejected:
   migration report names every such person.
 
 ### Q3: Does a Visitor need to sign in? **Recommended: NO**
+
+> **⚠️ OVERTURNED (2026-09-27, AMENDMENT 2 below; `visitor-sign-in-and-records.md`, MOTIR-6664).**
+> For the in-app live views the answer is now **YES**, with a one-time consent per project. motir.co's
+> pages stay anonymous. The text below is kept as the record of what was first decided.
 
 - Anyone, signed out included, who follows a public project's link enters as a Visitor. That is how
   `public` reads work today: `PUBLIC_PROJECT_PERMISSIONS` is granted to every actor, anonymous
@@ -318,3 +327,20 @@ roles design (MOTIR-6456) draws an org Admin's row as a Manager set by the organ
 
 **What this does NOT decide:** whether a workspace may opt OUT of its org Admins' reach (no mirror
 product offers it, and nothing asks for it), and anything about the org Owner, who is unchanged.
+
+## AMENDMENT 2 (2026-09-27) — a Visitor signs in, consents once, and is recorded
+
+**By:** Story MOTIR-6170 · Subtask MOTIR-6666, applying `docs/decisions/visitor-sign-in-and-records.md`
+(DECISION MOTIR-6664, set by the owner at the MOTIR-6641 design gate).
+
+- **Q3 is overturned for the in-app live views.** Reading a public project at
+  `app.motir.co/p/<identifier>/<view>` needs a signed-in account and, the first time for each project,
+  a consent that the reader's name and email will be visible to its workspace Managers. motir.co's
+  pages are unchanged.
+- **§4's Visitor is a signed-in person who cannot enter the project and has consented** — and is
+  recorded: one visitor record per (person, project), with the consent time and first and latest
+  visit, read by the project's Managers on Access & members. The rest of §4 stands.
+- **The _Every role_ table's Visitor row** reads _stored as a visitor record per project_ and
+  _signed-in and consented_ in place of _"nowhere: never stored"_ and _"no sign-in needed (Q3)"_.
+- **What stands:** the Visitor's key set (the Viewer's), public projects only, private epics withheld,
+  other people shown by name only, never assigned, and a person who can enter sent to their own view.

@@ -102,10 +102,14 @@ describe('the implicit grant gains exactly the Plans and Runs view keys', () => 
   // The implicit WORKSPACE-member set this block also covered retired with
   // project roles (MOTIR-6459): every workspace member now holds a workspace
   // role, and all three built-ins carry all three view-any keys (above).
-  it('the public level gains plan:view_any and run:view_any — not approval:view_any', () => {
+  // MOTIR-6642 — the Visitor role gives a public reader every view key the Viewer
+  // holds, `approval:view_any` included (DECISION MOTIR-6165, `role-model.md` §4).
+  it('the public level holds all three view-any keys — the Visitor is a Viewer nobody assigned', () => {
     expect([...PUBLIC_PROJECT_PERMISSIONS].sort()).toEqual(
       [
         'project:browse',
+        'report:view',
+        'approval:view_any',
         'plan:view_any',
         'run:view_any',
         'public_request:submit',

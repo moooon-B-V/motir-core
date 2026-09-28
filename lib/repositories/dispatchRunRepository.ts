@@ -50,11 +50,31 @@ export interface DispatchRunPage {
    * `[projectId, startedAt]` / `[scopeWorkItemId, startedAt]` indexes.
    */
   createdById?: string | undefined;
+  /**
+   * A Visitor's WITHHOLDING (Story MOTIR-6170 · MOTIR-6645): a run scoped to,
+   * or holding a card for, any of these work items (a private epic's
+   * descendants) is not listed. Applied by the QUERY, so a page is never
+   * shortened after the read. Omit for a member.
+   */
+  withheldWorkItemIds?: readonly string[] | undefined;
 }
 
 /** The `mine` narrowing, as a `where` fragment — empty when absent. */
 function startedBy(createdById: string | undefined) {
   return createdById ? { createdById } : {};
+}
+
+/** The {@link DispatchRunPage.withheldWorkItemIds} clause, or `{}`. */
+function notTouching(ids: readonly string[] | undefined): Prisma.DispatchRunWhereInput {
+  if (!ids || ids.length === 0) return {};
+  return {
+    NOT: {
+      OR: [
+        { scopeWorkItemId: { in: [...ids] } },
+        { cards: { some: { workItemId: { in: [...ids] } } } },
+      ],
+    },
+  };
 }
 
 /**
@@ -360,7 +380,7 @@ export const dispatchRunRepository = {
    */
   async listByScope(
     scopeWorkItemId: string,
-    { take, cursor, statuses, createdById }: DispatchRunPage,
+    { take, cursor, statuses, createdById, withheldWorkItemIds }: DispatchRunPage,
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRunWithCards[]> {
     return tx.dispatchRun.findMany({
@@ -368,6 +388,7 @@ export const dispatchRunRepository = {
         scopeWorkItemId,
         ...(statuses ? { status: { in: statuses } } : {}),
         ...startedBy(createdById),
+        ...notTouching(withheldWorkItemIds),
       },
       include: WITH_CARDS,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
@@ -386,7 +407,7 @@ export const dispatchRunRepository = {
    */
   async listByProject(
     projectId: string,
-    { take, cursor, statuses, createdById }: DispatchRunPage,
+    { take, cursor, statuses, createdById, withheldWorkItemIds }: DispatchRunPage,
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRunWithCards[]> {
     return tx.dispatchRun.findMany({
@@ -394,6 +415,7 @@ export const dispatchRunRepository = {
         projectId,
         ...(statuses ? { status: { in: statuses } } : {}),
         ...startedBy(createdById),
+        ...notTouching(withheldWorkItemIds),
       },
       include: WITH_CARDS,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
@@ -487,9 +509,16 @@ export const dispatchRunRepository = {
     projectId: string,
     tx: Prisma.TransactionClient,
     createdById?: string,
+    // A Visitor's withholding (MOTIR-6645) — see {@link DispatchRunPage}.
+    withheldWorkItemIds?: readonly string[],
   ): Promise<DispatchRunWithCards[]> {
     return tx.dispatchRun.findMany({
-      where: { projectId, status: 'running', ...startedBy(createdById) },
+      where: {
+        projectId,
+        status: 'running',
+        ...startedBy(createdById),
+        ...notTouching(withheldWorkItemIds),
+      },
       include: WITH_CARDS,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
     });

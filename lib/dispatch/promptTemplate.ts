@@ -15,6 +15,7 @@ import type {
   ExecutorDto,
   WorkItemDifficultyDto,
   WorkItemKindDto,
+  WorkItemObsolescenceDto,
   WorkItemPriorityDto,
   WorkItemProseAdvisoryDto,
   WorkItemTypeDto,
@@ -299,6 +300,44 @@ export interface ChangesRequestedForPrompt extends LatestRefusalDTO {
 }
 
 /**
+ * A FINISHED neighbour of the dispatched card that carries an OBSOLESCENCE mark
+ * (Story MOTIR-6576 · MOTIR-6657) — its parent, one of its blockers, or a work
+ * item its `## Context refs` name. Only a finished card can carry a mark
+ * (MOTIR-6575), and a dispatched card is always To Do, so the marks a prompt
+ * reports sit on these neighbours and never on the card itself.
+ */
+export interface ObsoleteNeighbour {
+  /** Why the card leans on it — the first role wins when it is named twice. */
+  role: 'parent' | 'blocker' | 'context ref';
+  key: string;
+  title: string;
+  mark: WorkItemObsolescenceDto;
+  /** The keys of the work items that SUPERSEDE it, ascending; `[]` when none is recorded. */
+  supersededByKeys: string[];
+  /** {@link obsolescenceNoteFirstLine} of its note, or null when it has none. */
+  noteFirstLine: string | null;
+}
+
+/** The cap on a neighbour's note line — the prompt points at the card, it does not reproduce it. */
+export const OBSOLESCENCE_NOTE_LINE_CHARS = 200;
+
+/**
+ * The FIRST non-empty line of an obsolescence note, Markdown left as written,
+ * capped at {@link OBSOLESCENCE_NOTE_LINE_CHARS} with `…`. `null` for a note that
+ * is absent or blank.
+ */
+export function obsolescenceNoteFirstLine(noteMd: string | null | undefined): string | null {
+  const line = (noteMd ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l.length > 0);
+  if (!line) return null;
+  return line.length > OBSOLESCENCE_NOTE_LINE_CHARS
+    ? `${line.slice(0, OBSOLESCENCE_NOTE_LINE_CHARS)}…`
+    : line;
+}
+
+/**
  * The run a CONTINUE picks up (Story MOTIR-6526 · MOTIR-6531) — the dead run and
  * where its work is, as the service resolved them. Set only when the prompt is
  * asked for with `continueFrom`; absent, the prompt is a fresh run's.
@@ -385,6 +424,14 @@ export interface DispatchPromptSource {
    * back gets byte-identically the prompt it got before the field existed.
    */
   changesRequested?: ChangesRequestedForPrompt[];
+  /**
+   * The MARKED neighbours (Story MOTIR-6576 · MOTIR-6657) — the finished parent,
+   * blockers and context-ref work items that carry an obsolescence mark, in the
+   * order parent → blockers → context refs, each named once. Omitted or EMPTY
+   * renders nothing: an unmarked neighbourhood gets byte-identically the prompt
+   * it got before the field existed.
+   */
+  obsoleteNeighbours?: ObsoleteNeighbour[];
   parent: { key: string; title: string } | null;
   projectName: string;
   /** The project key, e.g. `PROD` — the identifier prefix. */
@@ -1291,6 +1338,7 @@ function contextSection(
   } else {
     facts.push('- Context refs: none named on the card.');
   }
+  facts.push(...obsoleteNeighbourLines(src.obsoleteNeighbours ?? []));
 
   // The Epic-9 enrichment slots (empty in motir-core — see the module header).
   for (const block of injections.conventions) facts.push('', block);
@@ -1321,6 +1369,26 @@ function contextSection(
   facts.push('', 'CARD DESCRIPTION');
   facts.push('', narrative.length > 0 ? narrative : '(The card carries no description body.)');
   return facts;
+}
+
+/**
+ * One CONTEXT line per MARKED neighbour (MOTIR-6657) — the mark, what superseded
+ * it and the first line of its note — then ONE line saying how to read each mark.
+ * Sits directly under the context refs because it changes how the agent reads
+ * them. EMPTY renders nothing at all.
+ */
+function obsoleteNeighbourLines(neighbours: ObsoleteNeighbour[]): string[] {
+  if (neighbours.length === 0) return [];
+  const lines = neighbours.map((n) => {
+    const by = n.supersededByKeys.length > 0 ? n.supersededByKeys.join(', ') : 'nothing recorded';
+    const note = n.noteFirstLine ? ` ${n.noteFirstLine}` : '';
+    return `- \u26a0 ${n.role} ${n.key} is ${n.mark.toUpperCase()} \u2014 superseded by ${by}.${note}`;
+  });
+  lines.push(
+    "  An OUTDATED item's body is history: read what it does now from the items that" +
+      ' superseded it. A DEPRECATED one was retired on purpose: do not build on it.',
+  );
+  return lines;
 }
 
 /** How the prompt names the surface a refusal arrived through. */

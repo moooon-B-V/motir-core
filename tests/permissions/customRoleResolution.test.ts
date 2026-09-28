@@ -155,7 +155,10 @@ describe('the two RAILS stay above and below the custom set', () => {
     );
     expect(sorted(onPublic)).toEqual(
       [
-        // MOTIR-6328 — the two room view keys are level-gated on `public` too.
+        // MOTIR-6328 — the room view keys are level-gated on `public` too, and
+        // MOTIR-6642 made that set the Visitor's: every Viewer key.
+        'approval:view_any',
+        'report:view',
         'plan:view_any',
         'run:view_any',
         'project:browse',

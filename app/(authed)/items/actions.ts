@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { resolveActionReadActor } from '@/lib/visitor/readActor';
 import { redirect } from 'next/navigation';
 import { getErrorsTranslator } from '@/lib/i18n/errorsTranslator';
 import { getSession } from '@/lib/auth';
@@ -292,9 +293,25 @@ async function pendingForLevel(
   );
 }
 
+/** What a tree level answers a Visitor who has spent their read budget (MOTIR-6647). */
+const VISITOR_RATE_LIMITED = 'You’re reading a little too fast. Try again in a moment.';
+
 export async function listRootIssuesAction(input: ListTreeLevelInput): Promise<TreeLevelResult> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
+  // A VISITOR's tree (MOTIR-6647): the root of the public project the
+  // `motir_visitor` cookie names, private-epic descendants withheld (MOTIR-6644).
+  // A Visitor decides nothing, so no card is waiting on them.
+  const actor = await resolveActionReadActor();
+  if (actor.kind === 'limited') return { ok: false, error: VISITOR_RATE_LIMITED };
+  if (actor.kind === 'visitor') {
+    const level = await workItemsService.listRootIssues(
+      actor.ctx.project.id,
+      { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
+      actor.ctx,
+    );
+    return { ok: true, level, pending: {} };
+  }
   const ctx = await getActiveProject();
   if (!ctx) return { ok: false, error: 'No active project.' };
   const level = await workItemsService.listRootIssues(
@@ -310,6 +327,25 @@ export async function listChildIssuesAction(
 ): Promise<TreeLevelResult> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
+  // A VISITOR's drill (MOTIR-6647): a hidden parent is the same "no longer exists"
+  // an unknown one is (MOTIR-6644).
+  const actor = await resolveActionReadActor();
+  if (actor.kind === 'limited') return { ok: false, error: VISITOR_RATE_LIMITED };
+  if (actor.kind === 'visitor') {
+    try {
+      const level = await workItemsService.listChildIssues(
+        input.parentId,
+        { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
+        actor.ctx,
+      );
+      return { ok: true, level, pending: {} };
+    } catch (err) {
+      if (err instanceof WorkItemNotFoundError) {
+        return { ok: false, error: 'That issue no longer exists.' };
+      }
+      throw err;
+    }
+  }
   const ctx = await getActiveProject();
   if (!ctx) return { ok: false, error: 'No active project.' };
   try {
@@ -338,6 +374,25 @@ export async function listFolderLevelAction(
 ): Promise<TreeLevelResult> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
+  // A VISITOR's folder level (MOTIR-6647): a folder of another project is the same
+  // "no longer exists" an unknown one is.
+  const actor = await resolveActionReadActor();
+  if (actor.kind === 'limited') return { ok: false, error: VISITOR_RATE_LIMITED };
+  if (actor.kind === 'visitor') {
+    try {
+      const level = await workItemsService.listFolderLevel(
+        input.folderId,
+        { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
+        actor.ctx,
+      );
+      return { ok: true, level, pending: {} };
+    } catch (err) {
+      if (err instanceof FolderNotFoundError) {
+        return { ok: false, error: 'That folder no longer exists.' };
+      }
+      throw err;
+    }
+  }
   const ctx = await getActiveProject();
   if (!ctx) return { ok: false, error: 'No active project.' };
   try {

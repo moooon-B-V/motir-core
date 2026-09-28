@@ -3,9 +3,22 @@ import robots, { dynamic } from '../../app/robots';
 import {
   AUTH_SEGMENTS,
   SIGNED_IN_SEGMENTS,
+  VISITOR_SEGMENTS,
   buildRobots,
   disallowedPaths,
 } from '../../lib/robotsPolicy';
+
+/**
+ * Whether a robots `Disallow` pattern blocks `path`, the way the major crawlers
+ * read one: a PREFIX match, with `*` matching any run of characters.
+ */
+function blocks(pattern: string, path: string): boolean {
+  const source = pattern
+    .split('*')
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.*');
+  return new RegExp(`^${source}`).test(path);
+}
 
 // MOTIR-3726 — `app.motir.co/robots.txt` returned 404 (Next's HTML not-found
 // page, measured with a Googlebot UA) while the sitemap, JSON-LD, canonicals
@@ -89,7 +102,9 @@ describe('robots policy', () => {
       '/docs',
       '/docs/api',
       '/p/ACME',
-      '/p/ACME/roadmap',
+      // `/p/ACME/roadmap` was here until MOTIR-6648 made it a signed-in Visitor
+      // view; the changelog still 308s onto motir.co, so it stands in for it.
+      '/p/ACME/changelog',
     ]) {
       expect(
         denied.some((d) => path === d || path.startsWith(d.endsWith('/') ? d : `${d}/`)),
@@ -156,6 +171,41 @@ describe('robots policy', () => {
     for (const segment of SIGNED_IN_SEGMENTS) expect(denied).toContain(`/${segment}`);
     const body = JSON.stringify(buildRobots('https://example.test'));
     for (const segment of SIGNED_IN_SEGMENTS) expect(body).toContain(`/${segment}`);
+  });
+
+  it('does not admit the Visitor views under /p/, and still admits /p/<id> itself (MOTIR-6648)', () => {
+    // The Visitor's live views need a session now (`public-surface-hosts.md` §6,
+    // amended), so this host does not offer them to crawlers — but the bare
+    // project path and its changelog still 308 onto motir.co, and a `Disallow`
+    // over `/p/` whole would stop a crawler following that redirect.
+    const denied = disallowedPaths();
+    expect(VISITOR_SEGMENTS.length).toBeGreaterThanOrEqual(9);
+    for (const path of [
+      '/p/ACME/board',
+      '/p/ACME/items',
+      '/p/ACME/items/ACME-7',
+      '/p/ACME/tree',
+      '/p/ACME/roadmap',
+      '/p/ACME/plans',
+      '/p/ACME/plans/cplan1',
+      '/p/ACME/approvals',
+      '/p/ACME/runs',
+      '/p/ACME/consent',
+      '/p/ACME/enter',
+    ]) {
+      expect(
+        denied.some((d) => blocks(d, path)),
+        `${path} must be disallowed`,
+      ).toBe(true);
+    }
+    for (const path of ['/p/ACME', '/p/ACME/changelog']) {
+      expect(
+        denied.some((d) => blocks(d, path)),
+        `${path} must stay crawlable`,
+      ).toBe(false);
+    }
+    expect(denied).not.toContain('/p/');
+    expect(denied).not.toContain('/p');
   });
 
   // ── the one deliberate NON-entry ─────────────────────────────────────────

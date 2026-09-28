@@ -1,6 +1,7 @@
 import type { SavedFilterVisibility } from '@/generated/prisma/client';
 import { canBrowse, canEdit, type ProjectAccessInputs } from '@/lib/projects/access';
 import { hasPermission } from '@/lib/permissions/resolve';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 
 // The saved-filter permission POLICY (Story 6.2 · Subtask 6.2.1) — pure
 // decision functions composed FROM the shipped 6.4 project policy rather
@@ -57,6 +58,21 @@ export function savedFilterCapabilities(i: ProjectAccessInputs): SavedFilterProj
     canBrowse: canBrowse(i),
     canShare: canEdit(i),
     canManageAny: hasPermission(i, 'saved_filter:manage_any'),
+  };
+}
+
+/**
+ * The same tier read off an already-resolved permission SET — what a read page's
+ * view holds (MOTIR-6643). Each limb is the membership test the predicate above
+ * performs: `canBrowse` is `project:browse`, `canEdit` is `work_item:edit`.
+ */
+export function savedFilterCapabilitiesFromPermissions(
+  held: ReadonlySet<PermissionKey>,
+): SavedFilterProjectCapabilities {
+  return {
+    canBrowse: held.has('project:browse'),
+    canShare: held.has('work_item:edit'),
+    canManageAny: held.has('saved_filter:manage_any'),
   };
 }
 

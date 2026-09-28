@@ -51,6 +51,18 @@ export const DEFAULT_PUBLIC_FOLLOW_RATE_LIMIT = 5;
 export const DEFAULT_PUBLIC_FOLLOW_RATE_LIMIT_WINDOW_MS = 600_000;
 
 /**
+ * A Visitor's READS of a public project in the real app (Story MOTIR-6170 ·
+ * MOTIR-6642) — per IP, because a Visitor needs no account. Sized for a person
+ * paging a board: opening a view costs one page request plus a handful of
+ * client fetches (the board's columns, a tree level, the next page of a list),
+ * so a reader clicking steadily through eight views makes a few dozen reads a
+ * minute. 120 leaves that reader several times their pace while a crawler
+ * walking every item of a large project is stopped within the first minute.
+ */
+export const DEFAULT_PUBLIC_READ_RATE_LIMIT = 120;
+export const DEFAULT_PUBLIC_READ_RATE_LIMIT_WINDOW_MS = 60_000;
+
+/**
  * AI: a distinct budget because the resource being protected is MONEY, not
  * capacity — every call costs real tokens at a model provider, so one runaway
  * loop is a bill rather than an outage.
@@ -160,6 +172,16 @@ export function publicFollowBudget(): RateLimitBudget {
     'MOTIR_PUBLIC_FOLLOW_RATE_LIMIT_WINDOW_MS',
     DEFAULT_PUBLIC_FOLLOW_RATE_LIMIT,
     DEFAULT_PUBLIC_FOLLOW_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
+/** A Visitor's reads of a public project, keyed per IP (`publicReadGuard`). */
+export function publicReadBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_PUBLIC_READ_RATE_LIMIT',
+    'MOTIR_PUBLIC_READ_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_PUBLIC_READ_RATE_LIMIT,
+    DEFAULT_PUBLIC_READ_RATE_LIMIT_WINDOW_MS,
   );
 }
 
