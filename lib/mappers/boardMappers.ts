@@ -129,6 +129,7 @@ export function toBoardCardDto(
     ready: opts.ready,
     pendingDecision: opts.pendingDecision ?? null,
     ciState: row.ciState,
+    fixReason: row.fixReason,
     planHold: opts.planHold ?? null,
     statusCategory: opts.statusCategory ?? null,
   };

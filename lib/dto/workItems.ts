@@ -8,6 +8,7 @@
 // `string` (a fractional-index key is already a string and Decimals don't
 // JSON-serialize losslessly as numbers). The mapper owns those conversions.
 
+import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { ChoiceBodyDTO } from '@/lib/dto/approvalGate';
 import type { FilterAst } from '@/lib/filters/ast';
@@ -511,6 +512,14 @@ export interface IssueDetailDto {
    * this aggregate) and `/api/v1`: how agents learn folders is Story MOTIR-5310's.
    */
   placementFolder: PlacementFolderDto | null;
+  /**
+   * Why the card is stuck until something is repaired (`WorkItem.fixReason`,
+   * MOTIR-6600), or `null` (Story MOTIR-6589). Read off the SAME row the detail
+   * read loads, and carried on the aggregate rather than `WorkItemDto` for the
+   * reason `folderId` is. The quick view's header draws the To fix tag off it
+   * (MOTIR-6610) and the item page its banner (MOTIR-6611).
+   */
+  fixReason: WorkItemFixReasonDto | null;
   ancestors: WorkItemSummaryDto[];
   parent: WorkItemSummaryDto | null;
   children: WorkItemSummaryDto[];
@@ -704,6 +713,11 @@ export interface WorkItemTreeNodeDto {
    *  `failing` and `running`, and only off the `done` category (`ciBadgeState`,
    *  MOTIR-5474); the raw value travels so every surface applies ONE rule. */
   ciState: string | null;
+  /** Why the card is stuck until something is repaired (`WorkItem.fixReason`,
+   *  MOTIR-6600), or `null`. The row draws the To fix tag off it, and only off the
+   *  `done` category (`toFixTagState`, MOTIR-6610); the raw value travels so every
+   *  surface applies ONE rule. */
+  fixReason: WorkItemFixReasonDto | null;
   // The remaining core properties the list row shows alongside status/assignee
   // (the same fields the detail page's core-fields panel carries): priority,
   // reporter, due date, estimate. `reporterId` is always set; `dueDate` is a
@@ -1010,6 +1024,11 @@ export interface WorkItemListItemDto {
    *  `failing` and `running`, and only off the `done` category (`ciBadgeState`,
    *  MOTIR-5474); the raw value travels so every surface applies ONE rule. */
   ciState: string | null;
+  /** Why the card is stuck until something is repaired (`WorkItem.fixReason`,
+   *  MOTIR-6600), or `null`. The row draws the To fix tag off it, and only off the
+   *  `done` category (`toFixTagState`, MOTIR-6610); the raw value travels so every
+   *  surface applies ONE rule. */
+  fixReason: WorkItemFixReasonDto | null;
   priority: WorkItemPriorityDto;
   assigneeId: string | null;
   reporterId: string;

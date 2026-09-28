@@ -195,8 +195,9 @@ describe('IssueListTable — sortable headers', () => {
     expect(template).not.toMatch(/minmax\(\s*0[\s,]/);
     expect(template).toContain('72px'); // Est. (was 90)
     // Status: 130 → 108 (MOTIR-1307) → 144, which also holds the decision-waiting
-    // glyph (MOTIR-5881; design MOTIR-5875 measured the widest pairing at 138px).
-    expect(template).toContain('144px');
+    // glyph (MOTIR-5881) → 168, which also holds the To fix tag (MOTIR-6610; design
+    // MOTIR-6608 measured the widest cell, pill + both glyphs, at 161.6px).
+    expect(template).toContain('168px');
   });
 });
 

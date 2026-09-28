@@ -11,6 +11,7 @@
 // summary for the projection; the move path populates `assigneeId` — the id is
 // what the optimistic-update reconcile needs, the UI already holds the avatar.)
 
+import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { StatusCategoryDto, WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { SprintPointsDto } from '@/lib/dto/estimation';
@@ -184,6 +185,13 @@ export interface BoardCardDto {
    * The board already reads whole `WorkItem` rows, so this costs no extra query.
    */
   ciState: string | null;
+  /**
+   * Why the card is stuck until something is repaired (`WorkItem.fixReason`,
+   * MOTIR-6600), or `null`. The card draws the To fix tag off it, and only off the
+   * `done` category — `toFixTagState`, shared with the list, tree and quick view
+   * (MOTIR-6610). Raw, like `ciState`, so every surface applies ONE rule.
+   */
+  fixReason: WorkItemFixReasonDto | null;
   /**
    * The undecided PLAN holding this card at Planning (Story MOTIR-6017 ·
    * MOTIR-6268; AMENDMENT 21 §1), or `null` when none does — a session-held

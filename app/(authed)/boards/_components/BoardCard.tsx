@@ -12,6 +12,7 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
 import { CiStateBadge } from '@/components/github/CiStateBadge';
 import { DecisionWaitingMarker } from '@/components/approvals/DecisionWaitingMarker';
+import { ToFixTag, toFixTagId, toFixTagState } from '@/components/workItems/ToFixTag';
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import { formatStoryPoints } from '@/lib/estimation/scales';
 import type { BoardCardDto } from '@/lib/dto/boards';
@@ -68,13 +69,18 @@ export function decisionMarkerId(cardId: string): string {
   return `decision-marker-${cardId}`;
 }
 
-/** dnd-kit's instructions id joined with the marker's, when the slot draws the marker. */
+/**
+ * dnd-kit's instructions id joined with the marker's, when the slot draws the
+ * marker, and the To fix tag's, when the card draws the tag (MOTIR-6610) — the
+ * card is one `<button>`, so its own label would otherwise hide both.
+ */
 function describedBy(dndId: string | undefined, card: BoardCardDto): string | undefined {
   const marker =
     card.pendingDecision && (card.pendingDecision.state === 'yours' || card.ready)
       ? decisionMarkerId(card.id)
       : null;
-  const ids = [dndId, marker].filter((id): id is string => Boolean(id));
+  const toFix = toFixTagState(card.fixReason, card.statusCategory) ? toFixTagId(card.id) : null;
+  const ids = [dndId, marker, toFix].filter((id): id is string => Boolean(id));
   return ids.length > 0 ? ids.join(' ') : undefined;
 }
 
@@ -161,6 +167,16 @@ export function BoardCardView({
         ) : (
           <PriorityValue priority={card.priority} />
         )}
+        {/* THE TO FIX TAG (MOTIR-6610; design MOTIR-6608 panel 3): an ADDITIONAL
+            pill right after the exclusive slot and before the CI badge — never IN
+            the slot, so it never hides `Blocked` and is never hidden by it. The id
+            rides the in-list card only (`markerId`), so the drag clone does not
+            duplicate the one `aria-describedby` points at. */}
+        <ToFixTag
+          fixReason={card.fixReason}
+          statusCategory={card.statusCategory}
+          id={markerId ? toFixTagId(card.id) : undefined}
+        />
         {/* THE CI BADGE (MOTIR-5474), in the slot the design gives it: an
             ADDITIONAL pill immediately after the exclusive one, never replacing
             it — so `Blocked` and the decision-waiting marker both survive beside it.

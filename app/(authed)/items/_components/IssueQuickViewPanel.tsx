@@ -32,6 +32,7 @@ import { MultiSelectPicker, ValueChip } from '@/components/ui/MultiSelectPicker'
 import { Avatar, AssigneeValue, PriorityValue, StatusValue } from './issueCellPrimitives';
 import { QuickViewCloseButton } from './QuickViewCloseButton';
 import { StatusPicker } from '@/components/issues/StatusPicker';
+import { ToFixTag } from '@/components/workItems/ToFixTag';
 import { StatusHeldNotice } from '@/components/issues/StatusHeldNotice';
 import { useStatusHeld } from '@/components/issues/useStatusHeld';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
@@ -668,6 +669,10 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             label={data.statusLabel}
           />
         )}
+        {/* THE TO FIX TAG (MOTIR-6610; design MOTIR-6608 panel 4) — the label,
+            right after the status pill it qualifies. A proposal peek carries no
+            reason, so it draws nothing there. */}
+        <ToFixTag fixReason={data.fixReason} statusCategory={data.statusCategory} />
         {/* MOTIR-2050: the "Archived" chip, mirroring the detail page's eyebrow
           chip (2.9.6) — the archived state stays legible after the main column
           (which scrolls independently) is scrolled past the notice below. Neutral

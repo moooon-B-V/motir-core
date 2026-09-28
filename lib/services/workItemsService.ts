@@ -6291,6 +6291,7 @@ export const workItemsService = {
         : toWorkItemDto(item, itemRepositories),
       folderId: placement.folderId,
       placementFolder: placement.placementFolder,
+      fixReason: item.fixReason,
       ancestors,
       parent: placement.parent,
       // A Visitor's child panel names no hidden child; a private epic's is empty.

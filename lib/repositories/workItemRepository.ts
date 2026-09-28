@@ -27,7 +27,7 @@ import {
 } from '@/lib/filters/registry';
 import { UnknownFilterOperatorError } from '@/lib/filters/errors';
 import type { DistributionGroupBy } from '@/lib/reports/statisticTypes';
-import type { FixDetailDto } from '@/lib/dto/fixReason';
+import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
 // The ONE declaration of the ready order. The Workbench reads it rather than
@@ -141,6 +141,11 @@ export interface WorkItemForestRow {
    *  column; it is in the fixed projection because these reads select explicitly
    *  and a column left out of one is silently `undefined` at the mapper. */
   ciState: string | null;
+  /** Why the card is stuck until something is repaired (`WorkItem.fixReason`,
+   *  MOTIR-6600) — the `/items` row's To fix tag (MOTIR-6610). In the fixed
+   *  projection for the reason `ciState` is; cast to text so `$queryRaw` returns
+   *  the enum label. */
+  fixReason: WorkItemFixReasonDto | null;
   priority: WorkItemPriority;
   assigneeId: string | null;
   reporterId: string;
@@ -563,6 +568,11 @@ export interface WorkItemListRow {
    *  column; it is in the fixed projection because these reads select explicitly
    *  and a column left out of one is silently `undefined` at the mapper. */
   ciState: string | null;
+  /** Why the card is stuck until something is repaired (`WorkItem.fixReason`,
+   *  MOTIR-6600) — the `/items` row's To fix tag (MOTIR-6610). In the fixed
+   *  projection for the reason `ciState` is; cast to text so `$queryRaw` returns
+   *  the enum label. */
+  fixReason: WorkItemFixReasonDto | null;
   priority: WorkItemPriority;
   assigneeId: string | null;
   reporterId: string;
@@ -3262,7 +3272,7 @@ export const workItemRepository = {
     return client.$queryRaw<WorkItemForestRow[]>`
       WITH RECURSIVE forest AS (
         SELECT w."id", w."parentId", w."kind", w."type", w."key", w."identifier",
-               w."title", w."status", w."ciState", w."priority", w."assigneeId", w."reporterId",
+               w."title", w."status", w."ciState", w."fixReason", w."priority", w."assigneeId", w."reporterId",
                w."dueDate", w."estimateMinutes", w."storyPoints", w."updatedAt",
                ${hasDescriptionSql('w')} AS "hasDescription",
                w."obsolescence", w."obsolescenceNoteMd", w."publicChildrenHidden", 1 AS depth
@@ -3275,7 +3285,7 @@ export const workItemRepository = {
             AND ${notExcludedSql('w', filter.excludeIds)}
         UNION ALL
         SELECT c."id", c."parentId", c."kind", c."type", c."key", c."identifier",
-               c."title", c."status", c."ciState", c."priority", c."assigneeId", c."reporterId",
+               c."title", c."status", c."ciState", c."fixReason", c."priority", c."assigneeId", c."reporterId",
                c."dueDate", c."estimateMinutes", c."storyPoints", c."updatedAt",
                ${hasDescriptionSql('c')} AS "hasDescription",
                c."obsolescence", c."obsolescenceNoteMd", c."publicChildrenHidden", p.depth + 1
@@ -3296,6 +3306,7 @@ export const workItemRepository = {
              f."title",
              f."status",
              f."ciState",
+             f."fixReason"::text  AS "fixReason",
              f."priority"::text   AS "priority",
              f."assigneeId",
              f."reporterId",
@@ -3356,6 +3367,7 @@ export const workItemRepository = {
              w."title",
              w."status",
              w."ciState",
+             w."fixReason"::text  AS "fixReason",
              w."priority"::text   AS "priority",
              w."assigneeId",
              w."reporterId",
@@ -3511,6 +3523,7 @@ export const workItemRepository = {
              w."title",
              w."status",
              w."ciState",
+             w."fixReason"::text  AS "fixReason",
              w."priority"::text   AS "priority",
              w."assigneeId",
              w."reporterId",
@@ -4005,6 +4018,7 @@ export const workItemRepository = {
              w."title",
              w."status",
              w."ciState",
+             w."fixReason"::text  AS "fixReason",
              w."priority"::text   AS "priority",
              w."assigneeId",
              w."reporterId",

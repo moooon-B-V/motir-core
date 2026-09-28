@@ -9978,5 +9978,13 @@
       "rateLimitedBody": "This public project limits how quickly one reader can open it. Try again in {seconds, plural, one {# second} other {# seconds}}.",
       "rateLimitedRetry": "Try again"
     }
+  },
+  "toFix": {
+    "tagName": {
+      "queue_failed": "To fix · failed in the merge queue",
+      "conflicted": "To fix · conflicts with its base branch",
+      "ci_failed": "To fix · CI failed",
+      "changes_requested": "To fix · changes requested"
+    }
   }
 }

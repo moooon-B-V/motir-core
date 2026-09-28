@@ -106,6 +106,9 @@ function proposedPayload(item: PlanReviewItemDto, projectIdentifier: string): Qu
     status: item.status ?? '',
     statusLabel: item.statusLabel ?? '',
     statusCategory: item.statusCategory,
+    // A proposal peek shows what the PLAN would make of the card, not whether the
+    // live card is waiting on a repair — so it carries no To fix tag (MOTIR-6610).
+    fixReason: null,
     descriptionMd: item.descriptionMd,
     explanationMd: item.explanationMd,
     type: item.type as QuickViewData['type'],

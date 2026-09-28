@@ -9974,5 +9974,13 @@
       "rateLimitedBody": "此公开项目限制了单个读者的访问速度。请在 {seconds} 秒后重试。",
       "rateLimitedRetry": "重试"
     }
+  },
+  "toFix": {
+    "tagName": {
+      "queue_failed": "待修复 · 在合并队列中失败",
+      "conflicted": "待修复 · 与其目标分支冲突",
+      "ci_failed": "待修复 · CI 未通过",
+      "changes_requested": "待修复 · 已要求修改"
+    }
   }
 }

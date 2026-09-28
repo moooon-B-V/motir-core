@@ -4,6 +4,7 @@ import type { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { CiStateBadge } from '@/components/github/CiStateBadge';
 import { DecisionWaitingMarker } from '@/components/approvals/DecisionWaitingMarker';
+import { ToFixTag } from '@/components/workItems/ToFixTag';
 import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
 import { EstimateBadge } from '@/components/issues/EstimateBadge';
 import { ParentRollupBadge } from '@/components/issues/ParentRollupBadge';
@@ -201,14 +202,17 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
     {
       key: 'status',
       header: t('issues.columns.status'),
-      // 144px (was 108; MOTIR-5881, design MOTIR-5875 § *The List / Tree status
-      // cell — measured*). The track now holds the status pill AND the
-      // decision-waiting glyph: the widest pairing, *Implemented* (113.6px on its
-      // own — already 5.6px wider than the old 108px track, spilling into the
-      // row's right padding) + 6px gap + the 18px glyph, is 138px. The row's
-      // minimum moves 1204 → 1240px; nothing clips at 1280 (bug MOTIR-1307's
-      // concern), and every view shares this builder, so all three widen together.
-      width: 144,
+      // 168px (was 144; MOTIR-6610, design MOTIR-6608 § *The List / Tree status
+      // cell — measured, and the track widens 144 → 168px*). The track holds the
+      // status pill, then up to TWO 18px glyphs after 6px gaps: the
+      // decision-waiting glyph (MOTIR-5881) and the To fix tag. The widest case,
+      // *Implemented* (113.6px) + both glyphs, is 161.6px — 17.6px over the old
+      // track — and a to-fix card CAN carry an awaiting decision (a design or
+      // decision card with its own red pull request), so a precedence would drop
+      // the tag. Measured on the rows: the minimum moves 1148 → 1172px (the old
+      // comment's 1240 predated MOTIR-4258's removal of the 76px actions track),
+      // the row still fits at 1200, and every view shares this builder.
+      width: 168,
       sortColumn: 'status',
       // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only Pill
       // otherwise. The cell owns its own category→tone rendering. The marker sits
@@ -219,7 +223,7 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
       // percentage cap resolved against the wrapper's own width — 8px narrower
       // than the pill, because of the negative margins — and *In Progress* / *To
       // Do* broke onto two lines on every row WITHOUT a marker. Filling the cell
-      // gives the cap the 144px track to resolve against, as it had before.
+      // gives the cap the Status track to resolve against, as it had before.
       cell: (r) => (
         <span className="flex w-full min-w-0 items-center gap-1.5">
           <InlineStatusCell row={r} />
@@ -231,6 +235,11 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
               routedToName={r.pendingRoutedToName}
             />
           ) : null}
+          {/* THE TO FIX TAG (MOTIR-6610) — the glyph form, after the decision
+              glyph when both hold, outside the edit trigger like it. In the STATUS
+              cell rather than beside the CI glyph in the title cell, so a red CI
+              glyph and the tag sit in different columns (design MOTIR-6608). */}
+          <ToFixTag fixReason={r.fixReason} statusCategory={r.statusCategory} form="glyph" />
         </span>
       ),
     },
