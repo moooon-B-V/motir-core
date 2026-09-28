@@ -151,6 +151,7 @@ function listRow(): IssueRowData {
     type: null,
     status: 'todo',
     ciState: null,
+    obsolescence: null,
     statusLabel: 'To Do',
     statusCategory: 'todo',
     assigneeId: null,

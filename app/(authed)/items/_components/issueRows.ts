@@ -2,6 +2,7 @@ import { personDisplayName } from '@/lib/people/personLabel';
 import type {
   WorkItemKindDto,
   WorkItemListItemDto,
+  WorkItemObsolescenceDto,
   WorkItemPriorityDto,
   WorkItemTreeNodeDto,
   WorkItemTypeDto,
@@ -53,6 +54,9 @@ export interface IssueRowData {
    *  the GLYPH form only, and only for `failing` / `running` off the `done`
    *  category — `ciBadgeState`, shared with the board card (MOTIR-5474). */
   ciState: string | null;
+  /** The OBSOLESCENCE mark (MOTIR-6677) — the status cell draws its GLYPH after the
+   *  status pill. Nothing hides, dims or re-sorts a marked row. */
+  obsolescence: WorkItemObsolescenceDto | null;
   /** The raw assignee userId (or null) — what the inline AssigneePicker edits +
    *  `updateIssueAction` commits (2.5.5); `assigneeName` is its display. */
   assigneeId: string | null;
@@ -173,6 +177,7 @@ function shapeRowData(
     statusLabel: status?.label ?? item.status,
     statusCategory: status?.category ?? null,
     ciState: item.ciState,
+    obsolescence: item.obsolescence,
     assigneeId: item.assigneeId,
     assigneeName: item.assigneeId ? (nameById.get(item.assigneeId) ?? null) : null,
     updatedAt: item.updatedAt,

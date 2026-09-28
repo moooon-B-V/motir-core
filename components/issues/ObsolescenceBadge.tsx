@@ -27,19 +27,47 @@ const SEVERITY: Record<WorkItemObsolescenceDto, 'warning' | 'danger'> = {
   deprecated: 'danger',
 };
 
+/** The GLYPH form's ink — the CI badge's glyph rule: `--el-danger-on-surface` for
+ *  the retired state (never `--el-danger-text`), `--el-text-secondary` otherwise;
+ *  both clear AA on every surface a row paints in. */
+const GLYPH_INK: Record<WorkItemObsolescenceDto, string> = {
+  outdated: 'text-(--el-text-secondary)',
+  deprecated: 'text-(--el-danger-on-surface)',
+};
+
 export function ObsolescenceBadge({
   mark,
   className,
   trailing,
+  form = 'pill',
 }: {
   mark: WorkItemObsolescenceDto;
   className?: string;
   /** A trailing glyph after the word — the header link's `ArrowDown`. The badge
    *  itself stays static, the decision marker's rule. */
   trailing?: ReactNode;
+  /** `glyph` — the `/items` List and Tree status cell's form (MOTIR-6677): the
+   *  glyph alone, the word as its accessible name and title. */
+  form?: 'pill' | 'glyph';
 }) {
   const t = useTranslations('workItems.obsolescence');
   const Glyph = GLYPH[mark];
+  if (form === 'glyph') {
+    const label = t(`value.${mark}`);
+    // ⚠️ `shrink-0` is load-bearing: the status cell is `flex min-w-0`, and a
+    // squeezed glyph would overlap the status pill instead of sitting beside it.
+    return (
+      <span
+        className={`inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center ${GLYPH_INK[mark]}`}
+        role="img"
+        aria-label={label}
+        title={label}
+        data-obsolescence={mark}
+      >
+        <Glyph className="h-3.5 w-3.5" aria-hidden />
+      </span>
+    );
+  }
   return (
     <Pill
       severity={SEVERITY[mark]}

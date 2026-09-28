@@ -4,6 +4,7 @@ import type { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { CiStateBadge } from '@/components/github/CiStateBadge';
 import { DecisionWaitingMarker } from '@/components/approvals/DecisionWaitingMarker';
+import { ObsolescenceBadge } from '@/components/issues/ObsolescenceBadge';
 import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
 import { EstimateBadge } from '@/components/issues/EstimateBadge';
 import { ParentRollupBadge } from '@/components/issues/ParentRollupBadge';
@@ -223,6 +224,10 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
       cell: (r) => (
         <span className="flex w-full min-w-0 items-center gap-1.5">
           <InlineStatusCell row={r} />
+          {/* The mark's glyph (MOTIR-6677, `list--obsolescence.mock.html`): after
+              the status pill, before the decision glyph, outside the edit
+              trigger. A finished card's widest pairing fits the 144px track. */}
+          {r.obsolescence ? <ObsolescenceBadge mark={r.obsolescence} form="glyph" /> : null}
           {r.pendingDecision ? (
             <DecisionWaitingMarker
               form="glyph"

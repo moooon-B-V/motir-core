@@ -86,6 +86,7 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     title: `Card ${over.key}`,
     status: 'planning',
     ciState: null,
+    obsolescence: null,
     statusCategory: 'todo',
     priority: 'medium',
     assigneeId: null,
