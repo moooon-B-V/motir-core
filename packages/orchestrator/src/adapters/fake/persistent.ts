@@ -8,6 +8,7 @@ import type {
   PersistentContainerSpec,
   PersistentContainerState,
   PersistentContainerStatus,
+  PersistentExecResult,
 } from '../../types';
 
 // The FAKE adapter's PERSISTENT half (Story MOTIR-6860 · MOTIR-6869) — the
@@ -83,6 +84,10 @@ export interface FakePersistentControls {
   readonly persistentSpecs: PersistentContainerSpec[];
   /** Every operation, in order — how a test asserts the SEQUENCE (machine before volume). */
   readonly operations: string[];
+  /** Every `exec` command, in order, with the machine it ran on. */
+  readonly execs: Array<{ machineId: string; command: string[] }>;
+  /** What the next `exec` returns (default: exit 0, empty output). */
+  setNextExecResult(result: PersistentExecResult): void;
 }
 
 const STATE_PATH_ENV = 'MOTIR_FAKE_PERSISTENT_STATE_PATH';
@@ -90,6 +95,8 @@ const STATE_PATH_ENV = 'MOTIR_FAKE_PERSISTENT_STATE_PATH';
 let store: FakeStore = { apps: [], machines: {}, volumes: {}, sequence: 0 };
 const persistentSpecs: PersistentContainerSpec[] = [];
 const operations: string[] = [];
+const execs: Array<{ machineId: string; command: string[] }> = [];
+let nextExec: PersistentExecResult | null = null;
 const failures: Record<'provision' | 'machine' | 'start' | 'stop' | 'destroy', string | null> = {
   provision: null,
   machine: null,
@@ -145,6 +152,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
     provider: 'fake',
     persistentSpecs,
     operations,
+    execs,
 
     // ── controls ──────────────────────────────────────────────────────────────
 
@@ -153,6 +161,10 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       save();
       persistentSpecs.length = 0;
       operations.length = 0;
+      execs.length = 0;
+      nextExec = null;
+      execs.length = 0;
+      nextExec = null;
       for (const key of Object.keys(failures) as Array<keyof typeof failures>) failures[key] = null;
       bootBehaviour = 'start';
       now = () => new Date();
@@ -206,6 +218,9 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
     setNow(next) {
       now = next;
     },
+    setNextExecResult(result) {
+      nextExec = result;
+    },
     liveMachineIds() {
       load();
       return Object.keys(store.machines);
@@ -223,6 +238,10 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
 
     appNameFor(orgId: string): string {
       return `fake-inst-${orgId}`;
+    },
+
+    defaultRegion(): string {
+      return 'iad';
     },
 
     async provisionPersistent(spec: PersistentContainerSpec): Promise<PersistentContainerHandle> {
@@ -381,6 +400,22 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
         operations.push(`volume:destroy:${volumeId}`);
       }
       save();
+    },
+
+    async exec(
+      handle: PersistentContainerHandle,
+      command: readonly string[],
+    ): Promise<PersistentExecResult> {
+      load();
+      const machine = store.machines[handle.machineId];
+      if (!machine || machine.state !== 'running') {
+        throw new OrchestratorApiError('fake', 412, `machine ${handle.machineId} is not running`);
+      }
+      execs.push({ machineId: handle.machineId, command: [...command] });
+      operations.push(`machine:exec:${handle.machineId}`);
+      const result = nextExec ?? { exitCode: 0, stdout: '', stderr: '' };
+      nextExec = null;
+      return result;
     },
 
     async destroyMachine(_app: string, machineId: string): Promise<void> {

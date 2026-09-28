@@ -147,6 +147,7 @@ describe('the instance lane configuration (§7)', () => {
     expect(instanceAppName('motir-inst', ORG)).toBe(APP);
     expect(instanceAppName('motir-inst', 'org_other')).not.toBe(APP);
     expect(flyPersistentOrchestrator.appNameFor(ORG)).toBe(APP);
+    expect(flyPersistentOrchestrator.defaultRegion()).toBe('iad');
     const volume = instanceVolumeName('cmInstance1');
     expect(volume).toMatch(/^[a-z0-9_]{1,30}$/);
     expect(instanceMachineName('cmInstance_1')).toBe('instance-cminstance-1');
@@ -556,5 +557,37 @@ describe('the ephemeral path is unchanged', () => {
     expect(config['mounts']).toBeUndefined();
     expect(calls[0]!.url).toBe(`${API}/apps/motir-ci-fleet/machines`);
     expect(calls[0]!.auth).toBe('Bearer fleet-token');
+  });
+});
+
+describe('exec — one command inside a running machine (MOTIR-6872)', () => {
+  it('POSTs the argv and a timeout, and reads the exit code and output back', async () => {
+    handler = () => json(200, { exit_code: 3, stdout: 'out', stderr: 'err' });
+    const result = await flyPersistentOrchestrator.exec(HANDLE, ['sh', '-c', 'exit 3'], {
+      timeoutSeconds: 30,
+    });
+    expect(result).toEqual({ exitCode: 3, stdout: 'out', stderr: 'err' });
+    expect(calls[0]).toMatchObject({
+      method: 'POST',
+      url: `${API}/apps/${APP}/machines/m-1/exec`,
+      body: { cmd: ['sh', '-c', 'exit 3'], timeout: 30 },
+      auth: 'Bearer instances-token',
+    });
+  });
+
+  it('defaults the timeout, reads a body with no fields as an unknown exit, and throws on a refusal', async () => {
+    handler = () => json(200, {});
+    expect(await flyPersistentOrchestrator.exec(HANDLE, ['true'])).toEqual({
+      exitCode: -1,
+      stdout: '',
+      stderr: '',
+    });
+    expect(calls[0]!.body).toEqual({ cmd: ['true'], timeout: 120 });
+    handler = () => json(200, null);
+    expect((await flyPersistentOrchestrator.exec(HANDLE, ['true'])).exitCode).toBe(-1);
+    handler = () => json(412, { error: 'machine not started' });
+    await expect(flyPersistentOrchestrator.exec(HANDLE, ['true'])).rejects.toThrow(
+      OrchestratorApiError,
+    );
   });
 });

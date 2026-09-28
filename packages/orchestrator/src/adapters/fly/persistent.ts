@@ -20,6 +20,7 @@ import type {
   PersistentContainerSpec,
   PersistentContainerState,
   PersistentContainerStatus,
+  PersistentExecResult,
 } from '../../types';
 
 // The FLY adapter's PERSISTENT half (Story MOTIR-6860 · MOTIR-6869) — a user
@@ -316,6 +317,31 @@ const flyInstancesClient = {
     });
   },
 
+  async exec(
+    config: FlyInstancesConfig,
+    app: string,
+    id: string,
+    command: readonly string[],
+    timeoutSeconds: number,
+  ): Promise<PersistentExecResult> {
+    const res = await flyRequest(path(app, `/machines/${encodeURIComponent(id)}/exec`), {
+      method: 'POST',
+      token: config.token,
+      body: JSON.stringify({ cmd: [...command], timeout: timeoutSeconds }),
+    });
+    const body = await readFlyJson(res);
+    if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
+    const record = (typeof body === 'object' && body !== null ? body : {}) as Record<
+      string,
+      unknown
+    >;
+    return {
+      exitCode: typeof record['exit_code'] === 'number' ? record['exit_code'] : -1,
+      stdout: typeof record['stdout'] === 'string' ? record['stdout'] : '',
+      stderr: typeof record['stderr'] === 'string' ? record['stderr'] : '',
+    };
+  },
+
   async destroyMachine(config: FlyInstancesConfig, app: string, id: string): Promise<void> {
     const res = await flyRequest(path(app, `/machines/${encodeURIComponent(id)}?force=true`), {
       method: 'DELETE',
@@ -377,6 +403,10 @@ export const flyPersistentOrchestrator: PersistentContainerOrchestrator = {
 
   appNameFor(orgId: string): string {
     return instanceAppName(flyInstancesConfig().appPrefix, orgId);
+  },
+
+  defaultRegion(): string {
+    return flyInstancesConfig().region;
   },
 
   async provisionPersistent(spec: PersistentContainerSpec): Promise<PersistentContainerHandle> {
@@ -499,5 +529,19 @@ export const flyPersistentOrchestrator: PersistentContainerOrchestrator = {
 
   async destroyMachine(app: string, machineId: string): Promise<void> {
     await flyInstancesClient.destroyMachine(flyInstancesConfig(), app, machineId);
+  },
+
+  async exec(
+    handle: PersistentContainerHandle,
+    command: readonly string[],
+    options: { timeoutSeconds?: number } = {},
+  ): Promise<PersistentExecResult> {
+    return flyInstancesClient.exec(
+      flyInstancesConfig(),
+      handle.app,
+      handle.machineId,
+      command,
+      options.timeoutSeconds ?? 120,
+    );
   },
 };

@@ -23,7 +23,14 @@ export type FleetWorkloadKind =
   /** MOTIR-1981/1990: one container per code-graph index run. */
   | 'code_graph_index'
   /** Epic 9: one container per hosted agent run. */
-  | 'hosted_agent';
+  | 'hosted_agent'
+  /**
+   * MOTIR-6860: one user AGENT INSTANCE while it RUNS (`docs/decisions/agent-instances.md`
+   * §6). Slot-backed like `hosted_agent`; a hibernated instance holds no slot.
+   * Its machines live in per-organisation instance apps, never the fleet app,
+   * so the fleet reaper never sees one — the tag below names it in the console.
+   */
+  | 'agent_instance';
 
 // The CONTAINER-ORCHESTRATOR PORT (Story MOTIR-1916 · MOTIR-1921) —
 // `docs/decisions/ci-runner-fleet.md` §4 and §5, transcribed into the codebase
@@ -577,6 +584,10 @@ export interface PersistentContainerOrchestrator {
   /** The instance app an organisation's instances boot in (§7) — deterministic. */
   appNameFor(orgId: string): string;
 
+  /** The region a new instance's machine and volume are created in (§3) — the
+   *  adapter's own configuration, so no caller reads a provider variable. */
+  defaultRegion(): string;
+
   /**
    * Ensure the organisation's app (with its own private network), create the
    * volume, then create the machine mounting it. NEVER leaves an untracked
@@ -604,4 +615,23 @@ export interface PersistentContainerOrchestrator {
 
   /** Destroy one machine by id — the reconcile's orphan cleanup. Idempotent. */
   destroyMachine(app: string, machineId: string): Promise<void>;
+
+  /**
+   * Run ONE command inside a running machine and return its result — how the
+   * lifecycle clones a project's repositories into the home (MOTIR-6872) without
+   * a credential ever entering the machine's config, env or volume: the command's
+   * argv is the only place it travels, for the length of one process.
+   */
+  exec(
+    handle: PersistentContainerHandle,
+    command: readonly string[],
+    options?: { timeoutSeconds?: number },
+  ): Promise<PersistentExecResult>;
+}
+
+/** What one {@link PersistentContainerOrchestrator.exec} returned. */
+export interface PersistentExecResult {
+  readonly exitCode: number;
+  readonly stdout: string;
+  readonly stderr: string;
 }

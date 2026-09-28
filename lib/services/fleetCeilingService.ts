@@ -82,7 +82,13 @@ export type FleetSlotVerdict =
    *  idempotent, so a redelivery lands here rather than double-occupying. */
   | { outcome: 'already_held' }
   /** Not reserved. Nothing was written; the caller queues and retries. */
-  | { outcome: 'deferred'; reason: 'fleet_ceiling' | 'gate_unavailable'; detail: string };
+  | {
+      outcome: 'deferred';
+      /** `workload_cap` (MOTIR-6872): the request's own {@link FleetSlotRequest.guard}
+       *  refused — a workload-specific cap under the same lock, never the ceiling. */
+      reason: 'fleet_ceiling' | 'gate_unavailable' | 'workload_cap';
+      detail: string;
+    };
 
 export interface FleetSlotRequest {
   workload: FleetWorkloadKind;
@@ -104,6 +110,15 @@ export interface FleetSlotRequest {
    * the ceiling be exceeded — pass the workload's real timeout, not a guess.
    */
   ttlSeconds?: number;
+  /**
+   * A WORKLOAD'S OWN CAP, decided under the SAME fleet admission lock as the
+   * ceiling (MOTIR-6872). Returns `null` to admit, or a sentence naming the cap
+   * that refused. Evaluated after the already-held check and before the census,
+   * in the locked transaction — so a cap on how many of one workload may run is
+   * as exact as the ceiling itself, and two racers cannot both squeeze under it.
+   * A guard that THROWS fails closed like any other count (`gate_unavailable`).
+   */
+  guard?: (tx: Prisma.TransactionClient, now: Date) => Promise<string | null>;
 }
 
 function detailOf(err: unknown): string {
@@ -189,6 +204,17 @@ export const fleetCeilingService = {
         // caller would tear down a live container to honour a refusal.
         const held = await slots.findByRef(request.workload, request.ref, tx);
         if (held) return { outcome: 'already_held' as const };
+
+        if (request.guard) {
+          const refused = await request.guard(tx, now);
+          if (refused !== null) {
+            return {
+              outcome: 'deferred' as const,
+              reason: 'workload_cap' as const,
+              detail: refused,
+            };
+          }
+        }
 
         const census = await this.census(now, tx);
         if (census.total >= ceiling) {

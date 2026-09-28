@@ -33,6 +33,7 @@ describe('fakePersistentOrchestrator', () => {
     const a = await fake.provisionPersistent(SPEC);
     const b = await fake.provisionPersistent({ ...SPEC, instanceId: 'inst-2' });
     expect(a.app).toBe(fake.appNameFor('org-1'));
+    expect(fake.defaultRegion()).toBe('iad');
     expect(fake.appNames()).toEqual([a.app]);
     expect(fake.operations).toEqual([
       `app:create:${a.app}`,
@@ -165,5 +166,24 @@ describe('the cross-process seam', () => {
     const inventory = await fake.listPersistent(h.app);
     expect(inventory.machines[0]!.createdAt).toBeInstanceOf(Date);
     expect(fake.liveMachineIds()).toEqual([h.machineId]);
+  });
+});
+
+describe('exec (MOTIR-6872)', () => {
+  it('records each command on a running machine and returns the arranged result once', async () => {
+    const h = await fake.provisionPersistent(SPEC);
+    expect(await fake.exec(h, ['echo', 'hi'])).toEqual({ exitCode: 0, stdout: '', stderr: '' });
+    fake.setNextExecResult({ exitCode: 128, stdout: '', stderr: 'fatal' });
+    expect((await fake.exec(h, ['git', 'clone'])).exitCode).toBe(128);
+    expect((await fake.exec(h, ['true'])).exitCode).toBe(0);
+    expect(fake.execs.map((e) => e.command[0])).toEqual(['echo', 'git', 'true']);
+  });
+
+  it('refuses a machine that is not running', async () => {
+    const h = await fake.provisionPersistent(SPEC);
+    await fake.stop(h);
+    await expect(fake.exec(h, ['true'])).rejects.toThrow(/not running/);
+    fake.destroyOutside(h.machineId);
+    await expect(fake.exec(h, ['true'])).rejects.toThrow(/not running/);
   });
 });

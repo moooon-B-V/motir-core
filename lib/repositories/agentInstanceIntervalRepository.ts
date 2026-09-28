@@ -62,6 +62,20 @@ export const agentInstanceIntervalRepository = {
     return tx.agentInstanceInterval.findFirst({ where: { agentInstanceId, endedAt: null } });
   },
 
+  /**
+   * Move an OPEN interval's start to `startedAt` — the lifecycle opens an
+   * interval at Motir's own instant when it takes the slot, and corrects it to
+   * Fly's start event once the machine is seen running (§5: the provider's
+   * instant first, Motir's the fallback). A closed interval is never touched.
+   */
+  async correctStart(id: string, startedAt: Date, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.agentInstanceInterval.updateMany({
+      where: { id, endedAt: null },
+      data: { startedAt },
+    });
+    return result.count;
+  },
+
   /** An interval by id. */
   async findById(id: string, tx: Prisma.TransactionClient): Promise<AgentInstanceInterval | null> {
     return tx.agentInstanceInterval.findUnique({ where: { id } });

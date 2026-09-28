@@ -99,6 +99,9 @@ export const FLEET_WORKLOADS: Record<FleetWorkloadKind, FleetWorkload> = {
   },
   code_graph_index: slotBackedWorkload('code_graph_index', 'code-graph index'),
   hosted_agent: slotBackedWorkload('hosted_agent', 'hosted agents'),
+  // MOTIR-6872 — a user agent instance holds a slot for exactly as long as a
+  // running interval is open (`docs/decisions/agent-instances.md` §6).
+  agent_instance: slotBackedWorkload('agent_instance', 'agent instances'),
 };
 
 /** Every registered kind, in a stable order — the iteration order of the
@@ -130,6 +133,9 @@ export const CONTAINER_WORKLOAD_BY_FLEET_KIND: Record<FleetWorkloadKind, CiConta
   ci_runner: 'ci',
   code_graph_index: 'index',
   hosted_agent: 'agent',
+  // Its OWN line (MOTIR-6872): an instance is not a hosted run, and the guard
+  // below this map refuses two kinds collapsing onto one line.
+  agent_instance: 'instance',
 };
 
 /** The cost line a container of this kind is recorded under. A function rather

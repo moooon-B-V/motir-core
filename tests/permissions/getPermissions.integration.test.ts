@@ -190,6 +190,8 @@ function MEMBER_SET(): PermissionKey[] {
     'work_item:archive',
     // MOTIR-6328 — the three rooms' view-any keys.
     ...ROOM_VIEW_KEYS(),
+    // MOTIR-6872 — a member runs their own agent instances.
+    'instance:use',
   ];
 }
 
@@ -430,6 +432,7 @@ describe('the DTO boundary is serialisable and deterministic', () => {
         ...MEMBER_FACING_AT_MEMBER(),
         'ai:decide_plan',
         ...drawn(ROOM_VIEW_KEYS()),
+        'instance:use',
       ].sort(),
     );
     // Compare as a SET: the DTO emits catalog order, which MOTIR-2277 changed
