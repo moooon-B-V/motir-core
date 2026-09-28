@@ -300,3 +300,150 @@ describe('the pure maps', () => {
     });
   });
 });
+
+describe('the door’s other answers (coverage floor, MOTIR-6797)', () => {
+  it('models UNAVAILABLE: says so under the door, and Try again re-reads them', async () => {
+    routes[MODELS] = () => ({ status: 503, body: { code: 'hosted_models_unavailable' } });
+    await mount(died());
+    expect((screen.getByTestId('continue-hosted') as HTMLButtonElement).disabled).toBe(true);
+    const notice = screen.getByTestId('continue-hosted-models-unavailable');
+    await act(async () => {
+      fireEvent.click(notice.querySelector('button')!);
+    });
+    expect(calls(MODELS)).toHaveLength(2);
+  });
+
+  it('models EMPTY: says so, with nothing to retry', async () => {
+    routes[MODELS] = () => ({ status: 200, body: { models: [], default: null } });
+    await mount(died());
+    expect(screen.getByTestId('continue-hosted-models-empty').querySelector('button')).toBeNull();
+  });
+
+  it('`taken` with a start time draws when; a holder-less answer draws a dash', async () => {
+    routes[START] = () => ({
+      status: 409,
+      body: {
+        code: 'hosted_continue_taken',
+        holder: { id: 'usr_2', name: 'Bo' },
+        startedAt: '2026-09-27T14:20:00.000Z',
+      },
+    });
+    await mount(died());
+    await press();
+    const notice = screen.getByTestId('continue-hosted-refused-taken');
+    expect(notice.querySelector('time')?.getAttribute('datetime')).toBe('2026-09-27T14:20:00.000Z');
+  });
+
+  it('`run_alive` with no holder names nobody', async () => {
+    routes[START] = () => ({ status: 409, body: { code: 'hosted_continue_run_alive' } });
+    await mount(died());
+    await press();
+    expect(screen.getByTestId('continue-hosted-refused-runAlive').textContent).toContain('—');
+  });
+
+  it('not writable lists every repository with a way to fix it', async () => {
+    routes[START] = () => ({
+      status: 409,
+      body: {
+        code: 'hosted_repository_not_writable',
+        repositories: [
+          { repository: 'acme/web', reason: 'The App lost access.', fix: 'reconnect' },
+        ],
+        totalRepositories: 2,
+      },
+    });
+    await mount(died());
+    await press();
+    const notice = screen.getByTestId('continue-hosted-refused-notWritable');
+    expect(notice.textContent).toContain('acme/web');
+    expect(notice.textContent).toContain('The App lost access.');
+    expect(notice.querySelector('a')).toBeTruthy();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('not writable with no total still says how many', async () => {
+    routes[START] = () => ({
+      status: 409,
+      body: { code: 'hosted_repository_not_writable', repositories: 'nope' },
+    });
+    await mount(died());
+    await press();
+    expect(screen.getByTestId('continue-hosted-refused-notWritable')).toBeTruthy();
+  });
+
+  it('a model withdrawn since the page loaded: says so and re-reads the list', async () => {
+    routes[START] = () => ({ status: 422, body: { code: 'hosted_model_not_offered' } });
+    await mount(died());
+    await press();
+    expect(screen.getByTestId('continue-hosted-refused-modelNotOffered').textContent).toContain(
+      'claude-sonnet-5',
+    );
+    expect(calls(MODELS)).toHaveLength(2);
+  });
+
+  it.each([
+    [503, { code: 'hosted_run_unavailable' }, 'unavailable', false],
+    [503, { code: 'hosted_run_boot_failed', dispatchRunId: 'r' }, 'bootFailed', true],
+    [500, null, 'failed', false],
+  ])('%s %j → %s', async (status, body, kind, reread) => {
+    routes[START] = () => ({ status, body });
+    await mount(died());
+    await press();
+    expect(screen.getByTestId(`continue-hosted-refused-${kind}`)).toBeTruthy();
+    expect(refresh).toHaveBeenCalledTimes(reread ? 1 : 0);
+  });
+
+  it('a network failure is `failed`, and the door is usable again', async () => {
+    routes[START] = () => {
+      throw new Error('offline');
+    };
+    await mount(died());
+    await press();
+    expect(screen.getByTestId('continue-hosted-refused-failed')).toBeTruthy();
+    expect((screen.getByTestId('continue-hosted') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('with no `crypto.randomUUID` (an insecure origin) a press still carries a key', async () => {
+    vi.stubGlobal('crypto', {});
+    routes[START] = () => ({ status: 201, body: { dispatchRunId: 'run_2', created: true } });
+    await mount(died());
+    await press();
+    const body = JSON.parse(String(calls(START)[0]![1]?.body));
+    expect(body.idempotencyKey).toMatch(/^press-/);
+  });
+
+  it('a card with no door has neither door nor notice', async () => {
+    render(
+      <>
+        <ContinueHostedDoor />
+        <ContinueHostedNotice />
+      </>,
+    );
+    expect(screen.queryByTestId('continue-hosted-door')).toBeNull();
+  });
+});
+
+describe('continueRefusalOf — malformed answers', () => {
+  it('a holder that is not an actor, a missing time and a missing parent read as null', () => {
+    expect(continueRefusalOf(409, { code: 'hosted_continue_taken', holder: 'x' }, 'm')).toEqual({
+      kind: 'taken',
+      holder: null,
+      startedAt: null,
+    });
+    expect(continueRefusalOf(409, { code: 'hosted_continue_the_parent' }, 'm')).toEqual({
+      kind: 'theParent',
+      parentKey: null,
+    });
+    expect(continueRefusalOf(402, {}, 'm')).toEqual({ kind: 'outOfCredits' });
+  });
+
+  it('a view that is not died offers no continue and hides nothing', () => {
+    expect(continueDoorOf(null)).toMatchObject({ runDoorHidden: false });
+    expect(continueDoorOf({ state: 'alive' }).continueTarget('X-1')).toBeNull();
+    expect(
+      continueDoorOf(died({ refusal: 'continue_the_parent', parentKey: null })).continueTarget(
+        'X-1',
+      ),
+    ).toBeNull();
+  });
+});

@@ -10,8 +10,11 @@ import { inMemorySupervisionStore, type SupervisionStore } from '@/lib/jobs/supe
 import type { MemoizingSteps } from '@/lib/jobs/supervision/inProcessSteps';
 import type { HostedRunSuperviseData } from '@/lib/jobs/types';
 import {
+  HostedModelNotOfferedError,
   HostedRunBootFailedError,
+  HostedRunCardNotReadyError,
   HostedRunCreditsUnavailableError,
+  HostedRunOutOfCreditsError,
   HostedRunRepositoryNotWritableError,
   type RunGitWriteRefusal,
 } from '@/lib/hostedRuns/errors';
@@ -19,6 +22,9 @@ import { HOSTED_RUN_STALL_WINDOW_MS } from '@/lib/hostedRuns/limits';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
+import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
+import { apiTokensService } from '@/lib/services/apiTokensService';
+import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
 import { jobSupervisionRepository } from '@/lib/repositories/jobSupervisionRepository';
@@ -29,6 +35,9 @@ import {
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { runCredentialService } from '@/lib/services/runCredentialService';
 import { supervisionSweepService } from '@/lib/services/supervisionSweepService';
+import { usersService } from '@/lib/services/usersService';
+import { workItemContinueService } from '@/lib/services/workItemContinueService';
+import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { bearer } from '../fixtures/apiV1Fixtures';
@@ -39,6 +48,8 @@ import {
 } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { randomToken } from '../helpers/random';
+import { warmPool } from '../helpers/warmPool';
 
 // MOTIR-692 — THE STORY 9.1 TEST GATE ("a card runs on the hosted agent").
 //
@@ -120,6 +131,8 @@ let tokenSeq = 0;
 let installationStatus: Record<string, number> = {};
 /** `POST /v1/credits/agent-run-check`'s status override (default 200/ok). */
 let creditCheckStatus = 200;
+/** `agent-run-check`'s `mayRun` (default true) — false is an out-of-credits org. */
+let creditMayRun = true;
 
 function stubHttp(): void {
   calls = [];
@@ -131,6 +144,7 @@ function stubHttp(): void {
   tokenSeq = 0;
   installationStatus = {};
   creditCheckStatus = 200;
+  creditMayRun = true;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -151,7 +165,9 @@ function stubHttp(): void {
       }
       if (url === `${AI}/v1/credits/agent-run-check`) {
         if (creditCheckStatus !== 200) return json(creditCheckStatus, { code: 'internal_error' });
-        return json(200, { balanceCredits: 250, hasCredits: true, mayRun: true });
+        return creditMayRun
+          ? json(200, { balanceCredits: 250, hasCredits: true, mayRun: true })
+          : json(200, { balanceCredits: 0, hasCredits: false, mayRun: false });
       }
       if (url === `${AI}/v1/credits/agent-machine`) {
         machineChargeCalls += 1;
@@ -1097,5 +1113,404 @@ describe('two more start-path refusals — nothing opened survives them either',
     expect(revokedKeys).toContain(run.id);
     expect(await adminDb.apiToken.count({ where: { dispatchRunId: run.id } })).toBe(0);
     expect(fakeOrchestrator.provisioned).toEqual([]);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════
+// 6 · CONTINUE HOSTED (Story MOTIR-6527 · MOTIR-6797) — the story's own gate.
+//
+// Each card of that story tested itself (`tests/hostedRuns/hostedRunStart.test.ts`'s
+// continue block, `tests/ready/claimWorkItemContinue.test.ts`'s hosted opening, the
+// CLI's continue suites). What lives BETWEEN them is asserted here, on the same
+// fake fleet and the same real Postgres as the rest of this file: every end of a
+// hosted CONTINUE through `endHostedRun`, a refused pre-flight taking no lock, the
+// browser racing a terminal on one card, and a dead run's per-repository branches
+// reaching the container's own reads.
+// ═════════════════════════════════════════════════════════════════════════
+
+const startContinue = (key: string, ctx = fx.ctx) =>
+  hostedRunService.start(
+    { workItemKey: key, model: MODEL, idempotencyKey: `idem-${++seq}`, mode: 'continue' },
+    ctx,
+  );
+
+/** An In Progress card, assigned to the owner, pinned to `repos`, whose LOCAL run
+ *  checked out a branch in each and then went silent. */
+async function deadCardOn(
+  repos: SeededRepo[],
+  title = 'a card whose run died',
+): Promise<{ card: { id: string; identifier: string }; deadRunId: string; branches: string[] }> {
+  const card = await newCard({ kind: 'task', title });
+  await pinRepos(
+    card.id,
+    repos.map((r) => r.projectRepoId),
+  );
+  await adminDb.workItem.update({
+    where: { id: card.id },
+    data: { status: 'in_progress', assigneeId: fx.ownerId },
+  });
+  const { run } = await dispatchRunService.open(
+    {
+      projectKey: fx.projectIdentifier,
+      command: 'run',
+      cards: [{ key: card.identifier, disposition: 'queued' }],
+    },
+    fx.ctx,
+  );
+  const branches = repos.map((r) => `subtask/${card.identifier}-${r.name}`);
+  await dispatchRunService.appendEvents(
+    run.id,
+    [
+      {
+        kind: 'checkout_ready',
+        workItemKey: card.identifier,
+        disposition: 'running',
+        data:
+          repos.length === 1
+            ? { branch: branches[0] }
+            : {
+                branches: repos.map((r, i) => ({
+                  repository: r.name,
+                  branch: branches[i],
+                  workBranch: branches[i],
+                })),
+              },
+      },
+    ],
+    fx.ctx,
+  );
+  await adminDb.dispatchRun.update({
+    where: { id: run.id },
+    data: { lastHeartbeatAt: new Date(Date.now() - 8 * MINUTE) },
+  });
+  return { card, deadRunId: run.id, branches };
+}
+
+/** A LIVE hosted continue that has fetched its git credential. */
+async function liveContinueWithGitCredential() {
+  const repo = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+  const { card, deadRunId } = await deadCardOn([repo]);
+  const started = await startContinue(card.identifier);
+  const data = await supervisionDataOf();
+  const spec = fakeOrchestrator.specs.at(-1)!;
+  expect(spec.env).toMatchObject({ MOTIR_RUN_MODE: 'continue' });
+  const runToken = runTokenOf(spec);
+
+  const { POST: postGitCred } =
+    await import('@/app/api/v1/dispatch-runs/[id]/git-credential/route');
+  const res = await postGitCred(
+    jsonReq(
+      'POST',
+      `${BASE}/dispatch-runs/${started.dispatchRunId}/git-credential`,
+      bearer(runToken),
+    ),
+    { params: Promise.resolve({ id: started.dispatchRunId }) },
+  );
+  expect(res.status, 'seeding a live git credential').toBe(200);
+  return { dispatchRunId: started.dispatchRunId, cardId: card.id, deadRunId, data, runToken };
+}
+
+/** Every end but success leaves the card In Progress, with the continuer, and
+ *  continuable again — the ended continue is now the dead run. */
+async function expectContinuableAgain(cardId: string, dispatchRunId: string): Promise<void> {
+  expect(await cardOf(cardId)).toMatchObject({ status: 'in_progress', assigneeId: fx.ownerId });
+  expect(await workItemContinueService.getContinueView(cardId, fx.ctx)).toMatchObject({
+    state: 'died',
+    refusal: null,
+    deadRun: { id: dispatchRunId, command: 'continue', origin: 'hosted' },
+  });
+}
+
+describe('continue hosted — every end goes through endHostedRun and leaks nothing', () => {
+  it('start → claim → boot: ONE hosted `continue` run, booted in continue mode', async () => {
+    const { dispatchRunId, deadRunId } = await liveContinueWithGitCredential();
+    expect(await runOf(dispatchRunId)).toMatchObject({
+      command: 'continue',
+      origin: 'hosted',
+      status: 'running',
+    });
+    // The claim closed the lapsed run in its own transaction.
+    expect(await runOf(deadRunId)).toMatchObject({ stopReason: 'abandoned' });
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+  });
+
+  it('success — the CLI closes it, the end path only tears down', async () => {
+    const { dispatchRunId, data, runToken } = await liveContinueWithGitCredential();
+    const { POST: postClose } = await import('@/app/api/v1/dispatch-runs/[id]/close/route');
+    const closed = await postClose(
+      jsonReq('POST', `${BASE}/dispatch-runs/${dispatchRunId}/close`, bearer(runToken), {
+        stopReason: 'completed',
+        status: 'succeeded',
+      }),
+      { params: Promise.resolve({ id: dispatchRunId }) },
+    );
+    expect(closed.status).toBe(200);
+    fakeOrchestrator.completeJob(data.session.handle.id, { exitCode: 0 });
+    expect(await superviseToEnd(data)).toEqual({ outcome: 'settled', reason: 'job_completed' });
+    expect(await runOf(dispatchRunId)).toMatchObject({ status: 'succeeded' });
+    await assertNoLeak(dispatchRunId, runToken);
+  });
+
+  it('failed — a crash leaves the card In Progress and continuable', async () => {
+    const { dispatchRunId, data, runToken, cardId } = await liveContinueWithGitCredential();
+    fakeOrchestrator.completeJob(data.session.handle.id, { exitCode: 1 });
+    expect(await superviseToEnd(data)).toEqual({ outcome: 'settled', reason: 'job_completed' });
+    expect(await runOf(dispatchRunId)).toMatchObject({ status: 'failed', stopReason: 'halted' });
+    await assertNoLeak(dispatchRunId, runToken);
+    await expectContinuableAgain(cardId, dispatchRunId);
+  });
+
+  it('stall — no agent output ends it early; the card stays In Progress', async () => {
+    const { dispatchRunId, data, runToken, cardId } = await liveContinueWithGitCredential();
+    const bootedAt = new Date(data.session.bootedAt).getTime();
+    const later = () => new Date(bootedAt + HOSTED_RUN_STALL_WINDOW_MS + MINUTE);
+    expect(await superviseToEnd(data, later)).toEqual({
+      outcome: 'settled',
+      reason: 'job_timed_out',
+    });
+    expect(await runOf(dispatchRunId)).toMatchObject({ status: 'timed_out' });
+    await assertNoLeak(dispatchRunId, runToken);
+    await expectContinuableAgain(cardId, dispatchRunId);
+  });
+
+  it('cancelled — revoked at once, settled at the next poll; the card stays In Progress', async () => {
+    const { dispatchRunId, data, runToken, cardId } = await liveContinueWithGitCredential();
+    await hostedRunService.cancel(dispatchRunId, fx.ctx);
+    expect(await runOf(dispatchRunId)).toMatchObject({ status: 'cancelled' });
+    expect(await superviseToEnd(data)).toEqual({ outcome: 'settled', reason: 'gate_revoked' });
+    await assertNoLeak(dispatchRunId, runToken);
+    await expectContinuableAgain(cardId, dispatchRunId);
+  });
+
+  it('lost supervision — the sweep settles it; the card stays In Progress', async () => {
+    const { dispatchRunId, data, runToken, cardId } = await liveContinueWithGitCredential();
+    await truncateJobRuns();
+    const job = await adminDb.jobQueueRun.create({
+      data: {
+        jobId: 'hosted-run/supervise',
+        eventName: 'hosted-run/supervise',
+        workspaceId: fx.workspaceId,
+        runAt: new Date(Date.now() - 60 * MINUTE),
+        maxAttempts: 1,
+        state: 'failed',
+      },
+    });
+    await withSystemContext(async (tx: Prisma.TransactionClient) => {
+      await jobSupervisionRepository.open(
+        {
+          runId: job.id,
+          subject: data.session.dispatchId,
+          kind: 'hosted-agent',
+          nextPollAt: new Date(Date.now() - 40 * MINUTE),
+          workspaceId: fx.workspaceId,
+        },
+        tx,
+      );
+      await jobStepRepository.create(
+        {
+          runId: job.id,
+          stepId: hostedAgentBootStepId(data.session.dispatchId),
+          kind: 'run',
+          result: {
+            phase: 'supervising',
+            session: data.session,
+          } as unknown as Prisma.InputJsonValue,
+          workspaceId: fx.workspaceId,
+        },
+        tx,
+      );
+    });
+    expect(await supervisionSweepService.sweepAbandoned()).toMatchObject({ settled: 1 });
+    expect(await runOf(dispatchRunId)).toMatchObject({ status: 'timed_out' });
+    await assertNoLeak(dispatchRunId, runToken);
+    await expectContinuableAgain(cardId, dispatchRunId);
+    await truncateJobRuns();
+  });
+
+  it('died again — a continue that ended failed is continued by a second Continue hosted', async () => {
+    const { dispatchRunId, data, cardId } = await liveContinueWithGitCredential();
+    fakeOrchestrator.completeJob(data.session.handle.id, { exitCode: 1 });
+    await superviseToEnd(data);
+    const card = await cardOf(cardId);
+
+    const again = await startContinue(card.identifier);
+    expect(again.created).toBe(true);
+    expect(again.dispatchRunId).not.toBe(dispatchRunId);
+    expect(await runOf(again.dispatchRunId)).toMatchObject({
+      command: 'continue',
+      origin: 'hosted',
+      status: 'running',
+    });
+    expect(fakeOrchestrator.provisioned).toHaveLength(2);
+  });
+});
+
+describe('continue hosted — a refused pre-flight takes no lock', () => {
+  /** Nothing opened, nothing booted, the dead run untouched, the assignee kept —
+   *  and a terminal `motir continue` right after is accepted. */
+  async function expectNoLockTaken(cardId: string, identifier: string, deadRunId: string) {
+    expect(
+      await adminDb.dispatchRun.count({
+        where: { workspaceId: fx.workspaceId, command: 'continue' },
+      }),
+    ).toBe(0);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    expect((await runOf(deadRunId)).stopReason).toBeNull();
+    expect((await cardOf(cardId)).assigneeId).toBe(fx.ownerId);
+    const terminal = await workItemContinueService.claimContinue(fx.projectId, identifier, fx.ctx);
+    expect(terminal.outcome).toBe('claimed');
+  }
+
+  it('out of credits', async () => {
+    const repo = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card, deadRunId } = await deadCardOn([repo]);
+    creditMayRun = false;
+    await expect(startContinue(card.identifier)).rejects.toBeInstanceOf(HostedRunOutOfCreditsError);
+    await expectNoLockTaken(card.id, card.identifier, deadRunId);
+  });
+
+  it('a model not offered', async () => {
+    const repo = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card, deadRunId } = await deadCardOn([repo]);
+    await expect(
+      hostedRunService.start(
+        { workItemKey: card.identifier, model: 'nope', idempotencyKey: 'k', mode: 'continue' },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(HostedModelNotOfferedError);
+    await expectNoLockTaken(card.id, card.identifier, deadRunId);
+  });
+
+  it('a repository it cannot write', async () => {
+    const repo = await seedRepo({ state: 'connected', owner: 'acme', name: 'web' });
+    const { card, deadRunId } = await deadCardOn([repo]);
+    installationStatus = { 'acme/web': 404 };
+    await expect(startContinue(card.identifier)).rejects.toBeInstanceOf(
+      HostedRunRepositoryNotWritableError,
+    );
+    await expectNoLockTaken(card.id, card.identifier, deadRunId);
+  });
+
+  it('`mode` omitted is Run hosted: a died In Progress card is refused not ready, no continue opened', async () => {
+    const repo = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card, deadRunId } = await deadCardOn([repo]);
+    await expect(start(card.identifier)).rejects.toBeInstanceOf(HostedRunCardNotReadyError);
+    await expectNoLockTaken(card.id, card.identifier, deadRunId);
+  });
+});
+
+describe('continue hosted — the browser racing a terminal on one card', () => {
+  it('Continue hosted and a v1 `/continue` at once: one winner, the other `taken` naming it', async () => {
+    const repo = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card } = await deadCardOn([repo]);
+    const user = await usersService.createUser({
+      email: `terminal+${randomToken()}@example.com`,
+      password: 'hunter2hunter2',
+      name: 'Tess Terminal',
+    });
+    await workspacesService.addMember({ userId: user.id, workspaceId: fx.workspaceId });
+    const { token } = await apiTokensService.create(user.id, fx.workspaceId, {
+      label: `race-${randomToken()}`,
+      projectId: fx.projectId,
+      permissions: CLI_TOKEN_GRANT.filter((p) => !p.startsWith('lesson:')),
+    });
+    const { POST: postContinue } = await import('@/app/api/v1/work-items/[key]/continue/route');
+
+    // A cold pool hands both racers one connection and passes with the lock missing.
+    await warmPool(4);
+    const [hosted, terminal] = await Promise.all([
+      startContinue(card.identifier).then(
+        (r) => ({ ok: true as const, runId: r.dispatchRunId }),
+        (err: unknown) => ({ ok: false as const, err }),
+      ),
+      postContinue(
+        jsonReq('POST', `${BASE}/work-items/${card.identifier}/continue`, bearer(token)),
+        { params: Promise.resolve({ key: card.identifier }) },
+      ).then(async (res) => (await res.json()) as Record<string, unknown>),
+    ]);
+
+    const continues = await adminDb.dispatchRun.findMany({
+      where: { workspaceId: fx.workspaceId, command: 'continue' },
+    });
+    expect(continues, 'exactly one continuing agent').toHaveLength(1);
+    const winner = continues[0]!;
+
+    if (hosted.ok) {
+      // The browser won: the terminal is told who holds it.
+      expect(winner).toMatchObject({ id: hosted.runId, origin: 'hosted' });
+      expect(terminal).toMatchObject({ outcome: 'taken', holder: { id: fx.ownerId } });
+      expect(fakeOrchestrator.provisioned).toHaveLength(1);
+    } else {
+      // The terminal won: the browser's refusal names the terminal's member.
+      expect(terminal).toMatchObject({ outcome: 'claimed', runId: winner.id });
+      expect(hosted.err).toMatchObject({
+        code: 'hosted_continue_taken',
+        holder: { id: user.id, name: 'Tess Terminal' },
+      });
+      expect(fakeOrchestrator.provisioned).toEqual([]);
+    }
+  });
+});
+
+describe('continue hosted — a dead run’s branch per repository reaches the container', () => {
+  it('checkout_ready → the claim → the adopted run’s `continues` → the CONTINUE prompt, per repository', async () => {
+    const site = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const api = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'api' });
+    const { card, deadRunId, branches } = await deadCardOn([site, api], 'a two-repository card');
+
+    const started = await startContinue(card.identifier);
+    const runToken = runTokenOf(fakeOrchestrator.specs.at(-1)!);
+    const headers = bearer(runToken);
+
+    // The container ADOPTS the run and reads every repository's branch off it.
+    const { GET: getRun } = await import('@/app/api/v1/dispatch-runs/[id]/route');
+    const adopted = await getRun(
+      jsonReq('GET', `${BASE}/dispatch-runs/${started.dispatchRunId}`, headers),
+      { params: Promise.resolve({ id: started.dispatchRunId }) },
+    );
+    expect(adopted.status).toBe(200);
+    const run = dispatchRunSchema.parse(await adopted.json());
+    expect(run.continues).toMatchObject({ fromRunId: deadRunId, mode: 'card' });
+    expect(run.continues!.branches.map((b) => [b.repository, b.branch])).toEqual([
+      ['site', branches[0]],
+      ['api', branches[1]],
+    ]);
+    // Every repository names where to clone it from — none it has to refuse.
+    for (const b of run.continues!.branches) expect(b.cloneUrl).toMatch(/^https:\/\//);
+
+    // The agent's prompt names every repository's branch, in its CONTINUE block.
+    const { GET: getPrompt } = await import('@/app/api/v1/work-items/[key]/dispatch-prompt/route');
+    const promptRes = await getPrompt(
+      jsonReq(
+        'GET',
+        `${BASE}/work-items/${card.identifier}/dispatch-prompt?continueFrom=${deadRunId}`,
+        headers,
+      ),
+      { params: Promise.resolve({ key: card.identifier }) },
+    );
+    expect(promptRes.status).toBe(200);
+    const prompt = String(((await promptRes.json()) as { prompt?: unknown }).prompt);
+    expect(prompt).toContain('CONTINUE');
+    for (const branch of branches) expect(prompt).toContain(branch);
+  });
+
+  it('the continue run’s credential reaches only its own card', async () => {
+    const repo = await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const { card } = await deadCardOn([repo]);
+    const other = await newCard({ kind: 'task', title: 'outside the continue' });
+    await startContinue(card.identifier);
+    const token = runTokenOf(fakeOrchestrator.specs.at(-1)!);
+
+    const { GET: getWorkItem } = await import('@/app/api/v1/work-items/[key]/route');
+    const outside = await getWorkItem(
+      jsonReq('GET', `${BASE}/work-items/${other.identifier}`, bearer(token)),
+      { params: Promise.resolve({ key: other.identifier }) },
+    );
+    expect(outside.status).toBe(403);
+    const own = await getWorkItem(
+      jsonReq('GET', `${BASE}/work-items/${card.identifier}`, bearer(token)),
+      { params: Promise.resolve({ key: card.identifier }) },
+    );
+    expect(own.status).toBe(200);
   });
 });
