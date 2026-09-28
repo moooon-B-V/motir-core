@@ -161,13 +161,13 @@ describe('workspacesService — findMembership / getWorkspaceSummary / addMember
     expect(orgRow?.role).toBe('member');
   });
 
-  it('removeMember DELETES a real member rather than silently no-opping', async () => {
+  it('leaveWorkspace DELETES a real member rather than silently no-opping', async () => {
     // The read guarding this delete used to run on the `db` singleton INSIDE an
     // already-bound transaction, so it failed SILENTLY: a null reads as "not a
     // member", which is the idempotent no-op — Leave/Remove returned success having
     // deleted nothing.
     await workspacesService.addMember({ userId: outsiderId, workspaceId: home.workspaceId });
-    const removed = await workspacesService.removeMember({
+    const removed = await workspacesService.leaveWorkspace({
       userId: outsiderId,
       workspaceId: home.workspaceId,
     });

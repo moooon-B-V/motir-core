@@ -227,3 +227,25 @@ describe('a Member or a Viewer (1f)', () => {
     expect(screen.queryByText(/only Manager/)).toBeNull();
   });
 });
+
+// Bug MOTIR-6317: removing another member is a Manager's act, and never reaches
+// an org Owner / Admin. The server refuses both; the row HIDES the entry point
+// (the permission-gated UI rule) — only an aria-hidden spacer stays for layout.
+describe('who is offered Remove (MOTIR-6317)', () => {
+  const removeButtons = () => screen.queryAllByRole('button', { name: 'Remove' });
+
+  it('a Manager sees Remove on every row but their own', () => {
+    renderCard();
+    expect(removeButtons()).toHaveLength(members.length - 1);
+  });
+
+  it('a Member or a Viewer sees no Remove at all', () => {
+    renderCard({ roleContext: context({ canManageRoles: false }) });
+    expect(removeButtons()).toHaveLength(0);
+  });
+
+  it('a Manager sees no Remove on an org Owner / Admin row', () => {
+    renderCard({ roleContext: context({ orgManagedUserIds: ['u-odie'] }) });
+    expect(removeButtons()).toHaveLength(members.length - 2);
+  });
+});
