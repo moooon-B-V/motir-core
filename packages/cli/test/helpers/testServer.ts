@@ -274,6 +274,25 @@ export function v1ReadyRow(key: string, over: Record<string, unknown> = {}) {
     // is what a fixture row should be unless a test is about the other case.
     inheritedSessionBranch: null,
     dependencies: v1Edges(),
+    // The runnable container a LANE row groups under (MOTIR-6835) — null is a
+    // row standing alone, which is what a fixture row is unless a test is about
+    // grouping.
+    container: null,
+    ...over,
+  };
+}
+
+/** One v1 ready CONTAINER row (MOTIR-6835) — a runnable container. */
+export function v1ReadyContainer(key: string, over: Record<string, unknown> = {}) {
+  return {
+    key,
+    kind: 'story',
+    title: key,
+    priority: 'medium',
+    assigneeId: null,
+    assignee: null,
+    readyLeafCount: 1,
+    childCount: 1,
     ...over,
   };
 }
@@ -669,6 +688,10 @@ export const DEFAULT_V1: V1Script = {
   },
   'GET /api/v1/projects': { body: v1Page([v1Project('PROD', 'Prodect')]) },
   'GET /api/v1/projects/{projectKey}/ready': { body: v1Page([]) },
+  // The ready LANES (MOTIR-6835) — what the CLI reads now. Empty by default.
+  'GET /api/v1/projects/{projectKey}/ready/leaves': { body: v1Page([]) },
+  'GET /api/v1/projects/{projectKey}/ready/containers': { body: v1Page([]) },
+  'GET /api/v1/projects/{projectKey}/ready/bugs': { body: v1Page([]) },
   // The repository SET (MOTIR-3586). EMPTY by default, deliberately: `motir
   // link` reads it on every bind now, and the default script must not decide
   // for a suite that its link also CLONES something. A suite that wants a

@@ -348,7 +348,7 @@ describe('the credential ladder — MOTIR_TOKEN above the stored config (MOTIR-1
     await openCommand('PROD-1', { print: true });
     await linkCommand({ project: 'PROD' });
 
-    expect(server.v1Calls.map((c) => c.path)).toContain('/api/v1/projects/PROD/ready');
+    expect(server.v1Calls.map((c) => c.path)).toContain('/api/v1/projects/PROD/ready/leaves');
     expect(io.stdout()).toContain('PROD-1');
     // Nothing was persisted: no config dir, no config file, no token on disk.
     // This is what makes the tier work on a READ-ONLY mount — and it is asserted
@@ -434,14 +434,14 @@ describe('motir link', () => {
     expect(config).toEqual({ serverUrl: server.url, workspace: 'acme', project: 'PROD' });
     // No `repos` key: checkouts resolve by convention until an override is added.
     expect(config).not.toHaveProperty('repos');
-    expect(server.v1Calls.map((c) => c.path)).toContain('/api/v1/projects/PROD/ready');
+    expect(server.v1Calls.map((c) => c.path)).toContain('/api/v1/projects/PROD/ready/leaves');
     expect(io.stdout()).toContain('checkouts resolve by convention');
   });
 
   it('refuses a project the token cannot see — and writes no link at all', async () => {
     setCredential(server.url, { token: TOKEN });
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': {
+      'GET /api/v1/projects/{projectKey}/ready/leaves': {
         status: 404,
         body: { code: 'PROJECT_NOT_FOUND', error: 'no project "NOPE".' },
       },
@@ -472,7 +472,7 @@ describe('motir link', () => {
     // Resolution replaces the probe: `list_projects` enumerates what the token
     // can reach, which IS proof of access — no `list_ready` round trip needed.
     expect(server.v1Calls.map((c) => c.path)).toContain('/api/v1/projects');
-    expect(server.v1Calls.map((c) => c.path)).not.toContain('/api/v1/projects/PROD/ready');
+    expect(server.v1Calls.map((c) => c.path)).not.toContain('/api/v1/projects/PROD/ready/leaves');
     expect(io.stderr()).toContain('the only project in workspace acme');
   });
 
@@ -503,7 +503,7 @@ describe('motir link', () => {
     // distinct, so an explicit key is never silently replaced by a resolved one.
     // The probe is now a v1 read; enumeration would be `/projects`, and the two
     // paths stay distinct so an explicit key is never silently replaced.
-    expect(server.v1Calls.map((c) => c.path)).toContain('/api/v1/projects/ACME/ready');
+    expect(server.v1Calls.map((c) => c.path)).toContain('/api/v1/projects/ACME/ready/leaves');
     expect(server.v1Calls.map((c) => c.path)).not.toContain('/api/v1/projects');
   });
 
@@ -596,7 +596,7 @@ describe('the project session', () => {
   it('pages the WHOLE ready set through the cursor rather than one page', async () => {
     await linked();
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': (req) =>
+      'GET /api/v1/projects/{projectKey}/ready/leaves': (req) =>
         req.query.get('cursor') === null
           ? { body: v1Page([v1ReadyRow('PROD-1')], 'cursor-2') }
           : { body: v1Page([v1ReadyRow('PROD-2')]) },
@@ -619,7 +619,7 @@ describe('motir ready / status / open', () => {
   it('`ready` renders a table, or raw JSON with --json', async () => {
     await linked();
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': {
+      'GET /api/v1/projects/{projectKey}/ready/leaves': {
         body: v1Page([
           v1ReadyRow('PROD-7', {
             title: 'Wire the thing',
@@ -671,7 +671,7 @@ describe('motir ready / status / open', () => {
   it('`status` composes the pulse: ready count, in-flight total, the ACTIVE sprint', async () => {
     await linked();
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': {
+      'GET /api/v1/projects/{projectKey}/ready/leaves': {
         body: v1Page([v1ReadyRow('PROD-1'), v1ReadyRow('PROD-2')]),
       },
       'GET /api/v1/projects/{projectKey}/sprints': {

@@ -110,7 +110,7 @@ afterEach(() => {
 function script(keys: string[], over: Record<string, unknown> = {}): void {
   const statuses = new Map<string, string>(keys.map((key) => [key, 'todo']));
   const v1: V1Script = {
-    'GET /api/v1/projects/{projectKey}/ready': () => ({
+    'GET /api/v1/projects/{projectKey}/ready/leaves': () => ({
       body: v1Page(
         keys
           .filter((key) => (statuses.get(key) ?? 'todo') === 'todo')

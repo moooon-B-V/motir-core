@@ -521,7 +521,8 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
  *     most of it.
  *   • `listSprintWorkItems` / `listProjectBacklog` — narrowed by MEMBERSHIP,
  *     which is not the run's set: a batch snapshot spans whatever was ready.
- *   • `getProjectReadySet` — cannot contain a dispatched card by construction.
+ *   • the ready lanes (`getProjectReadyLeaves` / `getProjectReadyBugs`) —
+ *     cannot contain a dispatched card by construction.
  *     Every one of them left the to-do category when it was claimed.
  *   • `getWorkItem` — per key, and the only operation that can name this set.
  *

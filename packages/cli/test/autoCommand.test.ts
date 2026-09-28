@@ -99,7 +99,7 @@ function planScripts(): { v1: V1Script } {
   const statuses = new Map<string, string>();
   const v1: V1Script = {
     // Ready = not yet integrated, and (for PROD-2) its dependency integrated.
-    'GET /api/v1/projects/{projectKey}/ready': () => {
+    'GET /api/v1/projects/{projectKey}/ready/leaves': () => {
       const ready = ['PROD-1', 'PROD-2'].filter(
         (key) =>
           !integrated.has(key) &&
@@ -448,7 +448,7 @@ describe('motir auto — a whole run through the real session', () => {
     expect(v1CallsTo('POST', '/integration')).toHaveLength(1);
     // `--kinds` reached the server's own filter rather than being dropped —
     // as the ready collection's own REPEATED `kind` parameter (MOTIR-2398).
-    expect(v1CallsTo('GET', '/ready')[0]?.query.getAll('kind')).toEqual(['subtask']);
+    expect(v1CallsTo('GET', '/ready/leaves')[0]?.query.getAll('kind')).toEqual(['subtask']);
     expect(
       git.log.some((cmd) =>
         /push origin refs\/remotes\/origin\/main:refs\/heads\/motir\/auto-\d{8}-\d{6}/.test(cmd),
@@ -495,7 +495,7 @@ describe('motir auto — a whole run through the real session', () => {
 
     // ONE ready read: the exclusion is applied client-side over the ranked page,
     // so there is no second ask and no row id anywhere on the wire.
-    const asks = v1CallsTo('GET', '/ready');
+    const asks = v1CallsTo('GET', '/ready/leaves');
     expect(asks).toHaveLength(1);
     expect(JSON.stringify(asks[0]?.query ? [...asks[0].query] : [])).not.toContain('row-');
     // And PROD-1 was never dispatched.
@@ -625,7 +625,7 @@ describe('motir auto — a whole run through the real session', () => {
     let served = false;
     server.scriptV1({
       ...planScripts().v1,
-      'GET /api/v1/projects/{projectKey}/ready': () => {
+      'GET /api/v1/projects/{projectKey}/ready/leaves': () => {
         if (served) return { body: v1Page([]) };
         served = true;
         return {

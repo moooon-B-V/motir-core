@@ -1,6 +1,6 @@
 import { createServer, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { MotirClient, type SearchFilterEnvelope } from '../src/client.js';
 import { AuthError, CliError, PermissionError } from '../src/errors.js';
 import {
@@ -19,6 +19,7 @@ import {
   v1Proposal,
   v1WorkItem,
   v1Detail,
+  v1ReadyContainer,
   v1ReadyRow,
   v1Sprint,
   type TestServer,
@@ -238,7 +239,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
     // A page whose rank matches no field the client could sort on: not key
     // order, not priority, not title.
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': {
+      'GET /api/v1/projects/{projectKey}/ready/leaves': {
         body: v1Page([
           v1ReadyRow('PROD-9', { priority: 'low', title: 'zeta' }),
           v1ReadyRow('PROD-2', { priority: 'highest', title: 'alpha' }),
@@ -282,7 +283,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
     // run that had work two rows down — and a three-item fixture never shows it.
     const client = connected();
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': (req) =>
+      'GET /api/v1/projects/{projectKey}/ready/leaves': (req) =>
         req.query.get('cursor') === 'page-2'
           ? { body: { items: [v1ReadyRow('PROD-9')], nextCursor: null } }
           : {
@@ -301,13 +302,13 @@ describe('typed wrappers — each names its operation and forwards its arguments
 
     expect(item?.key).toBe('PROD-9');
     // It really followed the cursor rather than getting lucky on one page.
-    expect(server.v1Calls.filter((c) => c.path.endsWith('/ready'))).toHaveLength(2);
+    expect(server.v1Calls.filter((c) => c.path.endsWith('/ready/leaves'))).toHaveLength(2);
   });
 
   it('reports the set DRAINED when every page is unpickable — not a false pick', async () => {
     const client = connected();
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': {
+      'GET /api/v1/projects/{projectKey}/ready/leaves': {
         body: {
           items: [v1ReadyRow('PROD-1', { assigneeId: 'user_them' })],
           nextCursor: null,
@@ -321,7 +322,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
   it("takes MY OWN interrupted card, and never a teammate's", async () => {
     const client = connected();
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': {
+      'GET /api/v1/projects/{projectKey}/ready/leaves': {
         body: {
           items: [
             v1ReadyRow('PROD-1', {
@@ -350,7 +351,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
     // announced as work about to happen.
     const client = connected();
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': {
+      'GET /api/v1/projects/{projectKey}/ready/leaves': {
         body: {
           items: [
             v1ReadyRow('PROD-1'),
@@ -371,7 +372,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
   it('forwards allowSoftBlock as the string "true", and omits it otherwise (MOTIR-6355)', async () => {
     const client = connected();
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': {
+      'GET /api/v1/projects/{projectKey}/ready/leaves': {
         body: { items: [v1ReadyRow('PROD-1')], nextCursor: null },
       },
     });
@@ -772,7 +773,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
     // A page whose order matches no field the client could sort on: not key
     // order, not priority, not title. If anything re-ranked, it shows here.
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': {
+      'GET /api/v1/projects/{projectKey}/ready/leaves': {
         body: v1Page([
           v1ReadyRow('PROD-9', { priority: 'low', title: 'zeta' }),
           v1ReadyRow('PROD-2', { priority: 'highest', title: 'alpha' }),
@@ -788,7 +789,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
   it('FOLLOWS the cursor when a whole page is held out', async () => {
     const client = connected();
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': (req) =>
+      'GET /api/v1/projects/{projectKey}/ready/leaves': (req) =>
         req.query.get('cursor') === null
           ? { body: v1Page([v1ReadyRow('PROD-1'), v1ReadyRow('PROD-2')], 'page-2') }
           : { body: v1Page([v1ReadyRow('PROD-3')]) },
@@ -808,7 +809,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
   it('sends NO row id — the hold-out never reaches the wire', async () => {
     const client = connected();
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': { body: v1Page([v1ReadyRow('PROD-4')]) },
+      'GET /api/v1/projects/{projectKey}/ready/leaves': { body: v1Page([v1ReadyRow('PROD-4')]) },
     });
 
     await client.nextReady({ projectKey: 'PROD', excludeKeys: ['PROD-1'], kinds: ['subtask'] });
@@ -1309,4 +1310,113 @@ describe('failures', () => {
   // there is none. On `/api/v1` the equivalent — an endpoint this server does
   // not route — is a 404 with no envelope, which arms the version-skew probe and
   // is asserted in `transport.test.ts` where that logic lives.
+});
+
+// ─── The ready LANES (Story MOTIR-6829 · MOTIR-6835) ──────────────────────────
+//
+// Every ready read goes through the three lane operations: the leaves (what
+// `motir next` takes), the bugs, and the runnable containers. `getProjectReadySet`
+// is never called — the published CLI still reaches it until MOTIR-6841.
+describe('the ready lanes', () => {
+  // `scriptV1` merges, so reset after each case rather than leak a bugs lane into
+  // a later test that expects the default empty one.
+  afterEach(() => server.resetV1());
+
+  function scriptLanes(leaves: string[], bugs: string[]) {
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready/leaves': {
+        body: { items: leaves.map((k) => v1ReadyRow(k)), nextCursor: null },
+      },
+      'GET /api/v1/projects/{projectKey}/ready/bugs': {
+        body: { items: bugs.map((k) => v1ReadyRow(k, { kind: 'bug' })), nextCursor: null },
+      },
+    });
+  }
+
+  it('nextReady takes the LEAVES lane and never hands out a bug, even ranked first', async () => {
+    const client = connected();
+    scriptLanes(['PROD-2'], ['PROD-1']);
+    expect((await client.nextReady({ projectKey: 'PROD' })).item?.key).toBe('PROD-2');
+    // With the leaf held out, the default lane is DRAINED — it never falls to a bug.
+    expect(
+      (await client.nextReady({ projectKey: 'PROD', excludeKeys: ['PROD-2'] })).item,
+    ).toBeNull();
+    expect(server.v1Calls.some((c) => c.path.endsWith('/ready/bugs'))).toBe(false);
+    expect(server.v1Calls.some((c) => c.path.endsWith('/ready'))).toBe(false);
+  });
+
+  it("nextReady with lanes ['leaf', 'bug'] — motir auto — takes every leaf before the first bug", async () => {
+    const client = connected();
+    scriptLanes(['PROD-2', 'PROD-3'], ['PROD-1']);
+    const taken: string[] = [];
+    for (;;) {
+      const { item } = await client.nextReady({
+        projectKey: 'PROD',
+        lanes: ['leaf', 'bug'],
+        excludeKeys: taken,
+      });
+      if (!item) break;
+      taken.push(item.key);
+    }
+    expect(taken).toEqual(['PROD-2', 'PROD-3', 'PROD-1']);
+  });
+
+  it('listReadyForDispatch — batch and a scoped run — is leaves ∪ bugs, leaves first', async () => {
+    const client = connected();
+    scriptLanes(['PROD-11', 'PROD-12'], ['PROD-13']);
+    const snapshot = await client.listReadyForDispatch({
+      projectKey: 'PROD',
+      ancestor: ['PROD-10'],
+    });
+    expect(snapshot.map((i) => i.key)).toEqual(['PROD-11', 'PROD-12', 'PROD-13']);
+    // The SCOPE facet reaches BOTH lanes, so a story's edged bug is claimed with it.
+    const scoped = server.v1Calls.filter((c) => /\/ready\/(leaves|bugs)$/.test(c.path));
+    expect(scoped).toHaveLength(2);
+    for (const call of scoped) expect(call.query.getAll('ancestor')).toEqual(['PROD-10']);
+  });
+
+  it('listReady reads the leaves lane, carrying each row’s container', async () => {
+    const client = connected();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready/leaves': {
+        body: {
+          items: [
+            v1ReadyRow('PROD-11', {
+              container: v1ReadyContainer('PROD-10', { readyLeafCount: 2, childCount: 3 }),
+            }),
+            v1ReadyRow('PROD-20'),
+          ],
+          nextCursor: null,
+        },
+      },
+    });
+    const page = await client.listReady({ projectKey: 'PROD' });
+    expect(page.items[0]?.container).toMatchObject({
+      key: 'PROD-10',
+      readyLeafCount: 2,
+      childCount: 3,
+    });
+    expect(page.items[1]?.container).toBeNull();
+  });
+
+  it('nextReadyContainer takes the first container not held out, following the cursor', async () => {
+    const client = connected();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready/containers': (req) =>
+        req.query.get('cursor') === 'p2'
+          ? { body: { items: [v1ReadyContainer('PROD-30')], nextCursor: null } }
+          : { body: { items: [v1ReadyContainer('PROD-10')], nextCursor: 'p2' } },
+    });
+    expect((await client.nextReadyContainer({ projectKey: 'PROD' })).container?.key).toBe(
+      'PROD-10',
+    );
+    expect(
+      (await client.nextReadyContainer({ projectKey: 'PROD', excludeKeys: ['prod-10'] })).container
+        ?.key,
+    ).toBe('PROD-30');
+    expect(
+      (await client.nextReadyContainer({ projectKey: 'PROD', excludeKeys: ['PROD-10', 'PROD-30'] }))
+        .container,
+    ).toBeNull();
+  });
 });

@@ -79,7 +79,7 @@ afterEach(() => {
 function script(): void {
   const statuses = new Map<string, string>([['PROD-7', 'todo']]);
   const v1: V1Script = {
-    'GET /api/v1/projects/{projectKey}/ready': () => ({
+    'GET /api/v1/projects/{projectKey}/ready/leaves': () => ({
       body: v1Page(
         (statuses.get('PROD-7') ?? 'todo') === 'todo'
           ? [v1ReadyRow('PROD-7', { title: 'Add the thing' })]
@@ -411,7 +411,7 @@ describe('the guards coverage cannot see', () => {
     ]);
     server.resetV1();
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': () => {
+      'GET /api/v1/projects/{projectKey}/ready/leaves': () => {
         readyReads += 1;
         // ⚠️ PROD-8 BECOMES READY DURING THE RUN, which is the only fixture that
         // can test this: it is invisible at snapshot time and appears the moment

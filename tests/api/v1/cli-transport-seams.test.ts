@@ -5,6 +5,9 @@ import { GET as GET_ME } from '@/app/api/v1/me/route';
 import { GET as GET_WORKSPACES } from '@/app/api/v1/workspaces/route';
 import { GET as GET_PROJECTS } from '@/app/api/v1/projects/route';
 import { GET as GET_READY } from '@/app/api/v1/projects/[projectKey]/ready/route';
+import { GET as GET_READY_LEAVES } from '@/app/api/v1/projects/[projectKey]/ready/leaves/route';
+import { GET as GET_READY_CONTAINERS } from '@/app/api/v1/projects/[projectKey]/ready/containers/route';
+import { GET as GET_READY_BUGS } from '@/app/api/v1/projects/[projectKey]/ready/bugs/route';
 import { GET as GET_SPRINTS } from '@/app/api/v1/projects/[projectKey]/sprints/route';
 import { GET as GET_WORK_ITEMS } from '@/app/api/v1/projects/[projectKey]/work-items/route';
 import { GET as GET_COUNT } from '@/app/api/v1/projects/[projectKey]/work-items/count/route';
@@ -91,6 +94,10 @@ const ROUTES: Record<string, Handler> = {
   'GET /api/v1/workspaces': GET_WORKSPACES as Handler,
   'GET /api/v1/projects': GET_PROJECTS as Handler,
   'GET /api/v1/projects/{projectKey}/ready': GET_READY as Handler,
+  // The ready LANES (MOTIR-6835) — what the CLI reads now.
+  'GET /api/v1/projects/{projectKey}/ready/leaves': GET_READY_LEAVES as Handler,
+  'GET /api/v1/projects/{projectKey}/ready/containers': GET_READY_CONTAINERS as Handler,
+  'GET /api/v1/projects/{projectKey}/ready/bugs': GET_READY_BUGS as Handler,
   'GET /api/v1/projects/{projectKey}/sprints': GET_SPRINTS as Handler,
   'GET /api/v1/projects/{projectKey}/work-items': GET_WORK_ITEMS as Handler,
   'GET /api/v1/projects/{projectKey}/work-items/count': GET_COUNT as Handler,
@@ -390,7 +397,7 @@ describe('paging — a real multi-page collection, walked to exhaustion', () => 
 
     // It really did page — otherwise "every row exactly once" is trivially true
     // of a single response and this test proves nothing.
-    const readyCalls = served.filter((r) => r.path.endsWith('/ready'));
+    const readyCalls = served.filter((r) => r.path.endsWith('/ready/leaves'));
     expect(readyCalls.length).toBeGreaterThan(1);
 
     // ⚠️ THE CURSOR IS ECHOED, NEVER REBUILT (ADR §5). Each request after the
@@ -501,6 +508,18 @@ describe('the generated validators, against the EMITTER rather than a sample', (
     {
       operationId: 'getProjectReadySet',
       read: () => callRoute('GET', `/api/v1/projects/${caller.projectKey}/ready`),
+    },
+    {
+      operationId: 'getProjectReadyLeaves',
+      read: () => callRoute('GET', `/api/v1/projects/${caller.projectKey}/ready/leaves`),
+    },
+    {
+      operationId: 'getProjectReadyContainers',
+      read: () => callRoute('GET', `/api/v1/projects/${caller.projectKey}/ready/containers`),
+    },
+    {
+      operationId: 'getProjectReadyBugs',
+      read: () => callRoute('GET', `/api/v1/projects/${caller.projectKey}/ready/bugs`),
     },
     {
       operationId: 'listProjectSprints',

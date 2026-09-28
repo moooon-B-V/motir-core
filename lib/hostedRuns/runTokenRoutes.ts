@@ -36,8 +36,14 @@ export interface RunTokenRoute {
   /** The OpenAPI path, `{param}` form. */
   path: string;
   binding: RunTokenBinding;
-  /** Who in the container calls it. */
-  calledBy: 'cli' | 'git_credential_helper';
+  /**
+   * Who in the container calls it. `published_cli` is a route only an ALREADY
+   * PUBLISHED CLI calls — the source here has moved off it, but the released
+   * `@motir/cli` and the hosted sandbox images still reach it until they are
+   * rebuilt, so its run-token access stays until the task that deletes the route
+   * (the ready set's `getProjectReadySet`, MOTIR-6841, after MOTIR-6829's release).
+   */
+  calledBy: 'cli' | 'published_cli' | 'git_credential_helper';
   /**
    * The card that builds the route, when it does not exist yet. The table test
    * requires the route file to exist — and to opt in — once this is absent.
@@ -50,10 +56,27 @@ export const RUN_TOKEN_ROUTES: readonly RunTokenRoute[] = [
   { operationId: 'getMe', method: 'GET', path: '/api/v1/me', binding: 'self', calledBy: 'cli' },
 
   // The run's project — the scope drain's edge read and the close-out's ready set.
+  // The flat ready set — the CLI's source reads the lanes below since MOTIR-6835,
+  // but the PUBLISHED CLI still reads this one until MOTIR-6841 deletes it.
   {
     operationId: 'getProjectReadySet',
     method: 'GET',
     path: '/api/v1/projects/{projectKey}/ready',
+    binding: 'project',
+    calledBy: 'published_cli',
+  },
+  // The ready LANES (MOTIR-6835) — every CLI ready read goes through these.
+  {
+    operationId: 'getProjectReadyLeaves',
+    method: 'GET',
+    path: '/api/v1/projects/{projectKey}/ready/leaves',
+    binding: 'project',
+    calledBy: 'cli',
+  },
+  {
+    operationId: 'getProjectReadyBugs',
+    method: 'GET',
+    path: '/api/v1/projects/{projectKey}/ready/bugs',
     binding: 'project',
     calledBy: 'cli',
   },

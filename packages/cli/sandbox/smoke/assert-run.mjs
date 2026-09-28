@@ -95,7 +95,11 @@ const shapeOf = (entry) =>
     .replace(new RegExp(`${escapeRegExp(PROJECT)}-\\d+`, 'g'), '{key}')
     .replace(`/${PROJECT}/`, '/{project}/')}`;
 
-const READY = `GET /api/v1/projects/{project}/ready`;
+// The LEAVES lane (MOTIR-6835) — what `motir ready` and every `motir auto` pick
+// read. At the drain `auto` also reads the BUGS lane, because it takes the bugs
+// once the leaves are gone.
+const READY = `GET /api/v1/projects/{project}/ready/leaves`;
+const READY_BUGS = `GET /api/v1/projects/{project}/ready/bugs`;
 const PROMPT = 'GET /api/v1/work-items/{key}/dispatch-prompt';
 const INTEGRATION = 'POST /api/v1/work-items/{key}/integration';
 /**
@@ -214,7 +218,7 @@ const expected = [];
 // prompt read on purpose — the prompt is a pure read that carries `targetRepo`,
 // and `auto.ts` resolves the checkout from it before touching anything.
 for (let i = 1; i <= ITEMS; i += 1) expected.push(READY, PROMPT, CLAIM, READBACK, INTEGRATION);
-expected.push(READY); // the drain probe
+expected.push(READY, READY_BUGS); // the drain probe: leaves, then bugs
 
 // ── THE CI WATCH, once per landed card, AFTER the drain (MOTIR-3685) ────────
 //

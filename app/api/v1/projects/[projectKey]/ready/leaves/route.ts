@@ -5,6 +5,9 @@ import { serveReadyRowLane } from '@/lib/api/v1/ready/lanes';
 // — the LEAVES lane: the ready set minus bug work, grouped by runnable container.
 // What `motir next` takes from. The body is `lib/api/v1/ready/lanes.ts`, which
 // follows `…/ready/route.ts`: the route never re-derives readiness.
-export const GET = withV1Route<{ projectKey: string }>({ permission: 'project:browse' }, (ctx) =>
-  serveReadyRowLane(ctx, 'leaf'),
+// ⚠️ `acceptsRunToken` — a hosted run's own credential may call this (the CLI's
+// ready reads, MOTIR-6835), bound as `lib/hostedRuns/runTokenRoutes.ts` says.
+export const GET = withV1Route<{ projectKey: string }>(
+  { permission: 'project:browse', acceptsRunToken: true },
+  (ctx) => serveReadyRowLane(ctx, 'leaf'),
 );
