@@ -9280,6 +9280,7 @@
       "setting": {
         "line": "<b>{pr}</b> 未合并：仓库上的某项设置阻止了它。",
         "linePermission": "<b>{pr}</b> 未合并：Motir 的 GitHub App 在那里缺少 <b>{permission}</b> 权限。",
+        "hostReason": "GitHub 的原话：“{reason}”",
         "reasked": "改好设置后再按一次 — 这次按下是一次新的批准，并合并相同的提交。这里不提供 <b>motir fix</b>：没有可让代理修改的代码。"
       },
       "row": {

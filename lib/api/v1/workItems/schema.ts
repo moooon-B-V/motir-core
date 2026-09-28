@@ -462,6 +462,21 @@ const workItemDeliverySchema = z.object({
       failingCheckUrl: z.string().nullable(),
     })
     .nullable(),
+  /** The STANDING refusal the HOST gave when Motir pressed merge on this pull
+   *  request, or null (Bug MOTIR-6735): not superseded by a later successful press,
+   *  still at the pull request's current head, and the pull request still open.
+   *  `reason` is the host's own message, verbatim — for `branch_protected` it is the
+   *  only thing that names the setting that refused the merge. */
+  mergeRefusal: z
+    .object({
+      /** The refusal code — `branch_protected`, `conflict`, `checks_not_green`, … */
+      code: z.string(),
+      /** The host's own message; null when it gave none. */
+      reason: z.string().nullable(),
+      headSha: z.string(),
+      refusedAt: z.string(),
+    })
+    .nullable(),
 });
 export type WorkItemDelivery = z.infer<typeof workItemDeliverySchema>;
 
@@ -888,6 +903,15 @@ export function presentWorkItemDetail(
               headSha: delivery.queueExit.headSha,
               failingCheckName: delivery.queueExit.failingCheckName,
               failingCheckUrl: delivery.queueExit.failingCheckUrl,
+            },
+      mergeRefusal:
+        delivery.mergeRefusal === null
+          ? null
+          : {
+              code: delivery.mergeRefusal.code,
+              reason: delivery.mergeRefusal.reason,
+              headSha: delivery.mergeRefusal.headSha,
+              refusedAt: delivery.mergeRefusal.refusedAt,
             },
     })),
   };

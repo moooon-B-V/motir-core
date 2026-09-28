@@ -629,6 +629,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
       ci: 'passing',
       baseRef: 'main',
       defaultBranch: 'main',
+      mergeRefusal: null,
     };
     server.scriptV1({
       'GET /api/v1/work-items/{key}': {

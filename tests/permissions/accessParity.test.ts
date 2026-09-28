@@ -192,9 +192,11 @@ const TABLE: Row[] = [
   { accessMode: 'members', actor: 'limitedMember', addedToProject: false, expected: union(NONE) },
   { accessMode: 'members', actor: 'limitedMember', addedToProject: true, expected: union(MEMBER) },
 
-  // ── public — as workspace, plus the public read set for everyone ──
-  { accessMode: 'public', actor: 'none', addedToProject: false, expected: union(PUBLIC) },
-  { accessMode: 'public', actor: 'none', addedToProject: true, expected: union(PUBLIC) },
+  // ── public — as workspace, plus the public read set for every ENTRANT. On the
+  // MEMBER path a non-entrant holds nothing (MOTIR-6733); what they hold on the
+  // PUBLIC read path is the table below this one. ──
+  { accessMode: 'public', actor: 'none', addedToProject: false, expected: union(NONE) },
+  { accessMode: 'public', actor: 'none', addedToProject: true, expected: union(NONE) },
   {
     accessMode: 'public',
     actor: 'manager',
@@ -213,7 +215,7 @@ const TABLE: Row[] = [
   { accessMode: 'public', actor: 'viewer', addedToProject: true, expected: union(VIEWER, PUBLIC) },
   { accessMode: 'public', actor: 'custom', addedToProject: false, expected: union(CUSTOM, PUBLIC) },
   { accessMode: 'public', actor: 'custom', addedToProject: true, expected: union(CUSTOM, PUBLIC) },
-  { accessMode: 'public', actor: 'limitedMember', addedToProject: false, expected: union(PUBLIC) },
+  { accessMode: 'public', actor: 'limitedMember', addedToProject: false, expected: union(NONE) },
   {
     accessMode: 'public',
     actor: 'limitedMember',
@@ -300,6 +302,42 @@ describe('the truth table — 3 modes × 6 actors × added or not', () => {
       expect(canEnter(inputs), 'canEnter').toBe(beyondPublic || enteringViewer);
     },
   );
+});
+
+describe('the PUBLIC read path — a non-entrant holds the public set there, and only there (MOTIR-6733)', () => {
+  // `resolvePublicInputs` is the one caller that says `readPath: 'public'`, and
+  // every reader behind it applies the private-epic hidden set itself. The member
+  // path (the table above) applies none, so a non-entrant holds nothing on it.
+  const NON_ENTRANTS = TABLE.filter((r) => r.accessMode === 'public' && !canEnter(inputsFor(r)));
+
+  it('the non-entrants on a public project are exactly the no-membership reader and the Limited, not-added member', () => {
+    expect(NON_ENTRANTS.map((r) => `${r.actor}/${r.addedToProject}`).sort()).toEqual([
+      'limitedMember/false',
+      'none/false',
+      'none/true',
+    ]);
+  });
+
+  it.each(NON_ENTRANTS)(
+    '$actor · added=$addedToProject — the public set on the public path, nothing on the member path',
+    (row) => {
+      const inputs = inputsFor(row);
+      expect([...resolvePermissions({ ...inputs, readPath: 'public' })].sort()).toEqual(
+        union(PUBLIC),
+      );
+      expect([...resolvePermissions({ ...inputs, readPath: 'member' })]).toEqual([]);
+      expect([...resolvePermissions(inputs)], 'absent means member').toEqual([]);
+    },
+  );
+
+  it('an ENTRANT resolves the same set on either path', () => {
+    for (const row of TABLE.filter((r) => canEnter(inputsFor(r)))) {
+      const inputs = inputsFor(row);
+      expect([...resolvePermissions({ ...inputs, readPath: 'public' })].sort()).toEqual(
+        row.expected,
+      );
+    }
+  });
 });
 
 describe('the properties the story asserts', () => {

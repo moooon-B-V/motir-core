@@ -572,24 +572,11 @@ const named = (tree: ReactNode, name: string) =>
  * fails — so the list only shrinks, and a fix must delete its entry.
  */
 const KNOWN_DEFECTS: Record<'doors' | 'withheld' | 'pages', string[]> = {
-  // ① R3 — a Limited member of the project's workspace, not added to the project —
-  // is served the MEMBER read on every "member first" door (`memberThenVisitor`):
-  // their workspace context resolves, the Public level grants them
-  // `project:browse`, and the member read applies no private-epic hidden set. So
-  // they read C1 through V1's comments and activity (the chip is not redacted),
-  // and C1's own comments and history, P1 and the run on C1 by id. It reproduces
-  // with NO `motir_visitor` cookie at all, so the leak is the member path's.
-  // PRE-EXISTING on `origin/main` (`resolve.ts` layer 1): filed as MOTIR-6733.
-  doors: [
-    'R3 GET /api/work-items/[id]/activity/all → C1',
-    'R3 GET /api/work-items/[id]/comments → C1',
-  ],
-  withheld: [
-    'R3 comments on C1 → 200',
-    'R3 history of C1 → 200',
-    'R3 plan P1 → 200',
-    'R3 run on C1 → 200',
-  ],
+  // ① (fixed by MOTIR-6733 — a non-entrant holds no key on the member path, so R3's
+  // member read is not-found and `memberThenVisitor` serves the Visitor read, with
+  // the hidden set): no door or withheld finding is known.
+  doors: [],
+  withheld: [],
   // ② (fixed in the parent run, 9262567f3 — the story page's eligibility read
   // is skipped for a Visitor): no page finding is known.
   pages: [],

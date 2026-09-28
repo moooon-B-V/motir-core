@@ -177,7 +177,7 @@ import {
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toQuickViewData } from '@/lib/mappers/quickViewMappers';
 import { toLinkedPullRequestDto, toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
-import { standingQueueFailures } from './deliveryVerdict';
+import { standingMergeRefusals, standingQueueFailures } from './deliveryVerdict';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { amendRepoDeliveryWithSet } from '@/lib/workItems/deliverySet';
@@ -315,6 +315,7 @@ import { ContainerRepoSetNotWritableError } from '@/lib/workItems/errors';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
+import { writeDerivedRepoSet, writeRepoRefs } from '@/lib/workItems/repoSetWrites';
 import { recomputeWorkItemFixReason } from './fixReasonService';
 
 // ⚠️ `assertSingleTargetRepoInput` MOVED to `lib/workItems/targetRepo.ts`
@@ -328,36 +329,6 @@ import { recomputeWorkItemFixReason } from './fixReasonService';
  *  valid set without knowing the set exists. */
 function toRepoSet(pin: string | null): string[] {
   return pin === null ? [] : [pin];
-}
-
-/**
- * REPLACE one item's repository REFERENCES with `refs`, in order (Story
- * MOTIR-2732 · MOTIR-3039, ADR `work-item-repository-set.md` "Amendment
- * 2026-08-18" §A2).
- *
- * Delete-then-insert rather than a per-element diff, because a repository set is
- * authored as a whole: element 0 is the primary, so `[a, b]` → `[b, a]` is a
- * different decision and not two no-ops, and `@@unique([workItemId, position])`
- * makes any interleaved patch fight itself. That is also why `position` is a plain
- * ordinal — there is no incremental re-order to keep cheap.
- *
- * Positions are written CONTIGUOUS from 0, which the unique index then enforces:
- * a gap is a database error rather than something a reader has to interpret.
- *
- * Runs inside the caller's transaction (both repository calls require `tx`), so a
- * failed write leaves neither the row nor its references behind.
- */
-async function writeRepoRefs(
-  workItemId: string,
-  workspaceId: string,
-  refs: readonly string[],
-  tx: Prisma.TransactionClient,
-): Promise<void> {
-  await workItemRepoRepository.deleteByWorkItem(workItemId, tx);
-  await workItemRepoRepository.createMany(
-    refs.map((projectRepoId, position) => ({ workspaceId, workItemId, projectRepoId, position })),
-    tx,
-  );
 }
 
 /**
@@ -400,40 +371,6 @@ async function recomputeAncestorRepoSets(
     );
     await writeDerivedRepoSet(ancestor.id, workspaceId, refs, tx);
   }
-}
-
-/**
- * A container's derived set, written as BOTH halves of the one fact (Story
- * MOTIR-2732 · MOTIR-2978).
- *
- * ⚠️ The name projection is not optional here, and leaving it out is invisible.
- * `work_item.targetRepos` is a STORED projection of the references (ADR §A4), and
- * a leaf gets it written by its own create/update — but a container never
- * authors its set, so the rollup is the only writer it has. Writing only the join
- * rows leaves every container with an empty `targetRepos`, and the completion
- * gate reads exactly that column: the story that spans two repositories would
- * complete on its first merge, which is the outcome this whole capability exists
- * to prevent. Caught by MOTIR-3031's gate, which is the seam no unit test on
- * either card could see.
- *
- * Names are RESOLVED through the same rule every reader uses (`toWorkItemRepositoryDtos`
- * — the realized repository's own name, else the row's authored intent), so the
- * projection cannot say something different from what the panel shows.
- */
-async function writeDerivedRepoSet(
-  containerId: string,
-  workspaceId: string,
-  refs: readonly string[],
-  tx: Prisma.TransactionClient,
-): Promise<void> {
-  await writeRepoRefs(containerId, workspaceId, refs, tx);
-  const rows = await workItemRepoRepository.listByWorkItem(containerId, tx);
-  const names = toWorkItemRepositoryDtos(rows).map((r) => r.name);
-  await workItemRepository.update(
-    containerId,
-    { targetRepos: names, targetRepo: primaryTargetRepo(names) },
-    tx,
-  );
 }
 
 /**
@@ -6866,12 +6803,16 @@ export const workItemsService = {
       // Each member's STANDING queue failure (MOTIR-5720), over ONE read for the set
       // — the rule is `queueExitHoldsAtHead`, the same one the card's badge, the
       // promotion hold and the repair claim read.
-      const held = await standingQueueFailures(
-        new Map(rows.map((row) => [row.githubPullRequestId, row.pullRequest])),
-        tx,
-      );
+      const byId = new Map(rows.map((row) => [row.githubPullRequestId, row.pullRequest]));
+      const held = await standingQueueFailures(byId, tx);
+      // …and its STANDING host merge refusal, with the host's own words (MOTIR-6735).
+      const refused = await standingMergeRefusals(byId, tx);
       return rows.map((row) =>
-        toWorkItemDeliveryDto(row, held.get(row.githubPullRequestId) ?? null),
+        toWorkItemDeliveryDto(
+          row,
+          held.get(row.githubPullRequestId) ?? null,
+          refused.get(row.githubPullRequestId) ?? null,
+        ),
       );
     });
   },

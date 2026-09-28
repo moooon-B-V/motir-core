@@ -9284,6 +9284,7 @@
       "setting": {
         "line": "<b>{pr}</b> was not merged: a setting on the repository blocked it.",
         "linePermission": "<b>{pr}</b> was not merged: Motir’s GitHub App is missing <b>{permission}</b> there.",
+        "hostReason": "GitHub said: “{reason}”",
         "reasked": "Change the setting, then press again — this press is a new approval, and merges the same commits. <b>motir fix</b> is not offered: there is no code for an agent to change."
       },
       "row": {

@@ -97,6 +97,8 @@ describe('resolvePermissions with organizationClosing', () => {
       accessScope: null,
       addedToProject: false,
       organizationClosing: true,
+      // A public visitor is resolved on the PUBLIC read path (MOTIR-6733).
+      readPath: 'public',
     });
     // A public visitor keeps the browse, and whatever other READ keys their
     // open set holds — never a write (their request-submission key is gone).

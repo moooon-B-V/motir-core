@@ -307,25 +307,31 @@ describe('public PROJECTION payload (6.12.9) — internal fields never cross the
 // ---------------------------------------------------------------------------
 
 describe('public WRITE matrix (6.12.9) — normal writes blocked, the three grants open', () => {
-  it('the shared edit gate rejects an external actor (read-only 403) while browse stays open', async () => {
+  it('the shared edit gate rejects an external actor, who browses only through the public path', async () => {
     const fx = await makePublicProjectFixture();
     const crossOrg = await createTestUser();
     // The actor presents the project's workspace as context (the closest an
     // external actor can get): they are not a member, so workspaceRole is null.
     const crossOrgCtx = { userId: crossOrg.id, workspaceId: fx.workspaceId };
 
-    // canBrowse true (the public exception), canEdit false (the null-deny rail).
+    // The PUBLIC read path is the one that serves them: browse true (the public
+    // exception), and it is the path that applies the private-epic hidden set.
+    expect(
+      (await projectAccessService.getPublicCapabilities(fx.projectId, crossOrg.id)).canBrowse,
+    ).toBe(true);
+    // The MEMBER path applies no hidden set, so a non-entrant holds nothing on it
+    // (MOTIR-6733): neither browse nor edit.
     expect(await projectAccessService.getCapabilities(fx.projectId, crossOrgCtx)).toEqual({
-      canBrowse: true,
+      canBrowse: false,
       canEdit: false,
     });
 
     // EVERY normal write funnels through this one gate — so a single rejection
-    // here is the matrix's load-bearing assertion (kind 'edit' → HTTP 403,
-    // read-only; NOT 'browse'/404 — the public project is visible).
+    // here is the matrix's load-bearing assertion. It refuses as 'browse' (→ 404):
+    // on the member path the project is not theirs to see, let alone to write.
     const err = await projectAccessService.assertCanEdit(fx.projectId, crossOrgCtx).catch((e) => e);
     expect(err).toBeInstanceOf(ProjectAccessDeniedError);
-    expect((err as ProjectAccessDeniedError).kind).toBe('edit');
+    expect((err as ProjectAccessDeniedError).kind).toBe('browse');
   });
 
   it('concrete write SERVICES (field-edit / status / assign / move) each reject the external actor', async () => {

@@ -360,17 +360,10 @@ describe('every server action of the Visitor-rendered pages refuses R0–R3 and 
  * and reported for filing, not fixed by a test card. Tight both ways: a new one
  * fails, and a fixed one fails until its entry is deleted.
  *
- * R3, a Limited member of the workspace NOT added to the Public project, can
- * watch and unwatch its items: the watch route authorises on `project:browse`,
- * which the Public level grants every workspace member, so R3 passes the MEMBER
- * check a Visitor was meant never to pass. (The same root as the read defect
- * `visitorStoryGate.integration.test.tsx` records for R3.)
+ * (R3's watch/unwatch, which rode the Public level's `project:browse` on the
+ * member path, was fixed by MOTIR-6733: a non-entrant holds no key there.)
  */
-// R3's watcher write rides the same pre-existing grant — filed as MOTIR-6733.
-const KNOWN_WRITES: string[] = [
-  'R3 DELETE /api/work-items/[id]/watch → watcher',
-  'R3 PUT /api/work-items/[id]/watch → watcher',
-];
+const KNOWN_WRITES: string[] = [];
 
 /** Statuses outside 401/403/404 (and the body refusals above), each with its reason. Tight. */
 const NON_REFUSAL_STATUSES: string[] = [
@@ -379,9 +372,6 @@ const NON_REFUSAL_STATUSES: string[] = [
   // landed in this project; it is their own organisation's write, not a Visitor's.
   'R1 POST /api/sprints → 201',
   'R2 POST /api/sprints → 201',
-  // The R3 watch defect above.
-  'R3 DELETE /api/work-items/[id]/watch → 200',
-  'R3 PUT /api/work-items/[id]/watch → 200',
 ];
 
 /**

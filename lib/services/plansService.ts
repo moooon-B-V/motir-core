@@ -163,6 +163,7 @@ import {
 } from '@/lib/workItems/errors';
 import { readWorkItem } from '@/lib/workspaces/tenantRead';
 import { assertSingleTargetRepoInput, primaryTargetRepo } from '@/lib/workItems/targetRepo';
+import { writeDerivedRepoSet } from '@/lib/workItems/repoSetWrites';
 import { PROJECT_REPO_ROLES, isProjectRepoRole } from '@/lib/projectRepos/vocabulary';
 
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
@@ -3067,16 +3068,13 @@ async function recomputeContainersForTouched(
       workspaceId,
       tx,
     );
-    await workItemRepoRepository.deleteByWorkItem(containerId, tx);
-    await workItemRepoRepository.createMany(
-      refs.map((projectRepoId, position) => ({
-        workspaceId,
-        workItemId: containerId,
-        projectRepoId,
-        position,
-      })),
-      tx,
-    );
+    // BOTH halves — the references AND the stored name projection
+    // (`targetRepos` / `targetRepo`) — through the one writer the service-path
+    // rollup uses. Writing the references alone here (bug MOTIR-6751) left every
+    // container an approve re-derived reading back the names it had before: the
+    // empty set a planned story is created with, or the repositories a re-plan
+    // had just moved its work out of.
+    await writeDerivedRepoSet(containerId, workspaceId, refs, tx);
   }
 }
 

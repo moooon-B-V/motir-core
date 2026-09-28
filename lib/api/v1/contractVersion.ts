@@ -706,7 +706,21 @@
  *   and then `1.44.0`, which MOTIR-6501/6502 and MOTIR-6581/6547 took first). If a sibling has taken
  *   it since, RENUMBER this entry — it names the OPERATION.
  *
- * - `1.47.0` — MOTIR-6672 · MOTIR-6673: a mark is a FINISHED card's state. Two new
+ * - `1.47.0` — MOTIR-6735 adds `mergeRefusal` to `WorkItemDetail.deliveries[]`: a
+ *   delivering pull request whose merge Motir pressed and the HOST refused carries
+ *   the refusal's `code`, the host's own message as `reason` (nullable), the head it
+ *   refused and when — while it stands (not superseded, still at the current head,
+ *   the pull request still open). The message is the only record of WHICH setting
+ *   refused a `branch_protected` merge.
+ *
+ *   Additive: one new nullable field on an existing shape (§8's allowed list); no
+ *   declared field changes meaning. Read-only, on the same `project:browse` read.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: `V1_CONTRACT_VERSION` was `1.46.0` at
+ *   `520148f5c`, so this claims `1.47.0`. If a sibling has taken it since, RENUMBER
+ *   this entry — it names the FIELD.
+ *
+ * - `1.48.0` — MOTIR-6672 · MOTIR-6673: a mark is a FINISHED card's state. Two new
  *   codes for two new conditions, both 422 and both with an additive payload:
  *   `OBSOLESCENCE_REQUIRES_FINISHED` (`item`: the key, status and its category) on
  *   `createWorkItem` / `updateWorkItem` when a mark is SET on a card whose status is
@@ -720,7 +734,8 @@
  *   moved. No field changes shape.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
- *   was `1.46.0` at `a42aefe47`, so this claims `1.47.0`. If a sibling has taken it
- *   since, RENUMBER this entry — it names the CODES.
+ *   was `1.47.0` at the merge of `origin/main` that brought MOTIR-6735 (which took
+ *   `1.47.0` first — this entry was renumbered from it), so this claims `1.48.0`. If a
+ *   sibling has taken it since, RENUMBER this entry — it names the CODES.
  */
-export const V1_CONTRACT_VERSION = '1.47.0';
+export const V1_CONTRACT_VERSION = '1.48.0';

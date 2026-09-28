@@ -7502,6 +7502,10 @@ model GithubPullRequestMergeRefusal {
   approvalGateId String?   @map("approval_gate_id")
   /// `app_permission_missing` only — the permission the host said it needed.
   permission     String?
+  /// The host's OWN message for the refusal, verbatim (Bug MOTIR-6735) — for a
+  /// `branch_protected` refusal the only record of WHICH setting refused it. Null when
+  /// the host gave none, and on every row recorded before the column existed.
+  reason         String?
   refusedAt      DateTime  @map("refused_at")
   /// Stamped when a later press at the same head SUCCEEDED, or the pull request merged.
   /// Null while the refusal still stands. A PUSH needs no stamp: the head moves and the

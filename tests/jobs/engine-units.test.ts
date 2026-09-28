@@ -681,6 +681,99 @@ describe('the worker loop’s own branches', () => {
     expect(errors.length).toBeGreaterThan(0);
   });
 
+  // MOTIR-6734: shutdown() used to clear the heartbeat and release this worker's
+  // claims WITHOUT waiting for the loop's current claim or a renewal already on
+  // the wire, so a claim landing after the release held rows for a stopped worker.
+  // Both tests hold that query open and pin the ORDER: the release comes after it.
+  function heldOpen() {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let entered!: () => void;
+    const started = new Promise<void>((r) => (entered = r));
+    return { gate, release, started, entered };
+  }
+
+  it("shutdown() waits for the loop's claim in flight before releasing claims", async () => {
+    const order: string[] = [];
+    const claim = heldOpen();
+    const originalClaim = jobQueueRepository.claimDueRuns;
+    const originalRelease = jobQueueRepository.releaseClaims;
+    (jobQueueRepository as { claimDueRuns: unknown }).claimDueRuns = async () => {
+      claim.entered();
+      await claim.gate;
+      order.push('claim settled');
+      return [];
+    };
+    (jobQueueRepository as { releaseClaims: unknown }).releaseClaims = async (
+      ...args: Parameters<typeof originalRelease>
+    ) => {
+      order.push('released');
+      return originalRelease.apply(jobQueueRepository, args);
+    };
+    const w = new JobWorker({
+      workerId: 'claim-in-flight',
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      timings: { idleMinMs: 10, idleMaxMs: 10, renewMs: 60_000 },
+      execute: async () => {},
+    });
+    try {
+      w.start();
+      await claim.started;
+      const stopped = w.shutdown().then(() => order.push('shutdown returned'));
+      await new Promise((r) => setTimeout(r, 50));
+      expect(order).toEqual([]);
+      claim.release();
+      await stopped;
+    } finally {
+      (jobQueueRepository as { claimDueRuns: unknown }).claimDueRuns = originalClaim;
+      (jobQueueRepository as { releaseClaims: unknown }).releaseClaims = originalRelease;
+      claim.release();
+    }
+    expect(order).toEqual(['claim settled', 'released', 'shutdown returned']);
+  });
+
+  it('shutdown() waits for a lease renewal already on the wire', async () => {
+    const order: string[] = [];
+    const renewal = heldOpen();
+    const originalClaim = jobQueueRepository.claimDueRuns;
+    const originalRenew = jobQueueRepository.renewLeases;
+    const originalRelease = jobQueueRepository.releaseClaims;
+    (jobQueueRepository as { claimDueRuns: unknown }).claimDueRuns = async () => [];
+    (jobQueueRepository as { renewLeases: unknown }).renewLeases = async () => {
+      renewal.entered();
+      await renewal.gate;
+      order.push('renewal settled');
+      return 0;
+    };
+    (jobQueueRepository as { releaseClaims: unknown }).releaseClaims = async (
+      ...args: Parameters<typeof originalRelease>
+    ) => {
+      order.push('released');
+      return originalRelease.apply(jobQueueRepository, args);
+    };
+    const w = new JobWorker({
+      workerId: 'renewal-in-flight',
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      timings: { idleMinMs: 10, idleMaxMs: 10, renewMs: 10 },
+      execute: async () => {},
+    });
+    try {
+      w.start();
+      await renewal.started;
+      const stopped = w.shutdown().then(() => order.push('shutdown returned'));
+      await new Promise((r) => setTimeout(r, 50));
+      expect(order).toEqual([]);
+      renewal.release();
+      await stopped;
+    } finally {
+      (jobQueueRepository as { claimDueRuns: unknown }).claimDueRuns = originalClaim;
+      (jobQueueRepository as { renewLeases: unknown }).renewLeases = originalRenew;
+      (jobQueueRepository as { releaseClaims: unknown }).releaseClaims = originalRelease;
+      renewal.release();
+    }
+    expect(order).toEqual(['renewal settled', 'released', 'shutdown returned']);
+  });
+
   it('notify() on an idle worker is a no-op rather than a throw', async () => {
     const w = new JobWorker({
       workerId: 'idle',

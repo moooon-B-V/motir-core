@@ -240,3 +240,89 @@ describe('a `modify` that RE-PINS moves the leaf and its ancestors', () => {
     expect(await repoNames(story.id)).toEqual(['acme-infra']);
   });
 });
+
+// Bug MOTIR-6751. A container's repository set is written in TWO places — the
+// references above and the stored name projection `work_item.targetRepos` (with
+// `targetRepo`, its element 0). The service-path rollup writes both; the approve
+// re-derivation wrote only the references, so after an approved plan moved a
+// story's work the story still read back the repositories it used to ship in
+// (MOTIR-6706: `targetRepo: "motir-marketing"` over a single `motir-skills`
+// reference). Every reader of the NAME fields — dispatch routing, `get_work_item`,
+// the straddle advisory, the completion gate's `targetRepos` guard — was misled.
+describe('a re-derived CONTAINER stores the names of the references it now has', () => {
+  async function projection(workItemId: string) {
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: workItemId } });
+    return { targetRepos: row.targetRepos, targetRepo: row.targetRepo };
+  }
+
+  it('writes the union onto a story that had stored no names', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Spans both' },
+      fx.ctx,
+    );
+    const planId = await plannedPlan(fx, [
+      {
+        op: 'add',
+        parentRef: story.id,
+        proposedFields: { title: 'Web half', kind: 'subtask', targetRepoRole: 'web' },
+      },
+      {
+        op: 'add',
+        parentRef: story.id,
+        proposedFields: { title: 'API half', kind: 'subtask', targetRepoRole: 'api' },
+      },
+    ]);
+
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const names = await repoNames(story.id);
+    expect(names).toHaveLength(2);
+    expect(await projection(story.id)).toEqual({ targetRepos: names, targetRepo: names[0] });
+  });
+
+  it('moves the stored names when a `modify` moves the story’s only leaf elsewhere', async () => {
+    // The MOTIR-6706 shape: the story's names were right once, an approved plan
+    // moved its work to another repository, and the names stayed behind.
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Owner story' },
+      fx.ctx,
+    );
+    const firstPlan = await plannedPlan(fx, [
+      {
+        op: 'add',
+        parentRef: story.id,
+        proposedFields: { title: 'Moves', kind: 'subtask', targetRepoRole: 'web' },
+      },
+    ]);
+    await plansService.approvePlan(firstPlan, fx.ctx);
+    const webName = (await projectRepoSetService.listByProject(fx.projectId, fx.ctx)).find(
+      (r) => r.role === 'web',
+    )!.name;
+    expect(await projection(story.id)).toEqual({ targetRepos: [webName], targetRepo: webName });
+
+    await adminDb.projectRepo.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        role: 'infra',
+        name: 'acme-infra',
+        seedSource: 'blank',
+        state: 'connected',
+        position: 'zz',
+      },
+    });
+    const leaf = (await itemsByTitle(fx)).get('Moves')!;
+    const secondPlan = await plannedPlan(fx, [
+      { op: 'modify', workItemId: leaf.id, patch: { targetRepo: 'acme-infra' } },
+    ]);
+    await plansService.approvePlan(secondPlan, fx.ctx);
+
+    expect(await repoNames(story.id)).toEqual(['acme-infra']);
+    expect(await projection(story.id)).toEqual({
+      targetRepos: ['acme-infra'],
+      targetRepo: 'acme-infra',
+    });
+  });
+});
