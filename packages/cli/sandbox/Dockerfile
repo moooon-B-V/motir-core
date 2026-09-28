@@ -477,6 +477,24 @@ RUN printf '%s\n' \
 RUN mkdir -p /workspace /home/node/.config/motir /opt/motir-agents/bin /opt/motir-browsers \
     && chown -R node:node /workspace /home/node /opt/motir-agents /opt/motir-browsers
 
+# ── A copy of the build-time home, for a PERSISTENT home to seed from (MOTIR-6887) ─
+#
+# A user agent instance mounts a Fly volume over /home/node
+# (`docs/decisions/agent-instances.md` §1), and an empty volume hides everything
+# the layers above wrote there — the agent config home the entrypoint sources,
+# the `.bashrc` hook, the codegraph MCP wiring. So the finished home is copied
+# OUT of $HOME here, as the LAST write to it, and the entrypoint adds back
+# whatever a mounted home is missing (`seed-home.sh`, never overwriting).
+#
+# Owned by `node` so the copy it makes is `node`'s, and not writable by anyone
+# else, so nothing at run time can plant a file every future home would inherit.
+# It must stay AFTER every layer that writes into /home/node, or the seed is
+# missing that layer's files.
+COPY --chmod=0755 packages/cli/sandbox/seed-home.sh /usr/local/bin/motir-sandbox-seed-home
+RUN cp -a /home/node /opt/motir-home-seed \
+    && chown -R node:node /opt/motir-home-seed \
+    && chmod -R go-w /opt/motir-home-seed
+
 USER node
 # HOME is set explicitly because the CLI resolves its config dir from
 # `MOTIR_CONFIG_HOME` -> `XDG_CONFIG_HOME` -> `$HOME/.config` (see

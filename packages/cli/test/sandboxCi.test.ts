@@ -133,6 +133,7 @@ describe('the sandbox smoke harness', () => {
     'entrypoint-bypass-smoke.sh',
     'agent-update-smoke.sh',
     'runtimes-smoke.sh',
+    'home-seed-smoke.sh',
     'fake-agent.sh',
     'failing-agent.sh',
     'stub-server.mjs',
@@ -192,6 +193,21 @@ describe('the sandbox smoke harness', () => {
     // THE assertion: neither mount-free run may carry the credential bind, or
     // the tier under test would never be the one that supplied the credential.
     expect(mountFree).not.toContain('/home/node/.config/motir');
+  });
+
+  it('runs the persistent-home recipes with a directory mounted over /home/node (MOTIR-6887)', () => {
+    // A user agent instance boots with a volume over the image's HOME, and
+    // whether HOME is a mount is a property of the LAUNCH — so both cases are
+    // container runs of their own: an empty home the entrypoint must seed, and a
+    // populated one it must leave byte-for-byte.
+    const legs = runSh.slice(runSh.indexOf('the persistent-home recipes'));
+    expect(legs).toContain('-v "$HOME_EMPTY:/home/node"');
+    expect(legs).toContain('/workspace/.smoke/home-seed-smoke.sh empty');
+    expect(legs).toContain('-v "$HOME_POPULATED:/home/node"');
+    expect(legs).toContain('/workspace/.smoke/home-seed-smoke.sh populated "$RC_SHA" "$USER_SHA"');
+    // …and the leg refuses to pass on the image's own home.
+    const script = read(join(SMOKE_DIR, 'home-seed-smoke.sh'));
+    expect(script).toContain('/proc/self/mounts');
   });
 
   it('makes each mount-free leg PROVE the bind is absent before asserting anything', () => {
