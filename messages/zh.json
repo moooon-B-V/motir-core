@@ -9978,6 +9978,27 @@
       "rateLimitedTitle": "你浏览得有点太快了",
       "rateLimitedBody": "此公开项目限制了单个读者的访问速度。请在 {seconds} 秒后重试。",
       "rateLimitedRetry": "重试"
+    },
+    "requestedFeatures": {
+      "heading": "功能需求",
+      "subtitle": "大家向此项目提出的需求，按票数从高到低排列。你也可以为想要的需求投票。",
+      "total": "{count, plural, other {# 项待处理}}",
+      "listLabel": "待处理的功能需求",
+      "featureRequest": "功能请求",
+      "bugReport": "缺陷报告",
+      "shown": "显示 {total} 项中的 {shown} 项",
+      "loadMore": "加载更多",
+      "loading": "加载中…",
+      "loadFailed": "无法加载更多需求。",
+      "loadLimited": "你浏览得有点太快了，请稍后再试。",
+      "tryAgain": "重试",
+      "emptyTitle": "暂无待投票的需求",
+      "emptyBody": "当有人向此项目提出功能需求或报告缺陷时，它会出现在这里，直到团队接手处理。",
+      "upvote": "投票",
+      "removeVote": "取消投票",
+      "voteCount": "{count, plural, other {# 票}}",
+      "voteLimited": "你投票有点太快了。你的投票未保存——请稍后再试。",
+      "voteFailed": "你的投票未保存，请重试。"
     }
   },
   "workItems": {

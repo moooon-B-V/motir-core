@@ -151,6 +151,7 @@ export const VISITOR_SEGMENTS = [
   'enter',
   'items',
   'plans',
+  'requested-features',
   'roadmap',
   'runs',
   'tree',

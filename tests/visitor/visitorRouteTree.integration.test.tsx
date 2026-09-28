@@ -317,7 +317,7 @@ async function publicProjectWithWork() {
 }
 
 describe('each Visitor page renders its shared body for a consented Visitor', () => {
-  it('board, items, tree, roadmap, plans, approvals and runs render — no no-access state', async () => {
+  it('board, items, tree, roadmap, plans, approvals, runs and requested features render — no no-access state', async () => {
     const t = await publicProjectWithWork();
     await consented(t.identifier);
     const pages: Array<[string, () => Promise<{ default: (p: never) => Promise<ReactNode> }>]> = [
@@ -328,6 +328,10 @@ describe('each Visitor page renders its shared body for a consented Visitor', ()
       ['plans', () => import('@/app/(visitor)/p/[identifier]/plans/page') as never],
       ['approvals', () => import('@/app/(visitor)/p/[identifier]/approvals/page') as never],
       ['runs', () => import('@/app/(visitor)/p/[identifier]/runs/page') as never],
+      [
+        'requested-features',
+        () => import('@/app/(visitor)/p/[identifier]/requested-features/page') as never,
+      ],
     ];
     for (const [view, load] of pages) {
       state.path = `/p/${t.identifier}/${view}`;
@@ -354,6 +358,35 @@ describe('each Visitor page renders its shared body for a consented Visitor', ()
     expect(props).toMatchObject({ canEdit: false, activeProjectId: t.fx.projectId });
     expect(props.members.length).toBeGreaterThan(0);
     for (const m of props.members) expect(m.email).toBe('');
+  });
+
+  it('requested features hands its list the pending set — by votes, names only, no email', async () => {
+    const t = await publicProjectWithWork();
+    const submitter = await adminDb.user.create({
+      data: { email: `rf-${Date.now()}@example.com`, name: 'Rita Submitter', emailVerified: true },
+    });
+    const request = await createTestWorkItem(t.fx, { kind: 'task', title: 'Dark mode please' });
+    await adminDb.workItem.update({
+      where: { id: request.id },
+      data: { triagedAt: new Date(), submittedByUserId: submitter.id, status: 'todo' },
+    });
+    await consented(t.identifier);
+    state.path = `/p/${t.identifier}/requested-features`;
+    const { default: Page } =
+      await import('@/app/(visitor)/p/[identifier]/requested-features/page');
+    const tree = await Page({ params: params(t.identifier) });
+    const [list] = named(tree, 'RequestedFeaturesList');
+    const props = list!.props as {
+      identifier: string;
+      initial: { items: { title: string; submitterName: string }[]; total: number };
+    };
+    expect(props.identifier).toBe(t.identifier);
+    expect(props.initial.items.map((r) => r.title)).toEqual(['Dark mode please']);
+    expect(props.initial.items[0]!.submitterName).toBe('Rita Submitter');
+    expect(props.initial.total).toBe(1);
+    // The ordinary work item and the private epic are not requests.
+    expect(JSON.stringify(props.initial)).not.toContain('Visible task');
+    expect(JSON.stringify(props.initial)).not.toContain('@');
   });
 
   it('items is the list and tree is the tree, whatever ?view= says, read as the Visitor', async () => {

@@ -9982,6 +9982,27 @@
       "rateLimitedTitle": "You’re reading a little too fast",
       "rateLimitedBody": "This public project limits how quickly one reader can open it. Try again in {seconds, plural, one {# second} other {# seconds}}.",
       "rateLimitedRetry": "Try again"
+    },
+    "requestedFeatures": {
+      "heading": "Requested features",
+      "subtitle": "What people have asked this project for, most-voted first. Vote for the ones you want too.",
+      "total": "{count, plural, other {# waiting}}",
+      "listLabel": "Pending feature requests",
+      "featureRequest": "Feature request",
+      "bugReport": "Bug report",
+      "shown": "Showing {shown} of {total}",
+      "loadMore": "Load more",
+      "loading": "Loading…",
+      "loadFailed": "Couldn’t load more requests.",
+      "loadLimited": "You’re reading a little too fast. Try again in a moment.",
+      "tryAgain": "Try again",
+      "emptyTitle": "Nothing is waiting for a vote",
+      "emptyBody": "When someone asks this project for a feature or reports a bug, it appears here until the team picks it up.",
+      "upvote": "Upvote",
+      "removeVote": "Remove your vote",
+      "voteCount": "{count, plural, one {# vote} other {# votes}}",
+      "voteLimited": "You’re voting a little too fast. Your vote wasn’t saved — try again in a moment.",
+      "voteFailed": "Your vote wasn’t saved. Try again."
     }
   },
   "workItems": {
