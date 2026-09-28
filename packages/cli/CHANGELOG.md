@@ -1,5 +1,31 @@
 # Changelog — `@motir/cli`
 
+## 0.7.0
+
+### Minor Changes
+
+- 50b4d92: A hosted run indexes every checkout it clones with codegraph before the agent starts, and the hosted image now runs the CLI itself (MOTIR-6560). The container's entrypoint is a launcher for `motir run` (or `motir continue`) on the run the server opened, so a leaf, a leaf that spans several repositories and a parent all run hosted exactly as they do locally. The image carries `motir`, `gh`, git ≥ 2.36, the pinned OpenCode and codegraph, and no credential. The hosted `gh` shim now resolves a checkout's repository from its configured remote URL, not one rewritten by `url.insteadOf`.
+- 50b4d92: A hosted run launches its own agent and reaches GitHub only as Motir's App (MOTIR-6559). With `MOTIR_DISPATCH_RUN_ID` set and no `--agent`, `motir run` launches OpenCode on `MOTIR_MODEL` through the gateway (`MOTIR_GATEWAY_URL`, `MOTIR_RUN_KEY`), configured exactly as the gateway's egress contract says and on an allow-listed environment that never holds the run credential. git and `gh` get the run's repository tokens from its git-credential route through a credential helper and a `gh` shim — never from an environment variable — and every commit is authored as the App's bot of its repository. Every pull request a hosted run opens names the person who dispatched it, the card and the run. A hosted run always reports its agent's output, so the stall watchdog sees a long step working.
+- 50b4d92: A run now CHECKPOINTS its work (MOTIR-6539). While the agent works, the CLI
+  pushes the card's work branch in every repository of the leg whenever it holds
+  commits origin does not have yet — every 60 seconds, and once more when the
+  agent ends however it ends — so a run that dies (hosted or local, a leaf or a
+  parent's child) leaves its commits on origin for `motir continue`. It never
+  commits on the agent's behalf, never pushes a branch with nothing new on it, and
+  never touches the session branch. A failed checkpoint push is one `log` event on
+  the run and is retried; it never fails the run. `checkout_ready` now names every
+  repository's branch (`data.branches`), and the scope drain emits it too.
+- 50b4d92: `motir run` gains a HOSTED mode (MOTIR-6558). Given `--run-id <id>` or
+  `MOTIR_DISPATCH_RUN_ID`, it ADOPTS a run Motir already opened instead of opening
+  one — a leaf, a multi-repository leaf, or a parent whose members the server
+  claimed — and reads that run's cards and order back rather than claiming a
+  second set. It needs no `.motir.json` (the project comes from the run, the
+  checkouts go under `MOTIR_WORKSPACE`, default `/workspace`, cloned as
+  `<root>/<name>`), never prompts, and keeps a scope going past a failed card. The
+  env ladder gains the hosted names one rung below their general twins:
+  `MOTIR_RUN_TOKEN` below `MOTIR_TOKEN`, `MOTIR_API_URL` below `MOTIR_SERVER`. A
+  run without a run id is unchanged.
+
 ## 0.6.0
 
 ### Minor Changes
