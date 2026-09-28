@@ -46,18 +46,22 @@ describe('PUBLIC_PROJECT_PERMISSIONS', () => {
     );
   });
 
-  it('is exactly what a non-entrant resolves to on a public project', () => {
+  it('is exactly what a non-entrant resolves to on a public project — on the PUBLIC read path only', () => {
     for (const actor of [
       { workspaceRole: null, accessScope: null },
       { workspaceRole: 'member' as const, accessScope: 'limited' as const },
     ]) {
-      const held = resolvePermissions({
-        accessMode: 'public',
+      const inputs = {
+        accessMode: 'public' as const,
         ...actor,
         addedToProject: false,
         organizationClosing: false,
-      });
+      };
+      const held = resolvePermissions({ ...inputs, readPath: 'public' });
       expect([...held].sort()).toEqual([...PUBLIC_PROJECT_PERMISSIONS].sort());
+      // The member doors apply no private-epic hidden set, so there the same
+      // non-entrant holds nothing (MOTIR-6733).
+      expect([...resolvePermissions(inputs)]).toEqual([]);
     }
   });
 });

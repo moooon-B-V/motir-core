@@ -144,15 +144,27 @@ describe('the two RAILS stay above and below the custom set', () => {
     );
     expect(sorted(onPrivate)).toEqual([]);
 
-    // Public: the level-gated grants and NOT ONE key more, even though the
-    // custom role names the entire catalog.
-    const onPublic = resolvePermissions(
+    // Public, on the MEMBER path: nothing either — a non-entrant holds no key on
+    // the doors that apply no private-epic hidden set (MOTIR-6733).
+    const onPublicMember = resolvePermissions(
       onCustomRole({
         accessMode: 'public',
         workspaceRole: null,
         permissions: [...ROLE_GATED_PERMISSIONS],
       }),
     );
+    expect(sorted(onPublicMember)).toEqual([]);
+
+    // Public, on the PUBLIC read path: the level-gated grants and NOT ONE key
+    // more, even though the custom role names the entire catalog.
+    const onPublic = resolvePermissions({
+      ...onCustomRole({
+        accessMode: 'public',
+        workspaceRole: null,
+        permissions: [...ROLE_GATED_PERMISSIONS],
+      }),
+      readPath: 'public',
+    });
     expect(sorted(onPublic)).toEqual(
       [
         // MOTIR-6328 — the room view keys are level-gated on `public` too, and
@@ -241,8 +253,6 @@ describe('the ACCESS-MODE truth table — a custom role is admitted by entry, th
     'comment:add': false,
     'attachment:create': false,
   };
-  /** A non-entrant on a public project: the public read set's browse, nothing written. */
-  const PUBLIC_ONLY: Expectation = { ...NONE, 'project:browse': true };
 
   const TABLE: Array<{
     mode: ProjectAccessMode;
@@ -260,10 +270,11 @@ describe('the ACCESS-MODE truth table — a custom role is admitted by entry, th
     { mode: 'members', scope: 'full', added: true, expected: ALL },
     { mode: 'members', scope: 'limited', added: false, expected: NONE },
     { mode: 'members', scope: 'limited', added: true, expected: ALL },
-    // `public` — as `workspace`, and a non-entrant still browses.
+    // `public` — as `workspace`. A non-entrant browses only on the PUBLIC read
+    // path, never through these member doors (MOTIR-6733).
     { mode: 'public', scope: 'full', added: false, expected: ALL },
     { mode: 'public', scope: 'full', added: true, expected: ALL },
-    { mode: 'public', scope: 'limited', added: false, expected: PUBLIC_ONLY },
+    { mode: 'public', scope: 'limited', added: false, expected: NONE },
     { mode: 'public', scope: 'limited', added: true, expected: ALL },
   ];
 

@@ -195,11 +195,11 @@ interface Row {
  * this mode". `keys` names the expected permission set; the four booleans say
  * whether the project (or its item) appears; `route` is the project GET's status.
  *
- * The Public rows record one deliberate asymmetry: a Limited member and a
- * stranger hold Public's read set — `project:browse` among it, which is why the
- * project GET answers them 200 — but the project is NOT a place they are "in",
- * so the listing, search and MCP (which follow ENTRY, `canEnter`) leave it out.
- * The Visitor's reading surface is MOTIR-6170's.
+ * The Public rows for a Limited member and a stranger read exactly as the
+ * Workspace rows do: every surface here is a MEMBER door, which applies no
+ * private-epic hidden set, so a non-entrant holds nothing on it and the project
+ * GET answers 404 (MOTIR-6733). They read the project as its Visitor, through
+ * `/p/<identifier>` after consent — MOTIR-6170's surface, not these.
  */
 const MATRIX: Record<ProjectAccessMode, Record<Actor, Row>> = {
   workspace: {
@@ -223,8 +223,8 @@ const MATRIX: Record<ProjectAccessMode, Record<Actor, Row>> = {
     orgAdmin: { keys: 'manager', listed: true, searched: true, mcp: true, route: 200 },
     added: { keys: 'public+member', listed: true, searched: true, mcp: true, route: 200 },
     full: { keys: 'public+member', listed: true, searched: true, mcp: true, route: 200 },
-    limited: { keys: 'public', listed: false, searched: false, mcp: false, route: 200 },
-    none: { keys: 'public', listed: false, searched: false, mcp: false, route: 200 },
+    limited: { keys: 'nothing', listed: false, searched: false, mcp: false, route: 404 },
+    none: { keys: 'nothing', listed: false, searched: false, mcp: false, route: 404 },
   },
 };
 
