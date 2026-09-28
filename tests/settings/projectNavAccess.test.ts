@@ -185,7 +185,7 @@ describe('what each built-in role is offered', () => {
     const gone = PROJECT_NAV_ACCESS.map((e) => e.href).filter(
       (href) => !offered(VIEWER as never).includes(href),
     );
-    expect(gone.sort()).toEqual(['/triage']);
+    expect(gone.sort()).toEqual(['/requested-features']);
   });
 
   it('a viewer keeps every READ surface', () => {

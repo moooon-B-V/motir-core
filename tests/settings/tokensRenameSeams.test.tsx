@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DOCS_REDIRECTS, LANDING_REDIRECTS, SETTINGS_REDIRECTS } from '../../next.config';
+import {
+  DOCS_REDIRECTS,
+  LANDING_REDIRECTS,
+  REQUESTED_FEATURES_REDIRECTS,
+  SETTINGS_REDIRECTS,
+} from '../../next.config';
 import { ACCOUNT_SETTINGS_NAV, ACCOUNT_SETTINGS_ROUTES } from '@/lib/settings/accountSettingsNav';
 import {
   V1_SECURITY_SCHEME_NAME,
@@ -93,7 +98,12 @@ describe('the tokens rename — the seams between its cards', () => {
     // type error instead of an assertion. (`settingsRedirects.test.ts`
     // annotates it for the same reason; this file did not, and CI caught it.)
     const seen = new Set<string>();
-    for (const r of [...DOCS_REDIRECTS, ...SETTINGS_REDIRECTS, ...LANDING_REDIRECTS]) {
+    for (const r of [
+      ...DOCS_REDIRECTS,
+      ...SETTINGS_REDIRECTS,
+      ...LANDING_REDIRECTS,
+      ...REQUESTED_FEATURES_REDIRECTS,
+    ]) {
       expect(seen.has(r.source), `${r.source} is claimed by two redirect maps`).toBe(false);
       seen.add(r.source);
     }

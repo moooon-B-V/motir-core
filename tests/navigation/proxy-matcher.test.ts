@@ -157,12 +157,15 @@ describe('proxy config.matcher', () => {
       'plans',
       'ready',
       'reports',
+      // MOTIR-6772 — the members' inbox, renamed from `triage`. The count is
+      // unchanged: `/triage` is a `next.config` redirect now, answered before the
+      // proxy, so the filesystem no longer serves that segment.
+      'requested-features',
       'roadmap',
       // MOTIR-3923 — the runs index, the segment that made this list seventeen.
       'runs',
       'settings',
       'sprints',
-      'triage',
       // MOTIR-4782 — the signed-in landing, renamed from `home`. The count is
       // unchanged: a rename moved a segment, it did not add one.
       'workbench',
