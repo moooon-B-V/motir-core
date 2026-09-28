@@ -35,6 +35,7 @@ import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { WorkItemDetailActions } from './_components/WorkItemDetailActions';
 import { MonitorErrorsDoorProvider } from './_components/MonitorErrorsLinkControl';
 import { EpicPrivacyControl } from './_components/EpicPrivacyControl';
+import { isVisitorContext } from '@/lib/visitor/readScope';
 import { WatchControl } from './_components/WatchControl';
 import { ContentSectionCard } from './_components/ContentSectionCard';
 import { readLateSections } from './_components/lateReads';
@@ -83,6 +84,9 @@ export default async function ItemView({
   // rollup, the chips, the activity), `service` for the rest.
   const ctx = pageScope(pageCtx);
   const svc = ctx.service;
+  // A Visitor (MOTIR-6648) acts on nothing, so the page draws no Watch control
+  // and makes no plan-history read (below) for one.
+  const isVisitor = isVisitorContext(ctx.read);
 
   const { key } = await params;
   let detail;
@@ -143,7 +147,10 @@ export default async function ItemView({
   // indicator AND no read: an indicator naming a plan the viewer cannot open is
   // worse than none, and skipping the query keeps its cost off the actor least
   // able to benefit from it.
-  const canViewPlans = held.has('plan:view_any');
+  // A Visitor holds `plan:view_any` but not the `ai:view_plan` the item's plan
+  // history asserts, and that history is not filtered for a private epic's
+  // descendants; the Plans room is the Visitor's plan surface (MOTIR-6645).
+  const canViewPlans = held.has('plan:view_any') && !isVisitor;
 
   // The Activity tab (Story 5.5 · 5.5.4): URL-driven via `?activity=`
   // (default Comments — the Jira default); the server fetches ONLY the
@@ -481,13 +488,15 @@ export default async function ItemView({
                 beside the roll-up badge (the labels-components-watch mockup's
                 panel-0 placement). Every viewer gets it: watching is not
                 editing (the verified permission split). */}
-                    <WatchControl
-                      workItemId={item.id}
-                      initialCount={detail.watcherCount}
-                      initialWatching={detail.viewerIsWatching}
-                      currentUserId={ctx.userId}
-                      candidates={watcherCandidates}
-                    />
+                    {isVisitor ? null : (
+                      <WatchControl
+                        workItemId={item.id}
+                        initialCount={detail.watcherCount}
+                        initialWatching={detail.viewerIsWatching}
+                        currentUserId={ctx.userId}
+                        candidates={watcherCandidates}
+                      />
+                    )}
                     {/* 2.8.4: the ⋯ actions menu — Edit details · Copy link · Archive
                 · Delete… (Edit folded in here). Permission-gated: Edit/Archive
                 on canEdit, Archive + Delete on canDelete. 2.9.11: on an archived

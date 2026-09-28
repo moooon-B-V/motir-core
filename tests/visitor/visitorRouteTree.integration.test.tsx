@@ -418,6 +418,30 @@ describe('each Visitor page renders its shared body for a consented Visitor', ()
     expect(permanentRedirect).not.toHaveBeenCalled();
   });
 
+  // Found by the E2E walk (MOTIR-6651): a visible STORY's page crashed for a
+  // Visitor — the acceptance-video eligibility read resolved an organisation the
+  // Visitor is not in — and the page offered the Watch control and a plan
+  // history the Visitor cannot read.
+  it('a visible story renders for a Visitor, with no Watch control and no plan history', async () => {
+    const t = await publicProjectWithWork();
+    const story = await createTestWorkItem(t.fx, { kind: 'story', title: 'Visible story' });
+    await consented(t.identifier);
+    const { default: Page } = await import('@/app/(visitor)/p/[identifier]/items/[key]/page');
+    state.path = `/p/${t.identifier}/items/${story.identifier}`;
+    const tree = await Page({
+      params: Promise.resolve({ identifier: t.identifier, key: story.identifier }),
+      searchParams: Promise.resolve({}),
+    });
+    expect(JSON.stringify(named(tree, 'WorkItemTitle')[0]!.props)).toContain('Visible story');
+    expect(named(tree, 'WatchControl')).toHaveLength(0);
+    expect(named(tree, 'PlanHistorySection')).toHaveLength(0);
+    const late = named(tree, 'LateUpperSections')[0]!.props as {
+      reads: Promise<{ acceptanceEligibility: unknown }>;
+    };
+    const reads = await late.reads;
+    expect(reads.acceptanceEligibility).toBeNull();
+  });
+
   it('a plan of the project renders; a plan id that is not one is not-found', async () => {
     const t = await publicProjectWithWork();
     await consented(t.identifier);

@@ -36,6 +36,7 @@ import type { ActivityTab } from '@/lib/activity/tab';
 import type { DispatchRunListItemDto } from '@/lib/dto/dispatchRuns';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { VisitorReadContext } from '@/lib/visitor/context';
+import { isVisitorContext } from '@/lib/visitor/readScope';
 
 // The item page's LATE-TIER reads, as ONE promise (Subtask MOTIR-3436).
 //
@@ -348,6 +349,11 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
   // The ternaries stay: skipping a query is cheaper than parallelising it.
   const inReviewBand = input.itemStatus === 'in_review' || input.itemStatus === 'done';
   const readAcceptance = input.itemKind === 'story';
+  // A Visitor (MOTIR-6648) turns nothing on, and the eligibility read resolves
+  // the actor's ORGANISATION access — which a reader outside the organisation
+  // does not have, so it throws `OrganizationNotFoundError` and takes the whole
+  // story page down. The panel renders without the verb, as for a non-story.
+  const readEligibility = readAcceptance && !isVisitorContext(activityReader);
 
   return (async (): Promise<LateReads> => {
     const [
@@ -412,7 +418,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
           return null;
         }
       })(),
-      readAcceptance
+      readEligibility
         ? acceptanceVideoEligibilityService.resolve({
             actorUserId: ctx.userId,
             workspaceId: ctx.workspaceId,
