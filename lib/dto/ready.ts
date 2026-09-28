@@ -103,6 +103,14 @@ export interface ReadyItemDto {
   /** Why the card is marked, in Markdown — `null` when there is no note. */
   obsolescenceNoteMd: string | null;
   /**
+   * The RUNNABLE CONTAINER this row is grouped under in a ready LANE (Story
+   * MOTIR-6829) — its parent when that parent is a `story` / `task` / `bug`
+   * whose every child is childless, else `null`. PRESENT only on a lane read
+   * (`listReadyLeaves` / `listReadyBugs`); the flat `listReady` omits the key,
+   * so its payload is unchanged.
+   */
+  container?: ReadyContainerRefDto | null;
+  /**
    * The full Markdown instruction body — populated ONLY for a MANUAL row (the
    * source the *Show instruction* modal renders; 8.8.5 / 8.8.10) and `null` for
    * an agent-runnable row, so the list payload stays lean (the 7.0.3 split
@@ -111,6 +119,41 @@ export interface ReadyItemDto {
    * every item — the agent always needs it.
    */
   descriptionMd: string | null;
+}
+
+/**
+ * The runnable container a lane row is grouped under — enough to render the
+ * group's header and to build `motir run <KEY>` for it, and nothing more.
+ */
+export interface ReadyContainerRefDto {
+  id: string;
+  /** The `PROD-<n>` identifier, as on {@link ReadyItemDto.key}. */
+  key: string;
+  kind: WorkItemKindDto;
+  title: string;
+  priority: WorkItemPriorityDto;
+}
+
+/**
+ * One row of the CONTAINERS lane (Story MOTIR-6829): a non-bug runnable
+ * container holding at least one ready leaf — the unit `motir run <KEY>` runs
+ * as a parent run. `readyLeafCount` counts its rows in the leaves lane;
+ * `childCount` counts every live child, ready or not, so a surface can say
+ * "{ready} of {children} ready".
+ */
+export interface ReadyContainerDto extends ReadyContainerRefDto {
+  assignee: ReadyItemDto['assignee'];
+  readyLeafCount: number;
+  childCount: number;
+}
+
+/** How many rows each lane holds — the `/ready` header's count chips. */
+export interface ReadyLaneCountsDto {
+  leaves: number;
+  containers: number;
+  bugs: number;
+  /** Always `false`: the walk is exact (bounded by tree depth), as `countReady`'s is. */
+  hasMore: boolean;
 }
 
 /**
