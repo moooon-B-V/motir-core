@@ -187,6 +187,10 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
     if (resolvedStatusKey !== PULL_REQUEST_APPROVAL_TARGET.key) {
       return { statusWritten: null, statusDeferredReason: 'no_status_in_target_category' };
     }
+    // MARKED_CARD_CANNOT_REOPEN (MOTIR-6681) PROPAGATES: this is a person's press, and
+    // `approved` is outside the done category. A card marked under the rule is `done`
+    // and holds no merge gate; only a LEGACY card marked while open can reach here,
+    // and the refusal is the right answer to the person pressing — clear the mark.
     await workItemsService.applyStatusTransition(
       requireGateCard(gate, 'pullRequestApprovalHandler'),
       resolvedStatusKey,

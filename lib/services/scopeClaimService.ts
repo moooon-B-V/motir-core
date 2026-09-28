@@ -448,6 +448,10 @@ async function runScopeClaim(
   const members: ScopeClaimMemberDto[] = [];
   const byId = new Map(states.map((s) => [s.id, s]));
   for (const id of orderedIds) {
+    // MARKED_CARD_CANNOT_REOPEN (MOTIR-6681) PROPAGATES: the scope claim is all or
+    // nothing on a CLI door, so a member it cannot flip refuses the whole claim, typed
+    // (MOTIR-6673). A marked member is `done` and outside the claimable states; only a
+    // LEGACY card marked while open reaches this flip.
     const moved = await workItemsService.applyStatusTransition(id, IN_PROGRESS_STATUS_KEY, ctx, tx);
     if (moved.transition) transitions.push({ workItemId: id, ...moved.transition });
     const state = byId.get(id);

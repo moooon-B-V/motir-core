@@ -17,6 +17,8 @@ import { MultiSelectPicker, type MultiSelectOption } from '@/components/ui/Multi
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
+import { WORK_ITEM_OBSOLESCENCES } from '@/lib/issues/obsolescence';
+import { OBSOLESCENCE_GLYPH } from '@/components/issues/ObsolescenceBadge';
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
@@ -386,6 +388,7 @@ export function AdvancedFilterValueEditor({
   const tWorkType = useTranslations('labels.workItemType');
   const tDifficulty = useTranslations('labels.difficulty');
   const tFixReason = useTranslations('workbench.toFix.reason');
+  const tObsolescence = useTranslations('labels.obsolescence');
   const tFolders = useTranslations('folders');
   const [query, setQuery] = useState('');
 
@@ -455,6 +458,15 @@ export function AdvancedFilterValueEditor({
           label: tDifficulty(d),
           glyph: DIFFICULTY_GLYPH[d],
         }));
+      case 'obsolescence-select':
+        // The OBSOLESCENCE mark (Story MOTIR-6575 · MOTIR-6678), mildest first,
+        // each with the badge's own glyph, so a value here and a badge on a row
+        // are recognisably the same thing.
+        return WORK_ITEM_OBSOLESCENCES.map((o) => ({
+          id: o,
+          label: tObsolescence(o),
+          glyph: OBSOLESCENCE_GLYPH[o],
+        }));
       case 'member-select': {
         const options = members.map((m) => ({
           id: m.userId,
@@ -504,6 +516,7 @@ export function AdvancedFilterValueEditor({
     tPriority,
     tWorkType,
     tDifficulty,
+    tObsolescence,
     tGithub,
     tFixReason,
   ]);
@@ -537,6 +550,7 @@ export function AdvancedFilterValueEditor({
     case 'priority-select':
     case 'type-select':
     case 'difficulty-select':
+    case 'obsolescence-select':
     case 'member-select':
     case 'sprint-select':
     case 'component-select':

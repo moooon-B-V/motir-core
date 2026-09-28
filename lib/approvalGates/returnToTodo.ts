@@ -62,6 +62,9 @@ export async function returnCardToTodo(
   // The funnel locks the card's awaiting gates (this one included — a no-op re-lock)
   // and then the card, in the door's lock order; the supersede below touches rows
   // those locks already hold.
+  // MARKED_CARD_CANNOT_REOPEN (MOTIR-6681) PROPAGATES: a person's refusal press. A
+  // card marked under the rule is done-category and was refused above; only a LEGACY
+  // card marked while open reaches here, and the person is told to clear the mark.
   await workItemsService.applyStatusTransition(workItemId, target.key, ctx, tx, {
     system: true,
     decidingGateId: gate.id,

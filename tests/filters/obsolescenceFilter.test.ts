@@ -101,14 +101,21 @@ describe('filtering real rows by obsolescence', () => {
     unmarked: string;
   }> {
     const fx = await makeWorkItemFixture();
-    const outdated = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Stale text', obsolescence: 'outdated' },
-      fx.ctx,
-    );
-    const deprecated = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'story', title: 'Retired', obsolescence: 'deprecated' },
-      fx.ctx,
-    );
+    // A mark is a FINISHED card's state (MOTIR-6672): create, finish, then mark.
+    const markFinished = async (
+      kind: 'task' | 'story',
+      title: string,
+      obsolescence: 'outdated' | 'deprecated',
+    ) => {
+      const item = await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind, title },
+        fx.ctx,
+      );
+      await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'done' } });
+      return workItemsService.updateWorkItem(item.id, { obsolescence }, fx.ctx);
+    };
+    const outdated = await markFinished('task', 'Stale text', 'outdated');
+    const deprecated = await markFinished('story', 'Retired', 'deprecated');
     const unmarked = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'task', title: 'Still true' },
       fx.ctx,

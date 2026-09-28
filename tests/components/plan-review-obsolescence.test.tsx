@@ -506,6 +506,8 @@ const TARGET_PAYLOAD: QuickViewData = {
   type: 'code',
   executor: 'coding_agent',
   difficulty: null,
+  obsolescence: null,
+  obsolescenceNoteMd: null,
   assigneeName: null,
   assigneeId: null,
   reporterName: 'Zhu Yue',

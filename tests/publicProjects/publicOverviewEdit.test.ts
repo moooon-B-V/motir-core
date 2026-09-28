@@ -7,6 +7,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Story 6.16 · Subtask 6.16.5 — the ON-PAGE save path. The public Overview editor
 // persists tagline + tags + body through `publicProjectsService.setPublicOverview`,
@@ -27,7 +28,7 @@ afterAll(async () => {
 
 async function makePublicProjectFixture(): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name: 'Acme' });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   return fx;
 }
 

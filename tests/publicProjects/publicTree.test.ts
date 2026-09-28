@@ -12,6 +12,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Story 6.14 · Subtask 6.14.10 — the PUBLIC, expandable work-item TREE. The
 // hierarchy is the surface 6.14.5 / 6.14.6 / 6.14.9 assume. The load-bearing
@@ -40,7 +41,7 @@ async function setPrivate(epicId: string, value: boolean): Promise<void> {
 
 async function makePublicProjectFixture(name = 'Acme'): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   return fx;
 }
 

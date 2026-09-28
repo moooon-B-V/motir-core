@@ -8,6 +8,7 @@ import { waitForWindowHeadroom } from '@/tests/helpers/rateLimitWindow';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // THE VISITOR ROUTE TREE, through the real resolver and datastore (Story
 // MOTIR-6170 · MOTIR-6648): `app/(visitor)/p/[identifier]/…` — the layout's
@@ -100,7 +101,7 @@ async function project(mode: 'public' | 'members' | 'workspace' = 'public') {
   const fx = await makeWorkItemFixture({ name: `Visitor tree ${identifier}`, identifier });
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { accessMode: mode, accessLevel: mode === 'public' ? 'public' : 'private' },
+    data: projectAccessData(mode),
   });
   return { fx, identifier };
 }

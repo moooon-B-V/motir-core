@@ -595,7 +595,7 @@
       "duplicates": "重复",
       "clones": "克隆",
       "supersedes": "取代",
-      "superseded_by": "被取代"
+      "superseded_by": "被取代于"
     },
     "role": {
       "owner": "所有者",
@@ -660,6 +660,8 @@
       "lastManager": "工作区至少需要一名管理者。",
       "rolesManagerOnly": "只有工作区管理者可以更改角色。",
       "orgManagedRole": "组织所有者或管理员是所有工作区的管理者。请在组织的成员页面更改。",
+      "removeMemberManagerOnly": "只有工作区管理者可以移除成员。",
+      "removeMemberOrgManaged": "组织所有者或管理员是所有工作区的管理者。请在组织的成员页面移除。",
       "roleChangeFailed": "无法更改角色。",
       "scopeManagerOnly": "只有工作区管理者可以更改谁能进入项目。",
       "scopeNotApplicable": "管理者可以进入每个项目，因此其访问范围始终为“完整”。",
@@ -704,7 +706,9 @@
       "CONTAINER_HAS_OPEN_CHILDREN": "该工作项还有子项尚未达到“已实现”，因此无法进入该状态。父项处于该状态，即声明其下的全部工作都已构建完成，其拉取请求也是基于这一声明才打开的。请先完成这些子项、把已不属于本次范围的子项移到别处，或将该工作项移到“已完成”——那是有意地一并关闭它们，而不是作为副作用。",
       "APPROVAL_GATE_PENDING": "该状态无法直接设置——此工作项有一个待处理的审批，批准它才会完成这一移动。其他移动仍然可以进行。",
       "APPROVAL_GATE_PENDING_MERGE": "该状态无法直接设置——此工作项有未合并的拉取请求，合并它才会完成这一移动。其他移动仍然可以进行。",
-      "PLAN_TARGET_HELD": "计划未决定前无法更改状态——一个计划正在改写此工作项。请批准或拒绝该计划，或撤回指向此工作项的提议。"
+      "PLAN_TARGET_HELD": "计划未决定前无法更改状态——一个计划正在改写此工作项。请批准或拒绝该计划，或撤回指向此工作项的提议。",
+      "OBSOLESCENCE_REQUIRES_FINISHED": "只有已完成的事项才能标记——请改为归档。",
+      "MARKED_CARD_CANNOT_REOPEN": "此事项已标记为过时或已弃用。清除标记后才能重新打开此事项。"
     },
     "workflow": {
       "NOT_PROJECT_ADMIN": "只有项目管理员才能编辑工作流。",
@@ -1482,6 +1486,7 @@
     "advancedFieldPriority": "优先级",
     "advancedFieldType": "工作类型",
     "advancedFieldDifficulty": "难度",
+    "advancedFieldObsolescence": "失效状态",
     "difficulty": "难度",
     "setDifficulty": "设置难度",
     "advancedFieldReporter": "创建人",
@@ -3437,7 +3442,8 @@
         "autoDisabled": "已自动停用 · {count}次失败",
         "actionsAria": "{name}的操作",
         "reEnable": "重新启用",
-        "orgClosingAgo": "已暂停 · {time}"
+        "orgClosingAgo": "已暂停 · {time}",
+        "heldByMarkAgo": "因标记保持 · {time}"
       },
       "triggerSummary": {
         "created": "创建时",
@@ -3544,7 +3550,8 @@
           "failure": "失败",
           "no_actions": "无操作",
           "plan_held": "计划占用",
-          "org_closing": "已暂停"
+          "org_closing": "已暂停",
+          "held_by_mark": "因标记保持"
         },
         "conditionNotMet": "条件未满足",
         "planHeldNote": "计划正在重写此工作项",
@@ -3563,7 +3570,8 @@
           "title": "暂无运行记录",
           "description": "此规则尚未触发。当某个工作项匹配其触发器和条件时，每次运行都会显示在此处，包含运行结果、耗时以及触发该次运行的工作项。"
         },
-        "orgClosingNote": "该组织已计划删除"
+        "orgClosingNote": "该组织已计划删除",
+        "heldByMarkNote": "此事项已标记为过时或已弃用，因此保持完成状态"
       }
     },
     "aiPlanning": {
@@ -9998,6 +10006,43 @@
       "leadRun": "重新运行该工作项。新一次运行的提示词会带上审阅者的说明：",
       "toDevelopment": "查看它的拉取请求",
       "opening": "正在打开它的拉取请求…"
+    }
+  },
+  "workItems": {
+    "obsolescence": {
+      "label": "时效",
+      "value": {
+        "current": "有效",
+        "outdated": "已过时",
+        "deprecated": "已弃用"
+      },
+      "note": {
+        "label": "为何标记？",
+        "placeholder": "发生了什么变化，应改为参考什么",
+        "showMore": "展开",
+        "showLess": "收起"
+      },
+      "editor": {
+        "save": "保存",
+        "cancel": "取消",
+        "saving": "正在保存…"
+      },
+      "lockedHint": "只有已完成的事项才能标记——请改为归档",
+      "refused": {
+        "requiresFinished": "该事项已不再处于完成状态，无法标记。请刷新查看其状态。"
+      },
+      "badge": {
+        "jump": "跳转到时效字段"
+      },
+      "held": {
+        "option": "因标记锁定",
+        "text": "该事项已标记为{mark}，状态无法重新打开。",
+        "sub": "清除标记后才能重新打开此事项。",
+        "door": "清除标记",
+        "refusalArrived": "已在别处标记为{mark}——此次变更未执行。"
+      },
+      "heldLine": "此事项已标记为<strong>{mark}</strong>。清除标记后才能重新打开此事项。",
+      "openItem": "打开事项"
     }
   }
 }

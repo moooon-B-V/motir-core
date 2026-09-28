@@ -87,6 +87,7 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     status: 'planning',
     ciState: null,
     fixReason: null,
+    obsolescence: null,
     statusCategory: 'todo',
     priority: 'medium',
     assigneeId: null,
@@ -369,5 +370,40 @@ describe('the lifted clone', () => {
     const inert = document.querySelector<HTMLElement>('[data-plan-footer-inert]')!;
     expect(inert.textContent).toBe('Plan · PROD-10');
     expect(screen.queryByRole('link')).toBeNull();
+  });
+});
+
+// Story MOTIR-6575 · MOTIR-6682 — a MARKED card dragged out of the done category.
+describe('the refused drag — 409 MARKED_CARD_CANNOT_REOPEN (MOTIR-6682)', () => {
+  it('returns the card and opens the mark’s one line UNDER it, announced — no toast', async () => {
+    stubFetch({
+      status: 409,
+      body: {
+        code: 'MARKED_CARD_CANNOT_REOPEN',
+        error: 'marked',
+        key: 'PROD-4',
+        mark: 'outdated',
+      },
+    });
+    await renderBoard();
+    await dragOnto('w4', 'c2');
+
+    expect(toastSpy).not.toHaveBeenCalled();
+    const held = document.querySelector<HTMLElement>('[data-board-held]')!;
+    expect(held.textContent).toContain(
+      'This item is marked Outdated. Clear the mark to reopen this item.',
+    );
+    expect(held.closest('[data-plan-shell]')).toBeNull();
+    expect(held.querySelector('[data-mark-door="open-item"]')!.getAttribute('href')).toBe(
+      '/items/PROD-4#obsolescence-field',
+    );
+    // Sprung back into its own column, beside the card it left.
+    expect(columnOf('PROD-4')).toBe(columnOf('PROD-1'));
+    expect(screen.getByTestId('board-held-announcement').textContent).toBe(
+      'PROD-4 returned. This item is marked Outdated. Clear the mark to reopen this item.',
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.querySelector('[data-board-held]')).toBeNull();
   });
 });

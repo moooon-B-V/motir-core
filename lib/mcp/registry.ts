@@ -51,6 +51,12 @@ import { TRANSITION_STATUS_TOOL_NAME, registerTransitionStatus } from './tools/t
 import { ADD_COMMENT_TOOL_NAME, registerAddComment } from './tools/addComment';
 import { EDIT_COMMENT_TOOL_NAME, registerEditComment } from './tools/editComment';
 import { DELETE_COMMENT_TOOL_NAME, registerDeleteComment } from './tools/deleteComment';
+import {
+  ADD_WORK_ITEM_TODO_TOOL_NAME,
+  LIST_WORK_ITEM_TODOS_TOOL_NAME,
+  SET_WORK_ITEM_TODO_DONE_TOOL_NAME,
+  registerWorkItemTodos,
+} from './tools/workItemTodos';
 import { ADD_LESSON_TOOL_NAME, registerAddLesson } from './tools/addLesson';
 import { SEARCH_LESSONS_TOOL_NAME, registerSearchLessons } from './tools/searchLessons';
 import { REINFORCE_LESSON_TOOL_NAME, registerReinforceLesson } from './tools/reinforceLesson';
@@ -160,6 +166,9 @@ export const MCP_TOOL_NAMES = [
   ADD_COMMENT_TOOL_NAME,
   EDIT_COMMENT_TOOL_NAME,
   DELETE_COMMENT_TOOL_NAME,
+  LIST_WORK_ITEM_TODOS_TOOL_NAME,
+  ADD_WORK_ITEM_TODO_TOOL_NAME,
+  SET_WORK_ITEM_TODO_DONE_TOOL_NAME,
   ADD_LESSON_TOOL_NAME,
   SEARCH_LESSONS_TOOL_NAME,
   REINFORCE_LESSON_TOOL_NAME,
@@ -317,6 +326,10 @@ export function registerMcpTools(
   // The author's correction doors for a comment (MOTIR-5295).
   registerEditComment(target, resolveContext);
   registerDeleteComment(target, resolveContext);
+  // A committed card's TO-DO LIST (MOTIR-6725) — read it, append a step, tick
+  // or untick one, over the shipped `workItemTodosService`. Edit, reorder and
+  // delete stay the UI's: the guide that consumes these needs none of them.
+  registerWorkItemTodos(target, resolveContext);
   registerAddLesson(target, resolveContext);
   registerSearchLessons(target, resolveContext);
   registerReinforceLesson(target, resolveContext);

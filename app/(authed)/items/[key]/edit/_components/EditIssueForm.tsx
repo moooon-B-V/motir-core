@@ -71,7 +71,16 @@ export function EditIssueForm({
   heldTransitions,
   planHold,
 }: EditIssueFormProps) {
-  const statusHeld = useStatusHeld(heldTransitions, workflow.statuses, issue.status, planHold);
+  const statusHeld = useStatusHeld(
+    heldTransitions,
+    workflow.statuses,
+    issue.status,
+    planHold,
+    // A marked card holds every non-done status (MOTIR-6676). This page draws no
+    // Obsolescence field, so the mark is the served one; the door goes to the item
+    // page's field.
+    issue.obsolescence,
+  );
   const router = useRouter();
   const t = useTranslations('issueViews');
   const tc = useTranslations('common');
@@ -192,6 +201,10 @@ export function EditIssueForm({
             // plan's line and its Review plan door.
             statusHeld.onPlanHeldRefused(res.plan);
             setStatus(issue.status);
+          } else if (res.code === 'MARKED_CARD_CANNOT_REOPEN' && res.mark) {
+            // Marked after render (MOTIR-6676): the same, with the mark's line.
+            statusHeld.onMarkRefused(res.mark);
+            setStatus(issue.status);
           } else if (res.field === 'status') setStatusError(res.error);
           else toast({ variant: 'error', title: res.error });
           return;
@@ -281,6 +294,7 @@ export function EditIssueForm({
             itemKey={issue.identifier}
             lines={statusHeld.lines}
             plan={statusHeld.plan}
+            mark={statusHeld.mark}
           />
         </div>
 

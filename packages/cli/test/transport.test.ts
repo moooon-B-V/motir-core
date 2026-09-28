@@ -421,6 +421,38 @@ describe('the status map', () => {
     expect((error as CliError).hint).toContain('re-parent them out');
   });
 
+  it.each([
+    {
+      code: 'OBSOLESCENCE_REQUIRES_FINISHED',
+      error:
+        'MOTIR-12 is at in_progress: only a finished work item can be marked outdated or ' +
+        'deprecated. A work item nobody will finish is archived, not marked.',
+      item: { key: 'MOTIR-12', statusKey: 'in_progress', statusCategory: 'in_progress' },
+    },
+    {
+      code: 'MARKED_CARD_CANNOT_REOPEN',
+      error: 'MOTIR-12 is marked deprecated: clear the mark to reopen this item.',
+      mark: { key: 'MOTIR-12', obsolescence: 'deprecated', toStatusKey: 'todo' },
+    },
+  ])(
+    'a 422 `$code` — the finished-card refusals (MOTIR-6673) — reads as the server’s sentence, its additive payload accepted',
+    async (body) => {
+      // The envelope carries an ADDITIVE payload (`item` / `mark`) beside `code` and
+      // `error`. The CLI's envelope reader must accept it rather than fall back to the
+      // no-envelope path (MOTIR-6180 is the shape not to repeat: a client that
+      // rejects an additive field breaks the day the server adds one).
+      stub.queue({ status: 422, body });
+
+      const error = await transport()
+        .request('getProject', { path: { projectKey: 'MOTIR' } })
+        .catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(CliError);
+      expect((error as CliError).message).toBe(body.error);
+      expect((error as CliError).hint).toBeUndefined();
+    },
+  );
+
   it('a 4xx with NO envelope still produces a legible error', async () => {
     stub.queue({ status: 409, raw: '<html>nope</html>' });
 

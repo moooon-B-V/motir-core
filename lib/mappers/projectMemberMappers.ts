@@ -1,5 +1,5 @@
 import type { Project } from '@/generated/prisma/client';
-import { accessModeOf, levelForMode } from '@/lib/projects/accessMode';
+import { levelForMode } from '@/lib/projects/accessMode';
 import type { ProjectMembershipWithUser } from '@/lib/repositories/projectMembershipRepository';
 import type { MembershipWithUser } from '@/lib/repositories/workspaceMembershipRepository';
 import type {
@@ -36,7 +36,7 @@ export function toAccessLossPersonDTO(row: MembershipWithUser): AccessLossPerson
 export function toProjectAccessDTO(project: Project): ProjectAccessDTO {
   return {
     key: project.identifier,
-    accessMode: accessModeOf(project),
-    accessLevel: levelForMode(accessModeOf(project)),
+    accessMode: project.accessMode,
+    accessLevel: levelForMode(project.accessMode),
   };
 }

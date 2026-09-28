@@ -150,12 +150,14 @@ describe('project.accessLevel — default', () => {
         name: 'Private',
         slug: 'priv',
         identifier: 'PRV',
+        // legacy-access-level: this case pins the legacy column's own value set.
         accessLevel: 'private',
       },
     });
     expect(priv.accessLevel).toBe('private');
     const updated = await adminDb.project.update({
       where: { id: priv.id },
+      // legacy-access-level: this case pins the legacy column's own value set.
       data: { accessLevel: 'limited' },
     });
     expect(updated.accessLevel).toBe('limited');

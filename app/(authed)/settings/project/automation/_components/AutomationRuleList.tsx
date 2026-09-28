@@ -238,7 +238,9 @@ function LastRun({ rule, auto }: { rule: AutomationRuleSummaryDto; auto: boolean
         ? t('row.planHeldAgo', { time })
         : lastRun.status === 'org_closing'
           ? t('row.orgClosingAgo', { time })
-          : t('row.noActionsAgo', { time })}
+          : lastRun.status === 'held_by_mark'
+            ? t('row.heldByMarkAgo', { time })
+            : t('row.noActionsAgo', { time })}
     </span>
   );
 }

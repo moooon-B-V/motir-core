@@ -193,6 +193,7 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     planHold: null,
     ciState: null,
     fixReason: null,
+    obsolescence: null,
     statusCategory: 'in_progress',
     ...over,
   };
@@ -265,6 +266,8 @@ const QV: QuickViewData = {
   statusLabel: 'In Review',
   statusCategory: 'in_progress',
   fixReason: 'conflicted',
+  obsolescence: null,
+  obsolescenceNoteMd: null,
   descriptionMd: null,
   explanationMd: null,
   type: null,

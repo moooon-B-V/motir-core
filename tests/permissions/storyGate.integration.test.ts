@@ -18,6 +18,7 @@ import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { setWorkspaceRoleFor } from '../helpers/workspaceRoleFixtures';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // THE STORY TEST GATE for MOTIR-2256 (Subtask MOTIR-2302) — the SEAM half, against
 // real Postgres.
@@ -108,7 +109,7 @@ async function scenario(slug: string): Promise<Scenario> {
   const memberCtx = await actor('member', 'member');
   const outsiderCtx = await actor('outsider');
 
-  await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'private' } });
+  await setProjectAccess(adminDb, project.id, 'members');
 
   const board = await adminDb.board.findFirstOrThrow({ where: { projectId: project.id } });
   const column = await adminDb.boardColumn.findFirstOrThrow({
@@ -247,10 +248,10 @@ describe.each(DOMAIN_WRITES)('the $domain domain, end to end', ({ domain, key, w
   });
 
   it('a WORKSPACE OWNER passes on every access level — the always-pass rail', async () => {
-    for (const level of ['open', 'limited', 'private'] as const) {
-      const s = await scenario(`rail-${domain.replace(/\W/g, '')}-${level}`);
-      await adminDb.project.update({ where: { id: s.projectId }, data: { accessLevel: level } });
-      await expect(write(s, s.ownerCtx), `${domain} on a ${level} project`).resolves.toBeDefined();
+    for (const mode of ['workspace', 'members'] as const) {
+      const s = await scenario(`rail-${domain.replace(/\W/g, '')}-${mode}`);
+      await setProjectAccess(adminDb, s.projectId, mode);
+      await expect(write(s, s.ownerCtx), `${domain} on a ${mode} project`).resolves.toBeDefined();
     }
   });
 });

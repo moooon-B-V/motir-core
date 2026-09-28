@@ -103,7 +103,7 @@ describe('access gating — the membership-direction asymmetry (6.10.2 §5)', ()
     await workspacesService.addMember({ userId: member.id, workspaceId: w2.id });
 
     // Leave w1 (w1 still has the owner, so this isn't the last-member case).
-    await workspacesService.removeMember({ userId: member.id, workspaceId: w1.id });
+    await workspacesService.leaveWorkspace({ userId: member.id, workspaceId: w1.id });
 
     // The org membership is untouched (leaving a workspace ≠ leaving the org).
     expect(

@@ -119,6 +119,7 @@ function row(over: Partial<IssueRowData> & { identifier: string }): IssueRowData
     status: 'todo',
     ciState: null,
     fixReason: null,
+    obsolescence: null,
     statusLabel: 'To Do',
     statusCategory: 'todo',
     assigneeId: null,
@@ -241,6 +242,45 @@ describe('Inline row edits (Subtask 2.5.5)', () => {
     expect(screen.getByRole('button', { name: 'Edit Status' }).textContent).toContain('To Do');
 
     // Esc closes it.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('status-held-notice')).toBeNull();
+  });
+
+  it('a MARKED card’s reopen reverts and shows the mark’s one line ON the status cell, with Open item — not a toast (MOTIR-6682)', async () => {
+    statusSpy.mockResolvedValue({
+      ok: false,
+      error: 'marked',
+      field: 'status',
+      code: 'MARKED_CARD_CANNOT_REOPEN',
+      mark: 'deprecated',
+    });
+    renderTable([
+      row({
+        identifier: 'PROD-1',
+        id: 'wi_1',
+        status: 'done',
+        statusLabel: 'Done',
+        statusCategory: 'done',
+        obsolescence: 'deprecated',
+      }),
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Status' }));
+    fireEvent.click(screen.getByRole('option', { name: 'To Do' }));
+    await act(async () => {});
+
+    expect(toastSpy).not.toHaveBeenCalled();
+    const notice = screen.getByTestId('status-held-notice');
+    expect(notice.closest('[data-list-held]')).toBeTruthy();
+    expect(notice.textContent).toContain(
+      'This item is marked Deprecated. Clear the mark to reopen this item.',
+    );
+    expect(screen.getByRole('link', { name: 'Open item' }).getAttribute('href')).toBe(
+      '/items/PROD-1#obsolescence-field',
+    );
+    // Reverted: the cell reads its old status again.
+    expect(screen.getByRole('button', { name: 'Edit Status' }).textContent).toContain('Done');
+
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByTestId('status-held-notice')).toBeNull();
   });

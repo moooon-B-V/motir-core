@@ -1,5 +1,4 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { accessModeOf } from '@/lib/projects/accessMode';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -54,7 +53,7 @@ describe('getQuickView().archived — the peek payload carries the archived stat
     const peek = await workItemsService.getQuickView(
       s.project.id,
       item.identifier,
-      accessModeOf(s.project),
+      s.project.accessMode,
       s.ctx,
       'en',
     );
@@ -73,7 +72,7 @@ describe('getQuickView().archived — the peek payload carries the archived stat
     const peek = await workItemsService.getQuickView(
       s.project.id,
       item.identifier,
-      accessModeOf(s.project),
+      s.project.accessMode,
       s.ctx,
       'en',
     );
@@ -102,7 +101,7 @@ describe('getQuickView().archived — the peek payload carries the archived stat
     const peek = await workItemsService.getQuickView(
       s.project.id,
       item.identifier,
-      accessModeOf(s.project),
+      s.project.accessMode,
       s.ctx,
       'en',
     );

@@ -10,7 +10,9 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { scannedTestCount, testsRidingTheDefaultTimeout } from '../helpers/timeoutBudget';
 import type { ProjectSquareCardDto } from '@/lib/dto/projectSquare';
+import type { ProjectAccessMode } from '@/generated/prisma/client';
 import { runAsCloudBuild } from '../helpers/cloudBuild';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // This suite asserts what the public surface SERVES, which is a CLOUD build
 // (MOTIR-4034): off-cloud every `app/api/public/*` route is an absent capability.
@@ -57,7 +59,7 @@ async function makePublic(
   await adminDb.project.update({
     where: { id: projectId },
     data: {
-      accessLevel: 'public',
+      ...projectAccessData('public'),
       ...(pins.madePublicAt !== undefined ? { madePublicAt: pins.madePublicAt } : {}),
       ...(pins.createdAt !== undefined ? { createdAt: pins.createdAt } : {}),
     },
@@ -73,7 +75,7 @@ async function makePublic(
 async function makeProject(opts: {
   name: string;
   identifier: string;
-  access?: 'public' | 'open' | 'limited' | 'private';
+  access?: ProjectAccessMode;
   overview?: string;
 }): Promise<WorkItemFx> {
   const fx = await makeWorkItemFixture({ identifier: opts.identifier });
@@ -81,7 +83,7 @@ async function makeProject(opts: {
     where: { id: fx.projectId },
     data: {
       name: opts.name,
-      accessLevel: opts.access ?? 'open',
+      ...projectAccessData(opts.access ?? 'workspace'),
       ...(opts.overview !== undefined ? { publicOverviewMd: opts.overview } : {}),
     },
   });
@@ -171,9 +173,9 @@ describe('Project square · Guarantee 1 — public-only, cross-org, fully public
       // two public, plus one each of the three non-public levels.
       await makeProject({ name: 'Alpha', identifier: 'PUA', access: 'public' });
       await makeProject({ name: 'Bravo', identifier: 'PUB', access: 'public' });
-      await makeProject({ name: 'Charlie', identifier: 'OPN', access: 'open' });
-      await makeProject({ name: 'Delta', identifier: 'LIM', access: 'limited' });
-      await makeProject({ name: 'Echo', identifier: 'PRV', access: 'private' });
+      await makeProject({ name: 'Charlie', identifier: 'OPN', access: 'workspace' });
+      await makeProject({ name: 'Delta', identifier: 'LIM', access: 'members' });
+      await makeProject({ name: 'Echo', identifier: 'PRV', access: 'members' });
 
       const page = await projectSquareService.listDirectory();
       const ids = page.items.map((c) => c.identifier).sort();
@@ -226,7 +228,7 @@ describe('Project square · Guarantee 1 — public-only, cross-org, fully public
     async () => {
       await makeProject({ name: 'Open Source One', identifier: 'OS1', access: 'public' });
       await makeProject({ name: 'Open Source Two', identifier: 'OS2', access: 'public' });
-      await makeProject({ name: 'Closed', identifier: 'CLS', access: 'limited' });
+      await makeProject({ name: 'Closed', identifier: 'CLS', access: 'members' });
 
       // The route has NO getSession() call — a logged-out visitor / crawler reads
       // it. A bare Request with no cookies must succeed (no account gate to
@@ -248,7 +250,7 @@ describe('Project square · Guarantee 1 — public-only, cross-org, fully public
     { timeout: DB_TEST_TIMEOUT_MS },
     async () => {
       // Only non-public projects exist.
-      await makeProject({ name: 'Hidden', identifier: 'HID', access: 'private' });
+      await makeProject({ name: 'Hidden', identifier: 'HID', access: 'members' });
 
       const page = await projectSquareService.listDirectory();
       expect(page.items).toEqual([]);
@@ -328,7 +330,7 @@ describe('Project square · Guarantee 3 — search + category + rank compose, sa
       const nonPublic = await makeProject({
         name: 'Kanban Hidden',
         identifier: 'KNP',
-        access: 'limited',
+        access: 'members',
       });
       await tagProject(nonPublic.projectId, 'ai-ml', 'AI & Machine Learning'); // matches name + tag, NOT public
 

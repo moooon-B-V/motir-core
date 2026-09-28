@@ -42,6 +42,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Heavy per-test setup (credential accounts hashed, real sign-in, and the
 // pagination test archives a full page-plus of items via the service) — generous
@@ -246,7 +247,7 @@ test('Story 2.9: a non-editor (project viewer) sees the archived view + item but
   const viewer = await makeUser('e2e-archive-viewer@example.com', 'Val Viewer');
   await workspacesService.addMember({ userId: viewer.id, workspaceId: t.workspaceId });
   await grantProjectRole(viewer.id, t, 'viewer');
-  await db.project.update({ where: { id: t.projectId }, data: { accessLevel: 'private' } });
+  await setProjectAccess(db, t.projectId, 'members');
   await pinActiveProject(viewer.id, t);
 
   await signIn(page, 'e2e-archive-viewer@example.com', PWD);

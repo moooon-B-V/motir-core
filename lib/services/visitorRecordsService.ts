@@ -4,7 +4,6 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { ProjectVisitorsPageDTO, VisitorConsentDTO } from '@/lib/dto/visitors';
 import { toProjectVisitorDTO } from '@/lib/mappers/visitorMappers';
-import { accessModeOf } from '@/lib/projects/accessMode';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { resolveProjectByKeyWithAliasInTx } from '@/lib/projects/resolveByKey';
 import type { ProjectVisitorCursor } from '@/lib/repositories/projectVisitorRepository';
@@ -158,7 +157,7 @@ export const visitorRecordsService = {
         'project:manage_access',
         tx,
       );
-      if (accessModeOf(project) !== 'public') {
+      if (project.accessMode !== 'public') {
         throw new PermissionDeniedError(project.id, 'project:manage_access');
       }
       // In sequence: both reads share the one transaction's connection.

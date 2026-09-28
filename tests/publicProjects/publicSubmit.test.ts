@@ -19,6 +19,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateRateLimitCounters } from '../helpers/db';
 import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../helpers/rateLimitWindow';
 import { pinSharedRateLimitStoreDeadline } from '../helpers/rateLimitStore';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Service-layer tests for Story 6.12 · Subtask 6.12.5 — the public submit-to-
 // triage path + the duplicate-detection pre-check. Real Postgres, no DB mocks;
@@ -77,7 +78,7 @@ afterAll(async () => {
  *  same shortcut `project-access-service.test.ts` uses). */
 async function makePublicProjectFixture(name = 'Acme'): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name });
-  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, fx.projectId, 'public');
   return fx;
 }
 

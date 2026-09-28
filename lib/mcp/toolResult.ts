@@ -14,6 +14,8 @@ import {
   TypeNotAllowedOnKindError,
   DifficultyNotAllowedOnKindError,
   InvalidObsolescenceError,
+  MarkedCardCannotReopenError,
+  ObsolescenceRequiresFinishedError,
   UnknownStatusError,
   ContainerRepoSetNotWritableError,
   UnknownProjectRepoRefError,
@@ -96,6 +98,14 @@ import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { AttachmentError } from '@/lib/blob/errors';
 import { DesignEvidenceError } from '@/lib/designEvidence/errors';
 import { TestInstructionsError } from '@/lib/testInstructions/errors';
+import {
+  EmptyTodoTextError,
+  TodoCommandTooLongError,
+  TodoNotesTooLongError,
+  TodoReorderConflictError,
+  TodoTextTooLongError,
+  WorkItemTodoNotFoundError,
+} from '@/lib/workItemTodos/errors';
 import { AcceptanceEvidenceError } from '@/lib/acceptanceEvidence/errors';
 import {
   GithubNotConnectedError,
@@ -279,6 +289,11 @@ export function toToolError(err: unknown): CallToolResult {
     // and that deciding the plan (or withdrawing the proposal naming it) is the
     // way out — so an agent reports the plan instead of retrying the move.
     err instanceof PlanTargetHeldError ||
+    // A MARKED card stays finished (MOTIR-6672 · MOTIR-6673). The message names the
+    // card and its mark and says to clear the mark first — on `transition_status`,
+    // and on `create_work_item` / `update_work_item` / `move_to_parent` for a child
+    // under a marked parent — so an agent reports it rather than retrying.
+    err instanceof MarkedCardCannotReopenError ||
     err instanceof IllegalParentTypeError ||
     err instanceof DepthLimitExceededError ||
     // Re-parent cycle (move_to_parent, MOTIR-1017): the DB cycle trigger's
@@ -301,6 +316,10 @@ export function toToolError(err: unknown): CallToolResult {
     // that bypasses it (a direct runner call, a looser future schema) on a typed
     // `INVALID_OBSOLESCENCE` naming the field instead of an opaque internal error.
     err instanceof InvalidObsolescenceError ||
+    // …and the FINISHED-card rule (MOTIR-6672 · MOTIR-6673): a mark set on an
+    // unfinished card. The message names the card and its status and says to
+    // archive instead — a refusal an agent acts on, never an internal error.
+    err instanceof ObsolescenceRequiresFinishedError ||
     // Target-repo validation (MOTIR-1804; project-scoped in MOTIR-1783): a
     // `targetRepo` naming a repo outside the item's PROJECT repository set on
     // create_work_item / update_work_item — a workspace-connected repo the
@@ -373,6 +392,24 @@ export function toToolError(err: unknown): CallToolResult {
   // click-path that is both or neither, and a malformed field are each fixable in
   // one hop, and an agent refused with an opaque internal error instead carries on
   // as though its instructions landed.
+  // The to-do family (MOTIR-6725) — the three to-do tools reach the shipped
+  // `workItemTodosService`, whose refusals are each the caller's to act on: a
+  // step id that is not on this card (not-found, the same for a cross-tenant
+  // id), and the store's own caps on text, notes and command. Enumerated
+  // because `lib/workItemTodos/errors.ts` has no base class. The caps' messages
+  // say what to do (split the step; move the notes to a card), which is only
+  // worth writing if the sentence reaches the agent rather than a JSON-RPC
+  // internal error.
+  if (
+    err instanceof WorkItemTodoNotFoundError ||
+    err instanceof EmptyTodoTextError ||
+    err instanceof TodoTextTooLongError ||
+    err instanceof TodoNotesTooLongError ||
+    err instanceof TodoCommandTooLongError ||
+    err instanceof TodoReorderConflictError
+  ) {
+    return toolError(err.code, err.message);
+  }
   if (err instanceof TestInstructionsError) {
     return toolError(err.code, err.message);
   }

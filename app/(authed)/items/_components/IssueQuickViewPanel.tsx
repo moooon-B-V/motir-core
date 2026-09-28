@@ -47,6 +47,9 @@ import { PriorityPicker } from '@/components/issues/PriorityPicker';
 import { WorkItemTypePicker } from '@/components/issues/WorkItemTypePicker';
 import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
 import { DifficultyIndicator, DifficultyPicker } from '@/components/issues/DifficultyPicker';
+import { ObsolescenceHeaderLink } from '@/components/issues/ObsolescenceBadge';
+import { ObsolescenceField } from '@/components/issues/ObsolescenceField';
+import { canCarryObsolescence } from '@/lib/issues/obsolescence';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { EditableRailField, RailStaleNotice, useQuickViewRailEdit } from './QuickViewRailEdit';
@@ -81,6 +84,10 @@ import {
   QuickViewRail,
   QuickViewRailField,
 } from '@/components/workItems/QuickViewSurface';
+
+/** The peek's own anchor for the header badge — distinct from the item page's,
+ *  because the peek can open over an item page that has its own field. */
+const OBSOLESCENCE_PEEK_ANCHOR = 'obsolescence-field-peek';
 
 // The bot/person glyph for the Executor rail row (mirrors the detail rail's
 // ExecutorIndicator, condensed) — a faint value glyph, not a coloured chip.
@@ -336,6 +343,7 @@ function Sk({ className }: { className?: string }) {
 export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   const t = useTranslations('issueViews');
   const tl = useTranslations('labels');
+  const tob = useTranslations('workItems.obsolescence');
   const locale = useLocale() as Locale;
   // The expanded rail's empty custom fields hide behind a read-only "Show more
   // fields (N)" disclosure (8.8.8, mirroring the detail rail 5.3.7).
@@ -377,6 +385,9 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
     edit.effective?.status ?? ready?.status,
     // …and the undecided PLAN holding it at Planning (MOTIR-6267).
     ready?.planHold,
+    // …and the MARK, as the rail shows it now (MOTIR-6676) — a clear in the
+    // Obsolescence row lifts the hold with no re-read.
+    edit.effective ? edit.effective.obsolescence : ready?.obsolescence,
   );
   const labelEdit = useLabelEditing({
     workItemId: ready?.id ?? '',
@@ -655,6 +666,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             {data.identifier}
           </Link>
         )}
+        {/* THE OBSOLESCENCE BADGE (MOTIR-6674) right after the key — a pointer to
+            the rail's field (panel 2). Nothing on an unmarked item or a proposal. */}
+        {!proposal && view.obsolescence ? (
+          <ObsolescenceHeaderLink mark={view.obsolescence} targetId={OBSOLESCENCE_PEEK_ANCHOR} />
+        ) : null}
         {/* WHAT THE PLAN WILL DO, in the slot `/items` puts the status in — a
             status answers *what state is this work item in*, and on a review
             surface the question is *what will the plan do to it* (Part XIV §4).
@@ -1017,6 +1033,9 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                         // The rail reverts the optimistic value; the plan's line
                         // says why, with its Review plan door (MOTIR-6267).
                         statusHeld.onPlanHeldRefused(res.plan);
+                      } else if (res.code === 'MARKED_CARD_CANNOT_REOPEN' && res.mark) {
+                        // Marked after render (MOTIR-6676): the mark's line says why.
+                        statusHeld.onMarkRefused(res.mark);
                       }
                       return res;
                     },
@@ -1034,12 +1053,14 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           </EditableRailField>
           {/* The held message under the status field (MOTIR-5528; design panel 13
               of quick-view.mock.html) — visible without opening the picker. */}
-          {statusHeld.lines.length > 0 || statusHeld.plan ? (
+          {statusHeld.lines.length > 0 || statusHeld.plan || statusHeld.mark ? (
             <div className="px-(--spacing-control-x)">
               <StatusHeldNotice
                 itemKey={view.identifier}
                 lines={statusHeld.lines}
                 plan={statusHeld.plan}
+                mark={statusHeld.mark}
+                markFieldId={OBSOLESCENCE_PEEK_ANCHOR}
               />
             </div>
           ) : null}
@@ -1172,6 +1193,44 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               </EditableRailField>
             </>
           ) : null}
+
+          {/* Obsolescence (Story MOTIR-6575 · MOTIR-6674) — the item page's field in
+              the 300px rail (core-fields--obsolescence.mock.html panel 1c), on EVERY
+              kind, so outside the leaf-only branch. Both marks lock on a card outside
+              the done category; a refusal lands on this row, never as a toast. */}
+          <div id={OBSOLESCENCE_PEEK_ANCHOR} tabIndex={-1} className="focus:outline-none">
+            <EditableRailField
+              label={tob('label')}
+              fieldKey="obsolescence"
+              marker={markFor('obsolescence')}
+              edit={edit}
+              control={
+                <ObsolescenceField
+                  value={view.obsolescence}
+                  noteMd={view.obsolescenceNoteMd}
+                  editing
+                  locked={!canCarryObsolescence(view.statusCategory)}
+                  pending={edit.pending === 'obsolescence'}
+                  onMark={(obsolescence) =>
+                    void edit.commit('obsolescence', { obsolescence }, { obsolescence })
+                  }
+                  onNote={(obsolescenceNoteMd) =>
+                    void edit.commit('obsolescence', { obsolescenceNoteMd }, { obsolescenceNoteMd })
+                  }
+                  onCancelNote={edit.close}
+                />
+              }
+            >
+              <ObsolescenceField
+                value={view.obsolescence}
+                noteMd={view.obsolescenceNoteMd}
+                editing={false}
+                locked={false}
+                onMark={() => undefined}
+                onNote={() => undefined}
+              />
+            </EditableRailField>
+          </div>
 
           <EditableRailField
             label={t('priority')}

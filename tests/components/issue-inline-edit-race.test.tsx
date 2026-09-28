@@ -125,6 +125,7 @@ function toRow(
     status: dto.status,
     ciState: null,
     fixReason: null,
+    obsolescence: null,
     statusLabel: meta?.label ?? dto.status,
     statusCategory: meta?.category ?? null,
     assigneeId: dto.assigneeId,

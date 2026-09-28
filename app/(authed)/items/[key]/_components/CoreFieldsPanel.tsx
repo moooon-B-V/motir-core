@@ -42,6 +42,10 @@ import { WorkItemTypePicker } from '@/components/issues/WorkItemTypePicker';
 import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
 import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
 import { DifficultyIndicator, DifficultyPicker } from '@/components/issues/DifficultyPicker';
+import { OBSOLESCENCE_FIELD_ANCHOR } from '@/components/issues/ObsolescenceBadge';
+import { ObsolescenceField } from '@/components/issues/ObsolescenceField';
+import { useApplyOptimisticMark } from './OptimisticMarkProvider';
+import { canCarryObsolescence } from '@/lib/issues/obsolescence';
 import { EstimateBadge } from '@/components/issues/EstimateBadge';
 import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
 import { ISSUE_TYPE_META } from '@/lib/issues/issueTypes';
@@ -148,6 +152,7 @@ type EditableKey =
   | 'workItemType'
   | 'executor'
   | 'difficulty'
+  | 'obsolescence'
   | 'priority'
   | 'assignee'
   | 'parent'
@@ -199,6 +204,7 @@ export function CoreFieldsPanel({
   const router = useRouter();
   const t = useTranslations('issueViews');
   const tl = useTranslations('labels');
+  const tob = useTranslations('workItems.obsolescence');
   const locale = useLocale() as Locale;
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -253,7 +259,15 @@ export function CoreFieldsPanel({
   const eff = { ...item, status: pageStatus, ...overrides };
   // The held moves, filtered by the status the card shows NOW — an approval that
   // repaints the page in place moves it without going through this panel.
-  const statusHeld = useStatusHeld(heldTransitions, workflow.statuses, eff.status, planHold);
+  const statusHeld = useStatusHeld(
+    heldTransitions,
+    workflow.statuses,
+    eff.status,
+    planHold,
+    // …and the mark, as the rail shows it NOW (MOTIR-6676): clearing it in the
+    // Obsolescence field below lifts the hold with no reload.
+    eff.obsolescence,
+  );
   const effParent = parentOverride !== undefined ? parentOverride : parent;
 
   // THE FOLDER FIELD (Story MOTIR-5309 · MOTIR-5377). Its value is the page's
@@ -368,6 +382,41 @@ export function CoreFieldsPanel({
     });
   }
 
+  // THE OBSOLESCENCE WRITE (Story MOTIR-6575 · MOTIR-6674). The patch path's rule
+  // (optimistic, the 200 is the confirmation, a stale conflict re-reads) with two
+  // differences: the editor STAYS OPEN after a mark press so the note can follow,
+  // and the finished-card refusal is drawn IN the field rather than as a toast.
+  const [obsolescenceRefusal, setObsolescenceRefusal] = useState<string | null>(null);
+  const applyOptimisticMark = useApplyOptimisticMark();
+  function writeObsolescence(
+    input: Pick<UpdateIssueInput, 'obsolescence' | 'obsolescenceNoteMd'>,
+    opts: { close?: boolean } = {},
+  ) {
+    if (opts.close) setEditing(null);
+    setObsolescenceRefusal(null);
+    setOverrides((o) => ({ ...o, ...input }));
+    startTransition(async () => {
+      const res = await updateIssueAction({ id: item.id, expectedUpdatedAt: updatedAt, ...input });
+      if (res.ok) {
+        setUpdatedAt(res.updatedAt);
+        bumpActivity(item.id);
+        // The header badge is another surface: tell it what the 200 confirmed,
+        // never by a refresh (the inline-edit rule above).
+        if ('obsolescence' in input) applyOptimisticMark(input.obsolescence ?? null);
+      } else if (res.stale) {
+        revert(Object.keys(input));
+        toast({ variant: 'error', title: t('changedElsewhereRefreshing') });
+        router.refresh();
+      } else if (res.code === 'OBSOLESCENCE_REQUIRES_FINISHED') {
+        revert(Object.keys(input));
+        setObsolescenceRefusal(res.error);
+      } else {
+        revert(Object.keys(input));
+        toast({ variant: 'error', title: res.error });
+      }
+    });
+  }
+
   function changeStatus(toStatusKey: string) {
     setEditing(null);
     if (toStatusKey === eff.status) return;
@@ -387,6 +436,11 @@ export function CoreFieldsPanel({
         // plan's line with its Review plan door — never a toast.
         revert(['status']);
         statusHeld.onPlanHeldRefused(res.plan);
+      } else if (res.code === 'MARKED_CARD_CANNOT_REOPEN' && res.mark) {
+        // The card was marked after render (MOTIR-6676): revert, and draw the
+        // mark's line with its Clear the mark door — never a toast.
+        revert(['status']);
+        statusHeld.onMarkRefused(res.mark);
       } else {
         revert(['status']);
         toast({ variant: 'error', title: res.error });
@@ -469,6 +523,7 @@ export function CoreFieldsPanel({
             itemKey={item.identifier}
             lines={statusHeld.lines}
             plan={statusHeld.plan}
+            mark={statusHeld.mark}
           />
         </div>
       </FieldCard>
@@ -607,6 +662,36 @@ export function CoreFieldsPanel({
           </FieldCard>
         </>
       ) : null}
+
+      {/* Obsolescence (Story MOTIR-6575 · MOTIR-6674), per
+          design/work-items/core-fields--obsolescence.mock.html — directly below
+          Difficulty and OUTSIDE the leaf-only branch: every kind may carry the
+          mark. Both marks are locked on a card outside the done category
+          (`canCarryObsolescence`), decided from the status the rail already shows;
+          the server (MOTIR-6672) stays the authority. The header badge scrolls
+          here, so the card is the anchor. */}
+      <div id={OBSOLESCENCE_FIELD_ANCHOR} tabIndex={-1} className="focus:outline-none">
+        <FieldCard
+          readOnlyReason={readOnlyReason}
+          label={tob('label')}
+          editing={editing === 'obsolescence'}
+          onToggle={() => toggle('obsolescence')}
+        >
+          <ObsolescenceField
+            value={eff.obsolescence}
+            noteMd={eff.obsolescenceNoteMd}
+            editing={editing === 'obsolescence' && !readOnly}
+            locked={!canCarryObsolescence(statusMeta?.category)}
+            pending={isPending}
+            refusal={obsolescenceRefusal}
+            onMark={(obsolescence) => writeObsolescence({ obsolescence })}
+            onNote={(obsolescenceNoteMd) =>
+              writeObsolescence({ obsolescenceNoteMd }, { close: true })
+            }
+            onCancelNote={() => setEditing(null)}
+          />
+        </FieldCard>
+      </div>
 
       <FieldCard
         readOnlyReason={readOnlyReason}

@@ -67,9 +67,8 @@ import {
 /** The resolved facts the policy decides over (no IO — see projectAccessService). */
 export interface ProjectPermissionInputs {
   /**
-   * The project's ACCESS MODE (workspace / members / public) — read through
-   * `accessModeOf` (`lib/projects/accessMode.ts`), so a project the migration has
-   * not reached resolves exactly as its mapped legacy level.
+   * The project's ACCESS MODE (workspace / members / public) — the stored
+   * `project.accessMode`, NOT NULL since MOTIR-6686 and never derived.
    */
   accessMode: ProjectAccessMode;
   /**

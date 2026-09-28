@@ -23,6 +23,7 @@ import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../..
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { setWorkspaceRoleFor } from '../../helpers/workspaceRoleFixtures';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 beforeEach(async () => {
   await adminDb.$executeRawUnsafe(
@@ -91,7 +92,7 @@ describe('listFolderLevelAction', () => {
     );
     // The project is made private to its members so a workspace member who is
     // NOT on it cannot browse it.
-    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, fx.projectId, 'members');
     const outsider = await createTestUser({ email: 'level-outsider@ex.com', name: 'Outsider' });
     await workspacesService.addMember({ userId: outsider.id, workspaceId: fx.workspaceId });
     const viewer = await createTestUser({ email: 'level-viewer@ex.com', name: 'Viewer' });

@@ -359,6 +359,8 @@ describe('(5b) every `Textarea` caller in the tree is pinned by name', () => {
     'app/(authed)/items/_components/SaveFilterDialog.tsx',
     'app/(authed)/triage/_components/TriageDetail.tsx',
     'components/approvals/ApprovalGateControl.tsx',
+    // The obsolescence note (MOTIR-6674): a fixed three-row editor, per its design.
+    'components/issues/ObsolescenceField.tsx',
     'components/planning/PlanDeclineConfirm.tsx',
   ];
 

@@ -2,6 +2,7 @@ import {
   ApprovalGatePendingError,
   ContainerHasOpenChildrenError,
   IllegalTransitionError,
+  MarkedCardCannotReopenError,
   MissingArtifactEvidenceError,
   PlanTargetHeldError,
   UnknownStatusError,
@@ -56,6 +57,9 @@ export const STATUS_TRANSITION_REFUSALS = [
   // Cleared by a person deciding the plan, or withdrawing the proposal that names
   // the card, so a refusal and never a fault.
   PlanTargetHeldError,
+  // MOTIR-6672 — the card carries an obsolescence mark, and a marked card stays
+  // finished. Cleared by a person clearing the mark, so a refusal and never a fault.
+  MarkedCardCannotReopenError,
 ] as const;
 
 /** An error `applyStatusTransition` raises as a REFUSAL — see the list above. */

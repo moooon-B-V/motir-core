@@ -49,6 +49,8 @@ const DATA: QuickViewData = {
   type: 'code',
   executor: 'coding_agent',
   difficulty: null,
+  obsolescence: null,
+  obsolescenceNoteMd: null,
   assigneeName: 'Marco Ortiz',
   reporterName: 'Alice Chen',
   priority: 'medium',

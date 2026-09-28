@@ -25,7 +25,7 @@ import {
 import type { AutomationRuleWithOwner } from '@/lib/repositories/automationRuleRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { AutomationTriggerType } from '@/generated/prisma/client';
-import { PlanTargetHeldError } from '@/lib/workItems/errors';
+import { MarkedCardCannotReopenError, PlanTargetHeldError } from '@/lib/workItems/errors';
 
 // The automation EXECUTION ENGINE (Story 6.6 · Subtask 6.6.2) — events in,
 // attributed service calls out, every run audited. The heart of the story:
@@ -116,6 +116,9 @@ export interface AutomationRunSummary {
   /** Rules that met an organization scheduled for deletion and stood still
    * (MOTIR-6396). Optional for `planHeld`'s reason: an older memo has none. */
   orgClosing?: number;
+  /** Rules whose `transition` met a MARKED card and declined (MOTIR-6681). Optional
+   * for `planHeld`'s reason: an older memo has none. */
+  heldByMark?: number;
   /** Rules already run for this event (idempotency replay skips). */
   deduped: number;
 }
@@ -257,6 +260,7 @@ export const automationEngineService = {
       failed: 0,
       noActions: 0,
       planHeld: 0,
+      heldByMark: 0,
       deduped: 0,
     };
 
@@ -325,6 +329,9 @@ export const automationEngineService = {
         case 'plan_held':
           summary.planHeld = (summary.planHeld ?? 0) + 1;
           break;
+        case 'held_by_mark':
+          summary.heldByMark = (summary.heldByMark ?? 0) + 1;
+          break;
         case 'deduped':
           summary.deduped += 1;
           break;
@@ -362,7 +369,7 @@ export const automationEngineService = {
   async runRule(
     rule: AutomationRuleWithOwner,
     input: AutomationEngineEventInput,
-  ): Promise<'success' | 'failure' | 'no_actions' | 'plan_held' | 'deduped'> {
+  ): Promise<'success' | 'failure' | 'no_actions' | 'plan_held' | 'held_by_mark' | 'deduped'> {
     // (4) Idempotency — already ran this rule for this event? Skip before
     // re-executing any action (a replay must not re-apply side effects).
     // Bound (MOTIR-2815): `automation_rule_execution` is policy-gated. Unbound,
@@ -393,6 +400,7 @@ export const automationEngineService = {
     };
     let failure: string | null = null;
     let planHeld: string | null = null;
+    let markHeld: string | null = null;
     for (const action of actions) {
       try {
         await runAction(action, actionCtx);
@@ -403,6 +411,10 @@ export const automationEngineService = {
         // the auto-disable streak or emails the owner (MOTIR-6340). It still
         // stops the run, as any refused action does.
         if (err instanceof PlanTargetHeldError) planHeld = describeActionError(err);
+        // A MARKED card stays finished (MOTIR-6672 · MOTIR-6681): a rule that would
+        // reopen it did nothing wrong either, so it is recorded the same way — a
+        // no-op, never a failure, never the auto-disable streak.
+        else if (err instanceof MarkedCardCannotReopenError) markHeld = describeActionError(err);
         else failure = describeActionError(err);
         break;
       }
@@ -412,6 +424,10 @@ export const automationEngineService = {
     if (planHeld !== null) {
       await this.recordPlanHeld(rule, input, planHeld, durationMs);
       return 'plan_held';
+    }
+    if (markHeld !== null) {
+      await this.recordHeldByMark(rule, input, markHeld, durationMs);
+      return 'held_by_mark';
     }
     if (failure !== null) {
       await this.recordFailure(rule, input, failure, durationMs);
@@ -463,6 +479,23 @@ export const automationEngineService = {
    * Like `no_actions`, the failure counter is UNCHANGED and no email is sent —
    * the card was not the rule's to move, which is neither a success (the action
    * did not apply) nor a failure (nothing is wrong with the rule). */
+  /** Write a `held_by_mark` audit row (MOTIR-6681) — like `plan_held`, it leaves the
+   * failure streak untouched and emails nobody. */
+  async recordHeldByMark(
+    rule: AutomationRuleWithOwner,
+    input: AutomationEngineEventInput,
+    reason: string,
+    durationMs: number,
+  ): Promise<void> {
+    await this.writeExecution(rule, {
+      status: 'held_by_mark',
+      workItemId: input.workItemId,
+      eventId: input.eventId,
+      durationMs,
+      error: reason,
+    });
+  },
+
   async recordPlanHeld(
     rule: AutomationRuleWithOwner,
     input: AutomationEngineEventInput,
@@ -568,7 +601,7 @@ export const automationEngineService = {
   async writeExecution(
     rule: { id: string; workspaceId: string },
     data: {
-      status: 'success' | 'failure' | 'no_actions' | 'plan_held' | 'org_closing';
+      status: 'success' | 'failure' | 'no_actions' | 'plan_held' | 'org_closing' | 'held_by_mark';
       workItemId: string;
       eventId: string;
       durationMs: number;

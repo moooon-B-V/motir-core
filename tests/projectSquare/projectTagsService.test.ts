@@ -14,6 +14,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { addToProjectAs } from '../helpers/workspaceRoleFixtures';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // projectTagsService (Story 6.13 · Subtask 6.13.5) — the topic-tag model +
 // per-project tagging + the public tag-FACET read, against a REAL Postgres (the
@@ -36,7 +37,7 @@ afterAll(async () => {
 
 /** Make a project `public` so the facet read counts it. */
 async function makePublic(projectId: string): Promise<void> {
-  await adminDb.project.update({ where: { id: projectId }, data: { accessLevel: 'public' } });
+  await setProjectAccess(adminDb, projectId, 'public');
 }
 
 describe('projectTagsService.setProjectTags — per-project tagging', () => {
@@ -213,7 +214,7 @@ describe('projectTagsService.listCategories — the public tag facet', () => {
     await projectTagsService.setProjectTags(a.projectIdentifier, ['design'], a.ctx);
     expect((await projectTagsService.listCategories()).map((c) => c.slug)).toEqual(['design']);
 
-    await adminDb.project.update({ where: { id: a.projectId }, data: { accessLevel: 'open' } });
+    await setProjectAccess(adminDb, a.projectId, 'workspace');
     expect(await projectTagsService.listCategories()).toEqual([]);
   });
 });

@@ -55,14 +55,11 @@ describe('RELATIONSHIP_KINDS', () => {
     expect(relationshipLabel('replaces' as RelationshipKind)).toBe('replaces');
   });
 
-  it('the web add-link form does not offer the supersedes pair until the panel renders it', () => {
-    expect(LINK_FORM_RELATIONSHIP_KINDS.map((r) => r.kind)).toEqual([
-      'blocked_by',
-      'blocks',
-      'relates_to',
-      'duplicates',
-      'clones',
-    ]);
+  it('the web add-link form offers all seven relationships, the supersedes pair included (MOTIR-6675)', () => {
+    expect(LINK_FORM_RELATIONSHIP_KINDS.map((r) => r.kind)).toEqual(
+      RELATIONSHIP_KINDS.map((r) => r.kind),
+    );
+    expect(LINK_FORM_RELATIONSHIP_KINDS).toHaveLength(7);
   });
 });
 

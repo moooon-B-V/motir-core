@@ -1,5 +1,4 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { accessModeOf } from '@/lib/projects/accessMode';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { db } from '@/lib/db';
@@ -99,13 +98,7 @@ function signIn(s: Scenario, as?: { id: string; email: string }) {
 }
 
 function peek(s: Scenario, identifier: string, actor = s.ctx) {
-  return workItemsService.getQuickView(
-    s.project.id,
-    identifier,
-    accessModeOf(s.project),
-    actor,
-    'en',
-  );
+  return workItemsService.getQuickView(s.project.id, identifier, s.project.accessMode, actor, 'en');
 }
 
 function peekViaRoute(key: string): Promise<Response> {

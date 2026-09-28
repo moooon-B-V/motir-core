@@ -11,6 +11,7 @@ import { CircleAlert, GripVertical, Hash, Sparkles } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
 import { CiStateBadge } from '@/components/github/CiStateBadge';
+import { ObsolescenceBadge } from '@/components/issues/ObsolescenceBadge';
 import { DecisionWaitingMarker } from '@/components/approvals/DecisionWaitingMarker';
 import { ToFixTag, toFixTagId, toFixTagState } from '@/components/workItems/ToFixTag';
 import { formatDurationMinutes } from '@/lib/utils/duration';
@@ -177,6 +178,11 @@ export function BoardCardView({
           statusCategory={card.statusCategory}
           id={markerId ? toFixTagId(card.id) : undefined}
         />
+        {/* THE OBSOLESCENCE BADGE (MOTIR-6677, `board-card--obsolescence.mock.html`):
+            an ADDITIONAL pill after the exclusive slot and before the CI badge —
+            it takes no slot and hides nothing. The same Pill the item header
+            wears, so the mark reads one way everywhere. */}
+        {card.obsolescence ? <ObsolescenceBadge mark={card.obsolescence} /> : null}
         {/* THE CI BADGE (MOTIR-5474), in the slot the design gives it: an
             ADDITIONAL pill immediately after the exclusive one, never replacing
             it — so `Blocked` and the decision-waiting marker both survive beside it.

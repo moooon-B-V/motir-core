@@ -295,3 +295,95 @@ describe('EditIssueForm', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 });
+
+// MOTIR-6676 — a MARKED card's status control on the edit page, per
+// status-held-by-mark.mock.html: the edit page draws no Obsolescence field, so the
+// door is a link to the item page's.
+describe('EditIssueForm — the status control on a marked card', () => {
+  const doneWorkflow: WorkflowDto = {
+    ...workflow,
+    statuses: [
+      ...workflow.statuses,
+      {
+        id: 'st_done',
+        projectId: 'p1',
+        key: 'done',
+        label: 'Done',
+        category: 'done',
+        color: null,
+        position: 'z0',
+        isInitial: false,
+      },
+      {
+        id: 'st_cancelled',
+        projectId: 'p1',
+        key: 'cancelled',
+        label: 'Cancelled',
+        category: 'done',
+        color: null,
+        position: 'z1',
+        isInitial: false,
+      },
+    ],
+    policyMode: 'open',
+  };
+
+  it('holds every non-done status by mark, keeps Cancelled, and links Clear the mark to the item page', async () => {
+    render(
+      <ToastProvider>
+        <EditIssueForm
+          issue={{ ...issue, status: 'done', obsolescence: 'outdated' }}
+          workflow={doneWorkflow}
+          members={[]}
+        />
+      </ToastProvider>,
+    );
+    const notice = screen.getByTestId('status-held-notice');
+    expect(notice.textContent).toContain(
+      'Status can’t be reopened while this item is marked Outdated.',
+    );
+    expect(within(notice).getByRole('link', { name: 'Clear the mark' }).getAttribute('href')).toBe(
+      `/items/${issue.identifier}#obsolescence-field`,
+    );
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Status' }));
+    for (const name of ['To Do', 'In Progress']) {
+      const option = screen.getByRole('option', { name: new RegExp(name) });
+      expect(option.getAttribute('aria-disabled')).toBe('true');
+      expect(option.textContent).toContain('held by mark');
+    }
+    expect(
+      screen.getByRole('option', { name: /Cancelled/ }).getAttribute('aria-disabled'),
+    ).not.toBe('true');
+    await act(async () => {});
+  });
+
+  it('a MARKED_CARD_CANNOT_REOPEN answer puts the status back and draws the line — no toast, no field error', async () => {
+    changeStatusSpy.mockResolvedValue({
+      ok: false,
+      error: 'marked',
+      field: 'status',
+      code: 'MARKED_CARD_CANNOT_REOPEN',
+      mark: 'deprecated',
+    });
+    render(
+      <ToastProvider>
+        <EditIssueForm issue={{ ...issue, status: 'done' }} workflow={doneWorkflow} members={[]} />
+      </ToastProvider>,
+    );
+    expect(screen.queryByTestId('status-held-notice')).toBeNull();
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Status' }));
+    fireEvent.click(screen.getByRole('option', { name: 'To Do' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Status' }).textContent).toContain('Done');
+    expect(screen.getByTestId('status-held-notice').textContent).toContain(
+      'Marked Deprecated elsewhere — this move was not made.',
+    );
+    expect(screen.queryByText('marked')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});

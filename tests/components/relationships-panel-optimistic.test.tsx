@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type {
   ReadinessVerdictDto,
@@ -109,6 +109,8 @@ const EMPTY = {
   relatesTo: [] as RelationshipLinkDto[],
   duplicates: [] as RelationshipLinkDto[],
   clones: [] as RelationshipLinkDto[],
+  supersedes: [] as RelationshipLinkDto[],
+  supersededBy: [] as RelationshipLinkDto[],
   currentStatus: 'todo',
   workflow,
   editable: true,
@@ -361,5 +363,54 @@ describe('MOTIR-4496 · two writes in flight resolve OUT OF ORDER (the seq guard
     await act(async () => {
       refreshLanded.resolve();
     });
+  });
+});
+
+describe('MOTIR-6675 · the supersedes pair through the add-link control', () => {
+  it('offers all seven relationships, and a Superseded-by add lands under Superseded by', async () => {
+    const write = deferred<{ ok: true; linkId: string; readiness: ReadinessVerdictDto }>();
+    createLinkAction.mockReturnValue(write.promise);
+    render(<RelationshipsPanel {...EMPTY} readiness={READY} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Link work item/ }));
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Relationship' }));
+    const offered = (await screen.findAllByRole('option')).map((o) => o.textContent);
+    expect(offered).toEqual([
+      'Blocked by',
+      'Blocks',
+      'Relates to',
+      'Duplicates',
+      'Clones',
+      'Supersedes',
+      'Superseded by',
+    ]);
+    fireEvent.click(screen.getByRole('option', { name: 'Superseded by' }));
+
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Work item to link' }));
+    fireEvent.change(
+      await screen.findByRole('combobox', { name: /Search by identifier or title/ }),
+      {
+        target: { value: 'Upstream' },
+      },
+    );
+    fireEvent.click(await screen.findByRole('option', { name: /Upstream/ }));
+    const add = screen.getByRole('button', { name: 'Add' }) as HTMLButtonElement;
+    await waitFor(() => expect(add.disabled).toBe(false));
+    fireEvent.click(add);
+
+    await waitFor(() =>
+      expect(createLinkAction).toHaveBeenCalledWith(
+        expect.objectContaining({ relationship: 'superseded_by', targetId: 'b' }),
+      ),
+    );
+    // The optimistic row sits in the Superseded-by group, before the server answers.
+    const group = document.querySelector<HTMLElement>('[data-relationship-group="superseded_by"]')!;
+    expect(within(group).getByRole('link', { name: /Upstream/ })).toBeTruthy();
+    expect(document.querySelector('[data-relationship-group="supersedes"]')).toBeNull();
+
+    await act(async () => {
+      write.resolve({ ok: true, linkId: 'link-s', readiness: READY });
+    });
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
   });
 });

@@ -223,6 +223,9 @@ function ExecutionRow({ execution }: { execution: AutomationExecutionDto }) {
         {execution.status === 'org_closing' ? (
           <span className="font-sans text-xs text-(--el-text-muted)">{t('orgClosingNote')}</span>
         ) : null}
+        {execution.status === 'held_by_mark' ? (
+          <span className="font-sans text-xs text-(--el-text-muted)">{t('heldByMarkNote')}</span>
+        ) : null}
 
         <span className="ml-auto flex items-center gap-3">
           {execution.durationMs != null ? (

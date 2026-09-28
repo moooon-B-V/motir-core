@@ -3,6 +3,7 @@ import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type {
   WorkItemKindDto,
   WorkItemListItemDto,
+  WorkItemObsolescenceDto,
   WorkItemPriorityDto,
   WorkItemTreeNodeDto,
   WorkItemTypeDto,
@@ -58,6 +59,9 @@ export interface IssueRowData {
    *  the To fix tag's GLYPH form in the Status cell, and only off the `done`
    *  category — `toFixTagState`, shared with the board card (MOTIR-6610). */
   fixReason: WorkItemFixReasonDto | null;
+  /** The OBSOLESCENCE mark (MOTIR-6677) — the status cell draws its GLYPH after the
+   *  status pill. Nothing hides, dims or re-sorts a marked row. */
+  obsolescence: WorkItemObsolescenceDto | null;
   /** The raw assignee userId (or null) — what the inline AssigneePicker edits +
    *  `updateIssueAction` commits (2.5.5); `assigneeName` is its display. */
   assigneeId: string | null;
@@ -179,6 +183,7 @@ function shapeRowData(
     statusCategory: status?.category ?? null,
     ciState: item.ciState,
     fixReason: item.fixReason,
+    obsolescence: item.obsolescence,
     assigneeId: item.assigneeId,
     assigneeName: item.assigneeId ? (nameById.get(item.assigneeId) ?? null) : null,
     updatedAt: item.updatedAt,

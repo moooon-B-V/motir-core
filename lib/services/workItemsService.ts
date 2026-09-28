@@ -1,5 +1,4 @@
 import { isWorkspaceOrgClosing } from '@/lib/organizations/closingGuard';
-import { accessModeOf } from '@/lib/projects/accessMode';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import {
@@ -28,7 +27,11 @@ import {
   type IssueType,
 } from '@/lib/issues/parentRules';
 import { isTypeableKind, resolveExecutor } from '@/lib/issues/executorDefaults';
-import { isWorkItemObsolescence } from '@/lib/issues/obsolescence';
+import {
+  canCarryObsolescence,
+  isReopenHeldByMark,
+  isWorkItemObsolescence,
+} from '@/lib/issues/obsolescence';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { promoteIfCiAlreadyGreen } from './ciPromotion';
 import {
@@ -142,6 +145,8 @@ import {
   TypeNotAllowedOnKindError,
   DifficultyNotAllowedOnKindError,
   InvalidObsolescenceError,
+  MarkedCardCannotReopenError,
+  ObsolescenceRequiresFinishedError,
   UnknownStatusError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
@@ -277,7 +282,7 @@ import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import type { SprintBlockerDto, ValidityCondition } from '@/lib/dto/sprints';
 import { DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
 import { gatingItemSatisfied } from '@/lib/workItems/validity';
-import type { WorkflowStatusDto } from '@/lib/dto/workflows';
+import type { StatusCategoryDto, WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
   LinkWorkItemsInput,
   RelationshipKind,
@@ -496,17 +501,56 @@ function assertDifficultyKindConsistent(
 
 /**
  * Validate an OBSOLESCENCE value reaching the service (Story MOTIR-6574 ·
- * MOTIR-6579) — the enum-membership check, and NOTHING ELSE. Deliberately no
- * kind predicate (the one difference from {@link assertDifficultyKindConsistent})
- * and no status / archived check: the mark is kind- and status-agnostic, and
- * marking FINISHED work is its purpose. `null` (clear) is always legal. A value
- * outside the closed enum throws {@link InvalidObsolescenceError} before any
- * write, so nothing is persisted.
+ * MOTIR-6579) — the enum-membership check. Deliberately no kind predicate (the
+ * one difference from {@link assertDifficultyKindConsistent}): every kind may
+ * carry a mark. The STATUS rule is separate and runs where the card's status is
+ * known — {@link assertObsolescenceOnFinished} (MOTIR-6672): both marks are a
+ * FINISHED card's state. `null` (clear) is always legal. A value outside the
+ * closed enum throws {@link InvalidObsolescenceError} before any write, so
+ * nothing is persisted.
  */
 function assertObsolescence(value: unknown): WorkItemObsolescenceDto | null {
   if (value === null) return null;
   if (!isWorkItemObsolescence(value)) throw new InvalidObsolescenceError(value);
   return value;
+}
+
+/**
+ * A mark SET on a card whose status sits outside the `done` category is refused
+ * (Story MOTIR-6575 · MOTIR-6672): both marks are a FINISHED card's state, so a
+ * card nobody will finish is archived, not marked. Call it only when the write
+ * SETS a non-null mark — clearing is always legal, and a patch that leaves the
+ * mark untouched is never refused. `statusCategory` is the CATEGORY the project's
+ * own workflow gives the status (`canCarryObsolescence`), never a key.
+ */
+function assertObsolescenceOnFinished(args: {
+  key: string;
+  statusKey: string;
+  statusCategory: StatusCategoryDto | null;
+}): void {
+  if (!canCarryObsolescence(args.statusCategory)) {
+    throw new ObsolescenceRequiresFinishedError(args);
+  }
+}
+
+/**
+ * New work under a MARKED card is refused (Story MOTIR-6575 · MOTIR-6672): a
+ * child created or re-parented beneath it re-opens it through status
+ * derivation, and a marked card stays finished. Reuses the reopen refusal — the
+ * story fixes TWO typed errors, and a new child IS a reopen. Filing into a
+ * folder never reaches this: a folder has no status.
+ */
+function assertNotMarkedParent(
+  parent: Pick<WorkItem, 'identifier' | 'obsolescence'>,
+  childKey: string | null,
+): void {
+  if (parent.obsolescence == null) return;
+  throw new MarkedCardCannotReopenError({
+    key: parent.identifier,
+    obsolescence: parent.obsolescence,
+    toStatusKey: null,
+    childKey,
+  });
 }
 
 /** Stable, deterministic ordering for summary lists resolved via findByIds. */
@@ -1605,6 +1649,10 @@ async function reconcileChoiceGate(
 ): Promise<WorkItem> {
   const result = await choiceGateService.reconcile(item, tx);
   if (result.hopsToReview.length === 0) return item;
+  // MARKED_CARD_CANNOT_REOPEN (MOTIR-6681) PROPAGATES to the write that raised the
+  // gate: the hops walk toward `in_review`, outside the done category, and a card
+  // marked under the rule is `done` and holds no open question. Only a LEGACY card
+  // marked while open can meet it, and the person writing is told to clear it.
   for (const key of result.hopsToReview) {
     await workItemsService.applyStatusTransition(item.id, key, ctx, tx);
   }
@@ -1623,6 +1671,10 @@ async function reconcileDecisionGate(
 ): Promise<WorkItem> {
   const result = await decisionConfirmationGateService.reconcile(item, tx);
   if (result.hopsToReview.length === 0) return item;
+  // MARKED_CARD_CANNOT_REOPEN (MOTIR-6681) PROPAGATES to the write that raised the
+  // gate: the hops walk toward `in_review`, outside the done category, and a card
+  // marked under the rule is `done` and holds no open question. Only a LEGACY card
+  // marked while open can meet it, and the person writing is told to clear it.
   for (const key of result.hopsToReview) {
     await workItemsService.applyStatusTransition(item.id, key, ctx, tx);
   }
@@ -1690,6 +1742,11 @@ export const workItemsService = {
       if (!parent) throw new WorkItemNotFoundError(input.parentId);
       if (parent.projectId !== input.projectId) throw new CrossProjectParentError();
       assertValidParent(parent.kind, input.kind);
+      // A MARKED parent takes no new work (Story MOTIR-6575 · MOTIR-6672): a new
+      // child re-opens its parent through status derivation, and a marked card
+      // stays finished. Before the key-allocation transaction, so a refused
+      // create never burns a key.
+      assertNotMarkedParent(parent, null);
     } else {
       assertValidPlacement({ parentKind: null, filed: folderId !== null }, input.kind);
     }
@@ -1809,6 +1866,24 @@ export const workItemsService = {
     const statusKey = await workflowsService.getInitialStatusKey(input.projectId, workspaceId);
     if (statusKey == null) throw new NoInitialStatusError(input.projectId);
 
+    // A mark is a FINISHED card's state (Story MOTIR-6575 · MOTIR-6672): a new
+    // item lands at the workflow's initial status, so a mark on create is legal
+    // only when that status sits in the `done` category (a custom workflow can
+    // make it so). Read the CATEGORY, never a key list. Before the key-allocation
+    // transaction, so a refused create never burns a key.
+    if (itemObsolescence !== null) {
+      const initialStatus = await workflowsService.getStatusByKey(
+        input.projectId,
+        statusKey,
+        workspaceId,
+      );
+      assertObsolescenceOnFinished({
+        key: `The new ${input.kind}`,
+        statusKey,
+        statusCategory: initialStatus?.category ?? null,
+      });
+    }
+
     // Description mentions (Subtask 5.1.6): parse + view-validate BEFORE the
     // transaction (reference data, the commentsService pattern); invalid /
     // non-viewable ids are silently dropped (the Jira rule). The validated set
@@ -1818,7 +1893,7 @@ export const workItemsService = {
     if (descTokenIds.length > 0) {
       const mentionable = await resolveDescriptionMentionable(
         input.projectId,
-        accessModeOf(project),
+        project.accessMode,
         ctx,
       );
       descMentionIds = descTokenIds.filter((id) => mentionable.has(id));
@@ -2379,7 +2454,7 @@ export const workItemsService = {
         if (project) {
           descMentionable = await resolveDescriptionMentionable(
             project.id,
-            accessModeOf(project),
+            project.accessMode,
             ctx,
           );
         }
@@ -2593,6 +2668,10 @@ export const workItemsService = {
           if (!parent) throw new WorkItemNotFoundError(nextParentId);
           if (parent.projectId !== current.projectId) throw new CrossProjectParentError();
           assertValidParent(parent.kind, nextKind);
+          // Re-parenting UNDER a marked card is new work under it (MOTIR-6672).
+          // Only a real move is refused: a kind change beneath the parent the
+          // card already has adds no child.
+          if (parentChanged) assertNotMarkedParent(parent, current.identifier);
         }
       }
 
@@ -2651,12 +2730,28 @@ export const workItemsService = {
       }
 
       // ── Obsolescence (Story MOTIR-6574 · MOTIR-6579) ──────────────────
-      // NO kind predicate and NO done/archived refusal, deliberately: marking a
-      // `done` epic, a `cancelled` decision or an archived card is exactly what
-      // the field is for, so it is written on any kind in any status. It touches
-      // nothing else — not status, readiness, rollups, archive or the ready set.
-      // Re-sending the current value is a no-op and records nothing.
+      // NO kind predicate, deliberately: marking a `done` epic or a `cancelled`
+      // decision is exactly what the field is for. It touches nothing else — not
+      // status, readiness, rollups, archive or the ready set. Re-sending the
+      // current value is a no-op and records nothing.
+      //
+      // ONE status rule (Story MOTIR-6575 · MOTIR-6672): SETTING a mark needs a
+      // card whose status sits in the `done` category — read under this row lock,
+      // so a card reopened concurrently cannot be marked. Clearing (`null`) is
+      // always legal, and a patch that omits the mark never reaches the check.
       if (nextObsolescence !== undefined && nextObsolescence !== current.obsolescence) {
+        if (nextObsolescence !== null) {
+          const status = await workflowsService.getStatusByKey(
+            current.projectId,
+            current.status,
+            ctx.workspaceId,
+          );
+          assertObsolescenceOnFinished({
+            key: current.identifier,
+            statusKey: current.status,
+            statusCategory: status?.category ?? null,
+          });
+        }
         update.obsolescence = nextObsolescence;
         diff.obsolescence = { from: current.obsolescence, to: nextObsolescence };
       }
@@ -3182,6 +3277,25 @@ export const workItemsService = {
       ctx.workspaceId,
     );
     if (!target) throw new UnknownStatusError(toStatusKey);
+
+    // A MARKED card stays FINISHED (Story MOTIR-6575 · MOTIR-6672). A card
+    // carrying `outdated` or `deprecated` may not move to a status outside the
+    // `done` category until a person clears the mark — the rule is stated once in
+    // the pure `isReopenHeldByMark`, which the status control and the board read
+    // up front. Unlike the plan hold and the gate guard, `opts.system` is NOT
+    // exempt: no rollup, webhook or importer reopens a marked card. The system
+    // movers that report refusals (`isStatusTransitionRefusal`) record it rather
+    // than throw. A move WITHIN the done category (`done ↔ cancelled`) and the
+    // no-op move above are untouched. The mark is read from `current`, the row
+    // read under the lock, so a mark set concurrently cannot slip past. Before the
+    // legality check, so the refusal names the mark, not a missing edge.
+    if (isReopenHeldByMark(current.obsolescence, target.category)) {
+      throw new MarkedCardCannotReopenError({
+        key: current.identifier,
+        obsolescence: current.obsolescence as 'outdated' | 'deprecated',
+        toStatusKey,
+      });
+    }
 
     // Legal-edge validation, EXCEPT under a system context (`opts.system`). An
     // AUTHORITATIVE bulk/system operation — the issue importer (MOTIR-941),
@@ -3923,6 +4037,9 @@ export const workItemsService = {
     implementation?: { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null },
   ): Promise<WorkItemDto> {
     const { dto, transition } = await withWorkspaceContext(ctx, async (tx) => {
+      // MARKED_CARD_CANNOT_REOPEN (MOTIR-6681) PROPAGATES: `mark_integrated` is an
+      // agent's door, typed by MOTIR-6673; only a LEGACY card marked while open can
+      // meet it, since a card marked under the rule is `done`.
       const res = await workItemsService.applyStatusTransition(
         workItemId,
         IMPLEMENTED_STATUS_KEY,
@@ -3998,6 +4115,8 @@ export const workItemsService = {
       }> = [];
       for (const item of items) {
         try {
+          // Never meets MARKED_CARD_CANNOT_REOPEN (MOTIR-6681): `done` is the done
+          // category, and the mark refuses only a move out of it.
           const { dto, transition } = await workItemsService.applyStatusTransition(
             item.id,
             DONE_STATUS_KEY,
@@ -4399,6 +4518,9 @@ export const workItemsService = {
           if (!parent) throw new WorkItemNotFoundError(targetParentId);
           if (parent.projectId !== current.projectId) throw new CrossProjectParentError();
           assertValidParent(parent.kind, current.kind);
+          // New work under a MARKED card is refused (MOTIR-6672). A reorder
+          // beneath the same parent is not new work and never reaches here.
+          assertNotMarkedParent(parent, current.identifier);
         }
       }
 
@@ -7324,7 +7446,13 @@ export const workItemsService = {
     // Kanban) — claim across the WHOLE project, since a missing sprint is not an
     // error.
     const ready = await collectReadyLeaves(projectId, project.workspaceId, ctx, {});
-    const candidates = sprintId ? ready.filter((r) => r.sprintId === sprintId) : ready;
+    // A MARKED card is never claimed (MOTIR-6672 · MOTIR-6681): the flip to
+    // `in_progress` below leaves the done category, which the mark refuses. A card
+    // marked under the rule is `done` and never ready; a LEGACY card marked while
+    // open still is, and left in the candidate list it would fail every claim that
+    // ranked it first instead of the claim moving on to the next ready card.
+    const claimable = ready.filter((r) => r.obsolescence == null);
+    const candidates = sprintId ? claimable.filter((r) => r.sprintId === sprintId) : claimable;
     if (candidates.length === 0) return null;
     const orderedIds = candidates.map((r) => r.id);
     // ⚠️ THE DISPATCH REPOSITORY IS RESOLVED BEFORE THE CLAIM COMMITS (MOTIR-6243).
@@ -7531,6 +7659,10 @@ export const workItemsService = {
       // revision and re-locks the row under this same tx (a no-op re-lock — we
       // already hold it). Mirrors `claimNextReady` rather than inventing a
       // second flip.
+      // MARKED_CARD_CANNOT_REOPEN (MOTIR-6681) PROPAGATES: the KEYED claim names one
+      // card, so the caller is told it cannot be claimed, typed on every door. A
+      // marked card is `done` and refused `not_claimable` first; only a LEGACY card
+      // marked while open reaches this flip.
       const moved = await workItemsService.applyStatusTransition(
         item.id,
         IN_PROGRESS_STATUS_KEY,

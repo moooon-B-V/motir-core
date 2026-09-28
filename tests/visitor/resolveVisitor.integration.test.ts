@@ -9,11 +9,11 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { VisitorConsentNotApplicableError } from '@/lib/visitor/errors';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { levelForMode } from '@/lib/projects/accessMode';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { consentedVisitor } from './_consentedVisitor';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The Visitor's ONE resolution (Story MOTIR-6170 · MOTIR-6642), through the real
 // resolver and datastore: `not_found` for everything a stranger must not be able
@@ -53,7 +53,7 @@ async function tenant(mode: ProjectAccessMode = 'public') {
   const fx = await makeWorkItemFixture({ name: `RV ${identifier}`, identifier });
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { accessMode: mode, accessLevel: levelForMode(mode) },
+    data: projectAccessData(mode),
   });
   const full = await user('full');
   const limited = await user('limited');

@@ -72,6 +72,8 @@ async function seed(fx: Fx): Promise<{
   const story = await create('story', 'Old story', epic.id);
   const child = await create('task', 'Child', story.id);
   const replacement = await create('task', 'New way', epic.id);
+  // A mark is a FINISHED card's state (MOTIR-6672).
+  await adminDb.workItem.update({ where: { id: story.id }, data: { status: 'done' } });
   await workItemsService.updateWorkItem(
     story.id,
     { obsolescence: 'outdated', obsolescenceNoteMd: 'The flow moved.' },

@@ -306,6 +306,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // not-found to a non-member, since the comment's work item is hidden.
         edit_comment: { commentId: 'cmt_whatever', body: 'leak?' },
         delete_comment: { commentId: 'cmt_whatever' },
+        // MOTIR-6725 — the to-do tools are item-keyed, so a non-member must read
+        // A's card as not-found: no list, no appended step, no tick.
+        list_work_item_todos: { key: item1 },
+        add_work_item_todo: { key: item1, text: 'leak?' },
+        set_work_item_todo_done: { key: item1, todoId: 'tdo_whatever', done: true },
         // MOTIR-3361 — aimed at tenant A's PROJECT: a non-member must read the
         // key as not-found rather than write a standing planner instruction
         // into somebody else's project.
@@ -831,6 +836,13 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // and an id that names no comment is a not-found, never a scope denial.
         edit_comment: { commentId: 'cmt_scoped', body: 'scoped edit' },
         delete_comment: { commentId: 'cmt_scoped' },
+        // MOTIR-6725 — the caller's OWN card. The read executes (an empty list);
+        // the two writes are `work_item:edit`, so the read-only-token loop
+        // asserts both are REFUSED at the gate. A step id that names nothing is a
+        // not-found, never a scope denial.
+        list_work_item_todos: { key: item1 },
+        add_work_item_todo: { key: item1, text: 'scoped step' },
+        set_work_item_todo_done: { key: item1, todoId: 'tdo_scoped', done: true },
         // MOTIR-3361 — the caller's OWN project. A write-scoped tool, so the
         // read-only-token loop asserts it is REFUSED at the scope gate rather
         // than reaching motir-ai.

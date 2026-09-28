@@ -20,6 +20,15 @@ import { join, relative, sep } from 'node:path';
 //      holds total — so the two ways out of that promise, `Partial<Record<Enum…>>`
 //      and a cast `as Record<Enum…>`, are refused here, and a new enum value is a
 //      compile error at every lookup rather than a raw key at runtime.
+//   3. NOTHING READS THE RETIRED LEVEL (Story MOTIR-6554 · Subtask MOTIR-6687).
+//      A project is public — to the RLS policies, the listings, the directory and
+//      the tag counts — exactly when `accessMode = 'public'`. So nothing under
+//      `lib/` or `app/` reads `accessLevel` off a project row: no `where`, no
+//      `select`, no `Pick`, no property read, no `"accessLevel"` in raw SQL. The
+//      column is still WRITTEN (the previous image reads it during the deploy
+//      window), and a derived `accessLevel` is still PUBLISHED on the DTO, API v1
+//      and MCP; those sites are named below, and phase 2 (MOTIR-6692) retires the
+//      write path.
 //
 // Each guard is also shown FAILING on a synthetic source (the last block), so a
 // scanner that matches nothing cannot pass for one that found nothing.
@@ -80,6 +89,66 @@ function totalityEscapes(source: string): string[] {
     .map((line, i) => (escape.test(line) ? `${i + 1}: ${line.trim()}` : null))
     .filter((x): x is string => x !== null);
 }
+
+/**
+ * The sites still allowed to name the retired level (MOTIR-6687): the legacy
+ * WRITE path phase 2 (MOTIR-6692) retires, the mode ⇄ level mapping, and the
+ * derived, never-read-back `accessLevel` the DTO, API v1 and MCP publish.
+ */
+const LEVEL_ALLOWED = [
+  // The legacy `{ accessLevel }` request arm and its setter — retired by phase 2.
+  /^app\/api\/projects\/\[key\]\/access\/route\.ts$/,
+  /^lib\/services\/projectMembersService\.ts$/,
+  /^lib\/projects\/roles\.ts$/,
+  // `levelForMode` — the level written beside a mode.
+  /^lib\/projects\/accessMode\.ts$/,
+  // The derived public contract: DTO types, API v1's schema, MCP's row.
+  /^lib\/dto\/projects\.ts$/,
+  /^lib\/dto\/projectMembers\.ts$/,
+  /^lib\/api\/v1\/projects\/schema\.ts$/,
+  /^lib\/mcp\/tools\/listProjects\.ts$/,
+];
+
+/**
+ * A read of the retired level: any code line naming `accessLevel`, the SQL column
+ * `"accessLevel"` or the `project_access_level` type — except the one line shape
+ * that WRITES or DERIVES it from the mode, `accessLevel: levelForMode(…)`
+ * (`projectRepository.setAccessMode` and the two mappers).
+ */
+function levelReads(source: string): string[] {
+  const found: string[] = [];
+  source.split('\n').forEach((line, i) => {
+    if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+    if (
+      !/\baccessLevel\b|\baccess_level\b|\bproject_access_level\b|\bProjectAccessLevel\b/.test(line)
+    )
+      return;
+    if (/\baccessLevel\s*:\s*levelForMode\(/.test(line)) return;
+    found.push(`${i + 1}: ${line.trim()}`);
+  });
+  return found;
+}
+
+describe('NOTHING READS THE RETIRED LEVEL — lib/ and app/ key on the mode (MOTIR-6687)', () => {
+  it('no where, select, Pick, property read or raw SQL names accessLevel outside the allowed sites', () => {
+    const offenders = [...walk(join(ROOT, 'lib')), ...walk(join(ROOT, 'app'))]
+      .filter((f) => !LEVEL_ALLOWED.some((re) => re.test(rel(f))))
+      .flatMap((f) => levelReads(readFileSync(f, 'utf8')).map((hit) => `${rel(f)}:${hit}`));
+    expect(
+      offenders,
+      "A project is public exactly when accessMode = 'public' — read the mode, never the level.",
+    ).toEqual([]);
+  });
+
+  it('every allowed site still exists', () => {
+    const files = [...walk(join(ROOT, 'lib')), ...walk(join(ROOT, 'app'))].map(rel);
+    for (const re of LEVEL_ALLOWED)
+      expect(
+        files.some((f) => re.test(f)),
+        String(re),
+      ).toBe(true);
+  });
+});
 
 describe('ONE ENTRY RULE — nothing under lib/ decides entry from the column', () => {
   it('no service, repository or reader compares the mode or level with an entry value', () => {
@@ -177,6 +246,19 @@ describe('the guards have been SEEN to fail', () => {
     const src = "const ctx = await getActiveProject();\n  if (!ctx) redirect('/sign-in');";
     const m = /const (\w+) = await getActiveProject\(\)/.exec(src)!;
     expect(new RegExp(`if \\(!${m[1]}\\) redirect\\('/sign-in'\\)`).test(src)).toBe(true);
+  });
+
+  it('a read of the retired level is caught, and the derived write is not', () => {
+    const fixture = [
+      "return db.project.findMany({ where: { accessLevel: 'public' } });",
+      'select: { id: true, accessLevel: true },',
+      "type Row = Pick<Project, 'id' | 'accessLevel'>;",
+      "if (project.accessLevel === 'public') publish();",
+      'WHERE p."accessLevel" = \'public\'::"project_access_level"',
+      'accessLevel: levelForMode(accessMode),',
+      '// a comment naming accessLevel is a record, not a read',
+    ].join('\n');
+    expect(levelReads(fixture)).toHaveLength(5);
   });
 
   it('both totality escapes are caught', () => {

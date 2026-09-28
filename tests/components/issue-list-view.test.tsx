@@ -59,6 +59,7 @@ function row(over: Partial<IssueRowData> & { identifier: string }): IssueRowData
     statusCategory: 'todo',
     ciState: null,
     fixReason: null,
+    obsolescence: null,
     assigneeId: null,
     assigneeName: null,
     updatedAt: '2026-06-01T00:00:00.000Z',

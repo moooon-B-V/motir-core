@@ -20,6 +20,7 @@ import { toFixTagState } from '@/components/workItems/ToFixTag';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // THE STORY GATE for the To fix TAG, BANNER and FILTER (Story MOTIR-6589 ·
 // MOTIR-6612), on a real Postgres, through the real services.
@@ -531,7 +532,7 @@ describe('isolation', () => {
     );
     expect(open.items.map((r) => r.id)).toEqual([item.id]);
 
-    await adminDb.project.update({ where: { id: s.project.id }, data: { accessLevel: 'private' } });
+    await setProjectAccess(adminDb, s.project.id, 'members');
 
     await expect(
       workItemsService.getProjectIssuesList(

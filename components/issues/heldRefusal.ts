@@ -4,6 +4,8 @@ import { useEffect, type RefObject } from 'react';
 import type { StatusHeldLine } from './StatusHeldNotice';
 import type { ApprovalGatePendingPayloadDTO } from '@/lib/dto/approvalGate';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
+import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
+import { isWorkItemObsolescence } from '@/lib/issues/obsolescence';
 
 // The ANCHORED held refusal — shared by the two surfaces that learn about a held
 // move only by attempting it: the board drag and the `/items` row's inline status
@@ -34,11 +36,14 @@ export function heldLineFromRefusal(
  * A HELD refusal, tagged by the door's `code` (MOTIR-5529 · MOTIR-6268): an
  * approval or a merge holds ONE target status (`APPROVAL_GATE_PENDING`, with the
  * gate), or an undecided PLAN holds the whole item at Planning
- * (`PLAN_TARGET_HELD`, with the plan — AMENDMENT 21 §2).
+ * (`PLAN_TARGET_HELD`, with the plan — AMENDMENT 21 §2), or the card is MARKED
+ * and the move would reopen it (`MARKED_CARD_CANNOT_REOPEN`, with its mark —
+ * MOTIR-6682).
  */
 export type HeldRefusal =
   | { code: 'APPROVAL_GATE_PENDING'; gate: ApprovalGatePendingPayloadDTO }
-  | { code: 'PLAN_TARGET_HELD'; plan: PlanHoldDTO };
+  | { code: 'PLAN_TARGET_HELD'; plan: PlanHoldDTO }
+  | { code: 'MARKED_CARD_CANNOT_REOPEN'; mark: WorkItemObsolescenceDto };
 
 /** Read a HELD refusal off a refused board move, or null for every other refusal
  *  — which keeps its toast, unchanged. It branches on `code` and nothing else:
@@ -50,12 +55,16 @@ export async function readHeldRefusal(res: Response): Promise<HeldRefusal | null
       code?: string;
       gate?: ApprovalGatePendingPayloadDTO;
       plan?: PlanHoldDTO;
+      mark?: unknown;
     };
     if (body.code === 'APPROVAL_GATE_PENDING' && body.gate) {
       return { code: 'APPROVAL_GATE_PENDING', gate: body.gate };
     }
     if (body.code === 'PLAN_TARGET_HELD' && body.plan) {
       return { code: 'PLAN_TARGET_HELD', plan: body.plan };
+    }
+    if (body.code === 'MARKED_CARD_CANNOT_REOPEN' && isWorkItemObsolescence(body.mark)) {
+      return { code: 'MARKED_CARD_CANNOT_REOPEN', mark: body.mark };
     }
     return null;
   } catch {

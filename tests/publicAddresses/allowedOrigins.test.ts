@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The registered-origin set — Story MOTIR-3878 · Subtask MOTIR-4218.
 //
@@ -36,7 +37,7 @@ beforeEach(async () => {
       name: 'Acme',
       slug: 'acme',
       identifier: 'ACME',
-      accessLevel: 'public',
+      ...projectAccessData('public'),
     },
   });
   projectId = project.id;

@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The workspace-subdomain service — Story MOTIR-3878 · Subtask MOTIR-4215.
 // Real Postgres throughout (the no-mocks rule); the only toggles are the
@@ -631,7 +632,7 @@ describe('release and how the rest of the system then ADDRESSES the projects', (
         name: 'Public Project',
         slug: 'pub',
         identifier: 'PUB',
-        accessLevel: 'public',
+        ...projectAccessData('public'),
       },
     });
     await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);

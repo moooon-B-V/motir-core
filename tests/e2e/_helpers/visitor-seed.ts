@@ -3,6 +3,7 @@ import { createTestPerson } from './testPerson';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // Seed for Story MOTIR-6170's E2E + acceptance recording (Subtask MOTIR-6651): a
 // PUBLIC project a person outside its organisation watches as a Visitor.
@@ -73,10 +74,7 @@ export async function seedVisitorProject(slug: string): Promise<VisitorSeed> {
     });
     await adminDb.project.update({
       where: { id: p.id },
-      data:
-        mode === 'public'
-          ? { accessMode: 'public', accessLevel: 'public' }
-          : { accessMode: 'members', accessLevel: 'private' },
+      data: mode === 'public' ? projectAccessData('public') : projectAccessData('members'),
     });
     return { id: p.id, name, key: p.identifier };
   };

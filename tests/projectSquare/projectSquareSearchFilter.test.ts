@@ -9,6 +9,7 @@ import { encodeRankedCursor } from '@/lib/projectSquare/rankCursor';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // Story 6.13 · Subtask 6.13.3 — the PROJECT SQUARE search + category/tag filter.
 // Both NARROW the 6.13.2 cursored directory read (composing with the 6.13.4
@@ -41,7 +42,7 @@ async function makeProject(opts: {
     where: { id: fx.projectId },
     data: {
       name: opts.name,
-      ...(opts.public ? { accessLevel: 'public' } : {}),
+      ...(opts.public ? projectAccessData('public') : {}),
       ...(opts.overview !== undefined ? { publicOverviewMd: opts.overview } : {}),
     },
   });

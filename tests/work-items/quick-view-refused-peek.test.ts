@@ -1,5 +1,4 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { accessModeOf } from '@/lib/projects/accessMode';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -65,13 +64,7 @@ async function makeScenario(slug: string) {
 type Scenario = Awaited<ReturnType<typeof makeScenario>>;
 
 function peek(s: Scenario, identifier: string) {
-  return workItemsService.getQuickView(
-    s.project.id,
-    identifier,
-    accessModeOf(s.project),
-    s.ctx,
-    'en',
-  );
+  return workItemsService.getQuickView(s.project.id, identifier, s.project.accessMode, s.ctx, 'en');
 }
 
 describe('a REFUSED peek leaves no work in flight (MOTIR-3066)', () => {

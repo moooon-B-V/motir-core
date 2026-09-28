@@ -54,6 +54,7 @@ import type {
 } from './types';
 import { ImportAlreadyRunningError } from '../errors';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { MarkedCardCannotReopenError } from '@/lib/workItems/errors';
 
 /** Live per-outcome tallies of a run (mirrors the `Import.*Count` columns). */
 export interface ImportRunCounts {
@@ -309,8 +310,21 @@ async function persistOnePass1(
     // Status (ADR §Consequences #1): apply the mapped status through the
     // import/system status path — reaches a done-category status so a closed
     // source issue lands closed. A no-op when it already matches.
+    // ⚠️ A card a person has since MARKED obsolete (MOTIR-6672 · MOTIR-6681) stays
+    // finished: a re-sync whose source reopened it would move it out of the done
+    // category, which the mark refuses even for this system write. The re-sync is
+    // not a failure — every other field was applied — so the status is left
+    // unapplied and the item says why.
+    const statusWarnings: string[] = [];
     if (payload.statusKey) {
-      await workItemsService.setImportedStatus(workItemId, payload.statusKey, svcCtx);
+      try {
+        await workItemsService.setImportedStatus(workItemId, payload.statusKey, svcCtx);
+      } catch (err) {
+        if (!(err instanceof MarkedCardCannotReopenError)) throw err;
+        statusWarnings.push(
+          `Status "${payload.statusKey}" not applied: ${err.message} The work item keeps its status.`,
+        );
+      }
     }
 
     // Labels — find-or-create by name (setLabels replaces the source-label set,
@@ -373,7 +387,13 @@ async function persistOnePass1(
       externalId: issue.externalId,
       plan,
       workItemKey,
-      warnings: [...row.warnings, ...commentWarnings, ...attachmentWarnings, ...reporterWarnings],
+      warnings: [
+        ...row.warnings,
+        ...statusWarnings,
+        ...commentWarnings,
+        ...attachmentWarnings,
+        ...reporterWarnings,
+      ],
     };
   } catch (err) {
     // Per-issue partial failure — record it, keep the rest of the run going.

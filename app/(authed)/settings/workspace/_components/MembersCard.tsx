@@ -199,6 +199,9 @@ function MemberRow({
   // draws the 0-projects help line under its cells.
   const [scope, setScope] = useState<WorkspaceAccessScope>(member.accessScope);
   const isManagerRow = orgManaged || roleKey === 'manager';
+  // Removing ANOTHER member is a Manager's act, and never reaches an org Owner /
+  // Admin (the server refuses both — `workspacesService.removeMember`).
+  const canRemove = roleContext.canManageRoles && !orgManaged;
 
   const labelOf = (key: string) =>
     roleOptions.find((o) => o.value === key)?.label ?? t('members.role.member');
@@ -327,9 +330,12 @@ function MemberRow({
             workspaceName={workspaceName}
           />
         </div>
-        {isSelf ? (
-          // The self row has no Remove (as shipped); an invisible twin keeps the
-          // pickers in one column (design panel 1a).
+        {isSelf || !canRemove ? (
+          // No Remove on the self row (that is Leave), and none for an actor who
+          // cannot remove this person — a non-Manager, or any row an org Owner /
+          // Admin holds, which only the organization changes (MOTIR-6317; the
+          // permission-gated UI rule HIDES an entry point the actor cannot use).
+          // An invisible twin keeps the pickers in one column (design panel 1a).
           <span aria-hidden className="invisible">
             <Button variant="ghost" size="sm" tabIndex={-1}>
               {t('members.remove')}

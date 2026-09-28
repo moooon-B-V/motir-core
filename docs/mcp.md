@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **72 tools**.
+`initialize` handshake and registers **75 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -333,7 +333,9 @@ Each `ReadyItemDto` has `id`, `key` (the `<KEY>-<n>` identifier), `kind`, `title
 `descriptionExcerpt` — **plus the `dependencies` block** and the
 **[`commentCount`](#the-commentcount-field)** below — and the
 [obsolescence mark](#the-obsolescence-mark), `obsolescence` and
-`obsolescenceNoteMd`. A marked card stays in the ready set: the mark gates nothing.
+`obsolescenceNoteMd`. The mark gates nothing, but a marked card is FINISHED (a mark is
+settable only in the done category), so it is not in a ready set; a row carrying one is a
+legacy card marked before that rule.
 
 ##### The `dependencies` block (list reads)
 
@@ -397,9 +399,11 @@ item they return:
 ##### The obsolescence mark
 
 A work item can be marked as no longer **true of the code** (Story MOTIR-6574 ·
-MOTIR-6582), on ANY kind and in ANY status — a `done` card included, which is
-the point: the card that shipped the old behaviour is the one a later reader
-trusts.
+MOTIR-6582), on ANY kind — and, since Story MOTIR-6575 · MOTIR-6672, **only on a
+FINISHED card**: one whose status is in the project's done category (`done`,
+`cancelled`, or a custom done-category status). That is the point of the mark: the
+card that shipped the old behaviour is the one a later reader trusts. A card nobody
+will finish is **archived**, not marked.
 
 ```jsonc
 "obsolescence": "outdated",          // or "deprecated", or null
@@ -416,6 +420,38 @@ trusts.
 - **Written** by [`create_work_item`](#create_work_item) and
   [`update_work_item`](#update_work_item) (`null` clears; a value outside the
   enum is `INVALID_OBSOLESCENCE`).
+- **A mark is a finished card's state, and a marked card stays finished** — two
+  typed refusals, the same on MCP, REST v1 and every status door:
+  - **`OBSOLESCENCE_REQUIRES_FINISHED`** — SETTING `outdated` or `deprecated` on a
+    card whose status is outside the done category. A new card lands at the
+    workflow's initial status, so `create_work_item` with a mark is refused unless
+    that status is itself in the done category. Clearing (`null`) is always legal,
+    and a write that omits the mark never meets it.
+
+    ```text
+    OBSOLESCENCE_REQUIRES_FINISHED: ACME-12 is at in_progress: only a finished work item can be marked outdated or deprecated. A work item nobody will finish is archived, not marked.
+    ```
+
+  - **`MARKED_CARD_CANNOT_REOPEN`** — moving a marked card to any status outside
+    the done category ([`transition_status`](#transition_status), a board drag, the
+    status control, a system mover), or putting new work under it (a child created
+    or moved under a marked parent — a new child would reopen it through status
+    derivation). A move WITHIN the done category (`done` ↔ `cancelled`) is not a
+    reopen. The way out is to clear the mark with `update_work_item`, then move the
+    card; background movers (the parent rollup, the PR-status sync) record it and
+    leave the card where it is.
+
+    ```text
+    MARKED_CARD_CANNOT_REOPEN: ACME-12 is marked deprecated: clear the mark to reopen this item.
+    MARKED_CARD_CANNOT_REOPEN: ACME-9 is marked outdated: a new child (ACME-31) would reopen it. Clear the mark to reopen this item.
+    ```
+
+  Over REST v1 both are `422`, with an additive payload: `item: { key, statusKey,
+statusCategory }` for the first and `mark: { key, obsolescence, toStatusKey }` for
+  the second (`toStatusKey` is `null` for a refused child write). Existing rows are
+  not migrated: a card marked before this rule keeps its mark, the guards act on
+  WRITES only, and clearing is always legal.
+
 - **Read** by every work-item door: `get_work_item` (the item and each child
   row), `search_work_items`, `list_ready`, `next_ready`, `claim_next_ready` and
   every tool that returns a `WorkItemDto` carry both fields; `skeleton` carries
@@ -423,9 +459,8 @@ trusts.
 - **The text blocks** of `get_work_item` and `search_work_items` print
   `obsolescence: outdated — superseded by ACME-40` and the note's first line
   (`note: …`) on a marked card, and nothing new on an unmarked one.
-- **Informational only — no read hides a marked card.** No MCP read (and no
-  internal AI read) excludes, dims or re-sorts a marked row, and the mark does
-  not touch readiness. To select by it, filter on the `obsolescence` field of
+- **No read hides a marked card.** No MCP read (and no internal AI read)
+  excludes, dims or re-sorts a marked row, and the mark does not touch readiness. To select by it, filter on the `obsolescence` field of
   [`search_work_items`](#search_work_items).
 
 ##### The dispatch advisories
@@ -633,8 +668,9 @@ with `descriptionMd`, `contextRefs`, `blockerKeys`, `parentKey`, `runCommand`
 `targetRepoDefaultBranch` — plus the
 [`commentCount`](#the-commentcount-field) the list reads carry and the
 [obsolescence mark](#the-obsolescence-mark) (`obsolescence`,
-`obsolescenceNoteMd`) every ready row carries — a marked card is dispatched like
-any other, so read the note before building on it. A non-zero
+`obsolescenceNoteMd`) every ready row carries. A marked card is finished, so only a
+legacy card marked before that rule can be dispatched — read the note before building
+on it. A non-zero
 count on a dispatch payload is the cue to read
 [`get_work_item_activity`](#get_work_item_activity) before starting.
 
@@ -1206,7 +1242,7 @@ epics included, so the agent surface can create one).
 | `type`               | type enum \| null                                   | no       | Work type (code / design / test / …) — leaf kinds only; rejected on a story. Seeds the executor from the type default unless `executor` is also given. Omit/`null` → untyped.                                                                                       |
 | `executor`           | `"coding_agent" \| "human"` \| null                 | no       | Who executes the work — leaf kinds only; overrides the type default. Omit/`null` → the type default (or unset).                                                                                                                                                     |
 | `difficulty`         | `"trivial" \| "low" \| "medium" \| "high"` \| null  | no       | How hard the work is to REASON about (not how big) — leaf kinds only; a non-null value on an epic/story is `DIFFICULTY_NOT_ALLOWED_ON_KIND`. Omit/`null` → unset.                                                                                                   |
-| `obsolescence`       | `"outdated" \| "deprecated"` \| null                | no       | The [obsolescence mark](#the-obsolescence-mark) — any kind, any status. A value outside the enum is `INVALID_OBSOLESCENCE`. Omit/`null` → unmarked.                                                                                                                 |
+| `obsolescence`       | `"outdated" \| "deprecated"` \| null                | no       | The [obsolescence mark](#the-obsolescence-mark) — any kind; a new item lands at the unfinished initial status, so a mark here is `OBSOLESCENCE_REQUIRES_FINISHED`. A value outside the enum is `INVALID_OBSOLESCENCE`. Omit/`null` → unmarked.                      |
 | `obsolescenceNoteMd` | string \| null                                      | no       | Markdown note saying WHY the item is marked. Omit/`null` → none.                                                                                                                                                                                                    |
 | `targetRepo`         | string \| null                                      | no       | WHICH repo the item ships in — bare repo name (`"motir-core"`) or `"owner/name"`. Must name a repo in **this project's** repository set (else `UNKNOWN_TARGET_REPO`). Omit/`null` → unpinned.                                                                       |
 | `targetRepos`        | string[]                                            | no       | EVERY repo the item ships in, ORDERED — element 0 is the PRIMARY dispatch routes to. Same validation per element. MUTUALLY EXCLUSIVE with `targetRepo` (else `CONFLICTING_TARGET_REPO_INPUT`). Omit → the set comes from `targetRepo`; `[]` → the empty set.        |
@@ -1326,6 +1362,11 @@ the way out is a decision somebody makes in Motir, not a workflow edit:
   `docs/decisions/agent-authored-plans.md` AMENDMENT 21). The message names the
   plan and its state. A card parked by a planning SESSION with no plan is not
   held.
+- `MARKED_CARD_CANNOT_REOPEN` — the item carries an
+  [obsolescence mark](#the-obsolescence-mark), and a marked card stays finished: a
+  move to any status outside the done category is refused until the mark is cleared
+  with `update_work_item` (MOTIR-6672). `done` ↔ `cancelled` is not a reopen and is
+  not refused. The message names the item and its mark and says to clear it.
 
 | Input    | Type   | Required | Notes                                    |
 | -------- | ------ | -------- | ---------------------------------------- |
@@ -1387,6 +1428,93 @@ cannot be undone. Author only, for the reason `edit_comment` gives; gated on
 **Output** — `structuredContent`: `{ commentId, workItemKey, parentCommentId,
 replyCount }` — `replyCount` is how many replies went with a deleted root (always
 `0` for a reply).
+
+#### To-do lists — `list_work_item_todos` · `add_work_item_todo` · `set_work_item_todo_done`
+
+A work item's **to-do list** is the ordered steps of its own work — each step
+ONE operation, with who it is for (`executor`), optional Markdown instructions
+(`notesMd`) and an optional command to copy (`commandText`), ticked off as it is
+done ([`docs/decisions/work-item-todo-list.md`](decisions/work-item-todo-list.md)).
+These three tools read a card's list, append a step, and tick or untick one,
+over the same service the **To-do list** section of the item page uses — so a
+step an agent appends or ticks appears there exactly as a person's would, and
+every rule the page enforces applies here unchanged.
+
+| Tool                      | Permission       | What it does                                            |
+| ------------------------- | ---------------- | ------------------------------------------------------- |
+| `list_work_item_todos`    | `project:browse` | The card's steps in list order, with its progress.      |
+| `add_work_item_todo`      | `work_item:edit` | Append ONE step at the END of the list.                 |
+| `set_work_item_todo_done` | `work_item:edit` | Tick (`done: true`) or untick (`done: false`) one step. |
+
+Both writes need permission to **edit the card** — the same key the item page's
+to-do controls need. A token whose grant omits `work_item:edit` is refused both
+writes before anything runs (`PERMISSION_NOT_GRANTED`); a token whose owner can
+only browse the card reads its list and is refused both writes by the role
+(`PROJECT_ACCESS_DENIED`). A card the token cannot see at
+all, including one in another workspace, is `WORK_ITEM_NOT_FOUND` on every tool.
+Both write keys are in the CLI grant, so a dispatched agent can tick the steps of
+the card it was handed.
+
+**Ticking the LAST step does not move the card.** The to-do list never writes
+the card's status (ADR §3): a card whose every step is ticked stays where it is
+until its own workflow moves it. **A tick is not a revision** either — it stamps
+the step with who ticked it and when (`doneAt`, `doneBy`) and writes nothing to
+the card's history, while an append records one (ADR §4). **Ticking is
+idempotent:** ticking a step that is already ticked changes nothing and keeps the
+original `doneAt` / `doneBy`, so a retried call never re-attributes a step.
+
+**Deliberately absent:** editing, reordering and deleting a step. They stay on
+the item page.
+
+##### `list_work_item_todos`
+
+| Input | Type   | Required | Notes                 |
+| ----- | ------ | -------- | --------------------- |
+| `key` | string | yes      | Work item identifier. |
+
+**Output** — `structuredContent`: `{ workItemKey, items, progress }`. `items` is
+in list order; each step is `{ id, position, text, notesMd, commandText,
+executor, done, doneAt, doneBy }` (`doneBy` is `{ id, name }` or `null`).
+`progress` is `{ done, total }`, counted from the same read as `items`. A card
+with no steps answers `items: []` and `{ done: 0, total: 0 }`.
+
+##### `add_work_item_todo`
+
+| Input         | Type   | Required | Notes                                                                                         |
+| ------------- | ------ | -------- | --------------------------------------------------------------------------------------------- |
+| `key`         | string | yes      | Work item identifier.                                                                         |
+| `text`        | string | yes      | The step, ONE operation, in plain text (not Markdown), at most 200 characters.                |
+| `notesMd`     | string | no       | Instructions for this step (Markdown), at most 2000 characters.                               |
+| `commandText` | string | no       | A command the step runs, at most 500 characters; the item page renders it with a copy button. |
+| `executor`    | enum   | no       | `human` or `coding_agent`. Omitted ⇒ the card's own executor, or `human` when it has none.    |
+
+**Output** — `structuredContent`: `{ workItemKey, todo, progress }` — the new
+step (its `id` is what `set_work_item_todo_done` takes) and the list's progress
+after the append. The step is always appended **last**; concurrent appends to
+one card are serialized, so none of them lands on another's position.
+
+Text over the cap is **refused, never truncated** — a step that long is two
+steps:
+
+| Code                    | Meaning                                                 |
+| ----------------------- | ------------------------------------------------------- |
+| `EMPTY_TODO_TEXT`       | `text` is empty once trimmed.                           |
+| `TODO_TEXT_TOO_LONG`    | `text` is over 200 characters. Split it into two steps. |
+| `TODO_NOTES_TOO_LONG`   | `notesMd` is over 2000 characters. That is a work item. |
+| `TODO_COMMAND_TOO_LONG` | `commandText` is over 500 characters.                   |
+
+##### `set_work_item_todo_done`
+
+| Input    | Type    | Required | Notes                                                                 |
+| -------- | ------- | -------- | --------------------------------------------------------------------- |
+| `key`    | string  | yes      | Work item identifier.                                                 |
+| `todoId` | string  | yes      | The step's `id`, from `list_work_item_todos` or `add_work_item_todo`. |
+| `done`   | boolean | yes      | `true` ticks the step; `false` unticks it.                            |
+
+**Output** — `structuredContent`: `{ workItemKey, todo, progress }` — the step as
+it now stands and the list's progress, read in the same transaction as the tick.
+A `todoId` that is not a step of **that** card — another card's step, or no step
+at all — is `WORK_ITEM_TODO_NOT_FOUND`, and nothing changes.
 
 #### `add_lesson`
 
@@ -2164,25 +2292,25 @@ The leaf-only `type`/`executor` rule (setting them on an epic/story is rejected)
 the type→executor seed, and the assignee-membership check all apply exactly as in
 the UI; the same Story-6.4 edit gate gates the call.
 
-| Input                | Type                                               | Required | Notes                                                                                                                                 |
-| -------------------- | -------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `key`                | string                                             | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                                                |
-| `title`              | string                                             | no       | New title.                                                                                                                            |
-| `descriptionMd`      | string \| null                                     | no       | New description; `null` clears it.                                                                                                    |
-| `explanationMd`      | string \| null                                     | no       | New explanation ("why"); `null` clears it.                                                                                            |
-| `priority`           | `lowest…highest`                                   | no       | New priority.                                                                                                                         |
-| `type`               | work type \| null                                  | no       | Leaf items only; `null` clears it. First set seeds the executor.                                                                      |
-| `executor`           | `"coding_agent" \| "human"` \| null                | no       | Leaf items only; `null` clears it.                                                                                                    |
-| `difficulty`         | `"trivial" \| "low" \| "medium" \| "high"` \| null | no       | Leaf items only; `null` clears it. A re-kind onto a container that keeps one is refused.                                              |
-| `obsolescence`       | `"outdated" \| "deprecated"` \| null               | no       | The [obsolescence mark](#the-obsolescence-mark) — ANY kind in ANY status, a `done` card included; `null` clears it.                   |
-| `obsolescenceNoteMd` | string \| null                                     | no       | Why the item is marked; `null` clears it. Independent of the mark.                                                                    |
-| `estimateMinutes`    | number \| null                                     | no       | Estimated minutes (time); `null` clears it.                                                                                           |
-| `storyPoints`        | number \| null                                     | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals); set / change / `null` clears it.                                        |
-| `targetRepo`         | string \| null                                     | no       | Repo the item ships in — bare name or `"owner/name"`; must be in this project's repo set. `null` clears.                              |
-| `targetRepos`        | string[]                                           | no       | Replace the repo SET wholesale, ORDERED, element 0 the primary; `[]` clears it. Mutually exclusive with `targetRepo`.                 |
-| `targetRepositories` | string[]                                           | no       | Replace the set as REFERENCES — the project's repository row ids, ORDERED; `[]` clears it. Mutually exclusive with BOTH fields above. |
-| `assigneeId`         | string \| null                                     | no       | Assignee user id (must be a workspace member); `null` unassigns.                                                                      |
-| `dueDate`            | string (ISO-8601) \| null                          | no       | Due date; `null` clears it.                                                                                                           |
+| Input                | Type                                               | Required | Notes                                                                                                                                                  |
+| -------------------- | -------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `key`                | string                                             | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                                                                 |
+| `title`              | string                                             | no       | New title.                                                                                                                                             |
+| `descriptionMd`      | string \| null                                     | no       | New description; `null` clears it.                                                                                                                     |
+| `explanationMd`      | string \| null                                     | no       | New explanation ("why"); `null` clears it.                                                                                                             |
+| `priority`           | `lowest…highest`                                   | no       | New priority.                                                                                                                                          |
+| `type`               | work type \| null                                  | no       | Leaf items only; `null` clears it. First set seeds the executor.                                                                                       |
+| `executor`           | `"coding_agent" \| "human"` \| null                | no       | Leaf items only; `null` clears it.                                                                                                                     |
+| `difficulty`         | `"trivial" \| "low" \| "medium" \| "high"` \| null | no       | Leaf items only; `null` clears it. A re-kind onto a container that keeps one is refused.                                                               |
+| `obsolescence`       | `"outdated" \| "deprecated"` \| null               | no       | The [obsolescence mark](#the-obsolescence-mark) — any kind, on a FINISHED card only (else `OBSOLESCENCE_REQUIRES_FINISHED`); `null` clears it, always. |
+| `obsolescenceNoteMd` | string \| null                                     | no       | Why the item is marked; `null` clears it. Independent of the mark.                                                                                     |
+| `estimateMinutes`    | number \| null                                     | no       | Estimated minutes (time); `null` clears it.                                                                                                            |
+| `storyPoints`        | number \| null                                     | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals); set / change / `null` clears it.                                                         |
+| `targetRepo`         | string \| null                                     | no       | Repo the item ships in — bare name or `"owner/name"`; must be in this project's repo set. `null` clears.                                               |
+| `targetRepos`        | string[]                                           | no       | Replace the repo SET wholesale, ORDERED, element 0 the primary; `[]` clears it. Mutually exclusive with `targetRepo`.                                  |
+| `targetRepositories` | string[]                                           | no       | Replace the set as REFERENCES — the project's repository row ids, ORDERED; `[]` clears it. Mutually exclusive with BOTH fields above.                  |
+| `assigneeId`         | string \| null                                     | no       | Assignee user id (must be a workspace member); `null` unassigns.                                                                                       |
+| `dueDate`            | string (ISO-8601) \| null                          | no       | Due date; `null` clears it.                                                                                                                            |
 
 **Output** — `structuredContent`: the updated `WorkItemDto`. A non-member
 assignee, a `type`/`executor` on a non-leaf, a `difficulty` on a non-leaf
@@ -2192,7 +2320,9 @@ set (`UNKNOWN_TARGET_REPO`), a `targetRepositories` element that is not one of t
 project's repository rows (`UNKNOWN_PROJECT_REPO_REF`), or more than one of the
 three repo fields at once (`CONFLICTING_TARGET_REPO_INPUT`), or an
 `obsolescence` outside `outdated` · `deprecated` (`INVALID_OBSOLESCENCE` — the
-message leads with the code and names the field) returns a typed error.
+message leads with the code and names the field), a mark set on a card outside the
+done category (`OBSOLESCENCE_REQUIRES_FINISHED`), or a parent that carries a mark
+(`MARKED_CARD_CANNOT_REOPEN`) returns a typed error.
 
 `change_kind` needs no obsolescence rule: the mark has no kind constraint, so a
 marked card is reclassified exactly like an unmarked one.

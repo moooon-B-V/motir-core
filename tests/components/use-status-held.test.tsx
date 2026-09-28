@@ -262,3 +262,167 @@ describe('useStatusHeld', () => {
     expect(result.current.plan).toBeNull();
   });
 });
+
+// ── MOTIR-6676 — a MARK holds every status outside the done category ──────────
+
+const markStatuses: WorkflowStatusDto[] = [
+  ...statuses,
+  {
+    id: 's4',
+    projectId: 'p',
+    key: 'todo',
+    label: 'To Do',
+    category: 'todo',
+    color: null,
+    position: 'Z0',
+    isInitial: false,
+  },
+  {
+    id: 's5',
+    projectId: 'p',
+    key: 'cancelled',
+    label: 'Cancelled',
+    category: 'done',
+    color: null,
+    position: 'a3',
+    isInitial: false,
+  },
+  // A custom done-category status is finished too — moving to it is not a reopen.
+  {
+    id: 's6',
+    projectId: 'p',
+    key: 'shipped',
+    label: 'Shipped',
+    category: 'done',
+    color: null,
+    position: 'a4',
+    isInitial: false,
+  },
+];
+
+const heldKeys = (h: { statusKey: string; waitingOn: string }[]) =>
+  h.map((x) => `${x.statusKey}:${x.waitingOn}`);
+
+describe('useStatusHeld — the mark (MOTIR-6676)', () => {
+  it('a marked done card holds every non-done status; Cancelled and a custom done status stay free', () => {
+    const { result } = renderHook(() =>
+      useStatusHeld(undefined, markStatuses, 'done', null, 'outdated'),
+    );
+    expect(result.current.mark).toEqual({ mark: 'outdated', refused: false });
+    expect(heldKeys(result.current.held)).toEqual(['in_review:mark', 'approved:mark', 'todo:mark']);
+  });
+
+  it('on a marked cancelled card, Done is selectable', () => {
+    const { result } = renderHook(() =>
+      useStatusHeld(undefined, markStatuses, 'cancelled', null, 'deprecated'),
+    );
+    expect(result.current.held.map((h) => h.statusKey)).not.toContain('done');
+  });
+
+  it('clearing the mark lifts the hold with no new read', () => {
+    const { result, rerender } = renderHook(
+      ({ mark }: { mark: 'outdated' | null }) =>
+        useStatusHeld(undefined, markStatuses, 'done', null, mark),
+      { initialProps: { mark: 'outdated' as 'outdated' | null } },
+    );
+    expect(result.current.held).toHaveLength(3);
+    rerender({ mark: null });
+    expect(result.current.mark).toBeNull();
+    expect(result.current.held).toEqual([]);
+  });
+
+  it('a mark AND an awaiting gate: both show, the shared status tagged by the mark', () => {
+    const { result } = renderHook(() =>
+      useStatusHeld(
+        [held({ statusKey: 'approved', statusLabel: 'Approved' })],
+        markStatuses,
+        'done',
+        null,
+        'outdated',
+      ),
+    );
+    expect(result.current.mark).not.toBeNull();
+    expect(result.current.lines).toHaveLength(1);
+    expect(heldKeys(result.current.held).filter((k) => k.startsWith('approved'))).toEqual([
+      'approved:mark',
+    ]);
+  });
+
+  it('a gate on a done-category status still holds by its own reason beside the mark', () => {
+    const { result } = renderHook(() =>
+      useStatusHeld(
+        [held({ statusKey: 'shipped', statusLabel: 'Shipped' })],
+        markStatuses,
+        'done',
+        null,
+        'outdated',
+      ),
+    );
+    expect(heldKeys(result.current.held)).toContain('shipped:decision');
+  });
+
+  it('a MARKED_CARD_CANNOT_REOPEN refusal folds the mark in as refused; a move drops it', () => {
+    const { result } = renderHook(() => useStatusHeld(undefined, markStatuses, 'done'));
+    expect(result.current.mark).toBeNull();
+    act(() => result.current.onMarkRefused('deprecated'));
+    expect(result.current.mark).toEqual({ mark: 'deprecated', refused: true });
+    expect(heldKeys(result.current.held)).toContain('todo:mark');
+    act(() => result.current.onMoved('cancelled'));
+    expect(result.current.mark).toBeNull();
+  });
+
+  it('a refused mark stands only while the card shows the status it was refused at', () => {
+    const { result, rerender } = renderHook(
+      ({ current }: { current: string }) => useStatusHeld(undefined, markStatuses, current),
+      { initialProps: { current: 'done' } },
+    );
+    act(() => result.current.onMarkRefused('outdated'));
+    expect(result.current.mark).not.toBeNull();
+    rerender({ current: 'cancelled' });
+    expect(result.current.mark).toBeNull();
+  });
+
+  it('the card’s own mark changing is the newer word — a refusal drops', () => {
+    const { result, rerender } = renderHook(
+      ({ mark }: { mark: 'outdated' | null }) =>
+        useStatusHeld(undefined, markStatuses, 'done', null, mark),
+      { initialProps: { mark: null as 'outdated' | null } },
+    );
+    act(() => result.current.onMarkRefused('deprecated'));
+    expect(result.current.mark).toEqual({ mark: 'deprecated', refused: true });
+    rerender({ mark: 'outdated' });
+    expect(result.current.mark).toEqual({ mark: 'outdated', refused: false });
+    rerender({ mark: null });
+    expect(result.current.mark).toBeNull();
+  });
+
+  it('a new read drops a folded refusal', () => {
+    const { result, rerender } = renderHook(
+      ({ read }: { read: HeldTransitionDTO[] }) => useStatusHeld(read, markStatuses, 'done'),
+      { initialProps: { read: [] as HeldTransitionDTO[] } },
+    );
+    act(() => result.current.onMarkRefused('outdated'));
+    rerender({ read: [held({ statusKey: 'shipped', statusLabel: 'Shipped' })] });
+    expect(result.current.mark).toBeNull();
+  });
+
+  it('a plan hold still locks everything, tagged as the plan’s', () => {
+    const { result } = renderHook(() =>
+      useStatusHeld(
+        undefined,
+        markStatuses,
+        'planning',
+        {
+          itemKey: 'PROD-1',
+          workItemId: 'wi_1',
+          planId: 'pln_1',
+          planStatus: 'planned',
+          sessionId: 'pcs_1',
+          anchorKey: 'PROD-1',
+        },
+        'outdated',
+      ),
+    );
+    expect(result.current.held.every((h) => h.waitingOn === 'plan')).toBe(true);
+  });
+});

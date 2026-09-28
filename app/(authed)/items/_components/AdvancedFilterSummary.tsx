@@ -9,6 +9,7 @@ import {
 } from '@/lib/filters/ast';
 import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
 import { isWorkItemDifficulty } from '@/lib/issues/difficulty';
+import { isWorkItemObsolescence } from '@/lib/issues/obsolescence';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
@@ -69,6 +70,7 @@ export function AdvancedFilterSummary({
   const tWorkType = useTranslations('labels.workItemType');
   const tDifficulty = useTranslations('labels.difficulty');
   const tFixReason = useTranslations('workbench.toFix.reason');
+  const tObsolescence = useTranslations('labels.obsolescence');
   const format = useFormatter();
   const setOpen = useAdvancedFilterPopover()?.setOpen ?? (() => {});
 
@@ -127,6 +129,9 @@ export function AdvancedFilterSummary({
         // The Workbench's own reason words (MOTIR-6609); a value outside the enum
         // (a stale URL) is shown raw, as `difficulty` does.
         return isFixReason(id) ? tFixReason(FIX_REASON_VALUE_KEYS[id]) : id;
+      case 'obsolescence':
+        // The same rule for the mark (MOTIR-6678).
+        return isWorkItemObsolescence(id) ? tObsolescence(id) : id;
       case 'assignee':
       case 'reporter': {
         if (id === 'unassigned') return t('unassigned');

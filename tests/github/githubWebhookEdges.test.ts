@@ -12,6 +12,7 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
+import { setProjectAccess } from '@/tests/helpers/projectAccess';
 
 // Story 7.10 · MOTIR-896 — the webhook state machine's GUARD arms (the malformed
 // / unknown / unresolvable deliveries) the per-subtask suites leave uncovered.
@@ -426,7 +427,7 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
         },
         tx,
       );
-      await tx.project.update({ where: { id: project.id }, data: { accessLevel: 'private' } });
+      await setProjectAccess(tx, project.id, 'members');
     });
 
     const result = await githubWebhookService.handleEvent(

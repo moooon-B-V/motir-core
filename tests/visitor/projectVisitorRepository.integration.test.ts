@@ -4,6 +4,7 @@ import { projectVisitorRepository } from '@/lib/repositories/projectVisitorRepos
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The VISITOR RECORD's repository (Story MOTIR-6170 · MOTIR-6665), against the
 // real database: one row per (person, project) however often they consent, a
@@ -33,7 +34,7 @@ async function project() {
   const fx = await makeWorkItemFixture({ name: `PV ${identifier}`, identifier });
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { accessMode: 'public', accessLevel: 'public' },
+    data: projectAccessData('public'),
   });
   return fx;
 }
@@ -211,7 +212,7 @@ describe('the records go with the person and with the project', () => {
     );
     await adminDb.project.update({
       where: { id: fx.projectId },
-      data: { accessMode: 'members', accessLevel: 'private' },
+      data: projectAccessData('members'),
     });
     const own = await projectVisitorRepository.listByUser(u.id);
     expect(own).toHaveLength(1);

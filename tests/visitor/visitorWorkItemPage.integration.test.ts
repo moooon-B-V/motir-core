@@ -11,6 +11,7 @@ import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFix
 import { adminDb } from '../helpers/adminDb';
 import { consentedVisitor } from './_consentedVisitor';
 import { truncateAuthTables } from '../helpers/db';
+import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 // The single WORK-ITEM PAGE as a Visitor reads it (Story MOTIR-6170 ·
 // MOTIR-6652; `epic-privacy.md` §3–§5), through the real resolver and datastore.
@@ -47,7 +48,7 @@ async function fixture() {
   const fx = await makeWorkItemFixture({ name: `VP ${identifier}`, identifier });
   await adminDb.project.update({
     where: { id: fx.projectId },
-    data: { accessMode: 'public', accessLevel: 'public' },
+    data: projectAccessData('public'),
   });
   const E = await createTestWorkItem(fx, { kind: 'epic', title: 'Secret launch epic' });
   const C1 = await createTestWorkItem(fx, {

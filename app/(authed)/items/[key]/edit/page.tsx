@@ -118,6 +118,8 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
         relatesTo={detail.relatesTo}
         duplicates={detail.duplicates}
         clones={detail.clones}
+        supersedes={detail.supersedes}
+        supersededBy={detail.supersededBy}
         readiness={detail.readiness}
         currentStatus={detail.item.status}
         // MOTIR-2050: same gate as the detail page — an archived item shows no

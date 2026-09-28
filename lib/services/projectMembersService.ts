@@ -13,7 +13,7 @@ import {
   TargetNotWorkspaceMemberError,
 } from '@/lib/projects/errors';
 import { resolveProjectByKeyWithAliasInTx } from '@/lib/projects/resolveByKey';
-import { accessModeOf, asAccessMode } from '@/lib/projects/accessMode';
+import { asAccessMode } from '@/lib/projects/accessMode';
 import { asAccessLevel } from '@/lib/projects/roles';
 import { bindOrganizationContext } from '@/lib/organizations/context';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
@@ -135,8 +135,9 @@ export interface ActorScopedInput {
 
 /**
  * The DECISION's level → mode mapping (`role-model.md` Q1), for the one release in
- * which the shipped UI still sends a level. `accessModeOf` carries the same table
- * for a stored row; this one maps a REQUEST.
+ * which the shipped UI still sends a level. It maps a REQUEST; a stored row
+ * carries its mode, and `20260928000000_project_access_mode_not_null` restates
+ * this table for the rows it backfilled.
  */
 const LEVEL_TO_MODE = {
   open: 'workspace',
@@ -308,7 +309,7 @@ export const projectMembersService = {
       // Stamp `madePublicAt` only on the transition INTO `public` (Subtask
       // 6.13.4 — the project square's Recent rank's "newest" axis). A re-save of
       // an already-public project keeps its original go-public moment.
-      const stampMadePublicAt = mode === 'public' && accessModeOf(project) !== 'public';
+      const stampMadePublicAt = mode === 'public' && project.accessMode !== 'public';
       const updated = await projectRepository.setAccessMode(project.id, mode, tx, {
         stampMadePublicAt,
       });
