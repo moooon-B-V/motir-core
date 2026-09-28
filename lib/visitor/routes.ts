@@ -10,6 +10,9 @@ export const VISITOR_VIEWS = [
   'runs',
   'board',
   'roadmap',
+  // MOTIR-6769 — the pending feature requests (`public-request-board-retired.md`
+  // Decision 2), after Roadmap where the design (MOTIR-6767) places its rail row.
+  'requested-features',
   'plans',
   'approvals',
 ] as const;
@@ -25,12 +28,12 @@ export interface VisitorPath {
 }
 
 /**
- * The nine served shapes: seven views, plus `items/<key>` and `plans/<id>`. Any
+ * The ten served shapes: eight views, plus `items/<key>` and `plans/<id>`. Any
  * other `/p/*` path — the bare `/p/<identifier>`, its changelog, a sub-segment
  * under any other view — is NOT a Visitor path and keeps its 308 to motir.co.
  */
 const VIEW_PATH =
-  /^\/p\/([^/]+)\/(?:(items|plans)(?:\/([^/]+))?|(tree|runs|board|roadmap|approvals))\/?$/;
+  /^\/p\/([^/]+)\/(?:(items|plans)(?:\/([^/]+))?|(tree|runs|board|roadmap|requested-features|approvals))\/?$/;
 
 function decode(segment: string): string | null {
   try {
@@ -97,6 +100,9 @@ export function memberPathForVisitorPath(path: string): string | null {
     case 'roadmap':
     case 'approvals':
     case 'runs':
+    // The members' own inbox, renamed Requested features (MOTIR-6772): one list,
+    // one name, one address.
+    case 'requested-features':
       return withQuery(`/${view}`, params);
   }
 }
@@ -133,6 +139,7 @@ export function visitorPathForMemberPath(
     case 'roadmap':
     case 'approvals':
     case 'runs':
+    case 'requested-features':
       return decodedSub ? null : withQuery(visitorViewPath(identifier, head), params);
     default:
       return null;

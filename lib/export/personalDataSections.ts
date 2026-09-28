@@ -407,7 +407,8 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     table: 'work_item',
     model: 'workItem',
     tier: 'tenant',
-    basis: 'Work items the reader reported, is assigned, or submitted to triage.',
+    basis:
+      'Work items the reader reported, is assigned, or submitted as a bug report or feature request.',
     where: (userId) => ({
       OR: [{ reporterId: userId }, { assigneeId: userId }, { submittedByUserId: userId }],
     }),

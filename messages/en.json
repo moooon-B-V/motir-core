@@ -390,8 +390,8 @@
       "description": "Permanently delete a work item and everything beneath it. Cannot be undone."
     },
     "work_item_triage": {
-      "label": "Triage requests",
-      "description": "Accept, decline, promote or snooze an item in the triage queue."
+      "label": "Handle requested features",
+      "description": "Accept, decline, promote or snooze an item in Requested features."
     },
     "comment_add": {
       "label": "Add comments",
@@ -435,7 +435,7 @@
     },
     "public_request_submit": {
       "label": "Submit requests",
-      "description": "Send a bug report or feature request into the project's triage queue. Public projects only."
+      "description": "Send a bug report or feature request to the project's Requested features. Public projects only."
     },
     "public_request_upvote": {
       "label": "Upvote requests",
@@ -1091,7 +1091,7 @@
       "git": "Git",
       "github": "GitHub",
       "backlog": "Backlog",
-      "triage": "Triage",
+      "triage": "Requested features",
       "roadmap": "Roadmap",
       "plans": "Plans",
       "resumeOnboarding": "Resume onboarding",
@@ -5360,19 +5360,19 @@
     }
   },
   "triage": {
-    "heading": "Triage",
-    "count": "{count, plural, other {# to triage}}",
+    "heading": "Requested features",
+    "count": "{count, plural, other {# waiting}}",
     "subtitle": "{project} · {key} — incoming bug reports & feature requests, excluded from the tree until you act",
-    "noAccessTitle": "No access to triage",
-    "noAccessDescription": "You don’t have access to triage for this project.",
-    "loadError": "Couldn’t load the triage queue. Please try again.",
+    "noAccessTitle": "No access to Requested features",
+    "noAccessDescription": "You don’t have access to Requested features for this project.",
+    "loadError": "Couldn’t load Requested features. Please try again.",
     "queueLabel": "Queue · newest first",
     "searchPlaceholder": "Search submissions",
     "searchAria": "Search submissions",
     "loadOlder": "Load older",
     "loadingMore": "Loading…",
     "noSearchResults": "No submissions match your search.",
-    "selectPrompt": "Select a submission to triage",
+    "selectPrompt": "Select a request to review",
     "selectPromptBody": "Pick a row from the queue to see its full report and act on it.",
     "detailLoading": "Loading submission…",
     "publicChip": "Public",
@@ -5386,7 +5386,7 @@
     "commentsLabel": "Comments",
     "noComments": "No comments yet.",
     "empty": {
-      "title": "No items to triage",
+      "title": "Nothing waiting in Requested features",
       "description": "New bug reports and feature requests land here — from the in-app “Report” button or a signed-in “Submit a request” on the public project page."
     },
     "actions": {
@@ -5464,7 +5464,7 @@
       "descriptionPlaceholder": "Add any details that help us reproduce or understand it…",
       "submit": "Submit",
       "submitted": "Thanks — your report was submitted",
-      "submittedDetail": "Filed as {key}, now waiting in triage.",
+      "submittedDetail": "Filed as {key}, now waiting in Requested features.",
       "error": "Couldn’t submit your report. Please try again."
     }
   },
@@ -5515,7 +5515,7 @@
     "upvoteThis": "Upvote this",
     "continueAsNew": "Not the same? Continue and submit as new →",
     "confirmTitle": "Thanks — we got it",
-    "confirmBody": "Your request landed in the team’s triage queue. You’ll see it on the public roadmap once they review it. We’ll attribute it to your account.",
+    "confirmBody": "Your request landed in the team’s Requested features. You’ll see it on the public roadmap once they review it. We’ll attribute it to your account.",
     "upvotedTitle": "Thanks — your vote is in",
     "upvotedBody": "We added your upvote to the existing request. You’ll see it move on the public roadmap as the team works on it.",
     "submitAnother": "Submit another",
@@ -5566,7 +5566,7 @@
     "faqQ1": "Can anyone view this project?",
     "faqA1": "Yes. This is a public project — anyone on the web can view it with no account, and it’s indexable by search engines. You only need to sign in to submit, upvote, or comment on requests.",
     "faqQ2": "How do I submit a request?",
-    "faqA2": "Use the “Submit a request” button. You’ll be asked to sign in first (sign-in-to-act), then your bug or idea lands in the team’s triage queue and can appear on the public roadmap.",
+    "faqA2": "Use the “Submit a request” button. You’ll be asked to sign in first (sign-in-to-act), then your bug or idea lands in the team’s Requested features and can appear on the public roadmap.",
     "faqQ3": "What’s hidden on the public view?",
     "faqA3": "Internal fields are stripped by the public projection: assignees, estimates, story points, and internal work-item comments are never sent to the public view — they’re absent from the data, not just hidden in the page.",
     "priorityHighest": "Highest",
@@ -10111,6 +10111,27 @@
       "rateLimitedTitle": "You’re reading a little too fast",
       "rateLimitedBody": "This public project limits how quickly one reader can open it. Try again in {seconds, plural, one {# second} other {# seconds}}.",
       "rateLimitedRetry": "Try again"
+    },
+    "requestedFeatures": {
+      "heading": "Requested features",
+      "subtitle": "What people have asked this project for, most-voted first. Vote for the ones you want too.",
+      "total": "{count, plural, other {# waiting}}",
+      "listLabel": "Pending feature requests",
+      "featureRequest": "Feature request",
+      "bugReport": "Bug report",
+      "shown": "Showing {shown} of {total}",
+      "loadMore": "Load more",
+      "loading": "Loading…",
+      "loadFailed": "Couldn’t load more requests.",
+      "loadLimited": "You’re reading a little too fast. Try again in a moment.",
+      "tryAgain": "Try again",
+      "emptyTitle": "Nothing is waiting for a vote",
+      "emptyBody": "When someone asks this project for a feature or reports a bug, it appears here until the team picks it up.",
+      "upvote": "Upvote",
+      "removeVote": "Remove your vote",
+      "voteCount": "{count, plural, one {# vote} other {# votes}}",
+      "voteLimited": "You’re voting a little too fast. Your vote wasn’t saved — try again in a moment.",
+      "voteFailed": "Your vote wasn’t saved. Try again."
     }
   },
   "toFix": {

@@ -393,7 +393,7 @@ export const config = {
     '/runs/:path*',
     '/settings/:path*',
     '/sprints/:path*',
-    '/triage/:path*',
+    '/requested-features/:path*',
     '/workbench/:path*',
   ],
 };

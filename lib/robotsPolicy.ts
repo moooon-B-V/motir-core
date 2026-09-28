@@ -102,12 +102,15 @@ export const SIGNED_IN_SEGMENTS = [
   'plans',
   'ready',
   'reports',
+  // MOTIR-6772 — the members inbox, renamed from `triage` (which the app still
+  // answers on, as a 308 from `next.config`; a redirect source is not a served
+  // segment).
+  'requested-features',
   'roadmap',
   // MOTIR-3923 — the runs index, and the eighteenth segment.
   'runs',
   'settings',
   'sprints',
-  'triage',
   // MOTIR-4782 — the signed-in landing, renamed from `home` (which the app
   // still answers on, as a 308; a redirect source is not a served segment).
   'workbench',
@@ -148,6 +151,7 @@ export const VISITOR_SEGMENTS = [
   'enter',
   'items',
   'plans',
+  'requested-features',
   'roadmap',
   'runs',
   'tree',

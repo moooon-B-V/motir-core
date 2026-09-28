@@ -156,6 +156,10 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
     method: 'GET',
     path: '/api/public/p/{identifier}/tree',
     operationId: 'getPublicProjectTreeLevel',
+    deprecated: {
+      reason: "motir.co's read pages moved into the app (MOTIR-6171)",
+      replacement: 'the signed-in Visitor view at `app.motir.co/p/{identifier}/tree`',
+    },
     summary: 'One level of the public work-item tree',
     description:
       "The lazy hierarchy read: the project's roots, or one parent's direct children on expand. " +
@@ -192,6 +196,10 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
     method: 'GET',
     path: '/api/public/p/{identifier}/items',
     operationId: 'listPublicProjectWorkItems',
+    deprecated: {
+      reason: "motir.co's read pages moved into the app (MOTIR-6171)",
+      replacement: 'the signed-in Visitor view at `app.motir.co/p/{identifier}/items`',
+    },
     summary: "A page of a public project's work items",
     description:
       'The flat, cursor-paged list behind the Work items tab. Anonymous; a session, when present, ' +
@@ -304,6 +312,10 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
     method: 'GET',
     path: '/api/public/p/{identifier}/items/{key}',
     operationId: 'getPublicProjectWorkItem',
+    deprecated: {
+      reason: "motir.co's read pages moved into the app (MOTIR-6171)",
+      replacement: 'the signed-in Visitor view at `app.motir.co/p/{identifier}/items/{key}`',
+    },
     summary: 'ONE work item, as the public surface shows it',
     description:
       'The detail behind `/p/<identifier>/items/<key>` — the public projection plus the body, ' +
@@ -377,6 +389,10 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
     method: 'GET',
     path: '/api/public/p/{identifier}/board',
     operationId: 'getPublicProjectBoard',
+    deprecated: {
+      reason: "motir.co's read pages moved into the app (MOTIR-6171)",
+      replacement: 'the signed-in Visitor view at `app.motir.co/p/{identifier}/board`',
+    },
     summary: "The public project's BOARD tab",
     description:
       "The project's default board — its columns, the workflow statuses mapped into each, the " +
@@ -406,6 +422,10 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
     // new MAJOR. A slightly wrong name is the cheaper of the two, and this
     // comment is where the next reader finds out it was a decision.
     operationId: 'getPublicProjectRoadmapColumn',
+    deprecated: {
+      reason: "motir.co's read pages moved into the app (MOTIR-6171)",
+      replacement: 'the signed-in Visitor view at `app.motir.co/p/{identifier}/roadmap`',
+    },
     summary: 'The roadmap tab, or the next page of ONE of its columns',
     description:
       'TWO arms on one path, chosen by the parameters. With NEITHER `bucket` nor `cursor` it ' +

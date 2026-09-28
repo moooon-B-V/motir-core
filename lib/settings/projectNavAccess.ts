@@ -133,7 +133,7 @@ export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
       '`backlogService` asserts no catalog key; the sprint writes live in `sprintsService`.',
   },
   {
-    href: '/triage',
+    href: '/requested-features',
     requires: 'work_item:triage',
     evidence:
       '`triageService` asserts `work_item:triage` (MOTIR-2354, which moved it OFF `project:browse`). ' +

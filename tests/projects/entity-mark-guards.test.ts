@@ -142,7 +142,7 @@ describe('guard 2 — the `--el-avatar-*` ramp is not stranded', () => {
       found,
       'the --el-avatar-* ramp has no consumer left — either a surface stopped using it, or the ramp should be retired deliberately rather than left defined',
     ).not.toEqual([]);
-    expect(found).toContain('app/(authed)/triage/_components/TriageAvatar.tsx');
+    expect(found).toContain('app/(authed)/requested-features/_components/TriageAvatar.tsx');
   });
 
   it('the FALLBACK tile token has its own consumers, distinct from the pastel ramp', () => {

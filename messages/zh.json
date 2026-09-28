@@ -390,8 +390,8 @@
       "description": "永久删除工作项及其下级内容，无法撤销。"
     },
     "work_item_triage": {
-      "label": "处理收件箱",
-      "description": "接受、拒绝、升级或延后收件箱中的条目。"
+      "label": "处理功能需求",
+      "description": "接受、拒绝、升级或延后「功能需求」中的条目。"
     },
     "comment_add": {
       "label": "发表评论",
@@ -435,7 +435,7 @@
     },
     "public_request_submit": {
       "label": "提交请求",
-      "description": "向项目的收件箱提交缺陷报告或功能请求。仅适用于公开项目。"
+      "description": "向项目的「功能需求」提交缺陷报告或功能请求。仅适用于公开项目。"
     },
     "public_request_upvote": {
       "label": "为请求投票",
@@ -1091,7 +1091,7 @@
       "git": "Git",
       "github": "GitHub",
       "backlog": "待办列表",
-      "triage": "分流",
+      "triage": "功能需求",
       "roadmap": "路线图",
       "plans": "计划",
       "resumeOnboarding": "继续引导",
@@ -5360,19 +5360,19 @@
     }
   },
   "triage": {
-    "heading": "分流",
-    "count": "{count, plural, other {# 项待分流}}",
+    "heading": "功能需求",
+    "count": "{count, plural, other {# 项待处理}}",
     "subtitle": "{project} · {key} — 新的缺陷报告与功能请求，在你处理之前不会进入工作项树",
-    "noAccessTitle": "无分流权限",
-    "noAccessDescription": "你没有此项目的分流权限。",
-    "loadError": "无法加载分流队列，请重试。",
+    "noAccessTitle": "无权访问功能需求",
+    "noAccessDescription": "你没有此项目「功能需求」的访问权限。",
+    "loadError": "无法加载功能需求，请重试。",
     "queueLabel": "队列 · 最新优先",
     "searchPlaceholder": "搜索提交",
     "searchAria": "搜索提交",
     "loadOlder": "加载更早",
     "loadingMore": "加载中…",
     "noSearchResults": "没有符合搜索条件的提交。",
-    "selectPrompt": "选择一项以进行分流",
+    "selectPrompt": "选择一项请求进行处理",
     "selectPromptBody": "从队列中选择一行，查看完整报告并进行处理。",
     "detailLoading": "正在加载提交…",
     "publicChip": "公开",
@@ -5386,7 +5386,7 @@
     "commentsLabel": "评论",
     "noComments": "暂无评论。",
     "empty": {
-      "title": "没有待分流的事项",
+      "title": "「功能需求」中没有待处理的事项",
       "description": "新的缺陷报告和功能请求会出现在这里 — 来自应用内的“反馈”按钮，或公开项目页面上已登录用户的“提交请求”。"
     },
     "actions": {
@@ -5464,7 +5464,7 @@
       "descriptionPlaceholder": "补充有助于我们重现或理解的细节……",
       "submit": "提交",
       "submitted": "已收到你的反馈，谢谢",
-      "submittedDetail": "已记为 {key}，正在等待分流。",
+      "submittedDetail": "已记为 {key}，正在「功能需求」中等待处理。",
       "error": "反馈提交失败，请重试。"
     }
   },
@@ -5515,7 +5515,7 @@
     "upvoteThis": "给它点赞",
     "continueAsNew": "不是同一个？继续新建并提交 →",
     "confirmTitle": "谢谢 —— 我们收到了",
-    "confirmBody": "你的请求已进入团队的待处理收件箱。团队审阅后，它会出现在公开路线图上。我们会把它关联到你的账号。",
+    "confirmBody": "你的请求已进入团队的「功能需求」。团队审阅后，它会出现在公开路线图上。我们会把它关联到你的账号。",
     "upvotedTitle": "谢谢 —— 已记录你的支持",
     "upvotedBody": "我们已把你的点赞加到现有请求上。随着团队推进，你会在公开路线图上看到它的进展。",
     "submitAnother": "再提交一条",
@@ -5566,7 +5566,7 @@
     "faqQ1": "任何人都能查看这个项目吗？",
     "faqA1": "可以。这是一个公开项目——任何人都可以无需账号在网上查看，并可被搜索引擎收录。只有在提交需求、点赞或评论时才需要登录。",
     "faqQ2": "如何提交需求？",
-    "faqA2": "点击“提交需求”按钮。系统会先请你登录（登录后操作），随后你的缺陷或想法会进入团队的分流队列，并可能出现在公开路线图上。",
+    "faqA2": "点击“提交需求”按钮。系统会先请你登录（登录后操作），随后你的缺陷或想法会进入团队的「功能需求」，并可能出现在公开路线图上。",
     "faqQ3": "公开视图隐藏了什么？",
     "faqA3": "内部字段会被公开投影剥离：负责人、估算、故事点以及内部工作项评论都不会发送到公开视图——它们在数据中即不存在，而非仅在页面上隐藏。",
     "priorityHighest": "最高",
@@ -10107,6 +10107,27 @@
       "rateLimitedTitle": "你浏览得有点太快了",
       "rateLimitedBody": "此公开项目限制了单个读者的访问速度。请在 {seconds} 秒后重试。",
       "rateLimitedRetry": "重试"
+    },
+    "requestedFeatures": {
+      "heading": "功能需求",
+      "subtitle": "大家向此项目提出的需求，按票数从高到低排列。你也可以为想要的需求投票。",
+      "total": "{count, plural, other {# 项待处理}}",
+      "listLabel": "待处理的功能需求",
+      "featureRequest": "功能请求",
+      "bugReport": "缺陷报告",
+      "shown": "显示 {total} 项中的 {shown} 项",
+      "loadMore": "加载更多",
+      "loading": "加载中…",
+      "loadFailed": "无法加载更多需求。",
+      "loadLimited": "你浏览得有点太快了，请稍后再试。",
+      "tryAgain": "重试",
+      "emptyTitle": "暂无待投票的需求",
+      "emptyBody": "当有人向此项目提出功能需求或报告缺陷时，它会出现在这里，直到团队接手处理。",
+      "upvote": "投票",
+      "removeVote": "取消投票",
+      "voteCount": "{count, plural, other {# 票}}",
+      "voteLimited": "你投票有点太快了。你的投票未保存——请稍后再试。",
+      "voteFailed": "你的投票未保存，请重试。"
     }
   },
   "toFix": {

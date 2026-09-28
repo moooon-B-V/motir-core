@@ -12,13 +12,14 @@ import {
 // each one is (the `enter` redirect), and the Visitor path a member href followed
 // from a Visitor view is sent to.
 
-describe('parseVisitorPath — the nine served shapes, and nothing else', () => {
+describe('parseVisitorPath — the ten served shapes, and nothing else', () => {
   it.each([
     ['/p/ACME/board', 'board', null],
     ['/p/ACME/items', 'items', null],
     ['/p/ACME/items/ACME-7', 'items', 'ACME-7'],
     ['/p/ACME/tree', 'tree', null],
     ['/p/ACME/roadmap', 'roadmap', null],
+    ['/p/ACME/requested-features', 'requested-features', null],
     ['/p/ACME/plans', 'plans', null],
     ['/p/ACME/plans/cplan123', 'plans', 'cplan123'],
     ['/p/ACME/approvals', 'approvals', null],
@@ -45,7 +46,16 @@ describe('parseVisitorPath — the nine served shapes, and nothing else', () => 
 
   it('lists the seven views the rail and the switch address', () => {
     expect([...VISITOR_VIEWS].sort()).toEqual(
-      ['approvals', 'board', 'items', 'plans', 'roadmap', 'runs', 'tree'].sort(),
+      [
+        'approvals',
+        'board',
+        'items',
+        'plans',
+        'requested-features',
+        'roadmap',
+        'runs',
+        'tree',
+      ].sort(),
     );
   });
 
@@ -65,6 +75,8 @@ describe('memberPathForVisitorPath — the `enter` redirect (card mapping)', () 
     ['/p/ACME/items', '/items?view=list'],
     ['/p/ACME/tree', '/items?view=tree'],
     ['/p/ACME/roadmap', '/roadmap'],
+    // MOTIR-6769 — a member lands in their own inbox, renamed by MOTIR-6772.
+    ['/p/ACME/requested-features', '/requested-features'],
     ['/p/ACME/items/ACME-7', '/items/ACME-7'],
     ['/p/ACME/plans', '/plans'],
     ['/p/ACME/plans/cplan123', '/plans/cplan123'],
@@ -98,6 +110,7 @@ describe('visitorPathForMemberPath — a shared body’s member href, followed f
     ['/items/ACME-7', '?activity=comments', '/p/ACME/items/ACME-7?activity=comments'],
     ['/boards', '?board=b1', '/p/ACME/board?board=b1'],
     ['/roadmap', '?item=ACME-3', '/p/ACME/roadmap?item=ACME-3'],
+    ['/requested-features', '', '/p/ACME/requested-features'],
     ['/plans', '?planState=approved', '/p/ACME/plans?planState=approved'],
     ['/plans/cplan1', '', '/p/ACME/plans/cplan1'],
     ['/approvals', '?page=2', '/p/ACME/approvals?page=2'],

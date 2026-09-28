@@ -212,3 +212,76 @@ export async function seedVisitorProject(slug: string): Promise<VisitorSeed> {
     quiet,
   };
 }
+
+// ── Story MOTIR-6171 · MOTIR-6770 — PENDING PUBLIC REQUESTS on the public project ──
+//
+// A separate step, not folded into `seedVisitorProject`, so the Visitor story's
+// own walks keep the fixture they were written against: only the spec that
+// needs pending requests asks for them. The set is built so the Requested
+// features view's FILTER is observable — every excluded shape exists as a row
+// (snoozed, declined, unattributed) beside the three that show — and one
+// submitter is a member whose email is set, so the no-email scan is about an
+// address that is really in the database.
+
+export interface PendingRequestsSeed {
+  /** The three rows a Visitor sees, in the order they must appear (by votes). */
+  shown: { id: string; key: string; title: string; votes: number; by: string }[];
+  /** Rows that exist and must NOT appear. */
+  hidden: { key: string; title: string }[];
+}
+
+export async function seedPendingRequests(s: VisitorSeed): Promise<PendingRequestsSeed> {
+  const user = async (email: string) =>
+    (await adminDb.user.findUniqueOrThrow({ where: { email } })).id;
+  const [maya, fran, nameless] = await Promise.all(s.otherEmails.map(user));
+  const workspaceId = (await adminDb.project.findUniqueOrThrow({ where: { id: s.project.id } }))
+    .workspaceId;
+  const ctx = { userId: maya!, workspaceId };
+
+  let minutes = 60;
+  const ask = async (
+    title: string,
+    submittedByUserId: string | null,
+    patch: { snoozedUntil?: Date; status?: string } = {},
+  ) => {
+    const w = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'story', title },
+      ctx,
+    );
+    minutes -= 5;
+    await adminDb.workItem.update({
+      where: { id: w.id },
+      data: {
+        triagedAt: new Date(Date.now() - minutes * 60_000),
+        submittedByUserId,
+        status: 'todo',
+        ...patch,
+      },
+    });
+    return { id: w.id, key: w.identifier, title };
+  };
+  const vote = (workItemId: string, userIds: string[]) =>
+    adminDb.publicRequestVote.createMany({
+      data: userIds.map((userId) => ({ workItemId, userId })),
+    });
+
+  const dark = await ask('Dark mode for the dashboard', fran!);
+  const csv = await ask('Export the roadmap as CSV', nameless!);
+  const keys = await ask('Keyboard shortcuts cheat sheet', maya!);
+  const snoozed = await ask('Calendar sync', fran!, {
+    snoozedUntil: new Date(Date.now() + 7 * 86_400_000),
+  });
+  const declined = await ask('Fax integration', fran!, { status: 'done' });
+  const anonymous = await ask('A request nobody signed', null);
+  await vote(dark.id, [maya!, nameless!]);
+  await vote(csv.id, [fran!]);
+
+  return {
+    shown: [
+      { ...dark, votes: 2, by: 'Fran Full' },
+      { ...csv, votes: 1, by: 'Project member' },
+      { ...keys, votes: 0, by: 'Maya Manager' },
+    ],
+    hidden: [snoozed, declined, anonymous].map(({ key, title }) => ({ key, title })),
+  };
+}

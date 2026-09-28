@@ -1,7 +1,12 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DOCS_REDIRECTS, LANDING_REDIRECTS, SETTINGS_REDIRECTS } from '../next.config';
+import {
+  DOCS_REDIRECTS,
+  LANDING_REDIRECTS,
+  REQUESTED_FEATURES_REDIRECTS,
+  SETTINGS_REDIRECTS,
+} from '../next.config';
 
 // MOTIR-2316 — a design asset is a REFERRER to the app's addresses, and it is
 // the only referrer no other check can see.
@@ -102,10 +107,14 @@ const APP_ROUTES = appRoutePatterns();
 // docs one — a redirect source is an address the app answers on, whichever map
 // declares it, and a map this list forgets makes the guard report a live
 // address as resolving to nothing. (MOTIR-2534 added the second map.)
-// (MOTIR-4782 added the third, `/home` → `/workbench`.)
-const REDIRECT_SOURCES = [...DOCS_REDIRECTS, ...SETTINGS_REDIRECTS, ...LANDING_REDIRECTS].map(
-  (rule) => rule.source.replace(/^\//, '').split('/'),
-);
+// (MOTIR-4782 added the third, `/home` → `/workbench`; MOTIR-6772 the fourth,
+// `/triage` → `/requested-features`.)
+const REDIRECT_SOURCES = [
+  ...DOCS_REDIRECTS,
+  ...SETTINGS_REDIRECTS,
+  ...LANDING_REDIRECTS,
+  ...REQUESTED_FEATURES_REDIRECTS,
+].map((rule) => rule.source.replace(/^\//, '').split('/'));
 
 const isDynamic = (segment: string) => /^\[.+\]$/.test(segment) || /^:.+/.test(segment);
 const isCatchAll = (segment: string) => /^\[\.\.\..+\]$/.test(segment) || /^:.+\*$/.test(segment);
@@ -307,6 +316,28 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     file: 'design/workbench/workbench.mock.html',
     address: '/home',
     why: "The mock's header carries the same rename record as the notes, for a reader who opens the asset rather than the spec. Permanent.",
+  },
+  // ── `/triage` → `/requested-features` (MOTIR-6772) ─────────────────────────
+  // The members' inbox was renamed and moved; `REQUESTED_FEATURES_REDIRECTS`
+  // keeps the old address landing. These three assets drew the sidebar and the
+  // shell BEFORE the rename, and the card that renamed it adds no design asset
+  // (a label, heading and address change adds no element), so each is a record
+  // of its moment rather than a spec to rewrite. The 308 keeps every one of
+  // them resolving to the right room.
+  {
+    file: 'design/approvals/approvals-room.mock.html',
+    address: '/triage',
+    why: 'The sidebar as drawn before the inbox became Requested features (MOTIR-6772). The rename added no design asset; the 308 lands the old address on `/requested-features`. Permanent record.',
+  },
+  {
+    file: 'design/shell/top-bar.mock.html',
+    address: '/triage',
+    why: 'The shell drawer as drawn before the inbox became Requested features (MOTIR-6772). The rename added no design asset; the 308 lands the old address on `/requested-features`. Permanent record.',
+  },
+  {
+    file: 'design/shell/design-notes.md',
+    address: '/triage',
+    why: 'The ReportButton placement argument names the inbox by the address it had when the shell was drawn (MOTIR-6772 renamed it). The argument is unchanged; the 308 lands the old address on `/requested-features`. Permanent record.',
   },
   // ── A route on a DIFFERENT host, kept in the unified chrome's nav ─────────
   // `design/public-site/` (MOTIR-3880) draws the ONE chrome every motir.co
