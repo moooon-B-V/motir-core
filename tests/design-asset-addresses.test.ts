@@ -1534,6 +1534,21 @@ const reconcilablePath = (finding: PathFinding): Reconcilable => ({
 // inherited: the run that finds a class is not the run that clears it.
 // MOTIR-2369 cleared all six, so the table holds no STALE row today.
 const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
+  // ── FORWARD-LOOKING: the three error boundaries MOTIR-6855 creates (Bug MOTIR-6776) ──
+  //  MOTIR-6854's server-error design names the three files its code card builds —
+  //  one boundary per depth — because WHICH file catches a throw is the design's whole
+  //  premise (a segment's `error.tsx` never catches its own layout). None exists on
+  //  `main` yet. Each row DELETES ITSELF when MOTIR-6855 lands the file: `carries no
+  //  KNOWN_PATHS entry that has stopped applying` turns red in that pull request's CI,
+  //  exactly as the retired MOTIR-4942 row below did.
+  ...(['app/(authed)/error.tsx', 'app/error.tsx', 'app/global-error.tsx'] as const).flatMap(
+    (path) =>
+      ['design/shell/design-notes.md', 'design/shell/server-error.mock.html'].map((file) => ({
+        file,
+        path,
+        why: 'A boundary MOTIR-6855 creates, named by the server-error design (MOTIR-6854) — FORWARD-LOOKING, delete this row when the file lands',
+      })),
+  ),
   // ── A DRAWN DOCUMENT'S PATH, not a citation (Story MOTIR-4907 · MOTIR-5673) ──
   //  The decision port draws an agent's decision document as a pull request carries
   //  it, and its meta line and the To-approve row NAME that file. The path is the
