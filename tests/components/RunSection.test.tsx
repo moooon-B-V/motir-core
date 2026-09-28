@@ -18,9 +18,14 @@ import type { DispatchRunDto, DispatchRunListItemDto } from '@/lib/dto/dispatchR
 // invisible until somebody counts sockets. So the test counts requests.
 
 const fetchMock = vi.fn();
+// `RunSection` refreshes the SERVER-rendered surfaces when a run ends (the card's
+// status, its pull requests) — `router.refresh()`, so the router is mocked here.
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
 beforeEach(() => {
   fetchMock.mockReset();
+  refresh.mockReset();
   fetchMock.mockResolvedValue({ ok: false, status: 500, body: null });
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -126,6 +131,29 @@ describe('⚠️ it opens NO stream unless this card has a LIVE run', () => {
     // schema's `@@unique([dispatchRunId, seq])` is what makes that neither a
     // gap nor a duplicate.
     expect(streamCalls()[0]).toContain('since=12');
+  });
+});
+
+describe('when the live run ends', () => {
+  it('refreshes the server-rendered surfaces once the stream says done', async () => {
+    const frame = 'event: done\ndata: {"status":"succeeded"}\n\n';
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(frame));
+        controller.close();
+      },
+    });
+    fetchMock.mockResolvedValue({ ok: true, status: 200, body });
+    mount([
+      run({
+        status: 'running',
+        stopReason: null,
+        endedAt: null,
+        lastHeartbeatAt: new Date().toISOString(),
+      }),
+    ]);
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(streamCalls()).toHaveLength(1);
   });
 });
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Bot, TriangleAlert } from 'lucide-react';
 import { RunTonePill } from '@/components/runs/RunTonePill';
@@ -122,6 +123,7 @@ export function RunSection({
   // reconnect reads the latest value without the effect depending on it — an
   // effect that re-ran on every event would tear the connection down per frame.
   const seqRef = useRef(current?.seq ?? 0);
+  const router = useRouter();
 
   useEffect(() => {
     if (!liveRunId) return;
@@ -159,6 +161,11 @@ export function RunSection({
                 const status = (data as { status?: DispatchRunDto['status'] }).status;
                 if (status && !cancelled) {
                   setRuns((prev) => prev.map((r) => (r.id === liveRunId ? { ...r, status } : r)));
+                  // How a run ENDS changes SERVER-rendered surfaces the stream does
+                  // not carry — the card's status (the agent moved it on success),
+                  // its pull requests — so refresh them, as the start and cancel
+                  // mutations already do (CLAUDE.md: page state after a mutation).
+                  router.refresh();
                 }
                 cancelled = true;
                 return;
@@ -184,7 +191,7 @@ export function RunSection({
       cancelled = true;
       controller.abort();
     };
-  }, [liveRunId]);
+  }, [liveRunId, router]);
 
   // THE DOOR'S RUN (MOTIR-691): the section's current run — this card's own leg
   // run, or, for a container, the scope run over its children when that is the
