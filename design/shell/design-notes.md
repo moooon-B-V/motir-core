@@ -2233,3 +2233,124 @@ project-scoped route renders while there is no active project.
 switcher is a `listbox` with `aria-label` _Projects_ and a text child, so it announces as empty rather
 than as nothing. `tests/navigation/no-create-project-screen-guard.test.ts` must stay green: this shell
 is not a create-first screen.
+
+## The server-error page (MOTIR-6854)
+
+**Bug MOTIR-6776 · design card MOTIR-6854 · built by MOTIR-6855.** A NEW surface, drawn in
+**`design/shell/server-error.mock.html`** (panels 1, 1a, 1b, 2, 3 and the dark board D1–D3). It
+composes the shipped `ErrorState`, `Card` and `Button` (`packages/design-system`) and the shell as
+`no-project--limited.mock.html` draws it, read at `origin/main` @ `4495c493f`.
+
+**Why it exists.** `app/` has exactly two `error.tsx` files, both on settings panes
+(`app/(authed)/settings/project/{components,fields}/error.tsx`), and no `global-error.tsx`. So a
+server render failure anywhere else reaches Next's `onUncaughtError` and the reader is left with an
+empty tab. On 2026-09-28 a P2028 transaction stall in `app/(authed)/layout.tsx:227`
+(`projectsService.listProjects`; server event MOTIR-6780, cause owned by MOTIR-6788) produced exactly
+that on `/workbench`. This page is what the reader sees instead, whatever made the server fail.
+
+**Access path.** There is no door to draw: any navigation, and any refresh or cold load, can land
+here. Panel 2's address strip draws the one arrival that is not a click — a hard reload of a URL
+whose render fails lands on this page on the first paint.
+
+### Three depths, three boundaries
+
+A segment's `error.tsx` wraps that segment's CHILDREN, never its own layout, so each depth needs its
+own boundary, and each renders inside a different amount of chrome:
+
+| state                              | thrown in                                                                                  | caught by                | chrome around it                                 |
+| ---------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------ | ------------------------------------------------ |
+| **1** — a page failed              | any page under `app/(authed)/`                                                             | `app/(authed)/error.tsx` | the full shell: top bar + rail                   |
+| **2** — the signed-in shell failed | `app/(authed)/layout.tsx` (today's event)                                                  | `app/error.tsx`          | root layout only: tokens + locale, no shell      |
+| **3** — the root failed            | `app/layout.tsx` (it reads `appearancePreferenceService.getApplied` per signed-in request) | `app/global-error.tsx`   | nothing — it renders its own `<html>` / `<body>` |
+
+### Panels
+
+- **1 — in the shell.** The content area holds the shipped **`ErrorState`** as it composes today —
+  `Card` with `role="alert"`, `AlertTriangle` 48px in `--el-danger`, serif `text-xl` title,
+  `--el-text-muted` body **on the white card** (4.54:1, its one safe surface), and its secondary
+  **Try again** (`common.retry`). Centred in the content column at the width (480px) and top padding
+  (72px) the no-project shell's home area uses. **No second door:** the rail and top bar are the way
+  out — the reasoning `app/(authed)/not-found.tsx` already rests on.
+- **1a — Retry pending.** Try again takes the shipped `Button`'s `loading` state: `Spinner`,
+  `disabled`, `aria-busy`, label **Trying again…**. Nothing else on the page moves.
+  ⚠️ **`ErrorState` does not expose this today**: its retry `Button` takes no `loading`. The build
+  adds one optional prop to `ErrorState` (e.g. `retryPending`, passed to that `Button` with its
+  pending label) rather than hand-composing a second copy of the card.
+- **1b — Retry failed again.** The same page: no second card, no stacked message, no attempt count, no
+  loop. Only the **reference** changes, because a new failure carries a new digest. Drawn just after
+  **Copy reference**: the button becomes a quiet **Copied** (`role="status"`) for 2 s, then returns.
+- **2 — the signed-in shell failed.** A full page like `app/not-found.tsx` (centred, `max-w-[48rem]`,
+  `min-h-dvh`), the same `ErrorState` with the app-level copy. With no shell the page owes a door of
+  its own: **Go to Motir** — the existing `errors.notFound.homeAction` key, reused — a link to `/`,
+  which already sends a signed-in reader to its landing, `/workbench`, and anyone else to `/sign-in` (`app/page.tsx`).
+- **3 — the root failed.** **The same page as state 2**, drawn on the default appearance. Go to Motir
+  still goes to `/`: this page cannot know whether the reader has a session, and `/` is the one
+  address that decides it.
+- **D1–D3 — dark.** The three states on the dark board.
+
+### The reference (the digest)
+
+**Shown.** Below the card, on the page ground: `Reference` + the error's `digest` in a mono chip
+(`user-select: all`) + an icon button **Copy reference**. It is what a reader can quote to support,
+and the same value the boundary tags its Sentry report with, so support can find the matching server
+event. A digest is Next's opaque hash of the server error — it carries no message and no data, which
+is why it is safe to show. **When `error.digest` is absent** (an error thrown in the browser, which
+has none), the whole line is not rendered. The chip is on `--el-surface`, so its ink is
+`--el-text-secondary`, never muted.
+
+### What state 3 loses, and how each is replaced (for MOTIR-6855)
+
+`global-error.tsx` REPLACES `app/layout.tsx`, so everything the root layout supplies is absent:
+
+- **The appearance.** No server `data-theme` / `data-palette` / `data-style` / `data-type` on
+  `<html>` — the server preference is the database read that may be what failed. The page runs the
+  same theme init script with **no server preference** (`buildThemeInitScript(null)`), which reads
+  this device's stored appearance — kept reconciled from the server on every signed-in page — and
+  resolves `system` through `matchMedia`. So the page honours the reader's appearance **as last seen
+  on this device**; what it cannot honour is a change made on another device and not yet seen here.
+  With nothing stored it renders the default appearance, drawn in panel 3. **Ink and ground come
+  from ONE authority**: both are `--el-*` under the one `data-theme` the script sets, never ink from
+  `prefers-color-scheme` over a ground from `data-theme` — the split that made MOTIR-4708's 404
+  1.00:1.
+- **The fonts.** The root layout puts the `next/font` variables on `<html>`; `global-error` must apply
+  the same classes to its own `<html>`, or the serif title falls back to Georgia.
+- **The translations.** It renders outside the `next-intl` provider, so its strings cannot come from
+  `messages/*.json` through `useTranslations`. It carries its own small `en` / `zh` catalog of the
+  keys below, chosen from `NEXT_LOCALE` (the cookie `i18n/request.ts` reads) or `navigator.language`,
+  falling back to `en`.
+
+### Copy — `errors.serverError.*` (new; en + zh), plus two reused keys
+
+| key                                     | en                                                                                                                                                                                                              | zh                                                                                                                                    |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `pageTitle`                             | This page couldn’t load                                                                                                                                                                                         | 此页面无法加载                                                                                                                        |
+| `pageBody`                              | Something went wrong on Motir’s side while loading it — nothing you did caused this. Try again; if it keeps happening, include the reference below when you contact support.                                    | 加载此页面时 Motir 这边出现了问题，这不是你的操作导致的。请重试；如果问题持续出现，联系支持时请附上下方的参考编号。                   |
+| `appTitle`                              | Motir couldn’t load                                                                                                                                                                                             | Motir 无法加载                                                                                                                        |
+| `appBody`                               | Something went wrong on our side before this page could open — nothing you did caused this. Try again, or go back to Motir’s home. If it keeps happening, include the reference below when you contact support. | 页面打开之前，我们这边出现了问题，这不是你的操作导致的。请重试，或返回 Motir 首页。如果问题持续出现，联系支持时请附上下方的参考编号。 |
+| `retrying`                              | Trying again…                                                                                                                                                                                                   | 正在重试…                                                                                                                             |
+| `reference`                             | Reference                                                                                                                                                                                                       | 参考编号                                                                                                                              |
+| `copyReference`                         | Copy reference                                                                                                                                                                                                  | 复制参考编号                                                                                                                          |
+| `copied`                                | Copied                                                                                                                                                                                                          | 已复制                                                                                                                                |
+| _(reused)_ `common.retry`               | Try again                                                                                                                                                                                                       | 重试                                                                                                                                  |
+| _(reused)_ `errors.notFound.homeAction` | Go to Motir                                                                                                                                                                                                     | 前往 Motir                                                                                                                            |
+
+State 1 uses `pageTitle` / `pageBody`; states 2 and 3 use `appTitle` / `appBody`. The copy names no
+cause — the page only knows that the server failed — and never blames the reader.
+
+### Tokens &amp; a11y
+
+`--el-*` only: `--el-danger` (the triangle, a graphic), `--el-text` / `--el-text-muted` (on the white
+card) / `--el-text-secondary` (the reference line, on any ground), `--el-link`, `--el-surface` +
+`--el-border` (the digest chip), `--el-button-border`. Shape: `--radius-card`, `--radius-btn`,
+`--radius-control`, `--height-btn-md`, `--spacing-card-padding`, `--spacing-tooltip-x/y` (the chip).
+`ErrorState`'s `role="alert"` announces the failure; the copy button has an `aria-label` and its
+confirmation is a `role="status"`.
+
+### What this page does NOT cover
+
+- **A server ACTION's failure** — a click whose `POST` returns 500 (MOTIR-6147's comments). That is a
+  toast or inline message on the component that fired it, not a page.
+- **A 404.** `notFound()` is not an error to these boundaries; the two not-found pages stay the answer.
+- **The two settings-pane boundaries** keep their own panels. They already compose the same
+  `ErrorState`, so they read as the same family; this design changes neither.
+- **Why the server failed** — that is MOTIR-6788's.
