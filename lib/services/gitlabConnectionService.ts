@@ -1,4 +1,6 @@
+import type { Prisma } from '@/generated/prisma/client';
 import { assertWorkspaceOrgNotClosing } from '@/lib/organizations/closingGuard';
+import { assertOrgAdmin } from '@/lib/services/organizationAccessService';
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
@@ -45,6 +47,29 @@ const EXPIRY_SKEW_MS = 60_000;
  *  the same row rather than creating a duplicate). */
 function connectionId(workspaceId: string): string {
   return `gitlab-ws-${workspaceId}`;
+}
+
+/**
+ * WHO MAY MANAGE THE WORKSPACE'S GITLAB CONNECTION — an Owner or Admin of the
+ * organisation that owns it, the same `manageOrgSettings` capability the GitHub
+ * arm's disconnect asserts (`organizationRepoService.disconnectFromOrganisation`)
+ * and the Git page renders its controls from (MOTIR-6320).
+ *
+ * ⚠️ THE CONNECTION'S WRITES CHECKED NOTHING BUT RLS BEFORE THIS, and RLS answers
+ * a different question: whether the actor is IN the workspace, not what they may
+ * do there. So any member could delete the workspace's GitLab credential, register
+ * a webhook and start indexing, or schedule a project's code graph for removal —
+ * while the page said these were owner/admin controls.
+ *
+ * Takes the caller's `tx`, for the reason `assertOrgAdmin` gives: the role read
+ * runs in the transaction whose write it gates. A non-member of the org raises
+ * `OrganizationNotFoundError`, a plain member `OrgForbiddenError`.
+ */
+async function assertMayManageGitlab(
+  ctx: { userId: string; workspaceId: string },
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  await assertOrgAdmin(ctx.userId, await resolveOrganizationId(ctx.workspaceId, tx), tx);
 }
 
 /**
@@ -234,6 +259,8 @@ export const gitlabConnectionService = {
     const conn = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
+        // The list only feeds Connect, so it is gated like Connect (MOTIR-6320).
+        await assertMayManageGitlab(ctx, tx);
         const row = await githubInstallationRepository.findByWorkspaceAndProvider(
           ctx.workspaceId,
           'gitlab',
@@ -294,6 +321,7 @@ export const gitlabConnectionService = {
     const conn = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
+        await assertMayManageGitlab(ctx, tx);
         await assertWorkspaceOrgNotClosing(ctx.workspaceId, tx);
         return githubInstallationRepository.findByWorkspaceAndProvider(
           ctx.workspaceId,
@@ -395,6 +423,7 @@ export const gitlabConnectionService = {
     const disconnected = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
+        await assertMayManageGitlab(ctx, tx);
         await assertWorkspaceOrgNotClosing(ctx.workspaceId, tx);
         const conn = await githubInstallationRepository.findByWorkspaceAndProvider(
           ctx.workspaceId,
@@ -445,6 +474,7 @@ export const gitlabConnectionService = {
     const before = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
+        await assertMayManageGitlab(ctx, tx);
         await assertWorkspaceOrgNotClosing(ctx.workspaceId, tx);
         const conn = await githubInstallationRepository.findByWorkspaceAndProvider(
           ctx.workspaceId,
@@ -467,6 +497,9 @@ export const gitlabConnectionService = {
     const disconnectedRefs = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
+        // Again, in the transaction that DELETES: the check above gated the
+        // webhook removal, and a role change can land between the two.
+        await assertMayManageGitlab(ctx, tx);
         const conn = await githubInstallationRepository.findByWorkspaceAndProvider(
           ctx.workspaceId,
           'gitlab',

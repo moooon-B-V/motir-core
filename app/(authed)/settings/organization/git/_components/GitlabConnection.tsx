@@ -33,24 +33,46 @@ import { GitlabProjectPicker } from './GitlabProjectPicker';
 // 2b) rather than on a screen of GitLab's. The connection is WORKSPACE-scoped and
 // reuses `GithubInstallation` under `provider: 'gitlab'` (MOTIR-1474).
 
+// ⚠️ WRITING IS ORG ADMIN, AND THIS CARD IS TOLD SO (MOTIR-6320). The page
+// computed `canDisconnect` for the GitHub arm and never handed it here, so every
+// member saw Disconnect, the project picker and the sync switches — against a
+// service that checked no role either. `canManage` is the same answer
+// (`isOrgAdminForWorkspace`), and the service now asserts it on every write. The
+// permission-gated UI rule's treatments: the entry points (Connect GitLab,
+// Disconnect, the picker) are HIDDEN, and the per-project sync switch is shown
+// DISABLED beside the sentence that says who can — the GitHub arm's own copy.
+
 const OAUTH_START_PATH = '/api/gitlab/oauth/start';
 
 /** The connection read, and the panel it chooses between. */
 export async function GitlabConnection({
   userId,
   workspaceId,
+  canManage,
+  organizationName,
 }: {
   userId: string;
   workspaceId: string;
+  /** Whether the actor administers the organisation (`isOrgAdminForWorkspace`). */
+  canManage: boolean;
+  organizationName: string;
 }) {
   const connection = await gitlabConnectionService.getConnectionForWorkspace({
     userId,
     workspaceId,
   });
   return !connection ? (
-    <NotConnectedPanel connectHref={OAUTH_START_PATH} />
+    <NotConnectedPanel
+      connectHref={OAUTH_START_PATH}
+      canManage={canManage}
+      organizationName={organizationName}
+    />
   ) : (
-    <ConnectedPanel connection={connection} />
+    <ConnectedPanel
+      connection={connection}
+      canManage={canManage}
+      organizationName={organizationName}
+    />
   );
 }
 
@@ -58,8 +80,17 @@ export async function GitlabConnection({
  *  ONE grant: GitLab's `api` scope conveys identity AND project access + webhook
  *  rights in the same authorization, so step 2 is the in-app SELECTION that grant
  *  enables, not a second grant (the design's honest connect model). */
-async function NotConnectedPanel({ connectHref }: { connectHref: string }) {
+async function NotConnectedPanel({
+  connectHref,
+  canManage,
+  organizationName,
+}: {
+  connectHref: string;
+  canManage: boolean;
+  organizationName: string;
+}) {
   const t = await getTranslations('gitlab.connect');
+  const tGithub = await getTranslations('github');
   const scopes = ['read_user', 'read_api', 'api'];
   return (
     <Card
@@ -72,10 +103,16 @@ async function NotConnectedPanel({ connectHref }: { connectHref: string }) {
       footer={
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="font-sans text-sm text-(--el-text-muted)">{t('foot')}</p>
-          <a href={connectHref} className={buttonVariants({ variant: 'primary' })}>
-            <GitlabMark className="h-4 w-4" aria-hidden />
-            {t('cta')}
-          </a>
+          {canManage ? (
+            <a href={connectHref} className={buttonVariants({ variant: 'primary' })}>
+              <GitlabMark className="h-4 w-4" aria-hidden />
+              {t('cta')}
+            </a>
+          ) : (
+            <p className="font-sans text-sm text-(--el-text-secondary)">
+              {tGithub('organization.adminOnly', { org: organizationName })}
+            </p>
+          )}
         </div>
       }
     >
@@ -111,8 +148,17 @@ async function NotConnectedPanel({ connectHref }: { connectHref: string }) {
 }
 
 /** Panel 2 — connected: the identity card + the project-selection list. */
-async function ConnectedPanel({ connection }: { connection: GithubInstallationDTO }) {
+async function ConnectedPanel({
+  connection,
+  canManage,
+  organizationName,
+}: {
+  connection: GithubInstallationDTO;
+  canManage: boolean;
+  organizationName: string;
+}) {
   const t = await getTranslations('gitlab');
+  const tGithub = await getTranslations('github');
   const base = gitlabBaseUrl();
   const host = new URL(base).host;
   const profileUrl = `${base}/${connection.accountLogin}`;
@@ -140,7 +186,7 @@ async function ConnectedPanel({ connection }: { connection: GithubInstallationDT
           login={connection.accountLogin}
           verified={t('identity.verified')}
           caption={t('identity.connectedAs', { name: connection.accountLogin })}
-          trailing={<GitlabDisconnectButton />}
+          trailing={canManage ? <GitlabDisconnectButton /> : null}
         />
       </Card>
 
@@ -149,6 +195,11 @@ async function ConnectedPanel({ connection }: { connection: GithubInstallationDT
           <div className="flex flex-col gap-1">
             <SectionLabel label={t('projects.title')} />
             <p className="font-sans text-sm text-(--el-text-muted)">{t('projects.caption')}</p>
+            {canManage ? null : (
+              <p className="font-sans text-xs text-(--el-text-secondary)">
+                {tGithub('organization.adminOnly', { org: organizationName })}
+              </p>
+            )}
           </div>
         }
         footer={<p className="font-sans text-sm text-(--el-text-muted)">{t('projects.foot')}</p>}
@@ -178,12 +229,13 @@ async function ConnectedPanel({ connection }: { connection: GithubInstallationDT
                   <GitlabProjectSyncSwitch
                     repoId={repo.repoId}
                     label={`${repo.owner}/${repo.name}`}
+                    canManage={canManage}
                   />
                 </li>
               ))}
             </ul>
           )}
-          <GitlabProjectPicker />
+          {canManage ? <GitlabProjectPicker /> : null}
         </div>
       </Card>
     </div>

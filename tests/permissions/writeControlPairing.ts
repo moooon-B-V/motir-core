@@ -167,19 +167,16 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
 
   // ── organization settings ──────────────────────────────────────────────────
   'settings/organization/git/actions.ts#connectGitlabProjectAction': {
-    kind: 'known-gap',
-    card: 'MOTIR-6320',
-    reason: 'no role check beyond workspace membership',
+    kind: 'role',
+    role: 'org:owner-or-admin',
   },
   'settings/organization/git/actions.ts#disconnectGitlabAction': {
-    kind: 'known-gap',
-    card: 'MOTIR-6320',
-    reason: 'no role check beyond workspace membership',
+    kind: 'role',
+    role: 'org:owner-or-admin',
   },
   'settings/organization/git/actions.ts#disconnectGitlabProjectAction': {
-    kind: 'known-gap',
-    card: 'MOTIR-6320',
-    reason: 'no role check beyond workspace membership',
+    kind: 'role',
+    role: 'org:owner-or-admin',
   },
   'settings/organization/git/actions.ts#listGitlabProjectsAction': READ,
   'settings/organization/actions.ts#reconcileActiveWorkspaceAction': {
@@ -353,17 +350,14 @@ export const CONTROL_EXEMPTIONS: Record<string, ControlExemption> = {
     kind: 'page-guarded',
     page: 'app/(authed)/settings/project/monitoring/page.tsx',
   },
+  // Rendered only when `GitlabConnection` holds `canManage` (MOTIR-6320).
   'app/(authed)/settings/organization/git/_components/GitlabDisconnectButton.tsx': {
-    kind: 'known-gap',
-    card: 'MOTIR-6320',
+    kind: 'mounted-by',
+    parents: ['app/(authed)/settings/organization/git/_components/GitlabConnection.tsx'],
   },
   'app/(authed)/settings/organization/git/_components/GitlabProjectPicker.tsx': {
-    kind: 'known-gap',
-    card: 'MOTIR-6320',
-  },
-  'app/(authed)/settings/organization/git/_components/GitlabProjectSyncSwitch.tsx': {
-    kind: 'known-gap',
-    card: 'MOTIR-6320',
+    kind: 'mounted-by',
+    parents: ['app/(authed)/settings/organization/git/_components/GitlabConnection.tsx'],
   },
   'app/(authed)/settings/workspace/_components/NameCard.tsx': {
     kind: 'known-gap',

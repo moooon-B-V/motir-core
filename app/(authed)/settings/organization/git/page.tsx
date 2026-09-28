@@ -182,7 +182,12 @@ async function OrgGitBody({
   if (provider === 'gitlab') {
     return (
       <>
-        <GitlabConnection userId={ctx.userId} workspaceId={ctx.workspaceId} />
+        <GitlabConnection
+          userId={ctx.userId}
+          workspaceId={ctx.workspaceId}
+          canManage={canDisconnect}
+          organizationName={organizationName}
+        />
         <OrgGitClient
           initialRows={rows}
           organizationName={organizationName}

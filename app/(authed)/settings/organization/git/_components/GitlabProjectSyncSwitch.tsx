@@ -18,7 +18,18 @@ import { disconnectGitlabProjectAction } from '../actions';
 // listed — needs a persisted `sync-enabled` flag, deferred with the same
 // judgement as self-managed GitLab in the design notes; connect/disconnect is the
 // shipped two-state control. The switch is the faithful primitive either way.)
-export function GitlabProjectSyncSwitch({ repoId, label }: { repoId: string; label: string }) {
+//
+// Without `canManage` the switch still SHOWS the project is syncing, disabled;
+// the projects card says who can change it (MOTIR-6320).
+export function GitlabProjectSyncSwitch({
+  repoId,
+  label,
+  canManage,
+}: {
+  repoId: string;
+  label: string;
+  canManage: boolean;
+}) {
   const t = useTranslations('gitlab');
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -26,7 +37,7 @@ export function GitlabProjectSyncSwitch({ repoId, label }: { repoId: string; lab
   return (
     <Switch
       checked
-      disabled={pending}
+      disabled={pending || !canManage}
       aria-label={t('projects.syncLabel', { project: label })}
       onCheckedChange={() =>
         startTransition(async () => {
