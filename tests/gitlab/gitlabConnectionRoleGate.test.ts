@@ -145,7 +145,9 @@ async function snapshot(workspaceId: string, connId: string) {
   const [connections, repos, offboarding] = await Promise.all([
     adminDb.githubInstallation.count({ where: { workspaceId, provider: 'gitlab' } }),
     adminDb.githubRepo.findMany({ where: { installationId: connId }, select: { repoId: true } }),
-    adminDb.codeGraphOffboarding.count(),
+    // Scoped to THIS workspace: `truncateAuthTables` does not clear the offboarding
+    // queue, so a sibling file on the same worker can leave rows behind.
+    adminDb.codeGraphOffboarding.count({ where: { coreWorkspaceId: workspaceId } }),
   ]);
   return { connections, repoIds: repos.map((r) => r.repoId).sort(), offboarding };
 }
