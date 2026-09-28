@@ -121,6 +121,22 @@ export const EXEMPT_TOOLS = {
     'so there is no shared shape to derive from. `replyCount` is load-bearing rather than ' +
     'decorative: deleting a root takes its whole thread, and a caller must be able to see how ' +
     'much went with it without re-reading the item (MOTIR-5295).',
+  list_work_item_todos:
+    'Returns a committed work item’s TO-DO LIST — `{ workItemKey, items, progress }`. No ' +
+    '`/api/v1` operation returns a work item’s to-do list: the item page reads it through its ' +
+    'own Server Actions, and the only to-do shape in v1 is a plan PROPOSAL’s `todos`, which ' +
+    'describes a step that does not exist yet (no id, no `done`). So there is no shared shape to ' +
+    'derive from. `progress` is load-bearing: it is counted in the same read as the rows, so a ' +
+    'caller never pairs a list with a count taken at another moment (MOTIR-6725).',
+  add_work_item_todo:
+    'Returns the appended step and the list’s progress — `{ workItemKey, todo, progress }`. ' +
+    'Same boundary as `list_work_item_todos`: no `/api/v1` operation writes or returns a ' +
+    'committed card’s to-do, so there is nothing to derive from. `todo.id` is load-bearing: it ' +
+    'is what `set_work_item_todo_done` takes (MOTIR-6725).',
+  set_work_item_todo_done:
+    'Returns the ticked (or unticked) step and the list’s progress — `{ workItemKey, todo, ' +
+    'progress }`. Same boundary as its two siblings. `progress` is read inside the tick’s own ' +
+    'transaction, so it describes the list the tick produced (MOTIR-6725).',
   delete_work_item:
     'Returns a cascade-delete summary (`totalCount`, `descendantCount`, `byKind`). ADR §3 ' +
     'leaves the irreversible cascade delete OUT of v1 entirely, and `tests/helpers/v1RouteAudit.ts` ' +

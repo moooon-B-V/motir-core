@@ -55,6 +55,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // `activityService.listHistory` asserts `project:browse` by name; `listAll`
   // reaches it through `commentsService.listComments` → `assertCanBrowse`.
   get_work_item_activity: 'project:browse',
+  // A card's TO-DO LIST (MOTIR-6725). The read is `workItemTodosService.listTodos`,
+  // which asserts `assertCanBrowse` on the card's project — a read-only member
+  // sees the list and its progress, exactly as on the item page.
+  list_work_item_todos: 'project:browse',
   list_ready: 'project:browse',
   next_ready: 'project:browse',
   // Reads the item and assembles text; it never claims the item or flips its
@@ -194,6 +198,14 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // merge, its direction, and why it is accepted rather than papered over.
   mark_integrated: 'work_item:edit',
   complete_session: 'work_item:edit',
+  // The two to-do WRITES (MOTIR-6725) — append a step, tick or untick one. Every
+  // write on a to-do is `work_item:edit` on the PARENT card
+  // (`docs/decisions/work-item-todo-list.md` §4: ticking changes the item's
+  // content), which `workItemTodosService` asserts through `assertCanEdit`. The
+  // key is already in `CLI_TOKEN_GRANT`, so a dispatched agent may tick the
+  // steps of the card it was handed; the grant is NOT widened.
+  add_work_item_todo: 'work_item:edit',
+  set_work_item_todo_done: 'work_item:edit',
 
   // ── comment:add ───────────────────────────────────────────────────────────
   // `commentsService` gates the add on `getCommentCapabilities().canComment`,
