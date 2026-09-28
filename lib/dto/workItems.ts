@@ -8,7 +8,7 @@
 // `string` (a fractional-index key is already a string and Decimals don't
 // JSON-serialize losslessly as numbers). The mapper owns those conversions.
 
-import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
+import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { ChoiceBodyDTO } from '@/lib/dto/approvalGate';
 import type { FilterAst } from '@/lib/filters/ast';
@@ -520,6 +520,12 @@ export interface IssueDetailDto {
    * (MOTIR-6610) and the item page its banner (MOTIR-6611).
    */
   fixReason: WorkItemFixReasonDto | null;
+  /**
+   * What the item page's To fix banner names for that reason — the check, the
+   * base, the reviewer and their note, and the repair command (`WorkItem.fixDetail`,
+   * MOTIR-6600). `null` exactly when `fixReason` is (MOTIR-6611).
+   */
+  fixDetail: FixDetailDto | null;
   ancestors: WorkItemSummaryDto[];
   parent: WorkItemSummaryDto | null;
   children: WorkItemSummaryDto[];

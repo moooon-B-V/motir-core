@@ -170,6 +170,7 @@ import {
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toQuickViewData } from '@/lib/mappers/quickViewMappers';
+import { toFixDetailDto } from '@/lib/mappers/fixReasonMappers';
 import { toLinkedPullRequestDto, toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
 import { standingMergeRefusals, standingQueueFailures } from './deliveryVerdict';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
@@ -6292,6 +6293,7 @@ export const workItemsService = {
       folderId: placement.folderId,
       placementFolder: placement.placementFolder,
       fixReason: item.fixReason,
+      fixDetail: toFixDetailDto(item.fixReason, item.fixDetail),
       ancestors,
       parent: placement.parent,
       // A Visitor's child panel names no hidden child; a private epic's is empty.

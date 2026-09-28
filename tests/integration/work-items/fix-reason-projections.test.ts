@@ -88,3 +88,47 @@ describe('fixReason on every tag read (MOTIR-6610)', () => {
     }
   });
 });
+
+describe('fixReason + fixDetail on the item page read (MOTIR-6611)', () => {
+  beforeEach(async () => {
+    await adminDb.$executeRawUnsafe(
+      'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
+    );
+    await truncateAuthTables();
+  });
+
+  it('carries the stored reason and its detail, and null for both on a card with none', async () => {
+    const fx = await makeWorkItemFixture();
+    const stuck = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Sent back' },
+      fx.ctx,
+    );
+    const healthy = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Healthy' },
+      fx.ctx,
+    );
+    const detail = {
+      repair: 'run',
+      check: null,
+      queueReason: null,
+      base: null,
+      reviewerName: 'Ana Ruiz',
+      notePreview: 'Double-counts a moved card.',
+      gate: 'pull_request_approval',
+      affected: 2,
+      total: 2,
+    } as const;
+    await adminDb.workItem.update({
+      where: { id: stuck.id },
+      data: { status: 'in_progress', fixReason: 'changes_requested', fixDetail: detail },
+    });
+
+    const read = await workItemsService.getIssueDetail(fx.projectId, stuck.identifier, fx.ctx);
+    expect(read.fixReason).toBe('changes_requested');
+    expect(read.fixDetail).toEqual(detail);
+
+    const none = await workItemsService.getIssueDetail(fx.projectId, healthy.identifier, fx.ctx);
+    expect(none.fixReason).toBeNull();
+    expect(none.fixDetail).toBeNull();
+  });
+});

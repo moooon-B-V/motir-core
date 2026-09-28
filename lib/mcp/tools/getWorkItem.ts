@@ -225,8 +225,16 @@ export async function runGetWorkItem(
   // The path is the one read the quick view and `/api/v1` share; an unfiled item
   // makes no read and carries two nulls. `placementFolder` (MOTIR-5375) is the
   // work item PAGE's EFFECTIVE placement and is deliberately NOT published —
-  // agents see the item's own placement only.
-  const { placementFolder: _pagePlacementOnly, ...publishedDetail } = detail;
+  // agents see the item's own placement only. `fixReason` / `fixDetail` (Story
+  // MOTIR-6589) are likewise the item PAGE's — its To fix banner — and are not
+  // published here: widening this payload is a decision of its own, not a side
+  // effect of a page banner.
+  const {
+    placementFolder: _pagePlacementOnly,
+    fixReason: _pageFixReasonOnly,
+    fixDetail: _pageFixDetailOnly,
+    ...publishedDetail
+  } = detail;
   const folderPath =
     detail.folderId === null ? null : await workItemsService.getFolderPath(detail.folderId, ctx);
   // The work item's ERRORS (Story MOTIR-5975 · MOTIR-5981): every monitor link

@@ -1,0 +1,161 @@
+'use client';
+
+import { useCallback, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
+import { ArrowDown, LoaderCircle, Wrench } from 'lucide-react';
+import { CopyableCodeBlock } from '@/components/markdown/CopyableCodeBlock';
+import { toFixTagState } from '@/components/workItems/ToFixTag';
+import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import { DEVELOPMENT_SECTION_ID } from './decisionAnchor';
+import { useLandOnLateSection } from './useLandOnLateSection';
+
+// THE TO FIX BANNER (Story MOTIR-6589 · MOTIR-6611) — the item page says WHY the
+// card is stuck and WHAT repairs it, before a reader has opened a pull request.
+//
+// Design: `design/work-items/to-fix--tag-and-banner.mock.html` panels 5 and 6,
+// specified in `design/work-items/design-notes.md` § *The TO FIX tag and banner
+// (MOTIR-6608)*. It sits in the main column's state-banner slot:
+// `ArchivedBanner` › THIS › `PendingPlanNotice` › Description.
+//
+// ⚠️ THE COMMAND COMES FROM `fixDetail.repair`, NEVER FROM THE REASON — the
+// Workbench To fix row's rule (`workbench/design-notes.md` § 30), so the two can
+// never name different commands for one card. An approve-to-merge Request changes
+// is `run` (its re-run's prompt carries the note); an acceptance Re-run is `fix`.
+//
+// ⚠️ IT DRAWS WHAT THE STORED DETAIL SAYS AND NOTHING ELSE. No pull request is
+// read here: the Development block below already lists them, and the banner points
+// there rather than repeating them.
+
+/** GitHub's raw queue reasons the Workbench humanises (`workbench.toFix.queueReason.*`);
+ *  any other raw reason falls to the bare sentence, as the Workbench row does. */
+const QUEUE_REASONS = new Set([
+  'CI_FAILURE',
+  'CI_TIMEOUT',
+  'MERGE_CONFLICT',
+  'INVALID_MERGE_COMMIT',
+]);
+
+const code = (chunks: ReactNode) => (
+  <code className="rounded-(--radius-control) bg-(--el-code-bg) px-1 font-mono text-xs font-semibold text-(--el-code-text)">
+    {chunks}
+  </code>
+);
+const bold = (chunks: ReactNode) => <b className="font-semibold">{chunks}</b>;
+
+export interface ToFixBannerProps {
+  /** The `PROD-N` key — the command names it. */
+  identifier: string;
+  fixReason: WorkItemFixReasonDto | null;
+  fixDetail: FixDetailDto | null;
+  /** The item's status CATEGORY — a `done` card draws nothing (`toFixTagState`). */
+  statusCategory: StatusCategoryDto | null;
+}
+
+export function ToFixBanner({
+  identifier,
+  fixReason,
+  fixDetail,
+  statusCategory,
+}: ToFixBannerProps) {
+  const t = useTranslations('toFix.banner');
+  const tw = useTranslations('workbench.toFix');
+  const findDevelopment = useCallback(() => document.getElementById(DEVELOPMENT_SECTION_ID), []);
+  const { press, pending } = useLandOnLateSection(findDevelopment);
+
+  const reason = toFixTagState(fixReason, statusCategory);
+  if (!reason || !fixDetail) return null;
+
+  const sentence = ((): ReactNode => {
+    switch (reason) {
+      case 'queue_failed':
+        if (fixDetail.check) return t.rich('queueFailed', { check: fixDetail.check, code });
+        if (fixDetail.queueReason && QUEUE_REASONS.has(fixDetail.queueReason)) {
+          return t('queueFailedReason', {
+            reason: tw(`queueReason.${fixDetail.queueReason}`),
+          });
+        }
+        return t('queueFailedBare');
+      case 'conflicted':
+        return fixDetail.base
+          ? t.rich('conflicted', { base: fixDetail.base, code })
+          : t('conflictedNoBase');
+      case 'ci_failed':
+        return fixDetail.check
+          ? t.rich('ciFailed', { check: fixDetail.check, code })
+          : t('ciFailedBare');
+      case 'changes_requested':
+        if (!fixDetail.reviewerName) return t('changesRequestedAnon');
+        return fixDetail.notePreview
+          ? t.rich('changesRequested', {
+              name: fixDetail.reviewerName,
+              note: fixDetail.notePreview,
+              b: bold,
+            })
+          : t.rich('changesRequestedNoNote', { name: fixDetail.reviewerName, b: bold });
+      default: {
+        const unreachable: never = reason;
+        return unreachable;
+      }
+    }
+  })();
+
+  const meta = [
+    fixDetail.gate === 'acceptance_result' ? t('onAcceptance') : null,
+    fixDetail.total > 1
+      ? tw('affected', { affected: fixDetail.affected, total: fixDetail.total })
+      : null,
+  ].filter((line): line is string => line !== null);
+
+  return (
+    <div
+      role="status"
+      data-testid="to-fix-banner"
+      data-to-fix={reason}
+      className="flex items-start gap-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-danger-surface) px-3.5 py-3"
+    >
+      {/* The tag's own disc — the banner and the tag are recognisably one signal. */}
+      <span
+        className="mt-px inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-(--el-danger) text-(--el-danger-text)"
+        aria-hidden
+      >
+        <Wrench className="h-3 w-3 shrink-0" aria-hidden />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <p className="m-0 font-sans text-sm font-semibold text-(--el-danger-surface-text)">
+          {sentence}
+        </p>
+        {meta.length > 0 ? (
+          <p className="m-0 font-sans text-[13px] text-(--el-danger-surface-text)">
+            {meta.join(' · ')}
+          </p>
+        ) : null}
+        <p className="m-0 mt-1 font-sans text-[13px] text-(--el-danger-surface-text)">
+          {t(fixDetail.repair === 'run' ? 'leadRun' : 'leadFix')}
+        </p>
+        <CopyableCodeBlock language="shell" code={`motir ${fixDetail.repair} ${identifier}`} />
+        {/* A real `#development` link, so it works with scripting off; with it on,
+            the press waits for the late stack the way the header marker does. */}
+        <a
+          href={`#${DEVELOPMENT_SECTION_ID}`}
+          onClick={(event) => {
+            event.preventDefault();
+            press();
+          }}
+          aria-busy={pending || undefined}
+          className="inline-flex w-fit items-center gap-1 font-sans text-[13px] font-medium text-(--el-text-strong) underline decoration-(--el-border-strong) underline-offset-2 hover:decoration-(--el-text-strong) focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        >
+          {t('toDevelopment')}
+          {pending ? (
+            <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
+          ) : (
+            <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+          )}
+        </a>
+        <span className="sr-only" role="status" aria-live="polite">
+          {pending ? t('opening') : ''}
+        </span>
+      </div>
+    </div>
+  );
+}

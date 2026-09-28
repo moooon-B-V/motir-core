@@ -27,6 +27,7 @@ import { formatDate } from '@/lib/utils/datetime';
 import type { Locale } from '@/lib/i18n/locales';
 import { ArchivedBanner } from './_components/ArchivedBanner';
 import { PendingPlanNotice } from './_components/PendingPlanNotice';
+import { ToFixBanner } from './_components/ToFixBanner';
 import { PlanHistorySection } from './_components/PlanHistorySection';
 import { PLAN_HISTORY_FIRST_PAGE } from './_components/planHistoryPaging';
 import { CoreFieldsPanel } from './_components/CoreFieldsPanel';
@@ -549,8 +550,19 @@ export default async function ItemView({
                       canEdit={canEdit}
                     />
                   ) : null}
-                  {/* MOTIR-4197: the pending-plan indicator — SECOND in the slot,
-              after the archived banner when both render (present before
+                  {/* MOTIR-6611: the To fix banner — after the archived banner and
+              BEFORE the pending-plan notice (present before future: what the card
+              IS, what holds it now, what a plan proposes it become). Renders
+              nothing when nothing is waiting on a repair, which is nearly every
+              card, or on a done card. */}
+                  <ToFixBanner
+                    identifier={item.identifier}
+                    fixReason={detail.fixReason}
+                    fixDetail={detail.fixDetail}
+                    statusCategory={statusCategory}
+                  />
+                  {/* MOTIR-4197: the pending-plan indicator — LAST in the slot,
+              after the archived banner and the To fix banner when they render (present before
               future: what this card IS, then what a plan proposes it BECOME).
               Nothing renders — no reserved box — when no undecided plan names
               this card, which is nearly every card, or when the actor lacks

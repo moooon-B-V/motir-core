@@ -595,6 +595,10 @@ describe('the `dependencies` block on get_work_item’s CHILDREN (MOTIR-1848)', 
     // WITHHOLDS — which folder vocabulary agents see is Story MOTIR-5310's. So it
     // is removed from the DTO side here, and its absence from the tool is pinned.
     expect(structured).not.toHaveProperty('placementFolder');
+    // So are `fixReason` / `fixDetail` (Story MOTIR-6589): the item page's To fix
+    // banner reads them, and publishing them to agents is not that story's call.
+    expect(structured).not.toHaveProperty('fixReason');
+    expect(structured).not.toHaveProperty('fixDetail');
     const {
       children: _ignored,
       item: toolItem,
@@ -612,6 +616,8 @@ describe('the `dependencies` block on get_work_item’s CHILDREN (MOTIR-1848)', 
       children: _alsoIgnored,
       item: dtoItem,
       placementFolder: _pageOnly,
+      fixReason: _pageFixReason,
+      fixDetail: _pageFixDetail,
       ...restOfDto
     } = detail as unknown as Record<string, unknown>;
     const { commentCount: _count, ...toolItemRest } = toolItem as Record<string, unknown>;

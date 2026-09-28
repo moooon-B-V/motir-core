@@ -9981,6 +9981,23 @@
       "conflicted": "待修复 · 与其目标分支冲突",
       "ci_failed": "待修复 · CI 未通过",
       "changes_requested": "待修复 · 已要求修改"
+    },
+    "banner": {
+      "queueFailed": "需要修复：它在合并队列中失败（检查 <code>{check}</code>）。",
+      "queueFailedReason": "需要修复：它在合并队列中失败（{reason}）。",
+      "queueFailedBare": "需要修复：它在合并队列中失败。",
+      "conflicted": "需要修复：它与 <code>{base}</code> 冲突。",
+      "conflictedNoBase": "需要修复：它与其目标分支冲突。",
+      "ciFailed": "需要修复：CI 未通过（检查 <code>{check}</code>）。",
+      "ciFailedBare": "需要修复：CI 未通过。",
+      "changesRequested": "需要修复：<b>{name}</b> 要求修改——“{note}”",
+      "changesRequestedNoNote": "需要修复：<b>{name}</b> 要求修改。",
+      "changesRequestedAnon": "需要修复：已要求修改。",
+      "onAcceptance": "由验收视频退回。",
+      "leadFix": "用以下命令修复：",
+      "leadRun": "重新运行该工作项。新一次运行的提示词会带上审阅者的说明：",
+      "toDevelopment": "查看它的拉取请求",
+      "opening": "正在打开它的拉取请求…"
     }
   }
 }
