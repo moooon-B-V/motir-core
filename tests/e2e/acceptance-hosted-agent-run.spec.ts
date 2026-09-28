@@ -51,7 +51,10 @@ import en from '@/messages/en.json';
 // claims with the ordinary E2E discipline — authoritative waits, no timers —
 // but carry no pacing holds of their own.
 
-test.describe.configure({ timeout: 300_000 });
+// 120 s: the happy path overran its old 300 s budget twice, taking the whole
+// acceptance leg past its job ceiling so the failure was never printed. Bounded
+// here so the leg finishes and reports what the test is waiting on.
+test.describe.configure({ timeout: 120_000 });
 
 const DEFAULT_MODEL = 'e2e-hosted-default';
 const ALT_MODEL = 'e2e-hosted-alt';
