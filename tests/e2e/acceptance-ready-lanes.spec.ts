@@ -1,9 +1,12 @@
-import type { APIRequestContext, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { db, resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
-import { signUp as apiSignUp, createProject } from './_helpers/workflow';
-import { TEST_PASSWORD } from './_helpers/work-item-setup';
+import { usersService } from '@/lib/services/usersService';
+import { workspacesService } from '@/lib/services/workspacesService';
+import { projectsService } from '@/lib/services/projectsService';
+import { workItemsService } from '@/lib/services/workItemsService';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // READY WORK IN THREE LANES — THE ACCEPTANCE RECEIPT (Story MOTIR-6829 ·
 // Subtask MOTIR-6836). The story's verification recipe, steps 1–3, in a real
@@ -26,14 +29,55 @@ import { TEST_PASSWORD } from './_helpers/work-item-setup';
 // keeps the previous subtree mounted (hidden) while it does, so an unscoped one
 // matches both (CLAUDE.md § the second cost of a boundary).
 
+// The tree is seeded through the services, never the main lane's HTTP helpers:
+// those post to the main lane's origin, and this lane's server is on its own.
+
+const EMAIL = 'acceptance-ready-lanes@example.com';
+const PASSWORD = 'acceptance-ready-lanes-pw-1';
+
+interface Seed {
+  ctx: ServiceContext;
+  projectId: string;
+}
+
+async function seedProject(): Promise<Seed> {
+  const owner = await usersService.createUser({
+    email: EMAIL,
+    password: PASSWORD,
+    name: 'Riley Ready',
+  });
+  const { workspace } = await workspacesService.createWorkspace({
+    name: 'Motir Workspace',
+    ownerUserId: owner.id,
+  });
+  const project = await projectsService.createProject({
+    workspaceId: workspace.id,
+    actorUserId: owner.id,
+    name: 'Motir',
+    identifier: 'MOT',
+  });
+  await projectsService.setActiveProject({
+    userId: owner.id,
+    workspaceId: workspace.id,
+    projectId: project.id,
+  });
+  return { ctx: { userId: owner.id, workspaceId: workspace.id }, projectId: project.id };
+}
+
 async function mk(
-  ctx: APIRequestContext,
-  projectId: string,
-  data: { title: string; kind: string; priority?: string; parentId?: string },
+  seed: Seed,
+  data: {
+    title: string;
+    kind: 'epic' | 'story' | 'task' | 'bug' | 'subtask';
+    priority?: 'low';
+    parentId?: string;
+  },
 ): Promise<{ id: string; identifier: string }> {
-  const res = await ctx.post('/api/_test/work-items', { data: { projectId, ...data } });
-  expect(res.status(), `create "${data.title}"`).toBe(201);
-  return (await res.json()) as { id: string; identifier: string };
+  const dto = await workItemsService.createWorkItem(
+    { projectId: seed.projectId, ...data, parentId: data.parentId ?? null },
+    seed.ctx,
+  );
+  return { id: dto.id, identifier: dto.identifier };
 }
 
 const mainList = (page: Page) => page.getByRole('list', { name: 'Ready work items' });
@@ -56,53 +100,48 @@ test('/ready shows a story as one expandable row over its ready leaves, never an
   acceptanceStory('MOTIR-6829');
   test.setTimeout(240_000);
 
-  const owner = await apiSignUp('acceptance-ready-lanes@example.com');
-  const project = await createProject(owner, 'Motir', 'MOT');
-  await db.workspaceMembership.update({
-    where: { userId_workspaceId: { userId: owner.userId, workspaceId: owner.workspaceId } },
-    data: { activeProjectId: project.id },
-  });
-  const E = await mk(owner.ctx, project.id, { title: 'Ready work in lanes', kind: 'epic' });
-  const S = await mk(owner.ctx, project.id, {
+  const seed = await seedProject();
+  const E = await mk(seed, { title: 'Ready work in lanes', kind: 'epic' });
+  const S = await mk(seed, {
     title: 'Group the ready list by story',
     kind: 'story',
     parentId: E.id,
   });
   const leaves = [
-    await mk(owner.ctx, project.id, {
+    await mk(seed, {
       title: 'Partition the walk',
       kind: 'subtask',
       parentId: S.id,
     }),
-    await mk(owner.ctx, project.id, {
+    await mk(seed, {
       title: 'Lane cursor codec',
       kind: 'subtask',
       parentId: S.id,
     }),
-    await mk(owner.ctx, project.id, {
+    await mk(seed, {
       title: 'Container shapes read',
       kind: 'subtask',
       parentId: S.id,
     }),
   ];
-  const T = await mk(owner.ctx, project.id, {
+  const T = await mk(seed, {
     title: 'Reconcile the CLI changeset',
     kind: 'task',
     priority: 'low',
     parentId: E.id,
   });
-  const B = await mk(owner.ctx, project.id, { title: 'Copy toast clips long keys', kind: 'bug' });
-  const B2 = await mk(owner.ctx, project.id, {
+  const B = await mk(seed, { title: 'Copy toast clips long keys', kind: 'bug' });
+  const B2 = await mk(seed, {
     title: 'Load-more drops the last row',
     kind: 'bug',
   });
-  const b1 = await mk(owner.ctx, project.id, {
+  const b1 = await mk(seed, {
     title: 'Reproduce at the page boundary',
     kind: 'subtask',
     parentId: B2.id,
   });
 
-  await signIn(page, owner.email, TEST_PASSWORD);
+  await signIn(page, EMAIL, PASSWORD);
 
   await chapter('Open Ready from the sidebar — S is one collapsed row, E is no row', async () => {
     await page

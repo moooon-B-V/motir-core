@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -8,7 +8,6 @@ import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
-import { PageSkeleton } from '@/components/ui/PageSkeleton';
 import { buttonVariants } from '@/components/ui/Button';
 import { ReadyLanes } from './_components/ReadyLanes';
 import { ReadyHelpPopover } from './_components/ReadyHelpPopover';
@@ -36,6 +35,7 @@ export default async function ReadyPage() {
   if (!session) redirect('/sign-in');
 
   const t = await getTranslations('ready');
+  const tShell = await getTranslations('shell');
 
   const ctx = await getActiveProject();
   // No active project: the reader can enter none of the workspace's projects
@@ -61,21 +61,15 @@ export default async function ReadyPage() {
           ready--lanes panel 7: the REAL heading, then card-height blocks. */}
       <Suspense
         fallback={
-          <PageSkeleton
+          <ReadyFrame
             header={
               <header className="flex flex-col gap-1">
                 {heading}
                 {subtitle}
               </header>
             }
-          >
-            <div className="h-9 w-56 rounded-(--radius-btn) bg-(--el-muted)" />
-            <div className="flex flex-col gap-2">
-              {Array.from({ length: 6 }, (_, i) => (
-                <div key={i} className="h-11 rounded-(--radius-card) bg-(--el-muted)" />
-              ))}
-            </div>
-          </PageSkeleton>
+            loadingLabel={tShell('pageLoading')}
+          />
         }
       >
         <ReadyBody
@@ -155,5 +149,25 @@ async function ReadyBody({
         />
       )}
     </>
+  );
+}
+
+/** The lanes' pending frame (design/ready ready--lanes panel 7): the REAL heading,
+ *  then the switch and card-height blocks. Drawn here rather than through the
+ *  shared `PageSkeleton`, which MOTIR-3531 ships with no page consumer yet. */
+function ReadyFrame({ header, loadingLabel }: { header: ReactNode; loadingLabel: string }) {
+  return (
+    <div className="flex flex-col gap-6" aria-busy="true">
+      <span className="sr-only">{loadingLabel}</span>
+      {header}
+      <div className="flex animate-pulse flex-col gap-6" aria-hidden="true">
+        <div className="h-9 w-56 rounded-(--radius-btn) bg-(--el-muted)" />
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} className="h-11 rounded-(--radius-card) bg-(--el-muted)" />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
