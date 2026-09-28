@@ -8,6 +8,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { resolveDeliveredWorkItems } from './changeRequestWorkItems';
+import { recomputeWorkItemFixReason } from './fixReasonService';
 import { queueExitCardMoves, settleUnlandedOutcome } from './mergeQueueExitService';
 import { withdrawPullRequestApprovalGatesOnConflict } from './pullRequestApprovalGates';
 
@@ -129,8 +130,16 @@ export const pullRequestMergeabilityService = {
         },
         tx,
       );
-      if (!conflicted) return { withdrawn: 0, moved: [] as AppliedMove[] };
-      return this.withdrawForConflict(pullRequestId, actor, tx);
+      const settled = conflicted
+        ? await this.withdrawForConflict(pullRequestId, actor, tx)
+        : { withdrawn: 0, moved: [] as AppliedMove[] };
+      // A conflict — or a clean reading that ends one — changes the to-fix answer of
+      // every card this pull request delivers (MOTIR-6602). After the withdrawal, so the
+      // recompute reads any move it made; each card is locked in the order it does.
+      for (const ref of await resolveDeliveredWorkItems(pullRequestId, tx)) {
+        await recomputeWorkItemFixReason(ref.id, tx);
+      }
+      return settled;
     });
     await emitMoves(outcome.moved, actor);
     return { conflicted, ...outcome, actor };

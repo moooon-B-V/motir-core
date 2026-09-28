@@ -7,6 +7,7 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { withdrawPullRequestApprovalGateOnSetChange } from './pullRequestApprovalGates';
 import { recomputeWorkItemCiState } from './deliveryVerdict';
+import { recomputeWorkItemFixReason } from './fixReasonService';
 import { refreshLinkCheckForPullRequest } from './pullRequestLinkCheckService';
 import { resyncLinkedPullRequest } from './changeRequestStatusSync';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -277,6 +278,8 @@ export const githubPullRequestService = {
       // to fire, which for a pull request whose checks have already finished is
       // never. The link is exactly the moment the answer changes.
       if (!alreadyDelivered) await recomputeWorkItemCiState(currentItemId, tx);
+      // The same set is what the card's to-fix answer reads (MOTIR-6602).
+      if (!alreadyDelivered) await recomputeWorkItemFixReason(currentItemId, tx);
       return toLinkedPullRequestDto(pr);
     }).then(async (dto) => {
       // MOTIR-3675 — turn the unlinked-pull-request check GREEN, now rather than
@@ -490,6 +493,7 @@ export const githubPullRequestService = {
         // request — and the one that can write the FIRST delivery a card has
         // ever had.
         await recomputeWorkItemCiState(input.workItemId, tx);
+        await recomputeWorkItemFixReason(input.workItemId, tx);
       }
 
       return {
@@ -581,6 +585,7 @@ export const githubPullRequestService = {
         // was ever coming to correct it — the pull request it would have come
         // from is the one that just stopped delivering this card.
         await recomputeWorkItemCiState(workItemId, tx);
+        await recomputeWorkItemFixReason(workItemId, tx);
       }
       return { removed: count > 0 };
     }).then(async (result) => {
@@ -666,6 +671,7 @@ export const githubPullRequestService = {
       if (count > 0) {
         await withdrawPullRequestApprovalGateOnSetChange(input.workItemId, tx);
         await recomputeWorkItemCiState(input.workItemId, tx);
+        await recomputeWorkItemFixReason(input.workItemId, tx);
       }
       return { removed: count > 0, pullRequestId: pr.id };
     }).then(async (result) => {

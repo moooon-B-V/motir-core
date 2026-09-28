@@ -18,6 +18,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { commentsService } from './commentsService';
 import { promoteDeliveredCardsOnGreen, withdrawDeliveredCardsOnRed } from './ciPromotion';
 import { recomputeWorkItemCiState } from './deliveryVerdict';
+import { recomputeWorkItemFixReason } from './fixReasonService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
 
@@ -347,6 +348,8 @@ export async function applyCiStatusFeedback(
       // set that is missing the row this very delivery just wrote.
       for (const workItemId of resolved.allDeliveredWorkItemIds) {
         await recomputeWorkItemCiState(workItemId, tx);
+        // …and the card's to-fix answer, which reads the same check rows (MOTIR-6602).
+        await recomputeWorkItemFixReason(workItemId, tx);
       }
     }, CI_FEEDBACK_SYSTEM_TX);
     return {
@@ -518,6 +521,8 @@ export async function applyCiStatusFeedback(
     async (tx) => {
       for (const workItemId of resolved.allDeliveredWorkItemIds) {
         await recomputeWorkItemCiState(workItemId, tx);
+        // …and the card's to-fix answer, which reads the same check rows (MOTIR-6602).
+        await recomputeWorkItemFixReason(workItemId, tx);
       }
     },
     CI_FEEDBACK_TENANT_TX,

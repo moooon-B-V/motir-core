@@ -1,0 +1,304 @@
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
+import zhMessages from '@/messages/zh.json';
+import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
+import type { HomeWorkItemRowDto } from '@/lib/dto/home';
+import type { WorkflowDto } from '@/lib/dto/workflows';
+import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+
+// The To fix tab's ROWS (Story MOTIR-6588 · MOTIR-6605), under happy-dom, built to
+// `design/workbench/design-notes.md` § 30: the fix line for each reason (Panel 2),
+// the repair command read from `fixDetail.repair`, a HELD row marked *Cleared*
+// (Panel 3), the empty state (Panel 4), the pager (Panel 5) and zh (Panel 6).
+
+const push = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push, replace: vi.fn(), prefetch: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => '/workbench',
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+import { WorkbenchList } from '@/app/(authed)/workbench/_components/WorkbenchList';
+import { fixCommandOf } from '@/app/(authed)/workbench/_components/WorkbenchFixLine';
+import { toWorkbenchRowViews } from '@/app/(authed)/workbench/_components/workbenchRows';
+import type { WorkbenchTab } from '@/lib/workbench/tab';
+
+afterEach(() => {
+  cleanup();
+  push.mockReset();
+});
+
+const MEMBERS: WorkspaceMemberDTO[] = [
+  {
+    userId: 'u1',
+    name: 'Zhu Yue',
+    email: 'y@example.com',
+    workspaceRole: 'manager',
+    customRole: null,
+  },
+];
+
+const WORKFLOW = {
+  statuses: [
+    { key: 'implemented', label: 'Implemented', category: 'in_progress' },
+    { key: 'in_review', label: 'In Review', category: 'in_progress' },
+  ],
+} as unknown as WorkflowDto;
+
+const EMPTY = <p>Nothing to fix</p>;
+
+function detail(over: Partial<FixDetailDto> = {}): FixDetailDto {
+  return {
+    repair: 'fix',
+    check: null,
+    queueReason: null,
+    base: null,
+    reviewerName: null,
+    notePreview: null,
+    gate: null,
+    affected: 1,
+    total: 1,
+    ...over,
+  };
+}
+
+function stuck(
+  identifier: string,
+  fixReason: WorkItemFixReasonDto,
+  fixDetail: FixDetailDto,
+): HomeWorkItemRowDto {
+  return {
+    id: `wi_${identifier}`,
+    kind: 'task',
+    type: null,
+    key: 1,
+    identifier,
+    title: `Title of ${identifier}`,
+    status: 'implemented',
+    ciState: null,
+    fixReason,
+    fixDetail,
+    priority: 'medium',
+    assigneeId: 'u1',
+    reporterId: 'u1',
+    executor: null,
+    storyPoints: null,
+    estimateMinutes: null,
+    updatedAt: '2026-09-27T00:00:00.000Z',
+    completedAt: null,
+    project: { id: 'p1', identifier: 'MOTIR', name: 'Motir' },
+    viewerIsAssignee: true,
+    viewerIsReporter: false,
+  };
+}
+
+const FOUR = [
+  stuck('M-1', 'queue_failed', detail({ check: 'vitest (4/8)', queueReason: 'CI_FAILURE' })),
+  stuck('M-2', 'conflicted', detail({ base: 'main' })),
+  stuck('M-3', 'ci_failed', detail({ check: 'e2e (chromium, 2/4)', affected: 2, total: 3 })),
+  stuck(
+    'M-4',
+    'changes_requested',
+    detail({
+      repair: 'run',
+      reviewerName: 'Mei Lin',
+      notePreview: 'The empty state still says “No reviews”',
+      gate: 'pull_request_approval',
+    }),
+  ),
+];
+
+function list(
+  rows: HomeWorkItemRowDto[],
+  opts: { tab?: WorkbenchTab; page?: number; total?: number } = {},
+) {
+  return (
+    <WorkbenchList
+      rows={toWorkbenchRowViews(rows, WORKFLOW, MEMBERS, false)}
+      label="To fix"
+      tab={opts.tab ?? 'to-fix'}
+      pagination={{ total: opts.total ?? rows.length, page: opts.page ?? 1, pageSize: 25 }}
+      empty={EMPTY}
+    />
+  );
+}
+
+const fixLine = (key: string) => screen.getByTestId(`workbench-fix-${key}`);
+
+describe('To fix — one fix line per reason (§ 30 Panel 2)', () => {
+  it('draws the design’s four sentences, each with its repair command', () => {
+    render(list(FOUR));
+
+    expect(fixLine('M-1').textContent).toContain('Failed in the merge queue · vitest (4/8)');
+    expect(fixLine('M-2').textContent).toContain('Conflicts with main');
+    expect(fixLine('M-3').textContent).toContain('CI failed · e2e (chromium, 2/4)');
+    expect(fixLine('M-4').textContent).toContain(
+      'Changes requested by Mei Lin — “The empty state still says “No reviews””',
+    );
+
+    expect(within(fixLine('M-1')).getByText('motir fix M-1')).toBeTruthy();
+    expect(within(fixLine('M-2')).getByText('motir fix M-2')).toBeTruthy();
+    expect(within(fixLine('M-3')).getByText('motir fix M-3')).toBeTruthy();
+    expect(within(fixLine('M-4')).getByText('motir run M-4')).toBeTruthy();
+  });
+
+  it('names the affected pull requests only when the card delivers more than one', () => {
+    render(list(FOUR));
+    expect(fixLine('M-3').textContent).toContain('2 of 3 pull requests affected');
+    expect(fixLine('M-1').textContent).not.toContain('pull requests affected');
+  });
+
+  it('the command comes from `repair`, NOT the reason — an acceptance Re-run is `motir fix`', () => {
+    render(
+      list([
+        stuck(
+          'M-5',
+          'changes_requested',
+          detail({
+            repair: 'fix',
+            reviewerName: 'Zhu Yue',
+            notePreview: 'Say how to add the first card',
+            gate: 'acceptance_result',
+          }),
+        ),
+      ]),
+    );
+    expect(fixLine('M-5').textContent).toContain('Changes requested by Zhu Yue');
+    expect(within(fixLine('M-5')).getByText('motir fix M-5')).toBeTruthy();
+    expect(fixCommandOf(detail({ repair: 'run' }), 'X-1')).toBe('motir run X-1');
+  });
+
+  it.each([
+    [
+      'a queue failure with no check, a KNOWN reason',
+      'queue_failed',
+      { queueReason: 'CI_TIMEOUT' },
+      'Failed in the merge queue · checks timed out',
+    ],
+    [
+      'a queue failure with an UNMAPPED reason',
+      'queue_failed',
+      { queueReason: 'SOMETHING_ELSE' },
+      'Failed in the merge queue',
+    ],
+    ['a conflict with no recorded base', 'conflicted', {}, 'Conflicts with its base branch'],
+    ['red CI with no check name', 'ci_failed', {}, 'CI failed'],
+    [
+      'a refusal with no note',
+      'changes_requested',
+      { reviewerName: 'Mei Lin', repair: 'run' },
+      'Changes requested by Mei Lin',
+    ],
+    ['a refusal by nobody recorded', 'changes_requested', { repair: 'run' }, 'Changes requested'],
+  ] as const)('falls back for %s', (_label, reason, over, text) => {
+    render(list([stuck('M-9', reason, detail(over as Partial<FixDetailDto>))]));
+    expect(fixLine('M-9').querySelector('p')?.textContent).toBe(text);
+  });
+
+  it('a failure wears CircleX and a refusal wears Undo2 — every line is words, not only colour', () => {
+    render(list(FOUR));
+    expect(fixLine('M-1').querySelector('svg')?.getAttribute('class')).toContain('lucide-circle-x');
+    expect(fixLine('M-4').querySelector('svg')?.getAttribute('class')).toContain('lucide-undo2');
+  });
+
+  it('the copy button is always there, copies the command and does not open the card', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    render(list(FOUR));
+
+    const button = screen.getByRole('button', { name: 'Copy the repair command for M-4' });
+    expect(button.className).not.toContain('opacity-0');
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    expect(writeText).toHaveBeenCalledWith('motir run M-4');
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('draws NO fix line on any other tab', () => {
+    render(list(FOUR, { tab: 'in-progress' }));
+    expect(screen.queryByTestId('workbench-fix-M-1')).toBeNull();
+    expect(screen.getByTestId('workbench-row-M-1')).toBeTruthy();
+  });
+});
+
+describe('To fix — a repaired row is HELD (§ 30 Panel 3, § 26)', () => {
+  it('a row that left the set stays in place, marked Cleared, with no command', () => {
+    const view = render(list(FOUR));
+    // The live re-read: M-3's build went green, so the server no longer lists it.
+    view.rerender(list(FOUR.filter((r) => r.identifier !== 'M-3')));
+
+    const rows = screen
+      .getAllByRole('row')
+      .filter((r) => r.dataset.testid?.startsWith('workbench-row-'));
+    expect(rows.map((r) => r.dataset.testid)).toEqual([
+      'workbench-row-M-1',
+      'workbench-row-M-2',
+      'workbench-row-M-3',
+      'workbench-row-M-4',
+    ]);
+    const held = screen.getByTestId('workbench-row-M-3');
+    expect(held.dataset.held).toBe('true');
+    expect(within(held).getByText('Cleared')).toBeTruthy();
+    expect(within(held).queryByText('motir fix M-3')).toBeNull();
+    expect(within(held).queryByRole('button', { name: /Copy the repair command/ })).toBeNull();
+    // The glyph is dropped and the ink goes secondary.
+    expect(fixLine('M-3').querySelector('svg')).toBeNull();
+    expect(fixLine('M-3').querySelector('p')?.className).toContain('--el-text-secondary');
+    // Its siblings are untouched.
+    expect(screen.getByTestId('workbench-row-M-1').dataset.held).toBeUndefined();
+  });
+
+  it('the NEXT LOAD omits it — a pager move starts the window clean', () => {
+    const view = render(list(FOUR, { total: 30 }));
+    view.rerender(
+      list(
+        FOUR.filter((r) => r.identifier !== 'M-3'),
+        { page: 2, total: 29 },
+      ),
+    );
+    expect(screen.queryByTestId('workbench-row-M-3')).toBeNull();
+  });
+
+  it('when the LAST row clears it is held, not swapped for the empty state', () => {
+    const view = render(list([FOUR[0]!]));
+    view.rerender(list([], { total: 0 }));
+    expect(screen.getByTestId('workbench-row-M-1').dataset.held).toBe('true');
+    expect(screen.queryByText('Nothing to fix')).toBeNull();
+  });
+});
+
+describe('To fix — empty and paged (§ 30 Panels 4 and 5)', () => {
+  it('an empty tab draws its empty state and nothing else', () => {
+    render(list([]));
+    expect(screen.getByText('Nothing to fix')).toBeTruthy();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  it('more than one page mounts the shipped pager, which navigates to ?tab=to-fix&page=N', () => {
+    render(list(FOUR, { total: 60 }));
+    fireEvent.click(screen.getByRole('button', { name: /page 2/i }));
+    expect(push).toHaveBeenCalledWith('/workbench?tab=to-fix&page=2');
+  });
+});
+
+describe('To fix — zh (§ 30 Panel 6)', () => {
+  it('reads every reason, the affected clause and the held chip in Chinese; commands stay as typed', () => {
+    const view = render(list(FOUR), { locale: 'zh', messages: zhMessages });
+    expect(fixLine('M-1').textContent).toContain('在合并队列中失败 · vitest (4/8)');
+    expect(fixLine('M-2').textContent).toContain('与 main 冲突');
+    expect(fixLine('M-3').textContent).toContain('CI 未通过 · e2e (chromium, 2/4)');
+    expect(fixLine('M-3').textContent).toContain('3 个拉取请求中有 2 个受影响');
+    expect(fixLine('M-4').textContent).toContain('Mei Lin 要求修改');
+    expect(within(fixLine('M-4')).getByText('motir run M-4')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '复制 M-1 的修复命令' })).toBeTruthy();
+
+    view.rerender(list(FOUR.filter((r) => r.identifier !== 'M-2')));
+    expect(within(screen.getByTestId('workbench-row-M-2')).getByText('已解除')).toBeTruthy();
+  });
+});

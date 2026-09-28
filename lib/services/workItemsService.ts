@@ -309,6 +309,7 @@ import { ContainerRepoSetNotWritableError } from '@/lib/workItems/errors';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
+import { recomputeWorkItemFixReason } from './fixReasonService';
 
 // ⚠️ `assertSingleTargetRepoInput` MOVED to `lib/workItems/targetRepo.ts`
 // (MOTIR-4904) and is imported above. It was private here while this was the only
@@ -3712,6 +3713,14 @@ export const workItemsService = {
       await approvalGatesService.raiseOnReviewEntry(row, ctx, tx);
     }
 
+    // THE STATUS IS AN INPUT OF THE TO-FIX ANSWER (MOTIR-6602): only an `in_progress`-
+    // category card can be waiting on a repair, and the repair predicate reads the
+    // Implemented / In Review rung. So every move re-decides it — leaving the category
+    // clears it, a promotion or a hold re-reads it — here, after the status write and
+    // under the card lock this method already holds. SYSTEM moves included: the cascade,
+    // the merge sync and the CI promotion all come through here.
+    await recomputeWorkItemFixReason(workItemId, tx);
+
     return {
       dto: toWorkItemDto(row),
       transition: { fromStatusKey: fromKey, toStatusKey, revisionId },
@@ -4165,6 +4174,8 @@ export const workItemsService = {
       await projectAccessService.assertPermission(current.projectId, ctx, 'work_item:archive', tx);
 
       const row = await workItemRepository.archive(id, tx); // throws WorkItemNotFoundError if absent
+      // An archived card is waiting on no repair (MOTIR-6602).
+      await recomputeWorkItemFixReason(id, tx);
 
       // The container ROLLUP (MOTIR-2978, §A6): an ARCHIVED descendant contributes
       // nothing to its ancestors' union — a parent is not waiting on work archived
@@ -4219,6 +4230,8 @@ export const workItemsService = {
 
       const wasArchivedAt = current.archivedAt?.toISOString() ?? null;
       const row = await workItemRepository.unarchive(id, tx); // throws WorkItemNotFoundError if absent
+      // …and a restored one may be again (MOTIR-6602).
+      await recomputeWorkItemFixReason(id, tx);
 
       // …and unarchiving puts it back, which is the same trigger in reverse.
       await recomputeAncestorRepoSets(id, ctx.workspaceId, tx);

@@ -67,6 +67,8 @@ const NEVER_A_REVISION_KEY: Record<string, string> = {
   publicChildrenHidden: 'a public-page display toggle',
   sessionBranch: 'a dispatch run’s branch',
   ciState: 'written by the CI webhook',
+  fixReason: 'recomputed by fixReasonService from the delivery set, never a revision (MOTIR-6600)',
+  fixDetail: 'written with fixReason by the same recompute, never a revision (MOTIR-6600)',
   completedAt: 'derived from the status category',
 };
 
