@@ -499,6 +499,7 @@ export class JobWorker {
       const timer = setTimeout(finish, timeoutMs);
       timer.unref?.();
       this.slotWaiters.add(finish);
+      if (this.draining) finish();
     });
   }
 
@@ -594,6 +595,9 @@ export class JobWorker {
         // restarts it.
         this.log.error('[job-worker] claim tick failed', err);
       }
+      // Draining began during that tick: leave now rather than wait out a sleep
+      // or a slot that shutdown's single wake already missed.
+      if (this.draining) break;
       if (claimed > 0) {
         this.idleDelay = this.idleMinMs; // work found — poll eagerly again
         continue;
@@ -632,6 +636,9 @@ export class JobWorker {
       };
       const timer = setTimeout(finish, ms);
       this.wake = finish;
+      // A shutdown that began before this sleep was registered woke nothing —
+      // don't sleep through it (MOTIR-6734: shutdown now waits for the loop).
+      if (this.draining) finish();
     });
   }
 
