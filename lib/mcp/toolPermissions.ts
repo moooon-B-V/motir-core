@@ -206,6 +206,15 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // steps of the card it was handed; the grant is NOT widened.
   add_work_item_todo: 'work_item:edit',
   set_work_item_todo_done: 'work_item:edit',
+  // The REPAIR tools (MOTIR-6807) — the key the REST repair route
+  // (`claimWorkItemRepair`) and the dispatch-run heartbeat / close routes assert.
+  // `workItemRepairService.claimRepair` asserts `assertCanEdit` up front, and
+  // touch / close assert it again before reading the run, so a caller without
+  // edit is refused by name and no run opens. Already in `CLI_TOKEN_GRANT`, so
+  // the grant is NOT widened.
+  claim_work_item_repair: 'work_item:edit',
+  touch_work_item_repair: 'work_item:edit',
+  close_work_item_repair: 'work_item:edit',
 
   // ── comment:add ───────────────────────────────────────────────────────────
   // `commentsService` gates the add on `getCommentCapabilities().canComment`,

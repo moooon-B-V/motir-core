@@ -454,6 +454,19 @@ describe('typed wrappers — each names its operation and forwards its arguments
         dispatcher: { id: 'user_mara', name: 'Mara S.' },
       },
       branch: 'motir/auto-20260927-0900',
+      branches: [
+        {
+          repository: 'web',
+          branch: 'motir/auto-20260927-0900',
+          pullRequest: {
+            repo: 'acme/web',
+            number: 12,
+            url: 'https://github.com/acme/web/pull/12',
+            headRef: 'motir/auto-20260927-0900',
+          },
+        },
+        { repository: 'api', branch: 'motir/auto-20260927-0900', pullRequest: null },
+      ],
       pullRequest: {
         repo: 'acme/web',
         number: 12,
@@ -487,6 +500,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
           startedAt: null,
           deadRun: null,
           branch: null,
+          branches: [],
           pullRequest: null,
           previousAssignee: null,
           mode: 'card',

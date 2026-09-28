@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { _resetRunGitBotAuthors } from '@/lib/github/runGitCredential';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { adminDb } from '../helpers/adminDb';
@@ -309,5 +310,85 @@ describe('POST /api/work-items/[id]/hosted-runs (AC8)', () => {
   it('an error the service names nothing for is rethrown, not swallowed', async () => {
     vi.spyOn(hostedRunService, 'start').mockRejectedValueOnce(new Error('unexpected'));
     await expect(post('PROD-1', { model: MODEL })).rejects.toThrow('unexpected');
+  });
+});
+
+// Continue hosted (Story MOTIR-6527 · MOTIR-6792) — `mode: 'continue'`.
+describe('POST /api/work-items/[id]/hosted-runs — mode continue', () => {
+  async function deadCard(silentMinutes = 7) {
+    const card = await newCard({ kind: 'task', title: 'a card whose run died' });
+    await adminDb.workItem.update({
+      where: { id: card.id },
+      data: { status: 'in_progress', assigneeId: fx.ownerId },
+    });
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run',
+        cards: [{ key: card.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    await dispatchRunService.appendEvents(
+      run.id,
+      [
+        {
+          kind: 'checkout_ready',
+          workItemKey: card.identifier,
+          disposition: 'running',
+          data: { branch: 'subtask/work' },
+        },
+      ],
+      fx.ctx,
+    );
+    await adminDb.dispatchRun.update({
+      where: { id: run.id },
+      data: { lastHeartbeatAt: new Date(Date.now() - silentMinutes * 60_000) },
+    });
+    return card;
+  }
+
+  it('201 with a hosted continue run for a card whose run died', async () => {
+    await seedRepo('created');
+    const card = await deadCard();
+
+    const res = await post(card.identifier, {
+      model: MODEL,
+      idempotencyKey: 'c1',
+      mode: 'continue',
+    });
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { dispatchRunId: string; created: boolean };
+    const run = await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: body.dispatchRunId } });
+    expect(run).toMatchObject({ origin: 'hosted', command: 'continue' });
+  });
+
+  it('409 hosted_continue_run_alive, naming the holder, while the run still heartbeats', async () => {
+    await seedRepo('created');
+    const card = await deadCard(1);
+
+    const res = await post(card.identifier, { model: MODEL, mode: 'continue' });
+
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { code: string; holder: { id: string } };
+    expect(body.code).toBe('hosted_continue_run_alive');
+    expect(body.holder.id).toBe(fx.ownerId);
+  });
+
+  it('409 hosted_continue_no_dead_run on a card never run', async () => {
+    await seedRepo('created');
+    const card = await newCard({ kind: 'task', title: 'never run' });
+    await adminDb.workItem.update({ where: { id: card.id }, data: { status: 'in_progress' } });
+
+    const res = await post(card.identifier, { model: MODEL, mode: 'continue' });
+
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { code: string }).code).toBe('hosted_continue_no_dead_run');
+  });
+
+  it('400 on a mode that is neither run nor continue', async () => {
+    const res = await post('PROD-1', { model: MODEL, mode: 'resume' });
+    expect(res.status).toBe(400);
   });
 });

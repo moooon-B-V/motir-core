@@ -675,6 +675,8 @@ export function toWorkItemContinueClaim(
   body: SuccessBody<'claimWorkItemContinue'>,
 ): WorkItemContinueClaim {
   const ref = (a: { id: string; name: string } | null) => (a ? { id: a.id, name: a.name } : null);
+  const pr = (p: SuccessBody<'claimWorkItemContinue'>['pullRequest']) =>
+    p ? { repo: p.repo, number: p.number, url: p.url, headRef: p.headRef } : null;
   return {
     key: body.key,
     title: body.title,
@@ -696,14 +698,12 @@ export function toWorkItemContinueClaim(
         }
       : null,
     branch: body.branch,
-    pullRequest: body.pullRequest
-      ? {
-          repo: body.pullRequest.repo,
-          number: body.pullRequest.number,
-          url: body.pullRequest.url,
-          headRef: body.pullRequest.headRef,
-        }
-      : null,
+    branches: body.branches.map((b) => ({
+      repository: b.repository,
+      branch: b.branch,
+      pullRequest: pr(b.pullRequest),
+    })),
+    pullRequest: pr(body.pullRequest),
     previousAssignee: ref(body.previousAssignee),
     mode: body.mode,
     landedKeys: [...body.landedKeys],
@@ -794,6 +794,20 @@ export function toDispatchRunView(body: SuccessBody<'getDispatchRun'>): Dispatch
     cards: [...body.cards]
       .sort((a, b) => a.position - b.position)
       .map((card) => ({ key: card.key, position: card.position, disposition: card.disposition })),
+    continues: body.continues
+      ? {
+          fromRunId: body.continues.fromRunId,
+          branch: body.continues.branch,
+          branches: body.continues.branches.map((b) => ({
+            repository: b.repository,
+            branch: b.branch,
+            cloneUrl: b.cloneUrl ?? null,
+          })),
+          mode: body.continues.mode,
+          landedKeys: [...body.continues.landedKeys],
+          resumedKeys: [...body.continues.resumedKeys],
+        }
+      : null,
   };
 }
 

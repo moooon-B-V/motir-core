@@ -1,9 +1,13 @@
 import type {
+  RepairCloseOutcome,
   RepairPullRequestDto,
   WorkItemRepairClaimDto,
   WorkItemRepairRefusal,
+  WorkItemRepairRunDto,
   WorkItemRepairViewDto,
 } from '@/lib/dto/workItemRepair';
+import type { DispatchRun, DispatchStopReason } from '@/generated/prisma/client';
+import { DispatchRunTerminalError, RepairRunRefusedError } from '@/lib/dispatchRuns/errors';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
@@ -74,6 +78,32 @@ function attemptsOf(data: unknown): number | null {
   if (data === null || typeof data !== 'object') return null;
   const attempts = (data as { attempts?: unknown }).attempts;
   return typeof attempts === 'number' && Number.isInteger(attempts) ? attempts : null;
+}
+
+/**
+ * How an agent's repair outcome is recorded — the CLI's `CI_WATCH_STOP_REASON`
+ * vocabulary (`packages/cli/src/commands/dispatch.ts`), so the item page reads a
+ * repair closed over the MCP exactly as it reads a `motir fix` one: `halted` is a
+ * `failed` run, which the Development block draws as *gave up*.
+ */
+export const REPAIR_CLOSE_STOP_REASON = {
+  green: 'completed',
+  gave_up: 'halted',
+  halted: 'halted',
+  interrupted: 'interrupted',
+} as const satisfies Record<RepairCloseOutcome, DispatchStopReason>;
+
+function toRepairRunDto(key: string, run: DispatchRun): WorkItemRepairRunDto {
+  return {
+    key,
+    runId: run.id,
+    open: run.status === 'running',
+    status: run.status,
+    stopReason: run.stopReason,
+    startedAt: run.startedAt.toISOString(),
+    endedAt: run.endedAt?.toISOString() ?? null,
+    lastHeartbeatAt: run.lastHeartbeatAt?.toISOString() ?? null,
+  };
 }
 
 const refOf = (pr: RepairPullRequestDto) => ({
@@ -195,6 +225,94 @@ export const workItemRepairService = {
   },
 
   /**
+   * The repair claim as an AGENT makes it over the MCP (Story MOTIR-6804 ·
+   * MOTIR-6807): {@link claimRepair} unchanged, then — on `claimed` and `mine`
+   * only — ONE heartbeat on the run it answers.
+   *
+   * ⚠️ WHY THE FIRST BEAT IS HERE. A run with no heartbeat at all is on the
+   * 12-hour AGE reap, not the five-minute lapse (`isRunAlive`,
+   * `lib/runs/runLiveness.ts`), because a CLI that never heartbeats must not be
+   * reaped from under itself. An agent that claims and then dies before its first
+   * `touch_work_item_repair` would therefore hold the card *being fixed* for half a
+   * day. Beating once at the claim puts the run on the lapse rule from its first
+   * second, which is what the tools' contract (touch at least every two minutes)
+   * assumes. The claim's rules, its DTO and its refusals are untouched.
+   */
+  async claimRepairAsAgent(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemRepairClaimDto> {
+    const claim = await workItemRepairService.claimRepair(projectId, identifier, ctx);
+    if ((claim.outcome === 'claimed' || claim.outcome === 'mine') && claim.runId !== null) {
+      try {
+        await dispatchRunService.heartbeat(claim.runId, ctx);
+      } catch (err) {
+        // A `mine` run the reap closed between the claim's read and this beat.
+        // The claim's answer stands; the agent's first touch reads `open: false`.
+        /* v8 ignore next -- only a reap landing inside that window reaches here */
+        if (!(err instanceof DispatchRunTerminalError)) throw err;
+      }
+    }
+    return claim;
+  },
+
+  /**
+   * KEEP a claimed repair ALIVE (MOTIR-6807) — `touch_work_item_repair`.
+   *
+   * Only the caller's own `fix` run on THIS card is touched
+   * ({@link RepairRunRefusedError} otherwise, before anything is written). An
+   * open run is beaten through `dispatchRunService.heartbeat` — the one heartbeat
+   * there is, under the lock it shares with the reap — and a closed one is
+   * ANSWERED rather than refused, `open: false` with how it ended, because the
+   * agent's next move is to stop, and an error would read as something to retry.
+   */
+  async touchRepair(
+    projectId: string,
+    identifier: string,
+    runId: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemRepairRunDto> {
+    const { key, run } = await readOwnRepairRun(projectId, identifier, runId, ctx);
+    if (run.status !== 'running') return toRepairRunDto(key, run);
+    try {
+      await dispatchRunService.heartbeat(runId, ctx);
+    } catch (err) {
+      // Closed between the read above and the heartbeat's lock — by the reap,
+      // usually. The same answer as a run that was already closed.
+      if (!(err instanceof DispatchRunTerminalError)) throw err;
+    }
+    return toRepairRunDto(key, (await readOwnRepairRun(projectId, identifier, runId, ctx)).run);
+  },
+
+  /**
+   * CLOSE a claimed repair with how it ended (MOTIR-6807) —
+   * `close_work_item_repair`.
+   *
+   * Through `dispatchRunService.close`, so the run's status, stop reason and legs
+   * are settled by the one close there is. IDEMPOTENT: a run that is already
+   * closed — by this caller's own earlier close, or by the reap — is answered
+   * as it stands and changed by nothing, because an agent that retries after a
+   * timeout must not be told it failed.
+   */
+  async closeRepair(
+    projectId: string,
+    identifier: string,
+    runId: string,
+    outcome: RepairCloseOutcome,
+    ctx: ServiceContext,
+  ): Promise<WorkItemRepairRunDto> {
+    const { key, run } = await readOwnRepairRun(projectId, identifier, runId, ctx);
+    if (run.status !== 'running') return toRepairRunDto(key, run);
+    try {
+      await dispatchRunService.close(runId, { stopReason: REPAIR_CLOSE_STOP_REASON[outcome] }, ctx);
+    } catch (err) {
+      if (!(err instanceof DispatchRunTerminalError)) throw err;
+    }
+    return toRepairRunDto(key, (await readOwnRepairRun(projectId, identifier, runId, ctx)).run);
+  },
+
+  /**
    * What the item page's Development block draws about a repair (MOTIR-5466) —
    * the claim's own evaluation, WITHOUT a lock and without opening anything, plus
    * the card's latest `fix` run.
@@ -269,3 +387,35 @@ export const workItemRepairService = {
     );
   },
 };
+
+/**
+ * Resolve the card and read the named run, refusing anything that is not the
+ * CALLER's `fix` run on that card (MOTIR-6807). The card read carries the
+ * tenancy + browse gate (a foreign key is not found), and the edit gate is the
+ * one `claimRepair` asserts — keeping a repair alive or closing it is starting
+ * and ending work on the card, and a caller who could not have claimed it may
+ * not do either.
+ */
+async function readOwnRepairRun(
+  projectId: string,
+  identifier: string,
+  runId: string,
+  ctx: ServiceContext,
+): Promise<{ key: string; run: DispatchRun }> {
+  const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
+  await projectAccessService.assertCanEdit(projectId, ctx);
+  const run = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+    (tx) => dispatchRunRepository.findByIdWithCards(runId, tx),
+  );
+  const holdsCard =
+    run !== null &&
+    run.projectId === projectId &&
+    run.command === 'fix' &&
+    run.cards.some((leg) => leg.workItemId === item.id);
+  if (!run || !holdsCard) throw new RepairRunRefusedError(runId, item.identifier, 'not_found');
+  if (run.createdById !== ctx.userId) {
+    throw new RepairRunRefusedError(runId, item.identifier, 'not_yours');
+  }
+  return { key: item.identifier, run };
+}

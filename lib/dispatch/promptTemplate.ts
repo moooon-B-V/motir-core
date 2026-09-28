@@ -350,10 +350,31 @@ export interface ContinueFromForPrompt {
   lastHeardAt: string;
   /** Who ran it, or null when that account is gone. */
   dispatcherName: string | null;
-  /** The branch its work is on — the one this run checks out. */
+  /** The branch its work is on — the one this run checks out. The PRIMARY
+   *  repository's, when the run spanned several (`branches[0]`). */
   branch: string;
   /** The open pull request it left, when there is one. */
   pullRequest: { repo: string; number: number; url: string } | null;
+  /**
+   * Every repository's branch, primary first (MOTIR-6791). Two or more entries
+   * render the per-repository CONTINUE block and workflow; one entry (or none,
+   * for a caller that predates it) renders exactly the single-branch text.
+   */
+  branches?: ContinueFromBranch[];
+}
+
+/** One repository's share of a dead run's work, as the CONTINUE prompt names it. */
+export interface ContinueFromBranch {
+  /** The repository's name, or null when the run did not record it. */
+  repository: string | null;
+  branch: string;
+  pullRequest: { repo: string; number: number; url: string } | null;
+}
+
+/** The per-repository branches worth their own rendering — two or more. */
+function continueRepoSet(cf: ContinueFromForPrompt): ContinueFromBranch[] | null {
+  const branches = cf.branches ?? [];
+  return branches.length >= 2 ? branches : null;
 }
 
 export interface DispatchPromptSource {
@@ -1421,6 +1442,40 @@ function continueSection(cf: ContinueFromForPrompt | null): string[] {
     '',
     `  The previous run (${cf.deadRunId}) was run by ${cf.dispatcherName ?? 'somebody no longer resolvable'}.`,
     `  It ended: ${cf.endedHow}. Last heard from ${cf.lastHeardAt}.`,
+    ...continueWhereLines(cf),
+    '',
+    "  You are CONTINUING someone else's work:",
+    '    - read `git log origin/main..HEAD` and `git status` FIRST, before changing',
+    '      anything, and understand what is already done;',
+    '    - keep what is right; do not start over and do not redo finished work;',
+    ...(continueRepoSet(cf)
+      ? [
+          '    - do NOT create a new branch in any repository — the GIT WORKFLOW below',
+          '      checks each one out;',
+          '    - do NOT open a second pull request in any repository — reuse the one',
+          '      that is open there, if any.',
+        ]
+      : [
+          '    - do NOT create a new branch — the GIT WORKFLOW below checks this one out;',
+          '    - do NOT open a second pull request — reuse the one that is open, if any.',
+        ]),
+  ];
+}
+
+/** Where the dead run's work is — one branch, or one per repository. */
+function continueWhereLines(cf: ContinueFromForPrompt): string[] {
+  const repos = continueRepoSet(cf);
+  if (repos) {
+    return [
+      `  Its work spans ${repos.length} repositories, on a branch in each:`,
+      ...repos.flatMap((b) => [
+        `    - ${b.repository ?? '<repo>'}: ${b.branch}` +
+          (b.pullRequest ? ` — open pull request #${b.pullRequest.number}` : ''),
+        ...(b.pullRequest ? [`      (${b.pullRequest.url})`] : []),
+      ]),
+    ];
+  }
+  return [
     `  Its work is on the branch ${cf.branch}.`,
     ...(cf.pullRequest
       ? [
@@ -1428,13 +1483,6 @@ function continueSection(cf: ContinueFromForPrompt | null): string[] {
           `  (${cf.pullRequest.url}).`,
         ]
       : []),
-    '',
-    "  You are CONTINUING someone else's work:",
-    '    - read `git log origin/main..HEAD` and `git status` FIRST, before changing',
-    '      anything, and understand what is already done;',
-    '    - keep what is right; do not start over and do not redo finished work;',
-    '    - do NOT create a new branch — the GIT WORKFLOW below checks this one out;',
-    '    - do NOT open a second pull request — reuse the one that is open, if any.',
   ];
 }
 
@@ -2653,6 +2701,8 @@ function continueWorkflow(
   cf: ContinueFromForPrompt,
   sessionBranch: string | null,
 ): string[] {
+  const repos = continueRepoSet(cf);
+  if (repos) return multiRepoContinueWorkflow(src, repos, sessionBranch);
   const branch = cf.branch;
   const dir = worktreeDir(src.targetRepo, src.key);
   const base = sessionBranch ?? 'main';
@@ -2692,6 +2742,87 @@ function continueWorkflow(
     ...linkingStep(src, branch, 8),
     '9. STOP at the open pull request. Do not merge it and do not delete the branch.',
   ];
+}
+
+/**
+ * The MULTI-repository CONTINUE GIT WORKFLOW (MOTIR-6791) — the dead run pushed
+ * a branch in EACH repository, so each is checked out, brought up to date,
+ * finished and delivered: one pull request per repository (reusing an open one),
+ * or, for a leg of a parent run, integrated into that repository's session
+ * branch. Keeping only the first repository's branch — what this replaced —
+ * silently dropped the others' work.
+ */
+function multiRepoContinueWorkflow(
+  src: DispatchPromptSource,
+  repos: ContinueFromBranch[],
+  sessionBranch: string | null,
+): string[] {
+  const baseOf = (repository: string | null): string =>
+    sessionBranch ??
+    (src.targetRepos ?? []).find((r) => r.name === repository)?.defaultBranch ??
+    'main';
+  const lines: string[] = [
+    `This is a CONTINUE across ${repos.length} repositories: the work is already on a`,
+    'branch in EACH of them. Check every one out — never create a new branch.',
+  ];
+  repos.forEach((entry, i) => {
+    const name = entry.repository ?? '<repo>';
+    const wt = worktreeDir(entry.repository, src.key);
+    const base = baseOf(entry.repository);
+    lines.push(
+      '',
+      `${name}${i === 0 ? '  (your working directory)' : '  (a sibling checkout)'}`,
+      '',
+      `  1. cd ${siblingDir(name, i)} && git fetch origin`,
+      `  2. If the worktree ${wt} already exists and is on ${entry.branch}, use it. Otherwise:`,
+      `     git worktree add ${wt} ${entry.branch}`,
+      `     (it tracks origin/${entry.branch}; this checks the EXISTING branch out).`,
+      `  3. cd ${wt}, install dependencies, and read \`git log origin/${base}..HEAD\` and`,
+      '     `git status` BEFORE changing anything.',
+      `  4. git merge origin/${base}, and resolve any conflict.`,
+      "  5. Finish THIS repository's share of the work. Stage with explicit",
+      '     `git add <path>` — never `-A`.',
+      `  6. Commit with a Conventional Commits subject that carries ${src.key}.`,
+      ...checkpointLines(entry.branch, '  '),
+      ...(sessionBranch !== null
+        ? [`  7. Integrate the commit into ${sessionBranch} and push that branch.`]
+        : [
+            `  7. Push ${entry.branch}. Open a pull request against ${base} ONLY if none is open`,
+            `     for it (\`gh pr list --head ${entry.branch}\`)` +
+              (entry.pullRequest ? ` — #${entry.pullRequest.number} is.` : '.'),
+            `     Put ${src.key} in the TITLE as well, as a label.`,
+            ...linkingStep(src, entry.branch, 8, {
+              indent: '  ',
+              baseRef: base,
+              trailer: [
+                'ONCE PER REPOSITORY — each repository has its own pull request, so each',
+                'needs its own call; the item completes only when they have all merged.',
+              ],
+            }),
+          ]),
+    );
+  });
+  if (sessionBranch !== null) {
+    lines.push(
+      '',
+      `Then report it ONCE: call the mark_integrated tool with key ${src.key} and`,
+      `sessionBranch ${sessionBranch}. Do NOT open a pull request of your own; in EACH`,
+      'repository, find the session pull request (`gh pr list --head ' + sessionBranch + '`),',
+      'open it only if it does not exist, and:',
+      ...linkingStep(src, sessionBranch, 1, {
+        trailer: ['ONCE PER REPOSITORY.'],
+      }),
+      '',
+      'STOP. Do not merge any pull request and do not delete any branch.',
+    );
+  } else {
+    lines.push(
+      '',
+      `STOP at the ${repos.length} open pull requests — one per repository. Do not merge any`,
+      'of them and do not delete any branch.',
+    );
+  }
+  return lines;
 }
 
 function gitWorkflow(src: DispatchPromptSource, sessionBranch: string | null): string[] {

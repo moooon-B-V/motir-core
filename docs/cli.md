@@ -1884,9 +1884,9 @@ curl -s https://motir.example.com/api/openapi/v1.json | jq -r .info.version
    CLI records the API version it was generated against, so an older one asks for
    less.
 
-**The ready lanes need `1.52.0`.** This CLI reads the ready set through the
+**The ready lanes need `1.54.0`.** This CLI reads the ready set through the
 three lane operations (`…/ready/leaves`, `…/ready/containers`, `…/ready/bugs`),
-which a server older than contract `1.52.0` does not serve. Against one, every
+which a server older than contract `1.54.0` does not serve. Against one, every
 ready read — `motir next`, `motir ready`, `motir auto`, `motir batch`, a scoped run
 — reports the version skew above rather than a missing endpoint; the remedy is one
 of the two.

@@ -33,6 +33,9 @@ export function RunHostedButton() {
     if (run.origin !== 'hosted') return null;
     return <HostedRunCancel runId={run.id} onCancelled={door.notifyRunsChanged} />;
   }
+  // A died card is continued, not re-run (design § Continue hosted, C7): the server
+  // refuses a fresh hosted run on it, so the header offers none.
+  if (door.runDoorHidden) return null;
 
   const modelsReady = door.models.state === 'ok' && door.models.models.length > 0;
   const disabled = !door.ready || !modelsReady || door.starting || !door.selectedModel;

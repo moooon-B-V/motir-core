@@ -67,6 +67,12 @@ export interface CheckpointInput {
    *  checkpointed — a bootstrap target has none until the agent makes it. */
   targets: Pick<DispatchTarget, 'targetRepo' | 'repoPath' | 'cwd'>[];
   workBranch: string | null;
+  /**
+   * Each repository's OWN work branch, when they differ (MOTIR-6793) — a continue
+   * resumes every repository on the branch ITS dead run left there, which is not
+   * the card's fresh branch. A repository absent here falls back to `workBranch`.
+   */
+  branches?: Pick<LegBranch, 'repository' | 'workBranch'>[];
   reporter: Pick<DispatchRunReporter, 'event'>;
   run?: CommandRunner;
   intervalMs?: number;
@@ -94,12 +100,16 @@ function checkoutOf(t: Pick<DispatchTarget, 'repoPath' | 'cwd'>): string | null 
  * does not name one) there is nothing to push and nothing is started.
  */
 export function startCheckpoints(input: CheckpointInput): Checkpoints {
-  const { key, workBranch, reporter } = input;
-  if (!workBranch) return NO_CHECKPOINTS;
+  const { key, reporter } = input;
+  const branchOf = (repository: string | null): string | null =>
+    input.branches?.find((b) => b.repository === repository)?.workBranch ?? input.workBranch;
   const run = input.run ?? execCommand;
   const repos = input.targets
-    .map((t) => ({ repository: t.targetRepo, dir: checkoutOf(t) }))
-    .filter((r): r is { repository: string | null; dir: string } => r.dir !== null);
+    .map((t) => ({ repository: t.targetRepo, dir: checkoutOf(t), branch: branchOf(t.targetRepo) }))
+    .filter(
+      (r): r is { repository: string | null; dir: string; branch: string } =>
+        r.dir !== null && r.branch !== null,
+    );
   if (repos.length === 0) return NO_CHECKPOINTS;
 
   const pushed = new Map<string, string>();
@@ -107,7 +117,7 @@ export function startCheckpoints(input: CheckpointInput): Checkpoints {
   let stopped = false;
 
   const tick = (): void => {
-    for (const { repository, dir } of repos) {
+    for (const { repository, dir, branch: workBranch } of repos) {
       const head = run(
         'git',
         ['rev-parse', '--verify', '--quiet', `refs/heads/${workBranch}`],

@@ -128,6 +128,18 @@ describe('claimContinue — the takeover', () => {
       where: { dispatchRunId: opened.id, kind: 'run_opened' },
     });
     expect(event?.data).toMatchObject({ continuesRunId: runId, branch });
+
+    // The run's own read says what it resumes (MOTIR-6795) — what a hosted
+    // container adopting it reads — and a run that is not a continue says null.
+    expect((await dispatchRunService.getRun(result.runId!, other.ctx)).continues).toEqual({
+      fromRunId: runId,
+      branch,
+      branches: [{ repository: null, branch, cloneUrl: null }],
+      mode: 'card',
+      landedKeys: [],
+      resumedKeys: [],
+    });
+    expect((await dispatchRunService.getRun(runId, fx.ctx)).continues).toBeNull();
   });
 
   it('prefers the OPEN pull request’s head over the recorded branch', async () => {
@@ -344,6 +356,8 @@ describe('getContinueView — the four states the marker renders', () => {
       state: 'continuing',
       holder: { id: other.user.id },
       byViewer: false,
+      // A terminal claim: the part says nothing about a hosted container (MOTIR-6796).
+      origin: 'local',
       branch: died.branch,
       tookOverFrom: { runId: died.runId, dispatcher: { id: fx.ownerId } },
     });
@@ -392,6 +406,35 @@ describe('the branch is read from EITHER checkout_ready shape', () => {
       },
     });
     expect((await claim(fx, card.identifier)).branch).toBe('subtask/per-repo');
+  });
+  it('an event carrying BOTH shapes keeps every repository, the scalar naming the primary’s (MOTIR-6793)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, runId } = await deadCard(fx, { branch: null });
+    const leg = await adminDb.dispatchRunCard.findFirstOrThrow({ where: { dispatchRunId: runId } });
+    await adminDb.dispatchRunEvent.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        dispatchRunId: runId,
+        dispatchRunCardId: leg.id,
+        seq: 99,
+        kind: 'checkout_ready',
+        data: {
+          // What a continue's leg wrote before MOTIR-6793: the dead branch in the
+          // scalar, the card's fresh branch in `branches[0]`.
+          branch: 'subtask/the-dead-one',
+          branches: [
+            { repository: 'motir-core', branch: 'subtask/fresh', workBranch: 'subtask/fresh' },
+            { repository: 'motir-ai', branch: 'subtask/ai', workBranch: 'subtask/ai' },
+          ],
+        },
+      },
+    });
+    const result = await claim(fx, card.identifier);
+    expect(result.branch).toBe('subtask/the-dead-one');
+    expect(result.branches.map((b) => [b.repository, b.branch])).toEqual([
+      ['motir-core', 'subtask/the-dead-one'],
+      ['motir-ai', 'subtask/ai'],
+    ]);
   });
 });
 
@@ -488,5 +531,300 @@ describe('claimContinue — a PARENT whose scope run died (MOTIR-6535)', () => {
     expect(await workItemContinueService.getContinueView(story.id, fx.ctx)).toMatchObject({
       state: 'continuing',
     });
+    expect((await dispatchRunService.getRun(result.runId!, other.ctx)).continues).toMatchObject({
+      fromRunId: run.id,
+      branch: 'motir/auto-20260927-0900',
+      mode: 'parent',
+      landedKeys: [landed.identifier],
+      resumedKeys: [inFlight.identifier],
+    });
+  });
+});
+
+// A HOSTED opening (Story MOTIR-6527 · MOTIR-6790): the claim opens the lock AS
+// the hosted run, so the browser's Continue hosted and a terminal `motir
+// continue` race on ONE row.
+describe('claimContinue — a hosted opening', () => {
+  const opening = (idempotencyKey: string) => ({
+    origin: 'hosted' as const,
+    agent: 'opencode' as const,
+    model: 'anthropic/claude-sonnet-5',
+    idempotencyKey,
+  });
+  const hostedClaim = (
+    fx: WorkItemFixture,
+    key: string,
+    idempotencyKey: string,
+    ctx: ServiceContext = fx.ctx,
+  ) =>
+    workItemContinueService.claimContinue(fx.projectId, key, ctx, new Date(), {
+      opening: opening(idempotencyKey),
+    });
+
+  it('opens ONE hosted `continue` run with its agent, model and key, and ONE `run_opened` saying so', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, runId, branch } = await deadCard(fx);
+    const key = `hosted-${randomToken()}`;
+
+    const result = await hostedClaim(fx, card.identifier, key);
+
+    expect(result).toMatchObject({ outcome: 'claimed', branch, deadRun: { id: runId } });
+    const opened = await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: result.runId! } });
+    expect(opened).toMatchObject({
+      command: 'continue',
+      origin: 'hosted',
+      agent: 'opencode',
+      model: 'anthropic/claude-sonnet-5',
+      idempotencyKey: key,
+      status: 'running',
+    });
+    const events = await adminDb.dispatchRunEvent.findMany({
+      where: { dispatchRunId: opened.id, kind: 'run_opened' },
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0]!.seq).toBe(1);
+    expect(events[0]!.data).toMatchObject({
+      continuesRunId: runId,
+      branch,
+      origin: 'hosted',
+      model: 'anthropic/claude-sonnet-5',
+    });
+  });
+
+  it('the same key again answers the same run and opens nothing — even once that run has ended', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, runId } = await deadCard(fx);
+    const key = `hosted-${randomToken()}`;
+    const first = await hostedClaim(fx, card.identifier, key);
+
+    const again = await hostedClaim(fx, card.identifier, key);
+    expect(again).toMatchObject({
+      outcome: 'claimed',
+      runId: first.runId,
+      branch: first.branch,
+      deadRun: { id: runId },
+      previousAssignee: first.previousAssignee,
+    });
+
+    // The boot failed after the claim: the end path closed the run. A retried
+    // start with the SAME key is still told which run it opened, not handed a
+    // second takeover.
+    await dispatchRunService.close(first.runId!, { stopReason: 'halted' }, fx.ctx);
+    const afterEnd = await hostedClaim(fx, card.identifier, key);
+    expect(afterEnd.runId).toBe(first.runId);
+
+    const continues = await adminDb.dispatchRun.findMany({
+      where: { command: 'continue', cards: { some: { workItemId: card.id } } },
+    });
+    expect(continues).toHaveLength(1);
+  });
+
+  it('a DIFFERENT key while the hosted continue is alive is refused `taken`, naming its holder', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await deadCard(fx);
+    const first = await hostedClaim(fx, card.identifier, `hosted-${randomToken()}`);
+    const other = await member(fx, 'Terminal User');
+
+    const fromTerminal = await claim(fx, card.identifier, other.ctx);
+    const fromBrowser = await hostedClaim(
+      fx,
+      card.identifier,
+      `hosted-${randomToken()}`,
+      other.ctx,
+    );
+
+    for (const answer of [fromTerminal, fromBrowser]) {
+      expect(answer).toMatchObject({
+        outcome: 'taken',
+        runId: first.runId,
+        holder: { id: fx.ownerId },
+      });
+    }
+  });
+
+  it('a key that names some OTHER run is refused as a duplicate, not replayed', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await deadCard(fx);
+    const key = `hosted-${randomToken()}`;
+    const unrelated = await createTestWorkItem(fx, { kind: 'task', title: 'unrelated' });
+    await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run',
+        idempotencyKey: key,
+        cards: [{ key: unrelated.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+
+    await expect(hostedClaim(fx, card.identifier, key)).rejects.toMatchObject({
+      name: 'DuplicateDispatchRunError',
+    });
+  });
+
+  it('every refusal answers before any run is opened, opening or not', async () => {
+    const fx = await makeWorkItemFixture();
+    const alive = await deadCard(fx, { silentMinutes: 1 });
+    const fix = await deadCard(fx, { status: 'implemented' });
+    const todo = await deadCard(fx, { status: 'todo' });
+    const bare = await deadCard(fx, { branch: null });
+    const succeeded = await deadCard(fx);
+    await dispatchRunService.close(succeeded.runId, { stopReason: 'completed' }, fx.ctx);
+
+    const cases: Array<[string, string]> = [
+      [alive.card.identifier, 'run_alive'],
+      [fix.card.identifier, 'use_fix'],
+      [todo.card.identifier, 'not_in_progress'],
+      [bare.card.identifier, 'no_branch'],
+      [succeeded.card.identifier, 'no_dead_run'],
+    ];
+    for (const [key, reason] of cases) {
+      const answer = await hostedClaim(fx, key, `hosted-${randomToken()}`);
+      expect(answer).toMatchObject({ outcome: 'not_continuable', reason, runId: null });
+    }
+    expect(await adminDb.dispatchRun.count({ where: { command: 'continue' } })).toBe(0);
+  });
+
+  it('continue_the_parent is refused before any run is opened, with an opening', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'the story' });
+    const child = await createTestWorkItem(fx, {
+      kind: 'subtask',
+      title: 'a child',
+      parentId: story.id,
+    });
+    await setStatus(child.id, 'in_progress');
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run_scope',
+        scopeKey: story.identifier,
+        cards: [{ key: child.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    await dispatchRunService.close(run.id, { stopReason: 'halted' }, fx.ctx);
+
+    const answer = await hostedClaim(fx, child.identifier, `hosted-${randomToken()}`);
+
+    expect(answer).toMatchObject({ reason: 'continue_the_parent', parentKey: story.identifier });
+    expect(await adminDb.dispatchRun.count({ where: { command: 'continue' } })).toBe(0);
+  });
+});
+
+// A dead run's branch PER REPOSITORY (Story MOTIR-6527 · MOTIR-6791).
+describe('claimContinue — a run across repositories', () => {
+  async function twoRepoDeadCard(fx: WorkItemFixture) {
+    const { card, runId } = await deadCard(fx, { branch: null });
+    await adminDb.workItem.update({
+      where: { id: card.id },
+      data: { targetRepo: 'web', targetRepos: ['web', 'core'] },
+    });
+    await dispatchRunService.appendEvents(
+      runId,
+      [
+        {
+          kind: 'checkout_ready',
+          workItemKey: card.identifier,
+          data: {
+            branches: [
+              { repository: 'core', branch: 'task/core-side', workBranch: 'task/core-side' },
+              { repository: 'web', branch: 'task/web-side', workBranch: 'task/web-side' },
+            ],
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    await adminDb.dispatchRun.update({
+      where: { id: runId },
+      data: { lastHeartbeatAt: new Date(Date.now() - 7 * 60_000) },
+    });
+    return { card, runId };
+  }
+
+  it('the claim and the view carry EVERY repository’s branch, the primary’s first and as `branch`', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await twoRepoDeadCard(fx);
+
+    const view = await workItemContinueService.getContinueView(card.id, fx.ctx);
+    expect(view).toMatchObject({
+      state: 'died',
+      branch: 'task/web-side',
+      branches: [
+        { repository: 'web', branch: 'task/web-side', pullRequest: null },
+        { repository: 'core', branch: 'task/core-side', pullRequest: null },
+      ],
+    });
+
+    const result = await claim(fx, card.identifier);
+    expect(result).toMatchObject({
+      outcome: 'claimed',
+      branch: 'task/web-side',
+      branches: [
+        { repository: 'web', branch: 'task/web-side' },
+        { repository: 'core', branch: 'task/core-side' },
+      ],
+    });
+
+    // The continue itself records both, so a continue that dies before its own
+    // checkout is continuable across both repositories again.
+    const continuing = await workItemContinueService.getContinueView(card.id, fx.ctx);
+    expect(continuing).toMatchObject({
+      state: 'continuing',
+      branches: [
+        { repository: 'web', branch: 'task/web-side' },
+        { repository: 'core', branch: 'task/core-side' },
+      ],
+    });
+    await adminDb.dispatchRun.update({
+      where: { id: result.runId! },
+      data: { lastHeartbeatAt: new Date(Date.now() - 10 * 60_000) },
+    });
+    const again = await claim(fx, card.identifier);
+    expect(again.branches.map((b) => b.branch)).toEqual(['task/web-side', 'task/core-side']);
+  });
+
+  it('the continue run’s read gives each branch its repository’s clone URL, where the project knows one (MOTIR-6795)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await twoRepoDeadCard(fx);
+    await connectRepairRepo(fx, 'core');
+
+    const result = await claim(fx, card.identifier);
+    const run = await dispatchRunService.getRun(result.runId!, fx.ctx);
+    expect(run.continues?.branches).toEqual([
+      { repository: 'web', branch: 'task/web-side', cloneUrl: null },
+      {
+        repository: 'core',
+        branch: 'task/core-side',
+        cloneUrl: expect.stringMatching(/acme\/core/),
+      },
+    ]);
+  });
+
+  it('an open pull request in ONE repository replaces only that repository’s branch', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card } = await twoRepoDeadCard(fx);
+    const core = await connectRepairRepo(fx, 'core');
+    await deliveredPr(fx, card.id, core, { headRef: 'task/core-pr', checks: {} });
+
+    const result = await claim(fx, card.identifier);
+
+    expect(result.branches).toEqual([
+      { repository: 'web', branch: 'task/web-side', pullRequest: null },
+      {
+        repository: 'core',
+        branch: 'task/core-pr',
+        pullRequest: expect.objectContaining({ repo: 'acme/core', headRef: 'task/core-pr' }),
+      },
+    ]);
+    expect(result.branch).toBe('task/web-side');
+  });
+
+  it('a one-repository run answers a one-element `branches`', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, branch } = await deadCard(fx);
+    const result = await claim(fx, card.identifier);
+    expect(result.branches).toEqual([{ repository: null, branch, pullRequest: null }]);
   });
 });

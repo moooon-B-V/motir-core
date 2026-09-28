@@ -2,6 +2,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import type { ClaimActorDto } from '@/lib/dto/claim';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
+  ContinueBranchDto,
   ContinuePullRequestDto,
   DeadRunDto,
   RunDiedReason,
@@ -22,6 +23,7 @@ import { isRunAlive, lastHeardFrom } from '@/lib/runs/runLiveness';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { DuplicateDispatchRunError } from '@/lib/dispatchRuns/errors';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { IN_PROGRESS_STATUS_KEY } from '@/lib/workItems/claimOutcome';
@@ -94,52 +96,135 @@ function statusRefusal(
   return null;
 }
 
+/** A repository's name, whatever form it arrived in (`owner/name` or `name`). */
+function repoName(repository: string): string {
+  return (repository.split('/').pop() ?? repository).toLowerCase();
+}
+
+/** Where a dead run's work is — per repository, and its primary's entry. */
+export interface ResolvedContinueBranches {
+  /** The PRIMARY repository's branch (`branches[0]`), or null when none. */
+  branch: string | null;
+  /** The first open pull request the dead run left, as before MOTIR-6791. */
+  pullRequest: ContinuePullRequestDto | null;
+  /** Every repository's branch, primary first. */
+  branches: ContinueBranchDto[];
+}
+
 /**
- * WHERE THE WORK IS — the open pull request's head, else the branch the dead
- * run's `checkout_ready` recorded (MOTIR-6530), else the leg's session branch.
- * The same resolution the CONTINUE prompt uses (MOTIR-6531), so the claim and the
- * prompt name one branch.
+ * WHERE THE WORK IS, PER REPOSITORY (MOTIR-6791) — for each repository, its open
+ * pull request's head, else the branch the dead run's `checkout_ready` recorded
+ * for it (MOTIR-6530 / MOTIR-6539); when neither names anything, the leg's
+ * session branch, the scope's session branch, and last the branch a `continue`
+ * run's `run_opened` recorded. The same resolution the CONTINUE prompt uses
+ * (MOTIR-6531), so the claim and the prompt name the same branches.
+ *
+ * `primaryRepo` is the card's first `targetRepos` entry: its branch leads the
+ * list, which is what keeps `branch` meaning what it meant for one repository.
  */
 export async function resolveContinueBranch(
   itemId: string,
   run: LatestRunForWorkItem,
   tx: Prisma.TransactionClient,
-): Promise<{ branch: string | null; pullRequest: ContinuePullRequestDto | null }> {
+  primaryRepo: string | null = null,
+): Promise<ResolvedContinueBranches> {
   const deliveries = await workItemDeliveryRepository.listByWorkItemWithChecks(itemId, tx);
-  const open = deliveries.find((d) => d.pullRequest.state === 'open' && !d.pullRequest.merged);
-  if (open) {
-    const repo = `${open.repo.owner}/${open.repo.name}`;
-    return {
-      branch: open.pullRequest.headRef,
-      pullRequest: {
-        repo,
-        number: open.pullRequest.number,
-        url: `https://github.com/${repo}/pull/${open.pullRequest.number}`,
-        headRef: open.pullRequest.headRef,
-      },
-    };
-  }
+  const openPrs: ContinueBranchDto[] = deliveries
+    .filter((d) => d.pullRequest.state === 'open' && !d.pullRequest.merged)
+    .map((d) => {
+      const repo = `${d.repo.owner}/${d.repo.name}`;
+      return {
+        repository: d.repo.name,
+        branch: d.pullRequest.headRef,
+        pullRequest: {
+          repo,
+          number: d.pullRequest.number,
+          url: `https://github.com/${repo}/pull/${d.pullRequest.number}`,
+          headRef: d.pullRequest.headRef,
+        },
+      };
+    });
+
   const leg = run.cards[0] ?? null;
-  const recorded = await dispatchRunEventRepository.findLatestCheckoutBranch(
+  const recorded = await dispatchRunEventRepository.findLatestCheckoutBranches(
     run.id,
     leg?.id ?? null,
     tx,
   );
-  if (recorded !== null) return { branch: recorded, pullRequest: null };
-  if (leg?.sessionBranch) return { branch: leg.sessionBranch, pullRequest: null };
+  let branches: ContinueBranchDto[];
+  if (recorded.length > 0 && recorded.some((r) => r.repository !== null)) {
+    // Per repository: a repository's open pull request's head wins for THAT
+    // repository; a repository with a pull request and no checkpoint joins too.
+    branches = recorded.map((r) => {
+      const pr = openPrs.find(
+        (p) => r.repository !== null && repoName(p.repository!) === repoName(r.repository),
+      );
+      return pr ?? { repository: r.repository, branch: r.branch, pullRequest: null };
+    });
+    for (const pr of openPrs) {
+      if (!branches.some((b) => b.pullRequest?.url === pr.pullRequest!.url)) branches.push(pr);
+    }
+  } else if (openPrs.length > 0) {
+    // A run that did not say which repository its branch was in: the open pull
+    // requests are where the work is, exactly as before.
+    branches = openPrs;
+  } else if (recorded.length > 0) {
+    branches = recorded.map((r) => ({ ...r, pullRequest: null }));
+  } else {
+    branches = await fallbackBranches(run, leg, tx);
+  }
+
+  if (primaryRepo !== null) {
+    const at = branches.findIndex(
+      (b) => b.repository !== null && repoName(b.repository) === repoName(primaryRepo),
+    );
+    if (at > 0) branches = [branches[at]!, ...branches.slice(0, at), ...branches.slice(at + 1)];
+  }
+  return {
+    branch: branches[0]?.branch ?? null,
+    pullRequest: openPrs[0]?.pullRequest ?? null,
+    branches,
+  };
+}
+
+/** The branches a run knows when no checkpoint and no pull request names one. */
+async function fallbackBranches(
+  run: LatestRunForWorkItem,
+  leg: LatestRunForWorkItem['cards'][number] | null,
+  tx: Prisma.TransactionClient,
+): Promise<ContinueBranchDto[]> {
+  const one = (branch: string): ContinueBranchDto[] => [
+    { repository: null, branch, pullRequest: null },
+  ];
+  if (leg?.sessionBranch) return one(leg.sessionBranch);
   // A SCOPE run's container holds no leg of its own: its branch is the session
   // branch its legs were integrated onto (MOTIR-6535) — one name across repos.
   if (leg === null) {
     const legs = await dispatchRunCardRepository.listByRun(run.id, tx);
     const session = legs.find((l) => l.sessionBranch !== null)?.sessionBranch ?? null;
-    if (session !== null) return { branch: session, pullRequest: null };
+    if (session !== null) return one(session);
   }
-  // A `continue` run that has not checked out yet still KNOWS its branch: the
-  // claim wrote it onto the run's `run_opened` event. Without this, a continue
+  // A `continue` run that has not checked out yet still KNOWS its branches: the
+  // claim wrote them onto the run's `run_opened` event. Without this, a continue
   // that dies before its checkout could not be continued again.
   const opened = await dispatchRunEventRepository.findLatestOfKind(run.id, 'run_opened', tx);
-  const openedBranch = (opened?.data as { branch?: unknown } | null)?.branch;
-  return { branch: typeof openedBranch === 'string' ? openedBranch : null, pullRequest: null };
+  const data = (opened?.data ?? null) as { branch?: unknown; branches?: unknown } | null;
+  const recorded = openedBranches(data);
+  if (recorded.length > 0) return recorded.map((b) => ({ ...b, pullRequest: null }));
+  return typeof data?.branch === 'string' ? one(data.branch) : [];
+}
+
+/** The per-repository branches a `continue` run's `run_opened` recorded. */
+function openedBranches(
+  data: { branches?: unknown } | null,
+): Array<{ repository: string | null; branch: string }> {
+  if (!Array.isArray(data?.branches)) return [];
+  return (data.branches as Array<{ repository?: unknown; branch?: unknown }>)
+    .filter((b) => typeof b?.branch === 'string' && b.branch.length > 0)
+    .map((b) => ({
+      repository: typeof b.repository === 'string' ? b.repository : null,
+      branch: b.branch as string,
+    }));
 }
 
 /**
@@ -195,6 +280,7 @@ type Evaluation =
        *  not got to it. The claim closes it; the view only reads it. */
       lapsed: boolean;
       branch: string | null;
+      branches: ContinueBranchDto[];
       pullRequest: ContinuePullRequestDto | null;
       refusal: Exclude<WorkItemContinueRefusal, 'run_alive' | 'no_dead_run'> | null;
       parentKey: string | null;
@@ -206,7 +292,7 @@ type Evaluation =
  * refuse (design `design/runs/design-notes.md` § Run died).
  */
 async function evaluate(
-  item: { id: string; status: string; archivedAt: Date | null },
+  item: { id: string; status: string; archivedAt: Date | null; targetRepos: readonly string[] },
   statuses: readonly WorkflowStatusDto[],
   now: Date,
   tx: Prisma.TransactionClient,
@@ -238,7 +324,12 @@ async function evaluate(
     run.scopeWorkItemId !== null && run.scopeWorkItemId !== item.id
       ? (run.scope?.identifier ?? null)
       : null;
-  const { branch, pullRequest } = await resolveContinueBranch(item.id, run, tx);
+  const { branch, branches, pullRequest } = await resolveContinueBranch(
+    item.id,
+    run,
+    tx,
+    item.targetRepos[0] ?? null,
+  );
   const refusal: Exclude<WorkItemContinueRefusal, 'run_alive' | 'no_dead_run'> | null =
     // ⚠️ THE STATUS FIRST, then the parent (MOTIR-6537): a child that is not In
     // Progress — never started, or finished — has nothing to continue, whoever's
@@ -256,10 +347,35 @@ async function evaluate(
     run,
     lapsed: run.status === 'running',
     branch,
+    branches,
     pullRequest,
     refusal,
     parentKey,
   };
+}
+
+/**
+ * A HOSTED continue's opening (Story MOTIR-6527 · MOTIR-6790). The hosted start
+ * hands it to the claim so the lock it takes IS the hosted run: one `continue`
+ * row, recorded `origin: 'hosted'` with the agent and model it runs on, and
+ * idempotent on the start's key. Server-internal — the v1 continue route never
+ * accepts one.
+ */
+export interface HostedContinueOpening {
+  origin: 'hosted';
+  agent: 'opencode';
+  model: string;
+  idempotencyKey: string;
+}
+
+export interface ClaimContinueOptions {
+  opening?: HostedContinueOpening | undefined;
+  /**
+   * Told when the opening's key was ALREADY used, and the answer is a replay of
+   * the run it opened — so a hosted start racing its own repeat does not boot
+   * that run a second container.
+   */
+  onReplay?: ((runId: string) => void) | undefined;
 }
 
 function refused(
@@ -278,6 +394,7 @@ function refused(
     startedAt: null,
     deadRun: null,
     branch: null,
+    branches: [],
     pullRequest: null,
     previousAssignee: null,
     mode: 'card',
@@ -286,6 +403,75 @@ function refused(
     ...extra,
   };
 }
+
+/** A JSON array of strings, or `[]` for anything else. */
+function stringsOf(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+}
+
+/**
+ * The answer a hosted opening already got, given again for a repeat of its key
+ * (MOTIR-6790) — read back off the run it opened and that run's `run_opened`.
+ */
+async function replayOpening(
+  item: { id: string; identifier: string; title: string },
+  run: LatestRunForWorkItem,
+  tx: Prisma.TransactionClient,
+): Promise<WorkItemContinueClaimDto> {
+  const opened = await dispatchRunEventRepository.findLatestOfKind(run.id, 'run_opened', tx);
+  const data = (opened?.data ?? null) as {
+    continuesRunId?: unknown;
+    branch?: unknown;
+    branches?: unknown;
+    previousAssignee?: { id?: unknown; name?: unknown } | null;
+    landedKeys?: unknown;
+    resumedKeys?: unknown;
+  } | null;
+  const deadId = typeof data?.continuesRunId === 'string' ? data.continuesRunId : null;
+  const dead = deadId ? await dispatchRunRepository.findForWorkItemById(deadId, item.id, tx) : null;
+  const previous = data?.previousAssignee;
+  return {
+    key: item.identifier,
+    title: item.title,
+    outcome: 'claimed',
+    reason: null,
+    parentKey: null,
+    runId: run.id,
+    holder: actor(run.createdBy),
+    startedAt: run.startedAt.toISOString(),
+    deadRun: dead ? toDeadRun(dead) : null,
+    branch: typeof data?.branch === 'string' ? data.branch : null,
+    branches: openedBranches(data).map((b) => ({ ...b, pullRequest: null })),
+    pullRequest: dead ? (await resolveContinueBranch(item.id, dead, tx)).pullRequest : null,
+    previousAssignee:
+      previous && typeof previous.id === 'string' && typeof previous.name === 'string'
+        ? { id: previous.id, name: previous.name }
+        : null,
+    mode: run.scopeWorkItemId === item.id ? 'parent' : 'card',
+    landedKeys: stringsOf(data?.landedKeys),
+    resumedKeys: stringsOf(data?.resumedKeys),
+  };
+}
+
+/**
+ * What a HOSTED continue would take over (MOTIR-6792) — read before any lock, so
+ * the hosted start can run every pre-flight over the right repositories and
+ * refuse the way the claim would, having touched nothing.
+ *
+ * `ok` names the continue's TARGET: the card itself, or — for an in-flight leg of
+ * a dead PARENT run — that parent, which is continued whole. `legItemIds` are the
+ * cards whose repositories the resumed run covers.
+ */
+export type HostedContinuePreview =
+  | { ok: true; key: string; legItemIds: string[] }
+  | {
+      ok: false;
+      /** The claim's refusal, or `taken` when a `continue` run already holds it. */
+      reason: WorkItemContinueRefusal | 'taken';
+      holder: ClaimActorDto | null;
+      startedAt: string | null;
+      parentKey: string | null;
+    };
 
 export const workItemContinueService = {
   /**
@@ -301,7 +487,9 @@ export const workItemContinueService = {
     identifier: string,
     ctx: ServiceContext,
     now: Date = new Date(),
+    options: ClaimContinueOptions = {},
   ): Promise<WorkItemContinueClaimDto> {
+    const { opening } = options;
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
     // A continue starts an agent, exactly like a dispatch — the same credit gate,
     // before any lock.
@@ -319,8 +507,37 @@ export const workItemContinueService = {
         /* v8 ignore next -- the row was resolved above; only a delete between the two reads gets here */
         if (!state) throw new WorkItemNotFoundError(identifier);
 
+        // The SAME hosted opening again — a retried start. Answered with the run
+        // that opening already opened, whatever that run has done since: a
+        // repeat must never be refused `taken` by its own run, nor take the card
+        // over a second time once that run ended.
+        if (opening) {
+          const existing = await dispatchRunRepository.findByIdempotencyKey(
+            ctx.workspaceId,
+            opening.idempotencyKey,
+            tx,
+          );
+          if (existing) {
+            const replayed = await dispatchRunRepository.findForWorkItemById(
+              existing.id,
+              item.id,
+              tx,
+            );
+            if (!replayed || replayed.command !== 'continue') {
+              throw new DuplicateDispatchRunError(opening.idempotencyKey);
+            }
+            options.onReplay?.(replayed.id);
+            return replayOpening(item, replayed, tx);
+          }
+        }
+
         const verdict = await evaluate(
-          { id: item.id, status: state.status, archivedAt: state.archivedAt },
+          {
+            id: item.id,
+            status: state.status,
+            archivedAt: state.archivedAt,
+            targetRepos: item.targetRepos,
+          },
           statuses,
           now,
           tx,
@@ -328,8 +545,8 @@ export const workItemContinueService = {
 
         if (verdict.kind === 'continuing') {
           const mine = verdict.run.createdById === ctx.userId;
-          const branch = mine
-            ? (await resolveContinueBranch(item.id, verdict.run, tx)).branch
+          const resolved = mine
+            ? await resolveContinueBranch(item.id, verdict.run, tx, item.targetRepos[0] ?? null)
             : null;
           return {
             key: item.identifier,
@@ -342,7 +559,8 @@ export const workItemContinueService = {
             startedAt: verdict.run.startedAt.toISOString(),
             // The holder is handed the branch again; a rival is handed nothing.
             deadRun: null,
-            branch,
+            branch: resolved?.branch ?? null,
+            branches: resolved?.branches ?? [],
             pullRequest: null,
             previousAssignee: null,
             mode: verdict.run.scopeWorkItemId === item.id ? 'parent' : 'card',
@@ -417,16 +635,32 @@ export const workItemContinueService = {
           await workItemRepository.update(item.id, { assigneeId: ctx.userId }, tx);
         }
 
+        // The opening rides on the SAME insert, so the lock and the hosted run
+        // are one row. `openWithin` answers a known key with the run it names,
+        // but the replay above has already answered that case under this lock.
         const opened = await dispatchRunService.openWithin(
           projectId,
-          parent
-            ? {
-                command: 'continue',
-                scopeKey: item.identifier,
-                scopeLabel: item.identifier,
-                cards: legKeys.map((key) => ({ key, disposition: 'queued' as const })),
-              }
-            : { command: 'continue', cards: [{ key: item.identifier, disposition: 'queued' }] },
+          {
+            ...(parent
+              ? {
+                  command: 'continue' as const,
+                  scopeKey: item.identifier,
+                  scopeLabel: item.identifier,
+                  cards: legKeys.map((key) => ({ key, disposition: 'queued' as const })),
+                }
+              : {
+                  command: 'continue' as const,
+                  cards: [{ key: item.identifier, disposition: 'queued' as const }],
+                }),
+            ...(opening
+              ? {
+                  origin: opening.origin,
+                  agent: opening.agent,
+                  model: opening.model,
+                  idempotencyKey: opening.idempotencyKey,
+                }
+              : {}),
+          },
           ctx,
           tx,
         );
@@ -443,6 +677,19 @@ export const workItemContinueService = {
                 continuesRunId: deadRun.id,
                 previousAssignee: previousAssignee ? { ...previousAssignee } : null,
                 branch: verdict.branch,
+                branches: verdict.branches.map((b) => ({
+                  repository: b.repository,
+                  branch: b.branch,
+                })),
+                // The scope shape (MOTIR-6795): a hosted container ADOPTS this run
+                // rather than claiming, so what the claim decided is read back
+                // from here — which legs landed, which were in flight.
+                mode: parent ? 'parent' : 'card',
+                landedKeys: [...landedKeys].sort(),
+                resumedKeys: [...resumedKeys].sort(),
+                // A hosted continue's ONE `run_opened` (the hosted start appends
+                // none of its own) says what Run hosted's does.
+                ...(opening ? { origin: opening.origin, model: opening.model } : {}),
               },
             },
           ],
@@ -459,6 +706,7 @@ export const workItemContinueService = {
           startedAt: opened.run.startedAt,
           deadRun,
           branch: verdict.branch,
+          branches: verdict.branches,
           pullRequest: verdict.pullRequest,
           previousAssignee,
           mode: parent ? 'parent' : 'card',
@@ -467,6 +715,93 @@ export const workItemContinueService = {
         };
       },
     );
+  },
+
+  /**
+   * Which card a HOSTED continue of `identifier` takes over, and over which legs
+   * — or the refusal the claim would give (MOTIR-6792). The claim's own
+   * evaluation, WITHOUT a lock and writing nothing; the claim decides again under
+   * its lock, so this is a pre-flight, never the decision.
+   *
+   * A leg of a dead parent run redirects ONCE to that parent: a hosted continue
+   * boots `motir continue <PARENT>`, exactly what a terminal would run.
+   */
+  async previewHostedContinue(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+    now: Date = new Date(),
+    redirected = false,
+  ): Promise<HostedContinuePreview> {
+    const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
+    const statuses = await workflowsService.listStatusesByProject(projectId, ctx.workspaceId);
+    const refuse = (
+      reason: WorkItemContinueRefusal | 'taken',
+      extra: Partial<Extract<HostedContinuePreview, { ok: false }>> = {},
+    ): HostedContinuePreview => ({
+      ok: false,
+      reason,
+      holder: null,
+      startedAt: null,
+      parentKey: null,
+      ...extra,
+    });
+
+    const verdict = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+      async (tx) => {
+        const state = await workItemRepository.findClaimStateById(item.id, tx);
+        /* v8 ignore next -- the row was resolved above; only a delete between the two reads gets here */
+        if (!state) throw new WorkItemNotFoundError(identifier);
+        const evaluated = await evaluate(
+          {
+            id: item.id,
+            status: state.status,
+            archivedAt: state.archivedAt,
+            targetRepos: item.targetRepos,
+          },
+          statuses,
+          now,
+          tx,
+        );
+        const legs =
+          evaluated.kind === 'died' && evaluated.run.scopeWorkItemId === item.id
+            ? await dispatchRunCardRepository.listByRun(evaluated.run.id, tx)
+            : [];
+        return { evaluated, state, legs };
+      },
+    );
+    const { evaluated, state, legs } = verdict;
+
+    if (evaluated.kind === 'continuing') {
+      return refuse('taken', {
+        holder: actor(evaluated.run.createdBy),
+        startedAt: evaluated.run.startedAt.toISOString(),
+      });
+    }
+    if (evaluated.kind === 'alive') {
+      return refuse('run_alive', {
+        holder: actor(evaluated.run.createdBy),
+        startedAt: evaluated.run.startedAt.toISOString(),
+      });
+    }
+    if (evaluated.kind === 'none') {
+      return refuse(
+        statusRefusal(state.status, state.archivedAt !== null, statuses) ?? 'no_dead_run',
+      );
+    }
+    if (evaluated.refusal === 'continue_the_parent' && evaluated.parentKey && !redirected) {
+      return this.previewHostedContinue(projectId, evaluated.parentKey, ctx, now, true);
+    }
+    if (evaluated.refusal !== null) {
+      return refuse(evaluated.refusal, { parentKey: evaluated.parentKey });
+    }
+    const legItemIds = legs.map((l) => l.workItemId).filter((id): id is string => id !== null);
+    return {
+      ok: true,
+      key: item.identifier,
+      legItemIds: legItemIds.length > 0 ? legItemIds : [item.id],
+    };
   },
 
   /**
@@ -502,6 +837,7 @@ export const workItemContinueService = {
           const data = (opened?.data ?? null) as {
             continuesRunId?: unknown;
             branch?: unknown;
+            branches?: unknown;
           } | null;
           const tookOverId = typeof data?.continuesRunId === 'string' ? data.continuesRunId : null;
           const tookOver = tookOverId
@@ -511,8 +847,10 @@ export const workItemContinueService = {
             state: 'continuing',
             holder: actor(verdict.run.createdBy),
             byViewer: verdict.run.createdById === ctx.userId,
+            origin: verdict.run.origin === 'hosted' ? 'hosted' : 'local',
             startedAt: verdict.run.startedAt.toISOString(),
             branch: typeof data?.branch === 'string' ? data.branch : null,
+            branches: openedBranches(data).map((b) => ({ ...b, pullRequest: null })),
             tookOverFrom: tookOverId
               ? { runId: tookOverId, dispatcher: actor(tookOver?.createdBy ?? null) }
               : null,
@@ -523,6 +861,7 @@ export const workItemContinueService = {
           deadRun: toDeadRun(verdict.run),
           reason: await diedReason(verdict.run, tx),
           branch: verdict.branch,
+          branches: verdict.branches,
           pullRequest: verdict.pullRequest,
           refusal: verdict.refusal,
           parentKey: verdict.parentKey,

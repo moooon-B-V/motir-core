@@ -19,6 +19,7 @@ export const GITLAB_BANNER_STATUSES = [
   'error',
   'not_configured',
   'no_workspace',
+  'forbidden',
 ] as const;
 
 export type GitlabBannerStatus = (typeof GITLAB_BANNER_STATUSES)[number];
@@ -40,4 +41,7 @@ export const GITLAB_BANNER_TONE: Record<GitlabBannerStatus, GitlabBannerTone> = 
   error: 'danger',
   not_configured: 'info',
   no_workspace: 'info',
+  // Only an org Owner or Admin may connect GitLab (MOTIR-6765). Red, like GitHub's
+  // `install_forbidden`: the round trip the reader started was refused.
+  forbidden: 'danger',
 };

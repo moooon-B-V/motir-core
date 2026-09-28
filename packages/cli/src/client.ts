@@ -734,6 +734,33 @@ export interface AcceptanceRefusal {
  * CONTINUE claim on a work item whose last run died. A refusal is a result, not an
  * error: `not_continuable` carries its `reason`, `taken` its `holder`.
  */
+/** One repository's share of a dead run's work (MOTIR-6791). */
+export interface ContinueClaimBranch {
+  /** The repository's NAME, or null when the dead run did not record it. */
+  repository: string | null;
+  branch: string;
+  pullRequest: { repo: string; number: number; url: string; headRef: string } | null;
+  /**
+   * Where to clone it from — carried by a hosted continue's run read
+   * (MOTIR-6795), so a repository no remaining leg touches can still be closed
+   * out. Absent on the claim itself, whose caller has its own checkouts.
+   */
+  cloneUrl?: string | null;
+}
+
+/**
+ * The branches a continue claim handed over — every repository's, primary first —
+ * or the single `branch` from a server that sends no `branches`.
+ */
+export function continueBranchesOf(
+  claim: Pick<WorkItemContinueClaim, 'branch' | 'branches' | 'pullRequest'>,
+): ContinueClaimBranch[] {
+  if (claim.branches && claim.branches.length > 0) return claim.branches;
+  return claim.branch === null
+    ? []
+    : [{ repository: null, branch: claim.branch, pullRequest: claim.pullRequest }];
+}
+
 export interface WorkItemContinueClaim {
   key: string;
   title: string;
@@ -759,7 +786,14 @@ export interface WorkItemContinueClaim {
     lastHeardAt: string;
     dispatcher: { id: string; name: string } | null;
   } | null;
+  /** The PRIMARY repository's branch — `branches[0].branch`. */
   branch: string | null;
+  /**
+   * EVERY repository's branch of the dead run, primary first (MOTIR-6791).
+   * Optional because a server older than contract 1.52.0 does not send it — read
+   * it through `continueBranchesOf`, which falls back to `branch`.
+   */
+  branches?: ContinueClaimBranch[];
   pullRequest: { repo: string; number: number; url: string; headRef: string } | null;
   previousAssignee: { id: string; name: string } | null;
   /** `parent` when the dead run was a scoped run over this container (MOTIR-6535). */
@@ -1129,6 +1163,22 @@ export interface DispatchRunView {
   model: string | null;
   endedAt: string | null;
   cards: Array<{ key: string | null; position: number; disposition: string }>;
+  /**
+   * What a `continue` run resumes (MOTIR-6795) — what the server's continue claim
+   * decided when it opened the run. Null for any other command; absent from a
+   * server older than contract 1.53.0.
+   */
+  continues?: DispatchRunContinues | null;
+}
+
+export interface DispatchRunContinues {
+  fromRunId: string | null;
+  branch: string | null;
+  /** Each with its repository's clone URL, where the project knows one. */
+  branches: Array<{ repository: string | null; branch: string; cloneUrl: string | null }>;
+  mode: 'card' | 'parent';
+  landedKeys: string[];
+  resumedKeys: string[];
 }
 
 /**

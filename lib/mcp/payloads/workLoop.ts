@@ -10,12 +10,15 @@ import {
   presentPlanOutcome,
   presentPlanSession,
   presentSessionCloseOut,
+  presentWorkItemRepairClaim,
   planJobHandleSchema,
   sessionCloseOutSchema,
+  workItemRepairClaimSchema,
 } from '@/lib/api/v1/workLoop/schema';
 import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
 import { PLAN_DECISION_REASONS } from '@/lib/dto/plans';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
+import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
 import type { PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
 import { definePayload } from './define';
 import { mcpWorkItemSchema, type McpWorkItem } from './workItems';
@@ -353,3 +356,24 @@ export const markIntegratedPayload = definePayload({
 });
 
 export { integrationResultSchema };
+
+/**
+ * The REPAIR claim (Story MOTIR-6804 · MOTIR-6807). `claim_work_item_repair`
+ * answers exactly what `POST /api/v1/work-items/{key}/repair` answers, through
+ * v1's own presenter — so the whole payload IS the `WorkItemRepairClaim`
+ * resource and the probe selects the payload itself. One lock seen through two
+ * doors, never two descriptions of it.
+ */
+export const claimWorkItemRepairPayload = definePayload({
+  schema: workItemRepairClaimSchema as unknown as z.ZodType<
+    z.infer<typeof workItemRepairClaimSchema>
+  >,
+  probes: [{ resource: 'WorkItemRepairClaim', select: (p) => [p] }],
+});
+
+/** Map a repair claim — v1's own presenter, unchanged. */
+export function presentMcpWorkItemRepairClaim(
+  dto: WorkItemRepairClaimDto,
+): z.infer<typeof workItemRepairClaimSchema> {
+  return presentWorkItemRepairClaim(dto);
+}

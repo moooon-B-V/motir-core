@@ -213,8 +213,25 @@ export class RepoSessions {
      * already on origin is the dead run's, and `origin/main` is merged into it
      * before the first child builds on it. A fresh run never sets this.
      */
-    private readonly opts: { mergeBaseOnReuse?: boolean } = {},
+    private readonly opts: {
+      mergeBaseOnReuse?: boolean;
+      /**
+       * Each repository's OWN session branch, when a resumed scope's dead run left
+       * a different one per repository (MOTIR-6794) — keyed by repository name.
+       * A repository absent here takes `branch`, cut the way a fresh run cuts it.
+       */
+      branches?: readonly { repository: string | null; branch: string }[];
+    } = {},
   ) {}
+
+  /** The session branch a repository's work goes on. */
+  private branchFor(target: DispatchTarget): string {
+    const name = target.targetRepo?.toLowerCase();
+    const own = name
+      ? this.opts.branches?.find((b) => b.repository?.toLowerCase() === name)
+      : undefined;
+    return own?.branch ?? this.branch;
+  }
 
   /**
    * The session(s) an item's whole repository SET routes into (MOTIR-3135).
@@ -277,24 +294,25 @@ export class RepoSessions {
     target: DispatchTarget,
     opts: { tolerateFailure: boolean },
   ): RepoSession | null {
+    const branch = this.branchFor(target);
     try {
-      const outcome = ensureSessionBranchOnOrigin(target.cwd, this.branch, this.run);
+      const outcome = ensureSessionBranchOnOrigin(target.cwd, branch, this.run);
       info(
         outcome === 'created'
-          ? `Session branch ${this.branch} created on origin in ${target.cwd}.`
-          : `Session branch ${this.branch} already on origin in ${target.cwd} — reusing it.`,
+          ? `Session branch ${branch} created on origin in ${target.cwd}.`
+          : `Session branch ${branch} already on origin in ${target.cwd} — reusing it.`,
       );
       if (outcome === 'already_on_origin' && this.opts.mergeBaseOnReuse) {
-        const merged = mergeBaseIntoRemoteBranch(target.cwd, this.branch, this.run);
+        const merged = mergeBaseIntoRemoteBranch(target.cwd, branch, this.run);
         info(
           merged === 'merged'
-            ? `Merged origin/main into ${this.branch} in ${target.cwd}.`
+            ? `Merged origin/main into ${branch} in ${target.cwd}.`
             : merged === 'up_to_date'
-              ? `${this.branch} already contains origin/main in ${target.cwd}.`
-              : `origin/main does not merge cleanly into ${this.branch} in ${target.cwd} — left as it was; each child merges it itself.`,
+              ? `${branch} already contains origin/main in ${target.cwd}.`
+              : `origin/main does not merge cleanly into ${branch} in ${target.cwd} — left as it was; each child merges it itself.`,
         );
       }
-      return { repoName: target.targetRepo, cwd: target.cwd, branch: this.branch, keys: [] };
+      return { repoName: target.targetRepo, cwd: target.cwd, branch, keys: [] };
     } catch (err) {
       if (!opts.tolerateFailure) throw err;
       info(

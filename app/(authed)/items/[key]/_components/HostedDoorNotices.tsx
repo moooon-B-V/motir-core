@@ -25,6 +25,8 @@ export function HostedDoorNotices() {
   // While a run is live the header holds Cancel run (or nothing): the door's own
   // lines have nothing to say about it.
   if (door.currentRun && isLiveRun(door.currentRun.status)) return null;
+  // No Run hosted on a died card (C7), so nothing of its door is said either.
+  if (door.runDoorHidden) return null;
 
   return (
     <div className="flex flex-col gap-2" data-testid="hosted-door-notices">

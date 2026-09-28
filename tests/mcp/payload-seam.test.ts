@@ -185,6 +185,9 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   create_folder: true,
   update_folder: true,
   delete_folder: true,
+  // MOTIR-6807 — the repair claim, `WorkItemRepairClaim` whole (its touch and
+  // close siblings are EXEMPT: a run's liveness is not the `DispatchRun` resource).
+  claim_work_item_repair: true,
 };
 
 /** The runtime view the assertions below walk. */

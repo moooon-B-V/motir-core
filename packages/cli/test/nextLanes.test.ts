@@ -161,7 +161,7 @@ describe('motir next --parent', () => {
 
   it('skips a container on the exclude list', async () => {
     setup({ containers: [container('PROD-10'), container('PROD-20')] });
-    addExclude(SERVER, 'PROD', { key: 'PROD-10', reason: 'failed' });
+    addExclude(SERVER, 'PROD', { key: 'PROD-10' });
     await expect(nextCommand({ parent: true })).rejects.toThrow(/agent/i);
     expect(calls.find((c) => c.tool === 'getWorkItem')?.args).toBe('PROD-20');
   });
