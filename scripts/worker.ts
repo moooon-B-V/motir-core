@@ -42,6 +42,7 @@
 import * as Sentry from '@sentry/nextjs';
 import { db } from '@/lib/db';
 import { serverSentryInitOptions } from '@/lib/monitoring/serverInit';
+import { startTransactionStallMonitor } from '@/lib/monitoring/transactionStall';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { JobWorker } from '@/lib/jobs/engine/worker';
@@ -137,6 +138,8 @@ function initMonitoring(): void {
   const options = serverSentryInitOptions();
   if (!options) return;
   Sentry.init(options);
+  // A job's P2028 reports the worker's own event-loop delay (MOTIR-6701).
+  startTransactionStallMonitor();
   console.info(`[worker] error monitoring on (environment: ${options.environment ?? 'unset'})`);
 }
 

@@ -99,6 +99,26 @@ describe('the SERVER and EDGE runtimes read the RUNTIME environment', () => {
   );
 });
 
+describe('the transaction-stall monitor sits behind the SAME gate (MOTIR-6701)', () => {
+  // The event-loop histogram a P2028 report reads is a timer and a native
+  // monitor. A self-hosted build with no DSN reports nothing, so it must not
+  // pay for measuring either — the gate is `init`'s, not a second one.
+  it('starts NO monitor on the server when the DSN is unset', async () => {
+    await import('@/sentry.server.config');
+    const { isTransactionStallMonitorRunning } = await import('@/lib/monitoring/transactionStall');
+    expect(isTransactionStallMonitorRunning()).toBe(false);
+  });
+
+  it('starts the monitor on the server when the DSN is set', async () => {
+    vi.stubEnv('SENTRY_DSN', 'https://key@o1.ingest.us.sentry.io/2');
+    await import('@/sentry.server.config');
+    const { isTransactionStallMonitorRunning, stopTransactionStallMonitor } =
+      await import('@/lib/monitoring/transactionStall');
+    expect(isTransactionStallMonitorRunning()).toBe(true);
+    stopTransactionStallMonitor();
+  });
+});
+
 describe('the CLIENT cannot read a runtime environment, and says so', () => {
   it('defaults to production', async () => {
     vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', 'https://key@o1.ingest.us.sentry.io/2');
