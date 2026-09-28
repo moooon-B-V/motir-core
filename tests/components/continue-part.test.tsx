@@ -151,6 +151,7 @@ describe('D5 — continuing', () => {
   it('names who is continuing, whose run it took over, and the branch', () => {
     mount({
       state: 'continuing',
+      origin: 'local',
       holder: { id: 'usr_2', name: 'Bo' },
       byViewer: false,
       startedAt: '2026-09-27T14:25:00.000Z',
@@ -168,6 +169,7 @@ describe('D5 — continuing', () => {
   it('names nobody when the holder’s account is gone, and no branch when none is known', () => {
     mount({
       state: 'continuing',
+      origin: 'local',
       holder: null,
       byViewer: false,
       startedAt: '2026-09-27T14:25:00.000Z',
@@ -183,6 +185,7 @@ describe('D5 — continuing', () => {
   it('says “you” to the viewer who is continuing it', () => {
     mount({
       state: 'continuing',
+      origin: 'local',
       holder: { id: 'usr_2', name: 'Bo' },
       byViewer: true,
       startedAt: '2026-09-27T14:25:00.000Z',
