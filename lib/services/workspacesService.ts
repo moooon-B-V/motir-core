@@ -81,7 +81,7 @@ const ORG_WORKSPACES_MAX_LIMIT = 100;
 //
 // `createWorkspace` is the canonical multi-row write: it inserts a
 // Workspace AND an owner WorkspaceMembership atomically, and retries on
-// slug collisions. `addMember` / `removeMember` exist so the invite
+// slug collisions. `addMember` / `removeMember` / `leaveWorkspace` exist so the invite
 // flow (workspaceInvitesService) and the settings UI (1.2.6) have a
 // single business-logic entry point instead of poking the membership
 // repo directly.
@@ -94,7 +94,8 @@ const ORG_WORKSPACES_MAX_LIMIT = 100;
 // membership read; it is idempotent and concurrency-safe.
 //
 // The 1.2.6 settings surface adds `renameWorkspace`, `listMembers`, and
-// `getWorkspaceSummary`, plus a last-member guard on `removeMember`. Removing a
+// `getWorkspaceSummary`, plus a last-member guard on Leave and Remove (Remove is
+// Manager-gated since MOTIR-6317). Removing a
 // workspace is an org-Admin act since MOTIR-6309 (`removeWorkspaceAsOrgAdmin`),
 // with account erasure's own entry beside it (`deleteWorkspaceForErasure`). Those workspace-scoped operations run inside
 // withWorkspaceContext so the workspace / workspace_membership RLS
@@ -474,6 +475,36 @@ async function orgManagersOf(
     await organizationRepository.findByIdInTx(workspace.organizationId, tx),
   ];
   return { userIds, organizationName: org?.name ?? '' };
+}
+
+/**
+ * Delete `userId`'s membership of `workspaceId` behind the last-member guard —
+ * the shared tail of a Leave. Returns null when there is no row (idempotent).
+ *
+ * MOTIR-2527: every read here goes through `tx`, the caller's bound transaction,
+ * so the read that GUARDS the delete shares the transaction that performs it.
+ * Reading through the `db` singleton made this fail SILENTLY: a null reads as
+ * "not a member", which is the idempotent no-op, so Leave returned success
+ * having deleted nothing.
+ */
+async function deleteMembershipGuarded(
+  userId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<WorkspaceMembership | null> {
+  const existing = await readMembership(userId, workspaceId, tx);
+  if (!existing) return null;
+
+  // Lock the workspace's membership rows before counting so two concurrent
+  // leaves serialize (lock-before-read-derived-update) — a plain COUNT would
+  // let both observe count > 1 and both delete, orphaning the workspace.
+  const memberCount = await workspaceMembershipRepository.countByWorkspaceForUpdate(
+    workspaceId,
+    tx,
+  );
+  if (memberCount <= 1) throw new LastMemberError(workspaceId);
+
+  return workspaceMembershipRepository.deleteByUserAndWorkspace(userId, workspaceId, tx);
 }
 
 export const workspacesService = {
@@ -935,10 +966,15 @@ export const workspacesService = {
   },
 
   /**
-   * Remove a member. Returns the deleted row or null if the user
-   * wasn't a member to begin with (idempotent Leave / Remove).
+   * LEAVE a workspace — the actor removes their OWN membership. Returns the
+   * deleted row, or null if they were not a member (idempotent Leave). Any
+   * member may leave; there is no right to lack (`leaveWorkspaceAction`).
    *
-   * Enforces the last-member guard: if the target is the only remaining
+   * Removing ANOTHER person is {@link removeMember}, which is Manager-gated —
+   * the two are separate entries so a self-removal can never be mistaken for,
+   * or widened into, a removal of somebody else (MOTIR-6317).
+   *
+   * Enforces the last-member guard: if the leaver is the only remaining
    * membership, throws LastMemberError instead of deleting — a workspace
    * with zero members is unreachable and undeletable through the UI, so
    * the last member must use Delete, not Leave. The guard LOCKS the
@@ -948,51 +984,90 @@ export const workspacesService = {
    * after the first commits, and is refused — and the workspace can never be
    * orphaned (the lock-before-read-derived-update rule; mirrors the org
    * last-owner guard).
-   *
-   * Runs inside withWorkspaceContext so the count read and the delete
-   * both see the workspace_membership RLS GUCs. The actor must be a
-   * member of `workspaceId` — callers build the WorkspaceContext from a
-   * resolved membership, but we keep the workspace-scoped GUC honest by
-   * counting only rows the policy exposes.
    */
-  async removeMember(input: {
+  async leaveWorkspace(input: {
     userId: string;
     workspaceId: string;
   }): Promise<WorkspaceMembership | null> {
     return withWorkspaceContext({ userId: input.userId, workspaceId: input.workspaceId }, (tx) =>
-      workspacesService.removeMemberInTx(input, tx),
+      deleteMembershipGuarded(input.userId, input.workspaceId, tx),
     );
   },
 
-  async removeMemberInTx(
-    input: { userId: string; workspaceId: string },
-    tx: Prisma.TransactionClient,
-  ): Promise<WorkspaceMembership | null> {
-    // MOTIR-2527: `tx` — this method's only caller is `removeMember`, which wraps it in
-    // `withWorkspaceContext`, so the GUCs are bound and the read that GUARDS the delete
-    // shares the transaction that performs it (the 4-layer rule). Reading through the
-    // `db` singleton here made this fail SILENTLY rather than loudly: a null reads as
-    // "not a member", which is the idempotent no-op below, so Leave/Remove would return
-    // success having deleted nothing.
-    const existing = await readMembership(input.userId, input.workspaceId, tx);
-    // Not a member → idempotent no-op (matches the prior contract).
-    if (!existing) return null;
-
-    // Lock the workspace's membership rows before counting so two concurrent
-    // leaves serialize (lock-before-read-derived-update) — a plain COUNT would
-    // let both observe count > 1 and both delete, orphaning the workspace.
-    const memberCount = await workspaceMembershipRepository.countByWorkspaceForUpdate(
-      input.workspaceId,
-      tx,
-    );
-    if (memberCount <= 1) {
-      throw new LastMemberError(input.workspaceId);
+  /**
+   * A Manager removes ANOTHER member from the workspace (MOTIR-6317). Returns
+   * the deleted row, or null if the target was not a member (idempotent).
+   *
+   * The ACTOR is required — the transaction's RLS context is the actor's, never
+   * the target's, and the actor's role is asserted before the target's row is
+   * touched. Before this card the method took only the target, so no role check
+   * was possible and any member could remove any other, the Owner included.
+   *
+   * Refusals, each before anything is written:
+   *   * the actor is not in the workspace → NotAMemberError (404), or is not its
+   *     Manager → WorkspaceRoleForbiddenError (403). The org Owner and an org
+   *     Admin are Managers with or without a membership (`readReachRole`);
+   *   * the target is the org Owner or an org Admin → OrgManagedWorkspaceRoleError
+   *     (409) — they manage the workspace by their org role, which only the
+   *     organization changes, exactly as `setMemberRole` refuses them;
+   *   * the removal would leave no Manager → LastManagerError (409) — reachable
+   *     only when the actor manages by org role without a membership of their own;
+   *   * the target is the last member → LastMemberError.
+   *
+   * An actor naming THEMSELF is a leave, and takes {@link leaveWorkspace}'s path.
+   *
+   * Every membership row is locked `FOR UPDATE` before either count is derived
+   * (the lock-before-read-derived-update rule), so a removal racing a leave or a
+   * role change serialises on the same rows.
+   */
+  async removeMember(input: {
+    actorUserId: string;
+    targetUserId: string;
+    workspaceId: string;
+  }): Promise<WorkspaceMembership | null> {
+    if (input.actorUserId === input.targetUserId) {
+      return workspacesService.leaveWorkspace({
+        userId: input.actorUserId,
+        workspaceId: input.workspaceId,
+      });
     }
+    return withWorkspaceContext(
+      { userId: input.actorUserId, workspaceId: input.workspaceId },
+      async (tx) => {
+        const actorRole = await readReachRole(input.actorUserId, input.workspaceId, tx);
+        if (!actorRole) throw new NotAMemberError(input.actorUserId, input.workspaceId);
+        if (actorRole !== 'manager') {
+          throw new WorkspaceRoleForbiddenError(input.actorUserId, input.workspaceId);
+        }
 
-    return workspaceMembershipRepository.deleteByUserAndWorkspace(
-      input.userId,
-      input.workspaceId,
-      tx,
+        const target = await readMembership(input.targetUserId, input.workspaceId, tx);
+        // Not a member → idempotent no-op (matches the Leave contract).
+        if (!target) return null;
+
+        const workspace = await workspaceRepository.findByIdInTx(input.workspaceId, tx);
+        if (!workspace) throw new NotAMemberError(input.actorUserId, input.workspaceId);
+        if (await isOrgManagerTarget(input.targetUserId, workspace, tx)) {
+          throw new OrgManagedWorkspaceRoleError(input.targetUserId, input.workspaceId);
+        }
+
+        // Lock every membership row first, then derive the Manager count under
+        // the same locks.
+        const memberCount = await workspaceMembershipRepository.countByWorkspaceForUpdate(
+          input.workspaceId,
+          tx,
+        );
+        if (memberCount <= 1) throw new LastMemberError(input.workspaceId);
+        if (target.workspaceRole === 'manager') {
+          const managers = await workspaceMembershipRepository.countManagers(input.workspaceId, tx);
+          if (managers <= 1) throw new LastManagerError(input.workspaceId);
+        }
+
+        return workspaceMembershipRepository.deleteByUserAndWorkspace(
+          input.targetUserId,
+          input.workspaceId,
+          tx,
+        );
+      },
     );
   },
 
