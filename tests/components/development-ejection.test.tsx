@@ -73,6 +73,7 @@ function exit(over: Partial<PullRequestQueueExitDTO> = {}): PullRequestQueueExit
     requeuedAt: null,
     failingCheckName: 'CI complete',
     failingCheckUrl: CHECK_URL,
+    failingCheckConclusion: 'failure',
     ...over,
   };
 }

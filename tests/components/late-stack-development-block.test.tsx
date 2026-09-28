@@ -589,6 +589,7 @@ describe('the item page’s re-asked merge gate names the approval it replaced',
             requeuedAt: null,
             failingCheckName: 'CI complete',
             failingCheckUrl: 'https://github.com/moooon/motir-gateway/actions/runs/1/job/2',
+            failingCheckConclusion: 'failure',
           }
         : null,
       exitAtApprovedHead: exited,

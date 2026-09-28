@@ -167,6 +167,7 @@ export function toQueueExitDto(exit: GithubPullRequestQueueExit): PullRequestQue
     requeuedAt: exit.requeuedAt?.toISOString() ?? null,
     failingCheckName: exit.failingCheckName,
     failingCheckUrl: exit.failingCheckUrl,
+    failingCheckConclusion: exit.failingCheckConclusion,
   };
 }
 

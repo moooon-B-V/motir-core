@@ -234,6 +234,8 @@ export interface DeliveryQueueExitDto {
   /** The queue's failing check; both null when none is known (a conflict). */
   failingCheckName: string | null;
   failingCheckUrl: string | null;
+  /** That check's RAW GitHub conclusion, null when none is known (MOTIR-6846). */
+  failingCheckConclusion: string | null;
 }
 
 /**

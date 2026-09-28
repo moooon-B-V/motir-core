@@ -126,6 +126,7 @@ export function toWorkItemDeliveryDto(
     headSha: string;
     failingCheckName: string | null;
     failingCheckUrl: string | null;
+    failingCheckConclusion: string | null;
   } | null,
   /** The pull request's STANDING host merge refusal, when the caller read one
    *  (`standingMergeRefusals`, MOTIR-6735) — the refusal row itself, mapped here. */
@@ -152,6 +153,7 @@ export function toWorkItemDeliveryDto(
             headSha: standingExit.headSha,
             failingCheckName: standingExit.failingCheckName,
             failingCheckUrl: standingExit.failingCheckUrl,
+            failingCheckConclusion: standingExit.failingCheckConclusion,
           },
     mergeRefusal:
       standingRefusal === null
