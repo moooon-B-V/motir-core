@@ -1,0 +1,1945 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Ready — the three lanes (MOTIR-6831)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — MOTIR-6831, a DELTA on design/ready/ready.mock.html
+      (Story 7.0) as the /ready page ships today (rendered from origin/main before
+      drawing: a flat list of card rows under "Ready to start" + a neutral count chip).
+      Story MOTIR-6829 splits the ready set into three LANES — leaves grouped by
+      RUNNABLE CONTAINER, the containers themselves, and bugs — and this asset draws
+      how /ready shows them: a "Ready to run" list of collapsible container rows and
+      standalone leaf rows, and a separate "Bugs" list with its own count. Only the
+      changed panels. The lane contract it draws is lib/workItems/readyFilter.ts.
+
+      Built from app/(authed)/ready/page.tsx and _components/ReadyList.tsx (the shipped
+      dispatch row: IssueTypeIcon, mono key, title, WorkItemTypeChip, the priority Pill,
+      Avatar, the hover copy button + Tooltip), components/ui/TreeTable.tsx (the
+      ChevronRight toggle, its rotate-90 open state, the 16px leaf slot and the 22px
+      per-level indent), components/ui/PageSkeleton.tsx and components/ui/EmptyState.tsx.
+    -->
+    <style>
+      /* ═══ TOKENS — generated from @motir/design-system/theme.css ═══ */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        /* ADDED by MOTIR-4674, verbatim from packages/design-system/theme.css:
+           the ink for danger text ON a page surface. --el-danger-text is legal
+           ONLY on an element carrying bg-(--el-danger), and raw --el-danger is
+           under AA on the dark page in three palettes. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      /* ═══ MOCK BOARD CHROME (not product UI — the panel scaffolding) ═══ */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .sprite {
+        display: none;
+      }
+      .review-head {
+        max-width: 1040px;
+        margin: 0 auto 8px;
+      }
+      .review-title {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-sub {
+        margin: 4px 0 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .board-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        max-width: 1040px;
+        margin: 40px auto 10px;
+      }
+      .board {
+        max-width: 1040px;
+        margin: 0 auto;
+      }
+      .board-note {
+        margin: 0 0 12px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .ln-canvas {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 24px 32px 32px;
+      }
+
+      /* ═══ THE PAGE HEADER — mirrored from app/(authed)/ready/page.tsx ═══ */
+      .ln-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .ln-head-titles {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .ln-head-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .ln-h1 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 32px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .ln-sub {
+        margin: 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      /* the neutral Pill — `tone="neutral"` */
+      .ln-count {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-chip-border);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      /* "What is this?" — Button ghost sm */
+      .ln-help {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        border: 1px solid transparent;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .ln-help-ic {
+        width: 15px;
+        height: 15px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      /* ═══ ADDED BY THIS ASSET — the two lane sections ═══ */
+      .ln-section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .ln-section + .ln-section {
+        margin-top: 32px;
+      }
+      .ln-section-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .ln-h2 {
+        margin: 0;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .ln-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .ln-empty-line {
+        margin: 0;
+        padding: var(--spacing-control-y) 0;
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ═══ THE SHIPPED DISPATCH ROW — mirrored from ReadyList.tsx ReadyRow ═══ */
+      .ln-card {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: var(--height-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-subtle);
+      }
+      .ln-row--hover .ln-card {
+        border-color: var(--el-border-strong);
+        background: var(--el-surface-soft);
+      }
+      /* a CHILD of an expanded container: one tree level in (TreeTable INDENT_PX) */
+      .ln-row--child {
+        margin-left: 22px;
+      }
+      .ln-kind {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .ln-kind--subtask {
+        color: var(--el-type-subtask);
+      }
+      .ln-kind--story {
+        color: var(--el-type-story);
+      }
+      .ln-kind--task {
+        color: var(--el-type-task);
+      }
+      .ln-kind--bug {
+        color: var(--el-type-bug);
+      }
+      .ln-key {
+        flex-shrink: 0;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .ln-title {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .ln-row--hover .ln-title {
+        text-decoration: underline;
+      }
+      .ln-meta {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 12px;
+      }
+      /* WorkItemTypeChip, abridged to its label */
+      .ln-type-chip {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      /* the priority Pill — `priority=*`: the hue tinted 14% over the surface */
+      .ln-pri {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+      }
+      .ln-pri--highest {
+        background: color-mix(in srgb, var(--el-priority-highest) 14%, var(--el-surface));
+      }
+      .ln-pri--high {
+        background: color-mix(in srgb, var(--el-priority-high) 14%, var(--el-surface));
+      }
+      .ln-pri--medium {
+        background: color-mix(in srgb, var(--el-priority-medium) 14%, var(--el-surface));
+      }
+      .ln-pri--low {
+        background: color-mix(in srgb, var(--el-priority-low) 14%, var(--el-surface));
+      }
+      .ln-pri-ic {
+        width: 12px;
+        height: 12px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      /* Avatar (issueCellPrimitives) + name; the dashed unassigned placeholder */
+      .ln-person {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .ln-avatar {
+        display: inline-flex;
+        width: 22px;
+        height: 22px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .ln-person-name {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .ln-unassigned {
+        display: inline-flex;
+        width: 22px;
+        height: 22px;
+        border-radius: 9999px;
+        border: 1px dashed var(--el-border-strong);
+        background: var(--el-muted);
+      }
+      /* the copy icon-button — revealed on row hover / focus */
+      .ln-copy-wrap {
+        position: relative;
+        z-index: 10;
+      }
+      .ln-copy {
+        display: inline-flex;
+        width: var(--height-control);
+        height: var(--height-control);
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+        opacity: 0;
+      }
+      .ln-copy--shown {
+        opacity: 1;
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .ln-copy-ic {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .ln-tip {
+        position: absolute;
+        bottom: calc(100% + 6px);
+        right: 0;
+        white-space: nowrap;
+        border-radius: var(--radius-control);
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 12px;
+      }
+      .ln-tip-code {
+        font-family: var(--font-mono);
+      }
+
+      /* ═══ ADDED BY THIS ASSET — the container toggle (TreeTable's grammar) ═══ */
+      .ln-chev {
+        position: relative;
+        z-index: 10;
+        display: inline-flex;
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .ln-chev-ic {
+        width: 12px;
+        height: 12px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .ln-chev-ic--open {
+        transform: rotate(90deg);
+      }
+      .ln-chev-slot {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+      }
+      .ln-hint {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ═══ EmptyState (unchanged) ═══ */
+      .ln-emptystate {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 48px var(--spacing-card-padding);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        text-align: center;
+      }
+      .ln-empty-ic {
+        width: 48px;
+        height: 48px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .ln-empty-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .ln-empty-body {
+        margin: 0;
+        max-width: 460px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .ln-secondary-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-size: 14px;
+        text-decoration: none;
+      }
+      .ln-secondary-ic {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        color: var(--el-text-secondary);
+      }
+
+      /* ═══ Loading — PageSkeleton's pulse blocks ═══ */
+      .ln-pulse {
+        display: flex;
+        flex-direction: column;
+      }
+      .ln-skel-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .ln-skel-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: 44px;
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+      }
+      .ln-skel-block {
+        height: 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .ln-skel-block--icon {
+        width: 18px;
+        height: 18px;
+      }
+      .ln-skel-block--key {
+        width: 48px;
+      }
+      .ln-skel-block--title {
+        flex: 1;
+        max-width: 360px;
+      }
+      .ln-skel-block--pill {
+        width: 64px;
+        margin-left: auto;
+      }
+
+      /* ═══ Load-more — the review-only page-boundary rule and the status line ═══ */
+      .ln-page-break {
+        margin: 2px 0 2px 22px;
+        border-top: 1px dashed var(--el-border-strong);
+        padding-top: 4px;
+      }
+      .ln-note {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .ln-loading-more {
+        margin: 8px 0 0;
+        text-align: center;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="sprite" aria-hidden="true">
+      <defs>
+        <symbol id="i-copy" viewBox="0 0 24 24">
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+        </symbol>
+        <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"></path></symbol>
+        <symbol id="i-subtask" viewBox="0 0 24 24">
+          <path d="M13 5h8"></path>
+          <path d="M13 12h8"></path>
+          <path d="M13 19h8"></path>
+          <path d="m3 17 2 2 4-4"></path>
+          <path d="m3 7 2 2 4-4"></path>
+        </symbol>
+        <symbol id="i-story" viewBox="0 0 24 24">
+          <path d="M12 7v14"></path>
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          ></path>
+        </symbol>
+        <symbol id="i-task" viewBox="0 0 24 24">
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"></path>
+          <path d="m9 11 3 3L22 4"></path>
+        </symbol>
+        <symbol id="i-bug" viewBox="0 0 24 24">
+          <path d="M12 20v-9"></path>
+          <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"></path>
+          <path d="M14.12 3.88 16 2"></path>
+          <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+          <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+          <path d="M22 13h-4"></path>
+          <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+          <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+          <path d="M6 13H2"></path>
+          <path d="m8 2 1.88 1.88"></path>
+          <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path>
+        </symbol>
+        <symbol id="i-zap" viewBox="0 0 24 24">
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          ></path>
+        </symbol>
+        <symbol id="i-help" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+          <path d="M12 17h.01"></path>
+        </symbol>
+        <symbol id="i-inbox" viewBox="0 0 24 24">
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          ></path>
+        </symbol>
+        <symbol id="i-dot" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"></circle>
+          <circle cx="12" cy="12" r="1"></circle>
+        </symbol>
+        <symbol id="i-up" viewBox="0 0 24 24">
+          <path d="m5 12 7-7 7 7"></path>
+          <path d="M12 19V5"></path>
+        </symbol>
+        <symbol id="i-down" viewBox="0 0 24 24">
+          <path d="M12 5v14"></path>
+          <path d="m19 12-7 7-7-7"></path>
+        </symbol>
+        <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"></path></symbol>
+      </defs>
+    </svg>
+    <header class="review-head">
+      <h1 class="review-title">Ready — the three lanes</h1>
+      <p class="review-sub">MOTIR-6831 · delta on design/ready/ready.mock.html · seven states</p>
+    </header>
+
+    <div class="board-label">
+      1 · Populated — runnable containers (collapsed), a standalone leaf, and the Bugs list
+    </div>
+    <div class="board">
+      <p class="board-note">
+        Default state. MOT-9 and MOT-2 are runnable stories, collapsed, each with its “{ready} of
+        {children} ready” hint; MOT-9 is shown HOVERED, revealing the parent-run copy button and its
+        tooltip. MOT-7 is a task directly under an epic: a standalone row, no chevron, its 16px
+        chevron slot reserved so every icon aligns. The epic itself is no row. Bugs below: MOT-12
+        childless, MOT-13 a bug with a ready subtask (collapsed).
+      </p>
+      <div class="ln-canvas">
+        <header class="ln-head">
+          <div class="ln-head-titles">
+            <div class="ln-head-row">
+              <h2 class="ln-h1">Ready to start</h2>
+              <span class="ln-count">5 ready</span><span class="ln-count">2 bugs</span>
+            </div>
+            <p class="ln-sub">Motir · MOT</p>
+          </div>
+          <button type="button" class="ln-help">
+            <svg class="ln-help-ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-help" /></svg
+            >What is this?
+          </button>
+        </header>
+        <section class="ln-section" aria-label="Ready to run">
+          <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
+          <div class="ln-list" role="list" aria-label="Ready work items">
+            <div class="ln-row ln-row--hover" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <button
+                  type="button"
+                  class="ln-chev"
+                  aria-expanded="false"
+                  aria-label="Expand MOT-9"
+                >
+                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg></button
+                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-story" /></svg
+                ><span class="ln-key">MOT-9</span
+                ><span class="ln-title">Run the next story from the terminal</span>
+                <div class="ln-meta">
+                  <span class="ln-hint">1 of 2 ready</span
+                  ><span class="ln-pri ln-pri--highest"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >Highest</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">A</span><span class="ln-person-name">Ana</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button
+                      type="button"
+                      class="ln-copy ln-copy--shown"
+                      aria-label="Copy parent-run command for MOT-9"
+                    >
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                    ><span class="ln-tip" role="tooltip"
+                      >Copy <code class="ln-tip-code">motir run MOT-9</code></span
+                    ></span
+                  >
+                </div>
+              </div>
+            </div>
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <button
+                  type="button"
+                  class="ln-chev"
+                  aria-expanded="false"
+                  aria-label="Expand MOT-2"
+                >
+                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg></button
+                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-story" /></svg
+                ><span class="ln-key">MOT-2</span
+                ><span class="ln-title">Group the ready list by story</span>
+                <div class="ln-meta">
+                  <span class="ln-hint">3 of 3 ready</span
+                  ><span class="ln-pri ln-pri--high"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >High</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button
+                      type="button"
+                      class="ln-copy"
+                      aria-label="Copy parent-run command for MOT-2"
+                    >
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--task" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-task" /></svg
+                ><span class="ln-key">MOT-7</span
+                ><span class="ln-title">Reconcile the CLI changeset</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Chore</span
+                  ><span class="ln-pri ln-pri--low"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-down" /></svg
+                    >Low</span
+                  ><span class="ln-unassigned" aria-label="Unassigned"></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-7">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="ln-section" aria-label="Bugs">
+          <div class="ln-section-head">
+            <h3 class="ln-h2">Bugs</h3>
+            <span class="ln-count">2 bugs</span>
+          </div>
+          <div class="ln-list" role="list" aria-label="Ready bugs">
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-bug" /></svg
+                ><span class="ln-key">MOT-12</span
+                ><span class="ln-title">Copy toast clips long keys</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Code</span
+                  ><span class="ln-pri ln-pri--high"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >High</span
+                  ><span class="ln-unassigned" aria-label="Unassigned"></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-12">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <button
+                  type="button"
+                  class="ln-chev"
+                  aria-expanded="false"
+                  aria-label="Expand MOT-13"
+                >
+                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg></button
+                ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-bug" /></svg
+                ><span class="ln-key">MOT-13</span
+                ><span class="ln-title">Load-more drops the last row</span>
+                <div class="ln-meta">
+                  <span class="ln-hint">1 of 1 ready</span
+                  ><span class="ln-pri ln-pri--medium"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-minus" /></svg
+                    >Medium</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">A</span><span class="ln-person-name">Ana</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button
+                      type="button"
+                      class="ln-copy"
+                      aria-label="Copy parent-run command for MOT-13"
+                    >
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="board-label">2 · A container expanded</div>
+    <div class="board">
+      <p class="board-note">
+        MOT-2 expanded: its three ready subtasks appear beneath it, indented one tree level (22px,
+        the TreeTable INDENT_PX), in lane order. Each child keeps the leaf row’s own copy button
+        (`motir run MOT-4`); the container row’s copies `motir run MOT-2`, the parent run. Collapsed
+        by default; the chevron rotates 90° when open.
+      </p>
+      <div class="ln-canvas">
+        <header class="ln-head">
+          <div class="ln-head-titles">
+            <div class="ln-head-row">
+              <h2 class="ln-h1">Ready to start</h2>
+              <span class="ln-count">5 ready</span><span class="ln-count">2 bugs</span>
+            </div>
+            <p class="ln-sub">Motir · MOT</p>
+          </div>
+          <button type="button" class="ln-help">
+            <svg class="ln-help-ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-help" /></svg
+            >What is this?
+          </button>
+        </header>
+        <section class="ln-section" aria-label="Ready to run">
+          <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
+          <div class="ln-list" role="list" aria-label="Ready work items">
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <button
+                  type="button"
+                  class="ln-chev"
+                  aria-expanded="false"
+                  aria-label="Expand MOT-9"
+                >
+                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg></button
+                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-story" /></svg
+                ><span class="ln-key">MOT-9</span
+                ><span class="ln-title">Run the next story from the terminal</span>
+                <div class="ln-meta">
+                  <span class="ln-hint">1 of 2 ready</span
+                  ><span class="ln-pri ln-pri--highest"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >Highest</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">A</span><span class="ln-person-name">Ana</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button
+                      type="button"
+                      class="ln-copy"
+                      aria-label="Copy parent-run command for MOT-9"
+                    >
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <button
+                  type="button"
+                  class="ln-chev"
+                  aria-expanded="true"
+                  aria-label="Collapse MOT-2"
+                >
+                  <svg class="ln-chev-ic ln-chev-ic--open" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg></button
+                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-story" /></svg
+                ><span class="ln-key">MOT-2</span
+                ><span class="ln-title">Group the ready list by story</span>
+                <div class="ln-meta">
+                  <span class="ln-hint">3 of 3 ready</span
+                  ><span class="ln-pri ln-pri--high"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >High</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button
+                      type="button"
+                      class="ln-copy"
+                      aria-label="Copy parent-run command for MOT-2"
+                    >
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row ln-row--child" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-subtask" /></svg
+                ><span class="ln-key">MOT-4</span
+                ><span class="ln-title">Partition the walk into lanes</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Code</span
+                  ><span class="ln-pri ln-pri--high"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >High</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-4">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row ln-row--child" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-subtask" /></svg
+                ><span class="ln-key">MOT-5</span><span class="ln-title">Lane cursor codec</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Code</span
+                  ><span class="ln-pri ln-pri--medium"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-minus" /></svg
+                    >Medium</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-5">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row ln-row--child" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-subtask" /></svg
+                ><span class="ln-key">MOT-6</span
+                ><span class="ln-title">Container shapes read</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Code</span
+                  ><span class="ln-pri ln-pri--medium"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-minus" /></svg
+                    >Medium</span
+                  ><span class="ln-unassigned" aria-label="Unassigned"></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-6">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--task" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-task" /></svg
+                ><span class="ln-key">MOT-7</span
+                ><span class="ln-title">Reconcile the CLI changeset</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Chore</span
+                  ><span class="ln-pri ln-pri--low"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-down" /></svg
+                    >Low</span
+                  ><span class="ln-unassigned" aria-label="Unassigned"></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-7">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="ln-section" aria-label="Bugs">
+          <div class="ln-section-head">
+            <h3 class="ln-h2">Bugs</h3>
+            <span class="ln-count">2 bugs</span>
+          </div>
+          <div class="ln-list" role="list" aria-label="Ready bugs">
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-bug" /></svg
+                ><span class="ln-key">MOT-12</span
+                ><span class="ln-title">Copy toast clips long keys</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Code</span
+                  ><span class="ln-pri ln-pri--high"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >High</span
+                  ><span class="ln-unassigned" aria-label="Unassigned"></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-12">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <button
+                  type="button"
+                  class="ln-chev"
+                  aria-expanded="false"
+                  aria-label="Expand MOT-13"
+                >
+                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg></button
+                ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-bug" /></svg
+                ><span class="ln-key">MOT-13</span
+                ><span class="ln-title">Load-more drops the last row</span>
+                <div class="ln-meta">
+                  <span class="ln-hint">1 of 1 ready</span
+                  ><span class="ln-pri ln-pri--medium"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-minus" /></svg
+                    >Medium</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">A</span><span class="ln-person-name">Ana</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button
+                      type="button"
+                      class="ln-copy"
+                      aria-label="Copy parent-run command for MOT-13"
+                    >
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="board-label">3 · Main list empty, bugs present</div>
+    <div class="board">
+      <p class="board-note">
+        Nothing in the leaves lane, so “Ready to run” shows one inline line instead of a list, and
+        the page does NOT fall back to the EmptyState: the Bugs list is populated. MOT-13 is shown
+        expanded to its subtask, the same grammar as a container.
+      </p>
+      <div class="ln-canvas">
+        <header class="ln-head">
+          <div class="ln-head-titles">
+            <div class="ln-head-row">
+              <h2 class="ln-h1">Ready to start</h2>
+              <span class="ln-count">0 ready</span><span class="ln-count">2 bugs</span>
+            </div>
+            <p class="ln-sub">Motir · MOT</p>
+          </div>
+          <button type="button" class="ln-help">
+            <svg class="ln-help-ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-help" /></svg
+            >What is this?
+          </button>
+        </header>
+        <section class="ln-section" aria-label="Ready to run">
+          <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
+          <p class="ln-empty-line">Nothing ready to run.</p>
+        </section>
+        <section class="ln-section" aria-label="Bugs">
+          <div class="ln-section-head">
+            <h3 class="ln-h2">Bugs</h3>
+            <span class="ln-count">2 bugs</span>
+          </div>
+          <div class="ln-list" role="list" aria-label="Ready bugs">
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-bug" /></svg
+                ><span class="ln-key">MOT-12</span
+                ><span class="ln-title">Copy toast clips long keys</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Code</span
+                  ><span class="ln-pri ln-pri--high"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >High</span
+                  ><span class="ln-unassigned" aria-label="Unassigned"></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-12">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <button
+                  type="button"
+                  class="ln-chev"
+                  aria-expanded="true"
+                  aria-label="Collapse MOT-13"
+                >
+                  <svg class="ln-chev-ic ln-chev-ic--open" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg></button
+                ><svg class="ln-kind ln-kind--bug" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-bug" /></svg
+                ><span class="ln-key">MOT-13</span
+                ><span class="ln-title">Load-more drops the last row</span>
+                <div class="ln-meta">
+                  <span class="ln-hint">1 of 1 ready</span
+                  ><span class="ln-pri ln-pri--medium"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-minus" /></svg
+                    >Medium</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">A</span><span class="ln-person-name">Ana</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button
+                      type="button"
+                      class="ln-copy"
+                      aria-label="Copy parent-run command for MOT-13"
+                    >
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row ln-row--child" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-subtask" /></svg
+                ><span class="ln-key">MOT-14</span
+                ><span class="ln-title">Reproduce at the page boundary</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Test</span
+                  ><span class="ln-pri ln-pri--medium"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-minus" /></svg
+                    >Medium</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">A</span><span class="ln-person-name">Ana</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-14">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="board-label">4 · Bugs empty</div>
+    <div class="board">
+      <p class="board-note">
+        The Bugs section never disappears: with no ready bug it keeps its heading, reads “0 bugs”,
+        and shows one line.
+      </p>
+      <div class="ln-canvas">
+        <header class="ln-head">
+          <div class="ln-head-titles">
+            <div class="ln-head-row">
+              <h2 class="ln-h1">Ready to start</h2>
+              <span class="ln-count">5 ready</span><span class="ln-count">0 bugs</span>
+            </div>
+            <p class="ln-sub">Motir · MOT</p>
+          </div>
+          <button type="button" class="ln-help">
+            <svg class="ln-help-ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-help" /></svg
+            >What is this?
+          </button>
+        </header>
+        <section class="ln-section" aria-label="Ready to run">
+          <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
+          <div class="ln-list" role="list" aria-label="Ready work items">
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <button
+                  type="button"
+                  class="ln-chev"
+                  aria-expanded="false"
+                  aria-label="Expand MOT-9"
+                >
+                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg></button
+                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-story" /></svg
+                ><span class="ln-key">MOT-9</span
+                ><span class="ln-title">Run the next story from the terminal</span>
+                <div class="ln-meta">
+                  <span class="ln-hint">1 of 2 ready</span
+                  ><span class="ln-pri ln-pri--highest"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >Highest</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">A</span><span class="ln-person-name">Ana</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button
+                      type="button"
+                      class="ln-copy"
+                      aria-label="Copy parent-run command for MOT-9"
+                    >
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <button
+                  type="button"
+                  class="ln-chev"
+                  aria-expanded="false"
+                  aria-label="Expand MOT-2"
+                >
+                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg></button
+                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-story" /></svg
+                ><span class="ln-key">MOT-2</span
+                ><span class="ln-title">Group the ready list by story</span>
+                <div class="ln-meta">
+                  <span class="ln-hint">3 of 3 ready</span
+                  ><span class="ln-pri ln-pri--high"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >High</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button
+                      type="button"
+                      class="ln-copy"
+                      aria-label="Copy parent-run command for MOT-2"
+                    >
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--task" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-task" /></svg
+                ><span class="ln-key">MOT-7</span
+                ><span class="ln-title">Reconcile the CLI changeset</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Chore</span
+                  ><span class="ln-pri ln-pri--low"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-down" /></svg
+                    >Low</span
+                  ><span class="ln-unassigned" aria-label="Unassigned"></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-7">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="ln-section" aria-label="Bugs">
+          <div class="ln-section-head">
+            <h3 class="ln-h2">Bugs</h3>
+            <span class="ln-count">0 bugs</span>
+          </div>
+          <p class="ln-empty-line">No ready bugs.</p>
+        </section>
+      </div>
+    </div>
+    <div class="board-label">5 · All empty — the existing EmptyState</div>
+    <div class="board">
+      <p class="board-note">
+        Both lanes empty: exactly today’s EmptyState (unchanged copy and action), with neither
+        section drawn and no count chips.
+      </p>
+      <div class="ln-canvas">
+        <header class="ln-head">
+          <div class="ln-head-titles">
+            <div class="ln-head-row"><h2 class="ln-h1">Ready to start</h2></div>
+            <p class="ln-sub">Motir · MOT</p>
+          </div>
+          <button type="button" class="ln-help">
+            <svg class="ln-help-ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-help" /></svg
+            >What is this?
+          </button>
+        </header>
+        <div class="ln-emptystate" data-surface="card">
+          <svg class="ln-empty-ic" viewBox="0 0 24 24" aria-hidden="true">
+            <use href="#i-inbox" />
+          </svg>
+          <p class="ln-empty-title">Nothing's ready right now</p>
+          <p class="ln-empty-body">
+            A work item appears here once every work item blocking it is done. Right now nothing is
+            fully unblocked — head to Work Items to see what's still in progress and what it's
+            waiting on.
+          </p>
+          <a class="ln-secondary-btn" href="#"
+            ><svg class="ln-secondary-ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-dot" /></svg
+            >View all work items</a
+          >
+        </div>
+      </div>
+    </div>
+    <div class="board-label">6 · Loading</div>
+    <div class="board">
+      <p class="board-note">
+        The in-page PageSkeleton frame (behind a Suspense below the page gate, never a loading.tsx):
+        the REAL header and the two REAL section headings, and pulsing card-height blocks
+        (`--el-muted`, `--radius-card`) for rows in both sections. The count chips arrive with the
+        data.
+      </p>
+      <div class="ln-canvas">
+        <div class="ln-loading" aria-busy="true">
+          <header class="ln-head">
+            <div class="ln-head-titles">
+              <div class="ln-head-row"><h2 class="ln-h1">Ready to start</h2></div>
+              <p class="ln-sub">Motir · MOT</p>
+            </div>
+          </header>
+          <div class="ln-pulse" aria-hidden="true">
+            <section class="ln-section">
+              <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
+              <div class="ln-skel-list">
+                <div class="ln-skel-row">
+                  <span class="ln-skel-block ln-skel-block--icon"></span
+                  ><span class="ln-skel-block ln-skel-block--key"></span
+                  ><span class="ln-skel-block ln-skel-block--title"></span
+                  ><span class="ln-skel-block ln-skel-block--pill"></span>
+                </div>
+                <div class="ln-skel-row">
+                  <span class="ln-skel-block ln-skel-block--icon"></span
+                  ><span class="ln-skel-block ln-skel-block--key"></span
+                  ><span class="ln-skel-block ln-skel-block--title"></span
+                  ><span class="ln-skel-block ln-skel-block--pill"></span>
+                </div>
+                <div class="ln-skel-row">
+                  <span class="ln-skel-block ln-skel-block--icon"></span
+                  ><span class="ln-skel-block ln-skel-block--key"></span
+                  ><span class="ln-skel-block ln-skel-block--title"></span
+                  ><span class="ln-skel-block ln-skel-block--pill"></span>
+                </div>
+                <div class="ln-skel-row">
+                  <span class="ln-skel-block ln-skel-block--icon"></span
+                  ><span class="ln-skel-block ln-skel-block--key"></span
+                  ><span class="ln-skel-block ln-skel-block--title"></span
+                  ><span class="ln-skel-block ln-skel-block--pill"></span>
+                </div>
+              </div>
+            </section>
+            <section class="ln-section">
+              <div class="ln-section-head"><h3 class="ln-h2">Bugs</h3></div>
+              <div class="ln-skel-list">
+                <div class="ln-skel-row">
+                  <span class="ln-skel-block ln-skel-block--icon"></span
+                  ><span class="ln-skel-block ln-skel-block--key"></span
+                  ><span class="ln-skel-block ln-skel-block--title"></span
+                  ><span class="ln-skel-block ln-skel-block--pill"></span>
+                </div>
+                <div class="ln-skel-row">
+                  <span class="ln-skel-block ln-skel-block--icon"></span
+                  ><span class="ln-skel-block ln-skel-block--key"></span
+                  ><span class="ln-skel-block ln-skel-block--title"></span
+                  ><span class="ln-skel-block ln-skel-block--pill"></span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="board-label">
+      7 · Load-more at scale — a container group kept whole across a page boundary
+    </div>
+    <div class="board">
+      <p class="board-note">
+        The virtualized, cursor-streamed list (useRowWindow + a bottom sentinel), as today. The lane
+        cursor may end a page INSIDE a group; the next page’s first rows are that group’s remaining
+        members, and they MERGE into the rendered group rather than opening a second MOT-21 header.
+        A container expanded before the load stays expanded after it. The dashed rule is
+        review-only.
+      </p>
+      <div class="ln-canvas">
+        <header class="ln-head">
+          <div class="ln-head-titles">
+            <div class="ln-head-row">
+              <h2 class="ln-h1">Ready to start</h2>
+              <span class="ln-count">62 ready</span><span class="ln-count">2 bugs</span>
+            </div>
+            <p class="ln-sub">Motir · MOT</p>
+          </div>
+          <button type="button" class="ln-help">
+            <svg class="ln-help-ic" viewBox="0 0 24 24" aria-hidden="true">
+              <use href="#i-help" /></svg
+            >What is this?
+          </button>
+        </header>
+        <section class="ln-section" aria-label="Ready to run">
+          <div class="ln-section-head"><h3 class="ln-h2">Ready to run</h3></div>
+          <div class="ln-list" role="list" aria-label="Ready work items">
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <button
+                  type="button"
+                  class="ln-chev"
+                  aria-expanded="true"
+                  aria-label="Collapse MOT-21"
+                >
+                  <svg class="ln-chev-ic ln-chev-ic--open" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg></button
+                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-story" /></svg
+                ><span class="ln-key">MOT-21</span><span class="ln-title">Import Jira epics</span>
+                <div class="ln-meta">
+                  <span class="ln-hint">5 of 6 ready</span
+                  ><span class="ln-pri ln-pri--highest"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >Highest</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button
+                      type="button"
+                      class="ln-copy"
+                      aria-label="Copy parent-run command for MOT-21"
+                    >
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row ln-row--child" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-subtask" /></svg
+                ><span class="ln-key">MOT-22</span><span class="ln-title">Map issue types</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Code</span
+                  ><span class="ln-pri ln-pri--highest"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >Highest</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-22">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row ln-row--child" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-subtask" /></svg
+                ><span class="ln-key">MOT-23</span><span class="ln-title">Map statuses</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Code</span
+                  ><span class="ln-pri ln-pri--highest"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >Highest</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-23">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row ln-row--child" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-subtask" /></svg
+                ><span class="ln-key">MOT-24</span><span class="ln-title">Map custom fields</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Code</span
+                  ><span class="ln-pri ln-pri--highest"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >Highest</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-24">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-page-break" role="presentation">
+              <span class="ln-note"
+                >review note — page 1 of the lane cursor ends here; page 2 starts inside MOT-21’s
+                group</span
+              >
+            </div>
+            <div class="ln-row ln-row--child" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-subtask" /></svg
+                ><span class="ln-key">MOT-25</span
+                ><span class="ln-title">Resume after a rate limit</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Code</span
+                  ><span class="ln-pri ln-pri--high"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >High</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-25">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row ln-row--child" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <span class="ln-chev-slot" aria-hidden="true"></span
+                ><svg class="ln-kind ln-kind--subtask" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-subtask" /></svg
+                ><span class="ln-key">MOT-26</span><span class="ln-title">Report skipped rows</span>
+                <div class="ln-meta">
+                  <span class="ln-type-chip">Code</span
+                  ><span class="ln-pri ln-pri--high"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >High</span
+                  ><span class="ln-person"
+                    ><span class="ln-avatar">Y</span><span class="ln-person-name">Yue</span></span
+                  ><span class="ln-copy-wrap"
+                    ><button type="button" class="ln-copy" aria-label="Copy run command for MOT-26">
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="ln-row" role="listitem">
+              <div class="ln-card" data-surface="card">
+                <button
+                  type="button"
+                  class="ln-chev"
+                  aria-expanded="false"
+                  aria-label="Expand MOT-30"
+                >
+                  <svg class="ln-chev-ic" viewBox="0 0 24 24" aria-hidden="true">
+                    <use href="#i-chev" />
+                  </svg></button
+                ><svg class="ln-kind ln-kind--story" viewBox="0 0 24 24" aria-hidden="true">
+                  <use href="#i-story" /></svg
+                ><span class="ln-key">MOT-30</span
+                ><span class="ln-title">Board swimlanes by story</span>
+                <div class="ln-meta">
+                  <span class="ln-hint">2 of 4 ready</span
+                  ><span class="ln-pri ln-pri--high"
+                    ><svg class="ln-pri-ic" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-up" /></svg
+                    >High</span
+                  ><span class="ln-unassigned" aria-label="Unassigned"></span
+                  ><span class="ln-copy-wrap"
+                    ><button
+                      type="button"
+                      class="ln-copy"
+                      aria-label="Copy parent-run command for MOT-30"
+                    >
+                      <svg class="ln-copy-ic" viewBox="0 0 24 24" aria-hidden="true">
+                        <use href="#i-copy" />
+                      </svg></button
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <p class="ln-loading-more" role="status">Loading more…</p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>

@@ -308,3 +308,120 @@ then shows a brief loading state before the `MarkdownView`.
 | empty state             | inline (lucide `file-x` + copy) — the same shape as `EmptyState` at modal scale |
 
 No new design-system entry is invented — every piece reuses a shipped primitive.
+
+---
+
+## Lanes — runnable containers, standalone leaves and a Bugs list (MOTIR-6831, gating MOTIR-6834)
+
+Asset: **`ready--lanes.mock.html`** — a DELTA on `ready.mock.html` (§ _Layout_ and
+§ _Dispatch-card anatomy_ above), drawn against `/ready` as `origin/main` renders it
+(rendered before drawing: a flat list of dispatch cards under "Ready to start").
+Story MOTIR-6829 splits the ready set into three **lanes**, defined once in
+`lib/workItems/readyFilter.ts` and served by `workItemsService.listReadyLeaves` /
+`listReadyContainers` / `listReadyBugs` / `countReadyLanes`:
+
+- **leaves** — the ready leaves that are not bug work, each naming its **runnable
+  container** (a `story` / `task` / `bug` whose every child is childless — the shape
+  `motir run <parent>` accepts) or none;
+- **containers** — every non-bug runnable container holding at least one ready leaf;
+- **bugs** — a ready `bug`, or a ready subtask of a bug.
+
+The page shows the leaves lane as **Ready to run** and the bugs lane as **Bugs**. An
+**epic is never a row**, and neither is a container holding a grandchild: its leaves
+stand alone. Seven panels, one per state — review each.
+
+### The page (panel 1)
+
+- **Header** — unchanged title (**"Ready to start"**) and subtitle, plus TWO neutral
+  count chips: **`{n} ready`** (`ready.count`, now the LEAVES lane's count from
+  `countReadyLanes`) and **`{n} bugs`** (`ready.bugsCount`). Both chips drop out with
+  the EmptyState (panel 5), as today's single chip does.
+- **"Ready to run" section** — an `h2`-level heading (`ready.lanes.main.heading`,
+  `text-sm font-semibold text-(--el-text)`), then the `role="list"` of rows
+  (`aria-label` stays **"Ready work items"**, `ready.listAria`), `gap-2` as today.
+- **"Bugs" section** — `mt-8` below, heading **"Bugs"** (`ready.lanes.bugs.heading`)
+  with its own neutral count chip (`ready.bugsCount`), then its own `role="list"`
+  (`aria-label` **"Ready bugs"**, `ready.lanes.bugs.listAria`).
+- **Order** — the service's lane order, never re-sorted by the page: groups rank by
+  their best member's `(kind, priority, key)`, members keep that order inside a
+  group. A group is contiguous by construction.
+
+### Rows
+
+Every row is **today's dispatch card** (`ReadyRow`: `IssueTypeIcon`, mono key in
+`--el-text-secondary`, title, `WorkItemTypeChip`, the priority `Pill`, `Avatar`, the
+hover copy button + `Tooltip`), with ONE addition at its lead: the **tree toggle slot**,
+composed from `components/ui/TreeTable.tsx` exactly.
+
+- **Runnable-container row** — a 16px **chevron button** (lucide `ChevronRight`, 12px,
+  `text-(--el-text-secondary)`, `rounded-(--radius-control)`; `rotate-90` when open;
+  `aria-expanded`; `aria-label` **"Expand {key}"** / **"Collapse {key}"** —
+  `ready.container.expand` / `ready.container.collapse`), then the kind icon, key,
+  title and meta cluster. The meta cluster OPENS with the **hint**
+  **"{ready} of {children} ready"** (`ready.container.hint`, `text-xs
+text-(--el-text-secondary)`) — `readyLeafCount` of `childCount`. A container has no
+  work type, so no type chip. Its **copy** button copies **`motir run <KEY>`** — the
+  parent run — with the tooltip **Copy `motir run <KEY>`** and the `aria-label`
+  **"Copy parent-run command for {key}"** (`ready.container.copyAria`). **Collapsed by
+  default.** The chevron toggles; the rest of the row still opens the peek, as today.
+- **Standalone leaf row** — no chevron; the 16px slot is RESERVED (TreeTable's leaf
+  slot) so every kind icon in the list aligns. Otherwise exactly today's row,
+  including its copy (`motir run` / `motir plan`) or the manual _Show instruction_.
+- **Expanded container (panel 2)** — its ready leaves render directly beneath it,
+  each a full leaf row indented ONE tree level: **22px** (`TreeTable`'s
+  `INDENT_PX`) via `ml-[22px]`. Only the READY leaves are listed; the hint says how
+  many children there are in all.
+- **A bug with ready subtasks** — the same container row in the Bugs list (panel 3);
+  a childless bug is a plain leaf row there.
+
+### States
+
+- **(3) Main list empty, bugs present** — "Ready to run" keeps its heading and
+  shows ONE line, **"Nothing ready to run."** (`ready.lanes.main.empty`,
+  `text-sm text-(--el-text-secondary)`) — never the EmptyState, because the page is
+  not empty.
+- **(4) Bugs empty** — the Bugs section never disappears: heading, **"0 bugs"**,
+  and **"No ready bugs."** (`ready.lanes.bugs.empty`).
+- **(5) All empty** — today's `EmptyState`, unchanged (panel 3 of `ready.mock.html`).
+- **(6) Loading** — `PageSkeleton` in an in-page `<Suspense>` below the page gate
+  (never a `loading.tsx`): the REAL header (without chips) and the two REAL section
+  headings, then pulsing card-height blocks (`--el-muted` on `--radius-card`), four
+  under "Ready to run" and two under "Bugs".
+- **(7) Load-more at scale** — the list stays virtualized and cursor-streamed
+  (`useRowWindow` + the bottom sentinel), one sentinel per section. The load-more
+  cursor is the LANE cursor, which may end a page inside a group: the next page's
+  first rows are that group's remaining members and they **merge into the rendered
+  group** — never a second header for the same container. Expand state is
+  client-local, keyed by container id, and survives a load. "Loading more…"
+  (`ready.loadingMore`) is unchanged.
+
+### Access path
+
+Unchanged: the sidebar **Ready** entry (`nav.ready`, lucide `circle-play`) opens
+`/ready`. No filter, tab or toggle is added.
+
+### i18n — new keys under `ready.*` (en + zh)
+
+`bugsCount` ("{count, plural, one {# bug} other {# bugs}}"), `lanes.main.heading`
+("Ready to run"), `lanes.main.empty` ("Nothing ready to run."), `lanes.bugs.heading`
+("Bugs"), `lanes.bugs.empty` ("No ready bugs."), `lanes.bugs.listAria` ("Ready
+bugs"), `container.hint` ("{ready} of {total} ready"), `container.expand` ("Expand
+{key}"), `container.collapse` ("Collapse {key}"), `container.copyAria` ("Copy
+parent-run command for {key}").
+
+### Primitives composed (no hand-rolling)
+
+| Element                      | Shipped primitive                                                      |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| every row                    | `app/(authed)/ready/_components/ReadyList.tsx` `ReadyRow` (unchanged)  |
+| chevron · leaf slot · indent | `components/ui/TreeTable.tsx` (`ChevronRight`, 16px slot, `INDENT_PX`) |
+| count chips                  | `components/ui/Pill.tsx` (`tone="neutral"`)                            |
+| priority chip                | `Pill` via `PriorityValue` (`PRIORITY_META`)                           |
+| all-empty                    | `components/ui/EmptyState.tsx` (unchanged)                             |
+| loading                      | `components/ui/PageSkeleton.tsx`                                       |
+| copy tooltip · confirmation  | `components/ui/Tooltip.tsx` · `components/ui/Toast.tsx`                |
+| virtualization               | `components/ui/useRowWindow.ts`                                        |
+
+No new design-system entry. The expand grammar is TreeTable's; the page does not
+become a TreeTable — the lanes are two lists of dispatch cards, which is what the
+page already is.
