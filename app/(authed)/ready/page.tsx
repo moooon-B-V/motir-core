@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -7,6 +8,7 @@ import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
+import { PageSkeleton } from '@/components/ui/PageSkeleton';
 import { buttonVariants } from '@/components/ui/Button';
 import { ReadyLanes } from './_components/ReadyLanes';
 import { ReadyHelpPopover } from './_components/ReadyHelpPopover';
@@ -42,11 +44,76 @@ export default async function ReadyPage() {
   if (!ctx) redirect(NO_PROJECT_PATH);
 
   const svcCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  const heading = (
+    <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
+  );
+  const subtitle = (
+    <p className="text-sm text-(--el-text-muted)">
+      {t('subtitle', { project: ctx.project.name, key: ctx.project.identifier })}
+    </p>
+  );
 
+  return (
+    <div className="flex flex-col gap-6">
+      {/* The lanes' reads stream in behind an in-page Suspense placed AFTER the
+          gates above — never a `loading.tsx` (CLAUDE.md § A `loading.tsx` may NOT
+          sit above a route that decides existence). The frame is design/ready
+          ready--lanes panel 7: the REAL heading, then card-height blocks. */}
+      <Suspense
+        fallback={
+          <PageSkeleton
+            header={
+              <header className="flex flex-col gap-1">
+                {heading}
+                {subtitle}
+              </header>
+            }
+          >
+            <div className="h-9 w-56 rounded-(--radius-btn) bg-(--el-muted)" />
+            <div className="flex flex-col gap-2">
+              {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} className="h-11 rounded-(--radius-card) bg-(--el-muted)" />
+              ))}
+            </div>
+          </PageSkeleton>
+        }
+      >
+        <ReadyBody
+          projectId={ctx.projectId}
+          svcCtx={svcCtx}
+          heading={heading}
+          subtitle={subtitle}
+        />
+      </Suspense>
+
+      {/* Quick-view peek (notes.html #7; bug 8.8.2) — a client island that
+          watches `?peek` and renders the modal frame + skeleton instantly, then
+          client-fetches the item from /api/work-items/peek. Decoupled from this
+          page's server render, so opening/closing is a pure shallow URL change
+          with no underlying-list refetch. */}
+      <IssueQuickViewController />
+    </div>
+  );
+}
+
+/** The part of /ready that waits on the lanes' reads — the header's count chip,
+ *  the nudge, and the lanes (or the EmptyState when both are empty). */
+async function ReadyBody({
+  projectId,
+  svcCtx,
+  heading,
+  subtitle,
+}: {
+  projectId: string;
+  svcCtx: { userId: string; workspaceId: string };
+  heading: React.ReactNode;
+  subtitle: React.ReactNode;
+}) {
+  const t = await getTranslations('ready');
   const [leaves, bugs, counts] = await Promise.all([
-    workItemsService.listReadyLeaves(ctx.projectId, {}, svcCtx),
-    workItemsService.listReadyBugs(ctx.projectId, {}, svcCtx),
-    workItemsService.countReadyLanes(ctx.projectId, svcCtx),
+    workItemsService.listReadyLeaves(projectId, {}, svcCtx),
+    workItemsService.listReadyBugs(projectId, {}, svcCtx),
+    workItemsService.countReadyLanes(projectId, svcCtx),
   ]);
 
   const isEmpty = leaves.items.length === 0 && bugs.items.length === 0;
@@ -55,16 +122,14 @@ export default async function ReadyPage() {
     : t('count', { count: counts.leaves });
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2.5">
-            <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
+            {heading}
             {isEmpty ? null : <Pill tone="neutral">{countLabel}</Pill>}
           </div>
-          <p className="text-sm text-(--el-text-muted)">
-            {t('subtitle', { project: ctx.project.name, key: ctx.project.identifier })}
-          </p>
+          {subtitle}
         </div>
         <ReadyHelpPopover />
       </header>
@@ -89,13 +154,6 @@ export default async function ReadyPage() {
           counts={{ leaves: counts.leaves, bugs: counts.bugs }}
         />
       )}
-
-      {/* Quick-view peek (notes.html #7; bug 8.8.2) — a client island that
-          watches `?peek` and renders the modal frame + skeleton instantly, then
-          client-fetches the item from /api/work-items/peek. Decoupled from this
-          page's server render, so opening/closing is a pure shallow URL change
-          with no underlying-list refetch. */}
-      <IssueQuickViewController />
-    </div>
+    </>
   );
 }
