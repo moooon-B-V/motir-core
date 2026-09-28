@@ -102,7 +102,9 @@ const rowTag = (page: Page, card: SeededCard) => itemRow(page, card).locator('[d
 /** A board card is one `<button>` named by its key. */
 const boardCard = (page: Page, card: SeededCard) =>
   page.getByRole('button', { name: new RegExp(card.identifier) });
-const banner = (page: Page) => page.getByTestId('to-fix-banner');
+/** The item page's To fix banner, scoped to the LIVE page (`main`): a page-rooted test
+ *  id can match the copy React keeps mounted while the next page streams in. */
+const banner = (page: Page) => page.getByRole('main').getByTestId('to-fix-banner');
 
 const serverAction = (page: Page) =>
   page.waitForResponse(
@@ -365,7 +367,9 @@ test.describe('A stuck work item looks stuck wherever it is listed', () => {
 
         // The link lands on the Development block, where the pull requests are.
         await banner(page).getByRole('link', { name: en.toFix.banner.toDevelopment }).click();
-        await expect(page.locator('#development')).toBeFocused({ timeout: 60_000 });
+        await expect(page.getByRole('main').locator('#development')).toBeFocused({
+          timeout: 60_000,
+        });
         await beat();
       },
     );
