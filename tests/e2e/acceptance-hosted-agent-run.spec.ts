@@ -1,4 +1,4 @@
-import type { Locator, Page } from '@playwright/test';
+import type { Locator, Page, Response } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
@@ -51,9 +51,10 @@ import en from '@/messages/en.json';
 // claims with the ordinary E2E discipline — authoritative waits, no timers —
 // but carry no pacing holds of their own.
 
-// 120 s: the happy path overran its old 300 s budget twice, taking the whole
-// acceptance leg past its job ceiling so the failure was never printed. Bounded
-// here so the leg finishes and reports what the test is waiting on.
+// 120 s — well above a passing run, and far enough under the acceptance leg's
+// 40-minute job ceiling that a hang here fails THIS test and prints why, instead
+// of cancelling the leg with no report (which is how the start-body wait below
+// hid for two runs).
 test.describe.configure({ timeout: 120_000 });
 
 const DEFAULT_MODEL = 'e2e-hosted-default';
@@ -104,6 +105,19 @@ function defaultFixture() {
   resetHostedRunJournal();
 }
 
+/**
+ * The run a successful Run hosted opened — read off the run list the section
+ * refetches right after, NOT the start response's body: Chrome never reports the
+ * 201's chunked body finished once the page refreshes on it, so
+ * `response.text()` on it never resolves (while the page itself read it fine).
+ */
+async function startedRunId(runsRes: Response): Promise<string> {
+  const { runs } = (await runsRes.json()) as { runs: { id: string; origin: string }[] };
+  const run = runs.find((r) => r.origin === 'hosted');
+  expect(run, 'the run list carries the hosted run just started').toBeTruthy();
+  return run!.id;
+}
+
 async function openAndStart(
   page: Page,
   card: { id: string; identifier: string },
@@ -122,11 +136,10 @@ async function openAndStart(
   const runs = runsListResponse(page, card.identifier);
   await page.getByRole('main').getByTestId('run-hosted').click();
   const startRes = await started;
-  expect(startRes.status(), await startRes.text()).toBe(201);
-  const body = (await startRes.json()) as { dispatchRunId: string };
-  await runs;
+  expect(startRes.status()).toBe(201);
+  const dispatchRunId = await startedRunId(await runs);
   await expect(page.getByRole('main').getByTestId('hosted-run')).toBeVisible();
-  return body.dispatchRunId;
+  return dispatchRunId;
 }
 
 test.describe('a card runs on the hosted agent', () => {
@@ -170,9 +183,8 @@ test.describe('a card runs on the hosted agent', () => {
       const runs = runsListResponse(page, card.identifier);
       await page.getByRole('main').getByTestId('run-hosted').click();
       const startRes = await started;
-      expect(startRes.status(), await startRes.text()).toBe(201);
-      dispatchRunId = ((await startRes.json()) as { dispatchRunId: string }).dispatchRunId;
-      await runs;
+      expect(startRes.status()).toBe(201);
+      dispatchRunId = await startedRunId(await runs);
 
       // The gateway stub recorded the mint, with the BARE chosen model id —
       // proof the gateway seam is active, and AC2's "recorded in the mint".
