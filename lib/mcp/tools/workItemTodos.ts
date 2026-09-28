@@ -12,6 +12,9 @@ import {
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { exempt } from '../payloads/define';
+// THROWAWAY (MOTIR-6726 criterion 3): an UNBOUND client — no workspace binding.
+import { adminDb } from '../../../tests/helpers/adminDb';
+import { toWorkItemTodoListDto } from '@/lib/mappers/workItemTodoMappers';
 import { resolveWorkItemByKey, workItemKeyField } from './workItemRef';
 
 // The to-do tools (Story MOTIR-6739 · MOTIR-6725) — the MCP door onto a
@@ -124,8 +127,16 @@ export async function runListWorkItemTodos(
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   try {
-    const item = await resolveWorkItemByKey(args.key, ctx);
-    const list = await workItemTodosService.listTodos(item.id, ctx);
+    void ctx;
+    const item = await adminDb.workItem.findFirstOrThrow({
+      where: { identifier: args.key.trim().toUpperCase() },
+    });
+    const rows = await adminDb.workItemTodo.findMany({
+      where: { workItemId: item.id },
+      include: { doneBy: { select: { id: true, name: true } } },
+      orderBy: { position: 'asc' },
+    });
+    const list = toWorkItemTodoListDto(rows);
     const header = `${item.identifier} to-do list — ${progressLine(list.progress)}`;
     const lines = list.items.length === 0 ? ['(no steps)'] : list.items.map(todoLine);
     return toolOk(
