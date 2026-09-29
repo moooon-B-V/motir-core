@@ -206,27 +206,19 @@ function projects() {
 }
 
 /**
- * The ready collection — one page, no cursor.
+ * The ready LANES (Story MOTIR-6829 · MOTIR-6835) — what the CLI reads. The
+ * smoke fixture's subtasks stand alone (no runnable container) and none is bug
+ * work, so the leaves lane is the ready set with `container: null` on every row,
+ * and the containers and bugs lanes are empty. The flat `…/ready` the lanes
+ * replaced is gone from the real API (MOTIR-6841), so it is gone from here too.
  *
- * `motir ready` reads it as a page and `motir auto` walks it once per iteration,
- * so this one function serves both. Before the loop it describes the set the
- * loop is about to drain; after it, an empty one — which is what lets the smoke
- * assert the loop stopped because the SERVER drained rather than because it ran
- * out of patience.
- *
+ * One page, no cursor. `motir ready` reads it as a page and `motir auto` walks it
+ * once per iteration. Before the loop it describes the set the loop is about to
+ * drain; after it, an empty one — which is what lets the smoke assert the loop
+ * stopped because the SERVER drained rather than because it ran out of patience.
  * It is also the cheapest end-to-end proof that a credential RESOLVED, which is
  * why the mount-free legs (MOTIR-1877) run `motir ready` as their first
  * assertion.
- */
-function readySet() {
-  return { items: readyRows(), nextCursor: null };
-}
-
-/**
- * The ready LANES (Story MOTIR-6829 · MOTIR-6835) — what the CLI reads now. The
- * smoke fixture's subtasks stand alone (no runnable container) and none is bug
- * work, so the leaves lane is the ready set with `container: null` on every row,
- * and the containers and bugs lanes are empty.
  */
 function readyLeaves() {
   return { items: readyRows().map((row) => ({ ...row, container: null })), nextCursor: null };
@@ -447,7 +439,6 @@ const ROUTES = [
   ['GET', '/api/v1/me', () => me()],
   ['GET', '/api/v1/workspaces', () => workspaces()],
   ['GET', '/api/v1/projects', () => projects()],
-  ['GET', '/api/v1/projects/{projectKey}/ready', () => readySet()],
   ['GET', '/api/v1/projects/{projectKey}/ready/leaves', () => readyLeaves()],
   ['GET', '/api/v1/projects/{projectKey}/ready/containers', () => emptyLane()],
   ['GET', '/api/v1/projects/{projectKey}/ready/bugs', () => emptyLane()],
@@ -536,7 +527,7 @@ export const __fixtures = {
   me,
   workspaces,
   projects,
-  readySet,
+  readyLeaves,
   workItemDetail,
   dispatchPrompt,
   transition,

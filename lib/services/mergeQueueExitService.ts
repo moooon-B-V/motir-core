@@ -1,5 +1,9 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
-import type { GitProviderId, NormalizedMergeQueueExit } from '@/lib/git/types';
+import type {
+  GitProviderId,
+  NormalizedMergeQueueEntry,
+  NormalizedMergeQueueExit,
+} from '@/lib/git/types';
 import {
   classifyQueueExit,
   classOfQueueExit,
@@ -127,7 +131,117 @@ interface Resolved {
   ownerUserId: string | null;
 }
 
+/** The connection tier and the tenant of a merge-queue delivery, read-only — or why
+ *  there is none. The owner is the stand-in manager, the actor the status sync falls
+ *  back to. */
+async function resolveQueueRepo(
+  installationId: string,
+  providerRepoId: string,
+): Promise<Resolved | 'unknown_installation' | 'unknown_repo'> {
+  return withSystemContext(async (tx) => {
+    const installation = await githubInstallationRepository.findByInstallationId(
+      installationId,
+      tx,
+    );
+    if (!installation) return 'unknown_installation';
+    const repo = await githubRepoRepository.findByInstallationAndRepoId(
+      installation.id,
+      providerRepoId,
+      tx,
+    );
+    if (!repo) return 'unknown_repo';
+    await bindWorkspaceContext(tx, repo.workspaceId);
+    const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(
+      repo.workspaceId,
+      tx,
+    );
+    return { workspaceId: repo.workspaceId, repoId: repo.id, ownerUserId: owner?.userId ?? null };
+  });
+}
+
+export type MergeQueueEntryOutcome =
+  /** The standing exit at this head was stamped re-queued, and every delivered card's
+   *  CI state and fix reason recomputed. */
+  | 'requeued'
+  /** No exit stands at this head — never ejected, already re-queued (by *Queue again*,
+   *  or by this same delivery before), or ejected at a head the queue is not testing
+   *  now. Nothing written. */
+  | 'no_standing_exit'
+  | 'unknown_installation'
+  | 'unknown_repo'
+  | 'unknown_pull_request'
+  | 'malformed';
+
+export interface MergeQueueEntryResult {
+  event: 'pull_request_enqueued';
+  outcome: MergeQueueEntryOutcome;
+}
+
 export const mergeQueueExitService = {
+  /**
+   * A PULL REQUEST WENT BACK INTO THE MERGE QUEUE (MOTIR-6903; `approval-gates.md` §4
+   * SEVENTH AMENDMENT). GitHub sends `enqueued` for every enqueue, Motir's own
+   * included, so this is how a re-queue made OUTSIDE Motir — GitHub's *Merge when
+   * ready*, `gh pr merge --auto`, another integration — reaches the exit it answers.
+   *
+   * When the pull request's LATEST exit still stands at the head the queue is now
+   * testing, it is stamped re-queued (`claimRequeue`, the claim *Queue again* makes)
+   * and every delivered card's CI state and fix reason are recomputed, exactly as that
+   * press does: the row stops reading *Left the queue*, the card stops reading red, the
+   * promotion hold lifts, and `motir fix` stops claiming it.
+   *
+   * ⚠️ IT MOVES NO CARD AND DECIDES NO GATE (the SEVENTH AMENDMENT's point 2). A queue
+   * action on GitHub is not an answer to Motir's question; the merge webhook moves the
+   * card to `done` when the queue lands it, and a further exit is settled as any exit.
+   *
+   * IDEMPOTENT without a delivery key: the claim writes only while `requeuedAt` is
+   * null, so a redelivery, the `enqueued` that follows Motir's own *Queue again*, and a
+   * press racing this delivery all stamp the exit once. Locks the delivered cards
+   * FIRST, in the order *Queue again* takes them, before the claim writes the exit row.
+   */
+  async recordEntry(input: {
+    installationId: string | null;
+    entry: NormalizedMergeQueueEntry;
+    now?: Date;
+  }): Promise<MergeQueueEntryResult> {
+    const { entry } = input;
+    const result = (outcome: MergeQueueEntryOutcome): MergeQueueEntryResult => ({
+      event: 'pull_request_enqueued',
+      outcome,
+    });
+    if (!input.installationId) return result('unknown_installation');
+    const found = await resolveQueueRepo(input.installationId, entry.providerRepoId);
+    if (typeof found === 'string') return result(found);
+
+    return withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, found.workspaceId);
+      const pr = await githubPullRequestRepository.findByRepoAndNumber(
+        found.repoId,
+        entry.number,
+        tx,
+      );
+      if (!pr) return result('unknown_pull_request');
+      // Read unlocked, so a delivery with nothing to answer — Motir's own first enqueue,
+      // every time — takes no lock at all. The exit's head never changes, and the claim
+      // below re-checks `requeuedAt` itself, so nothing read here goes stale under it.
+      const exit = (
+        await githubPullRequestQueueExitRepository.findLatestByPullRequests([pr.id], tx)
+      ).get(pr.id);
+      if (!exit || !queueExitStandsAtHead(exit, entry.headSha)) {
+        return result('no_standing_exit');
+      }
+      for (const ref of await resolveDeliveredWorkItems(pr.id, tx)) await lockCard(ref.id, tx);
+      const claimed = await githubPullRequestQueueExitRepository.claimRequeue(
+        exit.id,
+        input.now ?? new Date(),
+        tx,
+      );
+      if (claimed === 0) return result('no_standing_exit');
+      await recomputeDeliveredCiState(pr.id, tx);
+      return result('requeued');
+    });
+  },
+
   /**
    * Record ONE removal. `deliveryId` is the delivery's `X-GitHub-Delivery` header;
    * a delivery without one is refused as malformed rather than recorded without an
@@ -167,25 +281,7 @@ export const mergeQueueExitService = {
     // Phase 1 — the connection tier and the tenant, read-only. The WRITE transaction
     // below runs as the workspace owner, the actor the status sync falls back to, so
     // the tenant must be known before it opens.
-    const found = await withSystemContext(async (tx): Promise<Resolved | MergeQueueExitOutcome> => {
-      const installation = await githubInstallationRepository.findByInstallationId(
-        installationId,
-        tx,
-      );
-      if (!installation) return 'unknown_installation';
-      const repo = await githubRepoRepository.findByInstallationAndRepoId(
-        installation.id,
-        exit.providerRepoId,
-        tx,
-      );
-      if (!repo) return 'unknown_repo';
-      await bindWorkspaceContext(tx, repo.workspaceId);
-      const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(
-        repo.workspaceId,
-        tx,
-      );
-      return { workspaceId: repo.workspaceId, repoId: repo.id, ownerUserId: owner?.userId ?? null };
-    });
+    const found = await resolveQueueRepo(installationId, exit.providerRepoId);
     if (typeof found === 'string') return { ...base, outcome: found };
 
     const ctx = found.ownerUserId

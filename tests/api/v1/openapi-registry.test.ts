@@ -261,13 +261,14 @@ describe('the emitted document', () => {
     expect(comments['200']?.content['application/json'].schema.allOf).toHaveLength(2);
   });
 
-  it('declares the ready set’s repeatable filters as exploded ARRAYS', () => {
+  it('declares the ready lanes’ repeatable filters as exploded ARRAYS', () => {
     const paths = document['paths'] as unknown as Record<
       string,
       Record<string, Record<string, unknown>>
     >;
-    const parameters = (paths['/api/v1/projects/{projectKey}/ready']?.['get']?.['parameters'] ??
-      []) as { name: string; explode?: boolean; schema?: { type?: string; items?: unknown } }[];
+    const parameters = (paths['/api/v1/projects/{projectKey}/ready/leaves']?.['get']?.[
+      'parameters'
+    ] ?? []) as { name: string; explode?: boolean; schema?: { type?: string; items?: unknown } }[];
 
     for (const name of ['kind', 'priority']) {
       const parameter = parameters.find((p) => p.name === name);

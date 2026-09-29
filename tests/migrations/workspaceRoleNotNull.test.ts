@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ensureLegacyRoleStorage } from '../helpers/legacyRoleStorage';
 import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -17,6 +18,9 @@ const NOT_NULL = '20260927090000_workspace_role_not_null';
 
 beforeEach(async () => {
   await truncateAuthTables();
+  // The migration under test reads the legacy role storage MOTIR-6569 dropped;
+  // rebuild it for the test (tests/helpers/legacyRoleStorage.ts).
+  await ensureLegacyRoleStorage();
 });
 
 afterEach(restoreWorkspaceRoleNotNull);
@@ -98,8 +102,8 @@ describe('20260927090000_workspace_role_not_null', () => {
     const u = await user('nn-refuse');
     await expect(
       adminDb.$executeRaw`
-        INSERT INTO "workspace_membership" ("id", "userId", "workspaceId", "role", "updatedAt")
-        VALUES (gen_random_uuid()::text, ${u.id}, ${ws.id}, 'member'::"member_role", now())`,
+        INSERT INTO "workspace_membership" ("id", "userId", "workspaceId", "updatedAt")
+        VALUES (gen_random_uuid()::text, ${u.id}, ${ws.id}, now())`,
     ).rejects.toThrow(/null value in column "workspace_role"/);
   });
 });

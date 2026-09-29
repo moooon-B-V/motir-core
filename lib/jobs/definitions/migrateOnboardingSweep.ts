@@ -66,7 +66,7 @@ import { defineJob } from '../defineJob';
  *  by a user whose onboarding run wedged — rare, and already a recovery path
  *  rather than the normal one. WHAT IT BOUGHT: four private wake-minutes
  *  ({7,22,37,52}) collapse onto two shared ones. */
-export const MIGRATE_ONBOARDING_SWEEP_CRON = '0,30 * * * *';
+export const MIGRATE_ONBOARDING_SWEEP_CRON = '*/5 * * * *';
 
 export const migrateOnboardingSweep = defineJob(
   {

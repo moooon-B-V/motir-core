@@ -49,29 +49,3 @@ export function customRolePermissionsOf(
   if (workspaceRole == null || workspaceRole === 'manager') return null;
   return membership?.roleDefinition?.permissions ?? null;
 }
-
-/**
- * A legacy membership role — the four values of the retired `member_role` type,
- * spelled locally so application code imports nothing of it (MOTIR-6562).
- */
-export type LegacyMemberRole = 'owner' | 'admin' | 'member' | 'viewer';
-
-/**
- * The DECISION's mapping from a legacy role to a workspace role.
- *
- * It exists ONLY for an invite token minted before MOTIR-6562, whose payload
- * carries `role` and no `workspaceRole`. Such a token expires after
- * `INVITE_EXPIRY_MS` (7 days), so this and `LegacyMemberRole` are deleted by
- * the phase-3 DROP card (MOTIR-6569), which runs long after the last one lapsed.
- */
-export function legacyToWorkspaceRole(role: LegacyMemberRole): WorkspaceRole {
-  switch (role) {
-    case 'owner':
-    case 'admin':
-      return 'manager';
-    case 'member':
-      return 'member';
-    case 'viewer':
-      return 'viewer';
-  }
-}

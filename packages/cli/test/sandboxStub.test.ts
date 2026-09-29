@@ -41,7 +41,7 @@ interface StubFixtures {
   me: () => unknown;
   workspaces: () => unknown;
   projects: () => unknown;
-  readySet: () => { items: { key: string }[] };
+  readyLeaves: () => { items: { key: string }[] };
   workItemDetail: (key: string) => unknown;
   dispatchPrompt: (key: string, query: URLSearchParams) => unknown;
   transition: (key: string, body: { status: string }) => unknown;
@@ -58,7 +58,7 @@ interface StubFixtures {
 }
 
 const fixtures = __fixtures as StubFixtures;
-const { me, workspaces, projects, readySet, workItemDetail, dispatchPrompt, integration } =
+const { me, workspaces, projects, readyLeaves, workItemDetail, dispatchPrompt, integration } =
   fixtures;
 
 /** The generated validator for an operation, and the fields it complains about. */
@@ -79,7 +79,7 @@ describe('every stubbed body is one the real API could have sent', () => {
     ['getMe', () => me()],
     ['listWorkspaces', () => workspaces()],
     ['listProjects', () => projects()],
-    ['getProjectReadySet', () => readySet()],
+    ['getProjectReadyLeaves', () => readyLeaves()],
     ['getWorkItem', () => workItemDetail('SMOKE-1')],
     [
       'getWorkItemDispatchPrompt',
@@ -125,7 +125,8 @@ describe('every stubbed body is one the real API could have sent', () => {
       validate('transitionWorkItem', () => ({ key: 'SMOKE-1', status: 'in_progress' })).ok,
     ).toBe(false);
     expect(
-      validate('getProjectReadySet', () => ({ items: [{ key: 'SMOKE-1' }], nextCursor: null })).ok,
+      validate('getProjectReadyLeaves', () => ({ items: [{ key: 'SMOKE-1' }], nextCursor: null }))
+        .ok,
     ).toBe(false);
   });
 });
@@ -152,7 +153,7 @@ describe('the ready set drains the way the real server does', () => {
     // vitest imports the module once, so an absolute count would depend on
     // which tests above it happened to run — a passing-by-accident shape, and
     // one this file would be the wrong place to discover.
-    const before = fixtures.readySet().items.map((row) => row.key);
+    const before = fixtures.readyLeaves().items.map((row) => row.key);
     const target = before.at(-1);
     expect(target, 'no item left in the ready set to claim').toBeDefined();
     const key = target as string;
@@ -163,7 +164,7 @@ describe('the ready set drains the way the real server does', () => {
     expect(first.outcome).toBe('claimed');
     expect(first.status).toEqual({ key: 'in_progress', category: 'in_progress' });
     expect(first.assignee?.id).toBe('u1');
-    const after = fixtures.readySet().items.map((row) => row.key);
+    const after = fixtures.readyLeaves().items.map((row) => row.key);
     expect(after).not.toContain(key);
     expect(after).toHaveLength(before.length - 1);
 
@@ -187,7 +188,7 @@ describe('the route table resolves the paths the CLI addresses', () => {
 
   it('extracts a dynamic segment by name', () => {
     expect(matchRoute('GET', '/api/v1/work-items/SMOKE-1')?.params).toEqual({ key: 'SMOKE-1' });
-    expect(matchRoute('GET', '/api/v1/projects/SMOKE/ready')?.params).toEqual({
+    expect(matchRoute('GET', '/api/v1/projects/SMOKE/ready/leaves')?.params).toEqual({
       projectKey: 'SMOKE',
     });
   });

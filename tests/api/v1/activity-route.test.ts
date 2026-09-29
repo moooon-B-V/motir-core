@@ -273,7 +273,7 @@ describe('GET /api/v1/work-items/{key}/activity', () => {
     expect((await req(caller, item.identifier, '?cursor=not-a-cursor')).status).toBe(422);
     // A ready-set cursor, signed by v1 but scoped elsewhere.
     const { encodeCollectionCursor } = await import('@/lib/api/v1/pagination');
-    const foreign = encodeCollectionCursor('ready', 'somewhere');
+    const foreign = encodeCollectionCursor('ready.leaves', 'somewhere');
     expect(
       (await req(caller, item.identifier, `?cursor=${encodeURIComponent(foreign)}`)).status,
     ).toBe(422);

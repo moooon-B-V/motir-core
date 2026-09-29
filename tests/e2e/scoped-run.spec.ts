@@ -81,7 +81,7 @@ async function readyUnder(
   seed: ScopedRunSeed,
   query: string,
 ): Promise<ReadyRow[]> {
-  const res = await ctx.get(`${BASE}/projects/${seed.projectKey}/ready?${query}`, {
+  const res = await ctx.get(`${BASE}/projects/${seed.projectKey}/ready/leaves?${query}`, {
     headers: { Authorization: `Bearer ${seed.token}` },
   });
   const body = await res.text();
@@ -511,14 +511,14 @@ test.describe('the states a happy path does not show', () => {
     // ⚠️ THE FAILURE THIS PREVENTS: a mistyped key that quietly matched
     // everything is how a scoped run claims a whole project. A 422, not a page.
     const res = await page.request.get(
-      `${BASE}/projects/${seed.projectKey}/ready?ancestor=${seed.projectKey}-999999`,
+      `${BASE}/projects/${seed.projectKey}/ready/leaves?ancestor=${seed.projectKey}-999999`,
       { headers: { Authorization: `Bearer ${seed.token}` } },
     );
     expect(res.status()).toBe(422);
     expect((await res.json()) as { code: string }).toMatchObject({ code: 'INVALID_READY_FILTER' });
 
     const sprintless = await page.request.get(
-      `${BASE}/projects/${seed.projectKey}/ready?sprintId=active`,
+      `${BASE}/projects/${seed.projectKey}/ready/leaves?sprintId=active`,
       { headers: { Authorization: `Bearer ${seed.token}` } },
     );
     expect(sprintless.status()).toBe(422);
