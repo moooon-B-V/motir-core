@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# A STUB of the Claude Code CLI — the acceptance lane's stand-in for the vendor's
+# sign-in (Story MOTIR-6861 · MOTIR-6943). TEST-ONLY: it lives under tests/e2e/,
+# only the lane's terminal host (host.ts) puts it on a shell's PATH, and nothing
+# in the image or the app refers to it. It NEVER reaches a vendor.
+#
+# What it does is the shape of the real flow, and no more: `/login` prints a URL,
+# accepts a pasted code, and writes the credential file the terminal server's
+# sign-in check stats (`$CLAUDE_CONFIG_DIR/.credentials.json`,
+# docs/decisions/agent-terminal.md Q7). The file's content is a placeholder.
+set -u
+echo "Claude Code (stub for the Motir acceptance lane)"
+echo "Type /login to sign in, /exit to leave."
+while IFS= read -r -p "> " line; do
+  case "$line" in
+    /login)
+      echo "Browse to this URL to sign in:"
+      echo "https://claude.invalid/oauth/authorize?client=e2e-stub"
+      IFS= read -r -p "Paste code here > " code || exit 1
+      if [ -z "$code" ]; then
+        echo "No code pasted; nothing changed."
+        continue
+      fi
+      dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+      mkdir -p "$dir"
+      printf '{"stub":"e2e"}\n' > "$dir/.credentials.json"
+      chmod 600 "$dir/.credentials.json"
+      echo "Login successful."
+      ;;
+    /exit) exit 0 ;;
+    "") ;;
+    *) echo "(stub) $line" ;;
+  esac
+done
