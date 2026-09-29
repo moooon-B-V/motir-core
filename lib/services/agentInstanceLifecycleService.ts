@@ -56,8 +56,12 @@ import type { AgentInstanceListPageDto, AgentInstanceStopReason } from '@/lib/dt
 import { getPersistentOrchestrator, isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
 import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
+import {
+  agentInstanceActivityService,
+  agentInstanceClock,
+  armIdleTimer,
+} from '@/lib/services/agentInstanceActivityService';
 import { agentInstanceChargeService } from '@/lib/services/agentInstanceChargeService';
-import { sendEvent } from '@/lib/jobs/sendEvent';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -101,12 +105,9 @@ import {
 // are IDEMPOTENT and are also what the 5-minute sweep (MOTIR-6873) calls for any
 // instance still in motion. Charging a closed interval is the sweep's too.
 
-/** The clock, as a seam so a test can move time without sleeping. */
-export const agentInstanceClock = {
-  now: (): Date => new Date(),
-  sleep: (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms)),
-  pollIntervalMs: 1_000,
-};
+// The clock seam and the activity door live in `agentInstanceActivityService`
+// (MOTIR-6940: the terminal relay imports them without this file's graph).
+export { agentInstanceClock };
 
 const STOP_REASONS: readonly string[] = ['credits', 'idle', 'backstop'];
 
@@ -282,14 +283,6 @@ async function closeOpenInterval(
     }
   }
   return closed;
-}
-
-/** (Re)arm the instance's idle timer (§2) — the debounced `agent-instance/idle-check`. */
-async function armIdleTimer(row: AgentInstance): Promise<void> {
-  await sendEvent('agent-instance/idle-check', {
-    workspaceId: row.workspaceId,
-    instanceId: row.id,
-  });
 }
 
 /** A guarded move made by the system (the settle paths): read, check, move. */
@@ -843,12 +836,7 @@ export const agentInstanceLifecycleService = {
 
   /** Bump the idle signal (§2) — the later stories' relay and runs call it. */
   async touchActivity(instanceId: string): Promise<void> {
-    const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
-    if (!row) return;
-    const moved = await withWorkspaceServiceContext(row.workspaceId, (tx) =>
-      agentInstanceRepository.touchActivity(row.id, agentInstanceClock.now(), tx),
-    );
-    if (moved === 1 && row.state === 'running') await armIdleTimer(row);
+    await agentInstanceActivityService.touchActivity(instanceId);
   },
 
   /**

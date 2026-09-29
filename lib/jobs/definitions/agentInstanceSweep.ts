@@ -30,6 +30,16 @@ export const agentInstanceSweep = defineJob(
     retryPolicy: 'idempotent',
   },
   async (ctx, services) => {
-    return ctx.step.run('sweep-agent-instances', () => services.agentInstanceSweep.sweep());
+    const summary = await ctx.step.run('sweep-agent-instances', () =>
+      services.agentInstanceSweep.sweep(),
+    );
+    // agent-terminal.md Q3 (MOTIR-6940): the terminal tickets past their 60-second
+    // life, deleted here rather than on a cron minute of their own (the substrate
+    // refuses any minute off the cluster). Its own step, so the instance summary's
+    // memoized shape is unchanged.
+    await ctx.step.run('sweep-agent-terminal-tickets', () =>
+      services.agentTerminalRelay.sweepExpiredTickets(),
+    );
+    return summary;
   },
 );

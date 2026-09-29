@@ -53,6 +53,7 @@ import { organizationErasureSweepService } from '@/lib/services/organizationEras
 import { organizationRetentionPurgeService } from '@/lib/services/organizationRetentionPurgeService';
 import { supervisionSweepService } from '@/lib/services/supervisionSweepService';
 import { agentInstanceSweepService } from '@/lib/services/agentInstanceSweepService';
+import { agentTerminalRelayService } from '@/lib/services/agentTerminalRelayService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
 // (Story 1.6 · Subtask 1.6.2). This is the seam that keeps the 4-layer rule
@@ -152,6 +153,9 @@ export const jobServices = {
   // Agent instances (Story MOTIR-6860 · MOTIR-6873): the idle timer's check and
   // the sweep that reconciles, hibernates, cleans orphans and charges.
   agentInstanceSweep: agentInstanceSweepService,
+  // The agent terminal (Story MOTIR-6861 · MOTIR-6940): the sweep's second step
+  // deletes terminal tickets past their 60-second life.
+  agentTerminalRelay: agentTerminalRelayService,
 };
 
 export type JobServices = typeof jobServices;
