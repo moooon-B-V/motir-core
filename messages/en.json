@@ -8819,6 +8819,78 @@
       "irreversible": "This can’t be undone. Machine time already used is still charged.",
       "keep": "Keep it",
       "confirm": "Delete agent"
+    },
+    "panel": {
+      "label": "Agent",
+      "close": "Close {name}",
+      "closeUnavailable": "Close",
+      "back": "My agents",
+      "hibernate": "Hibernate",
+      "delete": "Delete…",
+      "wake": "Wake",
+      "privacy": "Your sign-in belongs to {agent} and stays in this agent’s home. Motir never sees it.",
+      "signin": {
+        "signedIn": "Signed in to {agent}",
+        "signedOut": {
+          "claude": "Not signed in — run <cmd>{first}</cmd>, then <cmd>{second}</cmd>, in the terminal to sign in",
+          "codex": "Not signed in — run <cmd>{first}</cmd> in the terminal to sign in",
+          "opencode": "Not signed in — run <cmd>{first}</cmd> in the terminal to sign in",
+          "generic": "Not signed in — sign in to {agent} in the terminal"
+        },
+        "unknown": "Sign-in status can’t be checked for {agent}",
+        "unknownHow": {
+          "kimi": "To sign in, run <cmd>{first}</cmd> in the terminal and follow its sign-in.",
+          "aider": "Aider uses your model provider’s key: add <cmd>{first}</cmd> (or your provider’s) to <cmd>{second}</cmd>.",
+          "goose": "To add your model provider’s key, run <cmd>{first}</cmd> in the terminal.",
+          "generic": "To sign in, start {agent} in the terminal and follow its sign-in."
+        }
+      },
+      "tabs": {
+        "label": "Agent views",
+        "terminal": "Terminal"
+      },
+      "conn": {
+        "waiting": "Waiting",
+        "connecting": "Connecting…",
+        "live": "Live",
+        "reconnecting": "Reconnecting…",
+        "lost": "Disconnected",
+        "ended": "Ended",
+        "closed": "Closed",
+        "unavailable": "Unavailable"
+      },
+      "face": {
+        "startingHint": "The terminal opens here as soon as the agent is up.",
+        "hibernatingHint": "The terminal closes with it. Your files and your sign-in are kept.",
+        "hibernatedTitle": "{name} is hibernated",
+        "kept": "Your files and your sign-in are kept.",
+        "wakingHint": "The terminal connects by itself when it’s up — nothing to click.",
+        "deletingHint": "This panel closes; the list shows the agent until it is gone.",
+        "connecting": "Connecting to {name}’s terminal…"
+      },
+      "strip": {
+        "reconnecting": "Connection dropped — reconnecting to the same shell. Your build keeps running.",
+        "lost": "Couldn’t reconnect. Your shell is still running on the agent — reconnect to pick it up.",
+        "lostMachine": "The agent’s machine isn’t answering. Your files are safe in its home.",
+        "exited": "The shell exited. Your files are all still in the home.",
+        "takenOver": "This shell is open in another tab now. One shell answers one tab at a time."
+      },
+      "reconnect": "Reconnect",
+      "newShell": "Start a new shell",
+      "useHere": "Use it here",
+      "tryAgain": "Try again",
+      "jumpLatest": "Jump to latest",
+      "sessionLimit": "{name} already has 4 terminals open in other tabs. Close one there, then try again.",
+      "noTerminal": {
+        "title": "This agent can’t open a terminal yet",
+        "body": "It was made from an older image, from before the terminal existed. Moving an agent to the newer image — keeping its home and sign-in — is on its way. Until then, a new agent has the terminal."
+      },
+      "unavailable": {
+        "title": "This agent isn’t available",
+        "body": "It may have been deleted, or it isn’t one of yours. Only the person who created an agent can open it.",
+        "back": "Back to My agents"
+      },
+      "size": "{cols} × {rows}"
     }
   },
   "runs": {
