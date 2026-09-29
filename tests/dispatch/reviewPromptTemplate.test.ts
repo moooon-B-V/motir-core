@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { assembleReviewPrompt, type ReviewPromptInput } from '@/lib/dispatch/reviewPromptTemplate';
+import {
+  assembleReviewPrompt,
+  capConvention,
+  CONVENTION_ABSENT_LINE,
+  CONVENTION_SHORTENED_LINE,
+  REVIEW_CONVENTION_MAX_CHARS,
+  type ReviewPromptInput,
+} from '@/lib/dispatch/reviewPromptTemplate';
 
 // THE REVIEW PROMPT's assembler (Story MOTIR-1626 · MOTIR-6821; `hosted-agent-run.md`
 // §8.2–§8.4). PURE — so the whole text is pinned by a snapshot, and the properties the card
@@ -102,15 +109,87 @@ describe('assembleReviewPrompt', () => {
     expect(prompt).toContain('git diff origin/<its base branch>...aaa111');
   });
 
-  it('joins MOTIR-6904’s convention block verbatim after the code, and nothing when absent', () => {
-    const block = 'CODING CONVENTIONS\n\n  moooon/acme-web: components are function components.';
-    const withBlock = assembleReviewPrompt({
+  it('renders no CODING CONVENTIONS section when no conventions are passed', () => {
+    const { prompt } = assembleReviewPrompt({ ...TWO_REPOSITORY_CARD, conventions: [] });
+    expect(prompt).toBe(assembleReviewPrompt(TWO_REPOSITORY_CARD).prompt);
+    expect(prompt).not.toContain('CODING CONVENTIONS');
+  });
+});
+
+// THE CODING CONVENTIONS (MOTIR-6904; `hosted-agent-run.md` §8.5).
+describe('assembleReviewPrompt — CODING CONVENTIONS', () => {
+  const WITH_CONVENTIONS: ReviewPromptInput = {
+    ...TWO_REPOSITORY_CARD,
+    conventions: [
+      {
+        repoKey: 'moooon/acme-api',
+        state: 'present',
+        version: 3,
+        contentMd: '# House rules\n\n- Route → Service → Repository.\n- Errors are typed.',
+      },
+      { repoKey: 'moooon/acme-web', state: 'absent' },
+    ],
+  };
+
+  it('a two-repository card, one present and one absent: both entries and the instruction block', () => {
+    const { prompt } = assembleReviewPrompt(WITH_CONVENTIONS);
+    expect(prompt).toMatchSnapshot();
+
+    expect(prompt).toContain('CODING CONVENTIONS');
+    expect(prompt).toContain("moooon/acme-api — Motir's coding convention, version 3");
+    expect(prompt).toContain('    - Route → Service → Repository.');
+    expect(prompt).toContain(`  moooon/acme-web\n    ${CONVENTION_ABSENT_LINE}`);
+    // The instruction block.
+    expect(prompt).toContain('standard for the code the pull request CHANGES');
+    expect(prompt).toContain('QUOTES the rule it breaks');
+    expect(prompt).toContain('the card wins');
+    expect(prompt).toContain('Code the pull request did not touch is never a finding.');
+    expect(prompt).toContain(
+      'A missing convention is never a reason to return `changes_requested`.',
+    );
+    // After the code, before HOW TO REVIEW.
+    const at = prompt.indexOf('CODING CONVENTIONS');
+    expect(at).toBeGreaterThan(prompt.indexOf('reviewed head: bbb222'));
+    expect(at).toBeLessThan(prompt.indexOf('HOW TO REVIEW'));
+    // No UNCONDITIONAL CLAUDE.md / AGENTS.md line: every mention is the conditional one.
+    const mentions = prompt.split('\n').filter((line) => /CLAUDE\.md|AGENTS\.md/.test(line));
+    expect(mentions).toEqual([
+      '  - If a repository’s checkout has a CLAUDE.md or AGENTS.md at its root, read it as',
+    ]);
+  });
+
+  it('is deterministic with conventions', () => {
+    expect(assembleReviewPrompt(WITH_CONVENTIONS)).toEqual(assembleReviewPrompt(WITH_CONVENTIONS));
+  });
+
+  it('a convention AT the cap is rendered whole', () => {
+    // 119 lines of 100 characters (99 + newline) = 11 900, then a 100-character last line.
+    const exact = `${Array.from({ length: 119 }, () => 'x'.repeat(99)).join('\n')}\n${'y'.repeat(100)}`;
+    expect(exact).toHaveLength(REVIEW_CONVENTION_MAX_CHARS);
+    expect(capConvention(exact)).toEqual({ text: exact, shortened: false });
+  });
+
+  it('a convention ONE character over the cap is cut at the last line boundary under it', () => {
+    // 119 lines of 100 characters (99 + newline) = 11 900, then a 101-character last line:
+    // 12 001 characters in all.
+    const body = Array.from(
+      { length: 119 },
+      (_, i) => `${String(i).padStart(3, '0')}${'x'.repeat(96)}`,
+    );
+    const over = `${body.join('\n')}\n${'z'.repeat(101)}`;
+    expect(over).toHaveLength(REVIEW_CONVENTION_MAX_CHARS + 1);
+
+    const { text, shortened } = capConvention(over);
+    expect(shortened).toBe(true);
+    expect(text).toBe(`${body.join('\n')}\n${CONVENTION_SHORTENED_LINE}`);
+    expect(text).not.toContain('z');
+
+    const { prompt } = assembleReviewPrompt({
       ...TWO_REPOSITORY_CARD,
-      conventionSection: block,
-    }).prompt;
-    expect(withBlock).toContain(block);
-    expect(withBlock.indexOf(block)).toBeGreaterThan(withBlock.indexOf('reviewed head: bbb222'));
-    expect(withBlock.indexOf(block)).toBeLessThan(withBlock.indexOf('HOW TO REVIEW'));
-    expect(assembleReviewPrompt(TWO_REPOSITORY_CARD).prompt).not.toContain('CODING CONVENTIONS');
+      conventions: [{ repoKey: 'moooon/acme-api', state: 'present', version: 1, contentMd: over }],
+    });
+    expect(prompt).toContain(`    ${CONVENTION_SHORTENED_LINE}`);
+    expect(prompt).toContain('Code Health, /code');
+    expect(prompt).not.toContain('zzz');
   });
 });

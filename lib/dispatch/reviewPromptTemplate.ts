@@ -18,9 +18,15 @@ import { splitPlanBody } from '@/lib/markdown/planBody';
 //   · THE LIMITS — read-only: push nothing, post nothing to GitHub (§8.3).
 //   · THE ANSWER — ONE verdict, in an exact shape, through the verdict route (§8.4).
 //
-// ⚠️ IT NAMES NO CONVENTION FILE. Whether a repository has a coding convention, and what
-// the reviewer is told about it, is MOTIR-6904's (§8.5): a `CLAUDE.md` or `AGENTS.md`
-// named here unconditionally would send a reviewer after a file most repositories lack.
+//   · THE CONVENTIONS (MOTIR-6904, §8.5) — per delivery-set repository, Motir's derived
+//     coding convention when there is one, capped; else one line saying that repository is
+//     reviewed against the card only. The list is resolved by
+//     `reviewConventionsService.resolveReviewConventions`; this file only renders it.
+//
+// ⚠️ IT NAMES NO CONVENTION FILE UNCONDITIONALLY. A repository's own `CLAUDE.md` /
+// `AGENTS.md` is mentioned only as "if the checkout has one" (§8.5: never required), so a
+// reviewer is never sent after a file most repositories lack, and a missing one is never a
+// finding.
 
 /** The verdicts a review may give (§8.4). */
 export const REVIEW_VERDICTS = ['pass', 'changes_requested'] as const;
@@ -34,6 +40,46 @@ export const REVIEW_SUMMARY_MAX_LENGTH = 500;
  * runaway agent cannot write megabytes onto a gate row every surface renders.
  */
 export const REVIEW_FINDINGS_MAX_LENGTH = 65_536;
+
+/**
+ * The per-repository cap on a convention's text in the prompt (§8.5: "capped to a bounded
+ * size … so one repository's long convention cannot crowd out the card"). Characters, not
+ * bytes. A longer convention is cut at the last line boundary within the cap and followed by
+ * {@link CONVENTION_SHORTENED_LINE}; the full text is on Code Health (`/code`).
+ */
+export const REVIEW_CONVENTION_MAX_CHARS = 12_000;
+
+/** The line that follows a convention cut at {@link REVIEW_CONVENTION_MAX_CHARS}. */
+export const CONVENTION_SHORTENED_LINE =
+  '[This convention was shortened to fit the review. The full text is on Code Health, /code.]';
+
+/** The line an `absent` repository gets — no convention, motir-ai unconfigured or unreachable. */
+export const CONVENTION_ABSENT_LINE =
+  'No coding convention is recorded for this repository. Review it against the card only.';
+
+/**
+ * One delivery-set repository's coding convention, as resolved for the prompt (§8.5).
+ * `absent` covers all three absent cases — none recorded, motir-ai not configured, motir-ai
+ * erroring or timing out — and the prompt does not tell them apart: each is reviewed against
+ * the card alone, and none is a review that could not run.
+ */
+export type ReviewConventionForPrompt =
+  | { repoKey: string; state: 'present'; version: number; contentMd: string }
+  | { repoKey: string; state: 'absent' };
+
+/**
+ * Cap a convention's text at {@link REVIEW_CONVENTION_MAX_CHARS}: text at or under the cap is
+ * returned whole; longer text is cut at the last line boundary within the cap (a single
+ * over-long first line is cut at the cap itself) and followed by the shortened line.
+ */
+export function capConvention(contentMd: string): { text: string; shortened: boolean } {
+  const text = contentMd.trimEnd();
+  if (text.length <= REVIEW_CONVENTION_MAX_CHARS) return { text, shortened: false };
+  const head = text.slice(0, REVIEW_CONVENTION_MAX_CHARS + 1);
+  const lastBreak = head.lastIndexOf('\n');
+  const cut = lastBreak > 0 ? head.slice(0, lastBreak) : head.slice(0, REVIEW_CONVENTION_MAX_CHARS);
+  return { text: `${cut.trimEnd()}\n${CONVENTION_SHORTENED_LINE}`, shortened: true };
+}
 
 /** One pull request of the delivery set, at the head the review is about. */
 export interface ReviewPullRequestForPrompt {
@@ -63,15 +109,11 @@ export interface ReviewPromptInput {
   /** The delivery set at the reviewed head, in the set's canonical order. */
   pullRequests: readonly ReviewPullRequestForPrompt[];
   /**
-   * ── THE INSERTION POINT FOR MOTIR-6904 — the per-repository CODING CONVENTION block. ──
-   *
-   * Rendered VERBATIM after the pull requests when present, and nothing when absent. This
-   * card never fills it: the service passes nothing. MOTIR-6904 assembles the block (one
-   * repository's derived convention each, capped; none, not configured or unreachable ⇒
-   * that repository is reviewed against the card alone) and passes it here, so this
-   * assembler stays pure and owns no convention wording.
+   * The CODING CONVENTION of each distinct delivery-set repository (MOTIR-6904, §8.5), in
+   * the delivery set's order — `present` with its capped text, or `absent`. Omitted or
+   * empty ⇒ no CODING CONVENTIONS section at all.
    */
-  conventionSection?: string | null;
+  conventions?: readonly ReviewConventionForPrompt[];
 }
 
 export interface AssembledReviewPrompt {
@@ -97,6 +139,36 @@ function pullRequestLines(pr: ReviewPullRequestForPrompt): string[] {
     `      base: ${base}${pr.headBranch ? ` · branch: ${pr.headBranch}` : ''}`,
     `      the change:    git fetch origin ${base} ${pr.headSha} && git diff origin/${base}...${pr.headSha}`,
   ];
+}
+
+function conventionEntryLines(entry: ReviewConventionForPrompt): string[] {
+  if (entry.state === 'absent') {
+    return ['', `  ${entry.repoKey}`, `    ${CONVENTION_ABSENT_LINE}`];
+  }
+  const { text } = capConvention(entry.contentMd);
+  return [
+    '',
+    `  ${entry.repoKey} — Motir's coding convention, version ${entry.version}`,
+    '',
+    ...text.split('\n').map((line) => (line.length > 0 ? `    ${line}` : '')),
+  ];
+}
+
+function conventionSectionLines(conventions: readonly ReviewConventionForPrompt[]): string[] {
+  if (conventions.length === 0) return [];
+  return section('CODING CONVENTIONS', [
+    '  How code is written in each repository, as Motir has derived it. How to use them:',
+    '  - Treat each convention below as a standard for the code the pull request CHANGES.',
+    '    A finding that relies on one QUOTES the rule it breaks.',
+    '  - Where the card’s acceptance criteria explicitly require something a convention',
+    '    forbids, the card wins: say so in your summary rather than sending it back.',
+    '  - Code the pull request did not touch is never a finding.',
+    '  - If a repository’s checkout has a CLAUDE.md or AGENTS.md at its root, read it as',
+    '    the same kind of standard. If it has neither, that is not a finding and is not',
+    '    mentioned.',
+    '  - A missing convention is never a reason to return `changes_requested`.',
+    ...conventions.flatMap(conventionEntryLines),
+  ]);
 }
 
 /**
@@ -146,8 +218,7 @@ export function assembleReviewPrompt(input: ReviewPromptInput): AssembledReviewP
         ...input.pullRequests.flatMap(pullRequestLines),
       ],
     ),
-    // ── MOTIR-6904's CODING CONVENTION block joins here (see `conventionSection`). ──
-    ...(input.conventionSection?.trim() ? ['', input.conventionSection.trim()] : []),
+    ...conventionSectionLines(input.conventions ?? []),
     ...section('HOW TO REVIEW', [
       '  - Read the whole diff of every pull request above, and enough of the surrounding',
       '    code to judge it.',

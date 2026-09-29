@@ -31,6 +31,7 @@ import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository'
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { DISPATCH_RUN_EVENT_LIMIT } from '@/lib/services/dispatchRunService';
+import { reviewConventionsService } from '@/lib/services/reviewConventionsService';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -205,6 +206,14 @@ export const agentReviewRunService = {
       },
     );
 
+    // Each distinct repository's coding convention (MOTIR-6904, §8.5) — read over the
+    // service credential, concurrently; an absent one is reviewed against the card alone
+    // and never refuses the prompt.
+    const conventions = await reviewConventionsService.resolveReviewConventions(
+      { workspaceId: ctx.workspaceId, projectId },
+      pullRequests.map((pr) => pr.repository),
+    );
+
     const { prompt } = assembleReviewPrompt({
       key: item.identifier,
       title: item.title,
@@ -214,7 +223,7 @@ export const agentReviewRunService = {
       howToTestMd: howToTest.record?.bodyMd ?? null,
       subjectVersion: gate.subjectVersion,
       pullRequests,
-      // MOTIR-6904 fills `conventionSection`; this card passes none.
+      conventions,
     });
 
     return {

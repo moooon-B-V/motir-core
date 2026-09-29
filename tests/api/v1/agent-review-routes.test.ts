@@ -271,9 +271,58 @@ describe('GET …/review-prompt — the brief, for the review run’s own card o
     expect(prompt).toContain('Push NOTHING');
     expect(prompt).toContain('Post NOTHING to GitHub');
     expect(prompt).toContain(`"subjectVersion": "${version(71, 'sha-a')}"`);
-    expect(prompt).not.toMatch(/CLAUDE\.md|AGENTS\.md/);
+    // No UNCONDITIONAL CLAUDE.md / AGENTS.md line (MOTIR-6904): the only mention is the
+    // "if the checkout has one" instruction.
+    expect(prompt.split('\n').filter((l) => /CLAUDE\.md|AGENTS\.md/.test(l))).toEqual([
+      '  - If a repository’s checkout has a CLAUDE.md or AGENTS.md at its root, read it as',
+    ]);
     // A read — the gate is untouched.
     expect(await awaitingOf(item.id, REVIEW)).toHaveLength(1);
+  });
+
+  it('is SERVED when motir-ai fails every convention read — each repository reviewed against the card alone (MOTIR-6904)', async () => {
+    const s = await makeScenario('prompt-no-convention');
+    const { item } = await reviewedCard(s, 74, 'Show the widget count');
+    const { headers } = await runFor(s, item, 'review');
+
+    // motir-ai configured and answering 503 to every convention read — faked at the HTTP
+    // boundary, every other request passing through.
+    const aiUrl = 'http://motir-ai.review-routes.test';
+    vi.stubEnv('MOTIR_AI_URL', aiUrl);
+    vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
+    const realFetch = globalThis.fetch;
+    const conventionReads: string[] = [];
+    vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
+      const parsed = new URL(url instanceof Request ? url.url : String(url));
+      if (parsed.host === new URL(aiUrl).host) {
+        conventionReads.push(`${parsed.pathname}?repoKey=${parsed.searchParams.get('repoKey')}`);
+        return new Response(
+          JSON.stringify({ code: 'internal_error', status: 503, title: 'down' }),
+          {
+            status: 503,
+            headers: { 'content-type': 'application/problem+json' },
+          },
+        );
+      }
+      return realFetch(url, init);
+    });
+    try {
+      const res = await readPrompt(headers, item.identifier);
+      expect(res.status).toBe(200);
+      const prompt = String((await bodyOf(res))['prompt']);
+      expect(conventionReads).toEqual(['/v1/convention?repoKey=moooon/acme']);
+      expect(prompt).toContain('CODING CONVENTIONS');
+      expect(prompt).toContain(
+        '  moooon/acme\n    No coding convention is recorded for this repository. Review it against the card only.',
+      );
+      expect(prompt).not.toContain("Motir's coding convention, version");
+      // Nothing is held: the review stays awaiting, with no reason written.
+      const [gate] = await awaitingOf(item.id, REVIEW);
+      expect(gate).toBeDefined();
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
   });
 
   it('refuses a BUILD run’s token, a review run naming another card, a PAT, and a session', async () => {
