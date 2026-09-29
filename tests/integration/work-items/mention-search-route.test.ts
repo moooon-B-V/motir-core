@@ -206,6 +206,24 @@ describe('GET /api/work-items/mention-search — candidate read', () => {
     expect(asOwner).toContain(privItem.id);
   });
 
+  it('`?q=N` returns the key-N item FIRST — the bare-number arm (MOTIR-6896)', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'PROD' });
+    signInAs(fx.ctx);
+    let tenth: WorkItem | null = null;
+    for (let i = 1; i <= 10; i++) {
+      // PROD-2's title carries the digits, so the number has a title match to beat.
+      const item = await seedItem({
+        ...projectOf(fx),
+        reporterId: fx.ownerId,
+        title: i === 2 ? 'release 10 notes' : `routine ${i}`,
+      });
+      if (i === 10) tenth = item;
+    }
+    const body = await rows(await search('10'));
+    expect(body[0]?.id).toBe(tenth!.id);
+    expect(body.map((r) => r.title)).toContain('release 10 notes');
+  });
+
   it('caps the result at the mention-picker limit (8)', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'PROD' });
     signInAs(fx.ctx);

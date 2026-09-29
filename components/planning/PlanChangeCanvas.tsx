@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ProjectRoadmapCanvas,
+  type CanvasTargetAction,
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
 import { useWorkItemQuickView } from '@/components/planning/useWorkItemQuickView';
@@ -18,6 +19,7 @@ import { FolderEmptyLevel } from '@/components/planning/WorkItemNode';
 import { decorateTargetLevel } from '@/components/planning/PlanningTargetNode';
 import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
+import { MAX_PLANNING_TARGETS, type PlanningTarget } from '@/lib/planning/planningTargets';
 
 // The CANVAS pane of the plan-change conversation (Subtask MOTIR-1730; design
 // panel 4 — "the review surface is the CANVAS, not a corner dock"). A sibling
@@ -51,6 +53,12 @@ export interface PlanChangeCanvasProps {
    *  CURRENT level take the target ring, so the user sees what the planner is
    *  pointed at. */
   targetIds?: readonly string[];
+  /** Turn on the selected card's **Set as target** / **Remove target**
+   *  (MOTIR-6898). The planning surface passes it; nothing else does. Called with
+   *  the card's work item and whether it is a target already. */
+  onToggleTarget?: (target: PlanningTarget, isTarget: boolean) => void;
+  /** False at the target cap: Set is disabled, Remove still works. */
+  canAddTarget?: boolean;
   /** The level the canvas OPENS on, as a breadcrumb trail (MOTIR-2070) — the host
    *  passes the `?item=` anchor's ancestor chain, so a workspace summoned FROM a
    *  work item arrives on that item's own level instead of the project root, where
@@ -83,6 +91,8 @@ export function PlanChangeCanvas({
   projectKey,
   diffKey,
   targetIds,
+  onToggleTarget,
+  canAddTarget = true,
   initialTrail,
   followTo = null,
   onFollowDeclined,
@@ -93,7 +103,26 @@ export function PlanChangeCanvas({
 }: PlanChangeCanvasProps) {
   const t = useTranslations('roadmap.canvas');
   const tWorkspace = useTranslations('planningWorkspace');
-  const { registerItems, onView, quickView } = useWorkItemQuickView();
+  const { registerItems: registerForView, onView, quickView } = useWorkItemQuickView();
+  // Every work item a level has drawn, by id — the target action needs the
+  // item's key, title and kind to add it, and the canvas node carries none of
+  // them. Filled by the same call that feeds the quick-view peek, so a card is
+  // eligible exactly when View can open it.
+  const itemsRef = useRef(new Map<string, PlanningTarget>());
+  const registerItems = useCallback(
+    (level: RoadmapLevelData) => {
+      for (const item of level.items) {
+        itemsRef.current.set(item.id, {
+          id: item.id,
+          identifier: item.identifier,
+          title: item.title,
+          kind: item.kind,
+        });
+      }
+      registerForView(level);
+    },
+    [registerForView],
+  );
 
   // Levels cached so re-drilling doesn't re-hit the API; a mutable ref, so a new
   // key simply misses. Cleared whenever `diffKey` changes, since an approve has
@@ -306,6 +335,22 @@ export function PlanChangeCanvas({
     (crumb: CanvasCrumb) => targetIdSet.has(crumb.id),
     [targetIdSet],
   );
+  const tTargets = useTranslations('planningWorkspace.targets');
+  const targetAction = useMemo<CanvasTargetAction | undefined>(() => {
+    if (!onToggleTarget) return undefined;
+    return {
+      isEligible: (id) => itemsRef.current.has(id),
+      isTarget: (id) => targetIdSet.has(id),
+      // Asked only for an id `isEligible` passed, which is exactly a key in the map.
+      keyFor: (id) => itemsRef.current.get(id)!.identifier,
+      canAdd: canAddTarget,
+      disabledReason: tTargets('limitReached', { max: MAX_PLANNING_TARGETS }),
+      onToggle: (id) => {
+        const item = itemsRef.current.get(id);
+        if (item) onToggleTarget(item, targetIdSet.has(id));
+      },
+    };
+  }, [onToggleTarget, canAddTarget, targetIdSet, tTargets]);
   const emptyDrilledFor = useCallback(
     (focus: { id: string; label: string }) =>
       folderIdFromNodeId(focus.id) !== null ? <FolderEmptyLevel name={focus.label} /> : null,
@@ -326,6 +371,7 @@ export function PlanChangeCanvas({
         // navigated to, and never drag them back here.
         initialTrail={initialTrail}
         onView={onView}
+        targetAction={targetAction}
         searchable
         // This canvas draws the PROJECT, so a reader searching here is searching
         // the tree (MOTIR-4021, Part XIII

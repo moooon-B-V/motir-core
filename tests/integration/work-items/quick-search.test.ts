@@ -226,6 +226,111 @@ describe('workItemsService.quickSearch — correctness', () => {
   });
 });
 
+describe('workItemsService.quickSearch — a BARE NUMBER (MOTIR-6896)', () => {
+  /**
+   * One workspace, two browsable projects (ALPHA, BETA) and one private project
+   * (PRIV) the outsider may not browse — each holding a key-10 item — plus a
+   * title-only match on the digits. Ten items per project, because the key is
+   * the per-project counter and the number arm needs a key of two digits
+   * (`quickSearchNumber` reads a one-digit number as no number, like the guard).
+   */
+  async function seedNumbered() {
+    const owner = await usersService.createUser({
+      email: 'owner-num@ex.com',
+      password: PASSWORD,
+      name: 'Owner',
+    });
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'Num WS',
+      ownerUserId: owner.id,
+    });
+    const ownerCtx: ServiceContext = { userId: owner.id, workspaceId: workspace.id };
+    const create = (name: string, identifier: string) =>
+      projectsService.createProject({
+        workspaceId: workspace.id,
+        actorUserId: owner.id,
+        name,
+        identifier,
+      });
+    const alpha = await create('Alpha', 'ALPHA');
+    const beta = await create('Beta', 'BETA');
+    const priv = await create('Private', 'PRIV');
+    await projectMembersService.setAccessLevel({
+      key: priv.identifier,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      level: 'private',
+    });
+    const outsider = await usersService.createUser({
+      email: 'outsider-num@ex.com',
+      password: PASSWORD,
+      name: 'Outsider',
+    });
+    await workspacesService.addMember({ userId: outsider.id, workspaceId: workspace.id });
+    const outsiderCtx: ServiceContext = { userId: outsider.id, workspaceId: workspace.id };
+
+    const tenth: Record<string, WorkItem> = {};
+    let titleOnly: WorkItem | null = null;
+    for (const project of [alpha, beta, priv]) {
+      for (let i = 1; i <= 10; i++) {
+        const item = await seedItem({
+          workspaceId: workspace.id,
+          projectId: project.id,
+          identifier: project.identifier,
+          reporterId: owner.id,
+          // ALPHA-2's TITLE carries the digits — a title-only match for "10".
+          title: project === alpha && i === 2 ? 'release 10 notes' : `routine ${i}`,
+        });
+        if (i === 10) tenth[project.identifier] = item;
+        if (project === alpha && i === 2) titleOnly = item;
+      }
+    }
+    return { ownerCtx, outsiderCtx, tenth, titleOnly: titleOnly! };
+  }
+
+  it('`N` and `#N` return every browsable project’s key-N item before any title match', async () => {
+    const { outsiderCtx, tenth, titleOnly } = await seedNumbered();
+
+    for (const q of ['10', '#10', ' #10 ']) {
+      const ids = (await workItemsService.quickSearch(q, outsiderCtx)).map((r) => r.id);
+      // Both exact numbers first, in the existing key-then-identifier order.
+      expect(ids.slice(0, 2), `query=${q}`).toEqual([tenth.ALPHA!.id, tenth.BETA!.id]);
+      // The PRIV item is outside the outsider's browsable set.
+      expect(ids, `query=${q}`).not.toContain(tenth.PRIV!.id);
+      // The title-only match on the digits still comes back — after them.
+      if (q.trim() === '10') expect(ids.indexOf(titleOnly.id)).toBe(2);
+    }
+  });
+
+  it('the owner, who may browse PRIV, gets its key-N item too', async () => {
+    const { ownerCtx, tenth } = await seedNumbered();
+    const ids = (await workItemsService.quickSearch('10', ownerCtx)).map((r) => r.id);
+    expect(ids.slice(0, 3)).toEqual([tenth.ALPHA!.id, tenth.BETA!.id, tenth.PRIV!.id]);
+  });
+
+  it('the full key still ranks that exact item first, in either case', async () => {
+    const { outsiderCtx, tenth } = await seedNumbered();
+    for (const q of ['BETA-10', 'beta-10']) {
+      const ids = (await workItemsService.quickSearch(q, outsiderCtx)).map((r) => r.id);
+      expect(ids, `query=${q}`).toEqual([tenth.BETA!.id]);
+    }
+  });
+
+  it('a digits-and-words query takes the title path only — no number arm', async () => {
+    const { outsiderCtx, titleOnly } = await seedNumbered();
+    // "10 notes": both tokens are title tokens. The key-10 items' titles
+    // ("routine 10") carry "10" but not "notes", so only the title fixture is back.
+    const ids = (await workItemsService.quickSearch('10 notes', outsiderCtx)).map((r) => r.id);
+    expect(ids).toEqual([titleOnly.id]);
+  });
+
+  it('`#` and a one-digit query return [] without a round-trip', async () => {
+    const { outsiderCtx } = await seedNumbered();
+    expect(await workItemsService.quickSearch('#', outsiderCtx)).toEqual([]);
+    expect(await workItemsService.quickSearch('1', outsiderCtx)).toEqual([]);
+  });
+});
+
 describe('workItemsService.quickSearch — guards', () => {
   it('returns [] for an empty / whitespace / below-min-length query without a DB round-trip', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'PROD' });

@@ -2,45 +2,39 @@
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { AtSign, CircleStop, MessageCircleQuestionMark, Send } from 'lucide-react';
+import { CircleStop, MessageCircleQuestionMark, Search, Send } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { PlanningTargetChip } from '@/components/planning/PlanningTargetChip';
-import { TargetSearchListbox } from '@/components/planning/TargetSearchListbox';
-import { useWorkItemTargetSearch } from '@/lib/hooks/useWorkItemTargetSearch';
+import { TargetSearchPopover } from '@/components/planning/TargetSearchPopover';
 import {
-  clearMentionQuery,
-  findMentionQuery,
+  consumeTargetShortcut,
   MAX_PLANNING_TARGETS,
-  type MentionQueryRange,
   type PlanningTarget,
 } from '@/lib/planning/planningTargets';
-import type { WorkItemMentionCandidate } from '@/components/ui/markdownEditorMentions';
 
-// The planning chat's COMPOSER — the message input plus the `@`-mention TARGET
-// picker (Subtask MOTIR-1491; design `design/ai-chat/target-picker.mock.html`
-// panels 1, 2 and 4). Typing `@` (or pressing the `@` button) searches the
-// project's work items; picking one adds it to the TARGET SET the turn is
-// anchored at, shown as a chip tray above the field.
+// The planning chat's COMPOSER — the message input plus the TARGET search
+// (Subtask MOTIR-1491; design `design/ai-chat/target-picker.mock.html`, amended
+// by MOTIR-6897's `target-picker--search-and-canvas.mock.html` panels 1–5). The
+// Search control (or `@` typed at a word boundary) opens `TargetSearchPopover`,
+// whose OWN field takes the query; picking a row adds it to the TARGET SET the
+// turn is anchored at, shown as a chip tray above the field.
 //
 // The picked chip goes to the TRAY, not inline into the message text (design
 // panel 2): the target set is structured data the session is scoped by, not
-// prose — so the `@query` token is consumed on pick and the sentence the user was
-// typing closes over the gap.
+// prose. The `@` shortcut is CONSUMED as it is typed, so the sentence the user
+// was writing is never interrupted by a query token.
 //
 // The SET lives in the host (`PlanningWorkspaceHost`), not here, because the
 // CANVAS highlights it too; this component renders it and reports adds/removes.
 // The draft text lives in the rail, whose starter hints prefill it.
 //
-// A11Y — the ARIA 1.2 combobox pattern: the field is the combobox
-// (`aria-expanded` / `aria-controls` / `aria-activedescendant`), the popup owns
-// the listbox, and ↑/↓/Enter/Esc are handled here because focus never leaves the
-// field. Esc closes the picker and is swallowed, so it does not also reach the
-// workspace's "Esc closes" handler.
-
-const LISTBOX_ID = 'planning-target-listbox';
-const OPTION_PREFIX = 'planning-target-option';
+// A11Y — the combobox now lives in the POPOVER's field, not in the message:
+// the message is a plain textbox again, and focus moves between the two
+// explicitly — into the popover on open, back to the message caret on a pick,
+// Esc or Tab (design panel 5).
 
 /**
  * The composer's height CAP, in rows — the design's decision 1
@@ -161,24 +155,22 @@ export function PlanChangeComposer({
   // composition ENDS. See `onCompositionEnd` for why the tail matters.
   const composingRef = useRef(false);
   const caretPlacedRef = useRef(false);
-  const [mention, setMention] = useState<MentionQueryRange | null>(null);
-  const [dismissed, setDismissed] = useState(false);
-  // Tracked by candidate ID, not index: when the result set changes under the
-  // cursor the active row falls back to the first automatically, with no reset
-  // effect (set-state-in-effect is a lint error in this repo).
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  // Where focus goes back to when the search closes: the caret the person left
+  // in the message, or — opened from the control before any caret was placed —
+  // the end of the draft (design panel 5).
+  const returnCaretRef = useRef<number | null>(null);
+  // Has the person put a caret in the message themselves? Until then a caret
+  // read off the field is the browser's default, not a place to return to.
+  const caretPlacedByUserRef = useRef(false);
 
   const resolvedPlaceholder =
     placeholder ??
     (targets.length > 0 ? tc('composerPlaceholderTargets') : tc('composerPlaceholder'));
   const atLimit = targets.length >= MAX_PLANNING_TARGETS;
   // Closed while the turn is in flight too: the composer is locked, so an open
-  // dropdown would be a control the user cannot act on.
-  const open = mentions && mention !== null && !dismissed && !atLimit && !disabled;
-  const { results, loading, tooShort } = useWorkItemTargetSearch(mention?.query ?? '', open);
-
-  const foundIndex = activeId === null ? -1 : results.findIndex((r) => r.id === activeId);
-  const activeIndex = foundIndex >= 0 ? foundIndex : 0;
+  // search would be a control the user cannot act on.
+  const open = mentions && searchOpen && !disabled;
 
   // A PRE-FILLED draft — a starter chip's text, MOTIR-6210's seeded first turn —
   // is present before any typing, and a textarea whose value was set at mount
@@ -193,32 +185,29 @@ export function PlanChangeComposer({
     el.setSelectionRange(el.value.length, el.value.length);
   }, [autoFocus]);
 
-  /** Re-derive the `@` query from the field's current value + caret. */
-  function syncMention(el: HTMLTextAreaElement) {
-    setMention(findMentionQuery(el.value, el.selectionStart ?? el.value.length));
+  /** Open the search, remembering where the message caret should come back to. */
+  function openSearch(caret: number | null) {
+    returnCaretRef.current = caret;
+    setSearchOpen(true);
   }
 
-  function pick(candidate: WorkItemMentionCandidate) {
-    onAddTarget({
-      id: candidate.id,
-      identifier: candidate.identifier,
-      title: candidate.title,
-      kind: candidate.kind,
+  /** Close the search and hand focus back to the message, at its caret. */
+  function closeSearch(nextDraft: string = draft) {
+    setSearchOpen(false);
+    const caret = Math.min(returnCaretRef.current ?? nextDraft.length, nextDraft.length);
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(caret, caret);
     });
-    if (mention) {
-      const next = clearMentionQuery(draft, mention);
-      onDraftChange(next.text);
-      // Restore the caret where the query used to be, so typing continues mid
-      // sentence rather than jumping to the end.
-      requestAnimationFrame(() => {
-        const el = inputRef.current;
-        if (!el) return;
-        el.focus();
-        el.setSelectionRange(next.caret, next.caret);
-      });
-    }
-    setMention(null);
-    setActiveId(null);
+  }
+
+  function pick(target: PlanningTarget) {
+    onAddTarget(target);
+    // A pick CLOSES the search (design panel 5's decision): most turns anchor
+    // at one item, and a second is one more `@` or one more click.
+    closeSearch();
   }
 
   /**
@@ -250,75 +239,31 @@ export function PlanChangeComposer({
     // failure people typing Chinese or Japanese would hit on their first turn.
     if (event.key === 'Enter' && confirmsComposition(event)) return;
 
-    // (2) The `@` picker owns the keys while it is open — unchanged.
-    if (open) {
-      if (event.key === 'Escape') {
-        // Swallowed: the workspace's own Esc handler must not close the whole
-        // surface because the user was dismissing a dropdown.
-        event.preventDefault();
-        event.stopPropagation();
-        setDismissed(true);
-        return;
-      }
-      if (event.key === 'Tab') {
-        setDismissed(true);
-        return;
-      }
-      if (results.length > 0) {
-        if (event.key === 'ArrowDown') {
-          event.preventDefault();
-          setActiveId(results[(activeIndex + 1) % results.length]!.id);
-          return;
-        }
-        if (event.key === 'ArrowUp') {
-          event.preventDefault();
-          setActiveId(results[(activeIndex - 1 + results.length) % results.length]!.id);
-          return;
-        }
-        if (event.key === 'Enter') {
-          // Commits the row — NOT the message. Without the preventDefault the
-          // send below would submit the half-typed `@bil` as a turn.
-          event.preventDefault();
-          pick(results[activeIndex]!);
-          return;
-        }
-      }
-      // An OPEN picker with no rows falls through: there is no row to commit,
-      // so Enter still sends, exactly as it did when the field was an `<input>`
-      // and the browser submitted the form for us.
-    }
+    // (2) The search owns its keys in its OWN field now, so nothing here is
+    // intercepted for it — an Enter in the message always means the message.
 
     // (3) Enter SENDS and (4) Shift+Enter breaks the line. A textarea submits no
     // form of its own, so the send is explicit — and it goes through
     // `requestSubmit()` rather than calling `submit()` directly, so the trim,
     // the empty-message refusal and the `disabled` guard keep exactly one home.
     //
-    // (5) ↑/↓ with the picker CLOSED never reach here, so the caret moves
-    // between lines the way it does in any other multi-line field.
+    // (5) ↑/↓ are never intercepted, so the caret moves between lines the way
+    // it does in any other multi-line field.
     if (event.key !== 'Enter') return;
     if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
     event.preventDefault();
     event.currentTarget.form?.requestSubmit();
   }
 
-  /** The visible `@` affordance (design panel 2d) — focuses the field and opens
-   *  the picker, inserting the trigger the keyboard path would have typed. */
-  function triggerMention() {
+  /** The Search control — toggles the search. The caret it returns to is the
+   *  one the message had, when the person had placed one. */
+  function toggleSearch() {
+    if (open) {
+      closeSearch();
+      return;
+    }
     const el = inputRef.current;
-    if (!el) return;
-    const caret = el.selectionStart ?? draft.length;
-    const before = draft.slice(0, caret);
-    const needsSpace = before.length > 0 && !/\s$/.test(before);
-    const insert = `${needsSpace ? ' ' : ''}@`;
-    const next = `${before}${insert}${draft.slice(caret)}`;
-    const nextCaret = before.length + insert.length;
-    onDraftChange(next);
-    setDismissed(false);
-    setMention({ query: '', start: nextCaret - 1, end: nextCaret });
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(nextCaret, nextCaret);
-    });
+    openSearch(el && caretPlacedByUserRef.current ? (el.selectionStart ?? null) : null);
   }
 
   function submit(event: FormEvent) {
@@ -327,7 +272,6 @@ export function PlanChangeComposer({
     if (!text || disabled) return;
     onSubmit(text);
     onDraftChange('');
-    setMention(null);
   }
 
   return (
@@ -424,17 +368,7 @@ export function PlanChangeComposer({
       ) : null}
 
       {open ? (
-        <TargetSearchListbox
-          listboxId={LISTBOX_ID}
-          optionIdPrefix={OPTION_PREFIX}
-          query={mention?.query ?? ''}
-          results={results}
-          loading={loading}
-          tooShort={tooShort}
-          activeIndex={activeIndex}
-          onPick={pick}
-          onHover={(index) => setActiveId(results[index]?.id ?? null)}
-        />
+        <TargetSearchPopover targets={targets} onPick={pick} onClose={() => closeSearch()} />
       ) : null}
 
       {/* ⚠️ `items-end`, NOT `items-center` — the design's decision 2. Send is a
@@ -446,30 +380,11 @@ export function PlanChangeComposer({
           lower than today's centring — the one visible change to a composer
           nobody has typed into. */}
       <div className="flex items-end gap-2">
-        {/* The combobox WRAPPER, per the shipped `CommandPalette` pattern: the
-            role sits on the container so the message field keeps its native
-            textbox role (every existing consumer — and the acceptance spec —
-            addresses it that way, and a `<textarea>` carries that role exactly
-            as the `<input>` did), while `aria-controls` /
-            `aria-activedescendant` on the field still voice the active row. */}
-        {/* ⚠️ WITHOUT MENTIONS THE COMBOBOX ROLE GOES TOO, not just the button.
-            A `role="combobox"` that owns no popup and can never expand is a lie
-            told to a screen reader — it promises an autocomplete the surface does
-            not have. So the wrapper degrades to a plain `div`, and the field keeps
-            its native textbox role, which is what every consumer addresses it by
-            anyway. */}
+        {/* A plain wrapper since MOTIR-6897: the COMBOBOX moved into the
+            search popover's own field, so the message is an ordinary textbox
+            with or without `mentions` (and without them there is no control,
+            no shortcut and no combobox role at all — the MOTIR-3601 contract). */}
         <div
-          {...(mentions
-            ? {
-                role: 'combobox' as const,
-                'aria-expanded': open,
-                'aria-haspopup': 'listbox' as const,
-                // Named unconditionally (the role REQUIRES it): the listbox is
-                // the popup this combobox owns whenever it has one, and an id
-                // pointing at nothing is how a closed combobox reads.
-                'aria-controls': LISTBOX_ID,
-              }
-            : {})}
           // ⚠️ NOT a flex row any more. `Textarea` renders its field inside the
           // design system's `FormField` wrapper, and a flex child with no
           // `flex-1` of its own would size to content instead of filling the
@@ -478,20 +393,44 @@ export function PlanChangeComposer({
           className="relative min-w-0 flex-1"
         >
           {mentions ? (
-            <button
-              type="button"
-              onClick={triggerMention}
-              disabled={disabled || atLimit}
-              aria-label={t('trigger')}
-              data-testid="planning-target-trigger"
-              // `bottom-1.5` rather than vertical centring: the trigger is
-              // absolutely positioned, so it followed the row's `items-center`
-              // to the middle of a grown field. 6px above the field's bottom
-              // edge in every one of the design's thirteen sheets.
-              className="absolute bottom-1.5 left-1.5 z-10 inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+            // THE SEARCH CONTROL (design panel 1) — the shipped trigger's slot,
+            // testid and geometry, with a magnifier instead of `@`. The tooltip
+            // hangs off a wrapper because a DISABLED button fires no pointer
+            // events, and at the cap the tooltip is the only place the reason
+            // is said on the control itself.
+            <Tooltip
+              content={
+                atLimit ? (
+                  t('limitReached', { max: MAX_PLANNING_TARGETS })
+                ) : (
+                  <span className="inline-flex items-center gap-1.5">
+                    {t('trigger')}
+                    <kbd className="rounded-(--radius-kbd) border border-current px-(--spacing-kbd-x) font-mono text-[10px]">
+                      @
+                    </kbd>
+                  </span>
+                )
+              }
+              delayMs={300}
             >
-              <AtSign className="size-4" aria-hidden="true" />
-            </button>
+              {/* `bottom-1.5` rather than vertical centring: 6px above the
+                  field's bottom edge however tall the field has grown
+                  (decision 2 of the multi-line composer). */}
+              <span className="absolute bottom-1.5 left-1.5 z-10 inline-flex">
+                <button
+                  type="button"
+                  onClick={toggleSearch}
+                  disabled={disabled || atLimit}
+                  aria-label={t('trigger')}
+                  aria-haspopup="dialog"
+                  aria-expanded={open}
+                  data-testid="planning-target-trigger"
+                  className={`inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) hover:bg-(--el-card) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 ${open ? 'bg-(--el-tint-lavender) text-(--el-accent-on-surface)' : 'text-(--el-text-secondary)'}`}
+                >
+                  <Search className="size-4" aria-hidden="true" />
+                </button>
+              </span>
+            </Tooltip>
           ) : null}
           <Textarea
             ref={inputRef}
@@ -511,21 +450,30 @@ export function PlanChangeComposer({
                 composingRef.current = false;
               }, 0);
             }}
-            {...(mentions ? { 'aria-autocomplete': 'list' as const } : {})}
-            {...(open && results.length > 0
-              ? {
-                  'aria-controls': LISTBOX_ID,
-                  'aria-activedescendant': `${OPTION_PREFIX}-${activeIndex}`,
-                }
-              : {})}
             onChange={(event) => {
-              onDraftChange(event.target.value);
-              setDismissed(false);
-              syncMention(event.target);
+              const el = event.target;
+              // THE `@` SHORTCUT (design panel 4): an `@` typed at a word
+              // boundary opens the search and is CONSUMED, so the draft keeps
+              // no stray `@` and the caret stays where it was.
+              const shortcut =
+                mentions && !open
+                  ? consumeTargetShortcut(draft, el.value, el.selectionStart ?? el.value.length)
+                  : null;
+              if (shortcut) {
+                onDraftChange(shortcut.text);
+                caretPlacedByUserRef.current = true;
+                openSearch(shortcut.caret);
+                return;
+              }
+              onDraftChange(el.value);
             }}
             onKeyDown={onKeyDown}
-            onKeyUp={(event) => syncMention(event.currentTarget)}
-            onClick={(event) => syncMention(event.currentTarget)}
+            onKeyUp={() => {
+              caretPlacedByUserRef.current = true;
+            }}
+            onClick={() => {
+              caretPlacedByUserRef.current = true;
+            }}
             disabled={disabled}
             // Pre-focused for a re-plan so the reason can be typed straight away
             // (MOTIR-910): the workspace is a full-screen route whose primary act

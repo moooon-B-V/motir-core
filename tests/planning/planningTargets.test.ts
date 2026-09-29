@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   addPlanningTarget,
-  clearMentionQuery,
+  consumeTargetShortcut,
   extraPlanningTargetKeys,
-  findMentionQuery,
   MAX_PLANNING_TARGETS,
   primaryPlanningTarget,
   removePlanningTarget,
@@ -13,7 +12,7 @@ import { MAX_SCOPE_TARGETS } from '@/lib/planChange/scope';
 
 // The `@`-mention target picker's PURE core (Subtask MOTIR-1491). Everything the
 // composer's behaviour rests on that has no DOM in it: what the set does, and
-// where the `@` query starts and stops. The rules matter because both ends of the
+// — since MOTIR-6897 — which edit is the `@` SHORTCUT that opens the search. The rules matter because both ends of the
 // wire read them — the picker builds the set, the server canonicalizes it.
 
 function target(identifier: string, title = 'Some work'): PlanningTarget {
@@ -60,58 +59,34 @@ describe('the target SET', () => {
   });
 });
 
-describe('the `@` query the caret sits in', () => {
-  it('opens on a bare `@` at the caret — with an EMPTY query (the “type to search” state)', () => {
-    const text = 'Add sub-stories to @';
-    expect(findMentionQuery(text, text.length)).toEqual({ query: '', start: 19, end: 20 });
+describe('the `@` shortcut (MOTIR-6897) — an `@` typed at a word boundary', () => {
+  it('fires on an `@` typed at the START of the message, and gives the `@` back', () => {
+    expect(consumeTargetShortcut('', '@', 1)).toEqual({ text: '', caret: 0 });
   });
 
-  it('grows with what is typed after the trigger', () => {
-    const text = 'Add sub-stories to @bil';
-    expect(findMentionQuery(text, text.length)).toEqual({ query: 'bil', start: 19, end: 23 });
-  });
-
-  it('is NOT triggered mid-word — an email-ish `foo@bar` is not a mention', () => {
-    const text = 'ping me at yue@example';
-    expect(findMentionQuery(text, text.length)).toBeNull();
-  });
-
-  it('closes once whitespace follows the query', () => {
-    const text = 'Add to @bil then stop';
-    expect(findMentionQuery(text, text.length)).toBeNull();
-  });
-
-  it('reads from the CARET, not the end — editing mid-sentence still triggers', () => {
-    const text = 'Add @bil to the plan';
-    expect(findMentionQuery(text, 8)).toEqual({ query: 'bil', start: 4, end: 8 });
-  });
-
-  it('a second `@` CLOSES the query instead of nesting inside it', () => {
-    // `@` is excluded from the query charset, so `@bil@pay` is not a mention of
-    // `bil@pay` — and the trailing `@` is mid-word, so it opens nothing either.
-    // Neither half silently becomes a search the user did not ask for.
-    expect(findMentionQuery('Add @bil@pay', 'Add @bil@pay'.length)).toBeNull();
-    // A properly separated second mention DOES open, at its own position.
-    const text = 'Add @bil and @pay';
-    expect(findMentionQuery(text, text.length)).toEqual({ query: 'pay', start: 13, end: 17 });
-  });
-});
-
-describe('consuming the query on a pick', () => {
-  it('removes the `@token` and closes the caret over the gap — the chip goes to the TRAY', () => {
-    const text = 'Add sub-stories to @bil';
-    const range = findMentionQuery(text, text.length)!;
-
-    expect(clearMentionQuery(text, range)).toEqual({
-      text: 'Add sub-stories to ',
-      caret: 19,
+  it('fires after whitespace — including a line break — mid-sentence too', () => {
+    expect(consumeTargetShortcut('Break this into ', 'Break this into @', 17)).toEqual({
+      text: 'Break this into ',
+      caret: 16,
+    });
+    expect(consumeTargetShortcut('one\n', 'one\n@', 5)).toEqual({ text: 'one\n', caret: 4 });
+    // Typed in the MIDDLE: the caret decides, not the end of the text.
+    expect(consumeTargetShortcut('Add  to it', 'Add @ to it', 5)).toEqual({
+      text: 'Add  to it',
+      caret: 4,
     });
   });
 
-  it('keeps what was typed AFTER the query, so a mid-sentence pick loses nothing', () => {
-    const text = 'Add @bil to the plan';
-    const range = findMentionQuery(text, 8)!;
+  it('does NOT fire inside a word — an email-ish `foo@bar` types an ordinary `@`', () => {
+    expect(consumeTargetShortcut('Ask foo', 'Ask foo@', 8)).toBeNull();
+  });
 
-    expect(clearMentionQuery(text, range)).toEqual({ text: 'Add  to the plan', caret: 4 });
+  it('does NOT fire on anything but a single typed `@` — a paste, a deletion, another key', () => {
+    expect(consumeTargetShortcut('', '@bil', 4)).toBeNull(); // a paste
+    expect(consumeTargetShortcut('Add @', 'Add ', 4)).toBeNull(); // a deletion
+    expect(consumeTargetShortcut('Add ', 'Add x', 5)).toBeNull(); // another key
+    // The caret is not just past the inserted `@` (a replaced selection).
+    expect(consumeTargetShortcut('Add ', 'Add @', 3)).toBeNull();
+    expect(consumeTargetShortcut('Add ', '@Add', 0)).toBeNull();
   });
 });

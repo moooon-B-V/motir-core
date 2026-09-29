@@ -33,6 +33,7 @@ import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
 // The ONE declaration of the ready order. The Workbench reads it rather than
 // re-typing it — see `deriveKindSortOrder`.
 import { READY_KIND_RANK } from '@/lib/workItems/readyFilter';
+import { quickSearchNumber } from '@/lib/workItems/quickSearch';
 
 /**
  * The `WorkItem` create shape, NAMED BY THE OWNING REPOSITORY
@@ -2307,6 +2308,13 @@ export const workItemRepository = {
    * is inert under the dev/CI superuser). Read-only → `db` singleton. The query
    * binds as a parameter (never interpolated) and is pattern-escaped for LIKE
    * metacharacters, so a search for "50%" matches the literal "50%".
+   *
+   * A query that NAMES A NUMBER (`6010`, `#6010` — {@link quickSearchNumber})
+   * also matches `w."key"` exactly, within the same browsable set, so a
+   * workspace with two projects returns each project's `…-6010` (MOTIR-6896).
+   * It ranks with the exact identifier (0). Every other query — words, a
+   * digits-and-words mix, a sub-minimum number — builds the SQL it always did:
+   * the number arm is `Prisma.empty` there, not a `FALSE` clause.
    */
   async quickSearch(
     workspaceId: string,
@@ -2339,6 +2347,11 @@ export const workItemRepository = {
     const excludeSql = excludeIds.length
       ? Prisma.sql`AND w."id" <> ALL(${excludeIds})`
       : Prisma.empty;
+    // The number arm, bound as a parameter and only ever an integer parsed after
+    // a digits-only match — never interpolated.
+    const number = quickSearchNumber(query);
+    const numberMatch = number === null ? Prisma.empty : Prisma.sql`OR w."key" = ${number}`;
+    const numberRank = number === null ? Prisma.empty : Prisma.sql`WHEN w."key" = ${number} THEN 0`;
     const client = tx ?? dbRead;
     return client.$queryRaw<WorkItem[]>`
       SELECT w.*
@@ -2351,10 +2364,12 @@ export const workItemRepository = {
           AND (
             w."identifier" ILIKE ${idPrefixPattern}
             OR (${titleMatch})
+            ${numberMatch}
           )
         ORDER BY
           CASE
             WHEN LOWER(w."identifier") = ${exact} THEN 0
+            ${numberRank}
             WHEN w."identifier" ILIKE ${idPrefixPattern} THEN 1
             ELSE 2
           END ASC,
