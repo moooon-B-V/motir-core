@@ -1668,13 +1668,17 @@ only, **$0.15/GB per 30 days**, no compute; a **suspended** machine is documente
 neither way. All three apps are on shared IPv4 (no $2/mo dedicated address) and
 Anycast IPv6 is free. Egress $0.02/GB.
 
-| change                                                     | machine delta           | database delta                    |
-| ---------------------------------------------------------- | ----------------------- | --------------------------------- |
-| `motir-core` floor 1 → 2                                   | **+$11.83/mo**          | **$0** — no in-process poll (§21) |
-| `motir-ai` floor 1 → 2 (after 3221/3222/3223)              | **+$11.83/mo**          | **$0** — no in-process poll (§21) |
-| `motir-gateway` floor stays 1                              | $0                      | $0                                |
-| `motir-gateway` pool 2 → 4, both extra members **stopped** | **≈ $0** — rootfs cents | $0                                |
-| **Total, once all of it is applied**                       | **≈ +$23.66/mo**        | **$0**                            |
+| change                                                     | machine delta           | database delta                                                                             |
+| ---------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------ |
+| `motir-core` floor 1 → 2                                   | **+$11.83/mo**          | **$0** — ~~no in-process poll (§21)~~ the compute is already always on (the worker's poll) |
+| `motir-ai` floor 1 → 2 (after 3221/3222/3223)              | **+$11.83/mo**          | **$0** — no in-process poll (§21)                                                          |
+| `motir-gateway` floor stays 1                              | $0                      | $0                                                                                         |
+| `motir-gateway` pool 2 → 4, both extra members **stopped** | **≈ $0** — rootfs cents | $0                                                                                         |
+| **Total, once all of it is applied**                       | **≈ +$23.66/mo**        | **$0**                                                                                     |
+
+> ⚠️ SUPERSEDED by [`always-on-database-job-cadence.md`](always-on-database-job-cadence.md) (MOTIR-6893, 2026-09-29): the `motir-core` row's
+> $0 stands for a second web machine, but its reason is now that the compute is already always on
+> because of the job worker's ≤ 5 s poll, not that nothing polls (MOTIR-6934).
 
 For scale: the fleet runs at **≈ $27/mo** today (11.83 + 11.83 + 3.32), so this is
 roughly a **doubling of the machine bill and no change to the database bill** —
@@ -1952,9 +1956,14 @@ rot.
 
 | service         | in-process poll on a warm machine                                                            | does a second warm machine add compute-hours?                                                                  |
 | --------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `motir-core`    | **none** — every `setInterval` in the repo is client-side                                    | **No.** Scheduled work arrives via Inngest over HTTP and reaches one machine anyway.                           |
+| `motir-core`    | ~~**none** — every `setInterval` in the repo is client-side~~                                | ~~**No.** Scheduled work arrives via Inngest over HTTP and reaches one machine anyway.~~                       |
 | `motir-ai`      | **none** — no timer re-arms on an idle queue ([MOTIR-3224](motir:cmt1gpozk00kpi2phgjsqn228)) | **No, and not by a margin.** There is no timer to price: an idle worker schedules nothing and issues no query. |
 | `motir-gateway` | the two sync goroutines, **`SYNC_FREQUENCY = 1800` s** — raised for margin; see below        | **No** — and the database does sleep: measured 46.6% asleep at 600 s, ~83% projected at 1800 s. See below.     |
+
+> ⚠️ SUPERSEDED by [`always-on-database-job-cadence.md`](always-on-database-job-cadence.md) (MOTIR-6893, 2026-09-29): `motir-core` now runs an
+> in-process poll — the job worker, every ≤ 5 s (`IDLE_MAX_MS`, `lib/jobs/engine/worker.ts`) — and
+> its scheduled work runs on that worker, not via Inngest over HTTP. The `motir-ai` and
+> `motir-gateway` rows are unchanged (MOTIR-6934).
 
 **All three rows re-checked against shipped code on 2026-08-20** by
 [MOTIR-3257](motir:cmt1u6a2q000ai5ph1wjb16wa), rather than carried forward:
@@ -2058,9 +2067,14 @@ re-measured at that time, with the date written down beside it — and whether t
 and ~5 min readings differ by endpoint or by a platform change is **not settled by this
 card**, which measured one endpoint and says so.
 
-**All three floors above can therefore be raised without a database bill**, which
+> ⚠️ SUPERSEDED by [`always-on-database-job-cadence.md`](always-on-database-job-cadence.md) (MOTIR-6893, 2026-09-29), for `motir-core` only: its job
+> worker polls Postgres every ≤ 5 s (`IDLE_MAX_MS`), so its floor is already priced against an
+> always-on compute rather than raised without a database bill. The struck sentences still hold
+> for `motir-ai` and `motir-gateway` (MOTIR-6934).
+
+~~**All three floors above can therefore be raised without a database bill**, which
 is not a coincidence — it is the result of separate cards having already taken
-every polling loop out of the path. **That is the property to protect.** A future
+every polling loop out of the path. **That is the property to protect.**~~ A future
 in-process poll on any of these services re-prices every floor in this amendment,
 and is a decision to bring back here rather than a constant to tune. **Note what
 that sentence no longer says:** it used to license any interval longer than five
@@ -2103,30 +2117,36 @@ the reaper's own "offset so it never lines up" rationale assumed. Clustering the
 schedules is the fix, and it is a coordinated change across every `system.*` job
 rather than a constant to tune; it has its own work item.
 
-**⚠️ AND THE SCHEDULE IS NOW CLUSTERED — MOTIR-3314, 2026-08-26. THE NUMBERS BELOW
+> ⚠️ SUPERSEDED by [`always-on-database-job-cadence.md`](always-on-database-job-cadence.md) (MOTIR-6893, 2026-09-29). The job worker polls Postgres every ≤ 5 s
+> (`IDLE_MAX_MS`, `lib/jobs/engine/worker.ts`), so `motir-core`'s compute never suspends
+> whatever the cron shape: the `{0, 30}` cluster, its gap guard, the ~30% / ~17% predictions and
+> the owed re-measurement below are retired, not pending. Struck in place, not deleted
+> (MOTIR-6934).
+
+~~**⚠️ AND THE SCHEDULE IS NOW CLUSTERED — MOTIR-3314, 2026-08-26. THE NUMBERS BELOW
 ARE PREDICTED, NOT MEASURED, AND MUST NOT BE READ AS THE PARAGRAPH ABOVE IS READ.**
 The paragraph above is a MEASUREMENT of the old shape. This one is the change made
-in response to it, and its duty cycle has not been observed.
+in response to it, and its duty cycle has not been observed.~~
 
-**The change.** All fourteen `system.*` crons are re-timed onto two shared minutes
+~~**The change.** All fourteen `system.*` crons are re-timed onto two shared minutes
 past the hour — `SCHEDULE_CLUSTER_MINUTES = {0, 30}` in `lib/jobs/schedules.ts`.
 Nine expressions moved, five already sat on a clustered minute; the loudest,
-`CI_RUNNER_PROVISION_SWEEP_CRON`, went from `* * * * *` to `0,30 * * * *`.
+`CI_RUNNER_PROVISION_SWEEP_CRON`, went from `* * * * *` to `0,30 * * * *`.~~
 
-|                       | before                                                                                 | after              |
-| --------------------- | -------------------------------------------------------------------------------------- | ------------------ |
-| union of wake-minutes | every minute (`* * * * *`), and `{0,7,10,17,20,22,27,30,37,40,47,50,52,57}` without it | **`{0, 30}`**      |
-| longest quiet gap     | **1 min** as deployed · 7 min with the sweep deleted                                   | **30 min**         |
-| duty cycle            | **100%**, measured over 6 h 12 m (above)                                               | **~30% predicted** |
+|                           | ~~before~~                                                                                 | ~~after~~              |
+| ------------------------- | ------------------------------------------------------------------------------------------ | ---------------------- |
+| ~~union of wake-minutes~~ | ~~every minute (`* * * * *`), and `{0,7,10,17,20,22,27,30,37,40,47,50,52,57}` without it~~ | ~~**`{0, 30}`**~~      |
+| ~~longest quiet gap~~     | ~~**1 min** as deployed · 7 min with the sweep deleted~~                                   | ~~**30 min**~~         |
+| ~~duty cycle~~            | ~~**100%**, measured over 6 h 12 m (above)~~                                               | ~~**~30% predicted**~~ |
 
-**The gap is COMPUTED, not asserted** — `lib/jobs/schedules.ts` unions the MINUTE
+~~**The gap is COMPUTED, not asserted** — `lib/jobs/schedules.ts` unions the MINUTE
 field of every registered expression and measures the cyclic stretches between
 them, and `tests/jobs/schedule-cluster.test.ts` fails the build if one drops below
 the floor. That is the part of this change that outlives the number: a fifteenth
 job picking a free-looking minute is the failure mode that produced the 100%, and
-it now breaks a test instead of a bill.
+it now breaks a test instead of a bill.~~
 
-**⚠️ AND THE GUARD ASSERTS THE SHORTEST GAP, NOT THE LONGEST — worth stating
+~~**⚠️ AND THE GUARD ASSERTS THE SHORTEST GAP, NOT THE LONGEST — worth stating
 because the longest is the number this section quotes.** A longest-gap assertion
 does not defend the bill, which was found by writing the test that adds a
 fifteenth job and watching it pass: put one job at :17 on a `{0, 30}` schedule and
@@ -2138,9 +2158,9 @@ schedule is only as clustered as its tightest pair.** MOTIR-3314's criterion ask
 for the longest gap, which is the right summary of the OLD shape — 7 minutes,
 honestly describing a set with no gap wide enough to sleep in — and the wrong
 quantity to guard on. Both are computed; the longest is reported, the shortest is
-asserted.
+asserted.~~
 
-**What the margin is priced against, and when it was last measured.** 30 minutes
+~~**What the margin is priced against, and when it was last measured.** 30 minutes
 against the **~9 min** delay measured **2026-08-20** (the table at the top of this
 section: two endpoints, control-plane sampling with no database connection of the
 run's own) is **21 minutes of margin, 3.3×**. Against the **~5m12s** measured
@@ -2151,15 +2171,15 @@ reading with a date on it and this one moved by four minutes in three days. 30 i
 the same spacing `motir-gateway` took for the same reason
 ([MOTIR-3411](motir:cmt6cyvie003ei4ph1uyq1qsm)), after 10-minute spacing cleared the
 then-believed threshold by about a minute and cost a **77%** duty cycle. A gap
-chosen to sit just past ~9 min would be that near-miss for a third time.
+chosen to sit just past ~9 min would be that near-miss for a third time.~~
 
-| gap        | awake at ~5m12s | awake at ~9 min                         |
-| ---------- | --------------- | --------------------------------------- |
-| 10 min     | 52%             | **~98%** — the near-miss, twice already |
-| 15 min     | 35%             | 60%                                     |
-| **30 min** | **17%**         | **30%**                                 |
+| ~~gap~~        | ~~awake at ~5m12s~~ | ~~awake at ~9 min~~                         |
+| -------------- | ------------------- | ------------------------------------------- |
+| ~~10 min~~     | ~~52%~~             | ~~**~98%** — the near-miss, twice already~~ |
+| ~~15 min~~     | ~~35%~~             | ~~60%~~                                     |
+| ~~**30 min**~~ | ~~**17%**~~         | ~~**30%**~~                                 |
 
-**What it costs.** The tightest cadence in the set IS the gap — no arrangement of
+~~**What it costs.** The tightest cadence in the set IS the gap — no arrangement of
 the other jobs can produce a quiet stretch longer than the shortest one — so the
 clustering is one decision, not fourteen. It is paid mostly by
 `system.plan-target-lock-sweep`: a stranded planning lease's worst-case wait goes
@@ -2170,9 +2190,9 @@ hot path is the `workflow_job` webhook and the admission wake. Each trade is arg
 at its own constant. The nightly table-walking sweeps did **not** lose their
 separation: it moved from the minute axis to the HOUR axis (03:30 → 04:00 → 04:30 →
 05:00), which is why the cluster has two slots rather than one, and is strictly
-more clearance than the old 04:10/04:15 pair had.
+more clearance than the old 04:10/04:15 pair had.~~
 
-**⚠️ THE RE-MEASUREMENT IS OWED, AND THIS SECTION IS NOT SETTLED UNTIL IT IS
+~~**⚠️ THE RE-MEASUREMENT IS OWED, AND THIS SECTION IS NOT SETTLED UNTIL IT IS
 TAKEN.** ~30% predicts a Neon line of roughly **$5.85/mo** against the $19.50/mo
 measured above. **Nobody has watched the compute at this shape.** The method is
 [MOTIR-2853](motir:cmss0x0xf00lki5phahz5bhzo)'s and is what makes the reading
@@ -2185,7 +2205,7 @@ one. The prediction is also FALSIFIABLE in a specific way worth naming: if the
 delay at `motir-core`'s endpoint is nearer the gateway's ~5 min than the ~9 min
 measured on 2026-08-20, the duty cycle comes in at ~17% rather than ~30% — a
 better result from the same change, and evidence about the endpoint question this
-section explicitly leaves open.
+section explicitly leaves open.~~
 
 **So the `motir-core` row above stands, and its $19.50/mo is a standing bill that
 is now measured rather than inferred.**
@@ -2247,11 +2267,14 @@ is a re-plan of this card, not a judgement call there.
 | Machine states, VM sizes, event histories                   | `GET https://api.machines.dev/v1/apps/<app>/machines`, 2026-08-20                                                                                                                            |
 | Resident memory per service                                 | `fly ssh console -a <app> --machine <id>` → `/proc/*/status` `VmRSS`, 2026-08-20                                                                                                             |
 | One machine runs one job at a time                          | `motir-ai` `src/jobs/worker.ts` (`ticking` guard) and `src/jobs/planJobRepository.ts`, `origin/main`                                                                                         |
-| motir-core has no server-side poll                          | `grep -rn 'setInterval(' lib app` on `origin/main`, 2026-08-20 — five hits, all `'use client'`                                                                                               |
+| ~~motir-core has no server-side poll~~                      | ~~`grep -rn 'setInterval(' lib app` on `origin/main`, 2026-08-20 — five hits, all `'use client'`~~                                                                                           |
 | `REDIS_CONN_STRING` unset on the gateway                    | `fly secrets list -a motir-gateway`, 2026-08-20                                                                                                                                              |
 | Neon's five-minute SETTING floor is not lowerable on Launch | Neon API probe, 2026-08-13, recorded on MOTIR-2780 — this is the minimum `suspend_timeout_seconds`, NOT the observed delay                                                                   |
 | Neon's observed suspend DELAY is ~9 min, not five           | Neon control-plane sampling every 30 s with no database connection, 2026-08-20 — three samples (9m43s / 8m20s / 9m31s), recorded on MOTIR-3224 (motir-ai#256) and carried here by MOTIR-3257 |
 | motir-ai runs no in-process poll                            | `src/jobs/worker.ts` on `origin/main` after MOTIR-3224 — an idle tick sets its delay to `null` and schedules nothing                                                                         |
+
+> ⚠️ SUPERSEDED by [`always-on-database-job-cadence.md`](always-on-database-job-cadence.md) (MOTIR-6893, 2026-09-29): the `motir-core` row
+> above is a true reading of 2026-08-20 and no longer describes the code (MOTIR-6934).
 
 ---
 
