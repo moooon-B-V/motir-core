@@ -86,8 +86,8 @@ describe('the collection-scoped cursor carries a SERVICE-OWNED position', () => 
 
   it("round-trips the ready set's (kind, priority, key) DISPATCH tuple", () => {
     const position = { kind: 'subtask', priority: 'high', key: 2059 };
-    const cursor = encodeCollectionCursor('ready', position);
-    expect(decodeCollectionCursor(cursor, 'ready', readReadyPosition)).toEqual(position);
+    const cursor = encodeCollectionCursor('ready.leaves', position);
+    expect(decodeCollectionCursor(cursor, 'ready.leaves', readReadyPosition)).toEqual(position);
   });
 
   it("round-trips a sprint's `sequence`", () => {
@@ -119,7 +119,11 @@ describe('a cursor is refused OUTSIDE the collection that issued it', () => {
     // Deliberate: distinguishing "forged" from "wrong collection" would tell an
     // attacker which half of the check they failed, and a client can act on
     // neither — the cursor is opaque to them either way.
-    const foreign = encodeCollectionCursor('ready', { kind: 'subtask', priority: 'high', key: 1 });
+    const foreign = encodeCollectionCursor('ready.leaves', {
+      kind: 'subtask',
+      priority: 'high',
+      key: 1,
+    });
     let wrongCollectionCode: string | undefined;
     let tamperedCode: string | undefined;
 
@@ -129,7 +133,7 @@ describe('a cursor is refused OUTSIDE the collection that issued it', () => {
       wrongCollectionCode = (err as ApiV1Error).code;
     }
     try {
-      decodeCollectionCursor(`${foreign}x`, 'ready', readReadyPosition);
+      decodeCollectionCursor(`${foreign}x`, 'ready.leaves', readReadyPosition);
     } catch (err) {
       tamperedCode = (err as ApiV1Error).code;
     }
@@ -209,8 +213,8 @@ describe('a bad cursor is a 422, never a silent reset to page one', () => {
     // The case 11.1's own gate found, on the new surface: the signature verifies
     // and the collection matches, but the position is a shape the reader
     // rejects — an older release's payload, or a fixture built by hand.
-    const cursor = encodeCollectionCursor('ready', { kind: 'subtask' });
-    expectInvalidCursor(() => decodeCollectionCursor(cursor, 'ready', readReadyPosition));
+    const cursor = encodeCollectionCursor('ready.leaves', { kind: 'subtask' });
+    expectInvalidCursor(() => decodeCollectionCursor(cursor, 'ready.leaves', readReadyPosition));
   });
 
   it('refuses an empty-string row id rather than paging from an unnamed position', () => {
@@ -231,7 +235,9 @@ describe('parseCollectionPageRequest', () => {
   });
 
   it('honours a limit below the ceiling', () => {
-    expect(parseCollectionPageRequest(req('?limit=25'), 'ready', readReadyPosition).limit).toBe(25);
+    expect(
+      parseCollectionPageRequest(req('?limit=25'), 'ready.leaves', readReadyPosition).limit,
+    ).toBe(25);
   });
 
   it("clamps DOWN to v1's ceiling even where the underlying read allows more", () => {
@@ -242,7 +248,7 @@ describe('parseCollectionPageRequest', () => {
     expect(READY_MAX_LIMIT).toBeGreaterThan(MAX_PAGE_LIMIT);
     const page = parseCollectionPageRequest(
       req(`?limit=${READY_MAX_LIMIT}`),
-      'ready',
+      'ready.leaves',
       readReadyPosition,
     );
     expect(page.limit).toBe(MAX_PAGE_LIMIT);

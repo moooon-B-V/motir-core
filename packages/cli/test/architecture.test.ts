@@ -194,7 +194,7 @@ const WIRE_FACING = (rel: string): boolean => rel === 'transport.ts' || rel.star
  * Both forms, because the ADR's auditable rule ("no file outside
  * `src/transport.ts` and `src/adapters/` may import from `src/api/`") has a
  * hole the story fell into: `transport.ts` re-exports `SuccessBody<Id>`, so
- * `type Row = SuccessBody<'getProjectReadySet'>['items'][number]` puts a wire
+ * `type Row = SuccessBody<'getProjectReadyLeaves'>['items'][number]` puts a wire
  * shape on a signature having imported nothing from `src/api/` at all. That
  * line existed in `client.ts` — added by 11.5.23, removed by this card — and
  * the literal rule would never have seen it. A derived type is the rejected
@@ -239,8 +239,9 @@ describe('GUARD 1 — no generated wire type outside the adapter boundary', () =
   });
 
   it('FAILS on the DERIVED form the literal rule misses', () => {
-    // Verbatim the line this card removed from `client.ts`.
-    const derived = "type ReadyRow = SuccessBody<'getProjectReadySet'>['items'][number];";
+    // The line this card removed from `client.ts`, re-pointed at the leaves lane
+    // once the flat ready read it named was deleted (MOTIR-6841).
+    const derived = "type ReadyRow = SuccessBody<'getProjectReadyLeaves'>['items'][number];";
     expect(wireTypeReferences(derived)).toContain('SuccessBody<');
   });
 
@@ -552,7 +553,7 @@ describe('GUARD 5 — the client reaches only declared operations', () => {
       '  }',
       '',
       '  private async *walkReady() {',
-      "    yield await this.v1.request('getProjectReadySet');",
+      "    yield await this.v1.request('getProjectReadyLeaves');",
       '  }',
       '}',
     ].join('\n');

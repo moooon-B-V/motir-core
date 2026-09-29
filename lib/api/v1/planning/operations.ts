@@ -349,27 +349,11 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
   }),
   defineOperation({
     method: 'GET',
-    path: '/api/v1/projects/{projectKey}/ready',
-    operationId: 'getProjectReadySet',
-    summary: 'Read a project’s READY set',
-    description:
-      'The work items whose every `blocked_by` dependency is done — what an agent loop claims from. Each row carries its dependency edges. Reports no total: unlike the backlog, this read has no cheap bounded count.',
-    permission: 'project:browse',
-    parameters: readyRowFacetParameters(),
-    response: {
-      status: 200,
-      body: { kind: 'page', item: readyItemSchema },
-      description: 'A page of ready work items with their dependency edges.',
-    },
-    errorStatuses: [404, 422],
-  }),
-  defineOperation({
-    method: 'GET',
     path: '/api/v1/projects/{projectKey}/ready/leaves',
     operationId: 'getProjectReadyLeaves',
     summary: 'Read a project’s ready LEAVES lane',
     description:
-      'The ready set minus BUG WORK (a `bug`, or a leaf whose parent is a `bug`), each row naming the RUNNABLE CONTAINER it groups under — a `story`, `task` or `bug` whose every child is childless, the shape a parent run accepts — or `null`. ORDER is part of the contract: rows are grouped by `container ?? self`, a group ranks by its best member’s `(kind, priority, key)`, and members keep that rank inside it, so `items[0]` is the next leaf to run. Readiness is the same parent-ready cascade `getProjectReadySet` reads; this lane and `getProjectReadyBugs` together hold exactly its rows. Accepts every facet that read accepts.',
+      'The ready set minus BUG WORK (a `bug`, or a leaf whose parent is a `bug`), each row naming the RUNNABLE CONTAINER it groups under — a `story`, `task` or `bug` whose every child is childless, the shape a parent run accepts — or `null`. ORDER is part of the contract: rows are grouped by `container ?? self`, a group ranks by its best member’s `(kind, priority, key)`, and members keep that rank inside it, so `items[0]` is the next leaf to run. Readiness is the parent-ready cascade — a childless leaf, not terminal, every `blocked_by` blocker terminal and every ancestor ready; this lane and `getProjectReadyBugs` are disjoint and together hold the whole ready set.',
     permission: 'project:browse',
     parameters: readyRowFacetParameters(),
     response: {
@@ -401,7 +385,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     operationId: 'getProjectReadyBugs',
     summary: 'Read a project’s ready BUGS lane',
     description:
-      'The ready BUG WORK: a ready `bug` (its own group, `container: null`), and the ready subtasks of a bug (grouped under it, `container` = the bug). The same order, facets and cascade as `getProjectReadyLeaves`; the two lanes are disjoint and together hold exactly the rows of `getProjectReadySet`.',
+      'The ready BUG WORK: a ready `bug` (its own group, `container: null`), and the ready subtasks of a bug (grouped under it, `container` = the bug). The same order, facets and cascade as `getProjectReadyLeaves`; the two lanes are disjoint and together hold the whole ready set.',
     permission: 'project:browse',
     parameters: readyRowFacetParameters(),
     response: {

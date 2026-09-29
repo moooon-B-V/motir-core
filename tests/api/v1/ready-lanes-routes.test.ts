@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET as leavesGET } from '@/app/api/v1/projects/[projectKey]/ready/leaves/route';
 import { GET as containersGET } from '@/app/api/v1/projects/[projectKey]/ready/containers/route';
 import { GET as bugsGET } from '@/app/api/v1/projects/[projectKey]/ready/bugs/route';
-import { GET as flatGET } from '@/app/api/v1/projects/[projectKey]/ready/route';
 import {
   readyContainerSchema,
   readyLaneItemSchema,
@@ -15,25 +14,24 @@ import { truncateAuthTables } from '../../helpers/db';
 
 // The three ready-LANE operations (Story MOTIR-6829 · MOTIR-6832) against real
 // Postgres: each returns its service lane's rows in the service's order, pages
-// with a cursor its own lane alone accepts, and maps the service's refusals
-// exactly as the flat ready route does.
+// with a cursor its own lane alone accepts, and maps the service's refusals to
+// 422s. (The flat `GET …/ready` they replaced was deleted by MOTIR-6841, so the
+// partition below is checked against the service's own `listReady`.)
 
 const BASE = 'http://localhost:3000/api/v1';
 type Lane = 'leaves' | 'containers' | 'bugs';
 const HANDLERS = { leaves: leavesGET, containers: containersGET, bugs: bugsGET } as const;
 
-function req(caller: V1ProjectCaller, lane: Lane | 'flat', query = ''): Promise<Response> {
-  const path = lane === 'flat' ? 'ready' : `ready/${lane}`;
-  const handler = lane === 'flat' ? flatGET : HANDLERS[lane];
-  return handler(
-    new Request(`${BASE}/projects/${caller.projectKey}/${path}${query}`, {
+function req(caller: V1ProjectCaller, lane: Lane, query = ''): Promise<Response> {
+  return HANDLERS[lane](
+    new Request(`${BASE}/projects/${caller.projectKey}/ready/${lane}${query}`, {
       headers: caller.headers,
     }),
     { params: Promise.resolve({ projectKey: caller.projectKey }) },
   );
 }
 
-async function page<T>(caller: V1ProjectCaller, lane: Lane | 'flat', query = '') {
+async function page<T>(caller: V1ProjectCaller, lane: Lane, query = '') {
   const res = await req(caller, lane, query);
   expect(res.status, await res.clone().text()).toBe(200);
   return (await res.json()) as { items: T[]; nextCursor: string | null };
@@ -101,10 +99,14 @@ describe('GET /api/v1/projects/{projectKey}/ready/{leaves,containers,bugs}', () 
     expect(bugs.items.map((i) => i.key).sort()).toEqual([t.B.identifier, t.b1.identifier].sort());
     expect(bugs.items.find((i) => i.key === t.b1.identifier)?.container?.key).toBe(t.B2.identifier);
 
-    // The partition: leaves ∪ bugs is exactly the flat ready set.
-    const flat = await page<{ key: string }>(caller, 'flat');
+    // The partition: leaves ∪ bugs is exactly the service's whole ready set.
+    const whole = await workItemsService.listReady(
+      caller.fixture.projectId,
+      { limit: 100 },
+      caller.ctx,
+    );
     expect([...leaves.items, ...bugs.items].map((i) => i.key).sort()).toEqual(
-      flat.items.map((i) => i.key).sort(),
+      whole.items.map((i) => i.key).sort(),
     );
   });
 
