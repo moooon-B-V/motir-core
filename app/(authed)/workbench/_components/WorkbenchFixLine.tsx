@@ -4,6 +4,11 @@ import { useCallback, useState, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { CircleX, Copy, TriangleAlert, Undo2 } from 'lucide-react';
 import { relativeLabel } from '@/components/github/RepairFixPart';
+import {
+  ContinueHostedAnswer,
+  ContinueHostedButtonRow,
+} from '@/components/hosted/ContinueHostedControl';
+import { useContinueHosted } from '@/components/hosted/useContinueHosted';
 import { Pill } from '@/components/ui/Pill';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useToast } from '@/components/ui/Toast';
@@ -198,19 +203,46 @@ function CopyFixCommand({ command, itemKey }: { command: string; itemKey: string
   );
 }
 
+/** The command chip and its copy button — § 30's command part. */
+function FixCommand({ command, itemKey }: { command: string; itemKey: string }) {
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      <code className="rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) font-mono text-(--el-code-text)">
+        {command}
+      </code>
+      <CopyFixCommand command={command} itemKey={itemKey} />
+    </span>
+  );
+}
+
+const keyBold = (chunks: ReactNode) => <b className="font-semibold text-(--el-text)">{chunks}</b>;
+
 export function WorkbenchFixLine({
   itemKey,
   reason,
   detail,
   held,
+  canContinueHosted = false,
+  viewerId = null,
+  onStarted,
+  onStateMoved,
 }: {
   itemKey: string;
   reason: WorkItemFixReasonDto;
   detail: FixDetailDto;
   /** The card left the To fix set while the reader looked (§ 30 Panel 3). */
   held: boolean;
+  /** A dead run the viewer may continue: the row places Continue hosted (§ 31). */
+  canContinueHosted?: boolean;
+  /** The session's user — a `taken` refusal naming them reads *you*. */
+  viewerId?: string | null;
+  /** The continue started — the list re-reads the page, and the row goes HELD. */
+  onStarted?: () => void;
+  /** A refusal that means the row's view is stale (C5a) — the list re-reads it. */
+  onStateMoved?: () => void;
 }) {
   const t = useTranslations('workbench');
+  const tContinue = useTranslations('github.development.continue');
   const locale = useLocale();
   const [clock] = useState(() => Date.now());
   const context: SentenceContext = {
@@ -225,6 +257,61 @@ export function WorkbenchFixLine({
       },
   };
   const command = fixCommandOf(detail, itemKey);
+  const dead = reason === 'run_died';
+  const continueKey = detail.continueKey ?? itemKey;
+  // § 31's door rule: a dead run with a branch to continue, and a viewer who may edit.
+  // The server decided the permission (`homeService.listToFix`); the repair decides
+  // whether there is anything to continue.
+  const hostedTarget =
+    dead && detail.repair === 'continue' && canContinueHosted ? continueKey : null;
+  // THE PRESS LIVES ON THE ROW, not in a child that unmounts when the row goes HELD:
+  // a C5a refusal (the state moved) holds the row AND must stay on it (§ 31 state 6).
+  const press = useContinueHosted(hostedTarget, { onStarted, onStateMoved });
+
+  let repairs: ReactNode = null;
+  if (held) {
+    /* HELD (§ 26 as widened by § 30): the command is replaced by the colourless
+       chip. *Cleared*, not *Repaired* — the nudge says the card LEFT the set, not
+       why, and an archive clears it too. The row still opens. */
+    repairs = <Pill tone="neutral">{t('live.cleared')}</Pill>;
+  } else if (dead && detail.repair === 'none') {
+    // § 31 state 4 — nothing pushed: the marker's own start-over line, no command.
+    repairs = (
+      <p
+        data-testid={`workbench-fix-start-over-${itemKey}`}
+        className="text-xs text-(--el-text-secondary)"
+      >
+        {tContinue.rich('startOver', { target: continueKey, b: keyBold })}
+      </p>
+    );
+  } else if (dead && detail.repair === 'continue' && !canContinueHosted) {
+    // § 31 state 5 — the viewer may not edit: `claimContinue` would refuse the
+    // command too, so neither repair is offered.
+    repairs = (
+      <p
+        data-testid={`workbench-fix-cannot-edit-${itemKey}`}
+        className="text-xs text-(--el-text-secondary)"
+      >
+        {t('toFix.reason.runDiedCannotEdit')}
+      </p>
+    );
+  } else if (command !== null) {
+    repairs = (
+      <span className="relative z-10 flex flex-wrap items-center justify-end gap-2">
+        {/* § 31: Continue hosted leads; the command keeps the right edge. */}
+        {hostedTarget ? (
+          <ContinueHostedButtonRow
+            continueTarget={hostedTarget}
+            itemKey={itemKey}
+            starting={press.starting}
+            onPress={() => void press.start()}
+          />
+        ) : null}
+        <FixCommand command={command} itemKey={itemKey} />
+      </span>
+    );
+  }
+
   return (
     <div
       data-testid={`workbench-fix-${itemKey}`}
@@ -248,19 +335,19 @@ export function WorkbenchFixLine({
           </span>
         ) : null}
       </p>
-      {held ? (
-        /* HELD (§ 26 as widened by § 30): the command is replaced by the colourless
-           chip. *Cleared*, not *Repaired* — the nudge says the card LEFT the set, not
-           why, and an archive clears it too. The row still opens. */
-        <Pill tone="neutral">{t('live.cleared')}</Pill>
-      ) : command === null ? null : (
-        <span className="relative z-10 flex shrink-0 items-center gap-1">
-          <code className="rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) font-mono text-(--el-code-text)">
-            {command}
-          </code>
-          <CopyFixCommand command={command} itemKey={itemKey} />
-        </span>
-      )}
+      {repairs}
+      {/* § 31 state 6: the door's answer takes a full-width slot under the repairs,
+          and a refusal stays on a HELD row, because it answers the press. The model
+          notices belong to a live door only. */}
+      {hostedTarget ? (
+        <div className="relative z-10 basis-full empty:hidden">
+          <ContinueHostedAnswer
+            continueTarget={held ? null : hostedTarget}
+            refusal={press.refusal}
+            viewerId={viewerId}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

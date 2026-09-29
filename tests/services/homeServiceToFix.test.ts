@@ -212,3 +212,62 @@ describe('To fix reads only what the reader may browse', () => {
     expect((await homeService.tabCounts(ctx)).toFix).toBe(0);
   });
 });
+
+describe('To fix offers Continue hosted where the reader may edit (§ 31, MOTIR-6882)', () => {
+  const DIED = { ...DETAIL, repair: 'continue', check: null, continueKey: null };
+
+  async function dead(
+    fx: WorkItemFixture,
+    title: string,
+    repair: 'continue' | 'none',
+    assigneeId?: string,
+  ) {
+    const item = await card(fx, title, 'in_progress', 'run_died');
+    await adminDb.workItem.update({
+      where: { id: item.id },
+      data: { fixDetail: { ...DIED, repair }, ...(assigneeId ? { assigneeId } : {}) },
+    });
+    return item;
+  }
+
+  it('an editor gets it on a dead run with a branch, and on nothing else', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'CHE' });
+    const pushed = await dead(fx, 'pushed', 'continue');
+    const nothing = await dead(fx, 'nothing pushed', 'none');
+    const red = await card(fx, 'red', 'implemented', 'ci_failed');
+
+    const page = await homeService.listToFix(hctx(fx));
+    const flag = (id: string) => page.items.find((r) => r.id === id)?.canContinueHosted;
+
+    expect(flag(pushed.id)).toBe(true);
+    expect(flag(nothing.id)).toBe(false);
+    expect(flag(red.id)).toBe(false);
+  });
+
+  it('a reader who may only browse gets it nowhere — the claim would refuse them', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'CHV' });
+    const viewer = await createTestUser({
+      email: `viewer-${Date.now()}@example.com`,
+      name: 'Viewer',
+    });
+    await workspacesService.addMember({
+      userId: viewer.id,
+      workspaceId: fx.workspaceId,
+      workspaceRole: 'viewer',
+    });
+    await dead(fx, 'theirs to watch', 'continue', viewer.id);
+    const ctx = { userId: viewer.id, workspaceId: fx.workspaceId, projectId: fx.projectId };
+
+    const page = await homeService.listToFix(ctx);
+
+    expect(page.total).toBe(1);
+    expect(page.items[0]!.canContinueHosted).toBe(false);
+  });
+
+  it('other tabs never carry it', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'CHO' });
+    await card(fx, 'building', 'in_progress');
+    const page = await homeService.listInProgress(hctx(fx));
+    expect(page.items.every((r) => r.canContinueHosted === false)).toBe(true);
+  });
+});

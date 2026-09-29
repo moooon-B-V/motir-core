@@ -365,6 +365,7 @@ export default async function WorkbenchPage({
             tab={tab}
             pagination={{ total: window.total, page: window.page, pageSize: window.pageSize }}
             empty={<EmptyTab tab={tab} />}
+            viewerId={ctx.userId}
           />
         )}
       </div>

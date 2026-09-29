@@ -65,6 +65,14 @@ export interface HomeWorkItemRowDto {
   fixReason: WorkItemFixReasonDto | null;
   /** What the To fix row names for that reason — `null` exactly when `fixReason` is. */
   fixDetail: FixDetailDto | null;
+  /**
+   * Whether this row may OFFER Continue hosted (MOTIR-6882): a dead run with a branch
+   * to continue (`fixReason === 'run_died'`, `fixDetail.repair === 'continue'`) on a
+   * project where the reader holds `work_item:edit` — the item page's own door rule.
+   * Decided only by the To fix read (once per distinct project on the page); `false`
+   * on every other tab's rows.
+   */
+  canContinueHosted: boolean;
   priority: WorkItemPriorityDto;
   assigneeId: string | null;
   reporterId: string;

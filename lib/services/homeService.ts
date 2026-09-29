@@ -285,7 +285,31 @@ export const homeService = {
    * predicate rather than by two queries agreeing.
    */
   async listToFix(ctx: HomeActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
-    return homeService.listSlice(ctx, HOME_SLICE_TO_FIX, options);
+    const page = await homeService.listSlice(ctx, HOME_SLICE_TO_FIX, options);
+    // CONTINUE HOSTED ON A DEAD-RUN ROW (MOTIR-6882) — offered only where the reader
+    // may edit the card, the item page's own door rule. Decided ONCE PER DISTINCT
+    // PROJECT among the rows that could offer it, never once per row, and not at all
+    // on a page of pull-request reasons.
+    const continuable = page.items.filter(
+      (row) => row.fixReason === 'run_died' && row.fixDetail?.repair === 'continue',
+    );
+    if (continuable.length === 0) return page;
+    const editable = new Set<string>();
+    for (const projectId of new Set(continuable.map((row) => row.project.id))) {
+      const held = await projectAccessService.getPermissions(projectId, {
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      if (held.has('work_item:edit')) editable.add(projectId);
+    }
+    return {
+      ...page,
+      items: page.items.map((row) =>
+        continuable.includes(row) && editable.has(row.project.id)
+          ? { ...row, canContinueHosted: true }
+          : row,
+      ),
+    };
   },
 
   /**
