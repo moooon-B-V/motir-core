@@ -178,11 +178,11 @@ describe('/api/v1 planning conformance — an external client with a real PAT', 
     );
     expect(sprintList.items.find((s) => s.id === created.id)).toEqual(started);
 
-    // ── 6. TRACK. The ready set answers "what do I pick up next?" and carries
+    // ── 6. TRACK. The leaves lane answers "what do I pick up next?" and carries
     // the downstream impact of each row.
     const ready = await json<{
       items: Array<{ key: string; dependencies: { blockedBy: unknown[]; blocks: unknown[] } }>;
-    }>(await http(`/api/v1/projects/${projectKey}/ready`, caller));
+    }>(await http(`/api/v1/projects/${projectKey}/ready/leaves`, caller));
     expect(ready.items.map((i) => i.key)).toEqual([first, second]);
     // Both arrays are always present, even with no edges.
     expect(ready.items[0]?.dependencies).toEqual({ blockedBy: [], blocks: [] });
@@ -220,7 +220,7 @@ describe('/api/v1 planning conformance — an external client with a real PAT', 
       `/api/v1/projects/${caller.projectKey}`,
       `/api/v1/projects/${caller.projectKey}/sprints`,
       `/api/v1/projects/${caller.projectKey}/backlog`,
-      `/api/v1/projects/${caller.projectKey}/ready`,
+      `/api/v1/projects/${caller.projectKey}/ready/leaves`,
     ];
 
     for (const path of paths) {
@@ -280,7 +280,7 @@ describe('/api/v1 planning conformance — an external client with a real PAT', 
       `/api/v1/projects/${other.projectKey}`,
       `/api/v1/projects/${other.projectKey}/sprints`,
       `/api/v1/projects/${other.projectKey}/backlog`,
-      `/api/v1/projects/${other.projectKey}/ready`,
+      `/api/v1/projects/${other.projectKey}/ready/leaves`,
       `/api/v1/sprints/${theirSprint.id}`,
       `/api/v1/sprints/${theirSprint.id}/work-items`,
     ];
@@ -298,8 +298,8 @@ describe('/api/v1 planning conformance — an external client with a real PAT', 
       `/api/v1/projects/${caller.projectKey}/backlog?limit=0`,
       `/api/v1/projects/${caller.projectKey}/backlog?cursor=zzz`,
       `/api/v1/projects/${caller.projectKey}/backlog?filter=garbage`,
-      `/api/v1/projects/${caller.projectKey}/ready?cursor=zzz`,
-      `/api/v1/projects/${caller.projectKey}/ready?kind=nonsense`,
+      `/api/v1/projects/${caller.projectKey}/ready/leaves?cursor=zzz`,
+      `/api/v1/projects/${caller.projectKey}/ready/leaves?kind=nonsense`,
       '/api/v1/projects/NOPE/sprints',
       '/api/v1/sprints/not-a-sprint-id',
       '/api/v1/sprints/not-a-sprint-id/work-items',
@@ -353,7 +353,6 @@ describe('/api/v1 planning conformance — an external client with a real PAT', 
       'app/api/v1/projects/[projectKey]/sprints/route.ts',
       'app/api/v1/projects/[projectKey]/backlog/route.ts',
       'app/api/v1/projects/[projectKey]/backlog/work-items/route.ts',
-      'app/api/v1/projects/[projectKey]/ready/route.ts',
       'app/api/v1/projects/[projectKey]/ready/leaves/route.ts',
       'app/api/v1/projects/[projectKey]/ready/containers/route.ts',
       'app/api/v1/projects/[projectKey]/ready/bugs/route.ts',

@@ -34,7 +34,9 @@ const SCHEMA_FILE = 'lib/api/v1/ready/schema.ts';
 
 /** The filter a bare request parses to, plus the values the vocabulary accepts. */
 function parse(query: string) {
-  return parseReadyFilters(new Request(`https://motir.test/api/v1/projects/MOTIR/ready${query}`));
+  return parseReadyFilters(
+    new Request(`https://motir.test/api/v1/projects/MOTIR/ready/leaves${query}`),
+  );
 }
 
 describe('the /ready filter vocabularies (MOTIR-2458)', () => {
@@ -100,14 +102,14 @@ describe('the /ready filter vocabularies (MOTIR-2458)', () => {
     }
   });
 
-  it('the OpenAPI document lists `allowSoftBlock` on the ready read as an optional true/false', () => {
+  it('the OpenAPI document lists `allowSoftBlock` on the leaves lane as an optional true/false', () => {
     const doc = emitOpenApiDocument() as {
       paths: Record<
         string,
         { get?: { parameters?: { name: string; required?: boolean; schema?: unknown }[] } }
       >;
     };
-    const param = doc.paths['/api/v1/projects/{projectKey}/ready']?.get?.parameters?.find(
+    const param = doc.paths['/api/v1/projects/{projectKey}/ready/leaves']?.get?.parameters?.find(
       (p) => p.name === 'allowSoftBlock',
     );
     expect(param).toMatchObject({ in: 'query', required: false });

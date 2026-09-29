@@ -32,7 +32,7 @@ const STORY_ROUTES = [
   'app/api/v1/projects/[projectKey]/sprints/route.ts',
   'app/api/v1/projects/[projectKey]/backlog/route.ts',
   'app/api/v1/projects/[projectKey]/backlog/work-items/route.ts',
-  'app/api/v1/projects/[projectKey]/ready/route.ts',
+  'app/api/v1/projects/[projectKey]/ready/leaves/route.ts',
   'app/api/v1/sprints/[sprintId]/route.ts',
   'app/api/v1/sprints/[sprintId]/start/route.ts',
   'app/api/v1/sprints/[sprintId]/complete/route.ts',
@@ -199,11 +199,11 @@ describe('gate — cursor isolation across the REAL endpoints', () => {
           ),
       },
       {
-        collection: 'ready',
+        collection: 'ready.leaves',
         call: async (cursor) =>
-          (await route('app/api/v1/projects/[projectKey]/ready/route.ts', 'GET'))(
+          (await route('app/api/v1/projects/[projectKey]/ready/leaves/route.ts', 'GET'))(
             new Request(
-              `${BASE}/projects/${caller.projectKey}/ready?cursor=${encodeURIComponent(cursor)}`,
+              `${BASE}/projects/${caller.projectKey}/ready/leaves?cursor=${encodeURIComponent(cursor)}`,
               { headers: caller.headers },
             ),
             { params: Promise.resolve({ projectKey: caller.projectKey }) },
@@ -324,8 +324,8 @@ describe('seam — the planning cadence, card to card', () => {
   }
 
   async function readyKeys(caller: V1ProjectCaller): Promise<string[]> {
-    const handler = await route('app/api/v1/projects/[projectKey]/ready/route.ts', 'GET');
-    const res = await handler(get(caller, `/projects/${caller.projectKey}/ready`), {
+    const handler = await route('app/api/v1/projects/[projectKey]/ready/leaves/route.ts', 'GET');
+    const res = await handler(get(caller, `/projects/${caller.projectKey}/ready/leaves`), {
       params: Promise.resolve({ projectKey: caller.projectKey }),
     });
     expect(res.status).toBe(200);
