@@ -5,7 +5,8 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 import { enforcePublicReadRateLimit } from '@/lib/rateLimit/publicReadGuard';
 import { visitorRecordsService } from '@/lib/services/visitorRecordsService';
 import type { VisitorReadContext } from '@/lib/visitor/context';
-import { readVisitorCookie } from '@/lib/visitor/readActor';
+import { readVisitorAddress } from '@/lib/visitor/readActor';
+import { VISITOR_ADDRESS_HEADER } from '@/lib/visitor/address';
 import { openVisitorRead, stripPrivateEpicTells } from '@/lib/visitor/readScope';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -90,14 +91,19 @@ describe('pure edges', () => {
     });
   });
 
-  it('the cookie reader ignores a part with no "=", a mangled escape and a value that is no key', () => {
-    const r = (cookie: string) =>
-      readVisitorCookie(new Request('http://x/', { headers: { cookie } }));
-    expect(r('flag; motir_visitor=NW')).toBe('NW');
-    expect(r('motir_visitor=%E0%A4%A')).toBeNull();
-    expect(r('motir_visitor=not a key!')).toBeNull();
-    expect(r('other=1')).toBeNull();
-    expect(readVisitorCookie(new Request('http://x/'))).toBeNull();
+  it('the address reader takes a key-shaped header and nothing else — never the cookie (MOTIR-6892)', () => {
+    const r = (value: string) =>
+      readVisitorAddress(
+        new Request('http://x/', { headers: { [VISITOR_ADDRESS_HEADER]: value } }),
+      );
+    expect(r('NW')).toBe('NW');
+    expect(r(' NW ')).toBe('NW');
+    expect(r('not a key!')).toBeNull();
+    expect(r('x'.repeat(65))).toBeNull();
+    expect(readVisitorAddress(new Request('http://x/'))).toBeNull();
+    expect(
+      readVisitorAddress(new Request('http://x/', { headers: { cookie: 'motir_visitor=NW' } })),
+    ).toBeNull();
   });
 
   it('a Visitor read of another project is not-found; one without the key is denied', () => {

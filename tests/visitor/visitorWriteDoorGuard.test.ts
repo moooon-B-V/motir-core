@@ -61,7 +61,8 @@ const ENTRANCES = new Set([
   'resolveActionReadActor',
   'memberThenVisitor',
   'visitorThenMember',
-  'readVisitorCookie',
+  'readVisitorAddress',
+  'VISITOR_ADDRESS_HEADER',
   'VISITOR_COOKIE',
   'resolvePublicInputs',
   'visitorServiceContext',
@@ -70,7 +71,7 @@ const ENTRANCES = new Set([
   'settleVisitor',
   'recordConsent',
 ]);
-const ENTRANCE_STRINGS = new Set(['motir_visitor']);
+const ENTRANCE_STRINGS = new Set(['motir_visitor', 'x-motir-visitor']);
 
 const ALLOWED: { file: string; handler: string; hits: string[]; why: string }[] = [
   {
