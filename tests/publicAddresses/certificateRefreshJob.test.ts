@@ -3,7 +3,7 @@ import {
   publicAddressCertificateRefresh,
   PUBLIC_ADDRESS_CERTIFICATE_REFRESH_CRON,
 } from '@/lib/jobs/definitions/publicAddressCertificateRefresh';
-import { SCHEDULE_CLUSTER_MINUTES } from '@/lib/jobs/schedules';
+import { SUB_HOURLY_CADENCE } from '@/lib/jobs/schedules';
 
 // THE CERTIFICATE-REFRESH JOB (Story MOTIR-3878 · MOTIR-4223, over MOTIR-4219).
 //
@@ -13,20 +13,12 @@ import { SCHEDULE_CLUSTER_MINUTES } from '@/lib/jobs/schedules';
 // hand a step to the sweep — was never observed.
 
 describe('the schedule', () => {
-  it('fires on BOTH clustered minutes, which is the finest cadence allowed', () => {
-    // ⚠️ THE CARD ASKED FOR FIVE MINUTES AND THE PLATFORM DOES NOT HAVE IT.
-    // `schedules.ts` clusters every wake into `SCHEDULE_CLUSTER_MINUTES` so the
-    // engine wakes twice an hour rather than twelve times; a five-minute cron
-    // would violate the wake-gap invariant its own guard asserts. The trade is
-    // recorded on the job and in `job-queue-foundation.md` §11.4 — a domain
-    // reaches `issued` within thirty minutes of the platform issuing it, and the
-    // pane's own *Check again* is what a watching customer uses.
-    expect(PUBLIC_ADDRESS_CERTIFICATE_REFRESH_CRON).toBe('0,30 * * * *');
-
-    const minutes = PUBLIC_ADDRESS_CERTIFICATE_REFRESH_CRON.split(' ')[0]!.split(',').map(Number);
-    // Read from the constant rather than restated, so a change to the cluster
-    // fails here instead of shipping a job the engine will not wake.
-    expect(minutes).toEqual([...SCHEDULE_CLUSTER_MINUTES].sort((a, b) => a - b));
+  it('fires every 5 minutes — the cadence the card recommended', () => {
+    // MOTIR-4219 asked for five minutes on the in-flight statuses; the :00/:30
+    // cluster withheld it until MOTIR-6893 retired the cluster. A domain now
+    // reaches `issued` within five minutes of the platform issuing it.
+    expect(PUBLIC_ADDRESS_CERTIFICATE_REFRESH_CRON).toBe('*/5 * * * *');
+    expect(PUBLIC_ADDRESS_CERTIFICATE_REFRESH_CRON).toBe(SUB_HOURLY_CADENCE);
   });
 
   it('is `latest` catch-up and idempotent, and both are readings of the same fact', () => {

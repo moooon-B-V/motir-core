@@ -360,8 +360,8 @@ describe('no manual intervention re-arms indexing (AC 5)', () => {
 });
 
 describe('the job', () => {
-  it('is registered on the clustered minutes and drives the service through one memoized step', async () => {
-    expect(CODE_GRAPH_INDEX_CATCH_UP_CRON).toBe('0,30 * * * *');
+  it('is registered every 5 minutes and drives the service through one memoized step', async () => {
+    expect(CODE_GRAPH_INDEX_CATCH_UP_CRON).toBe('*/5 * * * *');
     expect(jobSchedules()).toContainEqual({
       functionId: 'system.code-graph-index-catch-up',
       cron: CODE_GRAPH_INDEX_CATCH_UP_CRON,

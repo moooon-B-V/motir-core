@@ -92,7 +92,7 @@ import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
  * WHAT IT BOUGHT: fifty-eight wake-minutes an hour, which is the difference
  * between a compute that never sleeps and one that sleeps half the hour.
  */
-export const CI_RUNNER_PROVISION_SWEEP_CRON = '0,30 * * * *';
+export const CI_RUNNER_PROVISION_SWEEP_CRON = '*/5 * * * *';
 
 /** Every 30 minutes, ON the cluster. The reaper only ever finds something when a
  *  supervisor died, so it is almost always a single provider list call that
@@ -127,7 +127,7 @@ export const CI_RUNNER_PROVISION_SWEEP_CRON = '0,30 * * * *';
  *  a longest gap of 7 minutes, under the ~9 min suspend delay, so the compute
  *  never slept — 100% duty cycle over 6 h 12 m. The spreading is what cost the
  *  money; `lib/jobs/schedules.ts` now asserts the gap so it cannot re-open. */
-export const CI_RUNNER_REAP_CRON = '0,30 * * * *';
+export const CI_RUNNER_REAP_CRON = '*/5 * * * *';
 
 /** How many pending intents one sweep will fan out. A ceiling rather than
  *  "everything", so a backlog drains at a predictable rate instead of firing

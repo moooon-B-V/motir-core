@@ -20,7 +20,7 @@ import { jobServices } from '@/lib/jobs/services';
 // module evaluation, so a test that only asks the registry finds nothing unless
 // something has evaluated the definition.
 import { supervisionSweep } from '@/lib/jobs/definitions/supervisionSweep';
-import { SCHEDULE_CLUSTER_MINUTES } from '@/lib/jobs/schedules';
+import { SUB_HOURLY_CADENCE } from '@/lib/jobs/schedules';
 import { IDLE_MAX_MS, LEASE_MS, retryBackoffMs } from '@/lib/jobs/engine/worker';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
@@ -535,14 +535,13 @@ describe('the shape of the thing', () => {
     expect(result).toEqual({ scanned: 3, settled: 2, skipped: 1 });
   });
 
-  it('is scheduled ON the cluster, and declares its catch-up at the cron', () => {
+  it('runs every 5 minutes, and declares its catch-up at the cron', () => {
     const def = engineJob('system.supervision-sweep');
     expect(def).toBeDefined();
     expect(def).toBe(supervisionSweep);
-    const minutes = def!.cron!.split(' ')[0]!.split(',').map(Number);
-    // A new distinct offset is a new WAKE, forever (MOTIR-3314) — which on a
-    // compute that suspends when idle is the whole bill.
-    for (const m of minutes) expect(SCHEDULE_CLUSTER_MINUTES).toContain(m);
+    // 15-minute grace + ≤ 5 minutes to the next tick = a 20-minute worst case,
+    // against the 70-minute fleet reaper it pre-empts (MOTIR-6932).
+    expect(def!.cron).toBe(SUB_HOURLY_CADENCE);
     // §11.8: the disposition is declared BESIDE the cron, never in a second list.
     expect(def!.catchUp).toBe('latest');
   });
