@@ -123,9 +123,11 @@ export function toWorkItemDeliveryDto(
    *  (`standingQueueFailures`, MOTIR-5720) — the exit row itself, mapped here. */
   standingExit: {
     rawReason: string;
+    disposition: 'failure' | 'neutral' | 'landed';
     headSha: string;
     failingCheckName: string | null;
     failingCheckUrl: string | null;
+    failingCheckConclusion: string | null;
   } | null,
   /** The pull request's STANDING host merge refusal, when the caller read one
    *  (`standingMergeRefusals`, MOTIR-6735) — the refusal row itself, mapped here. */
@@ -149,9 +151,11 @@ export function toWorkItemDeliveryDto(
         ? null
         : {
             rawReason: standingExit.rawReason,
+            disposition: standingExit.disposition,
             headSha: standingExit.headSha,
             failingCheckName: standingExit.failingCheckName,
             failingCheckUrl: standingExit.failingCheckUrl,
+            failingCheckConclusion: standingExit.failingCheckConclusion,
           },
     mergeRefusal:
       standingRefusal === null

@@ -5,7 +5,9 @@ import { githubMergeQueueAttemptRepository } from '@/lib/repositories/githubMerg
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
+import { resettleStandingExit, type ResettleResult } from './mergeQueueExitService';
 
 // WHICH CHECK MADE THE MERGE QUEUE GIVE UP (Story MOTIR-5461 · MOTIR-5633).
 //
@@ -56,13 +58,16 @@ export interface FailingCheckAttachResult {
   attempts: number;
   /** Failure exits this check was named on — the check completed after the exit. */
   exits: number;
+  /** Keys of the cards a HUNG check re-asked once its conclusion arrived (§4 SIXTH
+   *  AMENDMENT, point 4; MOTIR-6847). */
+  reasked?: string[];
 }
 
 async function resolveRepo(
   installationId: string | null,
   providerRepoId: string,
   tx: Prisma.TransactionClient,
-): Promise<{ id: string } | 'unknown_installation' | 'unknown_repo'> {
+): Promise<{ id: string; workspaceId: string } | 'unknown_installation' | 'unknown_repo'> {
   if (!installationId) return 'unknown_installation';
   const installation = await githubInstallationRepository.findByInstallationId(installationId, tx);
   if (!installation) return 'unknown_installation';
@@ -73,7 +78,7 @@ async function resolveRepo(
   );
   if (!repo) return 'unknown_repo';
   await bindWorkspaceContext(tx, repo.workspaceId);
-  return { id: repo.id };
+  return { id: repo.id, workspaceId: repo.workspaceId };
 }
 
 export const mergeQueueCheckService = {
@@ -115,18 +120,27 @@ export const mergeQueueCheckService = {
     check: NormalizedUnlinkedCheckFailure;
   }): Promise<FailingCheckAttachResult> {
     const { check } = input;
-    return withSystemContext(async (tx): Promise<FailingCheckAttachResult> => {
+    let workspaceId: string | null = null;
+    const moved: ResettleResult['moved'] = [];
+    let actorId: string | null = null;
+    const attached = await withSystemContext(async (tx): Promise<FailingCheckAttachResult> => {
       const none = { attempts: 0, exits: 0 };
       const repo = await resolveRepo(input.installationId, check.providerRepoId, tx);
       if (typeof repo === 'string') return none;
+      workspaceId = repo.workspaceId;
       const attempts = await githubMergeQueueAttemptRepository.findByRepoAndSha(
         repo.id,
         check.headSha,
         tx,
       );
       if (attempts.length === 0) return none;
-      const named = { name: check.name, url: check.url, at: check.completedAt };
-      const result = { ...none };
+      const named = {
+        name: check.name,
+        url: check.url,
+        at: check.completedAt,
+        conclusion: check.conclusion,
+      };
+      const result: FailingCheckAttachResult = { ...none };
       for (const attempt of attempts) {
         result.attempts += await githubMergeQueueAttemptRepository.setFailingCheckIfUnset(
           attempt.id,
@@ -153,13 +167,45 @@ export const mergeQueueCheckService = {
           attempt.pullRequestId,
           tx,
         );
-        result.exits += await githubPullRequestQueueExitRepository.setFailingCheckIfUnset(
+        const namedOnExit = await githubPullRequestQueueExitRepository.setFailingCheckIfUnset(
           exit.id,
-          { name: current!.failingCheckName!, url: current!.failingCheckUrl! },
+          {
+            name: current!.failingCheckName!,
+            url: current!.failingCheckUrl!,
+            conclusion: current!.failingCheckConclusion,
+          },
           tx,
         );
+        result.exits += namedOnExit;
+        if (namedOnExit === 0) continue;
+        // ⚠️ THE CONCLUSION ARRIVED AFTER THE EXIT (§4 SIXTH AMENDMENT, point 4). A check
+        // that was CANCELLED or TIMED OUT failed nothing, so the exit is re-judged and a
+        // card it held at `implemented` is re-asked — in THIS transaction, so the check
+        // and its consequence commit together.
+        const resettled = await resettleStandingExit({
+          pullRequestId: attempt.pullRequestId,
+          workspaceId: repo.workspaceId,
+          tx,
+        });
+        moved.push(...resettled.moved);
+        actorId = resettled.actorId ?? actorId;
+        if (resettled.reasked.length > 0) {
+          result.reasked = [...(result.reasked ?? []), ...resettled.reasked];
+        }
       }
       return result;
     });
+    // Post-commit, never inside the transaction — a rollback must not have notified.
+    for (const m of moved) {
+      await sendEvent('work-item/transitioned', {
+        workspaceId: workspaceId!,
+        workItemId: m.id,
+        actorId: actorId!,
+        fromStatusKey: m.from,
+        toStatusKey: m.to,
+        revisionId: m.revisionId,
+      });
+    }
+    return attached;
   },
 };

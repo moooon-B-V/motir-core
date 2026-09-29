@@ -129,6 +129,15 @@
   gate. Neutral removals, setting outcomes and `auto` mode are unchanged. The
   FOURTH AMENDMENT's affected sentences carry superseded notes; none is struck.
 
+- **AMENDED 2026-09-28 (MOTIR-6844, for Story MOTIR-6843), at §4 — a queue exit
+  whose check HUNG re-asks.** §4's SIXTH AMENDMENT narrows the FIFTH for
+  `CI_FAILURE` and `CI_TIMEOUT`: when the check the queue recorded as failing
+  concluded `cancelled` or `timed_out`, nothing failed in the code, so the exit is
+  `neutral` and `retryable` and the card goes back to `in_review` with ONE gate.
+  The check's raw conclusion is recorded, and one that arrives after the exit (by
+  webhook, or read by the reconcile tick) re-settles a still-standing exit. The
+  FIFTH AMENDMENT's affected sentences carry narrowed notes; none is struck.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -2162,6 +2171,12 @@ An approval that does not merge is a note, not a gate.
 > way: `motir fix` merges the default branch first (MOTIR-3744), so there is always
 > a new head and a new green run.
 >
+> **⚠️ NARROWED by the SIXTH AMENDMENT below (MOTIR-6844, 2026-09-28)** for
+> `CI_FAILURE` and `CI_TIMEOUT`: _"a failure says the commits as they stand cannot
+> land"_ is false when the recorded failing check was CANCELLED or TIMED OUT, which
+> says nothing about the commits. Such an exit is `neutral` / `retryable`. A check
+> that concluded anything else stays as this point says. Kept visible as the record.
+>
 > The class table after this amendment, over every key of `QUEUE_EXIT_REASONS` and
 > every `MergeRefusalCode` (`lib/git/types.ts`):
 >
@@ -2187,6 +2202,12 @@ An approval that does not merge is a note, not a gate.
 > | host   | `already_merged`         | —           | `landed`              | no      |
 > | host   | `subject_changed`        | —           | none (not an outcome) | no      |
 >
+> **⚠️ NARROWED by the SIXTH AMENDMENT below (MOTIR-6844, 2026-09-28)** in the
+> `CI_FAILURE` and `CI_TIMEOUT` rows: their disposition and class now follow the
+> raw conclusion of the recorded failing check, and are `neutral` / `retryable`
+> when it is `cancelled` or `timed_out` (and, for `CI_TIMEOUT`, when no check that
+> genuinely failed is recorded). The other rows stand. Kept visible as the record.
+>
 > **2. WHAT THAT MEANS, SURFACE BY SURFACE — the shipped `cant_land` behaviour,
 > applied to four more reasons.** No new mechanism is introduced:
 >
@@ -2199,6 +2220,12 @@ An approval that does not merge is a note, not a gate.
 > - `motir fix` claims the card at `implemented`;
 > - a push whose CI goes green raises ONE gate through the ordinary CI promotion
 >   (the FOURTH's point 6, unchanged).
+>
+> **⚠️ NARROWED by the SIXTH AMENDMENT below (MOTIR-6844, 2026-09-28)** for a
+> `CI_FAILURE` / `CI_TIMEOUT` exit whose recorded check was cancelled or timed out:
+> none of these five bullets applies to it. The card goes to `in_review` with ONE
+> fresh gate, _Queue again_ is its approve, and `motir fix` is not offered. The
+> bullets stand for every other queue failure. Kept visible as the record.
 >
 > **3. WHAT DOES NOT MOVE, AND WHY.**
 >
@@ -2222,6 +2249,11 @@ An approval that does not merge is a note, not a gate.
 > and a second run moves nothing. It runs through the MOTIR-5809 script and its
 > `workflow_dispatch`, operated after deploy.
 >
+> **⚠️ NARROWED by the SIXTH AMENDMENT below (MOTIR-6844, 2026-09-28)** for a
+> re-ask that came from a HUNG check: that re-ask was correct, and a card this
+> convergence already moved to `implemented` on such an exit is re-asked again by
+> the SIXTH's point 4 (the reconcile tick), with no push. Kept visible as the record.
+>
 > **5. SUPERSEDED TEXT.** The FOURTH AMENDMENT's point 2 RETRYABLE row and its
 > RETRYABLE sentence, point 4 for a failure, point 6's `in_review` claim and point
 > 9's first population carry a `⚠️ SUPERSEDED by the FIFTH AMENDMENT below` note,
@@ -2239,6 +2271,162 @@ An approval that does not merge is a note, not a gate.
 > | 1, 2        | MOTIR-6594 — the class map, the refusal, `motir fix` and its help          |
 > | 2 (surface) | MOTIR-6593 — the design delta · MOTIR-6596 — the row, the overlay and copy |
 > | 4           | MOTIR-6595 — the convergence · MOTIR-6592 — its production run             |
+
+> ### §4 — SIXTH AMENDMENT (MOTIR-6844, 2026-09-28): a queue exit whose check HUNG re-asks — a `CI_FAILURE` / `CI_TIMEOUT` exit whose recorded failing check was CANCELLED or TIMED OUT is `neutral` and `retryable`, the check's raw conclusion is recorded, and a late or reconciled conclusion re-settles a still-standing exit
+>
+> **DECIDED BY THE REQUESTER (Yue, 2026-09-28)**, accepting _"re-ask with one gate /
+> Queue again"_ for a hung check. Story MOTIR-6843. It narrows the FIFTH
+> AMENDMENT for `CI_FAILURE` and `CI_TIMEOUT` only; the FIFTH's affected sentences
+> carry a narrowed note above, and nothing is struck. Every rule below is for a
+> `manual`-mode project, as the FOURTH's and the FIFTH's are.
+>
+> **1. WHAT MOVES, AND WHY.** A `CI_FAILURE` or `CI_TIMEOUT` exit is judged by the
+> RAW GitHub conclusion of its recorded failing check. When that conclusion is
+> `cancelled` or `timed_out`, nothing failed in the code: the job was stopped, by a
+> person or by its own time limit, before it could say anything about the commits.
+> The exit's disposition becomes `neutral` and its class `retryable`, the same as
+> `MANUAL`: the card goes `approved → in_review` with ONE fresh awaiting
+> `pull_request_approval` gate (`settleUnlandedOutcome`, unchanged), its CI state
+> does not read failing, _Queue again_ is its approve, it is listed on To approve,
+> and it is not on To fix. A `CI_TIMEOUT` exit with no recorded check that
+> concluded a genuine failure is judged the same way, because a queue timeout is
+> itself the statement that the checks did not finish.
+>
+> _Why:_ the FIFTH's premise, _"a failure says the commits as they stand cannot
+> land"_, is true of a check that FAILED and false of one that HUNG. Holding a
+> hung card at `implemented` sends `motir fix` to repair code that has nothing
+> wrong with it, and the only other way forward is a hand-made push.
+>
+> **The fixture.** MOTIR-6765 / `motir-core` PR #3227, 2026-09-28. Its merge-group
+> run `36443325714` ran the `TypeScript` job, which hung in
+> `pnpm -r --filter './packages/*' build` from 15:25 to 15:44 UTC and was cancelled
+> at its timeout. 23 of the 24 surrounding merge-group runs passed the same job in
+> 3–4 minutes. The queue exited the pull request `CI_FAILURE`, the card sat at
+> `implemented` with a green pull request and nothing to press, and the 30-minute
+> reconcile tick left it there on every pass, because it trusts the recorded exit
+> and the exit could not tell a hang from a failure.
+>
+> The table after this amendment, over every key of `QUEUE_EXIT_REASONS`
+> (`lib/mergeQueue/queueExit.ts`); the host `MergeRefusalCode` rows of the FIFTH's
+> table are unchanged:
+>
+> | reason                   | recorded check's conclusion                     | disposition | class       | changed |
+> | ------------------------ | ----------------------------------------------- | ----------- | ----------- | ------- |
+> | `CI_FAILURE`             | `cancelled` or `timed_out`                      | neutral     | `retryable` | **yes** |
+> | `CI_FAILURE`             | anything else, or none recorded yet             | failure     | `cant_land` | no      |
+> | `CI_TIMEOUT`             | `cancelled`, `timed_out`, or none recorded      | neutral     | `retryable` | **yes** |
+> | `CI_TIMEOUT`             | anything else (`failure`, `startup_failure`, …) | failure     | `cant_land` | no      |
+> | `INVALID_MERGE_COMMIT`   | — (names no check)                              | failure     | `cant_land` | no      |
+> | `GIT_TREE_INVALID`       | — (names no check)                              | failure     | `cant_land` | no      |
+> | `MERGE_CONFLICT`         | —                                               | failure     | `cant_land` | no      |
+> | `BRANCH_PROTECTIONS`     | —                                               | failure     | `setting`   | no      |
+> | `MANUAL`                 | —                                               | neutral     | `retryable` | no      |
+> | `QUEUE_CLEARED`          | —                                               | neutral     | `retryable` | no      |
+> | `ROLL_BACK`              | —                                               | neutral     | `retryable` | no      |
+> | `UNKNOWN_REMOVAL_REASON` | —                                               | neutral     | `retryable` | no      |
+> | an unrecognised string   | —                                               | neutral     | `retryable` | no      |
+> | `MERGE`                  | —                                               | landed      | `landed`    | no      |
+> | `ALREADY_MERGED`         | —                                               | landed      | `landed`    | no      |
+>
+> **The disposition is WRITTEN on the exit row, and the class follows it.** An exit
+> row already stores its `disposition`, and every reader of the promotion hold, the
+> card's CI state and the repair claim keys on it (`queueExitHoldsAtHead`). So the
+> conclusion decides the row's disposition when it is known, at the exit or later
+> (point 4), and a `CI_FAILURE` / `CI_TIMEOUT` exit's class is `retryable` exactly
+> when its stored disposition is `neutral`. One stored fact, read the same way by
+> every surface, is what keeps the badge, the hold, To fix and _Queue again_ from
+> disagreeing about one exit.
+>
+> **2. WHAT DOES NOT MOVE.**
+>
+> - A recorded check that concluded `failure`, `startup_failure`,
+>   `action_required`, or anything other than `cancelled` / `timed_out`, stays
+>   `failure` / `cant_land`, exactly as the FIFTH left it: held at `implemented`,
+>   no gate, `motir fix`.
+> - `INVALID_MERGE_COMMIT`, `GIT_TREE_INVALID` and `MERGE_CONFLICT` are unchanged.
+>   They name no check, and each says the commits could not be combined.
+> - The neutral reasons and the setting reasons are unchanged, and so are the host
+>   refusals at the press (Story MOTIR-5799).
+> - **`auto` mode is unchanged.** A queue failure still moves the card
+>   `in_review → implemented`, holds it, and `requeueAutoMember` re-dispatches the
+>   same head on a person's press. The neutral re-disposition is written only when
+>   no card the pull request delivers sits in an `auto` project; otherwise the exit
+>   keeps its `failure` disposition and its hold. _Why:_ in `auto` nobody is asked,
+>   so a released hold would let the CI promotion merge the same head again
+>   unattended, and a hang that repeats would loop.
+>
+> **3. WHICH CHECK COUNTS.** The one the queue attempt records: the FIRST check to
+> complete as a failure at the merge-group commit (`setFailingCheckIfUnset`, which
+> writes only while no check is named). Its raw conclusion is recorded beside its
+> name, on the attempt and on the exit (`failingCheckConclusion`), because
+> `mapConclusion` folds `cancelled` and `timed_out` into `failure` and the fold is
+> where the difference was lost. An aggregate job such as `CI complete`, which
+> finishes after the jobs it waits on, is never the first, so it is never the one
+> recorded.
+>
+> _The known imprecision._ If a hung job is recorded first and a genuine failure
+> completes later in the same run, the exit reads as a hang and the card is
+> re-asked. That costs one extra queue run and one press, never a wrong merge:
+> _Queue again_ sends the commits back through the queue, which runs every check
+> again, and a genuine failure then exits the pull request with a failure recorded
+> first. The same holds for a genuine failure that arrives after a `CI_TIMEOUT`
+> exit was re-asked: the re-ask stands and the next queue run decides.
+>
+> **4. ORDERING — THE CONCLUSION MAY ARRIVE AFTER THE EXIT.** The check's
+> completion routinely lands after the `dequeued` delivery, and a delivery can be
+> lost. So:
+>
+> - **At the exit**, the conclusion that is known decides. A `CI_FAILURE` exit with
+>   no conclusion yet is recorded as today, `failure` / `cant_land`, and the card
+>   holds at `implemented`.
+> - **When the conclusion arrives**, by the `check_run` webhook
+>   (`mergeQueueCheckService.attachFailingCheck`) or read from GitHub by the
+>   `system.pull-request-reconcile` tick, it is recorded on the exit, and a
+>   `cancelled` / `timed_out` conclusion RE-SETTLES the exit: its disposition is
+>   written `neutral`, and each card it delivers is moved through
+>   `settleUnlandedOutcome` with `retryable` (`implemented → in_review`, ONE gate),
+>   the same entry point a live exit runs. No push and no `motir fix` are needed.
+> - It re-settles only while the exit still STANDS at the pull request's current
+>   head (`queueExitStandsAtHead`: not re-queued, head not moved) and the card is
+>   still where the exit put it, `implemented`. A moved head or a requeue settles
+>   nothing: the push re-arms the card through the ordinary CI promotion, and a
+>   requeue has already asked its own question.
+> - **The reconcile tick is the backstop** for a lost delivery and for an exit
+>   recorded before this amendment shipped. For a standing `CI_FAILURE` /
+>   `CI_TIMEOUT` exit with no recorded conclusion, it reads the check runs at the
+>   pull request's latest queue attempt's merge-group commit, records the failing
+>   check (the one already named, or else the first to complete as a failure) with
+>   its raw conclusion, and re-settles as above.
+> - A re-settle only ever moves an exit TOWARDS the re-ask. A conclusion is written
+>   once, the first time it is known, and nothing turns a `neutral` exit back into
+>   a `failure` (point 3's imprecision says why that is safe).
+>
+> **5. ONE APPROVAL = ONE ACTION IS UNCHANGED** (the FOURTH's point 1, Story
+> MOTIR-5799). The re-ask is a NEW gate that a person presses. Nothing re-queues
+> without a person pressing _Queue again_ on it, so a deterministic hang costs one
+> press per attempt and can never loop unattended.
+>
+> **6. SUPERSEDED TEXT.** The FIFTH AMENDMENT's point 1 sentence _"a failure says
+> the commits as they stand cannot land"_, its table's `CI_FAILURE` and
+> `CI_TIMEOUT` rows, point 2's surface-by-surface bullets and point 4's
+> convergence carry a `⚠️ NARROWED by the SIXTH AMENDMENT below` note, in the form
+> the FIFTH used on the FOURTH. Sentences about `INVALID_MERGE_COMMIT`,
+> `GIT_TREE_INVALID`, conflicts, and neutral or setting outcomes are left
+> unmarked. Nothing is struck and nothing is deleted.
+>
+> **What this does NOT decide:** re-queueing WITHOUT a person (point 5 forbids
+> it); retrying a hung job inside one queue run; which checks a repository marks
+> as required; any notification; GitLab merge trains (MOTIR-4608); and whether a
+> host refusal at the press can be a hang (it names no check, and is unchanged).
+>
+> **Which card builds which point** (Story MOTIR-6843):
+>
+> | points        | card                                                                       |
+> | ------------- | -------------------------------------------------------------------------- |
+> | 3 (recording) | MOTIR-6846 — `failingCheckConclusion` on the attempt and the exit          |
+> | 1, 2, 4       | MOTIR-6847 — the disposition, the class, and the late re-settle            |
+> | 4 (backstop)  | MOTIR-6848 — the reconcile tick reads the conclusion from GitHub           |
+> | 1 (surface)   | MOTIR-6845 — the design delta · MOTIR-6849 — the row, the overlay and copy |
 
 ### 5. The line against Story 9.2 — DECIDED BY THE PLANNER (rung 3, and it re-scopes existing cards)
 

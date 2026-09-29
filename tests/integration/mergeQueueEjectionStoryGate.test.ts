@@ -35,6 +35,7 @@ import { derivePrCiState } from '@/lib/github/prCiState';
 import {
   QUEUE_EXIT_REASONS,
   classOfQueueExit,
+  judgeQueueExit,
   classifyQueueExit,
 } from '@/lib/mergeQueue/queueExit';
 import { QueueAgainRefusedError } from '@/lib/mergeQueue/errors';
@@ -53,6 +54,13 @@ import { linkPrByIdentifier } from '../helpers/prLink';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { POST as queueAgainRoute } from '@/app/api/work-items/[id]/pull-requests/[pullRequestId]/queue-again/route';
 import { queueAgainAutoAction } from '@/app/(authed)/items/[key]/approvalGateActions';
+
+/** The exit as the recorder STORES it for a manual card whose queue run named no
+ *  check (§4 SIXTH AMENDMENT): a `CI_TIMEOUT` with no known check is neutral. */
+const asStored = (reason: string) => ({
+  rawReason: reason,
+  disposition: judgeQueueExit({ rawReason: reason, failingCheckConclusion: null }).disposition,
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // THE STORY GATE — A PULL REQUEST THE MERGE QUEUE EJECTS (Story MOTIR-5461 · MOTIR-5636)
@@ -509,7 +517,8 @@ describe('4 · the dispositions, over the WHOLE reason table', () => {
   });
 
   it.each([...reasons, 'SOMETHING_NEW'])('%s', async (reason) => {
-    const disposition = classifyQueueExit(reason).disposition;
+    // The STORED disposition: a manual `CI_TIMEOUT` with no check named is neutral.
+    const disposition = asStored(reason).disposition;
     const { item } = await approvedIntoTheQueue(`reason-${reason.toLowerCase()}@example.com`);
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -530,7 +539,7 @@ describe('4 · the dispositions, over the WHOLE reason table', () => {
       // goes, not the disposition. Every un-landed reason settles it — a neutral removal
       // as much as a failure — and only a CONFLICT is held at `implemented`, because the
       // same commits cannot combine however often anybody says yes.
-      const landingClass = classOfQueueExit(reason);
+      const landingClass = classOfQueueExit(asStored(reason));
       expect(await statusOf(item.id)).toBe(
         landingClass === 'cant_land' ? 'implemented' : 'in_review',
       );

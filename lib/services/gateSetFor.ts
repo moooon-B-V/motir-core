@@ -183,7 +183,7 @@ export async function gateSetFor(
     // twin, one disposition wider — so the two readers cannot disagree about which exit
     // still describes the code.
     if (queueExitStandsAtHead(exit, head)) {
-      outcomes.push({ at: exit!.exitedAt, landingClass: classOfQueueExit(exit!.rawReason) });
+      outcomes.push({ at: exit!.exitedAt, landingClass: classOfQueueExit(exit!) });
     }
     const refusal = latestRefusals.get(delivery.githubPullRequestId);
     const refusalClass = refusal ? classOfMergeRefusal(refusal.code) : null;

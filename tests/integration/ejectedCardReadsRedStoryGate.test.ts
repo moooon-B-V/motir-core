@@ -20,7 +20,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
+import { classOfQueueExit, judgeQueueExit } from '@/lib/mergeQueue/queueExit';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
@@ -42,6 +42,13 @@ import { connectRepairRepo, deliveredPr, setStatus } from '../helpers/repairFixt
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { ciVerdict, renderFixPrompt, watchAndFixCi } from '../../packages/cli/src/ciWatch';
 import { toWorkItemDetail } from '../../packages/cli/src/adapters/reads';
+
+/** The exit as the recorder STORES it for a manual card whose queue run named no
+ *  check (§4 SIXTH AMENDMENT): a `CI_TIMEOUT` with no known check is neutral. */
+const asStored = (reason: string) => ({
+  rawReason: reason,
+  disposition: judgeQueueExit({ rawReason: reason, failingCheckConclusion: null }).disposition,
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // THE STORY GATE — AN EJECTED CARD READS RED (Story MOTIR-5628 · MOTIR-5722)
@@ -207,7 +214,7 @@ async function ejectedManual(email: string, reason = 'CI_FAILURE') {
   // §4 FOURTH AMENDMENT, point 2 (MOTIR-5805): settled by the reason's CLASS — back to
   // review with ONE fresh gate, or held at `implemented` where the commits cannot land.
   expect(await statusOf(item.id)).toBe(
-    classOfQueueExit(reason) === 'cant_land' ? 'implemented' : 'in_review',
+    classOfQueueExit(asStored(reason)) === 'cant_land' ? 'implemented' : 'in_review',
   );
   return { s, item, gateId: gate!.id };
 }

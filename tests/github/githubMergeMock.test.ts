@@ -340,3 +340,39 @@ describe('the mergeability read — through the real readChangeRequestMergeabili
     expect(await read(5)).toEqual({ mergeable: true, mergeableState: 'clean', headSha: 'h-5' });
   });
 });
+
+describe('a commit’s check runs — through the real readCommitCheckRuns (MOTIR-6851)', () => {
+  const SHA = 'c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00';
+
+  it('answers a commit the control names, with each run’s raw conclusion, and journals the read', async () => {
+    const { readCommitCheckRuns } = await import('@/lib/github/checkRuns');
+    control({
+      commitCheckRuns: {
+        [`moooon/web@${SHA}`]: [
+          { name: 'TypeScript', conclusion: 'cancelled' },
+          { name: 'Lint', conclusion: null, status: 'in_progress' },
+        ],
+      },
+    });
+
+    const runs = await readCommitCheckRuns('inst-1', 'moooon', 'web', SHA);
+
+    expect(runs).toEqual([
+      expect.objectContaining({ checkName: 'TypeScript', rawConclusion: 'cancelled' }),
+      expect.objectContaining({ checkName: 'Lint', conclusion: 'pending', rawConclusion: null }),
+    ]);
+    expect(journal().map((c) => c.path)).toEqual([
+      expect.stringContaining(`/repos/moooon/web/commits/${SHA}/check-runs`),
+    ]);
+  });
+
+  it('a commit the control does NOT name is not claimed — the caller gets no answer', async () => {
+    const { readCommitCheckRuns } = await import('@/lib/github/checkRuns');
+    control({ commitCheckRuns: { [`moooon/web@${SHA}`]: [] } });
+
+    const other = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+    expect(await readCommitCheckRuns('inst-1', 'moooon', 'web', other)).toBeNull();
+    expect(await readCommitCheckRuns('inst-1', 'moooon', 'api', SHA)).toBeNull();
+    expect(journal()).toEqual([]);
+  });
+});

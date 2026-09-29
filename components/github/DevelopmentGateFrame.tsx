@@ -36,7 +36,7 @@ import {
   type PersistedRowOutcome,
   type RowMergeOutcome,
 } from './MergeOutcomeSlot';
-import { QueueExitLine } from './QueueExitLine';
+import { hungCheckSentenceKey, QueueExitLine } from './QueueExitLine';
 import { decisionDocumentShown } from './DecisionDocumentSlot';
 import { withdrawnMergeCopy, type WithdrawnMessage } from './withdrawnMergeCopy';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
@@ -914,12 +914,15 @@ export function DevelopmentGateFrame({
    * changed for a reader: the pill and the verb look much as they did, and only this line
    * says the press ahead of them is a NEW approval rather than the old one still working.
    */
-  function unlandedSub(kind: RowMergeOutcome['kind'], neutral: boolean): ReactNode {
+  function unlandedSub(kind: RowMergeOutcome['kind'], neutral: boolean, hung = false): ReactNode {
     if (kind === 'newCommits') return t('exit.newCommits');
     if (kind === 'cannotLand') return t.rich('exit.cannotLand', { b: bold });
     if (kind === 'failedHeld') return t.rich('exit.failed.held', { key: itemIdentifier, b: bold });
     if (kind === 'refusedSetting') return t.rich('setting.reasked', { b: bold });
     if (!reasked) return t.rich('exit.unchanged', { b: bold });
+    // A check that HUNG gets its own first clause (design § 32): the approval is spent
+    // because the check stopped, not because anything failed.
+    if (hung) return t.rich('exit.hung.reasked', { b: bold });
     return t.rich(neutral ? 'exit.neutral.reasked' : 'exit.reasked.failure', { b: bold });
   }
   const exitParts = members.flatMap((member) => {
@@ -1002,7 +1005,11 @@ export function DevelopmentGateFrame({
         name={nameOf(member)}
         exit={fact.exit}
         held={kind === 'failedHeld'}
-        sub={unlandedSub(kind, fact.exit.disposition !== 'failure')}
+        sub={unlandedSub(
+          kind,
+          fact.exit.disposition !== 'failure',
+          hungCheckSentenceKey(fact.exit) !== null,
+        )}
       />,
     ];
   });

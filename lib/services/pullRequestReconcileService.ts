@@ -16,6 +16,14 @@ import { reconcileGatesFor } from './gateSetFor';
 import { promoteIfCiAlreadyGreen } from './ciPromotion';
 import { readReportedCheckSet } from './checkSetReconcile';
 import { pullRequestMergeabilityService } from './pullRequestMergeabilityService';
+import { resettleStandingExit } from './mergeQueueExitService';
+import { githubMergeQueueAttemptRepository } from '@/lib/repositories/githubMergeQueueAttemptRepository';
+import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
+import type { ReportedCheckRun } from '@/lib/github/checkRuns';
+import { liveRowsAtLatestSha } from '@/lib/github/prCiState';
+import { HUNG_CHECK_CONCLUSIONS } from '@/lib/mergeQueue/queueExit';
+import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 
 // THE OPEN-DELIVERY RECONCILE (MOTIR-5390) — the path that makes a lost
 // `pull_request` delivery recoverable instead of permanent.
@@ -127,6 +135,15 @@ export interface PullRequestReconcileSummary {
    * ingestion is the bug to fix.
    */
   promoted: number;
+  /**
+   * Standing queue-failure exits whose check's conclusion Motir never received, now
+   * READ from the host and recorded (§4 SIXTH AMENDMENT, point 4; MOTIR-6848). A
+   * cancelled / timed-out one re-settles its card through `resettleStandingExit`.
+   *
+   * ⚠️ READ IT LIKE `promoted`: one is a lost `check_run` delivery repaired (or an exit
+   * recorded before the conclusion was); a steady trickle is an ingestion defect.
+   */
+  queueExitsResolved: number;
 }
 
 /** The sync outcomes that mean a card actually moved. */
@@ -151,6 +168,7 @@ export const pullRequestReconcileService = {
       failed: 0,
       gatesRaised: 0,
       promoted: 0,
+      queueExitsResolved: 0,
     };
 
     const candidates = await withSystemContext((tx) =>
@@ -226,9 +244,12 @@ export const pullRequestReconcileService = {
           // failed enqueue, or a member GitHub had not computed within that job's waits
           // is settled here — BEFORE the promotion and the re-ask below, so a member
           // that now conflicts is neither promoted nor asked about. Not counted on the
-          // summary: that is a memoized step result (`reconcile-open-deliveries-v3`), and
+          // summary: that is a memoized step result (`reconcile-open-deliveries-v4`), and
           // widening it would owe an id bump for a number nothing reads.
           await settleMergeability(candidate, read.pullRequest);
+          // ⚠️ A QUEUE EXIT WHOSE CHECK'S END NOBODY HEARD (MOTIR-6848). Before the
+          // promotion and the gate sweep, so a hung check's card re-asks in THIS pass.
+          if (await resolveStandingQueueExit(candidate)) summary.queueExitsResolved += 1;
           // ⚠️ STILL OPEN IS NOT NOTHING TO DO (Subtask MOTIR-5671). This sweep
           // exists as the backstop for a delivery nobody heard, and a LOST EVENT
           // costs a card its gate exactly as it costs it a merge: every raise in
@@ -447,6 +468,110 @@ async function promoteDeliveredCardsAfterReRead(
     }
   }
   return promoted;
+}
+
+/** The reasons whose exit is judged by its check's conclusion (§4 SIXTH AMENDMENT). */
+const CHECK_JUDGED_REASONS = new Set(['CI_FAILURE', 'CI_TIMEOUT']);
+
+/**
+ * Which of a merge-group commit's reported runs is the exit's failing check. The one
+ * the exit already NAMES, when it names one; otherwise a GENUINE failure outranks a
+ * cancelled / timed-out one (the imprecision the SIXTH AMENDMENT accepts runs the
+ * other way only when the webhook ordered it), and a run that did not fail is never it.
+ */
+export function pickFailingCheck(
+  runs: readonly ReportedCheckRun[],
+  namedCheck: string | null,
+): ReportedCheckRun | null {
+  const failed = runs.filter((run) => run.conclusion === 'failure' && run.rawConclusion !== null);
+  const latestFirst = [...failed].sort(
+    (a, b) => (b.completedAt?.getTime() ?? 0) - (a.completedAt?.getTime() ?? 0),
+  );
+  if (namedCheck !== null) return latestFirst.find((run) => run.checkName === namedCheck) ?? null;
+  const genuine = latestFirst.find((run) => !HUNG_CHECK_CONCLUSIONS.includes(run.rawConclusion!));
+  return genuine ?? latestFirst[0] ?? null;
+}
+
+/**
+ * READ THE CONCLUSION OF A STANDING QUEUE EXIT'S CHECK FROM THE HOST, record it, and
+ * re-settle the exit (§4 SIXTH AMENDMENT, point 4; MOTIR-6848). The backstop for a
+ * `check_run` delivery that was lost, a check that completed before its attempt row
+ * existed, and every exit recorded before the conclusion was.
+ *
+ * It asks the host only for an exit that still STANDS at the pull request's head, is a
+ * `CI_FAILURE` / `CI_TIMEOUT`, has no conclusion, and has a queue attempt naming the
+ * merge-group commit — so once a conclusion is recorded the row never matches again,
+ * and a moved head or a requeue costs no host call. A `null` answer ("no answer") records
+ * nothing: the row is simply asked again next pass. The move is
+ * `resettleStandingExit`'s; nothing here moves a card itself.
+ */
+async function resolveStandingQueueExit(candidate: ReconcileCandidate): Promise<boolean> {
+  const workspaceId = candidate.repo.workspaceId;
+  const target = await withSystemContext(async (tx) => {
+    await bindWorkspaceContext(tx, workspaceId);
+    const exit = (
+      await githubPullRequestQueueExitRepository.findLatestByPullRequests([candidate.id], tx)
+    ).get(candidate.id);
+    if (!exit || !CHECK_JUDGED_REASONS.has(exit.rawReason)) return null;
+    if (exit.failingCheckConclusion !== null) return null;
+    const pr = (await githubPullRequestRepository.findManyByIdsForSummary([candidate.id], tx)).get(
+      candidate.id,
+    );
+    const head = pr ? liveRowsAtLatestSha([...pr.checkRuns])[0]?.commitSha : undefined;
+    if (!queueExitStandsAtHead(exit, head)) return null;
+    const attempt = await githubMergeQueueAttemptRepository.findLatestByPullRequest(
+      candidate.id,
+      tx,
+    );
+    if (!attempt || attempt.createdAt > exit.exitedAt) return null;
+    return { exit, attempt };
+  });
+  if (!target) return false;
+
+  const runs = await readReportedCheckSet({
+    installationId: candidate.repo.installation.installationId,
+    owner: candidate.repo.owner,
+    name: candidate.repo.name,
+    commitSha: target.attempt.headSha,
+  });
+  if (runs === null) return false;
+  const check = pickFailingCheck(runs, target.exit.failingCheckName);
+  if (!check) return false;
+  const conclusion = check.rawConclusion!;
+
+  const resettled = await withSystemContext(async (tx) => {
+    await bindWorkspaceContext(tx, workspaceId);
+    if (target.exit.failingCheckName === null) {
+      const named = {
+        name: check.checkName,
+        url: check.url ?? '',
+        conclusion,
+      };
+      await githubMergeQueueAttemptRepository.setFailingCheckIfUnset(
+        target.attempt.id,
+        { ...named, at: check.completedAt ?? new Date() },
+        tx,
+      );
+      await githubPullRequestQueueExitRepository.setFailingCheckIfUnset(target.exit.id, named, tx);
+    } else {
+      const named = { name: check.checkName, conclusion };
+      await githubMergeQueueAttemptRepository.setConclusionIfUnset(target.attempt.id, named, tx);
+      await githubPullRequestQueueExitRepository.setConclusionIfUnset(target.exit.id, named, tx);
+    }
+    return resettleStandingExit({ pullRequestId: candidate.id, workspaceId, tx });
+  });
+  // Post-commit, never inside the transaction — a rollback must not have notified.
+  for (const m of resettled.moved) {
+    await sendEvent('work-item/transitioned', {
+      workspaceId,
+      workItemId: m.id,
+      actorId: resettled.actorId!,
+      fromStatusKey: m.from,
+      toStatusKey: m.to,
+      revisionId: m.revisionId,
+    });
+  }
+  return true;
 }
 
 /** Stamp the row as heard-from, under the tenant the sync itself writes it under. */

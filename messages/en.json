@@ -9418,7 +9418,15 @@
         },
         "neutral": {
           "reasked": "They still did not land, so that approval is spent and Motir is asking you again. The press on the pull request — or <b>Approve and merge</b> below — is the new approval, and puts them back in the merge queue."
-        }
+        },
+        "hung": {
+          "cancelled": "<b>{pr}</b> left the merge queue: <b>{check}</b> was cancelled. Nothing failed in the code.",
+          "timedOut": "<b>{pr}</b> left the merge queue: <b>{check}</b> timed out before it finished. Nothing failed in the code.",
+          "noCheck": "<b>{pr}</b> left the merge queue: the queue's checks did not finish in time. Nothing failed in the code.",
+          "reasked": "The check stopped before it said anything about these commits, so that approval is spent and Motir is asking you again. The press on the pull request — or <b>Approve and merge</b> below — is the new approval, and puts them back in the merge queue."
+        },
+        "stoppedCheck": "Stopped check: <link>{check}</link>",
+        "openStoppedCheck": "Open the stopped check {check} on GitHub"
       },
       "requeue": {
         "progress": "Adding {pr} back to its merge queue…",

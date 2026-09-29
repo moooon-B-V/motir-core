@@ -70,6 +70,7 @@ function exit(): PullRequestQueueExitDTO {
     requeuedAt: null,
     failingCheckName: 'CI complete',
     failingCheckUrl: 'https://github.com/moooon/motir-gateway/actions/runs/1/job/2',
+    failingCheckConclusion: 'failure',
   };
 }
 

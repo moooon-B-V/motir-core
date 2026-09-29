@@ -341,6 +341,10 @@ export interface NormalizedUnlinkedCheckFailure {
   name: string;
   url: string;
   completedAt: Date;
+  /** The host's RAW conclusion, verbatim (`failure`, `cancelled`, `timed_out`, …).
+   *  `mapConclusion` folds all of them into `failure`; this keeps which one it was
+   *  (`approval-gates.md` §4 SIXTH AMENDMENT, MOTIR-6846). */
+  conclusion: string;
 }
 
 /** A completed CI workflow run, normalized across providers — consumed by the

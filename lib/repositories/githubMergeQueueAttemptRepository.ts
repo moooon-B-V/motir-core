@@ -18,6 +18,8 @@ export interface FailingCheck {
   name: string;
   url: string;
   at: Date;
+  /** The check's RAW host conclusion (MOTIR-6846), written beside the name. */
+  conclusion: string;
 }
 
 export const githubMergeQueueAttemptRepository = {
@@ -55,7 +57,28 @@ export const githubMergeQueueAttemptRepository = {
   ): Promise<number> {
     const result = await tx.githubMergeQueueAttempt.updateMany({
       where: { id: attemptId, failingCheckName: null },
-      data: { failingCheckName: check.name, failingCheckUrl: check.url, failedAt: check.at },
+      data: {
+        failingCheckName: check.name,
+        failingCheckUrl: check.url,
+        failingCheckConclusion: check.conclusion,
+        failedAt: check.at,
+      },
+    });
+    return result.count;
+  },
+
+  /** Record the RAW conclusion of the check already named on this attempt — only while
+   *  it is that check and no conclusion is known (a row named before MOTIR-6846, or one
+   *  whose conclusion the reconcile tick read from the host). Returns the count. Write
+   *  path → `tx`. */
+  async setConclusionIfUnset(
+    attemptId: string,
+    check: { name: string; conclusion: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubMergeQueueAttempt.updateMany({
+      where: { id: attemptId, failingCheckName: check.name, failingCheckConclusion: null },
+      data: { failingCheckConclusion: check.conclusion },
     });
     return result.count;
   },
