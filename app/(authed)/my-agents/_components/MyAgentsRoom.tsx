@@ -5,11 +5,12 @@ import { useTranslations } from 'next-intl';
 import { Plus, SquareTerminal, TriangleAlert } from 'lucide-react';
 import { RunTonePill } from '@/components/runs/RunTonePill';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import {
   AGENT_STATES_IN_MOTION,
   AGENT_STATE_TONE,
   formatMachineTime,
-  MY_AGENTS_PAGE_SIZE,
+  MY_AGENTS_LIST_LIMIT,
   type AgentMove,
 } from '@/lib/agentInstances/presentation';
 import type { AgentInstanceListItemDto, AgentInstanceListPageDto } from '@/lib/dto/agentInstances';
@@ -24,7 +25,7 @@ import { RefusalBox, useAgentRefusal, type AgentRefusal } from './agentRefusal';
 // ⚠️ IT OWNS ITS LIST, SO IT REFETCHES ITSELF (the page-state-after-mutation
 // contract, case 3). It is seeded from the server's first read and never relies on
 // `router.refresh()`, which cannot reach a `useState` seed: every create, wake,
-// hibernate and delete re-reads the page it is on, and while any row is in motion
+// hibernate and delete re-reads the list, and while any row is in motion
 // (starting, hibernating, waking, deleting) it polls until that row settles, so a
 // transition resolves on screen without a reload. Reads are sequence-guarded, so an
 // older response never overwrites a newer one.
@@ -51,7 +52,6 @@ export function MyAgentsRoom({
   const t = useTranslations('myAgents');
   const refusalFor = useAgentRefusal(maxPerUser);
   const [data, setData] = useState<AgentInstanceListPageDto | null>(initial);
-  const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AgentInstanceListItemDto | null>(null);
   const [pending, setPending] = useState<Action | null>(null);
@@ -61,31 +61,26 @@ export function MyAgentsRoom({
   const seq = useRef(0);
   const base = `/api/projects/${encodeURIComponent(projectKey)}/instances`;
 
-  const load = useCallback(
-    async (target: number) => {
-      const mine = ++seq.current;
-      try {
-        const res = await fetch(`${base}?page=${target}&limit=${MY_AGENTS_PAGE_SIZE}`, {
-          cache: 'no-store',
-        });
-        if (!res.ok) throw new Error(String(res.status));
-        const body = (await res.json()) as AgentInstanceListPageDto;
-        if (mine === seq.current) setData(body);
-      } catch {
-        // A failed re-read keeps the last good list on screen; only a failed FIRST
-        // read shows the failure face.
-      }
-    },
-    [base],
-  );
+  const load = useCallback(async () => {
+    const mine = ++seq.current;
+    try {
+      const res = await fetch(`${base}?limit=${MY_AGENTS_LIST_LIMIT}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(String(res.status));
+      const body = (await res.json()) as AgentInstanceListPageDto;
+      if (mine === seq.current) setData(body);
+    } catch {
+      // A failed re-read keeps the last good list on screen; only a failed FIRST
+      // read shows the failure face.
+    }
+  }, [base]);
 
   const rows = data?.instances ?? [];
   const inMotion = rows.some((r) => AGENT_STATES_IN_MOTION.has(r.state));
   useEffect(() => {
     if (!inMotion) return;
-    const id = setInterval(() => void load(page), POLL_MS);
+    const id = setInterval(() => void load(), POLL_MS);
     return () => clearInterval(id);
-  }, [inMotion, load, page]);
+  }, [inMotion, load]);
 
   async function send(
     url: string,
@@ -114,8 +109,7 @@ export function MyAgentsRoom({
       return;
     }
     setCreateOpen(false);
-    setPage(1);
-    await load(1);
+    await load();
   }
 
   async function onMove(row: AgentInstanceListItemDto, move: AgentMove) {
@@ -129,7 +123,7 @@ export function MyAgentsRoom({
     const result = await send(`${base}/${encodeURIComponent(row.id)}/${move}`, { method: 'POST' });
     setPending(null);
     if (!result.ok) setListRefusal(refusalFor(result.body, row.name));
-    await load(page);
+    await load();
   }
 
   async function onConfirmDelete() {
@@ -144,11 +138,10 @@ export function MyAgentsRoom({
       return;
     }
     setDeleteTarget(null);
-    await load(page);
+    await load();
   }
 
   const total = data?.total ?? 0;
-  const pages = Math.max(1, Math.ceil(total / MY_AGENTS_PAGE_SIZE));
   const newAgent = (
     <Button
       leftIcon={<Plus aria-hidden="true" />}
@@ -185,50 +178,18 @@ export function MyAgentsRoom({
           {t('loadFailed')}
         </div>
       ) : total === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-(--radius-card) border border-(--el-border) px-(--spacing-card-padding) py-10 text-center">
-          <SquareTerminal className="size-7 text-(--el-text-secondary)" aria-hidden="true" />
-          <h2 className="m-0 font-serif text-lg font-semibold text-(--el-text)">
-            {t('emptyTitle')}
-          </h2>
-          <p className="m-0 max-w-[36rem] text-sm text-(--el-text-secondary)">{t('emptyBody')}</p>
-          {newAgent}
-        </div>
+        // The shipped empty state — the same component the Runs page uses, so the
+        // title, copy and action carry the design system's own type and spacing.
+        <EmptyState
+          icon={<SquareTerminal className="h-12 w-12" aria-hidden="true" />}
+          title={t('emptyTitle')}
+          description={t('emptyBody')}
+          action={newAgent}
+        />
       ) : (
         <>
           <AgentTable rows={rows} projectName={projectName} pending={pending} onMove={onMove} />
           <AgentCards rows={rows} projectName={projectName} onMove={onMove} />
-          <div className="flex items-center justify-between gap-3 text-sm text-(--el-text-secondary)">
-            <span>{t('count', { count: total })}</span>
-            <div className="flex items-center gap-2">
-              {pages > 1 ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => {
-                    setPage(page - 1);
-                    void load(page - 1);
-                  }}
-                >
-                  {t('previous')}
-                </Button>
-              ) : null}
-              <span>{t('page', { page, pages })}</span>
-              {pages > 1 ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={page >= pages}
-                  onClick={() => {
-                    setPage(page + 1);
-                    void load(page + 1);
-                  }}
-                >
-                  {t('next')}
-                </Button>
-              ) : null}
-            </div>
-          </div>
         </>
       )}
 

@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { INSTANCE_MAX_PER_USER } from '@/lib/agentInstances/config';
-import { MY_AGENTS_PAGE_SIZE } from '@/lib/agentInstances/presentation';
+import { MY_AGENTS_LIST_LIMIT } from '@/lib/agentInstances/presentation';
 import { OFFERED_AGENT_PROFILES } from '@/lib/agentInstances/profiles';
 import { memberPageContext, pageScope } from '@/lib/pages/projectPageContext';
 import { agentInstanceLifecycleService } from '@/lib/services/agentInstanceLifecycleService';
@@ -59,7 +59,7 @@ async function MyAgentsData({
   // A failed first read is its own face, never the empty state — "we could not
   // load" and "you have none" are opposite facts (panel 7).
   const initial = await agentInstanceLifecycleService
-    .list(projectKey, { take: MY_AGENTS_PAGE_SIZE, skip: 0 }, service)
+    .list(projectKey, { take: MY_AGENTS_LIST_LIMIT, skip: 0 }, service)
     .catch((err: unknown) => {
       console.error('[my-agents] the first read failed', {
         projectKey,

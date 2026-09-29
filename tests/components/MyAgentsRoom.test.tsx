@@ -147,8 +147,9 @@ describe('the faces', () => {
       'The machine could not start: no capacity on its host. Wake to try again, or delete it.',
     );
     expect(rows[3]!.textContent).toContain('Booting — cloning the project’s repositories');
-    expect(screen.getByText('4 agents')).toBeTruthy();
-    expect(screen.getByText('Page 1 of 1')).toBeTruthy();
+    // Not paginated (a person keeps at most 10 agents): no pager, no page count.
+    expect(screen.queryByText(/Page \d+ of/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
   });
 
   it('renders in Chinese from the zh catalog', () => {
@@ -182,7 +183,7 @@ describe('create', () => {
     expect(post).toMatchObject({ url: '/api/projects/MOTIR/instances', method: 'POST' });
     expect(JSON.parse(String(post!.body))).toEqual({ name: 'my-codex', profileId: 'codex' });
     expect(get).toMatchObject({ method: 'GET' });
-    expect(get!.url).toContain('/api/projects/MOTIR/instances?page=1');
+    expect(get!.url).toContain('/api/projects/MOTIR/instances?limit=10');
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.getAllByText('my-codex').length).toBeGreaterThan(0);
   });

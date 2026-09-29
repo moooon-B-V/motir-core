@@ -8714,10 +8714,6 @@
       "actions": "Actions"
     },
     "rowActions": "Actions for {name}",
-    "count": "{count, plural, one {# agent} other {# agents}}",
-    "page": "Page {page} of {pages}",
-    "previous": "Previous",
-    "next": "Next",
     "thisMonth": "{time} this month",
     "creditsCount": "{count, plural, one {# credit} other {# credits}}",
     "state": {

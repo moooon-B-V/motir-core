@@ -8710,10 +8710,6 @@
       "actions": "操作"
     },
     "rowActions": "{name} 的操作",
-    "count": "{count, plural, other {# 个智能体}}",
-    "page": "第 {page} 页，共 {pages} 页",
-    "previous": "上一页",
-    "next": "下一页",
     "thisMonth": "本月 {time}",
     "creditsCount": "{count, plural, other {# 额度}}",
     "state": {
