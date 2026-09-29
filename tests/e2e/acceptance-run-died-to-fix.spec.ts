@@ -52,12 +52,24 @@ test.describe.configure({ timeout: 600_000 });
 
 const MODEL = 'e2e-hosted-default';
 
+/** A message template's markup tags removed, until none is left (a single pass
+ *  can leave a tag behind when two overlap, e.g. `<b<b>>`). */
+function stripTags(template: string): string {
+  let prev: string;
+  let out = template;
+  do {
+    prev = out;
+    out = out.replace(/<\/?[a-z]+>/g, '');
+  } while (out !== prev);
+  return out;
+}
+
 /** A rich message as the page renders it: tags keep their children, `{var}` its value,
  *  and `<when></when>` ANY relative time. */
 function rich(template: string, vars: Record<string, string> = {}): RegExp {
   const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const literal = (s: string) =>
-    escape(s.replace(/<\/?[a-z]+>/g, '').replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? ''));
+    escape(stripTags(s).replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? ''));
   return new RegExp(
     template
       .split(/<when><\/when>/)
@@ -67,7 +79,7 @@ function rich(template: string, vars: Record<string, string> = {}): RegExp {
 }
 
 const plain = (template: string, vars: Record<string, string> = {}) =>
-  template.replace(/<\/?[a-z]+>/g, '').replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? '');
+  stripTags(template).replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? '');
 
 // ── The page ────────────────────────────────────────────────────────────────
 
