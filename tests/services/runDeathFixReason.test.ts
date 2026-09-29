@@ -357,8 +357,8 @@ describe('the sweeps never wait on a card lock', () => {
 });
 
 describe('the lapse sweep’s schedule', () => {
-  it('stays on the :00 / :30 cluster — a silent death reaches To fix within one pass', () => {
-    expect(RUN_LIVENESS_SWEEP_CRON).toBe('0,30 * * * *');
+  it('runs every 5 minutes — a silent death reaches To fix within one pass', () => {
+    expect(RUN_LIVENESS_SWEEP_CRON).toBe('*/5 * * * *');
   });
 });
 

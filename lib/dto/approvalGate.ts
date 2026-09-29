@@ -169,6 +169,9 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'pulled_back'
   /** CI reported a terminal FAILURE at the commits the gate asked about (MOTIR-6271). */
   | 'ci_failed'
+  /** A check at the asked-about commits is pending again — the set left green without
+   *  going red (MOTIR-6946). */
+  | 'ci_rerunning'
   | 'unknown'
   /** The plan went `stale` (ADR §11.7). */
   | 'plan_stale'

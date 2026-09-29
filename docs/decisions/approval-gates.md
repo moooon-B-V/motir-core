@@ -593,7 +593,10 @@ in_progress` through its own path, so an acceptance decision is invisible to
 > The question rides on the green set, so every event that takes the set out of
 > green withdraws it WITH the merge question, under the same cause: a head move
 > (`head_moved`), a close (`member_closed`), a draft (`member_drafted`) and a set
-> change (`set_changed`) (`lib/services/pullRequestApprovalGates.ts`). The next
+> change (`set_changed`) (`lib/services/pullRequestApprovalGates.ts`) — joined since by
+> a conflict (`conflict`, MOTIR-5914), a red build (`ci_failed`, §8's SIXTH AMENDMENT)
+> and a check at the asked-about commits running again (`ci_rerunning`, §8's SEVENTH
+> AMENDMENT). The next
 > green asks both again. **This reverses MOTIR-5787 point 5's _"a PUSH does not by
 > itself re-ask acceptance"_ for an AWAITING question**: an unanswered question
 > about a set that is no longer green is not a question anybody can act on. A
@@ -2684,7 +2687,9 @@ has several open pull requests and therefore several simultaneous awaiting gates
 > value per writing path and **no value meaning _unsaid_**: `republished` ·
 > `withdrawn` · `head_moved` · `member_closed` · `member_drafted` · `set_changed` ·
 > `pulled_back` (`member_drafted` added by MOTIR-5699; **`ci_failed` by MOTIR-6271** —
-> a terminal CI failure at the commits the gate asked about, §8's SIXTH AMENDMENT).
+> a terminal CI failure at the commits the gate asked about, §8's SIXTH AMENDMENT;
+> **`ci_rerunning` by MOTIR-6946** — a check at those commits `pending` again, the set
+> leaving green without going red, §8's SEVENTH AMENDMENT).
 > The full table, with which path writes each, is `design-result.md`
 > AMENDMENT 6 Q5. (A seventh, `reopened_by_hand`, was named here when the
 > amendment was written and removed before it shipped — MOTIR-5661 found that a
@@ -4596,6 +4601,62 @@ repositories produce no preview has two paths rather than three, and says so.
 > and the hold at Implemented, the cause, the no-actor invariant (§6b) re-asserted
 > for the new path, the fresh gate on the next green, a decided gate untouched by a
 > later red, and a card not at In Review losing its gate without being dragged.
+
+> ### §8 — SEVENTH AMENDMENT (MOTIR-6946, 2026-09-29): a set that leaves green WITHOUT going red withdraws the question too — `ci_rerunning` joins the cause vocabulary
+>
+> **Again this adds no rule; it adds the second writing path the SIXTH AMENDMENT's
+> own principle required and its enumeration left out.** The SIXTH closed the RED
+> arm of _every event that takes the set out of green_. The other arm is green →
+> `running` at an UNCHANGED head: none of the causes — no head moved, no member
+> closed, nothing failed — so the gate stood `awaiting` for the whole run that
+> followed, and a person could press _Approve and merge_ over commits whose tests
+> had not finished.
+>
+> **Observed.** `moooon-B-V/motir-core#3261` @ `688ce704` (2026-09-29): the gate was
+> raised at `18:40:08` over a set only the acceptance lane had made green, because
+> CI's workflow run was queued behind its `concurrency` group with no jobs
+> (`ci-verdict-expected-check-set.md` AMENDMENT 3). CI's checks began arriving
+> `pending` at the SAME head from `18:40:58`, and nothing withdrew the question.
+>
+> #### 1 — the cause: `ci_rerunning`
+>
+> A new value, for the SIXTH AMENDMENT's reason: one value per writing path and
+> none meaning _unsaid_. `ci_failed` would be the nearest lie — nothing failed; the
+> verdict is simply not in. Its sentence says the checks started running again and
+> the question waits for them to pass; its cite is the re-ask, and that promise is
+> exact — the next green at the SAME commits raises a fresh gate, no push needed.
+>
+> #### 2 — only at the gate's OWN version
+>
+> A delivery that takes the pull request's live set at its head to `running`
+> (`derivePrCiState`) withdraws the awaiting merge gate ONLY where the set's
+> current version (`deliverySetVersion`) still equals the gate's `subjectVersion`.
+> A pending row at a NEW head is a push, which the same delivery already retired as
+> `head_moved` (`withdrawPullRequestApprovalGatesOnHeadMove` runs first); this path
+> never relabels it. A story run's acceptance question goes with it through the
+> ordinary predicate (MOTIR-5903).
+>
+> It fires from BOTH doors a pending row enters by: a `pending` delivery, and a
+> terminal delivery after which the reconcile recorded a pending row the host
+> reported (the queued workflow run of AMENDMENT 3). The feedback consumer's
+> aggregate `ciState` cannot tell the second apart from green — it reads `passing`
+> while any check succeeded — so the path re-derives `running` itself, exactly as
+> the promotion re-derives `passing`.
+>
+> #### 3 — the card, and what it does NOT touch
+>
+> The composer is the SIXTH AMENDMENT's (`ciPromotion.withdrawDeliveredCardsOffGreen`),
+> with one narrowing: **only a card whose merge question this path just retired
+> moves**, from `in_review` to Implemented via `settleUnlandedOutcome(… 'cant_land')`.
+> No hold is recorded — no conflict reading, no queue exit — so the next green at
+> the same head promotes it again with exactly one fresh gate. A card with no merge
+> question (an `auto` project) is not asked to approve anything and is not moved.
+> **A DECIDED gate is untouched** (§8's decision 5), as on every path.
+>
+> **Asserted** — `tests/github/pullRequestApprovalGates.test.ts` (the withdrawal, the
+> hold, the single fresh gate on the next green at the same commits, a new head
+> staying `head_moved`, a decided gate untouched, a red check still `ci_failed`) and
+> `tests/github/ciExpectedCheckSet.test.ts` (the `688ce704` replay raising no gate).
 
 > ### 9 — AMENDMENT: HOW TO TEST is per RUN (MOTIR-4906 re-plan, 2026-09-13), DECIDED BY THE REQUESTER (Yue, 2026-09-13)
 >

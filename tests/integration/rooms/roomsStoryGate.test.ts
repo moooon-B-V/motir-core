@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { PERMISSION_CATALOG, type PermissionKey } from '@/lib/permissions/catalog';
@@ -19,7 +19,12 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { adminDb } from '../../helpers/adminDb';
-import { findLegacyProjectRole, insertLegacyProjectRole } from '../../helpers/legacyProjectRoles';
+import {
+  dropLegacyRoleStorage,
+  ensureLegacyRoleStorage,
+  findLegacyProjectRole,
+  insertLegacyProjectRole,
+} from '../../helpers/legacyRoleStorage';
 import { truncateAuthTables } from '../../helpers/db';
 import { addToProjectAs, setProjectRoleDefinitionFor } from '../../helpers/workspaceRoleFixtures';
 
@@ -308,6 +313,11 @@ describe('a bearer token narrows the rooms by its GRANT, whatever the role holds
 });
 
 describe('the MIGRATION keeps every persisted grant’s reach (before = after)', () => {
+  // This migration reads the legacy role storage MOTIR-6569 dropped; rebuild it
+  // for these tests only (tests/helpers/legacyRoleStorage.ts).
+  beforeEach(ensureLegacyRoleStorage);
+  afterEach(dropLegacyRoleStorage);
+
   const MIGRATION = path.join(
     process.cwd(),
     'prisma/migrations/20260925170000_room_view_keys_for_custom_roles/migration.sql',

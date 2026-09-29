@@ -516,9 +516,9 @@ describe('setWorkspacePolicy', () => {
     }
   });
 
-  it('allows a stored workspace MANAGER, and refuses a stored Member whose legacy role says owner', async () => {
-    // The stored `workspace_role` wins over the legacy column in both directions:
-    // a Manager on a legacy `member` row passes, a founder demoted to Member does not.
+  it('allows a stored workspace MANAGER, and refuses a founder demoted to Member', async () => {
+    // The stored `workspace_role` decides: a Manager passes, a founder demoted to
+    // Member does not (the legacy `role` column is dropped, MOTIR-6569).
     const { workspace, organizationId } = await makeOrgWithWorkspace();
     const manager = await makeUser();
     const demoted = await makeUser();
@@ -541,9 +541,6 @@ describe('setWorkspacePolicy', () => {
         workspaceRole: 'member',
       },
     });
-    // The legacy column, written raw — nothing in the app writes it (MOTIR-6562).
-    await adminDb.$executeRaw`
-      UPDATE "workspace_membership" SET "role" = 'owner' WHERE "userId" = ${demoted.id}`;
 
     const dto = await twoFactorPolicyService.setWorkspacePolicy({
       workspaceId: workspace.id,

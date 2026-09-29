@@ -57,7 +57,7 @@ describe('findStandInManagerByWorkspace', () => {
     expect(picked?.userId).toBe(founder.id);
   });
 
-  it('ignores the legacy role: an older row whose legacy role is `owner` but whose workspace role is Member is never picked', async () => {
+  it('never picks an older row whose workspace role is Member (the legacy `owner` it once carried is dropped, MOTIR-6569)', async () => {
     const founder = await user('founder-legacy');
     const legacyOwner = await user('legacy-owner');
     const { workspace } = await workspacesService.createWorkspace({
@@ -72,10 +72,6 @@ describe('findStandInManagerByWorkspace', () => {
         createdAt: new Date('2000-01-01T00:00:00Z'),
       },
     });
-    // The legacy value, written raw — nothing in the app writes it (MOTIR-6562).
-    await adminDb.$executeRaw`
-      UPDATE "workspace_membership" SET "role" = 'owner' WHERE "userId" = ${legacyOwner.id}`;
-
     const picked = await standIn(workspace.id);
     expect(picked?.userId).toBe(founder.id);
   });
@@ -116,14 +112,11 @@ describe('findStandInManagerByWorkspace', () => {
       name: 'Migrated Co',
       ownerUserId: founder.id,
     });
-    // The founder was demoted to Member while the legacy column still says
-    // `owner` (written raw — nothing in the app writes it since MOTIR-6562).
+    // The founder was demoted to Member.
     await adminDb.workspaceMembership.update({
       where: { userId_workspaceId: { userId: founder.id, workspaceId: workspace.id } },
       data: { workspaceRole: 'member' },
     });
-    await adminDb.$executeRaw`
-      UPDATE "workspace_membership" SET "role" = 'owner' WHERE "userId" = ${founder.id}`;
     for (const [u, at, role] of [
       [viewer, '2001-01-01', 'viewer'],
       [older, '2002-01-01', 'manager'],

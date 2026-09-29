@@ -19,7 +19,7 @@ import {
   INDEX_FLEET_TIME_BUDGETS,
 } from '@/lib/services/codeGraphIndexDispatchService';
 import { FLEET_TIME_BUDGETS } from '@/lib/services/ciRunnerBootService';
-import { SCHEDULE_CLUSTER_MINUTES } from '@/lib/jobs/schedules';
+import { SUB_HOURLY_CADENCE } from '@/lib/jobs/schedules';
 import { fakeOrchestrator } from '@motir/orchestrator';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
@@ -496,13 +496,11 @@ describe('§2.4 exactly ONE supervision composition exists per fleet', () => {
   });
 });
 
-describe('§2.5 the sweep’s cron is on the cluster', () => {
-  it('costs no new wake', () => {
+describe('§2.5 the sweep’s cron is the sub-hourly cadence', () => {
+  it('runs every 5 minutes', () => {
     const def = engineJob('system.supervision-sweep');
     expect(def).toBeDefined();
-    for (const m of def!.cron!.split(' ')[0]!.split(',').map(Number)) {
-      expect(SCHEDULE_CLUSTER_MINUTES).toContain(m);
-    }
+    expect(def!.cron).toBe(SUB_HOURLY_CADENCE);
   });
 });
 

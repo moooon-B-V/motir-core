@@ -1644,6 +1644,7 @@ const APPROVAL_GATE_SUPERSEDE_CAUSE_VALUES = [
   'set_changed',
   'pulled_back',
   'ci_failed',
+  'ci_rerunning',
   'unknown',
   'plan_stale',
   'plan_discarded',

@@ -527,7 +527,6 @@ export const FILE_TEST_SECONDS: Readonly<Record<string, number>> = {
   'tests/project-details-service.test.ts': 28.0,
   'tests/project-members-service.test.ts': 27.9,
   'tests/project-membership-rls.test.ts': 10.3,
-  'tests/project-role-definition-rls.test.ts': 17.3,
   'tests/projectRepos/effectiveRepoDomain.test.ts': 11.8,
   'tests/projectRepos/projectRepoAccessService.test.ts': 17.4,
   'tests/projectRepos/projectRepoEstablishView.test.ts': 22.2,

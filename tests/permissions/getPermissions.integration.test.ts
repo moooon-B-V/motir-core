@@ -127,10 +127,10 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
       workspaceId: workspace.id,
       workspaceRole: role === 'viewer' ? 'viewer' : 'member',
     });
-    // The LEGACY project row, written raw — the project role nothing reads now.
-    await adminDb.$executeRaw`
-      INSERT INTO "project_membership" ("id", "workspace_id", "project_id", "user_id", "role", "updated_at")
-      VALUES (gen_random_uuid()::text, ${workspace.id}, ${project.id}, ${u.id}, ${role}::"member_role", now())`;
+    // The project row carries no role: the legacy project role was dropped (MOTIR-6569).
+    await adminDb.projectMembership.create({
+      data: { workspaceId: workspace.id, projectId: project.id, userId: u.id },
+    });
     return u;
   }
   const viewer = await projectActor('viewer');

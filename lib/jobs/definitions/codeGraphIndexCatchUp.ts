@@ -10,7 +10,7 @@ import { defineJob } from '../defineJob';
  * this takes both, like the drift sweep, and costs no new wake. Thirty minutes is
  * the latency between a top-up and the index resuming.
  */
-export const CODE_GRAPH_INDEX_CATCH_UP_CRON = '0,30 * * * *';
+export const CODE_GRAPH_INDEX_CATCH_UP_CRON = '*/5 * * * *';
 
 export const codeGraphIndexCatchUp = defineJob(
   {

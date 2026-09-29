@@ -23,7 +23,7 @@ import { defineJob } from '../defineJob';
  * suspend between them; a job at :17 re-opens the gap for the whole cluster and
  * nothing alerts. This lands on the existing pair.
  */
-export const CODE_GRAPH_DRIFT_SWEEP_CRON = '0,30 * * * *';
+export const CODE_GRAPH_DRIFT_SWEEP_CRON = '*/5 * * * *';
 
 export const codeGraphDriftSweep = defineJob(
   {

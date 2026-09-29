@@ -25,7 +25,7 @@ import { defineJob } from '../defineJob';
  * without anyone noticing it was stuck. A tighter cadence would re-price the whole
  * schedule (§21) to shave minutes off a failure that is rare by construction.
  */
-export const PULL_REQUEST_RECONCILE_CRON = '0,30 * * * *';
+export const PULL_REQUEST_RECONCILE_CRON = '*/5 * * * *';
 
 export const pullRequestReconcile = defineJob(
   {
