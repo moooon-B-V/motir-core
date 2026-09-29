@@ -297,14 +297,25 @@ export const ciRunnerProvisioningIntentRepository = {
     });
   },
 
-  /** Move an intent to a terminal status with the reason it got there. */
+  /**
+   * Move an intent to a terminal status with the reason it got there.
+   *
+   * ⚠️ THE FIRST SETTLE WINS (MOTIR-6908). An intent already `completed` or
+   * `failed` is left as it is, and the answer is `false`. Two paths can reach the
+   * same intent: an org STOP settles it with `credits_exhausted` / `admin_stop`
+   * while its supervisor is still polling, and the supervisor's own settle a
+   * moment later must not overwrite why the container really ended.
+   */
   async settle(
     id: string,
     data: CiRunnerSettleRecord,
     tx: Prisma.TransactionClient,
-  ): Promise<void> {
-    await tx.ciRunnerProvisioningIntent.update({
-      where: { id },
+  ): Promise<boolean> {
+    const { count } = await tx.ciRunnerProvisioningIntent.updateMany({
+      where: {
+        id,
+        status: { notIn: [CI_RUNNER_INTENT_COMPLETED, CI_RUNNER_INTENT_FAILED] },
+      },
       data: {
         status: data.status,
         teardownReason: data.teardownReason,
@@ -314,6 +325,7 @@ export const ciRunnerProvisioningIntentRepository = {
         ...(data.bootLatencyMs === undefined ? {} : { bootLatencyMs: data.bootLatencyMs }),
       },
     });
+    return count === 1;
   },
 
   /**
@@ -354,6 +366,23 @@ export const ciRunnerProvisioningIntentRepository = {
   ): Promise<number> {
     return tx.ciRunnerProvisioningIntent.count({
       where: { organizationId, status: { in: [...CI_RUNNER_INTENT_IN_FLIGHT] } },
+    });
+  },
+
+  /**
+   * Every intent ONE ORGANISATION has in flight — the input of an org STOP
+   * (MOTIR-6908, `fleetStopService.stopOrganization`). Unbounded on purpose: the
+   * org's pool bounds it (500 by default), and a stop that tore down only the
+   * first page would leave the rest running on a zero balance. Rides
+   * `[organization_id, status]`.
+   */
+  async listInFlightForOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<CiRunnerProvisioningIntent[]> {
+    return tx.ciRunnerProvisioningIntent.findMany({
+      where: { organizationId, status: { in: [...CI_RUNNER_INTENT_IN_FLIGHT] } },
+      orderBy: { createdAt: 'asc' },
     });
   },
 

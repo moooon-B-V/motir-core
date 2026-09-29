@@ -1433,6 +1433,9 @@ export default defineConfig({
         'lib/services/ciRunnerBootService.ts',
         'lib/services/ciRunnerAdmissionService.ts',
         'lib/services/fleetCeilingService.ts',
+        // Story MOTIR-6906 · MOTIR-6908 — the org stop.
+        'lib/services/fleetStopService.ts',
+        'lib/github/actionsRuns.ts',
         'lib/repositories/ciRunnerProvisioningIntentRepository.ts',
         'lib/repositories/ciFleetAdmissionLockRepository.ts',
         'lib/repositories/fleetInFlightSlotRepository.ts',
@@ -4646,6 +4649,8 @@ export default defineConfig({
         'lib/services/ciRunnerBootService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/ciRunnerAdmissionService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/fleetCeilingService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/fleetStopService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/github/actionsRuns.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/ciRunnerProvisioningIntentRepository.ts': {
           branches: 90,
           functions: 90,
