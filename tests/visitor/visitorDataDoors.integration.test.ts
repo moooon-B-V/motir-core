@@ -11,10 +11,12 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { consentedVisitor } from './_consentedVisitor';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
+import { visitorRecordsService } from '@/lib/services/visitorRecordsService';
+import { VISITOR_ADDRESS_HEADER } from '@/lib/visitor/address';
 
 // The client DATA DOORS a Visitor view calls (Story MOTIR-6170 · MOTIR-6647),
-// driven as the browser drives them: a `motir_visitor` cookie naming the public
-// project, the reader's session, and the real resolver and datastore behind them.
+// driven as the browser drives them: the Visitor tab's `x-motir-visitor` address
+// naming the public project (MOTIR-6892 — never the address), the reader's session, and the real resolver and datastore behind them.
 // A signed-in, consented stranger is served that project's data, with every
 // private-epic descendant withheld; everyone else — no session, no consent, a
 // member — is answered exactly as the route answers today.
@@ -110,11 +112,11 @@ async function publicProject() {
 
 type Fixture = Awaited<ReturnType<typeof publicProject>>;
 
-/** Sign the reader in as a consented stranger of `t`, cookie set, no workspace. */
+/** Sign the reader in as a consented stranger of `t`, addressed to it, no workspace. */
 async function asVisitor(t: Fixture) {
   const ctx = await consentedVisitor(t.identifier);
   session.current = { user: { id: ctx.actorUserId, email: 'stranger@example.com', name: 'S' } };
-  incoming.current = new Headers({ cookie: `motir_visitor=${t.identifier}` });
+  incoming.current = new Headers({ [VISITOR_ADDRESS_HEADER]: t.identifier });
   return ctx.actorUserId;
 }
 
@@ -130,8 +132,11 @@ function asMember(t: Fixture) {
   wsCtx.current = { userId: t.fx.ownerId, workspaceId: t.fx.workspaceId };
 }
 
-const req = (path: string, cookie?: string) =>
-  new Request(`${BASE}${path}`, { headers: cookie ? { cookie } : {} });
+/** A request as a tab sends it: carrying `address` as its Visitor address, or none. */
+const req = (path: string, address?: string) =>
+  new Request(`${BASE}${path}`, {
+    headers: address ? { [VISITOR_ADDRESS_HEADER]: address } : {},
+  });
 const params = <T>(p: T) => ({ params: Promise.resolve(p) });
 const text = async (res: Response) => JSON.stringify(await res.clone().json());
 
@@ -139,32 +144,32 @@ describe('a consented Visitor is served the public project, withheld rows exclud
   it('the board, boards, peek, comments, activity, rollup, roadmap and tree answer 200', async () => {
     const t = await publicProject();
     await asVisitor(t);
-    const cookie = `motir_visitor=${t.identifier}`;
+    const address = t.identifier;
 
-    const board = await boardGET(req('/api/board', cookie));
+    const board = await boardGET(req('/api/board', address));
     expect(board.status).toBe(200);
     const boardBody = await text(board);
     expect(boardBody).toContain(t.V.id);
     for (const h of t.hidden) expect(boardBody).not.toContain(h.id);
 
-    expect((await boardsGET(req('/api/boards', cookie))).status).toBe(200);
+    expect((await boardsGET(req('/api/boards', address))).status).toBe(200);
 
-    const peek = await peekGET(req(`/api/work-items/peek?key=${t.V.identifier}`, cookie));
+    const peek = await peekGET(req(`/api/work-items/peek?key=${t.V.identifier}`, address));
     expect(peek.status).toBe(200);
     expect(await text(peek)).not.toContain('@');
 
     for (const get of [commentsGET, allGET, historyGET]) {
-      const res = await get(req(`/api/work-items/${t.V.id}/x`, cookie), params({ id: t.V.id }));
+      const res = await get(req(`/api/work-items/${t.V.id}/x`, address), params({ id: t.V.id }));
       expect(res.status).toBe(200);
     }
     const rollup = await rollupGET(
-      req(`/api/work-items/${t.E.id}/rollup`, cookie),
+      req(`/api/work-items/${t.E.id}/rollup`, address),
       params({ id: t.E.id }),
     );
     expect(rollup.status).toBe(200);
 
     const roadmap = await roadmapGET(
-      req(`/api/projects/${t.identifier}/roadmap`, cookie),
+      req(`/api/projects/${t.identifier}/roadmap`, address),
       params({ key: t.identifier }),
     );
     expect(roadmap.status).toBe(200);
@@ -184,39 +189,35 @@ describe('a consented Visitor is served the public project, withheld rows exclud
   it('a hidden item answers exactly as an unknown one does', async () => {
     const t = await publicProject();
     await asVisitor(t);
-    const cookie = `motir_visitor=${t.identifier}`;
-    const hidden = await commentsGET(req('/x', cookie), params({ id: t.C.id }));
-    const unknown = await commentsGET(req('/x', cookie), params({ id: 'cm-not-an-item' }));
+    const address = t.identifier;
+    const hidden = await commentsGET(req('/x', address), params({ id: t.C.id }));
+    const unknown = await commentsGET(req('/x', address), params({ id: 'cm-not-an-item' }));
     expect(hidden.status).toBe(404);
     expect(unknown.status).toBe(404);
-    const hiddenPeek = await peekGET(req(`/api/work-items/peek?key=${t.C.identifier}`, cookie));
-    const unknownPeek = await peekGET(req(`/api/work-items/peek?key=${t.identifier}-9999`, cookie));
+    const hiddenPeek = await peekGET(req(`/api/work-items/peek?key=${t.C.identifier}`, address));
+    const unknownPeek = await peekGET(
+      req(`/api/work-items/peek?key=${t.identifier}-9999`, address),
+    );
     expect(hiddenPeek.status).toBe(404);
     expect(await hiddenPeek.json()).toEqual(await unknownPeek.json());
     const drill = await listChildIssuesAction({ sortParam: '', parentId: t.C.id });
     expect(drill).toEqual({ ok: false, error: 'That issue no longer exists.' });
   });
 
-  it('a cookie naming project A never serves a resource of project B', async () => {
+  it('an address naming project A never serves a resource of project B', async () => {
     const a = await publicProject();
     const b = await publicProject();
     await asVisitor(a);
-    const res = await commentsGET(
-      req('/x', `motir_visitor=${a.identifier}`),
-      params({ id: b.V.id }),
-    );
+    const res = await commentsGET(req('/x', a.identifier), params({ id: b.V.id }));
     expect(res.status).toBe(404);
-    const roadmap = await roadmapGET(
-      req('/x', `motir_visitor=${a.identifier}`),
-      params({ key: b.identifier }),
-    );
+    const roadmap = await roadmapGET(req('/x', a.identifier), params({ key: b.identifier }));
     expect(roadmap.status).toBe(404);
   });
 
   it('a run touching a withheld item is not found; one on a visible item is served', async () => {
     const t = await publicProject();
     await asVisitor(t);
-    const cookie = `motir_visitor=${t.identifier}`;
+    const address = t.identifier;
     const run = (scopeWorkItemId: string) =>
       adminDb.dispatchRun.create({
         data: {
@@ -232,64 +233,61 @@ describe('a consented Visitor is served the public project, withheld rows exclud
       });
     const visible = await run(t.V.id);
     const hidden = await run(t.C.id);
-    expect((await runGET(req('/x', cookie), params({ id: visible.id }))).status).toBe(200);
-    expect((await runGET(req('/x', cookie), params({ id: hidden.id }))).status).toBe(404);
+    expect((await runGET(req('/x', address), params({ id: visible.id }))).status).toBe(200);
+    expect((await runGET(req('/x', address), params({ id: hidden.id }))).status).toBe(404);
   });
 });
 
 describe('everyone else is answered exactly as today', () => {
-  it('no session answers 401, cookie or not', async () => {
+  it('no session answers 401, address or not', async () => {
     const t = await publicProject();
-    const cookie = `motir_visitor=${t.identifier}`;
-    expect((await boardGET(req('/api/board', cookie))).status).toBe(401);
-    const withCookie = await commentsGET(req('/x', cookie), params({ id: t.V.id }));
+    const address = t.identifier;
+    expect((await boardGET(req('/api/board', address))).status).toBe(401);
+    const withAddress = await commentsGET(req('/x', address), params({ id: t.V.id }));
     const without = await commentsGET(req('/x'), params({ id: t.V.id }));
-    expect(withCookie.status).toBe(401);
-    expect(await withCookie.json()).toEqual(await without.json());
+    expect(withAddress.status).toBe(401);
+    expect(await withAddress.json()).toEqual(await without.json());
   });
 
-  it('a signed-in stranger WITHOUT a consent gets the answer they get with no cookie', async () => {
+  it('a signed-in stranger WITHOUT a consent gets the answer they get with no address', async () => {
     const t = await publicProject();
     const stranger = await adminDb.user.create({
       data: { email: `nc-${seq++}@example.com`, name: 'No consent', emailVerified: true },
     });
     session.current = { user: { id: stranger.id, email: stranger.email, name: 'N' } };
-    const cookie = `motir_visitor=${t.identifier}`;
-    const withCookie = await boardGET(req('/api/board', cookie));
+    const address = t.identifier;
+    const withAddress = await boardGET(req('/api/board', address));
     const without = await boardGET(req('/api/board'));
-    expect(withCookie.status).toBe(without.status);
-    expect(await withCookie.json()).toEqual(await without.json());
-    const cWith = await commentsGET(req('/x', cookie), params({ id: t.V.id }));
+    expect(withAddress.status).toBe(without.status);
+    expect(await withAddress.json()).toEqual(await without.json());
+    const cWith = await commentsGET(req('/x', address), params({ id: t.V.id }));
     const cWithout = await commentsGET(req('/x'), params({ id: t.V.id }));
     expect(cWith.status).toBe(cWithout.status);
   });
 
-  it('a cookie naming a non-public or unknown project changes nothing', async () => {
+  it('an address naming a non-public or unknown project changes nothing', async () => {
     const t = await publicProject();
     await asVisitor(t);
     await adminDb.project.update({
       where: { id: t.fx.projectId },
       data: projectAccessData('members'),
     });
-    const gone = await commentsGET(
-      req('/x', `motir_visitor=${t.identifier}`),
-      params({ id: t.V.id }),
-    );
-    const unknown = await commentsGET(req('/x', 'motir_visitor=NOPE404'), params({ id: t.V.id }));
+    const gone = await commentsGET(req('/x', t.identifier), params({ id: t.V.id }));
+    const unknown = await commentsGET(req('/x', 'NOPE404'), params({ id: t.V.id }));
     const none = await commentsGET(req('/x'), params({ id: t.V.id }));
     expect(gone.status).toBe(none.status);
     expect(unknown.status).toBe(none.status);
   });
 
-  it('a member of the project, cookie or not, is served exactly as today', async () => {
+  it('a member of the project, address or not, is served exactly as today', async () => {
     const t = await publicProject();
     asMember(t);
-    const cookie = `motir_visitor=${t.identifier}`;
-    const withCookie = await boardGET(req('/api/board', cookie));
+    const address = t.identifier;
+    const withAddress = await boardGET(req('/api/board', address));
     const without = await boardGET(req('/api/board'));
-    expect(withCookie.status).toBe(200);
-    expect(await text(withCookie)).toEqual(await text(without));
-    const cWith = await commentsGET(req('/x', cookie), params({ id: t.C.id }));
+    expect(withAddress.status).toBe(200);
+    expect(await text(withAddress)).toEqual(await text(without));
+    const cWith = await commentsGET(req('/x', address), params({ id: t.C.id }));
     expect(cWith.status).toBe(200);
   });
 });
@@ -303,16 +301,136 @@ describe('the per-person read budget', () => {
     const t = await publicProject();
     await asVisitor(t);
     await waitForWindowHeadroom(READ_WINDOW_MS, READ_HEADROOM_MS);
-    const cookie = `motir_visitor=${t.identifier}`;
-    expect((await boardGET(req('/api/board', cookie))).status).toBe(200);
-    expect((await boardGET(req('/api/board', cookie))).status).toBe(200);
-    const refused = await boardGET(req('/api/board', cookie));
+    const address = t.identifier;
+    expect((await boardGET(req('/api/board', address))).status).toBe(200);
+    expect((await boardGET(req('/api/board', address))).status).toBe(200);
+    const refused = await boardGET(req('/api/board', address));
     expect(refused.status).toBe(429);
     expect(refused.headers.get('Retry-After')).toBeTruthy();
 
     asMember(t);
     for (let i = 0; i < 3; i += 1) {
-      expect((await boardGET(req('/api/board', cookie))).status).toBe(200);
+      expect((await boardGET(req('/api/board', address))).status).toBe(200);
     }
+  });
+});
+
+// ── MOTIR-6892 — the Visitor's address travels on the REQUEST, not in the browser ──
+//
+// The `motir_visitor` cookie is one value per browser, and a member page in the
+// reader's OTHER tab clears it. So a Visitor tab names its project on every
+// request it makes (`x-motir-visitor`, `lib/visitor/address.ts`), and the doors
+// read that — the cookie is the proxy's redirect hint alone.
+describe('the Visitor address is the request header, never the cookie (MOTIR-6892)', () => {
+  /** The reader owns project M (their active project) AND is a consented Visitor of public T. */
+  async function memberOfMVisitorOfT() {
+    const m = await publicProject();
+    const t = await publicProject();
+    asMember(m);
+    await visitorRecordsService.recordConsent({ identifier: t.identifier, userId: m.fx.ownerId });
+    return { m, t };
+  }
+  const addressed = (path: string, identifier: string) => req(path, identifier);
+  /** A request carrying `cookie` (and no address) — the member tab with a stale cookie. */
+  const withCookie = (path: string, cookie: string) =>
+    new Request(`${BASE}${path}`, { headers: { cookie } });
+
+  it('with the cookie CLEARED, the address alone serves the public project on every Visitor read', async () => {
+    const { m, t } = await memberOfMVisitorOfT();
+    incoming.current = new Headers({ [VISITOR_ADDRESS_HEADER]: t.identifier });
+
+    const board = await boardGET(addressed('/api/board', t.identifier));
+    expect(board.status).toBe(200);
+    const boardBody = await text(board);
+    expect(boardBody).toContain(t.V.id);
+    expect(boardBody).not.toContain(m.V.id);
+    for (const h of t.hidden) expect(boardBody).not.toContain(h.id);
+
+    expect((await boardsGET(addressed('/api/boards', t.identifier))).status).toBe(200);
+
+    const peek = await peekGET(
+      addressed(`/api/work-items/peek?key=${t.V.identifier}`, t.identifier),
+    );
+    expect(peek.status).toBe(200);
+    expect(await text(peek)).toContain(t.V.identifier);
+
+    for (const get of [commentsGET, allGET, historyGET]) {
+      const res = await get(addressed('/x', t.identifier), params({ id: t.V.id }));
+      expect(res.status).toBe(200);
+    }
+    const run = await adminDb.dispatchRun.create({
+      data: {
+        workspaceId: t.fx.workspaceId,
+        projectId: t.fx.projectId,
+        command: 'run_scope',
+        status: 'running',
+        scopeWorkItemId: t.V.id,
+        cards: { create: { workspaceId: t.fx.workspaceId, workItemId: t.V.id, position: 0 } },
+      },
+    });
+    expect((await runGET(addressed('/x', t.identifier), params({ id: run.id }))).status).toBe(200);
+
+    const root = await listRootIssuesAction({ sortParam: '' });
+    expect(root.ok).toBe(true);
+    if (root.ok) {
+      const ids = root.level.rows.map((r) => r.id);
+      expect(ids).toEqual(expect.arrayContaining([t.E.id, t.V.id]));
+      expect(ids).not.toContain(m.V.id);
+    }
+  });
+
+  it('a member request with NO address is answered by the member path, even with a stale cookie', async () => {
+    const { m, t } = await memberOfMVisitorOfT();
+    const stale = `motir_visitor=${t.identifier}`;
+    incoming.current = new Headers({ cookie: stale });
+
+    const withStale = await boardGET(withCookie('/api/board', stale));
+    const without = await boardGET(req('/api/board'));
+    expect(withStale.status).toBe(200);
+    const body = await text(withStale);
+    expect(body).toEqual(await text(without));
+    expect(body).toContain(m.V.id);
+    expect(body).not.toContain(t.V.id);
+
+    const peek = await peekGET(withCookie(`/api/work-items/peek?key=${m.V.identifier}`, stale));
+    expect(peek.status).toBe(200);
+    // Addressed by a resource of the public project, the member path's own answer stands.
+    const foreign = await commentsGET(withCookie('/x', stale), params({ id: t.V.id }));
+    const foreignNone = await commentsGET(req('/x'), params({ id: t.V.id }));
+    expect(foreign.status).toBe(foreignNone.status);
+
+    const root = await listRootIssuesAction({ sortParam: '' });
+    expect(root.ok && root.level.rows.map((r) => r.id)).toEqual(expect.arrayContaining([m.V.id]));
+    expect(root.ok && root.level.rows.map((r) => r.id)).not.toContain(t.V.id);
+  });
+
+  it('an address the session cannot visit grants nothing: not_found, enter and consent answer as the member path', async () => {
+    const { m, t } = await memberOfMVisitorOfT();
+    const memberBoard = await text(await boardGET(req('/api/board')));
+    const memberComments = await commentsGET(req('/x'), params({ id: t.V.id }));
+
+    // not_found — an unknown project, and a project that is no longer public.
+    const other = await publicProject();
+    await visitorRecordsService.recordConsent({
+      identifier: other.identifier,
+      userId: m.fx.ownerId,
+    });
+    await adminDb.project.update({
+      where: { id: other.fx.projectId },
+      data: projectAccessData('members'),
+    });
+    // enter — the reader's OWN project, which they can enter.
+    // consent — a public project the reader never consented to.
+    const unconsented = await publicProject();
+    for (const address of ['NOPE404', other.identifier, m.identifier, unconsented.identifier]) {
+      const board = await boardGET(addressed('/api/board', address));
+      expect(board.status).toBe(200);
+      expect(await text(board)).toEqual(memberBoard);
+      const c = await commentsGET(addressed('/x', address), params({ id: t.V.id }));
+      expect(c.status).toBe(memberComments.status);
+    }
+    // A malformed address is no address at all.
+    const odd = await boardGET(addressed('/api/board', 'not a key!'));
+    expect(await text(odd)).toEqual(memberBoard);
   });
 });

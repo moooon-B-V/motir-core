@@ -4,11 +4,12 @@ import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 // writes it). A module of its own, with no server imports, because `proxy.ts` is
 // what sets and clears it and must not pull the datastore in to learn its name.
 //
-// ⚠️ AN ADDRESS, NEVER A CREDENTIAL. It names the public project a signed-in
-// reader is watching, so the client data doors (`lib/visitor/readActor.ts`) know
-// which project a Visitor's fetch is about. It grants nothing on its own: a door
-// serves a Visitor only when the SESSION resolves, through `resolveVisitor`, to a
-// consented Visitor of exactly that project.
+// ⚠️ A REDIRECT HINT, AND NOTHING MORE (MOTIR-6892). It names the public project a
+// signed-in reader last opened, so `proxy.ts` can send a member link followed from
+// a Visitor view to that view's own path. The client data doors USED to read it,
+// and a cookie is one value per browser — a member page in another tab cleared it
+// under the Visitor tab. They now read the per-tab `x-motir-visitor` header
+// instead (`lib/visitor/address.ts`), and nothing but the proxy reads this.
 
 /** The cookie's name. */
 export const VISITOR_COOKIE = 'motir_visitor';

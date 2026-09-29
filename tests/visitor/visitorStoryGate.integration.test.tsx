@@ -16,6 +16,7 @@ import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { planSessionsService } from '@/lib/services/planSessionsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { visitorRecordsService } from '@/lib/services/visitorRecordsService';
+import { VISITOR_ADDRESS_HEADER } from '@/lib/visitor/address';
 import { VisitorConsentNotApplicableError } from '@/lib/visitor/errors';
 import type { VisitorReadContext } from '@/lib/visitor/context';
 import { __resetSharedRateLimitStoreForTest } from '@/lib/rateLimit/store';
@@ -59,6 +60,8 @@ const { state, redirect, notFound, permanentRedirect } = vi.hoisted(() => ({
     session: null as { user: { id: string; name: string; email: string } } | null,
     path: null as string | null,
     cookie: null as string | null,
+    /** The Visitor tab's per-request address (`x-motir-visitor`, MOTIR-6892). */
+    address: null as string | null,
     active: null as unknown,
     ws: null as unknown,
   },
@@ -96,6 +99,8 @@ vi.mock('next/headers', () => ({
     new Headers({
       ...(state.path ? { 'x-current-path': state.path } : {}),
       ...(state.cookie ? { cookie: state.cookie } : {}),
+      // The Visitor address header — spelled out, since a mock factory is hoisted above the imports.
+      ...(state.address ? { 'x-motir-visitor': state.address } : {}),
     }),
   cookies: async () => ({
     get: (name: string) => {
@@ -149,7 +154,14 @@ beforeEach(async () => {
   pinSharedRateLimitStoreDeadline();
   process.env['MOTIR_CLOUD'] = 'true';
   delete process.env['MOTIR_PUBLIC_READ_RATE_LIMIT'];
-  Object.assign(state, { session: null, path: null, cookie: null, active: null, ws: null });
+  Object.assign(state, {
+    session: null,
+    path: null,
+    cookie: null,
+    address: null,
+    active: null,
+    ws: null,
+  });
   redirect.mockClear();
   notFound.mockClear();
 });
@@ -189,12 +201,14 @@ function userOf(t: StoryGateFixture, who: Reader) {
 /**
  * Sign `who` in as the browser would present them on a Visitor view: their
  * session, their own workspace and active project (the app resolves those from
- * the session alone), and the `motir_visitor` cookie naming `cookieFor`.
+ * the session alone), and the `motir_visitor` cookie AND the tab's
+ * `x-motir-visitor` address (MOTIR-6892) naming `cookieFor`.
  */
 function as(t: StoryGateFixture, who: Reader, cookieFor: string | null = t.identifier) {
   const u = userOf(t, who);
   state.session = u ? sessionOf(u) : null;
   state.cookie = cookieFor ? `motir_visitor=${cookieFor}` : null;
+  state.address = cookieFor;
   const own = (fx: StoryGateFixture['fx'] | StoryGateFixture['other'], userId: string) => {
     state.ws = { userId, workspaceId: fx.workspaceId } satisfies WorkspaceContext;
     state.active = {
@@ -244,7 +258,10 @@ async function answer(res: Response) {
 
 function req(path: string) {
   return new Request(`${BASE}${path}`, {
-    headers: state.cookie ? { cookie: state.cookie } : {},
+    headers: {
+      ...(state.cookie ? { cookie: state.cookie } : {}),
+      ...(state.address ? { [VISITOR_ADDRESS_HEADER]: state.address } : {}),
+    },
   });
 }
 const params = <T,>(p: T) => ({ params: Promise.resolve(p) });

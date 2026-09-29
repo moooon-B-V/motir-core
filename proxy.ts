@@ -94,7 +94,9 @@ export function isAppVisitorPath(pathname: string): boolean {
  * `/sign-in` would tell a stranger that a private project's key is real. So the
  * layout owns the sign-in redirect, and this only forwards the path (the layout
  * builds its `next=` from it, validated) and, on a VIEW, writes the
- * `motir_visitor` cookie the client data doors read (`lib/visitor/cookie.ts`).
+ * `motir_visitor` cookie — the redirect hint `visitorLinkRedirect` reads
+ * (`lib/visitor/cookie.ts`). The data doors do NOT read it: a Visitor tab names
+ * its project on each request instead (`lib/visitor/address.ts`, MOTIR-6892).
  *
  * The cookie is written HERE because a Server Component cannot set one. Writing it
  * before the layout has decided anything is safe by construction: it is an
@@ -174,11 +176,12 @@ function visitorLinkRedirect(request: NextRequest): NextResponse | null {
 
 /**
  * Forget the Visitor's project on any other page (MOTIR-6648). The cookie is
- * sticky, and the doors addressed by the ACTIVE project (`visitorThenMember` —
- * the board, the peek) let a `visitor` verdict decide first: left set, a reader
- * who goes back to their OWN workspace would be served the public project's board
- * inside it. So a real navigation to any member page clears it — never a PREFETCH,
- * which happens while the reader is still on the Visitor view.
+ * sticky, and left set it would outlive the Visitor view it names and keep
+ * steering member links back to it. So a real navigation to any member page clears it —
+ * never a PREFETCH, which happens while the reader is still on the Visitor view.
+ * (The data doors once read it too, which is why clearing it from another tab
+ * broke a Visitor tab's reads; since MOTIR-6892 they read the per-tab
+ * `x-motir-visitor` header instead, so this clear touches links only.)
  *
  * ⚠️ AND NEVER A REQUEST FOLLOWED FROM THE VISITOR VIEW ITSELF (MOTIR-6888).
  * `isPrefetch` cannot see a router prefetch on this Next: `next@16.2.6`'s adapter

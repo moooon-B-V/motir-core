@@ -7,6 +7,7 @@ import { pinSharedRateLimitStoreDeadline } from '@/tests/helpers/rateLimitStore'
 import { truncateRateLimitCounters } from '@/tests/helpers/db';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { VISITOR_ADDRESS_HEADER } from '@/lib/visitor/address';
 import { changedTables, snapshotRows } from './_rowSnapshot';
 import { consent, storyGateFixture, type StoryGateFixture } from './_storyGateFixture';
 
@@ -41,6 +42,7 @@ const { state } = vi.hoisted(() => ({
   state: {
     session: null as { user: { id: string; name: string; email: string } } | null,
     cookie: null as string | null,
+    address: null as string | null,
   },
 }));
 vi.mock('@/lib/auth', async (orig) => ({
@@ -49,7 +51,11 @@ vi.mock('@/lib/auth', async (orig) => ({
   readSession: async () => state.session,
 }));
 vi.mock('next/headers', () => ({
-  headers: async () => new Headers(state.cookie ? { cookie: state.cookie } : {}),
+  headers: async () =>
+    new Headers(
+      // The Visitor address header — spelled out, since a mock factory is hoisted above the imports.
+      state.cookie ? { cookie: state.cookie, 'x-motir-visitor': state.address! } : {},
+    ),
   cookies: async () => ({
     get: (name: string) => {
       const m = state.cookie?.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
@@ -146,6 +152,7 @@ function as(who: Reader) {
   const u = { R0: null, R1: t.people.r1, R2: t.people.r2, R3: t.people.r3 }[who];
   state.session = u ? { user: { id: u.id, name: u.name, email: u.email } } : null;
   state.cookie = `motir_visitor=${t.identifier}`;
+  state.address = t.identifier;
 }
 
 /** A real fixture row for each dynamic segment the families use. */
@@ -268,7 +275,11 @@ describe('every write route in the Visitor-reachable families refuses R0–R3 an
             const res = await handler(
               new Request(`http://localhost:3000${path}`, {
                 method,
-                headers: { cookie: state.cookie!, 'content-type': 'application/json' },
+                headers: {
+                  cookie: state.cookie!,
+                  [VISITOR_ADDRESS_HEADER]: state.address!,
+                  'content-type': 'application/json',
+                },
                 body: JSON.stringify(probeBody()),
               }),
               { params: Promise.resolve(params) },
