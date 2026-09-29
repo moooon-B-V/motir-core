@@ -116,8 +116,9 @@ describe('the curated overview', () => {
                                   binary, credential presence.
 
       READ COMMANDS:
-        ready [options]           List the linked project’s ready set (every
-                                  dependency satisfied).
+        ready [options]           List the linked project’s ready leaves, grouped
+                                  under their runnable containers — or, with --parent
+                                  / --bug, the other two ready lanes.
         status [options]          Show the project pulse: ready / in-flight counts +
                                   the active sprint.
         sprints [options]         List the project’s sprints: state, item count,
@@ -130,8 +131,9 @@ describe('the curated overview', () => {
                                   prints the URL.
 
       WORK LOOP COMMANDS:
-        next [options]            Dispatch the next ready work item: claim it and
-                                  deliver its prompt.
+        next [options]            Dispatch the next ready leaf (never a bug): claim it
+                                  and deliver its prompt. --parent runs the next
+                                  runnable container; --bug takes the next bug.
         run [options] <scope>     Run a scope: one work item, a whole story, or
                                   \`sprint\` for the active one.
         fix [options] <key>       Hand a work item whose pull requests are failing,

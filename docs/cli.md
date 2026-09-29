@@ -22,7 +22,8 @@ code. It never reads the agent's credential and never inspects its output.
 
 **Contents** — [Install](#install) · [Authenticate](#authenticate) ·
 [Link](#link-a-workspace-root) · [Preflight](#preflight) ·
-[Your first run](#your-first-run) · [Command reference](#command-reference) ·
+[Your first run](#your-first-run) · [The three ready lanes](#the-three-ready-lanes) ·
+[Command reference](#command-reference) ·
 [The run shapes](#the-run-shapes) ·
 [Planning](#planning-from-the-terminal) ·
 [Dispatch runs](#dispatch-runs--the-record-of-what-a-run-did) ·
@@ -118,7 +119,7 @@ sentence:
 
 ```
 $ motir ready
-Error: This token is not granted the 'project:browse' permission required for getProjectReadySet.
+Error: This token is not granted the 'project:browse' permission required for getProjectReadyLeaves.
 Hint: Grant the 'project:browse' permission on a token: Settings → Account → Tokens.
 ```
 
@@ -336,8 +337,14 @@ sprint holds, and what the item you are about to pick up actually says:
 ```sh
 motir status                   # ready / in-flight counts + the active sprint
 motir sprint                   # the active sprint's items, and what blocks what
-motir ready                    # what can be picked up right now
+motir ready                    # what can be picked up right now, grouped by story
 ```
+
+`motir ready` prints the ready **leaves** grouped under the story, task or bug
+they belong to: a header line — `KEY  kind  title  (n of m ready)` — over its
+leaves, indented. A leaf with no such container stands alone. Bugs are not in
+this list; `motir ready --bug` shows them, and `motir ready --parent` lists the
+containers themselves (see [The three ready lanes](#the-three-ready-lanes)).
 
 `motir sprint` and `motir ready` show dependency edges in their own columns, so
 you can see which item unblocks the most before choosing one — see
@@ -356,7 +363,15 @@ something that does not exist yet, or that three of its siblings are buildable i
 parallel. Now claim it:
 
 ```sh
-motir next --print             # claim the top item, print its prompt
+motir next --print             # claim the next LEAF, print its prompt
+```
+
+`motir next` takes the next **leaf** — never a bug. Two siblings take the other
+lanes:
+
+```sh
+motir next --parent --agent "…"    # run the next whole story as a parent run
+motir next --bug --print           # take the next bug instead
 ```
 
 `--print` writes the **prompt to stdout** and everything else (the repo, the
@@ -587,6 +602,50 @@ reason, rather than failing with `unknown option`.
 
 ---
 
+## The three ready lanes
+
+A work item is **ready** when every `blocked_by` dependency is done and every
+ancestor is ready too. Motir splits that one ready set three ways — the way work
+is actually run — and every surface reads the same split: the web app's `/ready`
+page, the MCP `list_ready` / `next_ready` tools (their `lane` argument) and the
+CLI.
+
+- **Leaves** — the ready leaves that are not bug work. The lane `motir next` and
+  `motir ready` read. Each row names its **runnable container**: a story, task or
+  bug whose every child is a leaf — exactly the shape `motir run <KEY>` runs as a
+  parent run — or none.
+- **Containers** — those runnable containers (bugs excluded) holding at least one
+  ready leaf: what `motir next --parent` runs and `motir ready --parent` lists.
+  **An epic is never one**, and neither is a container one of whose children has
+  children of its own: its leaves stand alone instead.
+- **Bugs** — **bug work**: a ready bug, or a ready subtask of a bug. What
+  `motir next --bug` takes and `motir ready --bug` lists. A childless bug stands
+  alone; a bug's ready subtasks group under it.
+
+**The order.** Rows come grouped by container. A group ranks by its **best**
+member's `(kind, priority, key)` — the dispatch rank the flat set always used — and
+members keep that rank inside their group. So the first leaf is still the one the
+flat set would have picked first, unless that one was a bug.
+
+**The endpoints**, one per lane:
+
+- `GET /api/v1/projects/{key}/ready/leaves` — the leaves, each with its `container`.
+- `GET /api/v1/projects/{key}/ready/containers` — the runnable containers, each
+  with `readyLeafCount` and `childCount`.
+- `GET /api/v1/projects/{key}/ready/bugs` — the bug work.
+
+**Which command reads which lane:**
+
+| Command                     | Reads                                                                     |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `motir next`                | the leaves lane — never a bug                                             |
+| `motir next --parent`       | the containers lane, then runs the pick exactly as `motir run <KEY>`      |
+| `motir next --bug`          | the bugs lane — a bug with ready subtasks runs whole, as a parent run     |
+| `motir ready`               | the leaves lane, grouped · `--parent` the containers · `--bug` the bugs   |
+| `motir auto`                | the leaves lane until it is drained, **then** the bugs lane               |
+| `motir batch`               | leaves and bugs together, leaves first — one snapshot                     |
+| `motir run <story>` (scope) | leaves and bugs together under the story, so its edged bug is claimed too |
+
 ## Command reference
 
 Every command and flag the binary registers. `motir`, `motir help`, and
@@ -619,17 +678,19 @@ motir doctor --agent "codex exec --sandbox workspace-write" --json
 
 ### Read
 
-| Command              | Flags                                                           |
-| -------------------- | --------------------------------------------------------------- |
-| `motir ready`        | `--kinds <list>` · `--assignee <id\|me\|unassigned>` · `--json` |
-| `motir status`       | `--json`                                                        |
-| `motir sprints`      | `--state <planned\|active\|complete>` · `--json`                |
-| `motir sprint [ref]` | `--kinds <list>` · `--json`                                     |
-| `motir show <key>`   | `--activity` · `--comments` · `--json`                          |
-| `motir open <key>`   | `--print`                                                       |
+| Command              | Flags                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------- |
+| `motir ready`        | `--kinds <list>` · `--assignee <id\|me\|unassigned>` · `--parent` · `--bug` · `--json` |
+| `motir status`       | `--json`                                                                               |
+| `motir sprints`      | `--state <planned\|active\|complete>` · `--json`                                       |
+| `motir sprint [ref]` | `--kinds <list>` · `--json`                                                            |
+| `motir show <key>`   | `--activity` · `--comments` · `--json`                                                 |
+| `motir open <key>`   | `--print`                                                                              |
 
 ```sh
-motir ready --kinds subtask,bug --assignee me
+motir ready --kinds subtask --assignee me
+motir ready --parent               # the runnable containers: what `motir next --parent` runs
+motir ready --bug                  # the ready bugs
 motir ready --json | jq '.[].key'
 motir status                       # ready / in-flight counts + the active sprint
 motir sprints --state active       # just the one that's running
@@ -642,7 +703,11 @@ motir open MOTIR-42 --print        # print the URL, don't launch a browser
 ```
 
 `--kinds` takes any of `epic,story,task,bug,subtask`; an unknown kind is a hard
-error naming the valid set. These reads ride the same service the web app's
+error naming the valid set. It narrows the lane you are reading — bugs are their
+own lane now, so ask for them with `--bug` rather than `--kinds bug`. `--parent`
+and `--bug` are mutually exclusive, and `--parent` refuses `--kinds` (a container
+has no leaf kind). An empty lane prints `No ready work items in the <lane> lane.`
+and exits 0. These reads ride the same service the web app's
 **`/ready`** page uses, so the two can never disagree — `/ready` is the human
 mirror of `motir ready`, and its in-app help popover is the on-surface
 explanation of what "ready" means.
@@ -758,7 +823,8 @@ MOTIR-809   story    in_progress  medium    MOTIR-808✓                        
 ✓ = already done
 ```
 
-`motir ready` carries **only `BLOCKS`**. That is not an omission: an item is in
+`motir ready` carries **only `BLOCKS`**, in every lane it prints — a container's
+header line leaves the column blank, since the edges are its leaves'. That is not an omission: an item is in
 the ready set precisely because every blocker is already done, so a `BLOCKED BY`
 column would be dead in every row. What a picker actually wants is downstream
 impact — _"do this one first, it unblocks three."_
@@ -872,7 +938,7 @@ reporting what the plan says. In `--json`, a cycle member's `wave` is `null`.
 
 | Command                | Flags                                                                                                                                                                                        |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `motir next`           | `--kinds <list>` · `--print` · `--print-prompt` · `--agent <cmd>` · `--reset` · `--disable-log-bug` · `--disable-replan`                                                                     |
+| `motir next`           | `--kinds <list>` · `--parent` · `--bug` · `--print` · `--print-prompt` · `--agent <cmd>` · `--reset` · `--disable-log-bug` · `--disable-replan`                                              |
 | `motir run <scope>`    | `--print`¹ · `--print-prompt` · `--agent <cmd>` · `--force`¹ · `--allow-soft-block`² · `--max <n>` · `--keep-going` · `--include-planning` · `--disable-log-bug` · `--disable-replan`        |
 | `motir auto`           | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--include-planning` · `--print-prompt` · `--disable-log-bug` · `--disable-replan` · `--auto-approve-replan` |
 | `motir batch`          | `--agent <cmd>` · `--kinds <list>` · `--max <n>` · `--keep-going` · `--reset` · `--print-prompt` · `--disable-log-bug` · `--disable-replan`                                                  |
@@ -884,6 +950,8 @@ reporting what the plan says. In `--json`, a cycle member's `wave` is `null`.
 ```sh
 motir next --kinds subtask --print
 motir next --agent "claude --dangerously-skip-permissions" --reset
+motir next --parent --agent "…"             # the next runnable STORY/TASK/BUG, run as `motir run <KEY>`
+motir next --bug --print                    # the next BUG's prompt
 motir run MOTIR-42 --print                  # ONE item
 motir run MOTIR-42 --force                  # dispatch it even though it isn't ready
 motir run MOTIR-42 --allow-soft-block       # dispatch it though its EPIC/STORY is blocked
@@ -920,6 +988,17 @@ HARD one:
   the scope is built from the ready read with `allowSoftBlock=true`, so the
   children held only by the story's ancestor chain are in it. A child with its
   own open blocker outside the scope stays out and is reported, never built.
+
+**`motir next --parent` and `--bug`.** `motir next` takes the next **leaf** and
+never a bug. `--parent` takes the next runnable container and runs it exactly as
+`motir run <KEY>` would — the same code, so the claim, the refusals and the
+parent branch are identical. `--bug` takes the next bug: a childless bug is
+dispatched as a leaf, and a bug whose ready subtasks form a group runs that bug as
+a parent run. Three combinations are refused before anything is claimed:
+`--parent` with `--print` (a parent run has no single prompt — `motir run
+<container> --print`'s own message), `--parent` with `--kinds` (a container has no
+leaf kind) and `--parent` with `--bug`. The session exclude list serves every
+lane: it is keyed by the work item's key.
 
 `--force` overrides both kinds (leaf only), so `--allow-soft-block --force` is
 refused as redundant. `motir next`, `motir auto` and `motir batch` do not take
@@ -1032,13 +1111,24 @@ agent failing in a directory that does not exist.
 
 |                       | `motir next` / `motir run <leaf>`                                                     | `motir run <story>` / `motir run sprint`                                                            | `motir auto`                                                                                                                       | `motir batch`                                        |
 | --------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| Work list             | one item                                                                              | **the scope, claimed up front** — every card under it, in one transaction                           | **live** — one `next_ready` per iteration                                                                                          | **frozen** — the ready set snapshotted up front      |
+| Work list             | one item — `motir next` a leaf; `motir next --bug` a bug                              | **the scope, claimed up front** — every card under it, in one transaction                           | **live** — one `next_ready` per iteration                                                                                          | **frozen** — the ready set snapshotted up front      |
 | Becomes ready mid-run | n/a                                                                                   | n/a — the run already owns the whole set and never re-asks                                          | picked up (the loop cascades the dependency graph)                                                                                 | **not** picked up — counted and named                |
 | Order                 | n/a                                                                                   | the scope's own `blocked_by` graph, computed once                                                   | the server's ready rank, re-asked every iteration                                                                                  | the rank, frozen at the snapshot                     |
 | Git lineage           | none — the item's own branch off `main`, the SAME name in every repository it carries | ONE session branch per repo, exactly as `auto` does                                                 | ONE session branch per repo, `motir/auto-<run-id>` — opened in every repository a dispatched card carries, or in none of them      | **none** — each item branches off `origin/main`      |
 | Pull requests         | **one per repository the item carries**, opened by the agent                          | **ONE per repo for the whole scope**, opened by the CLI as a DRAFT at that repo's first landed card | ONE per repo, opened by the CLI as a DRAFT at that repo's first landed card — including every repository a dispatched card carries | **one per item per repository**, opened by the agent |
 | Close-out             | `motir done <key>`                                                                    | `motir done --session <branch>` (bulk)                                                              | `motir done --session <branch>` (bulk)                                                                                             | `motir done <key>` (per item)                        |
 | Agent required        | no (`--print` is the default)                                                         | **yes** — a set has no single prompt to paste                                                       | **yes**                                                                                                                            | **yes**                                              |
+
+`motir next --parent` is a `motir run <story>` in every column: it picks the next
+runnable container from the containers lane and hands its key to the same run. So
+is `motir next --bug` on a bug with ready subtasks; on a childless bug it is the
+leaf column.
+
+**What each shape reads from the ready lanes.** `motir auto` takes the leaves lane
+until it is empty and only then the bugs lane, so an unattended run finishes the
+planned work before it turns to defects. `motir batch` snapshots the leaves and
+the bugs together, leaves first. A scoped run reads the leaves and the bugs under
+its scope together, so a story's edged bug is claimed and run with it.
 
 ### `motir run <scope>` — a whole story, or the active sprint
 
@@ -1794,6 +1884,13 @@ curl -s https://motir.example.com/api/openapi/v1.json | jq -r .info.version
    CLI records the API version it was generated against, so an older one asks for
    less.
 
+**The ready lanes need `1.54.0`.** This CLI reads the ready set through the
+three lane operations (`…/ready/leaves`, `…/ready/containers`, `…/ready/bugs`),
+which a server older than contract `1.54.0` does not serve. Against one, every
+ready read — `motir next`, `motir ready`, `motir auto`, `motir batch`, a scoped run
+— reports the version skew above rather than a missing endpoint; the remedy is one
+of the two.
+
 **A MAJOR mismatch is the other direction** and says so — _"This CLI speaks Motir
 API v1, but … serves v2"_ — with the opposite remedy: upgrade the CLI.
 
@@ -1890,7 +1987,7 @@ repositories. It is a deliberate all-or-nothing: a lineage in some of a card's
 repositories and not others could never be closed out. Create or link the named
 checkout and re-run if you want the card on the session branch.
 
-**`motir next` says "No ready work items" but the board disagrees.** Check for
+**`motir next` says "No ready work items in the leaf lane" but the board disagrees.** The item may be a bug (`motir next --bug`) or a whole story (`motir next --parent`) — each lane is asked separately. Check for
 the skip line above it: previously-failed items are held out via the exclude
 list. `motir next --reset` clears it and retries them. Also confirm `--kinds`
 isn't narrowing the set, and that the token's user can actually see the project

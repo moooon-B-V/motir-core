@@ -583,8 +583,12 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       // "unassigned OR mine" has no wire form — which is why the page walk that
       // backs this must follow the cursor rather than stop at a page it cannot
       // use (MOTIR-2427).
+      // LEAVES FIRST, THEN BUGS (Story MOTIR-6829 · MOTIR-6835): the loop drains
+      // the leaves lane before it takes the first bug, so an unattended run
+      // finishes the planned work before it turns to defects.
       const { item } = await client.nextReady({
         projectKey,
+        lanes: ['leaf', 'bug'],
         ownerId,
         ...(kinds ? { kinds } : {}),
         ...(excludedKeys.size > 0 ? { excludeKeys: [...excludedKeys] } : {}),

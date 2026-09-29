@@ -708,7 +708,7 @@ describe('motir ready / sprint — the edge columns and their --json fidelity', 
     server.v1Calls.length = 0;
     server.resetV1();
     server.scriptV1({
-      'GET /api/v1/projects/{projectKey}/ready': { body: readyPage },
+      'GET /api/v1/projects/{projectKey}/ready/leaves': { body: readyPage },
       'GET /api/v1/projects/{projectKey}/sprints': { body: sprints },
       'GET /api/v1/projects/{projectKey}/work-items': { body: sprintPage },
     });

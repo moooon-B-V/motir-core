@@ -134,7 +134,7 @@ const readyItem = (over: Partial<ReadyItemSummary>): ReadyItemSummary => ({
 
 describe('renderReadyTable', () => {
   it('renders the empty-set line', () => {
-    expect(renderReadyTable([])).toBe('No ready work items.');
+    expect(renderReadyTable([])).toBe('No ready work items in the leaf lane.');
   });
   it('renders a count header + a row with the unassigned fallback', () => {
     const out = renderReadyTable([
@@ -431,7 +431,7 @@ describe('table + status formatting edges', () => {
   });
 
   it('renderReadyTable names the empty set instead of drawing an empty table', () => {
-    expect(renderReadyTable([])).toBe('No ready work items.');
+    expect(renderReadyTable([])).toBe('No ready work items in the leaf lane.');
     const one = renderReadyTable([
       { key: 'PROD-1', kind: 'subtask', title: 'x'.repeat(80), priority: 'high', assignee: null },
     ]);

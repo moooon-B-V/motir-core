@@ -522,6 +522,24 @@ describe('every operation’s REAL response validates against its declared schem
       { projectKey: pk },
     );
     await drive(
+      'getProjectReadyLeaves',
+      () => import('@/app/api/v1/projects/[projectKey]/ready/leaves/route'),
+      get(`/api/v1/projects/${pk}/ready/leaves`),
+      { projectKey: pk },
+    );
+    await drive(
+      'getProjectReadyContainers',
+      () => import('@/app/api/v1/projects/[projectKey]/ready/containers/route'),
+      get(`/api/v1/projects/${pk}/ready/containers`),
+      { projectKey: pk },
+    );
+    await drive(
+      'getProjectReadyBugs',
+      () => import('@/app/api/v1/projects/[projectKey]/ready/bugs/route'),
+      get(`/api/v1/projects/${pk}/ready/bugs`),
+      { projectKey: pk },
+    );
+    await drive(
       'listProjectSprints',
       () => import('@/app/api/v1/projects/[projectKey]/sprints/route'),
       get(`/api/v1/projects/${pk}/sprints`),

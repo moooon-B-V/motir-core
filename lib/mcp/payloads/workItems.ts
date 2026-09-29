@@ -11,7 +11,11 @@ import {
   workItemRefSchema,
   workItemSummarySchema,
 } from '@/lib/api/v1/workItems/schema';
-import { readyItemSchema } from '@/lib/api/v1/ready/schema';
+import {
+  presentReadyContainer,
+  readyContainerSchema,
+  readyItemSchema,
+} from '@/lib/api/v1/ready/schema';
 import { presentWorkItemClaim, workItemClaimSchema } from '@/lib/api/v1/workLoop/schema';
 import type { WorkItemClaimDto } from '@/lib/dto/claim';
 import type {
@@ -20,7 +24,7 @@ import type {
   WorkItemListItemDto,
   WorkItemSummaryDto,
 } from '@/lib/dto/workItems';
-import type { ReadyItemDispatchDto, ReadyItemDto } from '@/lib/dto/ready';
+import type { ReadyContainerDto, ReadyItemDispatchDto, ReadyItemDto } from '@/lib/dto/ready';
 import type { PlanTreeSkeletonItem } from '@/lib/dto/ai';
 import type { AttachmentDTO } from '@/lib/dto/attachments';
 import type { CommentDTO } from '@/lib/dto/comments';
@@ -501,8 +505,41 @@ export const mcpReadyRowSchema = readyItemSchema.extend({
     .nullable(),
   descriptionMd: z.string().nullable(),
   commentCount: z.number().int(),
+  /**
+   * The runnable container a LANE row groups under (MOTIR-6833), as the v1
+   * `ReadyLaneItem` carries it — present on every `list_ready` / `next_ready`
+   * row now that both read a lane, absent on `claim_next_ready`, which keeps the
+   * unlaned set.
+   */
+  container: readyContainerSchema.nullable().optional(),
 });
 export type McpReadyRow = z.infer<typeof mcpReadyRowSchema>;
+
+/**
+ * A CONTAINERS-lane row (MOTIR-6833): the v1 `ReadyContainer`, widened with the
+ * id an agent passes back in `excludeIds` and the parent-run command.
+ */
+export const mcpReadyContainerSchema = readyContainerSchema.extend({
+  id: z.string(),
+  runCommand: z.string(),
+});
+export type McpReadyContainer = z.infer<typeof mcpReadyContainerSchema>;
+
+/** Map one containers-lane row. */
+export function presentMcpReadyContainer(row: ReadyContainerDto): McpReadyContainer {
+  return {
+    key: row.key,
+    kind: row.kind,
+    title: row.title,
+    priority: row.priority,
+    assigneeId: row.assignee?.id ?? null,
+    assignee: row.assignee === null ? null : { id: row.assignee.id, name: row.assignee.name },
+    readyLeafCount: row.readyLeafCount,
+    childCount: row.childCount,
+    id: row.id,
+    runCommand: `motir run ${row.key}`,
+  };
+}
 
 /** The dispatch superset `next_ready` / `claim_next_ready` return. */
 export const mcpReadyDispatchSchema = mcpReadyRowSchema.extend({
@@ -549,6 +586,11 @@ function readyRowFields(
     assignee: item.assignee,
     descriptionMd: item.descriptionMd,
     commentCount,
+    ...(item.container !== undefined
+      ? {
+          container: item.container === null ? null : presentReadyContainer(item.container),
+        }
+      : {}),
   };
 }
 
@@ -579,24 +621,54 @@ export function presentMcpReadyDispatch(
   };
 }
 
-/** The `list_ready` page. Its rows are a WIDENING, so they carry a real probe. */
+/**
+ * The `list_ready` page (MOTIR-6833: it reads a LANE). A `leaf` / `bug` page
+ * holds ready rows, each carrying its `container`; a `container` page holds
+ * container rows. `lane` says which, and the probes follow it.
+ */
 export const listReadyPayload = definePayload({
   schema: z
-    .object({ items: z.array(mcpReadyRowSchema), nextCursor: z.string().nullable() })
+    .object({
+      lane: z.enum(['leaf', 'container', 'bug']),
+      items: z.array(z.union([mcpReadyContainerSchema, mcpReadyRowSchema])),
+      nextCursor: z.string().nullable(),
+    })
     .catchall(z.unknown()) as unknown as z.ZodType<
-    { items: McpReadyRow[]; nextCursor: string | null } & Record<string, unknown>
+    {
+      lane: 'leaf' | 'container' | 'bug';
+      items: Array<McpReadyRow | McpReadyContainer>;
+      nextCursor: string | null;
+    } & Record<string, unknown>
   >,
-  probes: [{ resource: 'ReadyItem', select: (p) => p.items }],
+  probes: [
+    { resource: 'ReadyLaneItem', select: (p) => (p.lane === 'container' ? [] : p.items) },
+    { resource: 'ReadyContainer', select: (p) => (p.lane === 'container' ? p.items : []) },
+  ],
 });
 
-/** The `next_ready` dispatch peek — `item` is null when nothing is ready. */
+/**
+ * The `next_ready` peek — the next row of a `leaf` / `bug` lane as `item`, or the
+ * next runnable container as `container` (MOTIR-6833). Each is null when that
+ * lane is exhausted or was not asked for.
+ */
 export const nextReadyPayload = definePayload({
   schema: z
-    .object({ item: mcpReadyDispatchSchema.nullable() })
+    .object({
+      lane: z.enum(['leaf', 'container', 'bug']),
+      item: mcpReadyDispatchSchema.nullable(),
+      container: mcpReadyContainerSchema.nullable(),
+    })
     .catchall(z.unknown()) as unknown as z.ZodType<
-    { item: McpReadyDispatch | null } & Record<string, unknown>
+    {
+      lane: 'leaf' | 'container' | 'bug';
+      item: McpReadyDispatch | null;
+      container: McpReadyContainer | null;
+    } & Record<string, unknown>
   >,
-  probes: [{ resource: 'ReadyItem', select: (p) => (p.item ? [p.item] : []) }],
+  probes: [
+    { resource: 'ReadyLaneItem', select: (p) => (p.item ? [p.item] : []) },
+    { resource: 'ReadyContainer', select: (p) => (p.container ? [p.container] : []) },
+  ],
 });
 
 /** The `claim_next_ready` result — the same item plus the advisories block. */

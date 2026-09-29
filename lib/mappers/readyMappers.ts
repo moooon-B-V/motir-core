@@ -1,5 +1,6 @@
 import type { User, WorkItem } from '@/generated/prisma/client';
-import type { ReadyItemDispatchDto, ReadyItemDto } from '@/lib/dto/ready';
+import type { ReadyContainerDto, ReadyItemDispatchDto, ReadyItemDto } from '@/lib/dto/ready';
+import type { ReadyContainerShapeRow } from '@/lib/repositories/workItemRepository';
 import { isManualReadyItem } from '@/lib/dto/ready';
 import { markdownToExcerpt } from '@/lib/markdown/excerpt';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
@@ -133,5 +134,26 @@ export function toReadyItemDispatchDto(
     targetRepo: ctx.targetRepo,
     targetRepoCloneUrl: ctx.targetRepoCloneUrl,
     targetRepoDefaultBranch: ctx.targetRepoDefaultBranch,
+  };
+}
+
+/**
+ * One CONTAINERS-lane row (MOTIR-6830). `assignee` is passed in rather than read
+ * off the shape, so the service can apply the Visitor's display-name rule to it
+ * exactly as it does to a leaf row's.
+ */
+export function toReadyContainerDto(
+  shape: ReadyContainerShapeRow,
+  ctx: { assignee: ReadyAssignee | null; readyLeafCount: number },
+): ReadyContainerDto {
+  return {
+    id: shape.id,
+    key: shape.identifier,
+    kind: shape.kind,
+    title: shape.title,
+    priority: shape.priority,
+    assignee: toAssigneeDto(ctx.assignee),
+    readyLeafCount: ctx.readyLeafCount,
+    childCount: shape.childCount,
   };
 }

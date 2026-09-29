@@ -29,6 +29,8 @@ import type {
   ProjectRepository,
   ProjectRepositoryList,
   ProjectSummary,
+  ReadyContainerPage,
+  ReadyContainerSummary,
   ReadyItemSummary,
   ReadyPage,
   SprintList,
@@ -93,8 +95,11 @@ type MeBody = SuccessBody<'getMe'>;
 type WorkspacesBody = SuccessBody<'listWorkspaces'>;
 /** One page of `GET /api/v1/projects`. */
 type ProjectsBody = SuccessBody<'listProjects'>;
-/** One page of the ready set. */
-type ReadyBody = SuccessBody<'getProjectReadySet'>;
+/** One page of a ready ROW lane — `leaves` or `bugs` (Story MOTIR-6829). The two
+ *  operations share one row schema (`ReadyLaneItem`), so one type serves both. */
+type ReadyBody = SuccessBody<'getProjectReadyLeaves'>;
+/** One page of the ready CONTAINERS lane. */
+type ReadyContainersBody = SuccessBody<'getProjectReadyContainers'>;
 /** One page of a project's sprints. */
 type SprintsBody = SuccessBody<'listProjectSprints'>;
 /** One page of a project's repository set. */
@@ -186,6 +191,9 @@ export function toReadyPage(body: ReadyBody): ReadyPage {
     title: row.title,
     priority: row.priority,
     assignee: row.assignee === null ? null : { id: row.assignee.id, name: row.assignee.name },
+    // The runnable container a lane row groups under (MOTIR-6835) — what
+    // `motir ready` prints as a group header over its leaves.
+    container: row.container === null ? null : toReadyContainerSummary(row.container),
     dependencies: {
       blockedBy: row.dependencies.blockedBy.map((edge) => ({ ...edge })),
       blocks: row.dependencies.blocks.map((edge) => ({ ...edge })),
@@ -194,6 +202,24 @@ export function toReadyPage(body: ReadyBody): ReadyPage {
   // ⚠️ The cursor is OPAQUE and collection-scoped: echoed, never parsed, never
   // handed to another collection's read.
   return { items, nextCursor: body.nextCursor };
+}
+
+/** One runnable container, as a lane row names it or the containers lane lists it. */
+export function toReadyContainerSummary(row: RowOf<ReadyContainersBody>): ReadyContainerSummary {
+  return {
+    key: row.key,
+    kind: row.kind,
+    title: row.title,
+    priority: row.priority,
+    assignee: row.assignee === null ? null : { id: row.assignee.id, name: row.assignee.name },
+    readyLeafCount: row.readyLeafCount,
+    childCount: row.childCount,
+  };
+}
+
+/** A page of the CONTAINERS lane, in the server's group order. */
+export function toReadyContainerPage(body: ReadyContainersBody): ReadyContainerPage {
+  return { items: rowsOf(body).map(toReadyContainerSummary), nextCursor: body.nextCursor };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1061,5 +1087,6 @@ export function toDispatchItem(row: ReadyBody['items'][number]): DispatchItem {
     executor: row.executor,
     assigneeId: row.assigneeId,
     inheritedSessionBranch: row.inheritedSessionBranch,
+    containerKey: row.container?.key ?? null,
   };
 }

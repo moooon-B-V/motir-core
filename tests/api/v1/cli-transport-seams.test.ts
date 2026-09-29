@@ -5,6 +5,9 @@ import { GET as GET_ME } from '@/app/api/v1/me/route';
 import { GET as GET_WORKSPACES } from '@/app/api/v1/workspaces/route';
 import { GET as GET_PROJECTS } from '@/app/api/v1/projects/route';
 import { GET as GET_READY } from '@/app/api/v1/projects/[projectKey]/ready/route';
+import { GET as GET_READY_LEAVES } from '@/app/api/v1/projects/[projectKey]/ready/leaves/route';
+import { GET as GET_READY_CONTAINERS } from '@/app/api/v1/projects/[projectKey]/ready/containers/route';
+import { GET as GET_READY_BUGS } from '@/app/api/v1/projects/[projectKey]/ready/bugs/route';
 import { GET as GET_SPRINTS } from '@/app/api/v1/projects/[projectKey]/sprints/route';
 import { GET as GET_WORK_ITEMS } from '@/app/api/v1/projects/[projectKey]/work-items/route';
 import { GET as GET_COUNT } from '@/app/api/v1/projects/[projectKey]/work-items/count/route';
@@ -91,6 +94,10 @@ const ROUTES: Record<string, Handler> = {
   'GET /api/v1/workspaces': GET_WORKSPACES as Handler,
   'GET /api/v1/projects': GET_PROJECTS as Handler,
   'GET /api/v1/projects/{projectKey}/ready': GET_READY as Handler,
+  // The ready LANES (MOTIR-6835) — what the CLI reads now.
+  'GET /api/v1/projects/{projectKey}/ready/leaves': GET_READY_LEAVES as Handler,
+  'GET /api/v1/projects/{projectKey}/ready/containers': GET_READY_CONTAINERS as Handler,
+  'GET /api/v1/projects/{projectKey}/ready/bugs': GET_READY_BUGS as Handler,
   'GET /api/v1/projects/{projectKey}/sprints': GET_SPRINTS as Handler,
   'GET /api/v1/projects/{projectKey}/work-items': GET_WORK_ITEMS as Handler,
   'GET /api/v1/projects/{projectKey}/work-items/count': GET_COUNT as Handler,
@@ -275,6 +282,50 @@ describe('wire → transport → adapter → renderer, over real routes', () => 
     expect(rendered).not.toContain('unassigned');
   });
 
+  it('READY LANES (MOTIR-6839) — a real story, its leaves and a bug reach the CLI through all three lanes', async () => {
+    // service → v1 route → the CLI's GENERATED validators → the adapter → the
+    // renderer, with a NON-null container on the wire — the shape an empty or
+    // flat fixture never exercises.
+    const mk = (kind: 'story' | 'subtask' | 'bug', title: string, parentId?: string) =>
+      workItemsService.createWorkItem(
+        { projectId: caller.fixture.projectId, kind, title, ...(parentId ? { parentId } : {}) },
+        caller.ctx,
+      );
+    const story = await mk('story', 'Seam story');
+    const leaf = await mk('subtask', 'Seam leaf', story.id);
+    await mk('subtask', 'Seam leaf two', story.id);
+    const bug = await mk('bug', 'Seam bug');
+    const client = clientFor(caller);
+
+    const leaves = await client.listReady({ projectKey: caller.projectKey });
+    const row = leaves.items.find((r) => r.key === leaf.identifier)!;
+    expect(row.container).toMatchObject({
+      key: story.identifier,
+      readyLeafCount: 2,
+      childCount: 2,
+    });
+    const rendered = renderReadyTable(leaves.items);
+    expect(rendered).toContain(`${story.identifier}`);
+    expect(rendered).toContain('(2 of 2 ready)');
+    expect(leaves.items.map((r) => r.key)).not.toContain(bug.identifier);
+
+    const containers = await client.listReadyContainers({ projectKey: caller.projectKey });
+    expect(containers.items.map((c) => c.key)).toEqual([story.identifier]);
+
+    const bugs = await client.listReady({ projectKey: caller.projectKey, lane: 'bug' });
+    expect(bugs.items.map((r) => r.key)).toEqual([bug.identifier]);
+    expect(bugs.items[0]!.container).toBeNull();
+
+    // The dispatch reads walk the same lanes: `next` takes a leaf, the snapshot
+    // (batch / a scoped run) holds the bug too.
+    expect((await client.nextReady({ projectKey: caller.projectKey })).item?.containerKey).toBe(
+      story.identifier,
+    );
+    const snapshot = await client.listReadyForDispatch({ projectKey: caller.projectKey });
+    expect(snapshot.map((i) => i.key)).toContain(bug.identifier);
+    expect(snapshot.at(-1)?.key).toBe(bug.identifier);
+  });
+
   it('DETAIL — the resource renders, and `--json` carries the SERVER payload', async () => {
     const item = await workItemsService.createWorkItem(
       { projectId: caller.fixture.projectId, kind: 'task', title: 'A detail read' },
@@ -390,7 +441,7 @@ describe('paging — a real multi-page collection, walked to exhaustion', () => 
 
     // It really did page — otherwise "every row exactly once" is trivially true
     // of a single response and this test proves nothing.
-    const readyCalls = served.filter((r) => r.path.endsWith('/ready'));
+    const readyCalls = served.filter((r) => r.path.endsWith('/ready/leaves'));
     expect(readyCalls.length).toBeGreaterThan(1);
 
     // ⚠️ THE CURSOR IS ECHOED, NEVER REBUILT (ADR §5). Each request after the
@@ -501,6 +552,18 @@ describe('the generated validators, against the EMITTER rather than a sample', (
     {
       operationId: 'getProjectReadySet',
       read: () => callRoute('GET', `/api/v1/projects/${caller.projectKey}/ready`),
+    },
+    {
+      operationId: 'getProjectReadyLeaves',
+      read: () => callRoute('GET', `/api/v1/projects/${caller.projectKey}/ready/leaves`),
+    },
+    {
+      operationId: 'getProjectReadyContainers',
+      read: () => callRoute('GET', `/api/v1/projects/${caller.projectKey}/ready/containers`),
+    },
+    {
+      operationId: 'getProjectReadyBugs',
+      read: () => callRoute('GET', `/api/v1/projects/${caller.projectKey}/ready/bugs`),
     },
     {
       operationId: 'listProjectSprints',

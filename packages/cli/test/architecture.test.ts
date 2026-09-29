@@ -373,8 +373,14 @@ describe('GUARD 3 — the wire-facing layer casts only where it says it does', (
  * a `Folder: Parked ▸ 2025` line under LINEAGE when `motir show` reads a filed
  * item. It reads the view model's `folderPath` (a `string[] | null` the adapter
  * maps), not a wire shape.
+ *
+ * MOTIR-6837 (Story MOTIR-6829) changed it deliberately: `renderReadyTable` groups
+ * a lane's rows under their runnable container (a header line, its leaves
+ * indented) and takes the lane for its empty line; `renderReadyContainers` prints
+ * the containers lane. Both read the adapter's `ReadyContainerSummary`, not a
+ * wire shape.
  */
-const RENDER_TS_SHA256 = '9683ce7547c06ce86ac36680e01a4110611be790c09f13b4d2ce21a0aacfe71a';
+const RENDER_TS_SHA256 = '893e67bfeea3ae768228d3186a6004e2c96fdfe5fb430de28f65b81091e0cc3c';
 
 describe('GUARD 4 — render.ts is pinned', () => {
   it('matches the recorded hash', () => {

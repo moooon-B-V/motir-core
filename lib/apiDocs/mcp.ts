@@ -552,13 +552,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   list_ready: {
     summary:
-      'The ready-to-start set for a project — every item whose dependencies are all satisfied, paginated.',
-    descriptionFingerprint: '570879d433ae',
+      'One ready LANE of a project, paginated — leaves (default, never a bug, each naming its container), runnable containers, or bugs — in the order the Ready view shows.',
+    descriptionFingerprint: '4a08d5afd615',
   },
   next_ready: {
     summary:
-      'The single highest-ranked ready item, as a full dispatch payload. The “what do I do next” call.',
-    descriptionFingerprint: '8283986decf5',
+      'The next item of one ready lane — a leaf (default, never a bug) or a bug as a full dispatch payload, or the next runnable container for a parent run. The “what do I do next” call.',
+    descriptionFingerprint: 'fef598b16a19',
   },
   dispatch_prompt: {
     summary:

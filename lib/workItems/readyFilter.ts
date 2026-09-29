@@ -113,6 +113,23 @@ export interface ReadyListFilter {
 }
 
 /**
+ * The filter the CONTAINERS lane accepts (Story MOTIR-6829). Its facets apply to
+ * the CONTAINER — its own priority, assignee and sprint — because a container is
+ * what that lane hands out; a leaf facet (`kinds`, `ancestorKeys`) has no
+ * meaning there and is not on the shape.
+ */
+export interface ReadyContainersFilter {
+  /** `null` = unassigned only; `undefined` = any assignee. */
+  assigneeId?: string | null;
+  priority?: WorkItemPriority[];
+  /** A sprint id, or {@link SPRINT_ACTIVE} — the container's OWN membership. */
+  sprintRef?: string;
+  /** Opaque containers-lane cursor. */
+  cursor?: string;
+  limit?: number;
+}
+
+/**
  * The literal a caller sends as `sprintRef` to mean "the project's ACTIVE
  * sprint".
  *
@@ -277,6 +294,181 @@ export function decodeReadyCursor(raw: string): ReadyCursor {
     kind: parsed[0] as WorkItemKind,
     priority: parsed[1] as WorkItemPriority,
     key: parsed[2],
+  };
+}
+
+/**
+ * The dispatch comparator over a bare `(kind, priority, key)` position —
+ * `READY_KIND_RANK` first, priority (highest first) second, `key` last. The
+ * service's `compareReadyRows` is this function, and the lane order below is
+ * built from it, so the flat ready set and the three lanes rank members
+ * identically.
+ */
+export function compareReadyPosition(a: ReadyCursor, b: ReadyCursor): number {
+  const dk = READY_KIND_RANK[a.kind] - READY_KIND_RANK[b.kind];
+  if (dk !== 0) return dk;
+  const dp = READY_PRIORITY_ASC.indexOf(b.priority) - READY_PRIORITY_ASC.indexOf(a.priority);
+  if (dp !== 0) return dp;
+  return a.key - b.key;
+}
+
+// ─── The ready LANES (Story MOTIR-6829 · MOTIR-6830) ─────────────────────────
+//
+// The flat ready set, partitioned the way work is RUN. This block is the ONE
+// home of what a lane holds and what order it comes in; the service partitions
+// the walk's result with these helpers, and every consumer — the v1 lane
+// operations, the MCP `lane` argument, `/ready` and the CLI — reads the
+// service's answer rather than grouping for itself.
+//
+//   - `leaf`      — the ready leaves that are not BUG WORK, each naming its
+//                   runnable container (or none).
+//   - `container` — one row per non-bug runnable container holding at least one
+//                   `leaf`-lane row.
+//   - `bug`       — the ready bug work: a childless bug is its own group, a
+//                   bug's ready subtasks group under it.
+//
+// A lane PARTITIONS the walk's result and never re-derives readiness:
+// `leaf ∪ bug` is exactly the flat set, and `leaf ∩ bug` is empty.
+
+/** The three lanes, in the order the product names them. */
+export const READY_LANES = ['leaf', 'container', 'bug'] as const;
+export type ReadyLane = (typeof READY_LANES)[number];
+
+const LANE_VALUES = new Set<string>(READY_LANES);
+
+/** A lane value arriving from a caller (a query string, an MCP argument). */
+export function isReadyLane(value: unknown): value is ReadyLane {
+  return typeof value === 'string' && LANE_VALUES.has(value);
+}
+
+/**
+ * The kinds that can be a RUNNABLE CONTAINER — a `story`, `task` or `bug` whose
+ * every child is childless, which is exactly the scope shape `motir run
+ * <parent>` accepts (`scopeClaimService`, `MAX_SCOPE_DEPTH = 1`). An `epic` is
+ * never one, whatever it holds.
+ */
+export const RUNNABLE_CONTAINER_KINDS = [
+  'story',
+  'task',
+  'bug',
+] as const satisfies readonly WorkItemKind[];
+const RUNNABLE_KIND_VALUES = new Set<string>(RUNNABLE_CONTAINER_KINDS);
+
+/** Is a parent, described by its shape, a runnable container? */
+export function isRunnableContainer(shape: {
+  kind: WorkItemKind;
+  hasGrandchildren: boolean;
+}): boolean {
+  return RUNNABLE_KIND_VALUES.has(shape.kind) && !shape.hasGrandchildren;
+}
+
+/**
+ * BUG WORK — a `bug` leaf, or a leaf whose parent is a `bug`. It belongs to the
+ * `bug` lane and never to the `leaf` lane, so `motir next` never hands a bug to
+ * somebody who asked for feature work.
+ */
+export function isBugWork(
+  row: { kind: WorkItemKind },
+  parent: { kind: WorkItemKind } | null,
+): boolean {
+  return row.kind === 'bug' || parent?.kind === 'bug';
+}
+
+/**
+ * A GROUP's position in a lane: its BEST member's `(kind, priority, key)` and
+ * the key of its HEAD — the runnable container, or the standalone row itself.
+ */
+export interface ReadyGroupPosition {
+  best: ReadyCursor;
+  headKey: number;
+}
+
+/**
+ * THE GROUP ORDER, shared by all three lanes. A group ranks by its best member
+ * under {@link compareReadyPosition}, so the first row of the first group is the
+ * row the flat set would have put first. The best member's key already makes
+ * that total — keys are unique — and the head's key is the tie-break of record
+ * should two groups ever share a best member.
+ */
+export function groupRank(a: ReadyGroupPosition, b: ReadyGroupPosition): number {
+  const d = compareReadyPosition(a.best, b.best);
+  if (d !== 0) return d;
+  return a.headKey - b.headKey;
+}
+
+/**
+ * A LANE cursor: which lane it pages, the group the previous page ended in and
+ * — for the two row lanes — the member it ended on. A `container`-lane row IS a
+ * group, so its cursor carries no member.
+ */
+export interface ReadyLaneCursor {
+  lane: ReadyLane;
+  group: ReadyGroupPosition;
+  member: ReadyCursor | null;
+}
+
+/** Encode a lane position into the opaque page cursor. */
+export function encodeReadyLaneCursor(cursor: ReadyLaneCursor): string {
+  const g = cursor.group;
+  const payload: unknown[] = [cursor.lane, g.best.kind, g.best.priority, g.best.key, g.headKey];
+  if (cursor.member) payload.push(cursor.member.kind, cursor.member.priority, cursor.member.key);
+  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+}
+
+function isPosition(kind: unknown, priority: unknown, key: unknown): boolean {
+  return (
+    typeof kind === 'string' &&
+    KIND_VALUES.has(kind) &&
+    typeof priority === 'string' &&
+    PRIORITY_VALUES.has(priority) &&
+    typeof key === 'number' &&
+    Number.isInteger(key)
+  );
+}
+
+/**
+ * Decode a lane cursor, REFUSING one minted by another lane. Throws
+ * {@link InvalidReadyCursorError} on a malformed token, a flat-set cursor, or a
+ * cursor whose lane is not `expected` — a leaves cursor handed to the bugs lane
+ * would otherwise seek to a position that means nothing there.
+ */
+export function decodeReadyLaneCursor(raw: string, expected: ReadyLane): ReadyLaneCursor {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+  } catch {
+    throw new InvalidReadyCursorError();
+  }
+  const memberLength = expected === 'container' ? 0 : 3;
+  if (
+    !Array.isArray(parsed) ||
+    parsed.length !== 5 + memberLength ||
+    parsed[0] !== expected ||
+    !isPosition(parsed[1], parsed[2], parsed[3]) ||
+    typeof parsed[4] !== 'number' ||
+    !Number.isInteger(parsed[4]) ||
+    (memberLength > 0 && !isPosition(parsed[5], parsed[6], parsed[7]))
+  ) {
+    throw new InvalidReadyCursorError();
+  }
+  return {
+    lane: expected,
+    group: {
+      best: {
+        kind: parsed[1] as WorkItemKind,
+        priority: parsed[2] as WorkItemPriority,
+        key: parsed[3] as number,
+      },
+      headKey: parsed[4] as number,
+    },
+    member:
+      memberLength > 0
+        ? {
+            kind: parsed[5] as WorkItemKind,
+            priority: parsed[6] as WorkItemPriority,
+            key: parsed[7] as number,
+          }
+        : null,
   };
 }
 

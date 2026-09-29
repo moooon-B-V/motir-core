@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -199,5 +200,147 @@ describe('MCP read tools — adapters', () => {
     const res = await runNextReady({ projectKey: 'PROD' }, fx.ctx);
     expect((res.structuredContent as { item: unknown }).item).toBeNull();
     expect(res.isError).toBeFalsy();
+  });
+});
+
+describe('MCP ready tools — the `lane` argument (MOTIR-6833)', () => {
+  /** A story S with two subtasks, a childless bug B, and bug B2 holding one subtask. */
+  async function laneTree(fx: WorkItemFixture) {
+    const mk = (kind: 'story' | 'subtask' | 'bug', title: string, parentId?: string) =>
+      workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind, title, ...(parentId ? { parentId } : {}) },
+        fx.ctx,
+      );
+    const S = await mk('story', 'S');
+    const s1 = await mk('subtask', 's1', S.id);
+    const s2 = await mk('subtask', 's2', S.id);
+    const B = await mk('bug', 'B');
+    const B2 = await mk('bug', 'B2');
+    const b1 = await mk('subtask', 'b1', B2.id);
+    return { S, s1, s2, B, B2, b1 };
+  }
+  const keys = (items: { key: string }[]) => items.map((i) => i.key);
+
+  it('list_ready defaults to the leaves lane — no bug, no subtask of a bug — in its order', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await laneTree(fx);
+    const res = (await runListReady({ projectKey: 'PROD' }, fx.ctx)).structuredContent as {
+      lane: string;
+      items: { key: string; container: { key: string } | null }[];
+    };
+    expect(res.lane).toBe('leaf');
+    const svc = await workItemsService.listReadyLeaves(fx.projectId, {}, fx.ctx);
+    expect(keys(res.items)).toEqual(keys(svc.items));
+    expect(keys(res.items)).not.toContain(t.B.identifier);
+    expect(keys(res.items)).not.toContain(t.b1.identifier);
+    expect(res.items.find((i) => i.key === t.s1.identifier)?.container?.key).toBe(t.S.identifier);
+  });
+
+  it('list_ready { lane: bug } and { lane: container } return exactly their service lanes', async () => {
+    const fx = await makeWorkItemFixture();
+    await laneTree(fx);
+    const bugs = (await runListReady({ projectKey: 'PROD', lane: 'bug' }, fx.ctx))
+      .structuredContent as { items: { key: string }[] };
+    const svcBugs = await workItemsService.listReadyBugs(fx.projectId, {}, fx.ctx);
+    expect(keys(bugs.items)).toEqual(keys(svcBugs.items));
+
+    const containers = (await runListReady({ projectKey: 'PROD', lane: 'container' }, fx.ctx))
+      .structuredContent as {
+      items: { key: string; readyLeafCount: number; runCommand: string }[];
+    };
+    const svcContainers = await workItemsService.listReadyContainers(fx.projectId, {}, fx.ctx);
+    expect(keys(containers.items)).toEqual(keys(svcContainers.items));
+    expect(containers.items[0]).toMatchObject({ readyLeafCount: 2 });
+    expect(containers.items[0]!.runCommand).toBe(`motir run ${containers.items[0]!.key}`);
+  });
+
+  it('list_ready { lane: container } says so when empty, then names each container, its assignee and its run', async () => {
+    const fx = await makeWorkItemFixture();
+    const text = (res: CallToolResult) => (res.content[0] as { text: string }).text;
+    const empty = await runListReady({ projectKey: 'PROD', lane: 'container' }, fx.ctx);
+    expect(text(empty)).toBe('No ready work in the container lane.');
+    const noBugs = await runListReady({ projectKey: 'PROD', lane: 'bug' }, fx.ctx);
+    expect(text(noBugs)).toBe('No ready work in the bug lane.');
+
+    const t = await laneTree(fx);
+    const owned = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Owned', assigneeId: fx.ownerId },
+      fx.ctx,
+    );
+    await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'subtask',
+        title: 'o1',
+        parentId: owned.id,
+        assigneeId: fx.ownerId,
+      },
+      fx.ctx,
+    );
+    const first = await runListReady({ projectKey: 'PROD', lane: 'container', limit: 1 }, fx.ctx);
+    const cursor = (first.structuredContent as { nextCursor: string | null }).nextCursor;
+    expect(cursor).not.toBeNull();
+    expect(text(first)).toMatch(/^1 runnable container:\n/);
+    expect(text(first)).toContain(`More available — pass cursor: ${cursor}`);
+
+    const all = text(await runListReady({ projectKey: 'PROD', lane: 'container' }, fx.ctx));
+    expect(all).toMatch(/^2 runnable containers:\n/);
+    expect(all).toContain(
+      `${t.S.identifier} [story/medium] S — 2 of 2 ready — unassigned — run: motir run ${t.S.identifier}`,
+    );
+    expect(all).toMatch(
+      new RegExp(`${owned.identifier} \\[story/\\w+\\] Owned — 1 of 1 ready — \\S`),
+    );
+    expect(all).not.toContain(`Owned — 1 of 1 ready — unassigned`);
+    // …and an assigned LEAF names its assignee in the leaf lane's line.
+    const leaves = text(await runListReady({ projectKey: 'PROD' }, fx.ctx));
+    expect(leaves).toMatch(new RegExp(`o1 \\(in ${owned.identifier}\\) — (?!unassigned)`));
+  });
+
+  it('next_ready never hands out a bug by default; lane bug and lane container take theirs', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await laneTree(fx);
+    const leafIds = [t.s1.id, t.s2.id];
+
+    const first = (await runNextReady({ projectKey: 'PROD' }, fx.ctx)).structuredContent as {
+      item: { key: string; container: { key: string } | null } | null;
+    };
+    expect([t.s1.identifier, t.s2.identifier]).toContain(first.item?.key);
+    expect(first.item?.container?.key).toBe(t.S.identifier);
+    // With every leaf excluded, the default lane is exhausted — it never falls to a bug.
+    const none = (await runNextReady({ projectKey: 'PROD', excludeIds: leafIds }, fx.ctx))
+      .structuredContent as { item: unknown };
+    expect(none.item).toBeNull();
+
+    const bugs = await workItemsService.listReadyBugs(fx.projectId, {}, fx.ctx);
+    const bug = (await runNextReady({ projectKey: 'PROD', lane: 'bug' }, fx.ctx))
+      .structuredContent as { item: { key: string } | null };
+    expect(bug.item?.key).toBe(bugs.items[0]!.key);
+    const secondBug = (
+      await runNextReady(
+        { projectKey: 'PROD', lane: 'bug', excludeIds: [bugs.items[0]!.id] },
+        fx.ctx,
+      )
+    ).structuredContent as { item: { key: string } | null };
+    expect(secondBug.item?.key).toBe(bugs.items[1]!.key);
+
+    const container = (await runNextReady({ projectKey: 'PROD', lane: 'container' }, fx.ctx))
+      .structuredContent as { item: unknown; container: { key: string; readyLeafCount: number } };
+    expect(container.item).toBeNull();
+    expect(container.container).toMatchObject({ key: t.S.identifier, readyLeafCount: 2 });
+  });
+
+  it('refuses an unknown lane, naming the three, and returns nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    await laneTree(fx);
+    const client = await connectClient(fx.ctx);
+    for (const name of ['list_ready', 'next_ready']) {
+      const res = await client.callTool({ name, arguments: { projectKey: 'PROD', lane: 'epic' } });
+      expect(res.isError).toBe(true);
+      const text = JSON.stringify(res.content);
+      for (const lane of ['leaf', 'container', 'bug']) expect(text).toContain(lane);
+      expect(res.structuredContent).toBeUndefined();
+    }
+    await client.close();
   });
 });

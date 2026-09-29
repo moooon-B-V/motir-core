@@ -87,7 +87,7 @@ function planScripts(keys: string[]): { v1: V1Script } {
   const v1: V1Script = {
     // The whole ready set, ranked — `motir batch` enumerates it once and
     // freezes it. An item leaves the set once its status moves off `todo`.
-    'GET /api/v1/projects/{projectKey}/ready': () => ({
+    'GET /api/v1/projects/{projectKey}/ready/leaves': () => ({
       body: v1Page(
         keys
           .filter((k) => (statuses.get(k) ?? 'todo') === 'todo')
@@ -246,7 +246,7 @@ describe('motir batch — a whole run through the real session', () => {
 
     // `--kinds` reached the server's own filter rather than being dropped —
     // the ready collection's own REPEATED `kind` parameter (MOTIR-2398).
-    expect(v1CallsTo('GET', '/ready')[0]?.query.getAll('kind')).toEqual(['subtask']);
+    expect(v1CallsTo('GET', '/ready/leaves')[0]?.query.getAll('kind')).toEqual(['subtask']);
     expect(v1CallsTo('GET', '/dispatch-prompt')).toEqual([]);
     expect(process.exitCode ?? 0).toBe(0);
   });
