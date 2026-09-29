@@ -472,6 +472,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ charges: { charged: number; notCharged: number; refused: number; retryable: number }; errors: number; hibernated: { backstop: number; credits: number; idle: number }; orphans: { machines: number; volumes: number }; reconciled: number; rolled: number; settled: number }',
   },
+  'charge-agent-instance-storage': {
+    file: 'lib/jobs/definitions/agentInstanceStorageCharge.ts',
+    shape:
+      '{ charged: number; notCharged: number; refused: number; retryable: number; written: number }',
+  },
   'reap-lapsed-runs': {
     file: 'lib/jobs/definitions/runLivenessSweep.ts',
     shape: '{ runsFailed: number; runsRacedByClose: number; runsReaped: number }',
