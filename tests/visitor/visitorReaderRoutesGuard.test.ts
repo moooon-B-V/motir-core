@@ -52,6 +52,8 @@ const WRAPPERS = new Set(['readerPath', 'path', 'view', 'revalidatePath']);
 const BUILDERS: { file: string; fn: string; takes?: 'routes' }[] = [
   { file: 'lib/boards/boardFilterHref.ts', fn: 'buildBoardFilterHref' },
   { file: 'lib/runs/runsAddress.ts', fn: 'runsHref' },
+  // The Approval records room's pager (MOTIR-6891).
+  { file: 'lib/approvals/recordsAddress.ts', fn: 'approvalRecordsHref' },
   // Answers an object, not an href, so it takes the reader's routes as an input
   // (`routes`) instead of being wrapped: a call without one is flagged.
   { file: 'lib/planning/planDestination.ts', fn: 'planRowDestination', takes: 'routes' },
@@ -67,13 +69,7 @@ const EXEMPT_FILES = new Set(['lib/visitor/routes.ts', 'proxy.ts', ...BUILDERS.m
  * Member routes still emitted RAW. Each one is owned by a named card that
  * empties it; nothing else may be added.
  */
-const ALLOWED: { file: string; text: string; why: string }[] = [
-  {
-    file: 'app/(authed)/approvals/_components/ApprovalRecordsList.tsx',
-    text: '/approvals',
-    why: 'MOTIR-6891 — the Approval records pager builds its own page address.',
-  },
-];
+const ALLOWED: { file: string; text: string; why: string }[] = [];
 
 /**
  * Every export of every `'use server'` module in the closure. `read` actions are
