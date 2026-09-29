@@ -1,4 +1,5 @@
 import { adminDb } from '../helpers/adminDb';
+import { dropLegacyAccessLevel, ensureLegacyAccessLevel } from '../helpers/legacyProjectAccess';
 import { runMigrationFile } from './_workspaceRoleTenant';
 
 // The pre-contract schema of `project.access_mode` (Story MOTIR-6554 · MOTIR-6686).
@@ -14,13 +15,21 @@ import { runMigrationFile } from './_workspaceRoleTenant';
 // migration is exercised on every restore. The same shape as MOTIR-6561's
 // `relaxWorkspaceRoleNotNull` for the role column.
 //
+// Those migrations read `project."accessLevel"` too, which MOTIR-6694 has since
+// dropped: the relax rebuilds it (`ensureLegacyAccessLevel`), and the restore
+// drops it again after MOTIR-6686's migration — which reads it — has run.
+//
 // ⚠️ The restore REFUSES rows whose two columns disagree — that is the migration's
 // own agreement check. A file that seeds such a row on purpose truncates before
 // it restores.
 export const ACCESS_MODE_NOT_NULL_MIGRATION = '20260928000000_project_access_mode_not_null';
 
-/** Drop MOTIR-6686's NOT NULL and DEFAULT on this worker's database, so NULL-mode rows can be written. */
+/**
+ * Drop MOTIR-6686's NOT NULL and DEFAULT on this worker's database, so NULL-mode
+ * rows can be written — and rebuild the legacy level those rows were mapped from.
+ */
 export async function relaxProjectAccessModeNotNull(): Promise<void> {
+  await ensureLegacyAccessLevel();
   await adminDb.$executeRawUnsafe(
     'ALTER TABLE "project" ALTER COLUMN "access_mode" DROP NOT NULL, ALTER COLUMN "access_mode" DROP DEFAULT',
   );
@@ -35,7 +44,8 @@ export async function nullAccessMode(projectId: string): Promise<void> {
   await adminDb.$executeRaw`UPDATE "project" SET "access_mode" = NULL WHERE "id" = ${projectId}`;
 }
 
-/** Put MOTIR-6686's DEFAULT and NOT NULL back by running its migration. */
+/** Put MOTIR-6686's DEFAULT and NOT NULL back by running its migration, then drop the legacy level (MOTIR-6694). */
 export async function restoreProjectAccessModeNotNull(): Promise<void> {
   await runMigrationFile(ACCESS_MODE_NOT_NULL_MIGRATION);
+  await dropLegacyAccessLevel();
 }

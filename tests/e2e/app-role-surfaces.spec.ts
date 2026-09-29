@@ -226,7 +226,7 @@ test('7 · the PUBLIC page works signed OUT — the arms are still open', async 
   // Since Story MOTIR-3908 the product's write path REFUSES `public` on a
   // self-hosted build (`PublicAccessUnavailableError`), and this lane is
   // off-cloud — so the shipped write path can no longer produce the state this
-  // test reads. The row it needs is identical either way (`accessLevel`; the
+  // test reads. The row it needs is identical either way (`access_mode`; the
   // service additionally stamps `madePublicAt`, which no RLS policy reads), and
   // the SUBJECT here is the READ binding — `work_item_public_project_read` and
   // `project_public_read` firing when `app.workspace_id` is UNSET — which the

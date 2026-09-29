@@ -64,7 +64,7 @@ async function legacyProject(
       ...(mode ? { accessMode: mode } : {}),
     },
   });
-  // legacy-access-level: the NULL-mode rows this migration fills are what it tests.
+  // The rebuilt legacy level (legacyProjectAccess.ts): the NULL-mode rows this migration fills are what it tests.
   await writeLegacyAccessLevel(adminDb, project.id, level);
   if (!mode) await nullAccessMode(project.id);
   return project;

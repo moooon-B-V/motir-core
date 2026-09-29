@@ -114,6 +114,28 @@ export const JOB_RUN_REAP_BATCH_SIZE = 200;
  */
 export const JOB_RUN_ABANDONED_CODE = 'job_run_abandoned';
 
+/**
+ * How long a TERMINAL ledger row is kept before the retention pass deletes it
+ * (Bug MOTIR-6935). Thirty days: the operator runs table reads newest-first and
+ * a month is well past anything it pages to, the DLQ is its own table and is not
+ * touched, and every reader that needs an OLDER row — the latest run of each job,
+ * the latest succeeded code-graph run per repository, a run a repository's
+ * `indexing_run_id` points at — is protected by the keep-set rather than by the
+ * window.
+ */
+export const JOB_RUN_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Rows deleted per transaction by the retention pass. */
+export const JOB_RUN_PURGE_BATCH_SIZE = 1000;
+
+/**
+ * Batches per pass. The pass runs daily, so this caps a day's deletions at
+ * 50 000 rows — an order of magnitude above the ~4 000 rows/day the scheduled
+ * jobs write — which keeps up with steady state and drains a first backlog over
+ * a few days without holding one transaction across it.
+ */
+export const JOB_RUN_PURGE_MAX_BATCHES = 50;
+
 export const jobRunsService = {
   /**
    * Insert the `running` row at job start; returns the persisted DTO, or `null`
@@ -341,5 +363,64 @@ export const jobRunsService = {
       }
       return { scanned: candidates.length, abandoned, stillLive };
     });
+  },
+
+  /**
+   * THE RETENTION PASS (Bug MOTIR-6935) — delete terminal ledger rows older than
+   * the retention window, in bounded batches.
+   *
+   * Until this existed nothing deleted a `job_run` row: the reap above CLOSES
+   * rows, and a workspace deletion's cascade never reaches the untenanted
+   * `system.*` rows that make up most of the ledger. So the table grew for ever.
+   *
+   * Never deleted, whatever its age:
+   *   - a `running` row (the reap's business, not this pass's);
+   *   - a row whose queue run is still live;
+   *   - a row a repository's `indexing_run_id` points at;
+   *   - the newest row of each event name, and the newest succeeded code-graph
+   *     run per repository — see the two keep-set reads on the repository.
+   *
+   * The keep-set is read once per pass; each batch is its own transaction, so a
+   * backlog drains over several batches (and, past `maxBatches`, several days)
+   * rather than one long lock. Converges: a deleted row stops matching.
+   */
+  async purgeExpired(
+    opts: { now?: Date; retentionMs?: number; batchSize?: number; maxBatches?: number } = {},
+  ): Promise<{ deleted: number; batches: number; kept: number; drained: boolean }> {
+    const now = opts.now ?? new Date();
+    const retentionMs = opts.retentionMs ?? JOB_RUN_RETENTION_MS;
+    const batchSize = opts.batchSize ?? JOB_RUN_PURGE_BATCH_SIZE;
+    const maxBatches = opts.maxBatches ?? JOB_RUN_PURGE_MAX_BATCHES;
+    const startedBefore = new Date(now.getTime() - retentionMs);
+
+    const keepIds = await withSystemContext(async (tx) => [
+      ...(await jobRunRepository.findLatestIdPerEventName(tx)),
+      ...(await jobRunRepository.findLatestSucceededCodeGraphRunIds(tx)),
+    ]);
+
+    let deleted = 0;
+    let batches = 0;
+    let drained = false;
+    while (batches < maxBatches) {
+      const { found, removed } = await withSystemContext(async (tx) => {
+        const ids = await jobRunRepository.findExpiredTerminalIds(
+          startedBefore,
+          keepIds,
+          batchSize,
+          tx,
+        );
+        return {
+          found: ids.length,
+          removed: await jobRunRepository.deleteTerminalByIds(ids, tx),
+        };
+      });
+      deleted += removed;
+      batches += 1;
+      if (found < batchSize) {
+        drained = true;
+        break;
+      }
+    }
+    return { deleted, batches, kept: new Set(keepIds).size, drained };
   },
 };

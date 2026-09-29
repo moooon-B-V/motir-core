@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Client } from 'pg';
 import { adminDb } from '../helpers/adminDb';
+import { dropLegacyAccessLevel, ensureLegacyAccessLevel } from '../helpers/legacyProjectAccess';
 import {
   dropLegacyRoleStorage,
   ensureLegacyRoleStorage,
@@ -44,6 +45,10 @@ export async function runMigrationFile(dir: string, transform: (sql: string) => 
 // legacy columns are what they read — so `makeTenant` rebuilds it
 // (`ensureLegacyRoleStorage`), and the restore drops it again after the NOT NULL
 // migration, which reads the legacy column too, has run.
+//
+// The never-wider check also reads `project."accessLevel"`, which MOTIR-6694 has
+// since dropped, so `makeTenant` rebuilds that too (`ensureLegacyAccessLevel`) and
+// the restore drops it again (`dropLegacyAccessLevel`).
 const NOT_NULL_MIGRATION = '20260927090000_workspace_role_not_null';
 
 /** Drop MOTIR-6561's NOT NULL on this worker's database, so pre-migration rows can be written. */
@@ -54,13 +59,15 @@ export async function relaxWorkspaceRoleNotNull(): Promise<void> {
 }
 
 /**
- * Put MOTIR-6561's NOT NULL back, and MOTIR-6569's drop of the legacy role
- * storage after it — call it from an `afterEach` in every file using `makeTenant`.
+ * Put MOTIR-6561's NOT NULL back, then MOTIR-6569's drop of the legacy role
+ * storage and MOTIR-6694's drop of the legacy access level after it — call it
+ * from an `afterEach` in every file using `makeTenant`.
  */
 export async function restoreWorkspaceRoleNotNull(): Promise<void> {
   await ensureLegacyRoleStorage();
   await runMigrationFile(NOT_NULL_MIGRATION);
   await dropLegacyRoleStorage();
+  await dropLegacyAccessLevel();
 }
 
 // ── The fixture tenant ─────────────────────────────────────────────────────────
@@ -133,6 +140,7 @@ export async function makeTenant(): Promise<Tenant> {
     viewer: 'viewer',
   };
   await ensureLegacyRoleStorage();
+  await ensureLegacyAccessLevel();
   await relaxWorkspaceRoleNotNull();
   for (const [label, id] of Object.entries(people)) {
     // The legacy column ONLY — `workspace_role` NULL, the row the migrations map.
