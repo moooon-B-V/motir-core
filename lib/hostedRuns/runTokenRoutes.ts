@@ -134,14 +134,14 @@ export const RUN_TOKEN_ROUTES: readonly RunTokenRoute[] = [
   // A REVIEW run's own two routes (MOTIR-6821; `hosted-agent-run.md` §3's pointer, §8.4).
   // ⚠️ NARROWER THAN `run_cards`: the service admits ONLY a `command: review` run's token
   // (`REVIEW_RUN_TOKEN_REQUIRED`) — a build run's token is refused on both — and then the
-  // run's own card, through the same `runTokenScopeService` binding.
+  // run's own card, through the same `runTokenScopeService` binding. Called by `motir
+  // review` (MOTIR-6824, `packages/cli/src/commands/review.ts`).
   {
     operationId: 'getWorkItemReviewPrompt',
     method: 'GET',
     path: '/api/v1/work-items/{key}/review-prompt',
     binding: 'run_cards',
     calledBy: 'cli',
-    callerPendingCard: 'MOTIR-6824',
   },
   {
     operationId: 'submitWorkItemAgentReview',
@@ -149,7 +149,6 @@ export const RUN_TOKEN_ROUTES: readonly RunTokenRoute[] = [
     path: '/api/v1/work-items/{key}/agent-review',
     binding: 'run_cards',
     calledBy: 'cli',
-    callerPendingCard: 'MOTIR-6824',
   },
   {
     operationId: 'claimWorkItem',

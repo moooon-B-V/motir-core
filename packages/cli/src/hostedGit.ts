@@ -317,6 +317,71 @@ export async function prepareHostedRun(input: PrepareHostedRunInput): Promise<Ho
   });
 }
 
+// ── A REVIEW run is READ-ONLY (MOTIR-6824) ─────────────────────────────────
+
+/** The URL scheme every push is rewritten to in a review run — no transport has it. */
+export const REVIEW_PUSH_REFUSED_SCHEME = 'motir-review-refuses-push';
+
+/** What the refusing `gh` says — a review posts nothing to GitHub. */
+export const REVIEW_GH_REFUSAL =
+  'motir: `gh` is disabled in a hosted REVIEW run — a review posts nothing to GitHub ' +
+  '(hosted-agent-run.md §8.3). Write your verdict to the file your prompt names.';
+
+/**
+ * LOCK a prepared hosted run READ-ONLY, for `motir review` (`hosted-agent-run.md` §8.3).
+ * Called after {@link prepareHostedRun} and before any checkout or agent:
+ *
+ *   - every push to GitHub is rewritten (`url.<x>.pushInsteadOf`) to a scheme no git
+ *     transport speaks, so `git push` fails before it connects — whoever runs it, from
+ *     whichever checkout. A push rewrite outranks the fetch-side `insteadOf`, so no
+ *     redirect of the fetch URL reopens it;
+ *   - a `pre-push` hook that refuses, through `core.hooksPath`, as a second wall;
+ *   - the run's `gh` shim is REPLACED by one that refuses every call, so nothing the
+ *     agent does can open, comment on or review a pull request.
+ *
+ * ⚠️ WHERE THE LOCK IS. This is the launcher's no-push rule — on a user's repository
+ * the §4 user token cannot be narrowed by permission, so this IS the guard there; on a
+ * Motir-created repository the server also mints the token `contents: read`. It
+ * guards against an agent that tries; an agent that rewrites the global git config
+ * could undo it, which is why the token's own scope stays the bound.
+ */
+export function lockHostedRunReadOnly(
+  stateDir: string,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  const gitconfig = join(stateDir, GITCONFIG_FILE);
+  const hooks = join(stateDir, 'review-hooks');
+  mkdirSync(hooks, { recursive: true, mode: 0o700 });
+  writeFileSync(
+    join(hooks, 'pre-push'),
+    `#!/bin/sh\necho "motir: pushing is disabled in a hosted REVIEW run (hosted-agent-run.md §8.3)." >&2\nexit 1\n`,
+    { mode: 0o755 },
+  );
+  chmodSync(join(hooks, 'pre-push'), 0o755);
+  const current = readFileSync(gitconfig, 'utf8');
+  const lock = [
+    '# A hosted REVIEW run pushes nothing (MOTIR-6824, hosted-agent-run.md §8.3).',
+    `[url "${REVIEW_PUSH_REFUSED_SCHEME}://github.com/"]`,
+    `\tpushInsteadOf = https://${GITHUB_HOST}/`,
+    `\tpushInsteadOf = git@${GITHUB_HOST}:`,
+    `\tpushInsteadOf = ssh://git@${GITHUB_HOST}/`,
+    '[core]',
+    `\thooksPath = ${gitValue(hooks)}`,
+  ];
+  writePrivate(gitconfig, `${current.replace(/\n*$/, '\n')}${lock.join('\n')}\n`);
+  env['GIT_CONFIG_GLOBAL'] = gitconfig;
+
+  const bin = join(stateDir, 'bin');
+  mkdirSync(bin, { recursive: true, mode: 0o700 });
+  writeFileSync(join(bin, 'gh'), `#!/bin/sh\necho ${shellQuote(REVIEW_GH_REFUSAL)} >&2\nexit 1\n`, {
+    mode: 0o755,
+  });
+  chmodSync(join(bin, 'gh'), 0o755);
+  if (!(env['PATH'] ?? '').split(delimiter).includes(bin)) {
+    env['PATH'] = [bin, env['PATH'] ?? ''].filter(Boolean).join(delimiter);
+  }
+}
+
 // ── `motir git-credential` — git's credential-helper protocol ───────────────
 
 function stateArg(argv: string[]): { stateDir: string; rest: string[] } {

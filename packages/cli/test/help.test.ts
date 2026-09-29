@@ -143,6 +143,9 @@ describe('the curated overview', () => {
         continue [options] <key>  Carry on a work item whose last run died, on the
                                   branch it left — from any machine, without starting
                                   it over.
+        review <key>              Hosted only: review a work item’s pull requests at
+                                  the version under review and submit ONE verdict —
+                                  never pushes, never posts to GitHub.
         auto [options]            Drain the ready set unattended: one item at a time
                                   onto a session branch.
         batch [options]           Implement a FROZEN snapshot of the ready set: one
@@ -247,6 +250,7 @@ describe('group membership', () => {
       'run',
       'fix',
       'continue',
+      'review',
       'auto',
       'batch',
       'plan',

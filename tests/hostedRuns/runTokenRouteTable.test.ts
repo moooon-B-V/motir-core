@@ -132,6 +132,9 @@ const RUN_PATH_FILES = [
   // Each hosted checkout's code graph (MOTIR-6560) — no server call today, listed
   // so one added later is checked against the table like every other.
   'hostedCodegraph.ts',
+  // The hosted REVIEW run (MOTIR-6824): the review prompt and the ONE verdict.
+  'commands/review.ts',
+  'hostedReview.ts',
 ];
 
 /** Client method → the operations it calls, following `this.<method>` hops. */

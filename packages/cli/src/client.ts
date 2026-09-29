@@ -1190,6 +1190,47 @@ export interface DispatchRunView {
   continues?: DispatchRunContinues | null;
 }
 
+/** One pull request under review, at the head the review is about (MOTIR-6824). */
+export interface ReviewPullRequest {
+  /** `owner/name`. */
+  repository: string;
+  number: number;
+  /** The REVIEWED head — the gate's version, never a later commit. */
+  headSha: string;
+  baseBranch: string | null;
+  headBranch: string | null;
+  url: string;
+}
+
+/** `GET /api/v1/work-items/{key}/review-prompt` (MOTIR-6821). */
+export interface ReviewPrompt {
+  key: string;
+  gateId: string;
+  /** The version under review — the verdict names it back. */
+  subjectVersion: string;
+  pullRequests: ReviewPullRequest[];
+  /** The server-assembled brief. */
+  prompt: string;
+}
+
+/** The ONE verdict a review run submits (`POST …/agent-review`, MOTIR-6821). */
+export interface AgentReviewVerdict {
+  subjectVersion: string;
+  verdict: 'pass' | 'changes_requested';
+  summaryMd: string | null;
+  findingsMd: string | null;
+}
+
+/** What an ACCEPTED verdict did. */
+export interface AgentReviewResult {
+  key: string;
+  gateId: string;
+  verdict: 'pass' | 'changes_requested';
+  state: 'approved' | 'changes_requested';
+  subjectVersion: string;
+  decidedAt: string;
+}
+
 export interface DispatchRunContinues {
   fromRunId: string | null;
   branch: string | null;
@@ -2344,6 +2385,55 @@ export class MotirClient {
   async workItemHowToTest(key: string): Promise<HowToTestRecord | null> {
     const body = await this.v1.request('getWorkItemHowToTest', { path: { key } });
     return body.record;
+  }
+
+  /**
+   * The REVIEW PROMPT a hosted review run is handed (MOTIR-6821 · MOTIR-6824;
+   * `hosted-agent-run.md` §8.2): the card, and every pull request of its delivery set
+   * at the REVIEWED head the card's `agent_review` gate names. Answers only a `review`
+   * run's own credential, for its own card. A read.
+   */
+  async reviewPrompt(key: string): Promise<ReviewPrompt> {
+    const body = await this.v1.request('getWorkItemReviewPrompt', { path: { key } });
+    return {
+      key: body.key,
+      gateId: body.gateId,
+      subjectVersion: body.subjectVersion,
+      pullRequests: body.pullRequests.map((pr) => ({
+        repository: pr.repository,
+        number: pr.number,
+        headSha: pr.headSha,
+        baseBranch: pr.baseBranch,
+        headBranch: pr.headBranch,
+        url: pr.url,
+      })),
+      prompt: body.prompt,
+    };
+  }
+
+  /**
+   * SUBMIT a hosted review run's ONE verdict (MOTIR-6821 · MOTIR-6824; §8.4). A late
+   * verdict — the code moved, the review was withdrawn or decided — throws
+   * `ReviewStaleError` (409 `REVIEW_STALE`): recorded on the run, deciding nothing.
+   */
+  async submitAgentReview(key: string, verdict: AgentReviewVerdict): Promise<AgentReviewResult> {
+    const body = await this.v1.request('submitWorkItemAgentReview', {
+      path: { key },
+      body: {
+        subjectVersion: verdict.subjectVersion,
+        verdict: verdict.verdict,
+        summaryMd: verdict.summaryMd,
+        findingsMd: verdict.findingsMd,
+      },
+    });
+    return {
+      key: body.key,
+      gateId: body.gateId,
+      verdict: body.verdict,
+      state: body.state,
+      subjectVersion: body.subjectVersion,
+      decidedAt: body.decidedAt,
+    };
   }
 
   /**
